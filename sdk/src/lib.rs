@@ -18,8 +18,6 @@ pub mod timing;
 pub mod token_program;
 pub mod transaction;
 pub mod transaction_builder;
-pub mod vote_program;
-pub mod vote_transaction;
 
 #[macro_use]
 extern crate serde_derive;

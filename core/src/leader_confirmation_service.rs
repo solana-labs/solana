@@ -6,7 +6,7 @@ use crate::service::Service;
 use solana_metrics::{influxdb, submit};
 use solana_runtime::bank::Bank;
 use solana_sdk::timing;
-use solana_sdk::vote_program::VoteState;
+use solana_vote_api::vote_state::VoteState;
 use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -127,7 +127,7 @@ mod tests {
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::vote_transaction::VoteTransaction;
+    use solana_vote_api::vote_transaction::VoteTransaction;
     use std::sync::Arc;
 
     #[test]

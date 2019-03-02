@@ -10,7 +10,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::transaction_builder::TransactionBuilder;
-use solana_sdk::vote_program::VoteInstruction;
+use solana_vote_api::vote_instruction::VoteInstruction;
 
 pub struct RewardsTransaction {}
 

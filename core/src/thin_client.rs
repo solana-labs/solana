@@ -490,8 +490,8 @@ mod tests {
     use crate::client::mk_client;
     use bincode::{deserialize, serialize};
     use solana_sdk::system_instruction::SystemInstruction;
-    use solana_sdk::vote_program::VoteState;
-    use solana_sdk::vote_transaction::VoteTransaction;
+    use solana_vote_api::vote_state::VoteState;
+    use solana_vote_api::vote_transaction::VoteTransaction;
     use std::fs::remove_dir_all;
 
     #[test]

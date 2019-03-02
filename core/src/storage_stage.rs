@@ -18,7 +18,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::storage_program::{self, StorageProgram, StorageTransaction};
 use solana_sdk::transaction::Transaction;
-use solana_sdk::vote_program;
 use std::collections::HashSet;
 use std::io;
 use std::mem::size_of;
@@ -368,7 +367,7 @@ impl StorageStage {
             // the storage_keys with their signatures.
             for tx in entry.transactions {
                 for (i, program_id) in tx.program_ids.iter().enumerate() {
-                    if vote_program::check_id(&program_id) {
+                    if solana_vote_api::check_id(&program_id) {
                         debug!(
                             "generating storage_keys from votes current_key_idx: {}",
                             *current_key_idx
@@ -459,7 +458,7 @@ mod tests {
     use solana_sdk::hash::Hasher;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::vote_transaction::VoteTransaction;
+    use solana_vote_api::vote_transaction::VoteTransaction;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

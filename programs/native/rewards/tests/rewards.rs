@@ -1,12 +1,11 @@
-use solana_rewards_api;
 use solana_rewards_api::rewards_transaction::RewardsTransaction;
 use solana_runtime::bank::{Bank, Result};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::vote_program::{self, VoteState};
-use solana_sdk::vote_transaction::VoteTransaction;
+use solana_vote_api::vote_state::{self, VoteState};
+use solana_vote_api::vote_transaction::VoteTransaction;
 
 struct RewardsBank<'a> {
     bank: &'a Bank,
@@ -81,12 +80,12 @@ fn test_redeem_vote_credits_via_bank() {
         .unwrap();
 
     // The validator submits votes to accumulate credits.
-    for i in 0..vote_program::MAX_LOCKOUT_HISTORY {
+    for i in 0..vote_state::MAX_LOCKOUT_HISTORY {
         let vote_state = rewards_bank.submit_vote(&vote_keypair, i as u64).unwrap();
         assert_eq!(vote_state.credits(), 0);
     }
     let vote_state = rewards_bank
-        .submit_vote(&vote_keypair, vote_program::MAX_LOCKOUT_HISTORY as u64 + 1)
+        .submit_vote(&vote_keypair, vote_state::MAX_LOCKOUT_HISTORY as u64 + 1)
         .unwrap();
     assert_eq!(vote_state.credits(), 1);
 

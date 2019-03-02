@@ -1,43 +1,19 @@
-//! Vote program
+//! Vote stte
 //! Receive and processes votes from validators
 
-use crate::account::{Account, KeyedAccount};
-use crate::native_program::ProgramError;
-use crate::pubkey::Pubkey;
-use crate::transaction_builder::BuilderInstruction;
+use crate::vote_instruction::Vote;
+use crate::{check_id, id};
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
+use serde_derive::{Deserialize, Serialize};
+use solana_sdk::account::{Account, KeyedAccount};
+use solana_sdk::native_program::ProgramError;
+use solana_sdk::pubkey::Pubkey;
 use std::collections::VecDeque;
-
-pub const VOTE_PROGRAM_ID: [u8; 32] = [
-    132, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0,
-];
-
-pub fn check_id(program_id: &Pubkey) -> bool {
-    program_id.as_ref() == VOTE_PROGRAM_ID
-}
-
-pub fn id() -> Pubkey {
-    Pubkey::new(&VOTE_PROGRAM_ID)
-}
 
 // Maximum number of votes to keep around
 pub const MAX_LOCKOUT_HISTORY: usize = 31;
 pub const INITIAL_LOCKOUT: usize = 2;
-
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Vote {
-    // TODO: add signature of the state here as well
-    /// A vote for height slot_height
-    pub slot_height: u64,
-}
-
-impl Vote {
-    pub fn new(slot_height: u64) -> Self {
-        Self { slot_height }
-    }
-}
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Lockout {
@@ -65,58 +41,12 @@ impl Lockout {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum VoteInstruction {
-    /// Initialize the VoteState for this `vote account`
-    /// * Transaction::keys[0] - the staker id that is also assumed to be the delegate by default
-    /// * Transaction::keys[1] - the new "vote account" to be associated with the delegate
-    InitializeAccount,
-    /// `Delegate` or `Assign` A staking account to a particular node
-    DelegateStake(Pubkey),
-    Vote(Vote),
-    /// Clear the credits in the vote account
-    /// * Transaction::keys[0] - the "vote account"
-    ClearCredits,
-}
-
-impl VoteInstruction {
-    pub fn new_clear_credits(vote_id: Pubkey) -> BuilderInstruction {
-        BuilderInstruction::new(id(), &VoteInstruction::ClearCredits, vec![(vote_id, true)])
-    }
-    pub fn new_delegate_stake(vote_id: Pubkey, delegate_id: Pubkey) -> BuilderInstruction {
-        BuilderInstruction::new(
-            id(),
-            &VoteInstruction::DelegateStake(delegate_id),
-            vec![(vote_id, true)],
-        )
-    }
-    pub fn new_initialize_account(vote_id: Pubkey, staker_id: Pubkey) -> BuilderInstruction {
-        BuilderInstruction::new(
-            id(),
-            &VoteInstruction::InitializeAccount,
-            vec![(staker_id, true), (vote_id, false)],
-        )
-    }
-    pub fn new_vote(vote_id: Pubkey, vote: Vote) -> BuilderInstruction {
-        BuilderInstruction::new(id(), &VoteInstruction::Vote(vote), vec![(vote_id, true)])
-    }
-}
-
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct VoteState {
     pub votes: VecDeque<Lockout>,
     pub delegate_id: Pubkey,
     pub root_slot: Option<u64>,
     credits: u64,
-}
-
-pub fn get_max_size() -> usize {
-    // Upper limit on the size of the Vote State. Equal to
-    // sizeof(VoteState) when votes.len() is MAX_LOCKOUT_HISTORY
-    let mut vote_state = VoteState::default();
-    vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_LOCKOUT_HISTORY]);
-    vote_state.root_slot = Some(std::u64::MAX);
-    serialized_size(&vote_state).unwrap() as usize
 }
 
 impl VoteState {
@@ -130,6 +60,15 @@ impl VoteState {
             credits,
             root_slot,
         }
+    }
+
+    pub fn max_size() -> usize {
+        // Upper limit on the size of the Vote State. Equal to
+        // sizeof(VoteState) when votes.len() is MAX_LOCKOUT_HISTORY
+        let mut vote_state = Self::default();
+        vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_LOCKOUT_HISTORY]);
+        vote_state.root_slot = Some(std::u64::MAX);
+        serialized_size(&vote_state).unwrap() as usize
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, ProgramError> {
@@ -296,7 +235,7 @@ pub fn clear_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramE
 }
 
 pub fn create_vote_account(tokens: u64) -> Account {
-    let space = get_max_size();
+    let space = VoteState::max_size();
     Account::new(tokens, space, id())
 }
 
@@ -329,7 +268,7 @@ pub fn vote_and_deserialize(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_initialize_staking_account() {
@@ -369,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_vote_serialize() {
-        let mut buffer: Vec<u8> = vec![0; get_max_size()];
+        let mut buffer: Vec<u8> = vec![0; VoteState::max_size()];
         let mut vote_state = VoteState::default();
         vote_state
             .votes
