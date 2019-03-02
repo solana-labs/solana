@@ -1,7 +1,6 @@
 use clap::{crate_version, App, Arg, SubCommand};
 use solana::blocktree::Blocktree;
-use solana::blocktree_processor;
-use solana_runtime::bank::Bank;
+use solana::blocktree_processor::process_blocktree;
 use solana_sdk::genesis_block::GenesisBlock;
 use std::io::{stdout, Write};
 use std::process::exit;
@@ -25,7 +24,7 @@ fn main() {
                 .long("head")
                 .value_name("NUM")
                 .takes_value(true)
-                .help("Limit to at most the first NUM entries in ledger\n  (only applies to verify, print, json commands)"),
+                .help("Limit to at most the first NUM entries in ledger\n  (only applies to print and json commands)"),
         )
         .arg(
             Arg::with_name("min-hashes")
@@ -112,33 +111,14 @@ fn main() {
             }
             stdout().write_all(b"\n]}\n").expect("close array");
         }
-        ("verify", _) => {
-            let bank = Bank::new(&genesis_block);
-            let mut last_id = bank.last_id();
-            let mut num_entries = 0;
-            for (i, entry) in entries.enumerate() {
-                if i >= head {
-                    break;
-                }
-
-                if !entry.verify(&last_id) {
-                    eprintln!("entry.verify() failed at entry[{}]", i + 2);
-                    if !matches.is_present("continue") {
-                        exit(1);
-                    }
-                }
-                last_id = entry.hash;
-                num_entries += 1;
-
-                if let Err(e) = blocktree_processor::process_entry(&bank, &entry) {
-                    eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
-                    if !matches.is_present("continue") {
-                        exit(1);
-                    }
-                }
+        ("verify", _) => match process_blocktree(&genesis_block, &blocktree, None) {
+            Ok((_bank_forks, bank_forks_info)) => {
+                println!("{:?}", bank_forks_info);
             }
-            println!("{} entries.  last_id={:?}", num_entries, last_id);
-        }
+            Err(err) => {
+                eprintln!("Ledger verification failed: {:?}", err);
+            }
+        },
         ("", _) => {
             eprintln!("{}", matches.usage());
             exit(1);
