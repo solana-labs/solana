@@ -73,6 +73,7 @@ members = [
     "programs",
     "programs/native/bpf_loader",
     "programs/native/budget",
+    "programs/native/budget_api",
     "programs/native/token",
     "programs/native/failure",
     "programs/native/native_loader",

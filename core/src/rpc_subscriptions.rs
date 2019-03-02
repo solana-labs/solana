@@ -145,7 +145,7 @@ impl RpcSubscriptions {
 mod tests {
     use super::*;
     use jsonrpc_pubsub::typed::Subscriber;
-    use solana_sdk::budget_program;
+    use solana_budget_api;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
@@ -163,7 +163,7 @@ mod tests {
             blockhash,
             1,
             16,
-            budget_program::id(),
+            solana_budget_api::id(),
             0,
         );
         bank.process_transaction(&tx).unwrap();

@@ -10,10 +10,10 @@ use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
 use log::*;
+use solana_budget_api;
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
-use solana_sdk::budget_program;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{extend_and_hash, Hash};
 use solana_sdk::native_loader;
@@ -293,7 +293,7 @@ impl Bank {
         self.add_native_program("solana_vote_program", &vote_program::id());
         self.add_native_program("solana_storage_program", &storage_program::id());
         self.add_native_program("solana_bpf_loader", &bpf_loader::id());
-        self.add_native_program("solana_budget_program", &budget_program::id());
+        self.add_native_program("solana_budget_program", &solana_budget_api::id());
         self.add_native_program("solana_token_program", &token_program::id());
     }
 
@@ -647,12 +647,6 @@ impl Bank {
     }
 
     pub fn read_balance(account: &Account) -> u64 {
-        // TODO: Re-instate budget_program special case?
-        /*
-        if budget_program::check_id(&account.owner) {
-           return budget_program::get_balance(account);
-        }
-        */
         account.tokens
     }
     /// Each program would need to be able to introspect its own state
@@ -1291,7 +1285,7 @@ mod tests {
         assert_eq!(system_program::id(), system);
         assert_eq!(native_loader::id(), native);
         assert_eq!(bpf_loader::id(), bpf);
-        assert_eq!(budget_program::id(), budget);
+        assert_eq!(solana_budget_api::id(), budget);
         assert_eq!(storage_program::id(), storage);
         assert_eq!(token_program::id(), token);
         assert_eq!(vote_program::id(), vote);
@@ -1304,7 +1298,7 @@ mod tests {
             system_program::id(),
             native_loader::id(),
             bpf_loader::id(),
-            budget_program::id(),
+            solana_budget_api::id(),
             storage_program::id(),
             token_program::id(),
             vote_program::id(),

@@ -164,9 +164,9 @@ mod tests {
     use jsonrpc_core::futures::sync::mpsc;
     use jsonrpc_core::Response;
     use jsonrpc_pubsub::{PubSubHandler, Session};
+    use solana_budget_api;
+    use solana_budget_api::budget_transaction::BudgetTransaction;
     use solana_runtime::bank::{self, Bank};
-    use solana_sdk::budget_program;
-    use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -275,7 +275,7 @@ mod tests {
         let witness = Keypair::new();
         let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
-        let budget_program_id = budget_program::id();
+        let budget_program_id = solana_budget_api::id();
         let executable = false; // TODO
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
