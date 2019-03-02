@@ -50,12 +50,12 @@ pub enum BankError {
 
     /// The bank has seen `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
-    /// its `last_id`, or as a double-spend attack.
+    /// its `recent_block_hash`, or as a double-spend attack.
     DuplicateSignature,
 
-    /// The bank has not seen the given `last_id` or the transaction is too old and
-    /// the `last_id` has been discarded.
-    LastIdNotFound,
+    /// The bank has not seen the given `recent_block_hash` or the transaction is too old and
+    /// the `recent_block_hash` has been discarded.
+    BlockHashNotFound,
 
     /// Proof of History verification failed.
     LedgerVerificationFailed,
@@ -85,7 +85,7 @@ pub struct Bank {
     /// A cache of signature statuses
     status_cache: RwLock<BankStatusCache>,
 
-    /// FIFO queue of `last_id` items
+    /// FIFO queue of `recent_block_hash` items
     block_hash_queue: RwLock<HashQueue>,
 
     /// Previous checkpoint of this bank
@@ -288,7 +288,7 @@ impl Bank {
         self.add_native_program("solana_token_program", &token_program::id());
     }
 
-    /// Return the last entry ID registered.
+    /// Return the last block hash registered.
     pub fn last_id(&self) -> Hash {
         self.block_hash_queue.read().unwrap().last_hash()
     }
@@ -303,7 +303,7 @@ impl Bank {
         for (i, tx) in txs.iter().enumerate() {
             match &res[i] {
                 Ok(_) => status_cache.add(&tx.signatures[0]),
-                Err(BankError::LastIdNotFound) => (),
+                Err(BankError::BlockHashNotFound) => (),
                 Err(BankError::DuplicateSignature) => (),
                 Err(BankError::AccountNotFound) => (),
                 Err(e) => {
@@ -417,7 +417,7 @@ impl Bank {
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok() && !hash_queue.check_entry_age(tx.recent_block_hash, max_age) {
                     error_counters.reserve_last_id += 1;
-                    Err(BankError::LastIdNotFound)
+                    Err(BankError::BlockHashNotFound)
                 } else {
                     lock_res
                 }
