@@ -21,12 +21,6 @@ fn entrypoint(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    // all vote instructions require that accounts_keys[0] be a signer
-    if keyed_accounts[0].signer_key().is_none() {
-        error!("account[0] is unsigned");
-        Err(ProgramError::InvalidArgument)?;
-    }
-
     match deserialize(data).map_err(|_| ProgramError::InvalidUserdata)? {
         VoteInstruction::InitializeAccount => vote_program::initialize_account(keyed_accounts),
         VoteInstruction::DelegateStake(delegate_id) => {
