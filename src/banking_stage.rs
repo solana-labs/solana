@@ -431,10 +431,9 @@ mod tests {
     use crate::packet::to_packets;
     use crate::poh_service::{PohService, PohServiceConfig};
     use solana_sdk::genesis_block::GenesisBlock;
-    //use solana_sdk::native_program::ProgramError;
+    use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
-    //use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::thread::sleep;
 
     fn create_test_recorder(bank: &Arc<Bank>) -> (Arc<Mutex<PohRecorder>>, PohService) {
@@ -641,129 +640,84 @@ mod tests {
         poh_service.close().unwrap();
     }
 
-    //     // Test that when the max_tick_height is reached, the banking stage exits
-    //     #[test]
-    //     fn test_max_tick_height_shutdown() {
-    //         solana_logger::setup();
-    //         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-    //         let bank = Arc::new(Bank::new(&genesis_block));
-    //         let (verified_sender, verified_receiver) = channel();
-    //         let max_tick_height = 10;
-    //         let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    //         let (banking_stage, _entry_receiver) = BankingStage::new(
-    //             &bank,
-    //             &poh_recorder,
-    //             verified_receiver,
-    //             max_tick_height,
-    //             genesis_block.bootstrap_leader_id,
-    //         );
-    //
-    //         loop {
-    //             let bank_tick_height = bank.tick_height();
-    //             if bank_tick_height >= max_tick_height {
-    //                 break;
-    //             }
-    //             sleep(Duration::from_millis(10));
-    //         }
-    //
-    //         drop(verified_sender);
-    //         banking_stage.join().unwrap();
-    //         poh_service.close().unwrap();
-    //     }
-    //
-    //     #[test]
-    //     fn test_returns_unprocessed_packet() {
-    //         solana_logger::setup();
-    //         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
-    //         let bank = Arc::new(Bank::new(&genesis_block));
-    //         let ticks_per_slot = 1;
-    //         let (verified_sender, verified_receiver) = channel();
-    //         let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    //         let (mut banking_stage, _entry_receiver) = BankingStage::new(
-    //             &bank,
-    //             &poh_recorder,
-    //             verified_receiver,
-    //             ticks_per_slot,
-    //             genesis_block.bootstrap_leader_id,
-    //         );
-    //
-    //         // Wait for Poh recorder to hit max height
-    //         loop {
-    //             let bank_tick_height = bank.tick_height();
-    //             if bank_tick_height >= ticks_per_slot {
-    //                 break;
-    //             }
-    //             sleep(Duration::from_millis(10));
-    //         }
-    //
-    //         // Now send a transaction to the banking stage
-    //         let transaction = SystemTransaction::new_account(
-    //             &mint_keypair,
-    //             Keypair::new().pubkey(),
-    //             2,
-    //             genesis_block.hash(),
-    //             0,
-    //         );
-    //
-    //         let packets = to_packets(&[transaction]);
-    //         verified_sender
-    //             .send(vec![(packets[0].clone(), vec![1u8])])
-    //             .unwrap();
-    //
-    //         // Shut down the banking stage, it should give back the transaction
-    //         drop(verified_sender);
-    //         let unprocessed_packets = banking_stage.join_and_collect_unprocessed_packets();
-    //         assert_eq!(unprocessed_packets.len(), 1);
-    //         let (packets, start_index) = &unprocessed_packets[0];
-    //         assert_eq!(packets.read().unwrap().packets.len(), 1); // TODO: maybe compare actual packet contents too
-    //         assert_eq!(*start_index, 0);
-    //         poh_service.close().unwrap();
-    //     }
-    //
-    //     #[test]
-    //     fn test_bank_record_transactions() {
-    //         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
-    //         let bank = Arc::new(Bank::new(&genesis_block));
-    //         let (entry_sender, entry_receiver) = channel();
-    //         let working_bank = WorkingBank {
-    //             bank: bank.clone(),
-    //             sender: entry_sender,
-    //             min_tick_height: bank.tick_height(),
-    //             max_tick_height: std::u64::MAX,
-    //         };
-    //
-    //         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
-    //             bank.tick_height(),
-    //             bank.last_id(),
-    //         )));
-    //         poh_recorder.lock().unwrap().set_working_bank(working_bank);
-    //         let pubkey = Keypair::new().pubkey();
-    //
-    //         let transactions = vec![
-    //             SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.hash(), 0),
-    //             SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.hash(), 0),
-    //         ];
-    //
-    //         let mut results = vec![Ok(()), Ok(())];
-    //         BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
-    //         let entries = entry_receiver.recv().unwrap();
-    //         assert_eq!(entries[0].0.transactions.len(), transactions.len());
-    //
-    //         // ProgramErrors should still be recorded
-    //         results[0] = Err(BankError::ProgramError(
-    //             1,
-    //             ProgramError::ResultWithNegativeTokens,
-    //         ));
-    //         BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
-    //         let entries = entry_receiver.recv().unwrap();
-    //         assert_eq!(entries[0].0.transactions.len(), transactions.len());
-    //
-    //         // Other BankErrors should not be recorded
-    //         results[0] = Err(BankError::AccountNotFound);
-    //         BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
-    //         let entries = entry_receiver.recv().unwrap();
-    //         assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
-    //     }
+    // Test that when the max_tick_height is reached, the banking stage exits
+    #[test]
+    fn test_max_tick_height_shutdown() {
+        solana_logger::setup();
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let (verified_sender, verified_receiver) = channel();
+        let max_tick_height = 10;
+        let (poh_recorder, poh_service) = create_test_recorder(&bank);
+        let (bank_sender, bank_receiver) = channel();
+        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let (banking_stage, entry_receiver) = BankingStage::new(
+            &cluster_info,
+            bank_receiver,
+            &poh_recorder,
+            verified_receiver,
+        );
+        bank_sender.send(bank.clone()).expect("sending bank");
+
+        loop {
+            let bank_tick_height = bank.tick_height();
+            if bank_tick_height >= max_tick_height {
+                break;
+            }
+            sleep(Duration::from_millis(10));
+        }
+
+        drop(verified_sender);
+        drop(bank_sender);
+        banking_stage.join().unwrap();
+        poh_service.close().unwrap();
+    }
+
+    #[test]
+    fn test_bank_record_transactions() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let (entry_sender, entry_receiver) = channel();
+        let working_bank = WorkingBank {
+            bank: bank.clone(),
+            sender: entry_sender,
+            min_tick_height: bank.tick_height(),
+            max_tick_height: std::u64::MAX,
+        };
+
+        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
+            bank.tick_height(),
+            bank.last_id(),
+        )));
+        poh_recorder.lock().unwrap().set_working_bank(working_bank);
+        let pubkey = Keypair::new().pubkey();
+
+        let transactions = vec![
+            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.hash(), 0),
+            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.hash(), 0),
+        ];
+
+        let mut results = vec![Ok(()), Ok(())];
+        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        let (_, entries) = entry_receiver.recv().unwrap();
+        assert_eq!(entries[0].0.transactions.len(), transactions.len());
+
+        // ProgramErrors should still be recorded
+        results[0] = Err(BankError::ProgramError(
+            1,
+            ProgramError::ResultWithNegativeTokens,
+        ));
+        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        let (_, entries) = entry_receiver.recv().unwrap();
+        assert_eq!(entries[0].0.transactions.len(), transactions.len());
+
+        // Other BankErrors should not be recorded
+        results[0] = Err(BankError::AccountNotFound);
+        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        let (_, entries) = entry_receiver.recv().unwrap();
+        assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
+    }
     //
     //     #[test]
     //     fn test_bank_process_and_record_transactions() {

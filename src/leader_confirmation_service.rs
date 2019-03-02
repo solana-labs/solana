@@ -5,7 +5,6 @@
 use crate::leader_schedule_utils;
 use solana_metrics::{influxdb, submit};
 use solana_runtime::bank::Bank;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
