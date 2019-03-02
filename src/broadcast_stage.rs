@@ -2,18 +2,17 @@
 //!
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT};
-use crate::entry::Entry;
 use crate::entry::EntrySlice;
 #[cfg(feature = "erasure")]
 use crate::erasure::CodingGenerator;
 use crate::packet::index_blobs;
 use crate::result::{Error, Result};
+use crate::banking_stage::TpuBankEntries;
 use crate::service::Service;
 use crate::staking_utils;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
-use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -41,7 +40,7 @@ impl Broadcast {
     fn run(
         &mut self,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<(Arc<Bank>, Vec<(Entry, u64)>)>,
+        receiver: &Receiver<TpuBankEntries>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
@@ -179,7 +178,7 @@ impl BroadcastStage {
     fn run(
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<(Arc<Bank>, Vec<(Entry, u64)>)>,
+        receiver: &Receiver<TpuBankEntries>,
         exit_signal: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
     ) -> BroadcastStageReturnType {
@@ -230,7 +229,7 @@ impl BroadcastStage {
     pub fn new(
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        receiver: Receiver<(Arc<Bank>, Vec<(Entry, u64)>)>,
+        receiver: Receiver<TpuBankEntries>,
         exit_sender: Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
     ) -> Self {

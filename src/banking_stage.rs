@@ -37,6 +37,8 @@ pub struct BankingStage {
     lcs_handle: JoinHandle<()>,
 }
 
+pub type TpuBankEntries = (Arc<Bank>, Vec<(Entry, u64)>);
+
 impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     #[allow(clippy::new_ret_no_self)]
@@ -45,7 +47,7 @@ impl BankingStage {
         bank_receiver: Receiver<Arc<Bank>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: Receiver<VerifiedPackets>,
-    ) -> (Self, Receiver<(Arc<Bank>, Vec<(Entry, u64)>)>) {
+    ) -> (Self, Receiver<TpuBankEntries>) {
         let (entry_sender, entry_receiver) = channel();
         let verified_receiver = Arc::new(Mutex::new(verified_receiver));
 
@@ -405,7 +407,7 @@ impl BankingStage {
         Ok(unprocessed_packets)
     }
 
-    pub fn exit(&self) -> () {
+    pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
     }
 }
