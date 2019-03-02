@@ -13,7 +13,6 @@ use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{self, Bank, BankError};
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_TICK_HASHES};
 use solana_sdk::transaction::Transaction;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -44,7 +43,6 @@ impl BankingStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: Receiver<VerifiedPackets>,
         max_tick_height: u64,
-        leader_id: Pubkey,
     ) -> (Self, Receiver<Vec<(Entry, u64)>>) {
         let (entry_sender, entry_receiver) = channel();
         let working_bank = WorkingBank {
@@ -70,8 +68,7 @@ impl BankingStage {
         let exit = Arc::new(AtomicBool::new(false));
 
         // Single thread to compute confirmation
-        let leader_confirmation_service =
-            LeaderConfirmationService::new(&bank, leader_id, exit.clone());
+        let leader_confirmation_service = LeaderConfirmationService::new(&bank, exit.clone());
 
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<UnprocessedPackets>> = (0..Self::num_threads())

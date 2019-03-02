@@ -787,9 +787,9 @@ impl Bank {
     }
 
     /// current vote accounts for this bank
-    pub fn vote_accounts<F, T>(&self, filter: F) -> HashMap<Pubkey, T>
+    pub fn vote_accounts<F, T>(&self, mut filter: F) -> HashMap<Pubkey, T>
     where
-        F: Fn(&Pubkey, &Account) -> Option<(Pubkey, T)>,
+        F: FnMut(&Pubkey, &Account) -> Option<(Pubkey, T)>,
     {
         self.accounts()
             .get_vote_accounts(self.accounts_id)

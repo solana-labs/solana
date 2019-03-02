@@ -7,6 +7,7 @@ use solana_metrics::{influxdb, submit};
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
+use solana_sdk::vote_program::VoteState;
 use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -28,26 +29,24 @@ pub struct LeaderConfirmationService {
 impl LeaderConfirmationService {
     fn get_last_supermajority_timestamp(
         bank: &Arc<Bank>,
-        leader_id: Pubkey,
         last_valid_validator_timestamp: u64,
     ) -> result::Result<u64, ConfirmationError> {
         let mut total_stake = 0;
-
+        let mut slots_and_stakes: Vec<(u64, u64)> = vec![];
         // Hold an accounts_db read lock as briefly as possible, just long enough to collect all
         // the vote states
-        let vote_states = bank.vote_states(|_, vote_state| leader_id != vote_state.delegate_id);
-
-        let slots_and_stakes: Vec<(u64, u64)> = vote_states
-            .iter()
-            .filter_map(|(_, vote_state)| {
-                let validator_stake = bank.get_balance(&vote_state.delegate_id);
-                total_stake += validator_stake;
+        bank.vote_accounts(|_, account| {
+            total_stake += account.tokens;
+            let vote_state = VoteState::deserialize(&account.userdata).unwrap();
+            slots_and_stakes.push(
                 vote_state
                     .votes
                     .back()
-                    .map(|vote| (vote.slot_height, validator_stake))
-            })
-            .collect();
+                    .map(|vote| (vote.slot_height, account.tokens))
+                    .unwrap(),
+            );
+            None as Option<(Pubkey, ())>
+        });
 
         let super_majority_stake = (2 * total_stake) / 3;
 
@@ -72,13 +71,9 @@ impl LeaderConfirmationService {
         Err(ConfirmationError::NoValidSupermajority)
     }
 
-    pub fn compute_confirmation(
-        bank: &Arc<Bank>,
-        leader_id: Pubkey,
-        last_valid_validator_timestamp: &mut u64,
-    ) {
+    pub fn compute_confirmation(bank: &Arc<Bank>, last_valid_validator_timestamp: &mut u64) {
         if let Ok(super_majority_timestamp) =
-            Self::get_last_supermajority_timestamp(bank, leader_id, *last_valid_validator_timestamp)
+            Self::get_last_supermajority_timestamp(bank, *last_valid_validator_timestamp)
         {
             let now = timing::timestamp();
             let confirmation_ms = now - super_majority_timestamp;
@@ -97,7 +92,7 @@ impl LeaderConfirmationService {
     }
 
     /// Create a new LeaderConfirmationService for computing confirmation.
-    pub fn new(bank: &Arc<Bank>, leader_id: Pubkey, exit: Arc<AtomicBool>) -> Self {
+    pub fn new(bank: &Arc<Bank>, exit: Arc<AtomicBool>) -> Self {
         let bank = bank.clone();
         let thread_hdl = Builder::new()
             .name("solana-leader-confirmation-service".to_string())
@@ -107,11 +102,7 @@ impl LeaderConfirmationService {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                    Self::compute_confirmation(
-                        &bank,
-                        leader_id,
-                        &mut last_valid_validator_timestamp,
-                    );
+                    Self::compute_confirmation(&bank, &mut last_valid_validator_timestamp);
                     sleep(Duration::from_millis(COMPUTE_CONFIRMATION_MS));
                 }
             })
