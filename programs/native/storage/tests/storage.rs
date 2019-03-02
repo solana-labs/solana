@@ -46,21 +46,21 @@ fn test_bank_storage() {
     let jill = Keypair::new();
 
     let x = 42;
-    let last_id = genesis_block.hash();
+    let block_hash = genesis_block.hash();
     let x2 = x * 2;
     let storage_block_hash = hash(&[x2]);
 
-    bank.register_tick(&last_id);
+    bank.register_tick(&block_hash);
 
-    bank.transfer(10, &alice, jill.pubkey(), last_id).unwrap();
+    bank.transfer(10, &alice, jill.pubkey(), block_hash).unwrap();
 
-    bank.transfer(10, &alice, bob.pubkey(), last_id).unwrap();
-    bank.transfer(10, &alice, jack.pubkey(), last_id).unwrap();
+    bank.transfer(10, &alice, bob.pubkey(), block_hash).unwrap();
+    bank.transfer(10, &alice, jack.pubkey(), block_hash).unwrap();
 
     let tx = SystemTransaction::new_program_account(
         &alice,
         bob.pubkey(),
-        last_id,
+        block_hash,
         1,
         4 * 1024,
         storage_program::id(),
@@ -72,7 +72,7 @@ fn test_bank_storage() {
     let tx = StorageTransaction::new_advertise_recent_block_hash(
         &bob,
         storage_block_hash,
-        last_id,
+        block_hash,
         ENTRIES_PER_SEGMENT,
     );
 
@@ -84,7 +84,7 @@ fn test_bank_storage() {
     //let tx = StorageTransaction::new_mining_proof(
     //    &jack,
     //    Hash::default(),
-    //    last_id,
+    //    block_hash,
     //    entry_height,
     //    Signature::default(),
     //);

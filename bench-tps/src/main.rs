@@ -170,8 +170,8 @@ fn main() {
     airdrop_tokens(&mut barrier_client, &drone_addr, &barrier_id, 1);
 
     println!("Get last ID...");
-    let mut last_id = client.get_recent_block_hash();
-    println!("Got last ID {:?}", last_id);
+    let mut block_hash = client.get_recent_block_hash();
+    println!("Got last ID {:?}", block_hash);
 
     let first_tx_count = client.transaction_count();
     println!("Initial transaction count {}", first_tx_count);
@@ -254,7 +254,7 @@ fn main() {
         // It's not feasible (would take too much time) to confirm each of the `tx_count / 2`
         // transactions sent by `generate_txs()` so instead send and confirm a single transaction
         // to validate the network is still functional.
-        send_barrier_transaction(&mut barrier_client, &mut last_id, &barrier_id);
+        send_barrier_transaction(&mut barrier_client, &mut block_hash, &barrier_id);
 
         i += 1;
         if should_switch_directions(num_tokens_per_account, i) {

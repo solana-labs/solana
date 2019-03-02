@@ -152,7 +152,7 @@ impl ReplayStage {
                         );
                         to_leader_sender.send(TvuRotationInfo {
                             tick_height: parent.tick_height(),
-                            last_id: parent.last_block_hash(),
+                            block_hash: parent.last_block_hash(),
                             slot: next_slot,
                             leader_id: next_leader,
                         })?;
@@ -329,7 +329,7 @@ mod test {
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10_000, leader_id, 500);
 
-        let (my_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
+        let (my_ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
 
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
@@ -383,10 +383,10 @@ mod test {
         let (forward_entry_sender, forward_entry_receiver) = channel();
         let genesis_block = GenesisBlock::new(10_000).0;
         let bank = Arc::new(Bank::new(&genesis_block));
-        let mut last_id = bank.last_block_hash();
+        let mut block_hash = bank.last_block_hash();
         let mut entries = Vec::new();
         for _ in 0..5 {
-            let entry = next_entry_mut(&mut last_id, 1, vec![]); //just ticks
+            let entry = next_entry_mut(&mut block_hash, 1, vec![]); //just ticks
             entries.push(entry);
         }
 

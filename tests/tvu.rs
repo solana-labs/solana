@@ -86,7 +86,7 @@ fn test_replay() {
     let tvu_addr = target1.info.tvu;
 
     let bank = Bank::new(&genesis_block);
-    let last_id = bank.last_block_hash();
+    let block_hash = bank.last_block_hash();
     let bank_forks = BankForks::new(0, bank);
     let bank_forks_info = vec![BankForksInfo {
         bank_id: 0,
@@ -138,7 +138,7 @@ fn test_replay() {
     let num_transfers = 10;
     let mut transfer_amount = 501;
     let bob_keypair = Keypair::new();
-    let mut cur_hash = last_id;
+    let mut cur_hash = block_hash;
     for i in 0..num_transfers {
         let entry0 = next_entry_mut(&mut cur_hash, i, vec![]);
         let entry_tick0 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
@@ -147,7 +147,7 @@ fn test_replay() {
             &mint_keypair,
             bob_keypair.pubkey(),
             transfer_amount,
-            last_id,
+            block_hash,
             0,
         );
         let entry_tick1 = next_entry_mut(&mut cur_hash, i + 1, vec![]);

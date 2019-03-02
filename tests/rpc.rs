@@ -36,13 +36,13 @@ fn test_rpc_send_tx() {
         .send()
         .unwrap();
     let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
-    let last_id_vec = bs58::decode(json["result"].as_str().unwrap())
+    let block_hash_vec = bs58::decode(json["result"].as_str().unwrap())
         .into_vec()
         .unwrap();
-    let last_id = Hash::new(&last_id_vec);
+    let block_hash = Hash::new(&block_hash_vec);
 
-    info!("last_id: {:?}", last_id);
-    let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
+    info!("block_hash: {:?}", block_hash);
+    let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, block_hash, 0);
     let serial_tx = serialize(&tx).unwrap();
 
     let client = reqwest::Client::new();

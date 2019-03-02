@@ -66,7 +66,7 @@ impl BankingStage {
 
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
-        // Once an entry has been recorded, its last_id is registered with the bank.
+        // Once an entry has been recorded, its block_hash is registered with the bank.
         let exit = Arc::new(AtomicBool::new(false));
 
         // Single thread to compute confirmation
@@ -464,11 +464,11 @@ mod tests {
 
         assert!(entries.len() >= 1);
 
-        let mut last_id = start_hash;
+        let mut block_hash = start_hash;
         entries.iter().for_each(|entries| {
             assert_eq!(entries.len(), 1);
-            assert!(entries.verify(&last_id));
-            last_id = entries.last().unwrap().hash;
+            assert!(entries.verify(&block_hash));
+            block_hash = entries.last().unwrap().hash;
         });
         drop(entry_receiver);
         banking_stage.join().unwrap();

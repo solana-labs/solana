@@ -156,11 +156,11 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(100);
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
-        let last_id = bank.last_block_hash();
+        let block_hash = bank.last_block_hash();
         let tx = SystemTransaction::new_program_account(
             &mint_keypair,
             alice.pubkey(),
-            last_id,
+            block_hash,
             1,
             16,
             budget_program::id(),
@@ -201,8 +201,8 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(100);
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
-        let last_id = bank.last_block_hash();
-        let tx = SystemTransaction::new_move(&mint_keypair, alice.pubkey(), 20, last_id, 0);
+        let block_hash = bank.last_block_hash();
+        let tx = SystemTransaction::new_move(&mint_keypair, alice.pubkey(), 20, block_hash, 0);
         let signature = tx.signatures[0];
         bank.process_transaction(&tx).unwrap();
 

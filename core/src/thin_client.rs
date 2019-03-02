@@ -123,17 +123,17 @@ impl ThinClient {
         tokens: u64,
         keypair: &Keypair,
         to: Pubkey,
-        last_id: &Hash,
+        block_hash: &Hash,
     ) -> io::Result<Signature> {
         debug!(
-            "transfer: tokens={} from={:?} to={:?} last_id={:?}",
+            "transfer: tokens={} from={:?} to={:?} block_hash={:?}",
             tokens,
             keypair.pubkey(),
             to,
-            last_id
+            block_hash
         );
         let now = Instant::now();
-        let transaction = SystemTransaction::new_account(keypair, to, tokens, *last_id, 0);
+        let transaction = SystemTransaction::new_account(keypair, to, tokens, *block_hash, 0);
         let result = self.transfer_signed(&transaction);
         solana_metrics::submit(
             influxdb::Point::new("thinclient")
@@ -216,7 +216,7 @@ impl ThinClient {
     }
 
     /// Request the last Entry ID from the server without blocking.
-    /// Returns the last_id Hash or None if there was no response from the server.
+    /// Returns the block_hash Hash or None if there was no response from the server.
     pub fn try_get_recent_block_hash(&mut self, mut num_retries: u64) -> Option<Hash> {
         loop {
             trace!("try_get_recent_block_hash send_to {}", &self.rpc_addr);
@@ -226,9 +226,9 @@ impl ThinClient {
 
             match response {
                 Ok(value) => {
-                    let last_id_str = value.as_str().unwrap();
-                    let last_id_vec = bs58::decode(last_id_str).into_vec().unwrap();
-                    return Some(Hash::new(&last_id_vec));
+                    let block_hash_str = value.as_str().unwrap();
+                    let block_hash_vec = bs58::decode(block_hash_str).into_vec().unwrap();
+                    return Some(Hash::new(&block_hash_vec));
                 }
                 Err(error) => {
                     debug!("thin_client get_recent_block_hash error: {:?}", error);
@@ -254,18 +254,18 @@ impl ThinClient {
 
     /// Request a new last Entry ID from the server. This method blocks
     /// until the server sends a response.
-    pub fn get_next_last_id(&mut self, previous_last_id: &Hash) -> Hash {
-        self.get_next_last_id_ext(previous_last_id, &|| {
+    pub fn get_next_block_hash(&mut self, previous_block_hash: &Hash) -> Hash {
+        self.get_next_block_hash_ext(previous_block_hash, &|| {
             sleep(Duration::from_millis(100));
         })
     }
-    pub fn get_next_last_id_ext(&mut self, previous_last_id: &Hash, func: &Fn()) -> Hash {
+    pub fn get_next_block_hash_ext(&mut self, previous_block_hash: &Hash, func: &Fn()) -> Hash {
         loop {
-            let last_id = self.get_recent_block_hash();
-            if last_id != *previous_last_id {
-                break last_id;
+            let block_hash = self.get_recent_block_hash();
+            if block_hash != *previous_block_hash {
+                break block_hash;
             }
-            debug!("Got same last_id ({:?}), will retry...", last_id);
+            debug!("Got same block_hash ({:?}), will retry...", block_hash);
             func()
         }
     }
@@ -468,7 +468,7 @@ pub fn new_fullnode() -> (Fullnode, NodeInfo, Keypair, String) {
     let node_info = node.info.clone();
 
     let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, node_info.id, 42);
-    let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
+    let (ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
 
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
@@ -511,10 +511,10 @@ mod tests {
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
 
-        let last_id = client.get_recent_block_hash();
-        info!("test_thin_client last_id: {:?}", last_id);
+        let block_hash = client.get_recent_block_hash();
+        info!("test_thin_client block_hash: {:?}", block_hash);
 
-        let signature = client.transfer(500, &alice, bob_pubkey, &last_id).unwrap();
+        let signature = client.transfer(500, &alice, bob_pubkey, &block_hash).unwrap();
         info!("test_thin_client signature: {:?}", signature);
         client.poll_for_signature(&signature).unwrap();
 
@@ -541,15 +541,15 @@ mod tests {
 
         let mut client = mk_client(&leader_data);
 
-        let last_id = client.get_recent_block_hash();
+        let block_hash = client.get_recent_block_hash();
 
-        let tx = SystemTransaction::new_account(&alice, bob_pubkey, 500, last_id, 0);
+        let tx = SystemTransaction::new_account(&alice, bob_pubkey, 500, block_hash, 0);
 
         let _sig = client.transfer_signed(&tx).unwrap();
 
-        let last_id = client.get_recent_block_hash();
+        let block_hash = client.get_recent_block_hash();
 
-        let mut tr2 = SystemTransaction::new_account(&alice, bob_pubkey, 501, last_id, 0);
+        let mut tr2 = SystemTransaction::new_account(&alice, bob_pubkey, 501, block_hash, 0);
         let mut instruction2 = deserialize(tr2.userdata(0)).unwrap();
         if let SystemInstruction::Move { ref mut tokens } = instruction2 {
             *tokens = 502;
@@ -578,9 +578,9 @@ mod tests {
 
         // Create the validator account, transfer some tokens to that account
         let validator_keypair = Keypair::new();
-        let last_id = client.get_recent_block_hash();
+        let block_hash = client.get_recent_block_hash();
         let signature = client
-            .transfer(500, &alice, validator_keypair.pubkey(), &last_id)
+            .transfer(500, &alice, validator_keypair.pubkey(), &block_hash)
             .unwrap();
 
         client.poll_for_signature(&signature).unwrap();
@@ -588,12 +588,12 @@ mod tests {
         // Create and register the vote account
         let validator_vote_account_keypair = Keypair::new();
         let vote_account_id = validator_vote_account_keypair.pubkey();
-        let last_id = client.get_recent_block_hash();
+        let block_hash = client.get_recent_block_hash();
 
         let transaction = VoteTransaction::fund_staking_account(
             &validator_keypair,
             vote_account_id,
-            last_id,
+            block_hash,
             1,
             1,
         );
@@ -652,15 +652,15 @@ mod tests {
         );
 
         let mut client = mk_client(&leader_data);
-        let last_id = client.get_recent_block_hash();
-        info!("test_thin_client last_id: {:?}", last_id);
+        let block_hash = client.get_recent_block_hash();
+        info!("test_thin_client block_hash: {:?}", block_hash);
 
         let starting_alice_balance = client.poll_get_balance(&alice.pubkey()).unwrap();
         info!("Alice has {} tokens", starting_alice_balance);
 
         info!("Give Bob 500 tokens");
         let signature = client
-            .transfer(500, &alice, bob_keypair.pubkey(), &last_id)
+            .transfer(500, &alice, bob_keypair.pubkey(), &block_hash)
             .unwrap();
         client.poll_for_signature(&signature).unwrap();
 
@@ -669,7 +669,7 @@ mod tests {
 
         info!("Take Bob's 500 tokens away");
         let signature = client
-            .transfer(500, &bob_keypair, alice.pubkey(), &last_id)
+            .transfer(500, &bob_keypair, alice.pubkey(), &block_hash)
             .unwrap();
         client.poll_for_signature(&signature).unwrap();
         let alice_balance = client.poll_get_balance(&alice.pubkey()).unwrap();

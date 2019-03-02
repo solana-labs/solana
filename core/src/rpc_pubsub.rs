@@ -203,12 +203,12 @@ mod tests {
         let bob_pubkey = bob.pubkey();
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
-        let last_id = arc_bank.last_block_hash();
+        let block_hash = arc_bank.last_block_hash();
 
         let rpc = RpcSolPubSubImpl::default();
 
         // Test signature subscriptions
-        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
+        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, block_hash, 0);
 
         let session = create_session();
         let (subscriber, _id_receiver, mut receiver) =
@@ -232,7 +232,7 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
-        let last_id = arc_bank.last_block_hash();
+        let block_hash = arc_bank.last_block_hash();
 
         let session = create_session();
 
@@ -240,7 +240,7 @@ mod tests {
         let rpc = RpcSolPubSubImpl::default();
         io.extend_with(rpc.to_delegate());
 
-        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
+        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, block_hash, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
             tx.signatures[0].to_string()
@@ -279,7 +279,7 @@ mod tests {
         let executable = false; // TODO
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
-        let last_id = arc_bank.last_block_hash();
+        let block_hash = arc_bank.last_block_hash();
 
         let rpc = RpcSolPubSubImpl::default();
         let session = create_session();
@@ -289,7 +289,7 @@ mod tests {
         let tx = SystemTransaction::new_program_account(
             &alice,
             contract_funds.pubkey(),
-            last_id,
+            block_hash,
             50,
             0,
             budget_program_id,
@@ -300,7 +300,7 @@ mod tests {
         let tx = SystemTransaction::new_program_account(
             &alice,
             contract_state.pubkey(),
-            last_id,
+            block_hash,
             1,
             196,
             budget_program_id,
@@ -342,7 +342,7 @@ mod tests {
             witness.pubkey(),
             None,
             50,
-            last_id,
+            block_hash,
         );
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
@@ -371,14 +371,14 @@ mod tests {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
 
-        let tx = SystemTransaction::new_account(&alice, witness.pubkey(), 1, last_id, 0);
+        let tx = SystemTransaction::new_account(&alice, witness.pubkey(), 1, block_hash, 0);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
         let tx = BudgetTransaction::new_signature(
             &witness,
             contract_state.pubkey(),
             bob_pubkey,
-            last_id,
+            block_hash,
         );
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));

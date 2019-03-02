@@ -495,7 +495,7 @@ mod tests {
         let keypairs = vec![&keypair0, &keypair1];
         let tokens = 5;
         let fee = 2;
-        let last_id = Hash::default();
+        let block_hash = Hash::default();
 
         let keys = vec![keypair0.pubkey(), keypair1.pubkey()];
 
@@ -508,7 +508,7 @@ mod tests {
         let tx = Transaction::new_with_instructions(
             &keypairs,
             &keys,
-            last_id,
+            block_hash,
             fee,
             program_ids,
             instructions,
