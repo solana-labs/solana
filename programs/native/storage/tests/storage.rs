@@ -46,7 +46,7 @@ fn test_bank_storage() {
     let jill = Keypair::new();
 
     let x = 42;
-    let last_id = hash(&[x]);
+    let last_id = genesis_block.hash();
     let x2 = x * 2;
     let storage_last_id = hash(&[x2]);
 
