@@ -142,7 +142,7 @@ impl Bank {
 
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
-        let vote_accounts = bank.vote_accounts(|k, v| Some((*k, v.clone())));
+        let vote_accounts: HashMap<_, _> = bank.vote_accounts().collect();
         for i in 0..=bank.epoch_from_stakers_slot_offset() {
             bank.epoch_vote_accounts.insert(i, vote_accounts.clone());
         }
@@ -182,7 +182,7 @@ impl Bank {
             //  if my parent didn't populate for this epoch, we've
             //  crossed a boundary
             if epoch_vote_accounts.get(&epoch).is_none() {
-                epoch_vote_accounts.insert(epoch, bank.vote_accounts(|k, v| Some((*k, v.clone()))));
+                epoch_vote_accounts.insert(epoch, bank.vote_accounts().collect());
             }
             epoch_vote_accounts
         };
@@ -787,15 +787,8 @@ impl Bank {
     }
 
     /// current vote accounts for this bank
-    pub fn vote_accounts<F, T>(&self, filter: F) -> HashMap<Pubkey, T>
-    where
-        F: Fn(&Pubkey, &Account) -> Option<(Pubkey, T)>,
-    {
-        self.accounts()
-            .get_vote_accounts(self.accounts_id)
-            .iter()
-            .filter_map(|(pubkey, account)| filter(pubkey, account))
-            .collect()
+    pub fn vote_accounts(&self) -> impl Iterator<Item = (Pubkey, Account)> {
+        self.accounts().get_vote_accounts(self.accounts_id)
     }
 
     ///  vote accounts for the specific epoch
@@ -817,11 +810,10 @@ impl Bank {
     {
         self.accounts()
             .get_vote_accounts(self.accounts_id)
-            .iter()
             .filter_map(|(p, account)| {
                 if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
                     if cond(&p, &vote_state) {
-                        return Some((*p, vote_state));
+                        return Some((p, vote_state));
                     }
                 }
                 None

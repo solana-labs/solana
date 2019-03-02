@@ -226,13 +226,8 @@ impl Tpu {
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
-        let (banking_stage, entry_receiver) = BankingStage::new(
-            &bank,
-            poh_recorder,
-            verified_receiver,
-            max_tick_height,
-            self.id,
-        );
+        let (banking_stage, entry_receiver) =
+            BankingStage::new(&bank, poh_recorder, verified_receiver, max_tick_height);
 
         let broadcast_stage = BroadcastStage::new(
             slot,

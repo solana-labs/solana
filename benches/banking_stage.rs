@@ -118,13 +118,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         })
         .collect();
     let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    let (_stage, signal_receiver) = BankingStage::new(
-        &bank,
-        &poh_recorder,
-        verified_receiver,
-        std::u64::MAX,
-        genesis_block.bootstrap_leader_id,
-    );
+    let (_stage, signal_receiver) =
+        BankingStage::new(&bank, &poh_recorder, verified_receiver, std::u64::MAX);
 
     let mut id = genesis_block.hash();
     for _ in 0..MAX_RECENT_TICK_HASHES {
@@ -227,13 +222,8 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         })
         .collect();
     let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    let (_stage, signal_receiver) = BankingStage::new(
-        &bank,
-        &poh_recorder,
-        verified_receiver,
-        std::u64::MAX,
-        genesis_block.bootstrap_leader_id,
-    );
+    let (_stage, signal_receiver) =
+        BankingStage::new(&bank, &poh_recorder, verified_receiver, std::u64::MAX);
 
     let mut id = genesis_block.hash();
     for _ in 0..MAX_RECENT_TICK_HASHES {

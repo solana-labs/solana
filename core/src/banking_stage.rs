@@ -13,7 +13,6 @@ use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{self, Bank, BankError};
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_TICK_HASHES};
 use solana_sdk::transaction::Transaction;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -44,7 +43,6 @@ impl BankingStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: Receiver<VerifiedPackets>,
         max_tick_height: u64,
-        leader_id: Pubkey,
     ) -> (Self, Receiver<Vec<(Entry, u64)>>) {
         let (entry_sender, entry_receiver) = channel();
         let working_bank = WorkingBank {
@@ -70,8 +68,7 @@ impl BankingStage {
         let exit = Arc::new(AtomicBool::new(false));
 
         // Single thread to compute confirmation
-        let leader_confirmation_service =
-            LeaderConfirmationService::new(&bank, leader_id, exit.clone());
+        let leader_confirmation_service = LeaderConfirmationService::new(&bank, exit.clone());
 
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<UnprocessedPackets>> = (0..Self::num_threads())
@@ -382,7 +379,6 @@ mod tests {
             &poh_recorder,
             verified_receiver,
             DEFAULT_TICKS_PER_SLOT,
-            genesis_block.bootstrap_leader_id,
         );
         drop(verified_sender);
         banking_stage.join().unwrap();
@@ -402,7 +398,6 @@ mod tests {
             &poh_recorder,
             verified_receiver,
             genesis_block.ticks_per_slot - 1,
-            genesis_block.bootstrap_leader_id,
         );
         sleep(Duration::from_millis(600));
         drop(verified_sender);
@@ -430,7 +425,6 @@ mod tests {
             &poh_recorder,
             verified_receiver,
             DEFAULT_TICKS_PER_SLOT,
-            genesis_block.bootstrap_leader_id,
         );
 
         // good tx
@@ -489,7 +483,6 @@ mod tests {
             &poh_recorder,
             verified_receiver,
             DEFAULT_TICKS_PER_SLOT,
-            genesis_block.bootstrap_leader_id,
         );
 
         // Process a batch that includes a transaction that receives two tokens.
@@ -552,13 +545,8 @@ mod tests {
         let (verified_sender, verified_receiver) = channel();
         let max_tick_height = 10;
         let (poh_recorder, poh_service) = create_test_recorder(&bank);
-        let (banking_stage, _entry_receiver) = BankingStage::new(
-            &bank,
-            &poh_recorder,
-            verified_receiver,
-            max_tick_height,
-            genesis_block.bootstrap_leader_id,
-        );
+        let (banking_stage, _entry_receiver) =
+            BankingStage::new(&bank, &poh_recorder, verified_receiver, max_tick_height);
 
         loop {
             let bank_tick_height = bank.tick_height();
@@ -581,13 +569,8 @@ mod tests {
         let ticks_per_slot = 1;
         let (verified_sender, verified_receiver) = channel();
         let (poh_recorder, poh_service) = create_test_recorder(&bank);
-        let (mut banking_stage, _entry_receiver) = BankingStage::new(
-            &bank,
-            &poh_recorder,
-            verified_receiver,
-            ticks_per_slot,
-            genesis_block.bootstrap_leader_id,
-        );
+        let (mut banking_stage, _entry_receiver) =
+            BankingStage::new(&bank, &poh_recorder, verified_receiver, ticks_per_slot);
 
         // Wait for Poh recorder to hit max height
         loop {
