@@ -37,13 +37,13 @@ impl LeaderConfirmationService {
         bank.vote_accounts().for_each(|(_, account)| {
             total_stake += account.tokens;
             let vote_state = VoteState::deserialize(&account.userdata).unwrap();
-            slots_and_stakes.push(
-                vote_state
-                    .votes
-                    .back()
-                    .map(|vote| (vote.slot_height, account.tokens))
-                    .unwrap(),
-            );
+            if let Some(stake_and_state) = vote_state
+                .votes
+                .back()
+                .map(|vote| (vote.slot_height, account.tokens))
+            {
+                slots_and_stakes.push(stake_and_state);
+            }
         });
 
         let super_majority_stake = (2 * total_stake) / 3;
