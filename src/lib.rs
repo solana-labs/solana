@@ -10,7 +10,7 @@
 pub mod bank_forks;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
-pub mod broadcast_service;
+pub mod broadcast_stage;
 #[cfg(feature = "chacha")]
 pub mod chacha;
 #[cfg(all(feature = "chacha", feature = "cuda"))]

@@ -3,7 +3,7 @@
 
 use crate::banking_stage::{BankingStage, UnprocessedPackets};
 use crate::blocktree::Blocktree;
-use crate::broadcast_service::BroadcastService;
+use crate::broadcast_stage::BroadcastStage;
 use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
 use crate::fetch_stage::FetchStage;
@@ -29,7 +29,7 @@ pub struct LeaderServices {
     sigverify_stage: SigVerifyStage,
     banking_stage: BankingStage,
     cluster_info_vote_listener: ClusterInfoVoteListener,
-    broadcast_service: BroadcastService,
+    broadcast_stage: BroadcastStage,
 }
 
 impl LeaderServices {
@@ -38,14 +38,14 @@ impl LeaderServices {
         sigverify_stage: SigVerifyStage,
         banking_stage: BankingStage,
         cluster_info_vote_listener: ClusterInfoVoteListener,
-        broadcast_service: BroadcastService,
+        broadcast_stage: BroadcastStage,
     ) -> Self {
         LeaderServices {
             fetch_stage,
             sigverify_stage,
             banking_stage,
             cluster_info_vote_listener,
-            broadcast_service,
+            broadcast_stage,
         }
     }
 
@@ -59,7 +59,7 @@ impl LeaderServices {
         results.push(self.sigverify_stage.join());
         results.push(self.cluster_info_vote_listener.join());
         results.push(self.banking_stage.join());
-        let broadcast_result = self.broadcast_service.join();
+        let broadcast_result = self.broadcast_stage.join();
         for result in results {
             result?;
         }
@@ -217,7 +217,7 @@ impl Tpu {
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
-        // TODO: Fix BankingStage/BroadcastService to operate on `slot` directly instead of
+        // TODO: Fix BankingStage/BroadcastStage to operate on `slot` directly instead of
         // `max_tick_height`
         let max_tick_height = (slot + 1) * bank.ticks_per_slot() - 1;
         let blob_index = blocktree
@@ -234,7 +234,7 @@ impl Tpu {
             self.id,
         );
 
-        let broadcast_service = BroadcastService::new(
+        let broadcast_stage = BroadcastStage::new(
             slot,
             bank,
             broadcast_socket,
@@ -250,7 +250,7 @@ impl Tpu {
             sigverify_stage,
             banking_stage,
             cluster_info_vote_listener,
-            broadcast_service,
+            broadcast_stage,
         );
         self.tpu_mode = Some(TpuMode::Leader(svcs));
     }
