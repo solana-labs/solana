@@ -426,14 +426,14 @@ impl Service for BankingStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entry::EntrySlice;
-    //use crate::packet::to_packets;
     use crate::cluster_info::Node;
+    use crate::entry::EntrySlice;
+    use crate::packet::to_packets;
     use crate::poh_service::{PohService, PohServiceConfig};
     use solana_sdk::genesis_block::GenesisBlock;
     //use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    //use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction::SystemTransaction;
     //use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::thread::sleep;
 
@@ -490,7 +490,7 @@ mod tests {
             verified_receiver,
         );
         trace!("sending bank");
-        bank_sender.send(bank.clone());
+        bank_sender.send(bank.clone()).expect("send");
         sleep(Duration::from_millis(500));
         drop(verified_sender);
         drop(bank_sender);
@@ -508,62 +508,66 @@ mod tests {
         poh_service.close().unwrap();
     }
 
-    //     #[test]
-    //     fn test_banking_stage_entries_only() {
-    //         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
-    //         let bank = Arc::new(Bank::new(&genesis_block));
-    //         let start_hash = bank.last_id();
-    //         let (verified_sender, verified_receiver) = channel();
-    //         let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    //         let (banking_stage, entry_receiver) = BankingStage::new(
-    //             &bank,
-    //             &poh_recorder,
-    //             verified_receiver,
-    //             DEFAULT_TICKS_PER_SLOT,
-    //             genesis_block.bootstrap_leader_id,
-    //         );
-    //
-    //         // good tx
-    //         let keypair = mint_keypair;
-    //         let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
-    //
-    //         // good tx, but no verify
-    //         let tx_no_ver =
-    //             SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
-    //
-    //         // bad tx, AccountNotFound
-    //         let keypair = Keypair::new();
-    //         let tx_anf = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
-    //
-    //         // send 'em over
-    //         let packets = to_packets(&[tx, tx_no_ver, tx_anf]);
-    //
-    //         // glad they all fit
-    //         assert_eq!(packets.len(), 1);
-    //         verified_sender // tx, no_ver, anf
-    //             .send(vec![(packets[0].clone(), vec![1u8, 0u8, 1u8])])
-    //             .unwrap();
-    //
-    //         drop(verified_sender);
-    //
-    //         //receive entries + ticks
-    //         let entries: Vec<Vec<Entry>> = entry_receiver
-    //             .iter()
-    //             .map(|x| x.into_iter().map(|e| e.0).collect())
-    //             .collect();
-    //
-    //         assert!(entries.len() >= 1);
-    //
-    //         let mut last_id = start_hash;
-    //         entries.iter().for_each(|entries| {
-    //             assert_eq!(entries.len(), 1);
-    //             assert!(entries.verify(&last_id));
-    //             last_id = entries.last().unwrap().hash;
-    //         });
-    //         drop(entry_receiver);
-    //         banking_stage.join().unwrap();
-    //         poh_service.close().unwrap();
-    //     }
+    #[test]
+    fn test_banking_stage_entries_only() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let start_hash = bank.last_id();
+        let (verified_sender, verified_receiver) = channel();
+        let (bank_sender, bank_receiver) = channel();
+        let (poh_recorder, poh_service) = create_test_recorder(&bank);
+        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let (banking_stage, entry_receiver) = BankingStage::new(
+            &cluster_info,
+            bank_receiver,
+            &poh_recorder,
+            verified_receiver,
+        );
+        bank_sender.send(bank).expect("sending bank");
+
+        // good tx
+        let keypair = mint_keypair;
+        let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
+
+        // good tx, but no verify
+        let tx_no_ver =
+            SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
+
+        // bad tx, AccountNotFound
+        let keypair = Keypair::new();
+        let tx_anf = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
+
+        // send 'em over
+        let packets = to_packets(&[tx, tx_no_ver, tx_anf]);
+
+        // glad they all fit
+        assert_eq!(packets.len(), 1);
+        verified_sender // tx, no_ver, anf
+            .send(vec![(packets[0].clone(), vec![1u8, 0u8, 1u8])])
+            .unwrap();
+
+        drop(verified_sender);
+        drop(bank_sender);
+
+        //receive entries + ticks
+        let entries: Vec<Vec<Entry>> = entry_receiver
+            .iter()
+            .map(|x| x.1.into_iter().map(|e| e.0).collect())
+            .collect();
+
+        assert!(entries.len() >= 1);
+
+        let mut last_id = start_hash;
+        entries.iter().for_each(|entries| {
+            assert_eq!(entries.len(), 1);
+            assert!(entries.verify(&last_id));
+            last_id = entries.last().unwrap().hash;
+        });
+        drop(entry_receiver);
+        banking_stage.join().unwrap();
+        poh_service.close().unwrap();
+    }
     //     #[test]
     //     #[ignore] //flaky
     //     fn test_banking_stage_entryfication() {
