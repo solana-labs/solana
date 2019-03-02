@@ -1,4 +1,4 @@
-//! The `broadcast_service` broadcasts data from a leader node to validators
+//! A stage to broadcast data from a leader node to validators
 //!
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo, DATA_PLANE_FANOUT};
@@ -24,7 +24,7 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum BroadcastServiceReturnType {
+pub enum BroadcastStageReturnType {
     LeaderRotation,
     ChannelDisconnected,
     ExitSignal,
@@ -138,7 +138,7 @@ impl Broadcast {
     }
 }
 
-// Implement a destructor for the BroadcastService3 thread to signal it exited
+// Implement a destructor for the BroadcastStage thread to signal it exited
 // even on panics
 struct Finalizer {
     exit_sender: Arc<AtomicBool>,
@@ -156,11 +156,11 @@ impl Drop for Finalizer {
     }
 }
 
-pub struct BroadcastService {
-    thread_hdl: JoinHandle<BroadcastServiceReturnType>,
+pub struct BroadcastStage {
+    thread_hdl: JoinHandle<BroadcastStageReturnType>,
 }
 
-impl BroadcastService {
+impl BroadcastStage {
     #[allow(clippy::too_many_arguments)]
     fn run(
         slot_height: u64,
@@ -171,7 +171,7 @@ impl BroadcastService {
         receiver: &Receiver<Vec<(Entry, u64)>>,
         exit_signal: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
-    ) -> BroadcastServiceReturnType {
+    ) -> BroadcastStageReturnType {
         let me = cluster_info.read().unwrap().my_data().clone();
 
         let mut broadcast = Broadcast {
@@ -185,7 +185,7 @@ impl BroadcastService {
 
         loop {
             if exit_signal.load(Ordering::Relaxed) {
-                return BroadcastServiceReturnType::ExitSignal;
+                return BroadcastStageReturnType::ExitSignal;
             }
             let mut broadcast_table = cluster_info
                 .read()
@@ -204,7 +204,7 @@ impl BroadcastService {
             ) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
-                        return BroadcastServiceReturnType::ChannelDisconnected;
+                        return BroadcastStageReturnType::ChannelDisconnected;
                     }
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                     Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
@@ -267,10 +267,10 @@ impl BroadcastService {
     }
 }
 
-impl Service for BroadcastService {
-    type JoinReturnType = BroadcastServiceReturnType;
+impl Service for BroadcastStage {
+    type JoinReturnType = BroadcastStageReturnType;
 
-    fn join(self) -> thread::Result<BroadcastServiceReturnType> {
+    fn join(self) -> thread::Result<BroadcastStageReturnType> {
         self.thread_hdl.join()
     }
 }
@@ -291,9 +291,9 @@ mod test {
     use std::thread::sleep;
     use std::time::Duration;
 
-    struct MockBroadcastService {
+    struct MockBroadcastStage {
         blocktree: Arc<Blocktree>,
-        broadcast_service: BroadcastService,
+        broadcast_service: BroadcastStage,
     }
 
     fn setup_dummy_broadcast_service(
@@ -302,7 +302,7 @@ mod test {
         ledger_path: &str,
         entry_receiver: Receiver<Vec<(Entry, u64)>>,
         blob_index: u64,
-    ) -> MockBroadcastService {
+    ) -> MockBroadcastStage {
         // Make the database ledger
         let blocktree = Arc::new(Blocktree::open(ledger_path).unwrap());
 
@@ -322,7 +322,7 @@ mod test {
         let bank = Arc::new(Bank::default());
 
         // Start up the broadcast stage
-        let broadcast_service = BroadcastService::new(
+        let broadcast_service = BroadcastStage::new(
             slot_height,
             &bank,
             leader_info.sockets.broadcast,
@@ -333,7 +333,7 @@ mod test {
             &blocktree,
         );
 
-        MockBroadcastService {
+        MockBroadcastStage {
             blocktree,
             broadcast_service,
         }
