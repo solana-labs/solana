@@ -415,7 +415,7 @@ impl Bank {
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && !hash_queue.check_entry_age(tx.last_id, max_age) {
+                if lock_res.is_ok() && !hash_queue.check_entry_age(tx.recent_block_hash, max_age) {
                     error_counters.reserve_last_id += 1;
                     Err(BankError::LastIdNotFound)
                 } else {

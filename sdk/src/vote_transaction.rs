@@ -16,20 +16,20 @@ impl VoteTransaction {
     pub fn new_vote<T: KeypairUtil>(
         voting_keypair: &T,
         slot_height: u64,
-        last_id: Hash,
+        recent_block_hash: Hash,
         fee: u64,
     ) -> Transaction {
         let vote = Vote { slot_height };
         TransactionBuilder::new(fee)
             .push(VoteInstruction::new_vote(voting_keypair.pubkey(), vote))
-            .sign(&[voting_keypair], last_id)
+            .sign(&[voting_keypair], recent_block_hash)
     }
 
     /// Fund or create the staking account with tokens
     pub fn fund_staking_account(
         from_keypair: &Keypair,
         vote_account_id: Pubkey,
-        last_id: Hash,
+        recent_block_hash: Hash,
         num_tokens: u64,
         fee: u64,
     ) -> Transaction {
@@ -41,7 +41,7 @@ impl VoteTransaction {
         Transaction::new_with_instructions(
             &[from_keypair],
             &[vote_account_id],
-            last_id,
+            recent_block_hash,
             fee,
             vec![system_program::id(), vote_program::id()],
             vec![
@@ -54,7 +54,7 @@ impl VoteTransaction {
     /// Choose a node id to `delegate` or `assign` this vote account to
     pub fn delegate_vote_account<T: KeypairUtil>(
         vote_keypair: &T,
-        last_id: Hash,
+        recent_block_hash: Hash,
         node_id: Pubkey,
         fee: u64,
     ) -> Transaction {
@@ -63,7 +63,7 @@ impl VoteTransaction {
                 vote_keypair.pubkey(),
                 node_id,
             ))
-            .sign(&[vote_keypair], last_id)
+            .sign(&[vote_keypair], recent_block_hash)
     }
 
     fn get_vote(tx: &Transaction, ix_index: usize) -> Option<(Pubkey, Vote, Hash)> {
@@ -72,7 +72,7 @@ impl VoteTransaction {
         }
         let instruction = deserialize(&tx.userdata(ix_index)).unwrap();
         if let VoteInstruction::Vote(vote) = instruction {
-            Some((tx.account_keys[0], vote, tx.last_id))
+            Some((tx.account_keys[0], vote, tx.recent_block_hash))
         } else {
             None
         }
@@ -93,11 +93,11 @@ mod tests {
     fn test_get_votes() {
         let keypair = Keypair::new();
         let slot_height = 1;
-        let last_id = Hash::default();
-        let transaction = VoteTransaction::new_vote(&keypair, slot_height, last_id, 0);
+        let recent_block_hash = Hash::default();
+        let transaction = VoteTransaction::new_vote(&keypair, slot_height, recent_block_hash, 0);
         assert_eq!(
             VoteTransaction::get_votes(&transaction),
-            vec![(keypair.pubkey(), Vote::new(slot_height), last_id)]
+            vec![(keypair.pubkey(), Vote::new(slot_height), recent_block_hash)]
         );
     }
 }

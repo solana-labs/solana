@@ -91,7 +91,7 @@ impl TransactionBuilder {
     }
 
     /// Return a signed transaction.
-    pub fn sign<T: KeypairUtil>(&self, keypairs: &[&T], last_id: Hash) -> Transaction {
+    pub fn sign<T: KeypairUtil>(&self, keypairs: &[&T], recent_block_hash: Hash) -> Transaction {
         let program_ids = self.program_ids();
         let (mut signed_keys, unsigned_keys) = self.keys();
         for (i, keypair) in keypairs.iter().enumerate() {
@@ -104,7 +104,7 @@ impl TransactionBuilder {
         Transaction::new_with_instructions(
             keypairs,
             &unsigned_keys,
-            last_id,
+            recent_block_hash,
             self.fee,
             program_ids,
             instructions,

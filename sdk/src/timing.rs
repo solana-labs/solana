@@ -9,10 +9,10 @@ pub const NUM_TICKS_PER_SECOND: u64 = 10;
 pub const DEFAULT_TICKS_PER_SLOT: u64 = 80;
 pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 64;
 
-/// The time window of recent `last_id` values that the bank will track the signatures
-/// of over. Once the bank discards a `last_id`, it will reject any transactions that use
-/// that `last_id` in a transaction. Lowering this value reduces memory consumption,
-/// but requires clients to update its `last_id` more frequently. Raising the value
+/// The time window of recent block hash values that the bank will track the signatures
+/// of over. Once the bank discards a block hash, it will reject any transactions that use
+/// that `recent_block_hash` in a transaction. Lowering this value reduces memory consumption,
+/// but requires clients to update its `recent_block_hash` more frequently. Raising the value
 /// lengthens the time a client must wait to be certain a missing transaction will
 /// not be processed by the network.
 pub const MAX_HASH_AGE_IN_SECONDS: usize = 120;

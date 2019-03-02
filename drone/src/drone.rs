@@ -368,7 +368,7 @@ mod tests {
 
         assert_eq!(tx.signatures.len(), 1);
         assert_eq!(tx.account_keys, vec![mint_pubkey, to]);
-        assert_eq!(tx.last_id, last_id);
+        assert_eq!(tx.recent_block_hash, last_id);
         assert_eq!(tx.program_ids, vec![system_program::id()]);
 
         assert_eq!(tx.instructions.len(), 1);
