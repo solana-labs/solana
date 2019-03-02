@@ -26,13 +26,13 @@ impl<'a> VoteBank<'a> {
         vote_id: Pubkey,
         lamports: u64,
     ) -> Result<()> {
-        let last_id = self.bank.last_id();
+        let last_id = self.bank.last_block_hash();
         let tx = VoteTransaction::fund_staking_account(from_keypair, vote_id, last_id, lamports, 0);
         self.bank.process_transaction(&tx)
     }
 
     fn submit_vote(&self, vote_keypair: &Keypair, tick_height: u64) -> Result<VoteState> {
-        let last_id = self.bank.last_id();
+        let last_id = self.bank.last_block_hash();
         let tx = VoteTransaction::new_vote(vote_keypair, tick_height, last_id, 0);
         self.bank.process_transaction(&tx)?;
         self.bank.register_tick(&hash(last_id.as_ref()));
@@ -71,7 +71,7 @@ fn test_vote_via_bank_with_no_signature() {
         .unwrap();
 
     let mallory_id = mallory_keypair.pubkey();
-    let last_id = bank.last_id();
+    let last_id = bank.last_block_hash();
     let vote_ix = BuilderInstruction::new(
         vote_program::id(),
         &VoteInstruction::Vote(Vote::new(0)),

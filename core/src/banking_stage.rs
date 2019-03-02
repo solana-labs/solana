@@ -361,7 +361,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
             bank.tick_height(),
-            bank.last_id(),
+            bank.last_block_hash(),
         )));
         let poh_service = PohService::new(
             poh_recorder.clone(),
@@ -394,7 +394,7 @@ mod tests {
         let (mut genesis_block, _mint_keypair) = GenesisBlock::new(2);
         genesis_block.ticks_per_slot = 4;
         let bank = Arc::new(Bank::new(&genesis_block));
-        let start_hash = bank.last_id();
+        let start_hash = bank.last_block_hash();
         let (verified_sender, verified_receiver) = channel();
         let (poh_recorder, poh_service) = create_test_recorder(&bank);
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -413,7 +413,7 @@ mod tests {
             .collect();
         assert_eq!(entries.len(), genesis_block.ticks_per_slot as usize - 1);
         assert!(entries.verify(&start_hash));
-        assert_eq!(entries[entries.len() - 1].hash, bank.last_id());
+        assert_eq!(entries[entries.len() - 1].hash, bank.last_block_hash());
         banking_stage.join().unwrap();
         poh_service.close().unwrap();
     }
@@ -422,7 +422,7 @@ mod tests {
     fn test_banking_stage_entries_only() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let start_hash = bank.last_id();
+        let start_hash = bank.last_block_hash();
         let (verified_sender, verified_receiver) = channel();
         let (poh_recorder, poh_service) = create_test_recorder(&bank);
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -636,7 +636,7 @@ mod tests {
 
         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
             bank.tick_height(),
-            bank.last_id(),
+            bank.last_block_hash(),
         )));
         poh_recorder.lock().unwrap().set_working_bank(working_bank);
         let pubkey = Keypair::new().pubkey();
@@ -691,7 +691,7 @@ mod tests {
         };
         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
             bank.tick_height(),
-            bank.last_id(),
+            bank.last_block_hash(),
         )));
         poh_recorder.lock().unwrap().set_working_bank(working_bank);
 

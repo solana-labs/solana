@@ -109,7 +109,7 @@ pub mod tests {
         bank: &Bank,
         num_tokens: u64,
     ) {
-        let last_id = bank.last_id();
+        let last_id = bank.last_block_hash();
         let tx = VoteTransaction::fund_staking_account(
             from_keypair,
             *voting_pubkey,
@@ -121,7 +121,7 @@ pub mod tests {
     }
 
     pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot_height: u64) {
-        let last_id = bank.last_id();
+        let last_id = bank.last_block_hash();
         let tx = VoteTransaction::new_vote(voting_keypair, slot_height, last_id, 0);
         bank.process_transaction(&tx).unwrap();
     }

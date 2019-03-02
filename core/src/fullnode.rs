@@ -124,10 +124,10 @@ impl Fullnode {
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_id].clone();
 
-        info!("starting PoH... {} {}", bank.tick_height(), bank.last_id(),);
+        info!("starting PoH... {} {}", bank.tick_height(), bank.last_block_hash(),);
         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
             bank.tick_height(),
-            bank.last_id(),
+            bank.last_block_hash(),
         )));
         let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, exit.clone());
 

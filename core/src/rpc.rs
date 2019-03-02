@@ -58,7 +58,7 @@ impl JsonRpcRequestProcessor {
     }
 
     fn get_recent_block_hash(&self) -> Result<String> {
-        let id = self.bank()?.last_id();
+        let id = self.bank()?.last_block_hash();
         Ok(bs58::encode(id).into_string())
     }
 
@@ -255,7 +255,7 @@ impl RpcSol for RpcSolImpl {
         trace!("request_airdrop id={} tokens={}", id, tokens);
         let pubkey = verify_pubkey(id)?;
 
-        let last_id = meta.request_processor.read().unwrap().bank()?.last_id();
+        let last_id = meta.request_processor.read().unwrap().bank()?.last_block_hash();
         let transaction = request_airdrop_transaction(&meta.drone_addr, &pubkey, tokens, last_id)
             .map_err(|err| {
             info!("request_airdrop_transaction failed: {:?}", err);
@@ -370,7 +370,7 @@ mod tests {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
 
-        let last_id = bank.last_id();
+        let last_id = bank.last_block_hash();
         let tx = SystemTransaction::new_move(&alice, pubkey, 20, last_id, 0);
         bank.process_transaction(&tx).expect("process transaction");
 
@@ -406,7 +406,7 @@ mod tests {
         let mut request_processor = JsonRpcRequestProcessor::new(StorageState::default());
         request_processor.set_bank(&bank);
         thread::spawn(move || {
-            let last_id = bank.last_id();
+            let last_id = bank.last_block_hash();
             let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
             bank.process_transaction(&tx).expect("process transaction");
         })

@@ -24,7 +24,7 @@ impl<'a> RewardsBank<'a> {
         rewards_id: Pubkey,
         lamports: u64,
     ) -> Result<()> {
-        let last_id = self.bank.last_id();
+        let last_id = self.bank.last_block_hash();
         let tx = RewardsTransaction::new_account(from_keypair, rewards_id, last_id, lamports, 0);
         self.bank.process_transaction(&tx)
     }
@@ -35,13 +35,13 @@ impl<'a> RewardsBank<'a> {
         vote_id: Pubkey,
         lamports: u64,
     ) -> Result<()> {
-        let last_id = self.bank.last_id();
+        let last_id = self.bank.last_block_hash();
         let tx = VoteTransaction::fund_staking_account(from_keypair, vote_id, last_id, lamports, 0);
         self.bank.process_transaction(&tx)
     }
 
     fn submit_vote(&self, vote_keypair: &Keypair, tick_height: u64) -> Result<VoteState> {
-        let last_id = self.bank.last_id();
+        let last_id = self.bank.last_block_hash();
         let tx = VoteTransaction::new_vote(vote_keypair, tick_height, last_id, 0);
         self.bank.process_transaction(&tx)?;
         self.bank.register_tick(&hash(last_id.as_ref()));
@@ -51,7 +51,7 @@ impl<'a> RewardsBank<'a> {
     }
 
     fn redeem_credits(&self, rewards_id: Pubkey, vote_keypair: &Keypair) -> Result<VoteState> {
-        let last_id = self.bank.last_id();
+        let last_id = self.bank.last_block_hash();
         let tx = RewardsTransaction::new_redeem_credits(&vote_keypair, rewards_id, last_id, 0);
         self.bank.process_transaction(&tx)?;
         let vote_account = self.bank.get_account(&vote_keypair.pubkey()).unwrap();

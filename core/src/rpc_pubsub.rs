@@ -203,7 +203,7 @@ mod tests {
         let bob_pubkey = bob.pubkey();
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
-        let last_id = arc_bank.last_id();
+        let last_id = arc_bank.last_block_hash();
 
         let rpc = RpcSolPubSubImpl::default();
 
@@ -232,7 +232,7 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
-        let last_id = arc_bank.last_id();
+        let last_id = arc_bank.last_block_hash();
 
         let session = create_session();
 
@@ -279,7 +279,7 @@ mod tests {
         let executable = false; // TODO
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
-        let last_id = arc_bank.last_id();
+        let last_id = arc_bank.last_block_hash();
 
         let rpc = RpcSolPubSubImpl::default();
         let session = create_session();

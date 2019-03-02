@@ -86,7 +86,7 @@ fn test_replay() {
     let tvu_addr = target1.info.tvu;
 
     let bank = Bank::new(&genesis_block);
-    let last_id = bank.last_id();
+    let last_id = bank.last_block_hash();
     let bank_forks = BankForks::new(0, bank);
     let bank_forks_info = vec![BankForksInfo {
         bank_id: 0,
