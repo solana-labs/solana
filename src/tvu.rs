@@ -23,8 +23,7 @@ use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
+use solana_runtime::bank::Bank;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -63,8 +62,8 @@ impl Tvu {
         sockets: Sockets,
         blocktree: Arc<Blocktree>,
         storage_rotate_count: u64,
-        to_leader_sender: &TvuRotationSender,
         storage_state: &StorageState,
+        bank_sender: Sender<Arc<Bank>>,
         blockstream: Option<&String>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
@@ -115,7 +114,6 @@ impl Tvu {
             &bank_forks_info,
             cluster_info.clone(),
             exit.clone(),
-            to_leader_sender,
             ledger_signal_receiver,
             subscriptions,
         );

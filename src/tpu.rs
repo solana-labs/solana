@@ -77,13 +77,13 @@ impl Tpu {
     pub fn new(
         id: Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        bank_receiver: &Receiver<Bank>,
+        bank_receiver: Receiver<Arc<Bank>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         transactions_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
         blocktree: &Arc<Blocktree>,
-    ) {
+    ) -> Self {
         cluster_info.write().unwrap().set_leader(id);
 
         let exit = Arc::new(AtomicBool::new(false));

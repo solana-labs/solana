@@ -3,6 +3,7 @@ use crate::client::mk_client;
 use crate::cluster_info::{Node, NodeInfo};
 use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::gossip_service::discover;
+use crate::service::Service;
 use crate::thin_client::retry_get_balance;
 use crate::thin_client::ThinClient;
 use crate::voting_keypair::VotingKeypair;
@@ -14,16 +15,14 @@ use solana_sdk::vote_program::VoteState;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::fs::remove_dir_all;
 use std::io::{Error, ErrorKind, Result};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::thread::JoinHandle;
 
 pub struct LocalCluster {
     /// Keypair with funding to particpiate in the network
     pub funding_keypair: Keypair,
     /// Entry point from which the rest of the network can be discovered
     pub entry_point_info: NodeInfo,
-    fullnode_hdls: Vec<(JoinHandle<()>, Arc<AtomicBool>)>,
+    fullnodes: Vec<Fullnode>,
     ledger_paths: Vec<String>,
 }
 
@@ -50,8 +49,7 @@ impl LocalCluster {
             None,
             &fullnode_config,
         );
-        let (thread, exit, _) = leader_server.start(None);
-        let mut fullnode_hdls = vec![(thread, exit)];
+        let mut fullnodes = vec![leader_server];
         let mut client = mk_client(&leader_node_info);
         for _ in 0..(num_nodes - 1) {
             let validator_keypair = Arc::new(Keypair::new());
@@ -88,27 +86,26 @@ impl LocalCluster {
                 Some(&leader_node_info),
                 &fullnode_config,
             );
-            let (thread, exit, _) = validator_server.start(None);
-            fullnode_hdls.push((thread, exit));
+            fullnodes.push(validator_server);
         }
         discover(&leader_node_info, num_nodes);
         Self {
             funding_keypair: mint_keypair,
             entry_point_info: leader_node_info,
-            fullnode_hdls,
+            fullnodes,
             ledger_paths,
         }
     }
 
     pub fn exit(&self) {
-        for node in &self.fullnode_hdls {
-            node.1.store(true, Ordering::Relaxed);
+        for node in &self.fullnodes {
+            node.exit();
         }
     }
     pub fn close(&mut self) {
         self.exit();
-        while let Some(node) = self.fullnode_hdls.pop() {
-            node.0.join().expect("join");
+        while let Some(node) = self.fullnodes.pop() {
+            node.join();
         }
         for path in &self.ledger_paths {
             remove_dir_all(path).unwrap();

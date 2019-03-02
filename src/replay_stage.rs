@@ -332,7 +332,7 @@ mod test {
         // Set up the replay stage
         let exit = Arc::new(AtomicBool::new(false));
         let voting_keypair = Arc::new(Keypair::new());
-        let (to_leader_sender, _to_leader_receiver) = channel();
+        let (bank_sender, _bank_receiver) = channel();
         {
             let (bank_forks, bank_forks_info, blocktree, l_receiver) =
                 new_banks_from_blocktree(&my_ledger_path, None);
@@ -347,7 +347,7 @@ mod test {
                 &bank_forks_info,
                 cluster_info_me.clone(),
                 exit.clone(),
-                &to_leader_sender,
+                bank_sender,
                 l_receiver,
                 &Arc::new(RpcSubscriptions::default()),
             );

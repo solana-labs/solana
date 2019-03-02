@@ -28,7 +28,7 @@ pub struct LeaderConfirmationService {
 
 impl LeaderConfirmationService {
     fn get_last_supermajority_timestamp(
-        bank: &Arc<Bank>,
+        bank: &Bank,
         leader_id: Pubkey,
         last_valid_validator_timestamp: u64,
     ) -> result::Result<u64, ConfirmationError> {
@@ -103,7 +103,7 @@ impl LeaderConfirmationService {
 
     /// Create a new LeaderConfirmationService for computing confirmation.
     pub fn new(leader_id: Pubkey, exit: Arc<AtomicBool>) -> Self {
-        let current_bank = Arc::new(Mutex::new(None));
+        let current_bank: Arc<Mutex<Option<Arc<Bank>>>> = Arc::new(Mutex::new(None));
         let thread_hdl = Builder::new()
             .name("solana-leader-confirmation-service".to_string())
             .spawn(move || {
@@ -115,7 +115,7 @@ impl LeaderConfirmationService {
                     }
                     // dont hold this lock to long
                     let maybe_bank = current_bank.lock().unwrap().clone();
-                    if let Some(bank) = maybe_bank {
+                    if let Some(ref bank) = maybe_bank {
                         Self::compute_confirmation(
                             bank,
                             leader_id,
