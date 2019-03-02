@@ -39,7 +39,7 @@ pub struct StorageStateInner {
     storage_results: StorageResults,
     storage_keys: StorageKeys,
     replicator_map: ReplicatorMap,
-    storage_last_id: Hash,
+    storage_block_hash: Hash,
     entry_height: u64,
 }
 
@@ -93,7 +93,7 @@ impl StorageState {
             storage_results,
             replicator_map,
             entry_height: 0,
-            storage_last_id: Hash::default(),
+            storage_block_hash: Hash::default(),
         };
 
         StorageState {
@@ -111,8 +111,8 @@ impl StorageState {
         self.state.read().unwrap().storage_results[idx]
     }
 
-    pub fn get_last_id(&self) -> Hash {
-        self.state.read().unwrap().storage_last_id
+    pub fn get_storage_block_hash(&self) -> Hash {
+        self.state.read().unwrap().storage_block_hash
     }
 
     pub fn get_entry_height(&self) -> u64 {

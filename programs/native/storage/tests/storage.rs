@@ -25,7 +25,7 @@ fn get_storage_entry_height(bank: &Bank, account: Pubkey) -> u64 {
     0
 }
 
-fn get_storage_last_id(bank: &Bank, account: Pubkey) -> Hash {
+fn get_storage_block_hash(bank: &Bank, account: Pubkey) -> Hash {
     if let Some(storage_system_account) = bank.get_account(&account) {
         let state = deserialize(&storage_system_account.userdata);
         if let Ok(state) = state {
@@ -48,7 +48,7 @@ fn test_bank_storage() {
     let x = 42;
     let last_id = genesis_block.hash();
     let x2 = x * 2;
-    let storage_last_id = hash(&[x2]);
+    let storage_block_hash = hash(&[x2]);
 
     bank.register_tick(&last_id);
 
@@ -71,7 +71,7 @@ fn test_bank_storage() {
 
     let tx = StorageTransaction::new_advertise_recent_block_hash(
         &bob,
-        storage_last_id,
+        storage_block_hash,
         last_id,
         ENTRIES_PER_SEGMENT,
     );
@@ -94,5 +94,5 @@ fn test_bank_storage() {
         get_storage_entry_height(&bank, bob.pubkey()),
         ENTRIES_PER_SEGMENT
     );
-    assert_eq!(get_storage_last_id(&bank, bob.pubkey()), storage_last_id);
+    assert_eq!(get_storage_block_hash(&bank, bob.pubkey()), storage_block_hash);
 }
