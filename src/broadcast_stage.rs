@@ -1,5 +1,6 @@
 //! A stage to broadcast data from a leader node to validators
 //!
+use crate::banking_stage::TpuBankEntries;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT};
 use crate::entry::EntrySlice;
@@ -7,7 +8,6 @@ use crate::entry::EntrySlice;
 use crate::erasure::CodingGenerator;
 use crate::packet::index_blobs;
 use crate::result::{Error, Result};
-use crate::banking_stage::TpuBankEntries;
 use crate::service::Service;
 use crate::staking_utils;
 use rayon::prelude::*;

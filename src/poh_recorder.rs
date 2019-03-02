@@ -10,6 +10,7 @@
 //! For Entries:
 //! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::man_tick_height
 //!
+use crate::banking_stage::TpuBankEntries;
 use crate::entry::Entry;
 use crate::poh::Poh;
 use crate::result::{Error, Result};
@@ -29,7 +30,7 @@ pub enum PohRecorderError {
 #[derive(Clone)]
 pub struct WorkingBank {
     pub bank: Arc<Bank>,
-    pub sender: Sender<(Arc<Bank>, Vec<(Entry, u64)>)>,
+    pub sender: Sender<TpuBankEntries>,
     pub min_tick_height: u64,
     pub max_tick_height: u64,
 }
