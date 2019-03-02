@@ -127,9 +127,6 @@ impl PohRecorder {
     }
 
     pub fn tick(&mut self) {
-        // Register and send the entry out while holding the lock if the max PoH height
-        // hasn't been reached.
-        // This guarantees PoH order and Entry production and banks LastId queue is the same
         let tick = self.generate_tick();
         trace!("tick {}", tick.1);
         self.tick_cache.push(tick);
@@ -137,15 +134,10 @@ impl PohRecorder {
     }
 
     pub fn record(&mut self, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
-        // Register and send the entry out while holding the lock.
-        // This guarantees PoH order and Entry production and banks LastId queue is the same.
         self.flush_cache(false)?;
         self.record_and_send_txs(mixin, txs)
     }
 
-    /// A recorder to synchronize PoH with the following data structures
-    /// * bank - the LastId's queue is updated on `tick` and `record` events
-    /// * sender - the Entry channel that outputs to the ledger
     pub fn new(tick_height: u64, last_entry_hash: Hash) -> Self {
         let poh = Poh::new(last_entry_hash, tick_height);
         PohRecorder {
