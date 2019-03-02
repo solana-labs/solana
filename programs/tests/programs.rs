@@ -39,7 +39,8 @@ fn load_program(bank: &Bank, from: &Keypair, loader_id: Pubkey, program: Vec<u8>
         offset += chunk_size as u32;
     }
 
-    let tx = LoaderTransaction::new_finalize(&program_account, loader_id, bank.last_block_hash(), 0);
+    let tx =
+        LoaderTransaction::new_finalize(&program_account, loader_id, bank.last_block_hash(), 0);
     bank.process_transaction(&tx).unwrap();
     assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
 
@@ -57,7 +58,14 @@ fn test_program_native_noop() {
     let program_id = load_program(&bank, &mint_keypair, native_loader::id(), program);
 
     // Call user program
-    let tx = Transaction::new(&mint_keypair, &[], program_id, &1u8, bank.last_block_hash(), 0);
+    let tx = Transaction::new(
+        &mint_keypair,
+        &[],
+        program_id,
+        &1u8,
+        bank.last_block_hash(),
+        0,
+    );
     bank.process_transaction(&tx).unwrap();
     assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
 }
@@ -73,7 +81,14 @@ fn test_program_native_failure() {
     let program_id = load_program(&bank, &mint_keypair, native_loader::id(), program);
 
     // Call user program
-    let tx = Transaction::new(&mint_keypair, &[], program_id, &1u8, bank.last_block_hash(), 0);
+    let tx = Transaction::new(
+        &mint_keypair,
+        &[],
+        program_id,
+        &1u8,
+        bank.last_block_hash(),
+        0,
+    );
     assert_eq!(
         bank.process_transaction(&tx),
         Err(BankError::ProgramError(0, ProgramError::GenericError))

@@ -34,7 +34,7 @@ use std::thread;
 
 pub struct TvuRotationInfo {
     pub tick_height: u64,  // tick height, bank might not exist yet
-    pub block_hash: Hash,     // block_hash that was voted on
+    pub block_hash: Hash,  // block_hash that was voted on
     pub slot: u64,         // slot height to initiate a rotation
     pub leader_id: Pubkey, // leader upon rotation
 }

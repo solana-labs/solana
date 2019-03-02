@@ -52,10 +52,12 @@ fn test_bank_storage() {
 
     bank.register_tick(&block_hash);
 
-    bank.transfer(10, &alice, jill.pubkey(), block_hash).unwrap();
+    bank.transfer(10, &alice, jill.pubkey(), block_hash)
+        .unwrap();
 
     bank.transfer(10, &alice, bob.pubkey(), block_hash).unwrap();
-    bank.transfer(10, &alice, jack.pubkey(), block_hash).unwrap();
+    bank.transfer(10, &alice, jack.pubkey(), block_hash)
+        .unwrap();
 
     let tx = SystemTransaction::new_program_account(
         &alice,
@@ -94,5 +96,8 @@ fn test_bank_storage() {
         get_storage_entry_height(&bank, bob.pubkey()),
         ENTRIES_PER_SEGMENT
     );
-    assert_eq!(get_storage_block_hash(&bank, bob.pubkey()), storage_block_hash);
+    assert_eq!(
+        get_storage_block_hash(&bank, bob.pubkey()),
+        storage_block_hash
+    );
 }

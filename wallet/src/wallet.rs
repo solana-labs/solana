@@ -590,7 +590,8 @@ fn process_pay(
 
 fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: Pubkey) -> ProcessResult {
     let block_hash = get_recent_block_hash(&rpc_client)?;
-    let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, config.id.pubkey(), block_hash);
+    let mut tx =
+        BudgetTransaction::new_signature(&config.id, pubkey, config.id.pubkey(), block_hash);
     let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
     Ok(signature_str.to_string())
 }

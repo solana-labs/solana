@@ -124,7 +124,11 @@ impl Fullnode {
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_id].clone();
 
-        info!("starting PoH... {} {}", bank.tick_height(), bank.last_block_hash(),);
+        info!(
+            "starting PoH... {} {}",
+            bank.tick_height(),
+            bank.last_block_hash(),
+        );
         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
             bank.tick_height(),
             bank.last_block_hash(),
@@ -441,8 +445,13 @@ pub fn make_active_set_entries(
     num_ending_ticks: u64,
 ) -> (Vec<Entry>, VotingKeypair) {
     // 1) Assume the active_keypair node has no tokens staked
-    let transfer_tx =
-        SystemTransaction::new_account(&token_source, active_keypair.pubkey(), stake, *block_hash, 0);
+    let transfer_tx = SystemTransaction::new_account(
+        &token_source,
+        active_keypair.pubkey(),
+        stake,
+        *block_hash,
+        0,
+    );
     let mut last_entry_hash = *block_hash;
     let transfer_entry = next_entry_mut(&mut last_entry_hash, 1, vec![transfer_tx]);
 
@@ -455,7 +464,8 @@ pub fn make_active_set_entries(
     let new_vote_account_entry = next_entry_mut(&mut last_entry_hash, 1, vec![new_vote_account_tx]);
 
     // 3) Create vote entry
-    let vote_tx = VoteTransaction::new_vote(&voting_keypair, slot_height_to_vote_on, *block_hash, 0);
+    let vote_tx =
+        VoteTransaction::new_vote(&voting_keypair, slot_height_to_vote_on, *block_hash, 0);
     let vote_entry = next_entry_mut(&mut last_entry_hash, 1, vec![vote_tx]);
 
     // 4) Create `num_ending_ticks` empty ticks

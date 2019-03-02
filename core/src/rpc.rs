@@ -211,7 +211,10 @@ impl RpcSol for RpcSolImpl {
 
     fn get_recent_block_hash(&self, meta: Self::Metadata) -> Result<String> {
         info!("get_recent_block_hash rpc request received");
-        meta.request_processor.read().unwrap().get_recent_block_hash()
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_recent_block_hash()
     }
 
     fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus> {
@@ -255,12 +258,19 @@ impl RpcSol for RpcSolImpl {
         trace!("request_airdrop id={} tokens={}", id, tokens);
         let pubkey = verify_pubkey(id)?;
 
-        let block_hash = meta.request_processor.read().unwrap().bank()?.last_block_hash();
-        let transaction = request_airdrop_transaction(&meta.drone_addr, &pubkey, tokens, block_hash)
-            .map_err(|err| {
-            info!("request_airdrop_transaction failed: {:?}", err);
-            Error::internal_error()
-        })?;;
+        let block_hash = meta
+            .request_processor
+            .read()
+            .unwrap()
+            .bank()?
+            .last_block_hash();
+        let transaction =
+            request_airdrop_transaction(&meta.drone_addr, &pubkey, tokens, block_hash).map_err(
+                |err| {
+                    info!("request_airdrop_transaction failed: {:?}", err);
+                    Error::internal_error()
+                },
+            )?;;
 
         let data = serialize(&transaction).map_err(|err| {
             info!("request_airdrop: serialize error: {:?}", err);

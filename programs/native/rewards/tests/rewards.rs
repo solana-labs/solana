@@ -36,7 +36,8 @@ impl<'a> RewardsBank<'a> {
         lamports: u64,
     ) -> Result<()> {
         let block_hash = self.bank.last_block_hash();
-        let tx = VoteTransaction::fund_staking_account(from_keypair, vote_id, block_hash, lamports, 0);
+        let tx =
+            VoteTransaction::fund_staking_account(from_keypair, vote_id, block_hash, lamports, 0);
         self.bank.process_transaction(&tx)
     }
 

@@ -332,7 +332,8 @@ impl Serialize for Transaction {
             .map_err(Error::custom)?;
         serialize_vec_with(&mut wr, &self.account_keys, Transaction::serialize_pubkey)
             .map_err(Error::custom)?;
-        wr.write_all(self.recent_block_hash.as_ref()).map_err(Error::custom)?;
+        wr.write_all(self.recent_block_hash.as_ref())
+            .map_err(Error::custom)?;
         wr.write_u64::<LittleEndian>(self.fee)
             .map_err(Error::custom)?;
         serialize_vec_with(&mut wr, &self.program_ids, Transaction::serialize_pubkey)
