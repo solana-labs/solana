@@ -129,7 +129,7 @@ pub enum RpcRequest {
     ConfirmTransaction,
     GetAccountInfo,
     GetBalance,
-    GetLastId,
+    GetRecentBlockHash,
     GetSignatureStatus,
     GetTransactionCount,
     RequestAirdrop,
@@ -149,7 +149,7 @@ impl RpcRequest {
             RpcRequest::ConfirmTransaction => "confirmTransaction",
             RpcRequest::GetAccountInfo => "getAccountInfo",
             RpcRequest::GetBalance => "getBalance",
-            RpcRequest::GetLastId => "getLastId",
+            RpcRequest::GetRecentBlockHash => "getRecentBlockHash",
             RpcRequest::GetSignatureStatus => "getSignatureStatus",
             RpcRequest::GetTransactionCount => "getTransactionCount",
             RpcRequest::RequestAirdrop => "requestAirdrop",
@@ -217,9 +217,9 @@ mod tests {
         let request = test_request.build_request_json(1, Some(addr));
         assert_eq!(request["method"], "getBalance");
 
-        let test_request = RpcRequest::GetLastId;
+        let test_request = RpcRequest::GetRecentBlockHash;
         let request = test_request.build_request_json(1, None);
-        assert_eq!(request["method"], "getLastId");
+        assert_eq!(request["method"], "getRecentBlockHash");
 
         let test_request = RpcRequest::GetTransactionCount;
         let request = test_request.build_request_json(1, None);
@@ -244,7 +244,7 @@ mod tests {
                 Ok(Value::Number(Number::from(50)))
             });
             // Failed request
-            io.add_method("getLastId", |params: Params| {
+            io.add_method("getRecentBlockHash", |params: Params| {
                 if params != Params::None {
                     Err(Error::invalid_request())
                 } else {
@@ -275,7 +275,7 @@ mod tests {
         );
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
-        let block_hash = rpc_client.make_rpc_request(2, RpcRequest::GetLastId, None);
+        let block_hash = rpc_client.make_rpc_request(2, RpcRequest::GetRecentBlockHash, None);
         assert_eq!(
             block_hash.unwrap().as_str().unwrap(),
             "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"
@@ -283,7 +283,7 @@ mod tests {
 
         // Send erroneous parameter
         let block_hash =
-            rpc_client.make_rpc_request(3, RpcRequest::GetLastId, Some(json!("paramter")));
+            rpc_client.make_rpc_request(3, RpcRequest::GetRecentBlockHash, Some(json!("paramter")));
         assert_eq!(block_hash.is_err(), true);
     }
 

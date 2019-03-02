@@ -222,7 +222,7 @@ impl ThinClient {
             trace!("try_get_recent_block_hash send_to {}", &self.rpc_addr);
             let response = self
                 .rpc_client
-                .make_rpc_request(1, RpcRequest::GetLastId, None);
+                .make_rpc_request(1, RpcRequest::GetRecentBlockHash, None);
 
             match response {
                 Ok(value) => {

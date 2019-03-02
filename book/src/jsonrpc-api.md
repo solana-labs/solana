@@ -24,7 +24,7 @@ Methods
 * [confirmTransaction](#confirmtransaction)
 * [getAccountInfo](#getaccountinfo)
 * [getBalance](#getbalance)
-* [getLastId](#getlastid)
+* [getRecentBlockHash](#getrecentblockhash)
 * [getSignatureStatus](#getsignaturestatus)
 * [getTransactionCount](#gettransactioncount)
 * [requestAirdrop](#requestairdrop)
@@ -137,19 +137,19 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 ---
 
-### getLastId
-Returns the last entry ID from the ledger
+### getRecentBlockHash
+Returns a recent block hash from the ledger
 
 ##### Parameters:
 None
 
 ##### Results:
-* `string` - the ID of last entry, a Hash as base-58 encoded string
+* `string` - a Hash as base-58 encoded string
 
 ##### Example:
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getLastId"}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getRecentBlockHash"}' http://localhost:8899
 
 // Result
 {"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
