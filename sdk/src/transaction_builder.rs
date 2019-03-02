@@ -53,14 +53,24 @@ impl TransactionBuilder {
 
     /// Return pubkeys referenced by all instructions, with the ones needing signatures first.
     /// No duplicates and order is preserved.
-    fn keys(&self) -> Vec<Pubkey> {
-        let mut key_and_signed: Vec<_> = self
+    fn keys(&self) -> (Vec<Pubkey>, Vec<Pubkey>) {
+        let mut keys_and_signed: Vec<_> = self
             .instructions
             .iter()
             .flat_map(|ix| ix.accounts.iter())
             .collect();
-        key_and_signed.sort_by(|x, y| y.1.cmp(&x.1));
-        key_and_signed.into_iter().map(|x| x.0).unique().collect()
+        keys_and_signed.sort_by(|x, y| y.1.cmp(&x.1));
+
+        let mut signed_keys = vec![];
+        let mut unsigned_keys = vec![];
+        for (key, signed) in keys_and_signed.into_iter().unique_by(|x| x.0) {
+            if *signed {
+                signed_keys.push(*key);
+            } else {
+                unsigned_keys.push(*key);
+            }
+        }
+        (signed_keys, unsigned_keys)
     }
 
     /// Return program ids referenced by all instructions.  No duplicates and order is preserved.
@@ -82,16 +92,18 @@ impl TransactionBuilder {
 
     /// Return a signed transaction.
     pub fn sign<T: KeypairUtil>(&self, keypairs: &[&T], last_id: Hash) -> Transaction {
-        let keys = self.keys();
         let program_ids = self.program_ids();
-        let instructions = self.instructions(&keys, &program_ids);
+        let (mut signed_keys, unsigned_keys) = self.keys();
         for (i, keypair) in keypairs.iter().enumerate() {
-            assert_eq!(keypair.pubkey(), keys[i], "keypair-pubkey mismatch");
+            assert_eq!(keypair.pubkey(), signed_keys[i], "keypair-pubkey mismatch");
         }
-        let unsigned_keys = &keys[keypairs.len()..];
+        assert_eq!(keypairs.len(), signed_keys.len(), "not enough keypairs");
+
+        signed_keys.extend(&unsigned_keys);
+        let instructions = self.instructions(&signed_keys, &program_ids);
         Transaction::new_with_instructions(
             keypairs,
-            unsigned_keys,
+            &unsigned_keys,
             last_id,
             self.fee,
             program_ids,
@@ -147,7 +159,7 @@ mod tests {
             .push(Instruction::new(program_id, &0, vec![(id0, true)]))
             .push(Instruction::new(program_id, &0, vec![(id0, true)]))
             .keys();
-        assert_eq!(keys, vec![id0]);
+        assert_eq!(keys, (vec![id0], vec![]));
     }
 
     #[test]
@@ -158,7 +170,7 @@ mod tests {
             .push(Instruction::new(program_id, &0, vec![(id0, false)]))
             .push(Instruction::new(program_id, &0, vec![(id0, true)]))
             .keys();
-        assert_eq!(keys, vec![id0]);
+        assert_eq!(keys, (vec![id0], vec![]));
     }
 
     #[test]
@@ -170,7 +182,7 @@ mod tests {
             .push(Instruction::new(program_id, &0, vec![(id0, false)]))
             .push(Instruction::new(program_id, &0, vec![(id1, false)]))
             .keys();
-        assert_eq!(keys, vec![id0, id1]);
+        assert_eq!(keys, (vec![], vec![id0, id1]));
     }
 
     #[test]
@@ -183,7 +195,7 @@ mod tests {
             .push(Instruction::new(program_id, &0, vec![(id1, false)]))
             .push(Instruction::new(program_id, &0, vec![(id0, true)]))
             .keys();
-        assert_eq!(keys, vec![id0, id1]);
+        assert_eq!(keys, (vec![id0], vec![id1]));
     }
 
     #[test]
@@ -195,7 +207,7 @@ mod tests {
             .push(Instruction::new(program_id, &0, vec![(id0, false)]))
             .push(Instruction::new(program_id, &0, vec![(id1, true)]))
             .keys();
-        assert_eq!(keys, vec![id1, id0]);
+        assert_eq!(keys, (vec![id1], vec![id0]));
     }
 
     #[test]
@@ -203,6 +215,17 @@ mod tests {
     fn test_transaction_builder_missing_key() {
         let keypair = Keypair::new();
         TransactionBuilder::default().sign(&[&keypair], Hash::default());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_transaction_builder_missing_keypair() {
+        let program_id = Pubkey::default();
+        let keypair0 = Keypair::new();
+        let id0 = keypair0.pubkey();
+        TransactionBuilder::default()
+            .push(Instruction::new(program_id, &0, vec![(id0, true)]))
+            .sign(&Vec::<&Keypair>::new(), Hash::default());
     }
 
     #[test]
