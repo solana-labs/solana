@@ -2,6 +2,7 @@
 //! to generate a thread which regularly calculates the last confirmation times
 //! observed by the leader
 
+use crate::leader_schedule_utils;
 use solana_metrics::{influxdb, submit};
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
@@ -27,9 +28,9 @@ pub struct LeaderConfirmationService {
 impl LeaderConfirmationService {
     fn get_last_supermajority_timestamp(
         bank: &Bank,
-        leader_id: Pubkey,
         last_valid_validator_timestamp: u64,
     ) -> result::Result<u64, ConfirmationError> {
+        let leader_id = leader_schedule_utils::slot_leader(&bank);
         let mut total_stake = 0;
 
         // Hold an accounts_db read lock as briefly as possible, just long enough to collect all
@@ -71,13 +72,9 @@ impl LeaderConfirmationService {
         Err(ConfirmationError::NoValidSupermajority)
     }
 
-    pub fn compute_confirmation(
-        bank: &Bank,
-        leader_id: Pubkey,
-        last_valid_validator_timestamp: &mut u64,
-    ) {
+    pub fn compute_confirmation(bank: &Bank, last_valid_validator_timestamp: &mut u64) {
         if let Ok(super_majority_timestamp) =
-            Self::get_last_supermajority_timestamp(bank, leader_id, *last_valid_validator_timestamp)
+            Self::get_last_supermajority_timestamp(bank, *last_valid_validator_timestamp)
         {
             let now = timing::timestamp();
             let confirmation_ms = now - super_majority_timestamp;
@@ -100,7 +97,7 @@ impl LeaderConfirmationService {
     }
 
     /// Create a new LeaderConfirmationService for computing confirmation.
-    pub fn new(leader_id: Pubkey, exit: Arc<AtomicBool>) -> (Self, JoinHandle<()>) {
+    pub fn new(exit: Arc<AtomicBool>) -> (Self, JoinHandle<()>) {
         let current_bank: Arc<Mutex<Option<Arc<Bank>>>> = Arc::new(Mutex::new(None));
         let current_bank_ = current_bank.clone();
         let thread_hdl = Builder::new()
@@ -115,11 +112,7 @@ impl LeaderConfirmationService {
                     // dont hold this lock to long
                     let maybe_bank = current_bank.lock().unwrap().clone();
                     if let Some(ref bank) = maybe_bank {
-                        Self::compute_confirmation(
-                            bank,
-                            leader_id,
-                            &mut last_valid_validator_timestamp,
-                        );
+                        Self::compute_confirmation(bank, &mut last_valid_validator_timestamp);
                     }
                     sleep(Duration::from_millis(COMPUTE_CONFIRMATION_MS));
                 }
@@ -181,22 +174,14 @@ mod tests {
 
         // There isn't 2/3 consensus, so the bank's confirmation value should be the default
         let mut last_confirmation_time = 0;
-        LeaderConfirmationService::compute_confirmation(
-            &bank,
-            genesis_block.bootstrap_leader_id,
-            &mut last_confirmation_time,
-        );
+        LeaderConfirmationService::compute_confirmation(&bank, &mut last_confirmation_time);
 
         // Get another validator to vote, so we now have 2/3 consensus
         let voting_keypair = &vote_accounts[7].0;
         let vote_tx = VoteTransaction::new_vote(voting_keypair, 7, ids[6], 0);
         bank.process_transaction(&vote_tx).unwrap();
 
-        LeaderConfirmationService::compute_confirmation(
-            &bank,
-            genesis_block.bootstrap_leader_id,
-            &mut last_confirmation_time,
-        );
+        LeaderConfirmationService::compute_confirmation(&bank, &mut last_confirmation_time);
         assert!(last_confirmation_time > 0);
     }
 }

@@ -101,7 +101,6 @@ impl Tpu {
             bank_receiver,
             poh_recorder,
             verified_receiver,
-            id,
         );
 
         let broadcast_stage = BroadcastStage::new(
