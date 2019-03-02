@@ -177,8 +177,6 @@ fn cleanup_dirs(paths: &str) {
     let paths = get_paths_vec(&paths);
     paths.iter().for_each(|p| {
         let _ignored = remove_dir_all(p);
-        let path = Path::new(p);
-        let _ignored = remove_dir_all(path.parent().unwrap());
     });
 }
 
