@@ -14,20 +14,20 @@ impl LoaderTransaction {
         loader: Pubkey,
         offset: u32,
         bytes: Vec<u8>,
-        last_id: Hash,
+        recent_block_hash: Hash,
         fee: u64,
     ) -> Transaction {
         let instruction = LoaderInstruction::Write { offset, bytes };
-        Transaction::new(from_keypair, &[], loader, &instruction, last_id, fee)
+        Transaction::new(from_keypair, &[], loader, &instruction, recent_block_hash, fee)
     }
 
     pub fn new_finalize(
         from_keypair: &Keypair,
         loader: Pubkey,
-        last_id: Hash,
+        recent_block_hash: Hash,
         fee: u64,
     ) -> Transaction {
         let instruction = LoaderInstruction::Finalize;
-        Transaction::new(from_keypair, &[], loader, &instruction, last_id, fee)
+        Transaction::new(from_keypair, &[], loader, &instruction, recent_block_hash, fee)
     }
 }

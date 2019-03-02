@@ -69,7 +69,7 @@ fn test_bank_storage() {
 
     bank.process_transaction(&tx).unwrap();
 
-    let tx = StorageTransaction::new_advertise_last_id(
+    let tx = StorageTransaction::new_advertise_recent_block_hash(
         &bob,
         storage_last_id,
         last_id,

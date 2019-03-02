@@ -284,7 +284,7 @@ impl StorageStage {
         let mut seed = [0u8; 32];
         let signature = keypair.sign(&entry_id.as_ref());
 
-        let tx = StorageTransaction::new_advertise_last_id(
+        let tx = StorageTransaction::new_advertise_recent_block_hash(
             keypair,
             entry_id,
             Hash::default(),

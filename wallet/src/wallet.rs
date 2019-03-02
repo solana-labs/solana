@@ -900,7 +900,8 @@ fn send_and_confirm_transactions(
         send_retries -= 1;
 
         // Re-sign any failed transactions with a new last_id and retry
-        let last_id = get_next_last_id(rpc_client, &transactions_signatures[0].0.last_id)?;
+        let last_id =
+            get_next_last_id(rpc_client, &transactions_signatures[0].0.recent_block_hash)?;
         transactions = transactions_signatures
             .into_iter()
             .map(|(mut transaction, _)| {
@@ -916,7 +917,7 @@ fn resign_transaction(
     tx: &mut Transaction,
     signer_key: &Keypair,
 ) -> Result<(), Box<dyn error::Error>> {
-    let last_id = get_next_last_id(rpc_client, &tx.last_id)?;
+    let last_id = get_next_last_id(rpc_client, &tx.recent_block_hash)?;
     tx.sign(&[signer_key], last_id);
     Ok(())
 }
@@ -1596,7 +1597,7 @@ mod tests {
 
         assert_ne!(prev_tx, tx);
         assert_ne!(prev_tx.signatures, tx.signatures);
-        assert_ne!(prev_tx.last_id, tx.last_id);
+        assert_ne!(prev_tx.recent_block_hash, tx.recent_block_hash);
         assert_eq!(prev_tx.fee, tx.fee);
         assert_eq!(prev_tx.account_keys, tx.account_keys);
         assert_eq!(prev_tx.instructions, tx.instructions);

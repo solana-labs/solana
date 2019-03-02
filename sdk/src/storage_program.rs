@@ -80,7 +80,7 @@ impl StorageTransaction {
     pub fn new_mining_proof(
         from_keypair: &Keypair,
         sha_state: Hash,
-        last_id: Hash,
+        recent_block_hash: Hash,
         entry_height: u64,
         signature: Signature,
     ) -> Transaction {
@@ -89,25 +89,25 @@ impl StorageTransaction {
             entry_height,
             signature,
         };
-        Transaction::new(from_keypair, &[], id(), &program, last_id, 0)
+        Transaction::new(from_keypair, &[], id(), &program, recent_block_hash, 0)
     }
 
-    pub fn new_advertise_last_id(
+    pub fn new_advertise_recent_block_hash(
         from_keypair: &Keypair,
         storage_id: Hash,
-        last_id: Hash,
+        recent_block_hash: Hash,
         entry_height: u64,
     ) -> Transaction {
         let program = StorageProgram::AdvertiseStorageLastId {
             id: storage_id,
             entry_height,
         };
-        Transaction::new(from_keypair, &[], id(), &program, last_id, 0)
+        Transaction::new(from_keypair, &[], id(), &program, recent_block_hash, 0)
     }
 
     pub fn new_proof_validation(
         from_keypair: &Keypair,
-        last_id: Hash,
+        recent_block_hash: Hash,
         entry_height: u64,
         proof_mask: Vec<ProofStatus>,
     ) -> Transaction {
@@ -115,15 +115,15 @@ impl StorageTransaction {
             entry_height,
             proof_mask,
         };
-        Transaction::new(from_keypair, &[], id(), &program, last_id, 0)
+        Transaction::new(from_keypair, &[], id(), &program, recent_block_hash, 0)
     }
 
     pub fn new_reward_claim(
         from_keypair: &Keypair,
-        last_id: Hash,
+        recent_block_hash: Hash,
         entry_height: u64,
     ) -> Transaction {
         let program = StorageProgram::ClaimStorageReward { entry_height };
-        Transaction::new(from_keypair, &[], id(), &program, last_id, 0)
+        Transaction::new(from_keypair, &[], id(), &program, recent_block_hash, 0)
     }
 }
