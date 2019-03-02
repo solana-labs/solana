@@ -77,7 +77,7 @@ impl JsonRpcRequestProcessor {
         Ok(bs58::encode(hash).into_string())
     }
 
-    fn get_storage_mining_entry_height(&self) -> Result<u64> {
+    fn get_storage_entry_height(&self) -> Result<u64> {
         let entry_height = self.storage_state.get_entry_height();
         Ok(entry_height)
     }
@@ -173,8 +173,8 @@ pub trait RpcSol {
     #[rpc(meta, name = "getStorageBlockHash")]
     fn get_storage_block_hash(&self, _: Self::Metadata) -> Result<String>;
 
-    #[rpc(meta, name = "getStorageMiningEntryHeight")]
-    fn get_storage_mining_entry_height(&self, _: Self::Metadata) -> Result<u64>;
+    #[rpc(meta, name = "getStorageEntryHeight")]
+    fn get_storage_entry_height(&self, _: Self::Metadata) -> Result<u64>;
 
     #[rpc(meta, name = "getStoragePubkeysForEntryHeight")]
     fn get_storage_pubkeys_for_entry_height(
@@ -335,11 +335,11 @@ impl RpcSol for RpcSolImpl {
             .get_storage_block_hash()
     }
 
-    fn get_storage_mining_entry_height(&self, meta: Self::Metadata) -> Result<u64> {
+    fn get_storage_entry_height(&self, meta: Self::Metadata) -> Result<u64> {
         meta.request_processor
             .read()
             .unwrap()
-            .get_storage_mining_entry_height()
+            .get_storage_entry_height()
     }
 
     fn get_storage_pubkeys_for_entry_height(
