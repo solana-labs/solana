@@ -71,10 +71,12 @@ impl BankingStage {
                         waiter.send(())?;
                         let bank = poh_recorder.lock().unwrap().bank();
                         if let Some(bank) = bank {
+                            debug!("banking-stage-tx bank {}", bank.slot());
                             let packets =
                                 Self::process_loop(&bank, &verified_receiver, &poh_recorder);
-                            let tpu = cluster_info.read().unwrap().leader_data().unwrap().tpu;
-                            Self::forward_unprocessed_packets(&tpu, packets)?;
+                            if let Some(leader) = cluster_info.read().unwrap().leader_data() {
+                                Self::forward_unprocessed_packets(&leader.tpu, packets)?;
+                            }
                         }
                     })
                     .unwrap()
@@ -131,16 +133,18 @@ impl BankingStage {
                 Err(RecvTimeoutError::Timeout) => (),
                 _ => {
                     let bank = result?;
+                    debug!("got bank {}", bank.slot());
                     return Ok(bank);
                 }
             }
-            let tpu = cluster_info.read().unwrap().leader_data().unwrap().tpu;
-            while let Ok(mms) = verified_receiver.lock().unwrap().try_recv() {
-                let _ = Self::forward_verified_packets(&tpu, mms);
-                let result = bank_receiver.try_recv();
-                if result.is_ok() {
-                    let bank = result?;
-                    return Ok(bank);
+            if let Some(leader) = cluster_info.read().unwrap().leader_data() {
+                while let Ok(mms) = verified_receiver.lock().unwrap().try_recv() {
+                    let _ = Self::forward_verified_packets(&leader.tpu, mms);
+                    let result = bank_receiver.try_recv();
+                    if result.is_ok() {
+                        let bank = result?;
+                        return Ok(bank);
+                    }
                 }
             }
         }
@@ -422,7 +426,7 @@ impl Service for BankingStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    //use crate::entry::EntrySlice;
+    use crate::entry::EntrySlice;
     //use crate::packet::to_packets;
     use crate::cluster_info::Node;
     use crate::poh_service::{PohService, PohServiceConfig};
@@ -431,7 +435,7 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     //use solana_sdk::system_transaction::SystemTransaction;
     //use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
-    //use std::thread::sleep;
+    use std::thread::sleep;
 
     fn create_test_recorder(bank: &Arc<Bank>) -> (Arc<Mutex<PohRecorder>>, PohService) {
         let exit = Arc::new(AtomicBool::new(false));
@@ -468,34 +472,42 @@ mod tests {
         poh_service.close().unwrap();
     }
 
-    //     #[test]
-    //     fn test_banking_stage_tick() {
-    //         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-    //         let bank = Arc::new(Bank::new(&genesis_block));
-    //         let start_hash = bank.last_id();
-    //         let (verified_sender, verified_receiver) = channel();
-    //         let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    //         let (banking_stage, entry_receiver) = BankingStage::new(
-    //             &bank,
-    //             &poh_recorder,
-    //             verified_receiver,
-    //             DEFAULT_TICKS_PER_SLOT,
-    //             genesis_block.bootstrap_leader_id,
-    //         );
-    //         sleep(Duration::from_millis(500));
-    //         drop(verified_sender);
-    //
-    //         let entries: Vec<_> = entry_receiver
-    //             .iter()
-    //             .flat_map(|x| x.into_iter().map(|e| e.0))
-    //             .collect();
-    //         assert!(entries.len() != 0);
-    //         assert!(entries.verify(&start_hash));
-    //         assert_eq!(entries[entries.len() - 1].hash, bank.last_id());
-    //         banking_stage.join().unwrap();
-    //         poh_service.close().unwrap();
-    //     }
-    //
+    #[test]
+    fn test_banking_stage_tick() {
+        solana_logger::setup();
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let start_hash = bank.last_id();
+        let (bank_sender, bank_receiver) = channel();
+        let (verified_sender, verified_receiver) = channel();
+        let (poh_recorder, poh_service) = create_test_recorder(&bank);
+        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let (banking_stage, entry_receiver) = BankingStage::new(
+            &cluster_info,
+            bank_receiver,
+            &poh_recorder,
+            verified_receiver,
+        );
+        trace!("sending bank");
+        bank_sender.send(bank.clone());
+        sleep(Duration::from_millis(500));
+        drop(verified_sender);
+        drop(bank_sender);
+
+        trace!("getting entries");
+        let entries: Vec<_> = entry_receiver
+            .iter()
+            .flat_map(|x| x.1.into_iter().map(|e| e.0))
+            .collect();
+        trace!("done");
+        assert!(entries.len() != 0);
+        assert!(entries.verify(&start_hash));
+        assert_eq!(entries[entries.len() - 1].hash, bank.last_id());
+        banking_stage.join().unwrap();
+        poh_service.close().unwrap();
+    }
+
     //     #[test]
     //     fn test_banking_stage_entries_only() {
     //         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
