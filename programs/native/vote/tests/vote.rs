@@ -7,8 +7,9 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::transaction_builder::{BuilderInstruction, TransactionBuilder};
-use solana_sdk::vote_program::{self, Vote, VoteInstruction, VoteState};
-use solana_sdk::vote_transaction::VoteTransaction;
+use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
+use solana_vote_api::vote_state::VoteState;
+use solana_vote_api::vote_transaction::VoteTransaction;
 
 struct VoteBank<'a> {
     bank: &'a Bank,
@@ -16,7 +17,7 @@ struct VoteBank<'a> {
 
 impl<'a> VoteBank<'a> {
     fn new(bank: &'a Bank) -> Self {
-        bank.add_native_program("solana_vote_program", &vote_program::id());
+        bank.add_native_program("solana_vote_program", &solana_vote_api::id());
         Self { bank }
     }
 
@@ -74,7 +75,7 @@ fn test_vote_via_bank_with_no_signature() {
     let mallory_id = mallory_keypair.pubkey();
     let blockhash = bank.last_blockhash();
     let vote_ix = BuilderInstruction::new(
-        vote_program::id(),
+        solana_vote_api::id(),
         &VoteInstruction::Vote(Vote::new(0)),
         vec![(vote_id, false)], // <--- attack!! No signature.
     );

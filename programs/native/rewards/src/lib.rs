@@ -8,7 +8,7 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
-use solana_sdk::vote_program::{self, VoteState};
+use solana_vote_api::vote_state::VoteState;
 
 const INTEREST_PER_CREDIT_DIVISOR: u64 = 100; // Staker earns 1/INTEREST_PER_CREDIT_DIVISOR of interest per credit
 const MINIMUM_CREDITS_PER_REDEMPTION: u64 = 1; // Raise this to either minimize congestion or lengthen the interest period
@@ -35,7 +35,7 @@ fn redeem_vote_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Progra
         Err(ProgramError::InvalidArgument)?;
     }
 
-    if !vote_program::check_id(&keyed_accounts[0].account.owner) {
+    if !solana_vote_api::check_id(&keyed_accounts[0].account.owner) {
         error!("account[0] is not assigned to the VOTE_PROGRAM");
         Err(ProgramError::InvalidArgument)?;
     }
@@ -87,7 +87,8 @@ mod tests {
     use solana_rewards_api::rewards_state::RewardsState;
     use solana_sdk::account::Account;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::vote_program::{self, Vote};
+    use solana_vote_api::vote_instruction::Vote;
+    use solana_vote_api::vote_state;
 
     fn create_rewards_account(tokens: u64) -> Account {
         let space = RewardsState::max_size();
@@ -113,8 +114,8 @@ mod tests {
         let mut staker_account = Account::new(100, 0, Pubkey::default());
 
         let vote_id = Keypair::new().pubkey();
-        let mut vote_account = vote_program::create_vote_account(100);
-        vote_program::initialize_and_deserialize(
+        let mut vote_account = vote_state::create_vote_account(100);
+        vote_state::initialize_and_deserialize(
             &staker_id,
             &mut staker_account,
             &vote_id,
@@ -122,17 +123,17 @@ mod tests {
         )
         .unwrap();
 
-        for i in 0..vote_program::MAX_LOCKOUT_HISTORY {
+        for i in 0..vote_state::MAX_LOCKOUT_HISTORY {
             let vote = Vote::new(i as u64);
             let vote_state =
-                vote_program::vote_and_deserialize(&vote_id, &mut vote_account, vote.clone())
+                vote_state::vote_and_deserialize(&vote_id, &mut vote_account, vote.clone())
                     .unwrap();
             assert_eq!(vote_state.credits(), 0);
         }
 
-        let vote = Vote::new(vote_program::MAX_LOCKOUT_HISTORY as u64 + 1);
+        let vote = Vote::new(vote_state::MAX_LOCKOUT_HISTORY as u64 + 1);
         let vote_state =
-            vote_program::vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
+            vote_state::vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
         assert_eq!(vote_state.credits(), 1);
 
         let rewards_id = Keypair::new().pubkey();

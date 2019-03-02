@@ -26,7 +26,9 @@ use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES, NUM_TICKS_PER_SECOND};
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
-use solana_sdk::vote_program::{self, VoteState};
+use solana_vote_api;
+use solana_vote_api::vote_instruction::Vote;
+use solana_vote_api::vote_state::{Lockout, VoteState};
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -255,15 +257,13 @@ impl Bank {
         // will be forced to select it as the leader for height 0
         let mut bootstrap_leader_staking_account = Account {
             tokens: bootstrap_leader_stake,
-            userdata: vec![0; vote_program::get_max_size() as usize],
-            owner: vote_program::id(),
+            userdata: vec![0; VoteState::max_size() as usize],
+            owner: solana_vote_api::id(),
             executable: false,
         };
 
         let mut vote_state = VoteState::new(genesis_block.bootstrap_leader_id);
-        vote_state
-            .votes
-            .push_back(vote_program::Lockout::new(&vote_program::Vote::new(0)));
+        vote_state.votes.push_back(Lockout::new(&Vote::new(0)));
         vote_state
             .serialize(&mut bootstrap_leader_staking_account.userdata)
             .unwrap();
@@ -292,7 +292,7 @@ impl Bank {
 
     fn add_builtin_programs(&self) {
         self.add_native_program("solana_system_program", &system_program::id());
-        self.add_native_program("solana_vote_program", &vote_program::id());
+        self.add_native_program("solana_vote_program", &solana_vote_api::id());
         self.add_native_program("solana_storage_program", &storage_program::id());
         self.add_native_program("solana_bpf_loader", &bpf_loader::id());
         self.add_native_program("solana_budget_program", &solana_budget_api::id());
@@ -1289,7 +1289,7 @@ mod tests {
         assert_eq!(solana_budget_api::id(), budget);
         assert_eq!(storage_program::id(), storage);
         assert_eq!(token_program::id(), token);
-        assert_eq!(vote_program::id(), vote);
+        assert_eq!(solana_vote_api::id(), vote);
     }
 
     #[test]
@@ -1302,7 +1302,7 @@ mod tests {
             solana_budget_api::id(),
             storage_program::id(),
             token_program::id(),
-            vote_program::id(),
+            solana_vote_api::id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
     }

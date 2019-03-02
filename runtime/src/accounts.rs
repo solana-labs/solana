@@ -11,7 +11,7 @@ use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
-use solana_sdk::vote_program;
+use solana_vote_api;
 use std::collections::BTreeMap;
 use std::env;
 use std::fs::{create_dir_all, remove_dir_all};
@@ -427,7 +427,7 @@ impl AccountsDB {
         index: &HashMap<Pubkey, AccountMap>,
         pubkey: &Pubkey,
     ) {
-        if vote_program::check_id(&account.owner) {
+        if solana_vote_api::check_id(&account.owner) {
             if Self::account_map_is_empty(pubkey, index) {
                 self.index_info.vote_index.write().unwrap().remove(pubkey);
             } else {
@@ -1454,7 +1454,7 @@ mod tests {
             let pubkey = Keypair::new().pubkey();
             let mut default_account = Account::default();
             pubkeys.push(pubkey.clone());
-            default_account.owner = vote_program::id();
+            default_account.owner = solana_vote_api::id();
             default_account.tokens = (num + t + 1) as u64;
             assert!(accounts.load(0, &pubkey, true).is_none());
             accounts.store(0, &pubkey, &default_account);
@@ -1593,7 +1593,7 @@ mod tests {
     fn test_accounts_vote_filter() {
         solana_logger::setup();
         let accounts = Accounts::new(0, None);
-        let mut vote_account = Account::new(1, 0, vote_program::id());
+        let mut vote_account = Account::new(1, 0, solana_vote_api::id());
         let key = Keypair::new().pubkey();
         accounts.store_slow(0, &key, &vote_account);
 
@@ -1608,7 +1608,7 @@ mod tests {
         vote_accounts = accounts.get_vote_accounts(1).collect();
         assert_eq!(vote_accounts.len(), 0);
 
-        let mut vote_account1 = Account::new(2, 0, vote_program::id());
+        let mut vote_account1 = Account::new(2, 0, solana_vote_api::id());
         let key1 = Keypair::new().pubkey();
         accounts.store_slow(1, &key1, &vote_account1);
 
@@ -1636,10 +1636,10 @@ mod tests {
         let accounts = accounts_db.get_vote_accounts(0);
         assert_eq!(accounts.len(), 1);
         accounts.iter().for_each(|(_, account)| {
-            assert_eq!(account.owner, vote_program::id());
+            assert_eq!(account.owner, solana_vote_api::id());
         });
         let lastkey = Keypair::new().pubkey();
-        let mut lastaccount = Account::new(1, 0, vote_program::id());
+        let mut lastaccount = Account::new(1, 0, solana_vote_api::id());
         accounts_db.store(0, &lastkey, &lastaccount);
         assert_eq!(accounts_db.get_vote_accounts(0).len(), 2);
 

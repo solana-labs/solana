@@ -7,7 +7,8 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
-use solana_sdk::vote_program::{self, VoteInstruction};
+use solana_vote_api::vote_instruction::VoteInstruction;
+use solana_vote_api::vote_state;
 
 solana_entrypoint!(entrypoint);
 fn entrypoint(
@@ -22,9 +23,9 @@ fn entrypoint(
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
     match deserialize(data).map_err(|_| ProgramError::InvalidUserdata)? {
-        VoteInstruction::InitializeAccount => vote_program::initialize_account(keyed_accounts),
+        VoteInstruction::InitializeAccount => vote_state::initialize_account(keyed_accounts),
         VoteInstruction::DelegateStake(delegate_id) => {
-            vote_program::delegate_stake(keyed_accounts, delegate_id)
+            vote_state::delegate_stake(keyed_accounts, delegate_id)
         }
         VoteInstruction::Vote(vote) => {
             debug!("{:?} by {}", vote, keyed_accounts[0].signer_key().unwrap());
@@ -33,8 +34,8 @@ fn entrypoint(
                     .add_field("count", solana_metrics::influxdb::Value::Integer(1))
                     .to_owned(),
             );
-            vote_program::process_vote(keyed_accounts, vote)
+            vote_state::process_vote(keyed_accounts, vote)
         }
-        VoteInstruction::ClearCredits => vote_program::clear_credits(keyed_accounts),
+        VoteInstruction::ClearCredits => vote_state::clear_credits(keyed_accounts),
     }
 }

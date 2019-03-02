@@ -18,7 +18,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::KeypairUtil;
 use solana_sdk::timing::duration_as_ms;
-use solana_sdk::vote_transaction::VoteTransaction;
+use solana_vote_api::vote_transaction::VoteTransaction;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
