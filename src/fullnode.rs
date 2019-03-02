@@ -84,7 +84,7 @@ impl Default for FullnodeConfig {
 }
 
 pub struct Fullnode {
-    id: Pubkey,
+    pub id: Pubkey,
     exit: Arc<AtomicBool>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
@@ -157,7 +157,7 @@ impl Fullnode {
 
         let storage_state = StorageState::new();
 
-        let mut rpc_service = JsonRpcService::new(
+        let rpc_service = JsonRpcService::new(
             &cluster_info,
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
             drone_addr,
@@ -245,11 +245,15 @@ impl Fullnode {
         );
         let exit_ = exit.clone();
         let bank_forks_ = bank_forks.clone();
+        let rpc_service_rp = rpc_service.request_processor.clone();
         let rpc_working_bank_handle = spawn(move || loop {
             if exit_.load(Ordering::Relaxed) {
                 break;
             }
-            rpc_service.set_bank(&bank_forks_.read().unwrap().working_bank());
+            rpc_service_rp
+                .write()
+                .unwrap()
+                .set_bank(&bank_forks_.read().unwrap().working_bank());
             let timer = Duration::from_millis(100);
             sleep(timer);
         });
@@ -289,30 +293,9 @@ impl Fullnode {
         self.poh_service.exit()
     }
 
-    pub fn close(&mut self) -> Result<()> {
+    pub fn close(self) -> Result<()> {
         self.exit();
-        self.join_mut_ref()
-    }
-    fn join_mut_ref(self) -> Result<()> {
-        if let Some(rpc_service) = self.rpc_service {
-            rpc_service.join()?;
-        }
-        if let Some(rpc_pubsub_service) = self.rpc_pubsub_service {
-            rpc_pubsub_service.join()?;
-        }
-
-        self.rpc_working_bank_handle.join()?;
-        self.gossip_service.join()?;
-        self.node_services.join()?;
-        trace!("exit node_services!");
-        self.poh_service.join()?;
-        trace!("exit poh!");
-        Ok(())
-    }
-}
-impl Drop for Fullnode {
-    fn drop(&mut self) {
-        self.close();
+        self.join()
     }
 }
 
@@ -342,8 +325,21 @@ pub fn new_banks_from_blocktree(
 impl Service for Fullnode {
     type JoinReturnType = ();
 
-    fn join(mut self) -> Result<()> {
-        self.join_mut_ref()
+    fn join(self) -> Result<()> {
+        if let Some(rpc_service) = self.rpc_service {
+            rpc_service.join()?;
+        }
+        if let Some(rpc_pubsub_service) = self.rpc_pubsub_service {
+            rpc_pubsub_service.join()?;
+        }
+
+        self.rpc_working_bank_handle.join()?;
+        self.gossip_service.join()?;
+        self.node_services.join()?;
+        trace!("exit node_services!");
+        self.poh_service.join()?;
+        trace!("exit poh!");
+        Ok(())
     }
 }
 

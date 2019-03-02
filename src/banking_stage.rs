@@ -57,14 +57,15 @@ impl BankingStage {
         let exit = Arc::new(AtomicBool::new(false));
 
         // Single thread to compute confirmation
-        let (leader_confirmation_service, lcs_handle) = LeaderConfirmationService::new(leader_id, exit.clone());
+        let (leader_confirmation_service, lcs_handle) =
+            LeaderConfirmationService::new(leader_id, exit.clone());
         let (waiter, notifier) = sync_channel(Self::num_threads() as usize);
         // Many banks that process transactions in parallel.
         let mut bank_thread_hdls: Vec<JoinHandle<Result<()>>> = (0..Self::num_threads())
             .map(|_| {
                 let verified_receiver = verified_receiver.clone();
                 let poh_recorder = poh_recorder.clone();
-        		let cluster_info = cluster_info.clone();
+                let cluster_info = cluster_info.clone();
                 let waiter = waiter.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())

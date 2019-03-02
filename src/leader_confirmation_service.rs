@@ -102,11 +102,12 @@ impl LeaderConfirmationService {
     /// Create a new LeaderConfirmationService for computing confirmation.
     pub fn new(leader_id: Pubkey, exit: Arc<AtomicBool>) -> (Self, JoinHandle<()>) {
         let current_bank: Arc<Mutex<Option<Arc<Bank>>>> = Arc::new(Mutex::new(None));
+        let current_bank_ = current_bank.clone();
         let thread_hdl = Builder::new()
             .name("solana-leader-confirmation-service".to_string())
             .spawn(move || {
                 let mut last_valid_validator_timestamp = 0;
-                let current_bank = current_bank.clone();
+                let current_bank = current_bank_.clone();
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
@@ -125,11 +126,7 @@ impl LeaderConfirmationService {
             })
             .unwrap();
 
-        (Self {
-            current_bank,
-        },
-            thread_hdl,
-		)
+        (Self { current_bank }, thread_hdl)
     }
 }
 

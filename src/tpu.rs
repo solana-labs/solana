@@ -134,7 +134,7 @@ impl Tpu {
         self.exit.load(Ordering::Relaxed)
     }
 
-    pub fn close(mut self) -> thread::Result<()> {
+    pub fn close(self) -> thread::Result<()> {
         self.exit();
         self.join()
     }

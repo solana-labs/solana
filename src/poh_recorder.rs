@@ -52,7 +52,7 @@ impl PohRecorder {
     }
 
     pub fn bank(&self) -> Option<Arc<Bank>> {
-        self.working_bank.map(|w| w.bank).clone()
+        self.working_bank.clone().map(|w| w.bank)
     }
     // synchronize PoH with a bank
     pub fn reset(&mut self, tick_height: u64, last_id: Hash) {
