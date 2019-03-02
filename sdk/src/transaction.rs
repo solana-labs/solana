@@ -256,9 +256,11 @@ impl Transaction {
     // a hash of a slice of transactions only needs to hash the signatures
     pub fn hash(transactions: &[Transaction]) -> Hash {
         let mut hasher = Hasher::default();
-        transactions
-            .iter()
-            .for_each(|tx| hasher.hash(&tx.signatures[0].as_ref()));
+        transactions.iter().for_each(|tx| {
+            if !tx.signatures.is_empty() {
+                hasher.hash(&tx.signatures[0].as_ref());
+            }
+        });
         hasher.result()
     }
 
