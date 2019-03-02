@@ -47,7 +47,9 @@ leader schedule.
 * TPU moves to new socket-free crate called solana-tpu.
 * TPU's BankingStage absorbs ReplayStage
 * TVU goes away
-* New RepairStage absorbs Blob Fetch Stage and Retransmit Stage
+* New RepairStage absorbs Blob Fetch Stage and repair requests
 * JSON RPC Service is optional - used for debugging. It should instead
 be part of a separate `solana-blockstreamer` executable. 
+* BroadcastStage moved to downstream of Blockstore
+* BroadcastStage absorbs retransmit part of RetransmitStage
 
