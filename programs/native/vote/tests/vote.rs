@@ -26,17 +26,17 @@ impl<'a> VoteBank<'a> {
         vote_id: Pubkey,
         lamports: u64,
     ) -> Result<()> {
-        let block_hash = self.bank.last_block_hash();
+        let blockhash = self.bank.last_blockhash();
         let tx =
-            VoteTransaction::fund_staking_account(from_keypair, vote_id, block_hash, lamports, 0);
+            VoteTransaction::fund_staking_account(from_keypair, vote_id, blockhash, lamports, 0);
         self.bank.process_transaction(&tx)
     }
 
     fn submit_vote(&self, vote_keypair: &Keypair, tick_height: u64) -> Result<VoteState> {
-        let block_hash = self.bank.last_block_hash();
-        let tx = VoteTransaction::new_vote(vote_keypair, tick_height, block_hash, 0);
+        let blockhash = self.bank.last_blockhash();
+        let tx = VoteTransaction::new_vote(vote_keypair, tick_height, blockhash, 0);
         self.bank.process_transaction(&tx)?;
-        self.bank.register_tick(&hash(block_hash.as_ref()));
+        self.bank.register_tick(&hash(blockhash.as_ref()));
 
         let vote_account = self.bank.get_account(&vote_keypair.pubkey()).unwrap();
         Ok(VoteState::deserialize(&vote_account.userdata).unwrap())
@@ -72,7 +72,7 @@ fn test_vote_via_bank_with_no_signature() {
         .unwrap();
 
     let mallory_id = mallory_keypair.pubkey();
-    let block_hash = bank.last_block_hash();
+    let blockhash = bank.last_blockhash();
     let vote_ix = BuilderInstruction::new(
         vote_program::id(),
         &VoteInstruction::Vote(Vote::new(0)),
@@ -85,7 +85,7 @@ fn test_vote_via_bank_with_no_signature() {
     let tx = TransactionBuilder::default()
         .push(SystemInstruction::new_move(mallory_id, vote_id, 1))
         .push(vote_ix)
-        .sign(&[&mallory_keypair], block_hash);
+        .sign(&[&mallory_keypair], blockhash);
 
     let result = bank.process_transaction(&tx);
 

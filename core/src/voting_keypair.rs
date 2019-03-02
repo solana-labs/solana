@@ -1,4 +1,4 @@
-//! The `vote_signer_proxy` votes on the `block_hash` of the bank at a regular cadence
+//! The `vote_signer_proxy` votes on the `blockhash` of the bank at a regular cadence
 
 use crate::rpc_request::{RpcClient, RpcRequest};
 use jsonrpc_core;
@@ -109,11 +109,11 @@ pub mod tests {
         bank: &Bank,
         num_tokens: u64,
     ) {
-        let block_hash = bank.last_block_hash();
+        let blockhash = bank.last_blockhash();
         let tx = VoteTransaction::fund_staking_account(
             from_keypair,
             *voting_pubkey,
-            block_hash,
+            blockhash,
             num_tokens,
             0,
         );
@@ -121,8 +121,8 @@ pub mod tests {
     }
 
     pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot_height: u64) {
-        let block_hash = bank.last_block_hash();
-        let tx = VoteTransaction::new_vote(voting_keypair, slot_height, block_hash, 0);
+        let blockhash = bank.last_blockhash();
+        let tx = VoteTransaction::new_vote(voting_keypair, slot_height, blockhash, 0);
         bank.process_transaction(&tx).unwrap();
     }
 

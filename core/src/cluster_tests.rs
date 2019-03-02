@@ -27,7 +27,7 @@ pub fn spend_and_verify_all_nodes(
             &funding_keypair,
             random_keypair.pubkey(),
             1,
-            client.get_recent_block_hash(),
+            client.get_recent_blockhash(),
             0,
         );
         let sig = client

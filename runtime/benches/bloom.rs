@@ -44,15 +44,15 @@ fn bench_sigs_bloom(bencher: &mut Bencher) {
     // 1M TPS * 1s (length of block in sigs) == 1M items in filter
     // 1.0E-8 false positive rate
     // https://hur.st/bloomfilter/?n=1000000&p=1.0E-8&m=&k=
-    let block_hash = hash(Hash::default().as_ref());
-    //    eprintln!("block_hash = {:?}", block_hash);
+    let blockhash = hash(Hash::default().as_ref());
+    //    eprintln!("blockhash = {:?}", blockhash);
     let keys = (0..27)
         .into_iter()
-        .map(|i| block_hash.hash_at_index(i))
+        .map(|i| blockhash.hash_at_index(i))
         .collect();
     let mut sigs: Bloom<Signature> = Bloom::new(38_340_234, keys);
 
-    let mut id = block_hash;
+    let mut id = blockhash;
     let mut falses = 0;
     let mut iterations = 0;
     bencher.iter(|| {
@@ -76,11 +76,11 @@ fn bench_sigs_bloom(bencher: &mut Bencher) {
 #[ignore]
 fn bench_sigs_hashmap(bencher: &mut Bencher) {
     // same structure as above, new
-    let block_hash = hash(Hash::default().as_ref());
-    //    eprintln!("block_hash = {:?}", block_hash);
+    let blockhash = hash(Hash::default().as_ref());
+    //    eprintln!("blockhash = {:?}", blockhash);
     let mut sigs: HashSet<Signature> = HashSet::new();
 
-    let mut id = block_hash;
+    let mut id = blockhash;
     let mut falses = 0;
     let mut iterations = 0;
     bencher.iter(|| {

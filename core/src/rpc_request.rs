@@ -129,7 +129,7 @@ pub enum RpcRequest {
     ConfirmTransaction,
     GetAccountInfo,
     GetBalance,
-    GetRecentBlockHash,
+    GetRecentBlockhash,
     GetSignatureStatus,
     GetTransactionCount,
     RequestAirdrop,
@@ -137,7 +137,7 @@ pub enum RpcRequest {
     RegisterNode,
     SignVote,
     DeregisterNode,
-    GetStorageBlockHash,
+    GetStorageBlockhash,
     GetStorageEntryHeight,
     GetStoragePubkeysForEntryHeight,
 }
@@ -149,7 +149,7 @@ impl RpcRequest {
             RpcRequest::ConfirmTransaction => "confirmTransaction",
             RpcRequest::GetAccountInfo => "getAccountInfo",
             RpcRequest::GetBalance => "getBalance",
-            RpcRequest::GetRecentBlockHash => "getRecentBlockHash",
+            RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
             RpcRequest::GetSignatureStatus => "getSignatureStatus",
             RpcRequest::GetTransactionCount => "getTransactionCount",
             RpcRequest::RequestAirdrop => "requestAirdrop",
@@ -157,7 +157,7 @@ impl RpcRequest {
             RpcRequest::RegisterNode => "registerNode",
             RpcRequest::SignVote => "signVote",
             RpcRequest::DeregisterNode => "deregisterNode",
-            RpcRequest::GetStorageBlockHash => "getStorageBlockHash",
+            RpcRequest::GetStorageBlockhash => "getStorageBlockhash",
             RpcRequest::GetStorageEntryHeight => "getStorageEntryHeight",
             RpcRequest::GetStoragePubkeysForEntryHeight => "getStoragePubkeysForEntryHeight",
         };
@@ -217,9 +217,9 @@ mod tests {
         let request = test_request.build_request_json(1, Some(addr));
         assert_eq!(request["method"], "getBalance");
 
-        let test_request = RpcRequest::GetRecentBlockHash;
+        let test_request = RpcRequest::GetRecentBlockhash;
         let request = test_request.build_request_json(1, None);
-        assert_eq!(request["method"], "getRecentBlockHash");
+        assert_eq!(request["method"], "getRecentBlockhash");
 
         let test_request = RpcRequest::GetTransactionCount;
         let request = test_request.build_request_json(1, None);
@@ -244,7 +244,7 @@ mod tests {
                 Ok(Value::Number(Number::from(50)))
             });
             // Failed request
-            io.add_method("getRecentBlockHash", |params: Params| {
+            io.add_method("getRecentBlockhash", |params: Params| {
                 if params != Params::None {
                     Err(Error::invalid_request())
                 } else {
@@ -275,16 +275,16 @@ mod tests {
         );
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
-        let block_hash = rpc_client.make_rpc_request(2, RpcRequest::GetRecentBlockHash, None);
+        let blockhash = rpc_client.make_rpc_request(2, RpcRequest::GetRecentBlockhash, None);
         assert_eq!(
-            block_hash.unwrap().as_str().unwrap(),
+            blockhash.unwrap().as_str().unwrap(),
             "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"
         );
 
         // Send erroneous parameter
-        let block_hash =
-            rpc_client.make_rpc_request(3, RpcRequest::GetRecentBlockHash, Some(json!("paramter")));
-        assert_eq!(block_hash.is_err(), true);
+        let blockhash =
+            rpc_client.make_rpc_request(3, RpcRequest::GetRecentBlockhash, Some(json!("paramter")));
+        assert_eq!(blockhash.is_err(), true);
     }
 
     #[test]

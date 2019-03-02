@@ -44,7 +44,7 @@ fn test_replicator_startup_basic() {
 
     let (genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(1_000_000_000, leader_info.id, 42);
-    let (leader_ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
+    let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
 
@@ -72,11 +72,11 @@ fn test_replicator_startup_basic() {
         let voting_keypair = VotingKeypair::new_local(&validator_keypair);
 
         let mut leader_client = mk_client(&leader_info);
-        let block_hash = leader_client.get_recent_block_hash();
-        debug!("block_hash: {:?}", block_hash);
+        let blockhash = leader_client.get_recent_blockhash();
+        debug!("blockhash: {:?}", blockhash);
 
         leader_client
-            .transfer(10, &mint_keypair, validator_keypair.pubkey(), &block_hash)
+            .transfer(10, &mint_keypair, validator_keypair.pubkey(), &blockhash)
             .unwrap();
 
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
@@ -98,9 +98,9 @@ fn test_replicator_startup_basic() {
         info!("starting transfers..");
         for i in 0..64 {
             debug!("transfer {}", i);
-            let block_hash = leader_client.get_recent_block_hash();
+            let blockhash = leader_client.get_recent_blockhash();
             let mut transaction =
-                SystemTransaction::new_account(&mint_keypair, bob.pubkey(), 1, block_hash, 0);
+                SystemTransaction::new_account(&mint_keypair, bob.pubkey(), 1, blockhash, 0);
             leader_client
                 .retry_transfer(&mint_keypair, &mut transaction, 5)
                 .unwrap();
@@ -116,13 +116,13 @@ fn test_replicator_startup_basic() {
 
         info!("giving replicator tokens..");
 
-        let block_hash = leader_client.get_recent_block_hash();
+        let blockhash = leader_client.get_recent_blockhash();
         // Give the replicator some tokens
         let mut tx = SystemTransaction::new_account(
             &mint_keypair,
             replicator_keypair.pubkey(),
             1,
-            block_hash,
+            blockhash,
             0,
         );
         leader_client
@@ -238,7 +238,7 @@ fn test_replicator_startup_leader_hang() {
 
     let leader_ledger_path = "replicator_test_leader_ledger";
     let (genesis_block, _mint_keypair) = GenesisBlock::new(10_000);
-    let (replicator_ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
+    let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     {
         let replicator_keypair = Keypair::new();
@@ -275,13 +275,13 @@ fn test_replicator_startup_ledger_hang() {
 
     let (genesis_block, _mint_keypair) =
         GenesisBlock::new_with_leader(100, leader_keypair.pubkey(), 42);
-    let (replicator_ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
+    let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     info!("starting leader node");
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
-    let (leader_ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
+    let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
     let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
 
     {

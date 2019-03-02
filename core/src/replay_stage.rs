@@ -137,7 +137,7 @@ impl ReplayStage {
                             let vote = VoteTransaction::new_vote(
                                 keypair,
                                 *latest_slot_vote,
-                                parent.last_block_hash(),
+                                parent.last_blockhash(),
                                 0,
                             );
                             cluster_info.write().unwrap().push_vote(vote);
@@ -152,7 +152,7 @@ impl ReplayStage {
                         );
                         to_leader_sender.send(TvuRotationInfo {
                             tick_height: parent.tick_height(),
-                            block_hash: parent.last_block_hash(),
+                            blockhash: parent.last_blockhash(),
                             slot: next_slot,
                             leader_id: next_leader,
                         })?;
@@ -208,7 +208,7 @@ impl ReplayStage {
         let bank_id = bank.slot();
         let bank_progress = &mut progress
             .entry(bank_id)
-            .or_insert((bank.last_block_hash(), 0));
+            .or_insert((bank.last_blockhash(), 0));
         blocktree.get_slot_entries_with_blob_count(bank_id, bank_progress.1 as u64, None)
     }
 
@@ -221,7 +221,7 @@ impl ReplayStage {
     ) -> result::Result<()> {
         let bank_progress = &mut progress
             .entry(bank.slot())
-            .or_insert((bank.last_block_hash(), 0));
+            .or_insert((bank.last_blockhash(), 0));
         let result = Self::verify_and_process_entries(&bank, &entries, &bank_progress.0);
         bank_progress.1 += num;
         if let Some(last_entry) = entries.last() {
@@ -257,7 +257,7 @@ impl ReplayStage {
                 entries.len(),
                 bank.tick_height(),
                 last_entry,
-                bank.last_block_hash()
+                bank.last_blockhash()
             );
             return Err(result::Error::BlobError(BlobError::VerificationFailed));
         }
@@ -333,7 +333,7 @@ mod test {
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10_000, leader_id, 500);
 
-        let (my_ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
+        let (my_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
@@ -362,11 +362,11 @@ mod test {
             );
 
             let keypair = voting_keypair.as_ref();
-            let vote = VoteTransaction::new_vote(keypair, 0, bank.last_block_hash(), 0);
+            let vote = VoteTransaction::new_vote(keypair, 0, bank.last_blockhash(), 0);
             cluster_info_me.write().unwrap().push_vote(vote);
 
             info!("Send ReplayStage an entry, should see it on the ledger writer receiver");
-            let next_tick = create_ticks(1, bank.last_block_hash());
+            let next_tick = create_ticks(1, bank.last_blockhash());
             blocktree.write_entries(1, 0, 0, next_tick.clone()).unwrap();
 
             let received_tick = ledger_writer_recv
@@ -387,10 +387,10 @@ mod test {
         let (forward_entry_sender, forward_entry_receiver) = channel();
         let genesis_block = GenesisBlock::new(10_000).0;
         let bank = Arc::new(Bank::new(&genesis_block));
-        let mut block_hash = bank.last_block_hash();
+        let mut blockhash = bank.last_blockhash();
         let mut entries = Vec::new();
         for _ in 0..5 {
-            let entry = next_entry_mut(&mut block_hash, 1, vec![]); //just ticks
+            let entry = next_entry_mut(&mut blockhash, 1, vec![]); //just ticks
             entries.push(entry);
         }
 

@@ -71,7 +71,7 @@ pub trait BlockstreamEvents {
         slot: u64,
         tick_height: u64,
         leader_id: Pubkey,
-        block_hash: Hash,
+        blockhash: Hash,
     ) -> Result<()>;
 }
 
@@ -109,7 +109,7 @@ where
         slot: u64,
         tick_height: u64,
         leader_id: Pubkey,
-        block_hash: Hash,
+        blockhash: Hash,
     ) -> Result<()> {
         let payload = format!(
             r#"{{"dt":"{}","t":"block","s":{},"h":{},"l":"{:?}","id":"{:?}"}}"#,
@@ -117,7 +117,7 @@ where
             slot,
             tick_height,
             leader_id,
-            block_hash,
+            blockhash,
         );
         self.output.write(payload)?;
         Ok(())
@@ -163,7 +163,7 @@ mod test {
         let blockstream = MockBlockstream::new("test_stream".to_string());
         let ticks_per_slot = 5;
 
-        let mut block_hash = Hash::default();
+        let mut blockhash = Hash::default();
         let mut entries = Vec::new();
         let mut expected_entries = Vec::new();
 
@@ -175,12 +175,12 @@ mod test {
         for tick_height in tick_height_initial..=tick_height_final {
             if tick_height == 5 {
                 blockstream
-                    .emit_block_event(curr_slot, tick_height - 1, leader_id, block_hash)
+                    .emit_block_event(curr_slot, tick_height - 1, leader_id, blockhash)
                     .unwrap();
                 curr_slot += 1;
             }
-            let entry = Entry::new(&mut block_hash, 1, vec![]); // just ticks
-            block_hash = entry.hash;
+            let entry = Entry::new(&mut blockhash, 1, vec![]); // just ticks
+            blockhash = entry.hash;
             blockstream
                 .emit_entry_event(curr_slot, tick_height, leader_id, &entry)
                 .unwrap();

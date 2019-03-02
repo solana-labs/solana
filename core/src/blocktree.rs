@@ -689,7 +689,7 @@ impl Blocktree {
         db_iterator.seek_to_first();
         Ok(EntryIterator {
             db_iterator,
-            block_hash: None,
+            blockhash: None,
         })
     }
 
@@ -1250,7 +1250,7 @@ struct EntryIterator {
     // TODO: remove me when replay_stage is iterating by block (Blocktree)
     //    this verification is duplicating that of replay_stage, which
     //    can do this in parallel
-    block_hash: Option<Hash>,
+    blockhash: Option<Hash>,
     // https://github.com/rust-rocksdb/rust-rocksdb/issues/234
     //   rocksdb issue: the _blocktree member must be lower in the struct to prevent a crash
     //   when the db_iterator member above is dropped.
@@ -1267,13 +1267,13 @@ impl Iterator for EntryIterator {
         if self.db_iterator.valid() {
             if let Some(value) = self.db_iterator.value() {
                 if let Ok(entry) = deserialize::<Entry>(&value[BLOB_HEADER_SIZE..]) {
-                    if let Some(block_hash) = self.block_hash {
-                        if !entry.verify(&block_hash) {
+                    if let Some(blockhash) = self.blockhash {
+                        if !entry.verify(&blockhash) {
                             return None;
                         }
                     }
                     self.db_iterator.next();
-                    self.block_hash = Some(entry.hash);
+                    self.blockhash = Some(entry.hash);
                     return Some(entry);
                 }
             }
@@ -1284,7 +1284,7 @@ impl Iterator for EntryIterator {
 
 // Creates a new ledger with slot 0 full of ticks (and only ticks).
 //
-// Returns the block_hash that can be used to append entries with.
+// Returns the blockhash that can be used to append entries with.
 pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Result<Hash> {
     let ticks_per_slot = genesis_block.ticks_per_slot;
     Blocktree::destroy(ledger_path)?;
@@ -1362,8 +1362,8 @@ macro_rules! create_new_tmp_ledger {
 // ticks)
 pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> (String, Hash) {
     let ledger_path = get_tmp_ledger_path(name);
-    let block_hash = create_new_ledger(&ledger_path, genesis_block).unwrap();
-    (ledger_path, block_hash)
+    let blockhash = create_new_ledger(&ledger_path, genesis_block).unwrap();
+    (ledger_path, blockhash)
 }
 
 #[macro_export]

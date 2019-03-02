@@ -50,7 +50,7 @@ pub enum DroneRequest {
     GetAirdrop {
         tokens: u64,
         to: Pubkey,
-        block_hash: Hash,
+        blockhash: Hash,
     },
 }
 
@@ -110,7 +110,7 @@ impl Drone {
             DroneRequest::GetAirdrop {
                 tokens,
                 to,
-                block_hash,
+                blockhash,
             } => {
                 if self.check_request_limit(tokens) {
                     self.request_current += tokens;
@@ -137,11 +137,11 @@ impl Drone {
                         &[to],
                         system_program::id(),
                         &create_instruction,
-                        block_hash,
+                        blockhash,
                         0, /*fee*/
                     );
 
-                    transaction.sign(&[&self.mint_keypair], block_hash);
+                    transaction.sign(&[&self.mint_keypair], blockhash);
                     Ok(transaction)
                 } else {
                     Err(Error::new(ErrorKind::Other, "token limit reached"))
@@ -194,18 +194,18 @@ pub fn request_airdrop_transaction(
     drone_addr: &SocketAddr,
     id: &Pubkey,
     tokens: u64,
-    block_hash: Hash,
+    blockhash: Hash,
 ) -> Result<Transaction, Error> {
     info!(
-        "request_airdrop_transaction: drone_addr={} id={} tokens={} block_hash={}",
-        drone_addr, id, tokens, block_hash
+        "request_airdrop_transaction: drone_addr={} id={} tokens={} blockhash={}",
+        drone_addr, id, tokens, blockhash
     );
     // TODO: make this async tokio client
     let mut stream = TcpStream::connect_timeout(drone_addr, Duration::new(3, 0))?;
     stream.set_read_timeout(Some(Duration::new(10, 0)))?;
     let req = DroneRequest::GetAirdrop {
         tokens,
-        block_hash,
+        blockhash,
         to: *id,
     };
     let req = serialize(&req).expect("serialize drone request");
@@ -353,11 +353,11 @@ mod tests {
     #[test]
     fn test_drone_build_airdrop_transaction() {
         let to = Keypair::new().pubkey();
-        let block_hash = Hash::default();
+        let blockhash = Hash::default();
         let request = DroneRequest::GetAirdrop {
             tokens: 2,
             to,
-            block_hash,
+            blockhash,
         };
 
         let mint = Keypair::new();
@@ -368,7 +368,7 @@ mod tests {
 
         assert_eq!(tx.signatures.len(), 1);
         assert_eq!(tx.account_keys, vec![mint_pubkey, to]);
-        assert_eq!(tx.recent_block_hash, block_hash);
+        assert_eq!(tx.recent_blockhash, blockhash);
         assert_eq!(tx.program_ids, vec![system_program::id()]);
 
         assert_eq!(tx.instructions.len(), 1);
@@ -391,11 +391,11 @@ mod tests {
     #[test]
     fn test_process_drone_request() {
         let to = Keypair::new().pubkey();
-        let block_hash = Hash::new(&to.as_ref());
+        let blockhash = Hash::new(&to.as_ref());
         let tokens = 50;
         let req = DroneRequest::GetAirdrop {
             tokens,
-            block_hash,
+            blockhash,
             to,
         };
         let req = serialize(&req).unwrap();
@@ -413,10 +413,10 @@ mod tests {
             &[to],
             system_program::id(),
             &expected_instruction,
-            block_hash,
+            blockhash,
             0,
         );
-        expected_tx.sign(&[&keypair], block_hash);
+        expected_tx.sign(&[&keypair], blockhash);
         let expected_bytes = serialize(&expected_tx).unwrap();
         let mut expected_vec_with_length = vec![0; 2];
         LittleEndian::write_u16(&mut expected_vec_with_length, expected_bytes.len() as u16);

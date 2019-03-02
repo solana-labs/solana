@@ -66,7 +66,7 @@ impl BankingStage {
 
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
-        // Once an entry has been recorded, its block_hash is registered with the bank.
+        // Once an entry has been recorded, its blockhash is registered with the bank.
         let exit = Arc::new(AtomicBool::new(false));
 
         // Single thread to compute confirmation
@@ -361,7 +361,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
             bank.tick_height(),
-            bank.last_block_hash(),
+            bank.last_blockhash(),
         )));
         let poh_service = PohService::new(
             poh_recorder.clone(),
@@ -394,7 +394,7 @@ mod tests {
         let (mut genesis_block, _mint_keypair) = GenesisBlock::new(2);
         genesis_block.ticks_per_slot = 4;
         let bank = Arc::new(Bank::new(&genesis_block));
-        let start_hash = bank.last_block_hash();
+        let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
         let (poh_recorder, poh_service) = create_test_recorder(&bank);
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -413,7 +413,7 @@ mod tests {
             .collect();
         assert_eq!(entries.len(), genesis_block.ticks_per_slot as usize - 1);
         assert!(entries.verify(&start_hash));
-        assert_eq!(entries[entries.len() - 1].hash, bank.last_block_hash());
+        assert_eq!(entries[entries.len() - 1].hash, bank.last_blockhash());
         banking_stage.join().unwrap();
         poh_service.close().unwrap();
     }
@@ -422,7 +422,7 @@ mod tests {
     fn test_banking_stage_entries_only() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let start_hash = bank.last_block_hash();
+        let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
         let (poh_recorder, poh_service) = create_test_recorder(&bank);
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -464,11 +464,11 @@ mod tests {
 
         assert!(entries.len() >= 1);
 
-        let mut block_hash = start_hash;
+        let mut blockhash = start_hash;
         entries.iter().for_each(|entries| {
             assert_eq!(entries.len(), 1);
-            assert!(entries.verify(&block_hash));
-            block_hash = entries.last().unwrap().hash;
+            assert!(entries.verify(&blockhash));
+            blockhash = entries.last().unwrap().hash;
         });
         drop(entry_receiver);
         banking_stage.join().unwrap();
@@ -636,7 +636,7 @@ mod tests {
 
         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
             bank.tick_height(),
-            bank.last_block_hash(),
+            bank.last_blockhash(),
         )));
         poh_recorder.lock().unwrap().set_working_bank(working_bank);
         let pubkey = Keypair::new().pubkey();
@@ -691,7 +691,7 @@ mod tests {
         };
         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
             bank.tick_height(),
-            bank.last_block_hash(),
+            bank.last_blockhash(),
         )));
         poh_recorder.lock().unwrap().set_working_bank(working_bank);
 

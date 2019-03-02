@@ -99,7 +99,7 @@ impl ThinClient {
         tries: usize,
     ) -> io::Result<Signature> {
         for x in 0..tries {
-            transaction.sign(&[keypair], self.get_recent_block_hash());
+            transaction.sign(&[keypair], self.get_recent_blockhash());
             let mut buf = vec![0; transaction.serialized_size().unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
             serialize_into(&mut wr, &transaction)
@@ -123,17 +123,17 @@ impl ThinClient {
         tokens: u64,
         keypair: &Keypair,
         to: Pubkey,
-        block_hash: &Hash,
+        blockhash: &Hash,
     ) -> io::Result<Signature> {
         debug!(
-            "transfer: tokens={} from={:?} to={:?} block_hash={:?}",
+            "transfer: tokens={} from={:?} to={:?} blockhash={:?}",
             tokens,
             keypair.pubkey(),
             to,
-            block_hash
+            blockhash
         );
         let now = Instant::now();
-        let transaction = SystemTransaction::new_account(keypair, to, tokens, *block_hash, 0);
+        let transaction = SystemTransaction::new_account(keypair, to, tokens, *blockhash, 0);
         let result = self.transfer_signed(&transaction);
         solana_metrics::submit(
             influxdb::Point::new("thinclient")
@@ -216,22 +216,22 @@ impl ThinClient {
     }
 
     /// Request the last Entry ID from the server without blocking.
-    /// Returns the block_hash Hash or None if there was no response from the server.
-    pub fn try_get_recent_block_hash(&mut self, mut num_retries: u64) -> Option<Hash> {
+    /// Returns the blockhash Hash or None if there was no response from the server.
+    pub fn try_get_recent_blockhash(&mut self, mut num_retries: u64) -> Option<Hash> {
         loop {
-            trace!("try_get_recent_block_hash send_to {}", &self.rpc_addr);
+            trace!("try_get_recent_blockhash send_to {}", &self.rpc_addr);
             let response =
                 self.rpc_client
-                    .make_rpc_request(1, RpcRequest::GetRecentBlockHash, None);
+                    .make_rpc_request(1, RpcRequest::GetRecentBlockhash, None);
 
             match response {
                 Ok(value) => {
-                    let block_hash_str = value.as_str().unwrap();
-                    let block_hash_vec = bs58::decode(block_hash_str).into_vec().unwrap();
-                    return Some(Hash::new(&block_hash_vec));
+                    let blockhash_str = value.as_str().unwrap();
+                    let blockhash_vec = bs58::decode(blockhash_str).into_vec().unwrap();
+                    return Some(Hash::new(&blockhash_vec));
                 }
                 Err(error) => {
-                    debug!("thin_client get_recent_block_hash error: {:?}", error);
+                    debug!("thin_client get_recent_blockhash error: {:?}", error);
                     num_retries -= 1;
                     if num_retries == 0 {
                         return None;
@@ -243,10 +243,10 @@ impl ThinClient {
 
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response.
-    pub fn get_recent_block_hash(&mut self) -> Hash {
+    pub fn get_recent_blockhash(&mut self) -> Hash {
         loop {
-            trace!("get_recent_block_hash send_to {}", &self.rpc_addr);
-            if let Some(hash) = self.try_get_recent_block_hash(10) {
+            trace!("get_recent_blockhash send_to {}", &self.rpc_addr);
+            if let Some(hash) = self.try_get_recent_blockhash(10) {
                 return hash;
             }
         }
@@ -254,18 +254,18 @@ impl ThinClient {
 
     /// Request a new last Entry ID from the server. This method blocks
     /// until the server sends a response.
-    pub fn get_next_block_hash(&mut self, previous_block_hash: &Hash) -> Hash {
-        self.get_next_block_hash_ext(previous_block_hash, &|| {
+    pub fn get_next_blockhash(&mut self, previous_blockhash: &Hash) -> Hash {
+        self.get_next_blockhash_ext(previous_blockhash, &|| {
             sleep(Duration::from_millis(100));
         })
     }
-    pub fn get_next_block_hash_ext(&mut self, previous_block_hash: &Hash, func: &Fn()) -> Hash {
+    pub fn get_next_blockhash_ext(&mut self, previous_blockhash: &Hash, func: &Fn()) -> Hash {
         loop {
-            let block_hash = self.get_recent_block_hash();
-            if block_hash != *previous_block_hash {
-                break block_hash;
+            let blockhash = self.get_recent_blockhash();
+            if blockhash != *previous_blockhash {
+                break blockhash;
             }
-            debug!("Got same block_hash ({:?}), will retry...", block_hash);
+            debug!("Got same blockhash ({:?}), will retry...", blockhash);
             func()
         }
     }
@@ -468,7 +468,7 @@ pub fn new_fullnode() -> (Fullnode, NodeInfo, Keypair, String) {
     let node_info = node.info.clone();
 
     let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, node_info.id, 42);
-    let (ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
+    let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
@@ -511,11 +511,11 @@ mod tests {
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
 
-        let block_hash = client.get_recent_block_hash();
-        info!("test_thin_client block_hash: {:?}", block_hash);
+        let blockhash = client.get_recent_blockhash();
+        info!("test_thin_client blockhash: {:?}", blockhash);
 
         let signature = client
-            .transfer(500, &alice, bob_pubkey, &block_hash)
+            .transfer(500, &alice, bob_pubkey, &blockhash)
             .unwrap();
         info!("test_thin_client signature: {:?}", signature);
         client.poll_for_signature(&signature).unwrap();
@@ -543,15 +543,15 @@ mod tests {
 
         let mut client = mk_client(&leader_data);
 
-        let block_hash = client.get_recent_block_hash();
+        let blockhash = client.get_recent_blockhash();
 
-        let tx = SystemTransaction::new_account(&alice, bob_pubkey, 500, block_hash, 0);
+        let tx = SystemTransaction::new_account(&alice, bob_pubkey, 500, blockhash, 0);
 
         let _sig = client.transfer_signed(&tx).unwrap();
 
-        let block_hash = client.get_recent_block_hash();
+        let blockhash = client.get_recent_blockhash();
 
-        let mut tr2 = SystemTransaction::new_account(&alice, bob_pubkey, 501, block_hash, 0);
+        let mut tr2 = SystemTransaction::new_account(&alice, bob_pubkey, 501, blockhash, 0);
         let mut instruction2 = deserialize(tr2.userdata(0)).unwrap();
         if let SystemInstruction::Move { ref mut tokens } = instruction2 {
             *tokens = 502;
@@ -580,9 +580,9 @@ mod tests {
 
         // Create the validator account, transfer some tokens to that account
         let validator_keypair = Keypair::new();
-        let block_hash = client.get_recent_block_hash();
+        let blockhash = client.get_recent_blockhash();
         let signature = client
-            .transfer(500, &alice, validator_keypair.pubkey(), &block_hash)
+            .transfer(500, &alice, validator_keypair.pubkey(), &blockhash)
             .unwrap();
 
         client.poll_for_signature(&signature).unwrap();
@@ -590,12 +590,12 @@ mod tests {
         // Create and register the vote account
         let validator_vote_account_keypair = Keypair::new();
         let vote_account_id = validator_vote_account_keypair.pubkey();
-        let block_hash = client.get_recent_block_hash();
+        let blockhash = client.get_recent_blockhash();
 
         let transaction = VoteTransaction::fund_staking_account(
             &validator_keypair,
             vote_account_id,
-            block_hash,
+            blockhash,
             1,
             1,
         );
@@ -654,15 +654,15 @@ mod tests {
         );
 
         let mut client = mk_client(&leader_data);
-        let block_hash = client.get_recent_block_hash();
-        info!("test_thin_client block_hash: {:?}", block_hash);
+        let blockhash = client.get_recent_blockhash();
+        info!("test_thin_client blockhash: {:?}", blockhash);
 
         let starting_alice_balance = client.poll_get_balance(&alice.pubkey()).unwrap();
         info!("Alice has {} tokens", starting_alice_balance);
 
         info!("Give Bob 500 tokens");
         let signature = client
-            .transfer(500, &alice, bob_keypair.pubkey(), &block_hash)
+            .transfer(500, &alice, bob_keypair.pubkey(), &blockhash)
             .unwrap();
         client.poll_for_signature(&signature).unwrap();
 
@@ -671,7 +671,7 @@ mod tests {
 
         info!("Take Bob's 500 tokens away");
         let signature = client
-            .transfer(500, &bob_keypair, alice.pubkey(), &block_hash)
+            .transfer(500, &bob_keypair, alice.pubkey(), &blockhash)
             .unwrap();
         client.poll_for_signature(&signature).unwrap();
         let alice_balance = client.poll_get_balance(&alice.pubkey()).unwrap();

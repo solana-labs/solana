@@ -24,7 +24,7 @@ fn test_rpc_send_tx() {
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
-       "method": "getRecentBlockHash",
+       "method": "getRecentBlockhash",
        "params": json!([])
     });
     let rpc_addr = leader_data.rpc;
@@ -36,13 +36,13 @@ fn test_rpc_send_tx() {
         .send()
         .unwrap();
     let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
-    let block_hash_vec = bs58::decode(json["result"].as_str().unwrap())
+    let blockhash_vec = bs58::decode(json["result"].as_str().unwrap())
         .into_vec()
         .unwrap();
-    let block_hash = Hash::new(&block_hash_vec);
+    let blockhash = Hash::new(&blockhash_vec);
 
-    info!("block_hash: {:?}", block_hash);
-    let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, block_hash, 0);
+    info!("blockhash: {:?}", blockhash);
+    let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, blockhash, 0);
     let serial_tx = serialize(&tx).unwrap();
 
     let client = reqwest::Client::new();

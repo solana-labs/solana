@@ -38,7 +38,7 @@ fn nominal() {
     let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(100, keypair.pubkey(), 50);
     let ticks_per_slot = genesis_block.ticks_per_slot;
 
-    let (ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
+    let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
     let ticks = ticks_per_slot as usize;
 
     // Basic validation

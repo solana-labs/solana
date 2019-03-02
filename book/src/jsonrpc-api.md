@@ -24,7 +24,7 @@ Methods
 * [confirmTransaction](#confirmtransaction)
 * [getAccountInfo](#getaccountinfo)
 * [getBalance](#getbalance)
-* [getRecentBlockHash](#getrecentblockhash)
+* [getRecentBlockhash](#getrecentblockhash)
 * [getSignatureStatus](#getsignaturestatus)
 * [getTransactionCount](#gettransactioncount)
 * [requestAirdrop](#requestairdrop)
@@ -137,7 +137,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 ---
 
-### getRecentBlockHash
+### getRecentBlockhash
 Returns a recent block hash from the ledger
 
 ##### Parameters:
@@ -149,7 +149,7 @@ None
 ##### Example:
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getRecentBlockHash"}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}' http://localhost:8899
 
 // Result
 {"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}

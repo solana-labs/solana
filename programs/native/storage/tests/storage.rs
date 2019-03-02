@@ -25,7 +25,7 @@ fn get_storage_entry_height(bank: &Bank, account: Pubkey) -> u64 {
     0
 }
 
-fn get_storage_block_hash(bank: &Bank, account: Pubkey) -> Hash {
+fn get_storage_blockhash(bank: &Bank, account: Pubkey) -> Hash {
     if let Some(storage_system_account) = bank.get_account(&account) {
         let state = deserialize(&storage_system_account.userdata);
         if let Ok(state) = state {
@@ -46,23 +46,21 @@ fn test_bank_storage() {
     let jill = Keypair::new();
 
     let x = 42;
-    let block_hash = genesis_block.hash();
+    let blockhash = genesis_block.hash();
     let x2 = x * 2;
-    let storage_block_hash = hash(&[x2]);
+    let storage_blockhash = hash(&[x2]);
 
-    bank.register_tick(&block_hash);
+    bank.register_tick(&blockhash);
 
-    bank.transfer(10, &alice, jill.pubkey(), block_hash)
-        .unwrap();
+    bank.transfer(10, &alice, jill.pubkey(), blockhash).unwrap();
 
-    bank.transfer(10, &alice, bob.pubkey(), block_hash).unwrap();
-    bank.transfer(10, &alice, jack.pubkey(), block_hash)
-        .unwrap();
+    bank.transfer(10, &alice, bob.pubkey(), blockhash).unwrap();
+    bank.transfer(10, &alice, jack.pubkey(), blockhash).unwrap();
 
     let tx = SystemTransaction::new_program_account(
         &alice,
         bob.pubkey(),
-        block_hash,
+        blockhash,
         1,
         4 * 1024,
         storage_program::id(),
@@ -71,10 +69,10 @@ fn test_bank_storage() {
 
     bank.process_transaction(&tx).unwrap();
 
-    let tx = StorageTransaction::new_advertise_recent_block_hash(
+    let tx = StorageTransaction::new_advertise_recent_blockhash(
         &bob,
-        storage_block_hash,
-        block_hash,
+        storage_blockhash,
+        blockhash,
         ENTRIES_PER_SEGMENT,
     );
 
@@ -86,7 +84,7 @@ fn test_bank_storage() {
     //let tx = StorageTransaction::new_mining_proof(
     //    &jack,
     //    Hash::default(),
-    //    block_hash,
+    //    blockhash,
     //    entry_height,
     //    Signature::default(),
     //);
@@ -97,7 +95,7 @@ fn test_bank_storage() {
         ENTRIES_PER_SEGMENT
     );
     assert_eq!(
-        get_storage_block_hash(&bank, bob.pubkey()),
-        storage_block_hash
+        get_storage_blockhash(&bank, bob.pubkey()),
+        storage_blockhash
     );
 }

@@ -125,7 +125,7 @@ mod test {
         let (mut genesis_block, _mint_keypair) = GenesisBlock::new(1000);
         genesis_block.ticks_per_slot = ticks_per_slot;
 
-        let (ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
 
         // Set up blockstream
@@ -138,12 +138,12 @@ mod test {
         let mut entries = create_ticks(4, Hash::default());
 
         let keypair = Keypair::new();
-        let mut block_hash = entries[3].hash;
+        let mut blockhash = entries[3].hash;
         let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, Hash::default(), 0);
-        let entry = Entry::new(&mut block_hash, 1, vec![tx]);
-        block_hash = entry.hash;
+        let entry = Entry::new(&mut blockhash, 1, vec![tx]);
+        blockhash = entry.hash;
         entries.push(entry);
-        let final_tick = create_ticks(1, block_hash);
+        let final_tick = create_ticks(1, blockhash);
         entries.extend_from_slice(&final_tick);
 
         let expected_entries = entries.clone();
