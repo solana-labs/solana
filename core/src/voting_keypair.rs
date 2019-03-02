@@ -101,7 +101,7 @@ pub mod tests {
     use solana_runtime::bank::Bank;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::vote_transaction::VoteTransaction;
+    use solana_vote_api::vote_transaction::VoteTransaction;
 
     pub fn new_vote_account(
         from_keypair: &Keypair,

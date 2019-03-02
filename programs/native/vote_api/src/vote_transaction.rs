@@ -1,14 +1,16 @@
 //! The `vote_transaction` module provides functionality for creating vote transactions.
 
-use crate::hash::Hash;
-use crate::pubkey::Pubkey;
-use crate::signature::{Keypair, KeypairUtil};
-use crate::system_instruction::SystemInstruction;
-use crate::system_program;
-use crate::transaction::{Instruction, Transaction};
-use crate::transaction_builder::TransactionBuilder;
-use crate::vote_program::{self, Vote, VoteInstruction};
+use crate::vote_instruction::{Vote, VoteInstruction};
+use crate::vote_state::VoteState;
+use crate::{check_id, id};
 use bincode::deserialize;
+use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_program;
+use solana_sdk::transaction::{Instruction, Transaction};
+use solana_sdk::transaction_builder::TransactionBuilder;
 
 pub struct VoteTransaction {}
 
@@ -35,15 +37,15 @@ impl VoteTransaction {
     ) -> Transaction {
         let create_tx = SystemInstruction::CreateAccount {
             tokens: num_tokens,
-            space: vote_program::get_max_size() as u64,
-            program_id: vote_program::id(),
+            space: VoteState::max_size() as u64,
+            program_id: id(),
         };
         Transaction::new_with_instructions(
             &[from_keypair],
             &[vote_account_id],
             recent_blockhash,
             fee,
-            vec![system_program::id(), vote_program::id()],
+            vec![system_program::id(), id()],
             vec![
                 Instruction::new(0, &create_tx, vec![0, 1]),
                 Instruction::new(1, &VoteInstruction::InitializeAccount, vec![0, 1]),
@@ -67,7 +69,7 @@ impl VoteTransaction {
     }
 
     fn get_vote(tx: &Transaction, ix_index: usize) -> Option<(Pubkey, Vote, Hash)> {
-        if !vote_program::check_id(&tx.program_id(ix_index)) {
+        if !check_id(&tx.program_id(ix_index)) {
             return None;
         }
         let instruction = deserialize(&tx.userdata(ix_index)).unwrap();

@@ -83,6 +83,7 @@ members = [
     "programs/native/storage",
     "programs/native/system",
     "programs/native/vote",
+    "programs/native/vote_api",
     "replicator",
     "sdk",
     "upload-perf",
