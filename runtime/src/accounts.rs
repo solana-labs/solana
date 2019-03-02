@@ -167,22 +167,28 @@ pub struct Accounts {
 
     /// List of persistent stores
     paths: String,
+
+    /// set to true if object created the directories in paths
+    /// when true, delete parents of 'paths' on drop
+    own_paths: bool,
 }
 
 fn get_paths_vec(paths: &str) -> Vec<String> {
     paths.split(',').map(|s| s.to_string()).collect()
 }
 
-fn cleanup_dirs(paths: &str) {
-    let paths = get_paths_vec(&paths);
-    paths.iter().for_each(|p| {
-        let _ignored = remove_dir_all(p);
-    });
-}
-
 impl Drop for Accounts {
     fn drop(&mut self) {
-        cleanup_dirs(&self.paths);
+        let paths = get_paths_vec(&self.paths);
+        paths.iter().for_each(|p| {
+            let _ignored = remove_dir_all(p);
+
+            // it is safe to delete the parent
+            if self.own_paths {
+                let path = Path::new(p);
+                let _ignored = remove_dir_all(path.parent().unwrap());
+            }
+        });
     }
 }
 
@@ -749,16 +755,17 @@ impl Accounts {
     }
 
     pub fn new(fork: Fork, in_paths: Option<String>) -> Self {
-        let paths = if in_paths.is_none() {
-            Self::make_default_paths()
+        let (paths, own_paths) = if in_paths.is_none() {
+            (Self::make_default_paths(), true)
         } else {
-            in_paths.unwrap()
+            (in_paths.unwrap(), false)
         };
         let accounts_db = AccountsDB::new(fork, &paths);
         Accounts {
             accounts_db,
             account_locks: Mutex::new(HashMap::new()),
             paths,
+            own_paths,
         }
     }
 
@@ -926,6 +933,13 @@ mod tests {
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::transaction::Instruction;
     use solana_sdk::transaction::Transaction;
+
+    fn cleanup_paths(paths: &str) {
+        let paths = get_paths_vec(&paths);
+        paths.iter().for_each(|p| {
+            let _ignored = remove_dir_all(p);
+        });
+    }
 
     fn load_accounts(
         tx: Transaction,
@@ -1359,7 +1373,7 @@ mod tests {
         assert_eq!(db.load(1, &key, true), None); // purged
         assert_eq!(&db.load(2, &key, true).unwrap(), &account0); // original value
 
-        cleanup_dirs(&paths);
+        cleanup_paths(&paths);
     }
 
     #[test]
@@ -1407,7 +1421,7 @@ mod tests {
             assert_eq!(&default_account, &account0);
             assert_eq!(&default_account, &account1);
         }
-        cleanup_dirs(&paths);
+        cleanup_paths(&paths);
     }
 
     #[test]
@@ -1433,7 +1447,7 @@ mod tests {
         accounts1.accounts_db = db0;
         assert_eq!(accounts1.load_slow(1, &key), None);
         assert_eq!(accounts1.load_slow(0, &key), Some(account0));
-        cleanup_dirs(&paths);
+        cleanup_paths(&paths);
     }
 
     fn create_account(
@@ -1499,7 +1513,7 @@ mod tests {
         let mut default_account = Account::default();
         default_account.tokens = 1;
         assert_eq!(compare_account(&default_account, &account), true);
-        cleanup_dirs(&paths);
+        cleanup_paths(&paths);
     }
 
     #[test]
@@ -1515,7 +1529,7 @@ mod tests {
             default_account.tokens = (idx + 1) as u64;
             assert_eq!(compare_account(&default_account, &account), true);
         }
-        cleanup_dirs(&paths);
+        cleanup_paths(&paths);
     }
 
     #[test]
@@ -1534,7 +1548,7 @@ mod tests {
                 AccountStorageStatus::StorageAvailable
             );
         }
-        cleanup_dirs(&paths);
+        cleanup_paths(&paths);
     }
 
     #[test]
@@ -1586,7 +1600,7 @@ mod tests {
             assert_eq!(accounts.load(0, &pubkey1, true).unwrap(), account1);
             assert_eq!(accounts.load(0, &pubkey2, true).unwrap(), account2);
         }
-        cleanup_dirs(&paths);
+        cleanup_paths(&paths);
     }
 
     #[test]
@@ -1678,7 +1692,7 @@ mod tests {
         assert_eq!(accounts_db.get_vote_accounts(1).len(), 1);
         assert_eq!(accounts_db.get_vote_accounts(2).len(), 1);
 
-        cleanup_dirs(&paths);
+        cleanup_paths(&paths);
     }
 
     #[test]
@@ -1686,7 +1700,7 @@ mod tests {
         let paths = "empty_hash".to_string();
         let accounts = AccountsDB::new(0, &paths);
         assert_eq!(accounts.hash_internal_state(0), None);
-        cleanup_dirs(&paths);
+        cleanup_paths(&paths);
     }
 
     #[test]
@@ -1694,7 +1708,7 @@ mod tests {
     fn test_accountsdb_duplicate_fork_should_panic() {
         let paths = "duplicate_fork".to_string();
         let accounts = AccountsDB::new(0, &paths);
-        cleanup_dirs(&paths);
+        cleanup_paths(&paths);
         accounts.add_fork(0, None);
     }
 
@@ -1708,5 +1722,6 @@ mod tests {
             Err(BankError::AccountNotFound)
         );
         assert_eq!(error_counters.account_not_found, 1);
+        cleanup_paths(&paths);
     }
 }
