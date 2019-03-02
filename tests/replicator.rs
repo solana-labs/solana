@@ -61,7 +61,6 @@ fn test_replicator_startup_basic() {
             None,
             &fullnode_config,
         );
-        let leader_exit = leader.run(None);
 
         debug!(
             "leader: {:?}",
@@ -91,7 +90,6 @@ fn test_replicator_startup_basic() {
             Some(&leader_info),
             &fullnode_config,
         );
-        let validator_exit = validator.run(None);
 
         let bob = Keypair::new();
 
@@ -217,8 +215,8 @@ fn test_replicator_startup_basic() {
         }
 
         replicator.close();
-        validator_exit();
-        leader_exit();
+        validator.close().unwrap();
+        leader.close().unwrap();
     }
 
     info!("cleanup");

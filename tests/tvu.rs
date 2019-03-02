@@ -3,6 +3,7 @@ extern crate solana;
 
 use log::*;
 use solana::bank_forks::BankForks;
+use solana::banking_stage::create_test_recorder;
 use solana::blocktree::{get_tmp_ledger_path, Blocktree};
 use solana::blocktree_processor::BankForksInfo;
 use solana::cluster_info::{ClusterInfo, Node};
@@ -110,7 +111,7 @@ fn test_replay() {
             .expect("Expected to successfully open ledger");
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
-    let (to_leader_sender, _to_leader_receiver) = channel();
+    let (poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
     let tvu = Tvu::new(
         Some(Arc::new(voting_keypair)),
         &Arc::new(RwLock::new(bank_forks)),
@@ -125,11 +126,11 @@ fn test_replay() {
         },
         Arc::new(blocktree),
         STORAGE_ROTATE_TEST_COUNT,
-        &to_leader_sender,
         &StorageState::default(),
         None,
         ledger_signal_receiver,
         &Arc::new(RpcSubscriptions::default()),
+        &poh_recorder,
     );
 
     let mut alice_ref_balance = starting_balance;
@@ -182,6 +183,7 @@ fn test_replay() {
     let bob_balance = bank.get_balance(&bob_keypair.pubkey());
     assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
+    poh_service.close().expect("close");
     tvu.close().expect("close");
     exit.store(true, Ordering::Relaxed);
     dr_l.join().expect("join");

@@ -18,28 +18,18 @@ use crate::blockstream_service::BlockstreamService;
 use crate::blocktree::Blocktree;
 use crate::blocktree_processor::BankForksInfo;
 use crate::cluster_info::ClusterInfo;
+use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, RwLock};
+use std::sync::mpsc::{channel, Receiver};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
-
-pub struct TvuRotationInfo {
-    pub tick_height: u64,  // tick height, bank might not exist yet
-    pub blockhash: Hash,   // blockhash that was voted on
-    pub slot: u64,         // slot height to initiate a rotation
-    pub leader_id: Pubkey, // leader upon rotation
-}
-pub type TvuRotationSender = Sender<TvuRotationInfo>;
-pub type TvuRotationReceiver = Receiver<TvuRotationInfo>;
 
 pub struct Tvu {
     fetch_stage: BlobFetchStage,
@@ -72,11 +62,11 @@ impl Tvu {
         sockets: Sockets,
         blocktree: Arc<Blocktree>,
         storage_rotate_count: u64,
-        to_leader_sender: &TvuRotationSender,
         storage_state: &StorageState,
         blockstream: Option<&String>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Self
     where
         T: 'static + KeypairUtil + Sync + Send,
@@ -124,9 +114,9 @@ impl Tvu {
             &bank_forks_info,
             cluster_info.clone(),
             exit.clone(),
-            to_leader_sender,
             ledger_signal_receiver,
             subscriptions,
+            poh_recorder,
         );
 
         let blockstream_service = if blockstream.is_some() {
@@ -197,6 +187,7 @@ impl Service for Tvu {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::banking_stage::create_test_recorder;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
@@ -228,7 +219,8 @@ pub mod tests {
         let blocktree_path = get_tmp_ledger_path!();
         let (blocktree, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
-        let (sender, _receiver) = channel();
+        let bank = bank_forks.working_bank();
+        let (poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
         let tvu = Tvu::new(
             Some(Arc::new(Keypair::new())),
             &Arc::new(RwLock::new(bank_forks)),
@@ -243,12 +235,13 @@ pub mod tests {
             },
             Arc::new(blocktree),
             STORAGE_ROTATE_TEST_COUNT,
-            &sender,
             &StorageState::default(),
             None,
             l_receiver,
             &Arc::new(RpcSubscriptions::default()),
+            &poh_recorder,
         );
         tvu.close().expect("close");
+        poh_service.close().expect("close");
     }
 }

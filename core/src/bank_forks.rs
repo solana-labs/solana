@@ -39,7 +39,11 @@ impl BankForks {
         frozen_banks.into_iter().map(|b| (b.slot(), b)).collect()
     }
     pub fn active_banks(&self) -> Vec<u64> {
-        self.banks.iter().map(|(k, _v)| *k).collect()
+        self.banks
+            .iter()
+            .filter(|(_, v)| !v.is_frozen())
+            .map(|(k, _v)| *k)
+            .collect()
     }
     pub fn get(&self, bank_id: u64) -> Option<&Arc<Bank>> {
         self.banks.get(&bank_id)
@@ -60,7 +64,9 @@ impl BankForks {
     // TODO: use the bank's own ID instead of receiving a parameter?
     pub fn insert(&mut self, bank_id: u64, bank: Bank) {
         let mut bank = Arc::new(bank);
-        self.banks.insert(bank_id, bank.clone());
+        assert_eq!(bank_id, bank.slot());
+        let prev = self.banks.insert(bank_id, bank.clone());
+        assert!(prev.is_none());
 
         if bank_id > self.working_bank.slot() {
             self.working_bank = bank.clone()
@@ -70,7 +76,9 @@ impl BankForks {
         //  parent if we're always calling insert()
         //  when we construct a child bank
         while let Some(parent) = bank.parent() {
-            self.banks.remove(&parent.slot());
+            if let Some(prev) = self.banks.remove(&parent.slot()) {
+                assert!(Arc::ptr_eq(&prev, &parent));
+            }
             bank = parent;
         }
     }

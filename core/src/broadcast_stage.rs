@@ -1,19 +1,18 @@
 //! A stage to broadcast data from a leader node to validators
 //!
 use crate::blocktree::Blocktree;
-use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo, DATA_PLANE_FANOUT};
-use crate::entry::Entry;
+use crate::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT};
 use crate::entry::EntrySlice;
 #[cfg(feature = "erasure")]
 use crate::erasure::CodingGenerator;
 use crate::packet::index_blobs;
+use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
-use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -32,7 +31,6 @@ pub enum BroadcastStageReturnType {
 
 struct Broadcast {
     id: Pubkey,
-    blob_index: u64,
 
     #[cfg(feature = "erasure")]
     coding_generator: CodingGenerator,
@@ -41,25 +39,46 @@ struct Broadcast {
 impl Broadcast {
     fn run(
         &mut self,
-        slot_height: u64,
-        max_tick_height: u64,
-        broadcast_table: &[NodeInfo],
-        receiver: &Receiver<Vec<(Entry, u64)>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        receiver: &Receiver<WorkingBankEntries>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
-        let entries = receiver.recv_timeout(timer)?;
+        let (bank, entries) = receiver.recv_timeout(timer)?;
+        let mut broadcast_table = cluster_info
+            .read()
+            .unwrap()
+            .sorted_tvu_peers(&staking_utils::node_stakes(&bank));
+        // Layer 1, leader nodes are limited to the fanout size.
+        broadcast_table.truncate(DATA_PLANE_FANOUT);
+        inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
+
+        let slot_height = bank.slot();
+        let max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
+        // TODO: Fix BankingStage/BroadcastStage to operate on `slot` directly instead of
+        // `max_tick_height`
+        let mut blob_index = blocktree
+            .meta(bank.slot())
+            .expect("Database error")
+            .map(|meta| meta.consumed)
+            .unwrap_or(0);
+
         let now = Instant::now();
         let mut num_entries = entries.len();
         let mut ventries = Vec::new();
         let mut last_tick = entries.last().map(|v| v.1).unwrap_or(0);
         ventries.push(entries);
 
-        while let Ok(entries) = receiver.try_recv() {
+        while let Ok((same_bank, entries)) = receiver.try_recv() {
             num_entries += entries.len();
             last_tick = entries.last().map(|v| v.1).unwrap_or(0);
             ventries.push(entries);
+            assert!(last_tick <= max_tick_height);
+            assert!(same_bank.slot() == bank.slot());
+            if last_tick == max_tick_height {
+                break;
+            }
         }
 
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
@@ -75,14 +94,8 @@ impl Broadcast {
             .collect();
 
         // TODO: blob_index should be slot-relative...
-        index_blobs(&blobs, &self.id, &mut self.blob_index, slot_height);
-        let parent = {
-            if slot_height == 0 {
-                0
-            } else {
-                slot_height - 1
-            }
-        };
+        index_blobs(&blobs, &self.id, &mut blob_index, slot_height);
+        let parent = bank.parents().first().map(|bank| bank.slot()).unwrap_or(0);
         for b in blobs.iter() {
             b.write().unwrap().set_parent(parent);
         }
@@ -129,7 +142,7 @@ impl Broadcast {
             influxdb::Point::new("broadcast-service")
                 .add_field(
                     "transmit-index",
-                    influxdb::Value::Integer(self.blob_index as i64),
+                    influxdb::Value::Integer(blob_index as i64),
                 )
                 .to_owned(),
         );
@@ -163,12 +176,9 @@ pub struct BroadcastStage {
 impl BroadcastStage {
     #[allow(clippy::too_many_arguments)]
     fn run(
-        slot_height: u64,
-        bank: &Arc<Bank>,
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        blob_index: u64,
-        receiver: &Receiver<Vec<(Entry, u64)>>,
+        receiver: &Receiver<WorkingBankEntries>,
         exit_signal: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
     ) -> BroadcastStageReturnType {
@@ -176,32 +186,15 @@ impl BroadcastStage {
 
         let mut broadcast = Broadcast {
             id: me.id,
-            blob_index,
             #[cfg(feature = "erasure")]
             coding_generator: CodingGenerator::new(),
         };
-
-        let max_tick_height = (slot_height + 1) * bank.ticks_per_slot() - 1;
 
         loop {
             if exit_signal.load(Ordering::Relaxed) {
                 return BroadcastStageReturnType::ExitSignal;
             }
-            let mut broadcast_table = cluster_info
-                .read()
-                .unwrap()
-                .sorted_tvu_peers(&staking_utils::node_stakes(&bank));
-            // Layer 1, leader nodes are limited to the fanout size.
-            broadcast_table.truncate(DATA_PLANE_FANOUT);
-            inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
-            if let Err(e) = broadcast.run(
-                slot_height,
-                max_tick_height,
-                &broadcast_table,
-                receiver,
-                sock,
-                blocktree,
-            ) {
+            if let Err(e) = broadcast.run(&cluster_info, receiver, sock, blocktree) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
                         return BroadcastStageReturnType::ChannelDisconnected;
@@ -234,32 +227,19 @@ impl BroadcastStage {
     /// completing the cycle.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        slot_height: u64,
-        bank: &Arc<Bank>,
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        blob_index: u64,
-        receiver: Receiver<Vec<(Entry, u64)>>,
+        receiver: Receiver<WorkingBankEntries>,
         exit_sender: Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
     ) -> Self {
         let exit_signal = Arc::new(AtomicBool::new(false));
         let blocktree = blocktree.clone();
-        let bank = bank.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
-                Self::run(
-                    slot_height,
-                    &bank,
-                    &sock,
-                    &cluster_info,
-                    blob_index,
-                    &receiver,
-                    &exit_signal,
-                    &blocktree,
-                )
+                Self::run(&sock, &cluster_info, &receiver, &exit_signal, &blocktree)
             })
             .unwrap();
 
@@ -282,6 +262,7 @@ mod test {
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
     use crate::service::Service;
+    use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
@@ -294,14 +275,13 @@ mod test {
     struct MockBroadcastStage {
         blocktree: Arc<Blocktree>,
         broadcast_service: BroadcastStage,
+        bank: Arc<Bank>,
     }
 
     fn setup_dummy_broadcast_service(
-        slot_height: u64,
         leader_pubkey: Pubkey,
         ledger_path: &str,
-        entry_receiver: Receiver<Vec<(Entry, u64)>>,
-        blob_index: u64,
+        entry_receiver: Receiver<WorkingBankEntries>,
     ) -> MockBroadcastStage {
         // Make the database ledger
         let blocktree = Arc::new(Blocktree::open(ledger_path).unwrap());
@@ -323,11 +303,8 @@ mod test {
 
         // Start up the broadcast stage
         let broadcast_service = BroadcastStage::new(
-            slot_height,
-            &bank,
             leader_info.sockets.broadcast,
             cluster_info,
-            blob_index,
             entry_receiver,
             exit_sender,
             &blocktree,
@@ -336,6 +313,7 @@ mod test {
         MockBroadcastStage {
             blocktree,
             broadcast_service,
+            bank,
         }
     }
 
@@ -352,17 +330,16 @@ mod test {
 
             let (entry_sender, entry_receiver) = channel();
             let broadcast_service = setup_dummy_broadcast_service(
-                0,
                 leader_keypair.pubkey(),
                 &ledger_path,
                 entry_receiver,
-                0,
             );
+            let bank = broadcast_service.bank.clone();
 
             let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
             for (i, tick) in ticks.into_iter().enumerate() {
                 entry_sender
-                    .send(vec![(tick, i as u64 + 1)])
+                    .send((bank.clone(), vec![(tick, i as u64 + 1)]))
                     .expect("Expect successful send to broadcast service");
             }
 

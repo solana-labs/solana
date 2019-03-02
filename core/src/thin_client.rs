@@ -498,7 +498,6 @@ mod tests {
     fn test_thin_client_basic() {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode();
-        let server_exit = server.run(None);
         let bob_pubkey = Keypair::new().pubkey();
 
         info!(
@@ -525,7 +524,7 @@ mod tests {
 
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 1);
-        server_exit();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -534,7 +533,6 @@ mod tests {
     fn test_bad_sig() {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode();
-        let server_exit = server.run(None);
         let bob_pubkey = Keypair::new().pubkey();
         info!(
             "found leader: {:?}",
@@ -562,7 +560,7 @@ mod tests {
 
         let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 1001);
-        server_exit();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -570,7 +568,6 @@ mod tests {
     fn test_register_vote_account() {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode();
-        let server_exit = server.run(None);
         info!(
             "found leader: {:?}",
             poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
@@ -626,7 +623,7 @@ mod tests {
             sleep(Duration::from_millis(900));
         }
 
-        server_exit();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -645,7 +642,6 @@ mod tests {
     fn test_zero_balance_after_nonzero() {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode();
-        let server_exit = server.run(None);
         let bob_keypair = Keypair::new();
 
         info!(
@@ -682,7 +678,7 @@ mod tests {
         info!("Bob's balance is {:?}", bob_balance);
         assert!(bob_balance.is_err(),);
 
-        server_exit();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 }
