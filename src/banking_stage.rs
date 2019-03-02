@@ -19,7 +19,7 @@ use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_TICK_HASHES};
 use solana_sdk::transaction::Transaction;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{channel, sync_channel, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
@@ -58,45 +58,57 @@ impl BankingStage {
 
         // Single thread to compute confirmation
         let leader_confirmation_service = LeaderConfirmationService::new(leader_id, exit.clone());
-
+        let (waiter, notifier) = sync_channel();
         // Many banks that process transactions in parallel.
-        let bank_thread_hdls: Vec<JoinHandle<Result<()>>> = (0..Self::num_threads())
+        let mut bank_thread_hdls: Vec<JoinHandle<Result<()>>> = (0..Self::num_threads())
             .map(|_| {
                 let verified_receiver = verified_receiver.clone();
                 let poh_recorder = poh_recorder.clone();
                 let cluster_info = cluster_info.clone();
+                let waiter = waiter.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || loop {
-                        let bank = Self::forward_until_bank(
-                            &cluster_info,
-                            &bank_receiver,
-                            &verified_receiver,
-                        )?;
-                        let max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
-                        let working_bank = WorkingBank {
-                            bank: bank.clone(),
-                            sender: entry_sender,
-                            min_tick_height: bank.tick_height(),
-                            max_tick_height,
-                        };
-
-                        info!(
-                            "new working bank {} {} {}",
-                            working_bank.min_tick_height,
-                            working_bank.max_tick_height,
-                            poh_recorder.lock().unwrap().poh.tick_height
-                        );
-                        leader_confirmation_service.set_bank(bank.clone());
-                        poh_recorder.lock().unwrap().set_working_bank(working_bank);
-
-                        let packets = Self::process_loop(&bank, &verified_receiver, &poh_recorder);
-                        let tpu = cluster_info.read().unwrap().leader_data().unwrap().tpu;
-                        Self::forward_unprocessed_packets(&tpu, packets);
+                        waiter.send()?;
+                        let bank = poh_recorder.lock().unwrap().get_bank();
+                        if let Some(bank) = bank {
+                            let packets =
+                                Self::process_loop(&bank, &verified_receiver, &poh_recorder);
+                            let tpu = cluster_info.read().unwrap().leader_data().unwrap().tpu;
+                            Self::forward_unprocessed_packets(&tpu, packets);
+                        }
                     })
                     .unwrap()
             })
             .collect();
+
+        let bank_thread_hdl: JoinHandle<Result<()>> = Builder::new()
+            .name("solana-banking-bank-recv".to_string())
+            .spawn(move || loop {
+                let bank =
+                    Self::forward_until_bank(&cluster_info, &bank_receiver, &verified_receiver)?;
+                let max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
+                let working_bank = WorkingBank {
+                    bank: bank.clone(),
+                    sender: entry_sender.clone(),
+                    min_tick_height: bank.tick_height(),
+                    max_tick_height,
+                };
+
+                info!(
+                    "new working bank {} {} {}",
+                    working_bank.min_tick_height,
+                    working_bank.max_tick_height,
+                    poh_recorder.lock().unwrap().poh.tick_height
+                );
+                leader_confirmation_service.set_bank(bank.clone());
+                poh_recorder.lock().unwrap().set_working_bank(working_bank);
+                for _ in 0..Self::num_threads() {
+                    notifier.recv()?;
+                }
+            })
+            .unwrap();
+        bank_thread_hdls.push(bank_thread_hdl);
         (
             Self {
                 bank_thread_hdls,

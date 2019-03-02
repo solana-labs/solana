@@ -51,6 +51,9 @@ impl PohRecorder {
         self.poh.hash();
     }
 
+    pub fn bank(&self) -> Option<Arc<Bank>> {
+        self.working_bank.map(|w| w.bank).cloned()
+    }
     // synchronize PoH with a bank
     pub fn reset(&mut self, tick_height: u64, last_id: Hash) {
         let mut cache = vec![];

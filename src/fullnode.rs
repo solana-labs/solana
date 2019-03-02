@@ -231,6 +231,7 @@ impl Fullnode {
             config.blockstream.as_ref(),
             ledger_signal_receiver,
             &subscriptions,
+            &poh_recorder,
         );
         let tpu = Tpu::new(
             id,
