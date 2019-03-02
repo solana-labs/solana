@@ -44,7 +44,15 @@ impl SystemTransaction {
         fee: u64,
     ) -> Transaction {
         let program_id = system_program::id();
-        Self::new_program_account(from_keypair, to, recent_block_hash, tokens, 0, program_id, fee)
+        Self::new_program_account(
+            from_keypair,
+            to,
+            recent_block_hash,
+            tokens,
+            0,
+            program_id,
+            fee,
+        )
     }
     /// Create and sign new SystemInstruction::Assign transaction
     pub fn new_assign(

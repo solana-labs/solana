@@ -34,7 +34,12 @@ impl BudgetTransaction {
 
     /// Create and sign a new Transaction. Used for unit-testing.
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(from_keypair: &Keypair, to: Pubkey, tokens: u64, recent_block_hash: Hash) -> Transaction {
+    pub fn new(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        tokens: u64,
+        recent_block_hash: Hash,
+    ) -> Transaction {
         Self::new_payment(from_keypair, to, tokens, recent_block_hash, 0)
     }
 

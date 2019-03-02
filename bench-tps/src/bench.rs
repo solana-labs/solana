@@ -100,7 +100,11 @@ pub fn sample_tx_count(
 }
 
 /// Send loopback payment of 0 tokens and confirm the network processed it
-pub fn send_barrier_transaction(barrier_client: &mut ThinClient, block_hash: &mut Hash, id: &Keypair) {
+pub fn send_barrier_transaction(
+    barrier_client: &mut ThinClient,
+    block_hash: &mut Hash,
+    id: &Keypair,
+) {
     let transfer_start = Instant::now();
 
     let mut poll_count = 0;

@@ -206,7 +206,9 @@ impl ReplayStage {
         progress: &mut HashMap<u64, (Hash, usize)>,
     ) -> result::Result<(Vec<Entry>, usize)> {
         let bank_id = bank.slot();
-        let bank_progress = &mut progress.entry(bank_id).or_insert((bank.last_block_hash(), 0));
+        let bank_progress = &mut progress
+            .entry(bank_id)
+            .or_insert((bank.last_block_hash(), 0));
         blocktree.get_slot_entries_with_blob_count(bank_id, bank_progress.1 as u64, None)
     }
 
@@ -217,7 +219,9 @@ impl ReplayStage {
         forward_entry_sender: &EntrySender,
         num: usize,
     ) -> result::Result<()> {
-        let bank_progress = &mut progress.entry(bank.slot()).or_insert((bank.last_block_hash(), 0));
+        let bank_progress = &mut progress
+            .entry(bank.slot())
+            .or_insert((bank.last_block_hash(), 0));
         let result = Self::verify_and_process_entries(&bank, &entries, &bank_progress.0);
         bank_progress.1 += num;
         if let Some(last_entry) = entries.last() {

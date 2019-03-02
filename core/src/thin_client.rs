@@ -220,9 +220,9 @@ impl ThinClient {
     pub fn try_get_recent_block_hash(&mut self, mut num_retries: u64) -> Option<Hash> {
         loop {
             trace!("try_get_recent_block_hash send_to {}", &self.rpc_addr);
-            let response = self
-                .rpc_client
-                .make_rpc_request(1, RpcRequest::GetRecentBlockHash, None);
+            let response =
+                self.rpc_client
+                    .make_rpc_request(1, RpcRequest::GetRecentBlockHash, None);
 
             match response {
                 Ok(value) => {
@@ -514,7 +514,9 @@ mod tests {
         let block_hash = client.get_recent_block_hash();
         info!("test_thin_client block_hash: {:?}", block_hash);
 
-        let signature = client.transfer(500, &alice, bob_pubkey, &block_hash).unwrap();
+        let signature = client
+            .transfer(500, &alice, bob_pubkey, &block_hash)
+            .unwrap();
         info!("test_thin_client signature: {:?}", signature);
         client.poll_for_signature(&signature).unwrap();
 

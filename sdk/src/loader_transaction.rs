@@ -18,7 +18,14 @@ impl LoaderTransaction {
         fee: u64,
     ) -> Transaction {
         let instruction = LoaderInstruction::Write { offset, bytes };
-        Transaction::new(from_keypair, &[], loader, &instruction, recent_block_hash, fee)
+        Transaction::new(
+            from_keypair,
+            &[],
+            loader,
+            &instruction,
+            recent_block_hash,
+            fee,
+        )
     }
 
     pub fn new_finalize(
@@ -28,6 +35,13 @@ impl LoaderTransaction {
         fee: u64,
     ) -> Transaction {
         let instruction = LoaderInstruction::Finalize;
-        Transaction::new(from_keypair, &[], loader, &instruction, recent_block_hash, fee)
+        Transaction::new(
+            from_keypair,
+            &[],
+            loader,
+            &instruction,
+            recent_block_hash,
+            fee,
+        )
     }
 }
