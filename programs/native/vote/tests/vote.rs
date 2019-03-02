@@ -1,8 +1,8 @@
-//use solana_runtime::bank::BankError;
+use solana_runtime::bank::BankError;
 use solana_runtime::bank::{Bank, Result};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
-//use solana_sdk::native_program::ProgramError;
+use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
@@ -86,15 +86,15 @@ fn test_vote_via_bank_with_no_signature() {
         .push(vote_ix)
         .sign(&[&mallory_keypair], last_id);
 
-    let _result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(&tx);
 
     // And ensure there's no vote.
     let vote_account = bank.get_account(&vote_id).unwrap();
     let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
     assert_eq!(vote_state.votes.len(), 0);
 
-    //assert_eq!(
-    //    result,
-    //    Err(BankError::ProgramError(1, ProgramError::InvalidArgument))
-    //);
+    assert_eq!(
+        result,
+        Err(BankError::ProgramError(1, ProgramError::InvalidArgument))
+    );
 }
