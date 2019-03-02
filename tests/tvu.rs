@@ -86,7 +86,7 @@ fn test_replay() {
     let tvu_addr = target1.info.tvu;
 
     let bank = Bank::new(&genesis_block);
-    let mut cur_hash = bank.last_id();
+    let last_id = bank.last_id();
     let bank_forks = BankForks::new(0, bank);
     let bank_forks_info = vec![BankForksInfo {
         bank_id: 0,
@@ -136,8 +136,9 @@ fn test_replay() {
     let mut msgs = Vec::new();
     let mut blob_idx = 0;
     let num_transfers = 10;
-    let transfer_amount = 501;
+    let mut transfer_amount = 501;
     let bob_keypair = Keypair::new();
+    let mut cur_hash = last_id;
     for i in 0..num_transfers {
         let entry0 = next_entry_mut(&mut cur_hash, i, vec![]);
         let entry_tick0 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
@@ -146,7 +147,7 @@ fn test_replay() {
             &mint_keypair,
             bob_keypair.pubkey(),
             transfer_amount,
-            cur_hash,
+            last_id,
             0,
         );
         let entry_tick1 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
@@ -154,6 +155,7 @@ fn test_replay() {
         let entry_tick2 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
 
         alice_ref_balance -= transfer_amount;
+        transfer_amount -= 1; // Sneaky: change transfer_amount slightly to avoid DuplicateSignature errors
 
         let entries = vec![entry0, entry_tick0, entry_tick1, entry1, entry_tick2];
         let blobs = entries.to_shared_blobs();
