@@ -1,8 +1,9 @@
 use crate::budget_expr::BudgetExpr;
-use crate::budget_program;
-use crate::pubkey::Pubkey;
-use crate::transaction_builder::BuilderInstruction;
+use crate::id;
 use chrono::prelude::{DateTime, Utc};
+use serde_derive::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction_builder::BuilderInstruction;
 
 /// A smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -28,10 +29,6 @@ pub enum Instruction {
 
 impl Instruction {
     pub fn new_budget(contract: Pubkey, expr: BudgetExpr) -> BuilderInstruction {
-        BuilderInstruction::new(
-            budget_program::id(),
-            &Instruction::NewBudget(expr),
-            vec![(contract, false)],
-        )
+        BuilderInstruction::new(id(), &Instruction::NewBudget(expr), vec![(contract, false)])
     }
 }

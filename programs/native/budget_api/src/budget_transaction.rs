@@ -2,15 +2,15 @@
 
 use crate::budget_expr::{BudgetExpr, Condition};
 use crate::budget_instruction::Instruction;
-use crate::budget_program;
-use crate::hash::Hash;
-use crate::pubkey::Pubkey;
-use crate::signature::{Keypair, KeypairUtil};
-use crate::system_instruction::SystemInstruction;
-use crate::transaction::Transaction;
-use crate::transaction_builder::TransactionBuilder;
+use crate::id;
 use bincode::deserialize;
 use chrono::prelude::*;
+use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::transaction::Transaction;
+use solana_sdk::transaction_builder::TransactionBuilder;
 
 pub struct BudgetTransaction {}
 
@@ -55,7 +55,7 @@ impl BudgetTransaction {
         Transaction::new(
             from_keypair,
             &[contract, to],
-            budget_program::id(),
+            id(),
             &instruction,
             recent_blockhash,
             0,
@@ -74,14 +74,7 @@ impl BudgetTransaction {
         if from_keypair.pubkey() != to {
             keys.push(to);
         }
-        Transaction::new(
-            from_keypair,
-            &keys,
-            budget_program::id(),
-            &instruction,
-            recent_blockhash,
-            0,
-        )
+        Transaction::new(from_keypair, &keys, id(), &instruction, recent_blockhash, 0)
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.
@@ -116,7 +109,7 @@ impl BudgetTransaction {
         Transaction::new(
             from_keypair,
             &[contract],
-            budget_program::id(),
+            id(),
             &instruction,
             recent_blockhash,
             0,
@@ -153,7 +146,7 @@ impl BudgetTransaction {
         Transaction::new(
             from_keypair,
             &[contract],
-            budget_program::id(),
+            id(),
             &instruction,
             recent_blockhash,
             0,

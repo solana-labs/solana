@@ -3,10 +3,10 @@ use bincode::{self, deserialize, serialize_into, serialized_size};
 use chrono::prelude::{DateTime, Utc};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
+use solana_budget_api::budget_expr::BudgetExpr;
+use solana_budget_api::budget_instruction::Instruction;
+use solana_budget_api::payment_plan::Witness;
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::budget_expr::BudgetExpr;
-use solana_sdk::budget_instruction::Instruction;
-use solana_sdk::payment_plan::Witness;
 use std::io;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -114,22 +114,6 @@ pub fn process_instruction(
         Err(BudgetError::UserdataDeserializeFailure)
     }
 }
-
-// TODO: Re-instate budget_program special case in bank.rs?
-/*
-pub fn get_balance(account: &Account) -> u64 {
-    if let Ok(program) = deserialize(&account.userdata) {
-        let program: BudgetProgram = program;
-        if program.is_pending() {
-            0
-        } else {
-            account.tokens
-        }
-    } else {
-        account.tokens
-    }
-}
-*/
 
 impl BudgetProgram {
     fn is_pending(&self) -> bool {
@@ -240,9 +224,9 @@ impl BudgetProgram {
 mod test {
     use super::*;
     use bincode::serialize;
+    use solana_budget_api::budget_transaction::BudgetTransaction;
+    use solana_budget_api::id;
     use solana_sdk::account::Account;
-    use solana_sdk::budget_program::*;
-    use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::{Instruction, Transaction};

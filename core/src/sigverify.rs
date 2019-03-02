@@ -335,7 +335,7 @@ mod tests {
     use crate::sigverify;
     use crate::test_tx::test_tx;
     use bincode::{deserialize, serialize};
-    use solana_sdk::budget_program;
+    use solana_budget_api;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
@@ -501,7 +501,7 @@ mod tests {
 
         let system_instruction = SystemInstruction::Move { tokens };
 
-        let program_ids = vec![system_program::id(), budget_program::id()];
+        let program_ids = vec![system_program::id(), solana_budget_api::id()];
 
         let instructions = vec![Instruction::new(0, &system_instruction, vec![0, 1])];
 

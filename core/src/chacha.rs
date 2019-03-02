@@ -95,7 +95,7 @@ mod tests {
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::entry::Entry;
     use ring::signature::Ed25519KeyPair;
-    use solana_sdk::budget_transaction::BudgetTransaction;
+    use solana_budget_api::budget_transaction::BudgetTransaction;
     use solana_sdk::hash::{hash, Hash, Hasher};
     use solana_sdk::signature::KeypairUtil;
     use std::fs::remove_file;

@@ -12,12 +12,12 @@ use solana::rpc_request::RpcClient;
 use solana::rpc_request::{get_rpc_request_str, RpcRequest};
 use solana::rpc_service::RPC_PORT;
 use solana::rpc_status::RpcSignatureStatus;
+use solana_budget_api;
+use solana_budget_api::budget_transaction::BudgetTransaction;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone::DRONE_PORT;
 use solana_sdk::bpf_loader;
-use solana_sdk::budget_program;
-use solana_sdk::budget_transaction::BudgetTransaction;
 use solana_sdk::hash::Hash;
 use solana_sdk::loader_transaction::LoaderTransaction;
 use solana_sdk::pubkey::Pubkey;
@@ -483,7 +483,7 @@ fn process_pay(
 
         let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
-        let budget_program_id = budget_program::id();
+        let budget_program_id = solana_budget_api::id();
 
         // Create account for contract funds
         let mut tx = SystemTransaction::new_program_account(
@@ -540,7 +540,7 @@ fn process_pay(
 
         let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
-        let budget_program_id = budget_program::id();
+        let budget_program_id = solana_budget_api::id();
 
         // Create account for contract funds
         let mut tx = SystemTransaction::new_program_account(
