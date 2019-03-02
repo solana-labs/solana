@@ -8,6 +8,7 @@ use crate::cluster_info::ClusterInfo;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
 use crate::leader_schedule_utils;
 use crate::packet::BlobError;
+use crate::poh_recorder::PohRecorder;
 use crate::result;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
@@ -21,7 +22,7 @@ use solana_sdk::vote_transaction::VoteTransaction;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
@@ -61,9 +62,10 @@ impl ReplayStage {
         _bank_forks_info: &[BankForksInfo],
         cluster_info: Arc<RwLock<ClusterInfo>>,
         exit: Arc<AtomicBool>,
-        banking_stage_sender: Sender<Bank>,
+        banking_stage_sender: Sender<Arc<Bank>>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> (Self, Receiver<(u64, Pubkey)>, EntryReceiver)
     where
         T: 'static + KeypairUtil + Send + Sync,
@@ -74,6 +76,7 @@ impl ReplayStage {
         let exit_ = exit.clone();
         let subscriptions = subscriptions.clone();
         let bank_forks = bank_forks.clone();
+        let poh_recorder = poh_recorder.clone();
 
         let mut progress = HashMap::new();
 
@@ -139,6 +142,10 @@ impl ReplayStage {
                                 0,
                             );
                             cluster_info.write().unwrap().push_vote(vote);
+                            poh_recorder
+                                .read()
+                                .unwrap()
+                                .reset(parent.tick_height(), parent.last_id());
                         }
                         if next_leader == my_id {
                             let tpu_bank = Bank::new_from_parent(&parent, my_id, next_slot);

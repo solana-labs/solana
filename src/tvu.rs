@@ -18,6 +18,7 @@ use crate::blockstream_service::BlockstreamService;
 use crate::blocktree::Blocktree;
 use crate::blocktree_processor::BankForksInfo;
 use crate::cluster_info::ClusterInfo;
+use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
@@ -28,7 +29,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
 pub struct Tvu {
@@ -67,6 +68,7 @@ impl Tvu {
         blockstream: Option<&String>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Self
     where
         T: 'static + KeypairUtil + Sync + Send,
@@ -114,8 +116,10 @@ impl Tvu {
             &bank_forks_info,
             cluster_info.clone(),
             exit.clone(),
+            bank_sender,
             ledger_signal_receiver,
             subscriptions,
+            poh_recorder,
         );
 
         let blockstream_service = if blockstream.is_some() {

@@ -96,8 +96,13 @@ impl Tpu {
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
-        let (banking_stage, entry_receiver) =
-            BankingStage::new(bank_receiver, poh_recorder, verified_receiver, id);
+        let (banking_stage, entry_receiver) = BankingStage::new(
+            &cluster_info,
+            bank_receiver,
+            poh_recorder,
+            verified_receiver,
+            id,
+        );
 
         let broadcast_stage = BroadcastStage::new(
             broadcast_socket,
