@@ -1,7 +1,7 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! multi-stage transaction processing pipeline in software.
 
-use crate::banking_stage::{BankingStage, UnprocessedPackets};
+use crate::banking_stage::BankingStage;
 use crate::blocktree::Blocktree;
 use crate::broadcast_stage::BroadcastStage;
 use crate::cluster_info::ClusterInfo;
@@ -10,7 +10,6 @@ use crate::fetch_stage::FetchStage;
 use crate::poh_recorder::PohRecorder;
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
-use crate::tpu_forwarder::TpuForwarder;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;

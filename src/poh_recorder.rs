@@ -29,7 +29,7 @@ pub enum PohRecorderError {
 #[derive(Clone)]
 pub struct WorkingBank {
     pub bank: Arc<Bank>,
-    pub sender: Sender<Vec<(Entry, u64)>>,
+    pub sender: Sender<(Arc<Bank>, Vec<(Entry, u64)>)>,
     pub min_tick_height: u64,
     pub max_tick_height: u64,
 }

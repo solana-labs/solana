@@ -11,7 +11,6 @@ use crate::packet::BlobError;
 use crate::result;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
-use crate::tvu::{TvuRotationInfo, TvuRotationSender};
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
