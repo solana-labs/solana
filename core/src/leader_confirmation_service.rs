@@ -5,7 +5,6 @@
 use crate::service::Service;
 use solana_metrics::{influxdb, submit};
 use solana_runtime::bank::Bank;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use solana_sdk::vote_program::VoteState;
 use std::result;
@@ -35,7 +34,7 @@ impl LeaderConfirmationService {
         let mut slots_and_stakes: Vec<(u64, u64)> = vec![];
         // Hold an accounts_db read lock as briefly as possible, just long enough to collect all
         // the vote states
-        bank.vote_accounts(|_, account| {
+        bank.vote_accounts().for_each(|(_, account)| {
             total_stake += account.tokens;
             let vote_state = VoteState::deserialize(&account.userdata).unwrap();
             slots_and_stakes.push(
@@ -45,7 +44,6 @@ impl LeaderConfirmationService {
                     .map(|vote| (vote.slot_height, account.tokens))
                     .unwrap(),
             );
-            None as Option<(Pubkey, ())>
         });
 
         let super_majority_stake = (2 * total_stake) / 3;
@@ -170,11 +168,7 @@ mod tests {
 
         // There isn't 2/3 consensus, so the bank's confirmation value should be the default
         let mut last_confirmation_time = 0;
-        LeaderConfirmationService::compute_confirmation(
-            &bank,
-            genesis_block.bootstrap_leader_id,
-            &mut last_confirmation_time,
-        );
+        LeaderConfirmationService::compute_confirmation(&bank, &mut last_confirmation_time);
         assert_eq!(last_confirmation_time, 0);
 
         // Get another validator to vote, so we now have 2/3 consensus
@@ -182,11 +176,7 @@ mod tests {
         let vote_tx = VoteTransaction::new_vote(voting_keypair, 7, blockhash, 0);
         bank.process_transaction(&vote_tx).unwrap();
 
-        LeaderConfirmationService::compute_confirmation(
-            &bank,
-            genesis_block.bootstrap_leader_id,
-            &mut last_confirmation_time,
-        );
+        LeaderConfirmationService::compute_confirmation(&bank, &mut last_confirmation_time);
         assert!(last_confirmation_time > 0);
     }
 }

@@ -908,12 +908,11 @@ impl Accounts {
         self.accounts_db.squash(fork);
     }
 
-    pub fn get_vote_accounts(&self, fork: Fork) -> HashMap<Pubkey, Account> {
+    pub fn get_vote_accounts(&self, fork: Fork) -> impl Iterator<Item = (Pubkey, Account)> {
         self.accounts_db
             .get_vote_accounts(fork)
             .into_iter()
             .filter(|(_, acc)| acc.tokens != 0)
-            .collect()
     }
 }
 
@@ -1602,26 +1601,31 @@ mod tests {
 
         accounts.new_from_parent(1, 0);
 
-        assert_eq!(accounts.get_vote_accounts(1).len(), 1);
+        let mut vote_accounts: Vec<_> = accounts.get_vote_accounts(1).collect();
+        assert_eq!(vote_accounts.len(), 1);
 
         vote_account.tokens = 0;
         accounts.store_slow(1, &key, &vote_account);
 
-        assert_eq!(accounts.get_vote_accounts(1).len(), 0);
+        vote_accounts = accounts.get_vote_accounts(1).collect();
+        assert_eq!(vote_accounts.len(), 0);
 
         let mut vote_account1 = Account::new(2, 0, vote_program::id());
         let key1 = Keypair::new().pubkey();
         accounts.store_slow(1, &key1, &vote_account1);
 
         accounts.squash(1);
-        assert_eq!(accounts.get_vote_accounts(0).len(), 1);
-        assert_eq!(accounts.get_vote_accounts(1).len(), 1);
+        vote_accounts = accounts.get_vote_accounts(0).collect();
+        assert_eq!(vote_accounts.len(), 1);
+        vote_accounts = accounts.get_vote_accounts(1).collect();
+        assert_eq!(vote_accounts.len(), 1);
 
         vote_account1.tokens = 0;
         accounts.store_slow(1, &key1, &vote_account1);
         accounts.store_slow(0, &key, &vote_account);
 
-        assert_eq!(accounts.get_vote_accounts(1).len(), 0);
+        vote_accounts = accounts.get_vote_accounts(1).collect();
+        assert_eq!(vote_accounts.len(), 0);
     }
 
     #[test]
