@@ -83,14 +83,15 @@ fn entrypoint(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_rewards_api::rewards_program;
+    use solana_rewards_api;
+    use solana_rewards_api::rewards_state::RewardsState;
     use solana_sdk::account::Account;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::vote_program::{self, Vote};
 
     fn create_rewards_account(tokens: u64) -> Account {
-        let space = rewards_program::get_max_size();
-        Account::new(tokens, space, rewards_program::id())
+        let space = RewardsState::max_size();
+        Account::new(tokens, space, solana_rewards_api::id())
     }
 
     fn redeem_vote_credits_(

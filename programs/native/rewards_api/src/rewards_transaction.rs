@@ -1,8 +1,9 @@
 //! The `rewards_transaction` module provides functionality for creating a global
 //! rewards account and enabling stakers to redeem credits from their vote accounts.
 
+use crate::id;
 use crate::rewards_instruction::RewardsInstruction;
-use crate::rewards_program;
+use crate::rewards_state::RewardsState;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -26,8 +27,8 @@ impl RewardsTransaction {
             rewards_id,
             last_id,
             num_tokens,
-            rewards_program::get_max_size() as u64,
-            rewards_program::id(),
+            RewardsState::max_size() as u64,
+            id(),
             fee,
         )
     }

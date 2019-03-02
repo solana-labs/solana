@@ -1,4 +1,4 @@
-use solana_rewards_api::rewards_program;
+use solana_rewards_api;
 use solana_rewards_api::rewards_transaction::RewardsTransaction;
 use solana_runtime::bank::{Bank, Result};
 use solana_sdk::genesis_block::GenesisBlock;
@@ -14,7 +14,7 @@ struct RewardsBank<'a> {
 
 impl<'a> RewardsBank<'a> {
     fn new(bank: &'a Bank) -> Self {
-        bank.add_native_program("solana_rewards_program", &rewards_program::id());
+        bank.add_native_program("solana_rewards_program", &solana_rewards_api::id());
         Self { bank }
     }
 
