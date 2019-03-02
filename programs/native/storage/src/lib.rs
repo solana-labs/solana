@@ -83,7 +83,7 @@ fn entrypoint(
                 };
                 storage_account_state.proofs[segment_index].push(proof_info);
             }
-            StorageProgram::AdvertiseStorageLastId { id, entry_height } => {
+            StorageProgram::AdvertiseStorageRecentBlockHash { hash, entry_height } => {
                 let original_segments = storage_account_state.entry_height / ENTRIES_PER_SEGMENT;
                 let segments = entry_height / ENTRIES_PER_SEGMENT;
                 debug!(
@@ -95,7 +95,7 @@ fn entrypoint(
                 }
 
                 storage_account_state.entry_height = entry_height;
-                storage_account_state.id = id;
+                storage_account_state.hash = hash;
 
                 // move the proofs to previous_proofs
                 storage_account_state.previous_proofs = storage_account_state.proofs.clone();

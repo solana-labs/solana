@@ -30,7 +30,7 @@ fn get_storage_last_id(bank: &Bank, account: Pubkey) -> Hash {
         let state = deserialize(&storage_system_account.userdata);
         if let Ok(state) = state {
             let state: storage_program::StorageProgramState = state;
-            return state.id;
+            return state.hash;
         }
     }
     Hash::default()

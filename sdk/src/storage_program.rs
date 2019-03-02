@@ -32,7 +32,7 @@ pub struct ValidationInfo {
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct StorageProgramState {
     pub entry_height: u64,
-    pub id: Hash,
+    pub hash: Hash,
 
     pub proofs: Vec<Vec<ProofInfo>>,
     pub previous_proofs: Vec<Vec<ProofInfo>>,
@@ -48,8 +48,8 @@ pub enum StorageProgram {
         entry_height: u64,
         signature: Signature,
     },
-    AdvertiseStorageLastId {
-        id: Hash,
+    AdvertiseStorageRecentBlockHash {
+        hash: Hash,
         entry_height: u64,
     },
     ClaimStorageReward {
@@ -94,12 +94,12 @@ impl StorageTransaction {
 
     pub fn new_advertise_recent_block_hash(
         from_keypair: &Keypair,
-        storage_id: Hash,
+        storage_hash: Hash,
         recent_block_hash: Hash,
         entry_height: u64,
     ) -> Transaction {
-        let program = StorageProgram::AdvertiseStorageLastId {
-            id: storage_id,
+        let program = StorageProgram::AdvertiseStorageRecentBlockHash {
+            hash: storage_hash,
             entry_height,
         };
         Transaction::new(from_keypair, &[], id(), &program, recent_block_hash, 0)
