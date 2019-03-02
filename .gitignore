@@ -1,6 +1,7 @@
 /target/
 /ledger-tool/target/
 /wallet/target/
+/core/target/
 /book/html/
 /book/src/img/
 /book/src/tests.ok
