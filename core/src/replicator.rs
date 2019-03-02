@@ -343,7 +343,7 @@ impl Replicator {
                 .expect("rpc request")
                 .to_string();
             let storage_entry_height = rpc_client
-                .make_rpc_request(2, RpcRequest::GetStorageMiningEntryHeight, None)
+                .make_rpc_request(2, RpcRequest::GetStorageEntryHeight, None)
                 .expect("rpc request")
                 .as_u64()
                 .unwrap();
