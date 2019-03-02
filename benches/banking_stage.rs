@@ -45,7 +45,7 @@ fn create_test_recorder(bank: &Arc<Bank>) -> (Arc<Mutex<PohRecorder>>, PohServic
     let exit = Arc::new(AtomicBool::new(false));
     let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
         bank.tick_height(),
-        bank.last_id(),
+        bank.last_block_hash(),
     )));
     let poh_service = PohService::new(
         poh_recorder.clone(),

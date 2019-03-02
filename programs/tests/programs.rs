@@ -15,7 +15,7 @@ fn load_program(bank: &Bank, from: &Keypair, loader_id: Pubkey, program: Vec<u8>
     let tx = SystemTransaction::new_program_account(
         from,
         program_account.pubkey(),
-        bank.last_id(),
+        bank.last_block_hash(),
         1,
         program.len() as u64,
         loader_id,
@@ -32,14 +32,14 @@ fn load_program(bank: &Bank, from: &Keypair, loader_id: Pubkey, program: Vec<u8>
             loader_id,
             offset,
             chunk.to_vec(),
-            bank.last_id(),
+            bank.last_block_hash(),
             0,
         );
         bank.process_transaction(&tx).unwrap();
         offset += chunk_size as u32;
     }
 
-    let tx = LoaderTransaction::new_finalize(&program_account, loader_id, bank.last_id(), 0);
+    let tx = LoaderTransaction::new_finalize(&program_account, loader_id, bank.last_block_hash(), 0);
     bank.process_transaction(&tx).unwrap();
     assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
 
@@ -57,7 +57,7 @@ fn test_program_native_noop() {
     let program_id = load_program(&bank, &mint_keypair, native_loader::id(), program);
 
     // Call user program
-    let tx = Transaction::new(&mint_keypair, &[], program_id, &1u8, bank.last_id(), 0);
+    let tx = Transaction::new(&mint_keypair, &[], program_id, &1u8, bank.last_block_hash(), 0);
     bank.process_transaction(&tx).unwrap();
     assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
 }
@@ -73,7 +73,7 @@ fn test_program_native_failure() {
     let program_id = load_program(&bank, &mint_keypair, native_loader::id(), program);
 
     // Call user program
-    let tx = Transaction::new(&mint_keypair, &[], program_id, &1u8, bank.last_id(), 0);
+    let tx = Transaction::new(&mint_keypair, &[], program_id, &1u8, bank.last_block_hash(), 0);
     assert_eq!(
         bank.process_transaction(&tx),
         Err(BankError::ProgramError(0, ProgramError::GenericError))
@@ -126,7 +126,7 @@ fn test_program_bpf_c_noop() {
         &[],
         program_id,
         &vec![1u8],
-        bank.last_id(),
+        bank.last_block_hash(),
         0,
     );
     bank.process_transaction(&tx).unwrap();
@@ -170,7 +170,7 @@ fn test_program_bpf_c() {
             &[],
             program_id,
             &vec![1u8],
-            bank.last_id(),
+            bank.last_block_hash(),
             0,
         );
         bank.process_transaction(&tx).unwrap();
@@ -210,7 +210,7 @@ fn test_program_bpf_rust() {
             &[],
             program_id,
             &vec![1u8],
-            bank.last_id(),
+            bank.last_block_hash(),
             0,
         );
         bank.process_transaction(&tx).unwrap();

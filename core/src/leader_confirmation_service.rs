@@ -154,7 +154,7 @@ mod tests {
             tick_hash = hash(&serialize(&tick_hash).unwrap());
             bank.register_tick(&tick_hash);
         }
-        let last_id = bank.last_id();
+        let last_id = bank.last_block_hash();
 
         // Create a total of 10 vote accounts, each will have a balance of 1 (after giving 1 to
         // their vote account), for a total staking pool of 10 tokens.

@@ -223,7 +223,7 @@ mod tests {
     fn test_poh_recorder_clear() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_id();
+        let prev_hash = bank.last_block_hash();
         let (entry_sender, _) = channel();
         let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
@@ -243,7 +243,7 @@ mod tests {
     fn test_poh_recorder_tick_sent_after_min() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_id();
+        let prev_hash = bank.last_block_hash();
         let (entry_sender, entry_receiver) = channel();
         let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
@@ -274,7 +274,7 @@ mod tests {
     fn test_poh_recorder_tick_sent_upto_and_including_max() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_id();
+        let prev_hash = bank.last_block_hash();
         let (entry_sender, entry_receiver) = channel();
         let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
@@ -304,7 +304,7 @@ mod tests {
     fn test_poh_recorder_record_to_early() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_id();
+        let prev_hash = bank.last_block_hash();
         let (entry_sender, entry_receiver) = channel();
         let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
@@ -326,7 +326,7 @@ mod tests {
     fn test_poh_recorder_record_at_min_passes() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_id();
+        let prev_hash = bank.last_block_hash();
         let (entry_sender, entry_receiver) = channel();
         let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
@@ -357,7 +357,7 @@ mod tests {
     fn test_poh_recorder_record_at_max_fails() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_id();
+        let prev_hash = bank.last_block_hash();
         let (entry_sender, entry_receiver) = channel();
         let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
@@ -385,7 +385,7 @@ mod tests {
     fn test_poh_cache_on_disconnect() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_id();
+        let prev_hash = bank.last_block_hash();
         let (entry_sender, entry_receiver) = channel();
         let mut poh_recorder = PohRecorder::new(0, prev_hash);
 

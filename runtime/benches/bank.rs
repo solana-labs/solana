@@ -25,14 +25,14 @@ fn bench_process_transaction(bencher: &mut Bencher) {
                 &mint_keypair,
                 rando0.pubkey(),
                 10_000,
-                bank.last_id(),
+                bank.last_block_hash(),
                 0,
             );
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
             // Seed the 'to' account and a cell for its signature.
             let rando1 = Keypair::new();
-            let tx = SystemTransaction::new_move(&rando0, rando1.pubkey(), 1, bank.last_id(), 0);
+            let tx = SystemTransaction::new_move(&rando0, rando1.pubkey(), 1, bank.last_block_hash(), 0);
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
             // Finally, return the transaction to the benchmark.
@@ -40,7 +40,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
         })
         .collect();
 
-    let mut id = bank.last_id();
+    let mut id = bank.last_block_hash();
 
     for _ in 0..(MAX_RECENT_TICK_HASHES - 1) {
         bank.register_tick(&id);

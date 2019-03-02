@@ -124,7 +124,7 @@ mod tests {
     fn test_poh_service() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_id();
+        let prev_hash = bank.last_block_hash();
         let (entry_sender, entry_receiver) = channel();
         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(bank.tick_height(), prev_hash)));
         let exit = Arc::new(AtomicBool::new(false));
@@ -204,7 +204,7 @@ mod tests {
     fn test_poh_service_drops_working_bank() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_id();
+        let prev_hash = bank.last_block_hash();
         let (entry_sender, entry_receiver) = channel();
         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(bank.tick_height(), prev_hash)));
         let exit = Arc::new(AtomicBool::new(false));

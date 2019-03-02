@@ -289,7 +289,7 @@ impl Bank {
     }
 
     /// Return the last block hash registered.
-    pub fn last_id(&self) -> Hash {
+    pub fn last_block_hash(&self) -> Hash {
         self.block_hash_queue.read().unwrap().last_hash()
     }
 
@@ -868,7 +868,7 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         let pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.last_id(), genesis_block.hash());
+        assert_eq!(bank.last_block_hash(), genesis_block.hash());
 
         bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.hash())
             .unwrap();
@@ -886,7 +886,7 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.last_id(), genesis_block.hash());
+        assert_eq!(bank.last_block_hash(), genesis_block.hash());
 
         let t1 = SystemTransaction::new_move(&mint_keypair, key1, 1, genesis_block.hash(), 0);
         let t2 = SystemTransaction::new_move(&mint_keypair, key2, 1, genesis_block.hash(), 0);
@@ -1381,11 +1381,11 @@ mod tests {
 
         let pubkey = Keypair::new().pubkey();
         bank0
-            .transfer(1_000, &mint_keypair, pubkey, bank0.last_id())
+            .transfer(1_000, &mint_keypair, pubkey, bank0.last_block_hash())
             .unwrap();
         assert_ne!(bank0.hash_internal_state(), initial_state);
         bank1
-            .transfer(1_000, &mint_keypair, pubkey, bank1.last_id())
+            .transfer(1_000, &mint_keypair, pubkey, bank1.last_block_hash())
             .unwrap();
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
 
