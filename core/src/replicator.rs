@@ -158,10 +158,10 @@ impl Replicator {
 
         info!("Got leader: {:?}", leader);
 
-        let (storage_last_id, storage_entry_height) =
+        let (storage_block_hash, storage_entry_height) =
             Self::poll_for_last_id_and_entry_height(&cluster_info)?;
 
-        let signature = keypair.sign(storage_last_id.as_ref());
+        let signature = keypair.sign(storage_block_hash.as_ref());
         let entry_height = get_entry_heights_from_last_id(&signature, storage_entry_height);
 
         info!("replicating entry_height: {}", entry_height);
@@ -338,8 +338,8 @@ impl Replicator {
                 RpcClient::new_from_socket(rpc_peers[node_idx].rpc)
             };
 
-            let storage_last_id = rpc_client
-                .make_rpc_request(2, RpcRequest::GetStorageMiningLastId, None)
+            let storage_block_hash = rpc_client
+                .make_rpc_request(2, RpcRequest::GetStorageBlockHash, None)
                 .expect("rpc request")
                 .to_string();
             let storage_entry_height = rpc_client
@@ -348,7 +348,7 @@ impl Replicator {
                 .as_u64()
                 .unwrap();
             if get_segment_from_entry(storage_entry_height) != 0 {
-                return Ok((storage_last_id, storage_entry_height));
+                return Ok((storage_block_hash, storage_entry_height));
             }
             info!("max entry_height: {}", storage_entry_height);
             sleep(Duration::from_secs(3));

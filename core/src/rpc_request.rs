@@ -137,7 +137,7 @@ pub enum RpcRequest {
     RegisterNode,
     SignVote,
     DeregisterNode,
-    GetStorageMiningLastId,
+    GetStorageBlockHash,
     GetStorageMiningEntryHeight,
     GetStoragePubkeysForEntryHeight,
 }
@@ -157,7 +157,7 @@ impl RpcRequest {
             RpcRequest::RegisterNode => "registerNode",
             RpcRequest::SignVote => "signVote",
             RpcRequest::DeregisterNode => "deregisterNode",
-            RpcRequest::GetStorageMiningLastId => "getStorageMiningLastId",
+            RpcRequest::GetStorageBlockHash => "getStorageBlockHash",
             RpcRequest::GetStorageMiningEntryHeight => "getStorageMiningEntryHeight",
             RpcRequest::GetStoragePubkeysForEntryHeight => "getStoragePubkeysForEntryHeight",
         };

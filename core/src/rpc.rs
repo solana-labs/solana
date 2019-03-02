@@ -72,9 +72,9 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank()?.transaction_count() as u64)
     }
 
-    fn get_storage_mining_last_id(&self) -> Result<String> {
-        let id = self.storage_state.get_last_id();
-        Ok(bs58::encode(id).into_string())
+    fn get_storage_block_hash(&self) -> Result<String> {
+        let hash = self.storage_state.get_storage_block_hash();
+        Ok(bs58::encode(hash).into_string())
     }
 
     fn get_storage_mining_entry_height(&self) -> Result<u64> {
@@ -170,8 +170,8 @@ pub trait RpcSol {
     #[rpc(meta, name = "sendTransaction")]
     fn send_transaction(&self, _: Self::Metadata, _: Vec<u8>) -> Result<String>;
 
-    #[rpc(meta, name = "getStorageMiningLastId")]
-    fn get_storage_mining_last_id(&self, _: Self::Metadata) -> Result<String>;
+    #[rpc(meta, name = "getStorageBlockHash")]
+    fn get_storage_block_hash(&self, _: Self::Metadata) -> Result<String>;
 
     #[rpc(meta, name = "getStorageMiningEntryHeight")]
     fn get_storage_mining_entry_height(&self, _: Self::Metadata) -> Result<u64>;
@@ -328,11 +328,11 @@ impl RpcSol for RpcSolImpl {
         Ok(signature)
     }
 
-    fn get_storage_mining_last_id(&self, meta: Self::Metadata) -> Result<String> {
+    fn get_storage_block_hash(&self, meta: Self::Metadata) -> Result<String> {
         meta.request_processor
             .read()
             .unwrap()
-            .get_storage_mining_last_id()
+            .get_storage_block_hash()
     }
 
     fn get_storage_mining_entry_height(&self, meta: Self::Metadata) -> Result<u64> {
