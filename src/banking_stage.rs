@@ -652,7 +652,7 @@ mod tests {
         let (bank_sender, bank_receiver) = channel();
         let cluster_info = ClusterInfo::new(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
-        let (banking_stage, entry_receiver) = BankingStage::new(
+        let (banking_stage, _entry_receiver) = BankingStage::new(
             &cluster_info,
             bank_receiver,
             &poh_recorder,
@@ -718,68 +718,68 @@ mod tests {
         let (_, entries) = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
     }
-    //
-    //     #[test]
-    //     fn test_bank_process_and_record_transactions() {
-    //         solana_logger::setup();
-    //         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
-    //         let bank = Arc::new(Bank::new(&genesis_block));
-    //         let pubkey = Keypair::new().pubkey();
-    //
-    //         let transactions = vec![SystemTransaction::new_move(
-    //             &mint_keypair,
-    //             pubkey,
-    //             1,
-    //             genesis_block.hash(),
-    //             0,
-    //         )];
-    //
-    //         let (entry_sender, entry_receiver) = channel();
-    //         let working_bank = WorkingBank {
-    //             bank: bank.clone(),
-    //             sender: entry_sender,
-    //             min_tick_height: bank.tick_height(),
-    //             max_tick_height: bank.tick_height() + 1,
-    //         };
-    //         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
-    //             bank.tick_height(),
-    //             bank.last_id(),
-    //         )));
-    //         poh_recorder.lock().unwrap().set_working_bank(working_bank);
-    //
-    //         BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder).unwrap();
-    //         poh_recorder.lock().unwrap().tick();
-    //
-    //         let mut need_tick = true;
-    //         // read entries until I find mine, might be ticks...
-    //         while let Ok(entries) = entry_receiver.recv() {
-    //             for (entry, _) in entries {
-    //                 if !entry.is_tick() {
-    //                     trace!("got entry");
-    //                     assert_eq!(entry.transactions.len(), transactions.len());
-    //                     assert_eq!(bank.get_balance(&pubkey), 1);
-    //                     need_tick = false;
-    //                 } else {
-    //                     break;
-    //                 }
-    //             }
-    //         }
-    //
-    //         assert_eq!(need_tick, false);
-    //
-    //         let transactions = vec![SystemTransaction::new_move(
-    //             &mint_keypair,
-    //             pubkey,
-    //             2,
-    //             genesis_block.hash(),
-    //             0,
-    //         )];
-    //
-    //         assert_matches!(
-    //             BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder,),
-    //             Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
-    //         );
-    //
-    //         assert_eq!(bank.get_balance(&pubkey), 1);
-    //     }
+
+    #[test]
+    fn test_bank_process_and_record_transactions() {
+        solana_logger::setup();
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let pubkey = Keypair::new().pubkey();
+
+        let transactions = vec![SystemTransaction::new_move(
+            &mint_keypair,
+            pubkey,
+            1,
+            genesis_block.hash(),
+            0,
+        )];
+
+        let (entry_sender, entry_receiver) = channel();
+        let working_bank = WorkingBank {
+            bank: bank.clone(),
+            sender: entry_sender,
+            min_tick_height: bank.tick_height(),
+            max_tick_height: bank.tick_height() + 1,
+        };
+        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
+            bank.tick_height(),
+            bank.last_id(),
+        )));
+        poh_recorder.lock().unwrap().set_working_bank(working_bank);
+
+        BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder).unwrap();
+        poh_recorder.lock().unwrap().tick();
+
+        let mut need_tick = true;
+        // read entries until I find mine, might be ticks...
+        while let Ok((_, entries)) = entry_receiver.recv() {
+            for (entry, _) in entries {
+                if !entry.is_tick() {
+                    trace!("got entry");
+                    assert_eq!(entry.transactions.len(), transactions.len());
+                    assert_eq!(bank.get_balance(&pubkey), 1);
+                    need_tick = false;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        assert_eq!(need_tick, false);
+
+        let transactions = vec![SystemTransaction::new_move(
+            &mint_keypair,
+            pubkey,
+            2,
+            genesis_block.hash(),
+            0,
+        )];
+
+        assert_matches!(
+            BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder,),
+            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
+        );
+
+        assert_eq!(bank.get_balance(&pubkey), 1);
+    }
 }
