@@ -99,7 +99,7 @@ impl ThinClient {
         tries: usize,
     ) -> io::Result<Signature> {
         for x in 0..tries {
-            transaction.sign(&[keypair], self.get_last_id());
+            transaction.sign(&[keypair], self.get_recent_block_hash());
             let mut buf = vec![0; transaction.serialized_size().unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
             serialize_into(&mut wr, &transaction)
@@ -217,9 +217,9 @@ impl ThinClient {
 
     /// Request the last Entry ID from the server without blocking.
     /// Returns the last_id Hash or None if there was no response from the server.
-    pub fn try_get_last_id(&mut self, mut num_retries: u64) -> Option<Hash> {
+    pub fn try_get_recent_block_hash(&mut self, mut num_retries: u64) -> Option<Hash> {
         loop {
-            trace!("try_get_last_id send_to {}", &self.rpc_addr);
+            trace!("try_get_recent_block_hash send_to {}", &self.rpc_addr);
             let response = self
                 .rpc_client
                 .make_rpc_request(1, RpcRequest::GetLastId, None);
@@ -231,7 +231,7 @@ impl ThinClient {
                     return Some(Hash::new(&last_id_vec));
                 }
                 Err(error) => {
-                    debug!("thin_client get_last_id error: {:?}", error);
+                    debug!("thin_client get_recent_block_hash error: {:?}", error);
                     num_retries -= 1;
                     if num_retries == 0 {
                         return None;
@@ -243,10 +243,10 @@ impl ThinClient {
 
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response.
-    pub fn get_last_id(&mut self) -> Hash {
+    pub fn get_recent_block_hash(&mut self) -> Hash {
         loop {
-            trace!("get_last_id send_to {}", &self.rpc_addr);
-            if let Some(hash) = self.try_get_last_id(10) {
+            trace!("get_recent_block_hash send_to {}", &self.rpc_addr);
+            if let Some(hash) = self.try_get_recent_block_hash(10) {
                 return hash;
             }
         }
@@ -261,7 +261,7 @@ impl ThinClient {
     }
     pub fn get_next_last_id_ext(&mut self, previous_last_id: &Hash, func: &Fn()) -> Hash {
         loop {
-            let last_id = self.get_last_id();
+            let last_id = self.get_recent_block_hash();
             if last_id != *previous_last_id {
                 break last_id;
             }
@@ -511,7 +511,7 @@ mod tests {
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
 
-        let last_id = client.get_last_id();
+        let last_id = client.get_recent_block_hash();
         info!("test_thin_client last_id: {:?}", last_id);
 
         let signature = client.transfer(500, &alice, bob_pubkey, &last_id).unwrap();
@@ -541,13 +541,13 @@ mod tests {
 
         let mut client = mk_client(&leader_data);
 
-        let last_id = client.get_last_id();
+        let last_id = client.get_recent_block_hash();
 
         let tx = SystemTransaction::new_account(&alice, bob_pubkey, 500, last_id, 0);
 
         let _sig = client.transfer_signed(&tx).unwrap();
 
-        let last_id = client.get_last_id();
+        let last_id = client.get_recent_block_hash();
 
         let mut tr2 = SystemTransaction::new_account(&alice, bob_pubkey, 501, last_id, 0);
         let mut instruction2 = deserialize(tr2.userdata(0)).unwrap();
@@ -578,7 +578,7 @@ mod tests {
 
         // Create the validator account, transfer some tokens to that account
         let validator_keypair = Keypair::new();
-        let last_id = client.get_last_id();
+        let last_id = client.get_recent_block_hash();
         let signature = client
             .transfer(500, &alice, validator_keypair.pubkey(), &last_id)
             .unwrap();
@@ -588,7 +588,7 @@ mod tests {
         // Create and register the vote account
         let validator_vote_account_keypair = Keypair::new();
         let vote_account_id = validator_vote_account_keypair.pubkey();
-        let last_id = client.get_last_id();
+        let last_id = client.get_recent_block_hash();
 
         let transaction = VoteTransaction::fund_staking_account(
             &validator_keypair,
@@ -652,7 +652,7 @@ mod tests {
         );
 
         let mut client = mk_client(&leader_data);
-        let last_id = client.get_last_id();
+        let last_id = client.get_recent_block_hash();
         info!("test_thin_client last_id: {:?}", last_id);
 
         let starting_alice_balance = client.poll_get_balance(&alice.pubkey()).unwrap();

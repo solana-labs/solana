@@ -122,7 +122,7 @@ impl LocalCluster {
         lamports: u64,
     ) -> u64 {
         trace!("getting leader last_id");
-        let last_id = client.get_last_id();
+        let last_id = client.get_recent_block_hash();
         let mut tx =
             SystemTransaction::new_account(&source_keypair, *dest_pubkey, lamports, last_id, 0);
         info!(
@@ -148,7 +148,7 @@ impl LocalCluster {
             let mut transaction = VoteTransaction::fund_staking_account(
                 from_account,
                 vote_account,
-                client.get_last_id(),
+                client.get_recent_block_hash(),
                 amount,
                 1,
             );

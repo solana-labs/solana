@@ -401,7 +401,7 @@ fn process_deploy(
         }
     }
 
-    let last_id = get_last_id(&rpc_client)?;
+    let last_id = get_recent_block_hash(&rpc_client)?;
     let program_id = Keypair::new();
     let mut file = File::open(program_location).map_err(|err| {
         WalletError::DynamicProgramError(
@@ -468,7 +468,7 @@ fn process_pay(
     witnesses: &Option<Vec<Pubkey>>,
     cancelable: Option<Pubkey>,
 ) -> ProcessResult {
-    let last_id = get_last_id(&rpc_client)?;
+    let last_id = get_recent_block_hash(&rpc_client)?;
 
     if timestamp == None && *witnesses == None {
         let mut tx = SystemTransaction::new_account(&config.id, to, tokens, last_id, 0);
@@ -528,7 +528,7 @@ fn process_pay(
         })
         .to_string())
     } else if timestamp == None {
-        let last_id = get_last_id(&rpc_client)?;
+        let last_id = get_recent_block_hash(&rpc_client)?;
 
         let witness = if let Some(ref witness_vec) = *witnesses {
             witness_vec[0]
@@ -589,7 +589,7 @@ fn process_pay(
 }
 
 fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: Pubkey) -> ProcessResult {
-    let last_id = get_last_id(&rpc_client)?;
+    let last_id = get_recent_block_hash(&rpc_client)?;
     let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
     let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
     Ok(signature_str.to_string())
@@ -621,7 +621,7 @@ fn process_time_elapsed(
         request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, 1)?;
     }
 
-    let last_id = get_last_id(&rpc_client)?;
+    let last_id = get_recent_block_hash(&rpc_client)?;
 
     let mut tx = BudgetTransaction::new_timestamp(&config.id, pubkey, to, dt, last_id);
     let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
@@ -642,7 +642,7 @@ fn process_witness(
         request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, 1)?;
     }
 
-    let last_id = get_last_id(&rpc_client)?;
+    let last_id = get_recent_block_hash(&rpc_client)?;
     let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, to, last_id);
     let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
@@ -713,7 +713,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
     }
 }
 
-fn get_last_id(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
+fn get_recent_block_hash(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
     let result = rpc_client.retry_make_rpc_request(1, &RpcRequest::GetLastId, None, 5)?;
     if result.as_str().is_none() {
         Err(WalletError::RpcRequestError(
@@ -733,13 +733,13 @@ fn get_next_last_id(
 ) -> Result<Hash, Box<dyn error::Error>> {
     let mut next_last_id_retries = 3;
     loop {
-        let next_last_id = get_last_id(rpc_client)?;
+        let next_last_id = get_recent_block_hash(rpc_client)?;
         if cfg!(not(test)) {
             if next_last_id != *previous_last_id {
                 return Ok(next_last_id);
             }
         } else {
-            // When using MockRpcClient, get_last_id() returns a constant value
+            // When using MockRpcClient, get_recent_block_hash() returns a constant value
             return Ok(next_last_id);
         }
         if next_last_id_retries == 0 {
@@ -928,7 +928,7 @@ pub fn request_and_confirm_airdrop(
     signer: &Keypair,
     tokens: u64,
 ) -> Result<(), Box<dyn error::Error>> {
-    let last_id = get_last_id(rpc_client)?;
+    let last_id = get_recent_block_hash(rpc_client)?;
     let mut tx = request_airdrop_transaction(drone_addr, &signer.pubkey(), tokens, last_id)?;
     send_and_confirm_transaction(rpc_client, &mut tx, signer)?;
     Ok(())
@@ -1506,18 +1506,18 @@ mod tests {
     }
 
     #[test]
-    fn test_wallet_get_last_id() {
+    fn test_wallet_get_recent_block_hash() {
         let rpc_client = RpcClient::new("succeeds".to_string());
 
         let vec = bs58::decode(PUBKEY).into_vec().unwrap();
         let expected_last_id = Hash::new(&vec);
 
-        let last_id = get_last_id(&rpc_client);
+        let last_id = get_recent_block_hash(&rpc_client);
         assert_eq!(last_id.unwrap(), expected_last_id);
 
         let rpc_client = RpcClient::new("fails".to_string());
 
-        let last_id = get_last_id(&rpc_client);
+        let last_id = get_recent_block_hash(&rpc_client);
         assert!(last_id.is_err());
     }
 
