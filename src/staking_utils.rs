@@ -120,6 +120,7 @@ mod tests {
     use hashbrown::HashSet;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
+    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::iter::FromIterator;
     use std::sync::Arc;
@@ -131,20 +132,24 @@ mod tests {
         (bank.tick_index(), bank.slot_index(), bank.epoch_height())
     }
 
+    fn new_from_parent(parent: &Arc<Bank>) -> Bank {
+        Bank::new_from_parent(parent, Pubkey::default(), parent.slot() + 1)
+    }
+
     #[test]
     fn test_bank_staked_nodes_at_epoch() {
         let pubkey = Keypair::new().pubkey();
         let bootstrap_tokens = 2;
         let (genesis_block, _) = GenesisBlock::new_with_leader(2, pubkey, bootstrap_tokens);
         let bank = Bank::new(&genesis_block);
-        let bank = Bank::new_from_parent(&Arc::new(bank));
+        let bank = new_from_parent(&Arc::new(bank));
         let ticks_per_offset = bank.stakers_slot_offset() * bank.ticks_per_slot();
         register_ticks(&bank, ticks_per_offset);
         assert_eq!(bank.slot_height(), bank.stakers_slot_offset());
 
         let mut expected = HashMap::new();
         expected.insert(pubkey, bootstrap_tokens - 1);
-        let bank = Bank::new_from_parent(&Arc::new(bank));
+        let bank = new_from_parent(&Arc::new(bank));
         assert_eq!(
             node_stakes_at_slot_extractor(&bank, bank.slot_height(), |s, _| s),
             expected

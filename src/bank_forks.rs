@@ -69,13 +69,14 @@ mod tests {
     use super::*;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
+    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_bank_forks() {
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
-        let child_bank = Bank::new_from_parent(&bank_forks[0u64]);
+        let child_bank = Bank::new_from_parent(&bank_forks[0u64], Pubkey::default(), 1);
         child_bank.register_tick(&Hash::default());
         bank_forks.insert(1, child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);

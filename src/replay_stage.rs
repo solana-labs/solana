@@ -200,7 +200,7 @@ impl ReplayStage {
             // If the next slot is going to be a new slot and we're the leader for that slot,
             // make a new working bank, set it as the working bank.
             if tick_height + 1 == first_tick_in_slot && leader_id == my_id {
-                bank = Self::create_and_set_working_bank(slot, &bank_forks, &old_bank);
+                bank = Self::create_and_set_working_bank(&old_bank, leader_id, slot, &bank_forks);
             }
 
             // Send a rotation notification back to Fullnode to initialize the TPU to the right
@@ -254,9 +254,10 @@ impl ReplayStage {
                             trace!("{} replay_stage: new_slot found: {:?}", my_id, new_slot);
                             // Reset the state
                             bank = Self::create_and_set_working_bank(
+                                &bank,
+                                current_leader_id,
                                 new_slot.unwrap(),
                                 &bank_forks,
-                                &bank,
                             );
                             current_slot = new_slot;
                             Self::reset_state(
@@ -346,9 +347,10 @@ impl ReplayStage {
                         if my_id == leader_id {
                             // Create new bank for next slot if we are the leader for that slot
                             bank = Self::create_and_set_working_bank(
+                                &old_bank,
+                                leader_id,
                                 next_slot,
                                 &bank_forks,
-                                &old_bank,
                             );
                             current_slot = Some(next_slot);
                             Self::reset_state(
@@ -406,11 +408,12 @@ impl ReplayStage {
     }
 
     fn create_and_set_working_bank(
+        parent: &Arc<Bank>,
+        leader_id: Pubkey,
         slot: u64,
         bank_forks: &Arc<RwLock<BankForks>>,
-        parent: &Arc<Bank>,
     ) -> Arc<Bank> {
-        let new_bank = Bank::new_from_parent(&parent);
+        let new_bank = Bank::new_from_parent(&parent, leader_id, slot);
         new_bank.squash();
         let mut bank_forks = bank_forks.write().unwrap();
         bank_forks.insert(slot, new_bank);

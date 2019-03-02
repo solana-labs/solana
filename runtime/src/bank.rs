@@ -28,7 +28,6 @@ use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteState};
 use std::result;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -139,7 +138,7 @@ impl Bank {
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
-    pub fn new_from_parent_and_id(parent: &Arc<Bank>, collector_id: Pubkey, id: u64) -> Self {
+    pub fn new_from_parent(parent: &Arc<Bank>, collector_id: Pubkey, id: u64) -> Self {
         parent.freeze();
 
         let mut bank = Self::default();
@@ -169,18 +168,6 @@ impl Bank {
         };
 
         bank
-    }
-
-    /// Create a new bank that points to an immutable checkpoint of another bank.
-    /// TODO: remove me in favor of _and_id(), id should not be an assumed value
-    pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
-        static BANK_ID: AtomicUsize = AtomicUsize::new(1);
-        let collector_id = parent.collector_id;
-        Self::new_from_parent_and_id(
-            parent,
-            collector_id,
-            BANK_ID.fetch_add(1, Ordering::Relaxed) as u64,
-        )
     }
 
     pub fn slot(&self) -> u64 {
@@ -233,7 +220,7 @@ impl Bank {
         assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_tokens);
         assert!(genesis_block.bootstrap_leader_tokens >= 2);
 
-        // Bootstrap leader collects fees until `new_from_parent_and_id` is called.
+        // Bootstrap leader collects fees until `new_from_parent` is called.
         self.collector_id = genesis_block.bootstrap_leader_id;
 
         let mint_tokens = genesis_block.tokens - genesis_block.bootstrap_leader_tokens;
@@ -1312,13 +1299,17 @@ mod tests {
         res[0].clone().unwrap_err();
     }
 
+    fn new_from_parent(parent: &Arc<Bank>) -> Bank {
+        Bank::new_from_parent(parent, Pubkey::default(), parent.slot() + 1)
+    }
+
     /// Verify that the parent's vector is computed correctly
     #[test]
     fn test_bank_parents() {
         let (genesis_block, _) = GenesisBlock::new(1);
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let bank = Bank::new_from_parent(&parent);
+        let bank = new_from_parent(&parent);
         assert!(Arc::ptr_eq(&bank.parents()[0], &parent));
     }
 
@@ -1332,7 +1323,7 @@ mod tests {
         let tx =
             SystemTransaction::new_move(&mint_keypair, key1.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(parent.process_transaction(&tx), Ok(()));
-        let bank = Bank::new_from_parent(&parent);
+        let bank = new_from_parent(&parent);
         assert_eq!(
             bank.process_transaction(&tx),
             Err(BankError::DuplicateSignature)
@@ -1350,7 +1341,7 @@ mod tests {
         let tx =
             SystemTransaction::new_move(&mint_keypair, key1.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(parent.process_transaction(&tx), Ok(()));
-        let bank = Bank::new_from_parent(&parent);
+        let bank = new_from_parent(&parent);
         let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(parent.get_signature_status(&tx.signatures[0]), None);
@@ -1375,7 +1366,7 @@ mod tests {
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
 
         // Checkpointing should not change its state
-        let bank2 = Bank::new_from_parent(&Arc::new(bank1));
+        let bank2 = new_from_parent(&Arc::new(bank1));
         assert_eq!(bank0.hash_internal_state(), bank2.hash_internal_state());
     }
 
@@ -1390,7 +1381,7 @@ mod tests {
     fn test_bank_hash_internal_state_squash() {
         let collector_id = Pubkey::default();
         let bank0 = Arc::new(Bank::new(&GenesisBlock::new(10).0));
-        let bank1 = Bank::new_from_parent_and_id(&bank0, collector_id, 1);
+        let bank1 = Bank::new_from_parent(&bank0, collector_id, 1);
 
         // no delta in bank1, hashes match
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
@@ -1416,7 +1407,7 @@ mod tests {
         assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
         assert_eq!(parent.transaction_count(), 1);
 
-        let bank = Bank::new_from_parent(&parent);
+        let bank = new_from_parent(&parent);
         assert_eq!(bank.transaction_count(), 0);
         let tx_move_1_to_2 =
             SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.hash(), 0);
@@ -1460,7 +1451,7 @@ mod tests {
             .transfer(1, &mint_keypair, key1.pubkey(), genesis_block.hash())
             .unwrap();
         assert_eq!(parent.get_balance(&key1.pubkey()), 1);
-        let bank = Bank::new_from_parent(&parent);
+        let bank = new_from_parent(&parent);
         bank.squash();
         assert_eq!(parent.get_balance(&key1.pubkey()), 1);
     }
@@ -1496,24 +1487,31 @@ mod tests {
             Some((*key, None))
         }
 
-        assert!(parent.epoch_vote_states(1, all).is_some());
-        assert!(parent.epoch_vote_states(2, all).is_some());
+        let mut i = 1;
+        loop {
+            if i > STAKERS_SLOT_OFFSET / SLOTS_PER_EPOCH {
+                break;
+            }
+            assert!(parent.epoch_vote_states(i, all).is_some());
+            i += 1;
+        }
 
         // child crosses epoch boundary and is the first slot in the epoch
-        let child = Bank::new_from_parent_and_id(
+        let child = Bank::new_from_parent(
             &parent,
             leader_id,
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH),
         );
-        assert!(child.epoch_vote_states(3, all).is_some());
+
+        assert!(child.epoch_vote_states(i, all).is_some());
 
         // child crosses epoch boundary but isn't the first slot in the epoch
-        let child = Bank::new_from_parent_and_id(
+        let child = Bank::new_from_parent(
             &parent,
             leader_id,
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH) + 1,
         );
-        assert!(child.epoch_vote_states(3, all).is_some());
+        assert!(child.epoch_vote_states(i, all).is_some());
     }
 
 }
