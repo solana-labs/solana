@@ -2,6 +2,7 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 
+use crate::cluster_info::ClusterInfo;
 use crate::entry::Entry;
 use crate::leader_confirmation_service::LeaderConfirmationService;
 use crate::packet::Packets;
@@ -16,9 +17,10 @@ use solana_runtime::bank::{self, Bank, BankError};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_TICK_HASHES};
 use solana_sdk::transaction::Transaction;
+use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
@@ -40,29 +42,14 @@ impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
-        bank: &Arc<Bank>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        bank_receiver: Receiver<Arc<Bank>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: Receiver<VerifiedPackets>,
-        max_tick_height: u64,
         leader_id: Pubkey,
-    ) -> (Self, Receiver<Vec<(Entry, u64)>>) {
+    ) -> (Self, Receiver<(Arc<Bank>, Vec<(Entry, u64)>)>) {
         let (entry_sender, entry_receiver) = channel();
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            sender: entry_sender,
-            min_tick_height: bank.tick_height(),
-            max_tick_height,
-        };
-
-        info!(
-            "new working bank {} {} {}",
-            working_bank.min_tick_height,
-            working_bank.max_tick_height,
-            poh_recorder.lock().unwrap().poh.tick_height
-        );
-        poh_recorder.lock().unwrap().set_working_bank(working_bank);
-
-        let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
+        let verified_receiver = Arc::new(Mutex::new(verified_receiver));
 
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
@@ -70,36 +57,45 @@ impl BankingStage {
         let exit = Arc::new(AtomicBool::new(false));
 
         // Single thread to compute confirmation
-        let leader_confirmation_service =
-            LeaderConfirmationService::new(&bank, leader_id, exit.clone());
+        let leader_confirmation_service = LeaderConfirmationService::new(leader_id, exit.clone());
 
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<UnprocessedPackets>> = (0..Self::num_threads())
             .map(|_| {
-                let thread_verified_receiver = shared_verified_receiver.clone();
-                let thread_poh_recorder = poh_recorder.clone();
-                let thread_bank = bank.clone();
+                let verified_receiver = verified_receiver.clone();
+                let poh_recorder = poh_recorder.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
-                        let mut unprocessed_packets: UnprocessedPackets = vec![];
+                        Self::start_forwarder(vec![]);
                         loop {
-                            match Self::process_packets(
-                                &thread_bank,
-                                &thread_verified_receiver,
-                                &thread_poh_recorder,
-                            ) {
-                                Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
-                                Ok(more_unprocessed_packets) => {
-                                    unprocessed_packets.extend(more_unprocessed_packets);
-                                }
-                                Err(err) => {
-                                    debug!("solana-banking-stage-tx: exit due to {:?}", err);
-                                    break;
-                                }
-                            }
+                            let bank = Self::forward_until_bank(
+                                &cluster_info,
+                                &bank_receiver,
+                                &verified_receiver,
+                            )?;
+                            let max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
+                            let working_bank = WorkingBank {
+                                bank: bank.clone(),
+                                sender: entry_sender,
+                                min_tick_height: bank.tick_height(),
+                                max_tick_height,
+                            };
+
+                            info!(
+                                "new working bank {} {} {}",
+                                working_bank.min_tick_height,
+                                working_bank.max_tick_height,
+                                poh_recorder.lock().unwrap().poh.tick_height
+                            );
+                            leader_confirmation_service.set_bank(bank.clone());
+                            poh_recorder.lock().unwrap().set_working_bank(working_bank);
+
+                            let packets =
+                                Self::process_loop(&bank, verified_receiver, poh_recorder);
+                            let tpu = cluster_info.read().unwrap().leader_data().unwrap().tpu;
+                            Self::forward_unprocessed_packets(tpu, packets);
                         }
-                        unprocessed_packets
                     })
                     .unwrap()
             })
@@ -112,6 +108,80 @@ impl BankingStage {
             },
             entry_receiver,
         )
+    }
+
+    fn forward_until_bank(
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        bank_receiver: &Receiver<Arc<Bank>>,
+        verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
+    ) -> Result<Arc<Bank>> {
+        loop {
+            let result = bank_receiver.recv_timeout(Duration::from_millis(100));
+            match result {
+                Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
+                _ => return result,
+            }
+            let tpu = cluster_info.read().unwrap().leader_data().unwrap().tpu;
+            while let Ok(mms) = verified_receiver.lock().unwrap().try_recv() {
+                let _ = Self::forward_verified_packets(tpu, mms);
+                let bank = bank_receiver.try_recv();
+                if bank.is_ok() {
+                    return Ok(bank);
+                }
+            }
+        }
+    }
+
+    fn forward_verified_packets(
+        tpu: &std::net::SocketAddr,
+        verified_packets: VerifiedPackets,
+    ) -> std::io::Result<()> {
+        let socket = UdpSocket::bind("0.0.0.0:0")?;
+        for (packets, sigverify) in verified_packets {
+            let packets = packets.read().unwrap();
+            for (packet, valid) in packets.packets.iter().zip(&sigverify) {
+                if valid == 0 {
+                    continue;
+                }
+                socket.send_to(&packet.data[..packet.meta.size], tpu)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn forward_unprocessed_packets(
+        tpu: &std::net::SocketAddr,
+        unprocessed_packets: UnprocessedPackets,
+    ) -> std::io::Result<()> {
+        let socket = UdpSocket::bind("0.0.0.0:0")?;
+        for (packets, start_index) in unprocessed_packets {
+            let packets = packets.read().unwrap();
+            for packet in packets.packets.iter().skip(start_index) {
+                socket.send_to(&packet.data[..packet.meta.size], tpu)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn process_loop(
+        bank: &Bank,
+        verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
+    ) -> UnprocessedPackets {
+        let mut unprocessed_packets: UnprocessedPackets = vec![];
+        loop {
+            match Self::process_packets(&bank, &verified_receiver, &poh_recorder) {
+                Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
+                Ok(more_unprocessed_packets) => {
+                    unprocessed_packets.extend(more_unprocessed_packets);
+                }
+                Err(err) => {
+                    debug!("solana-banking-stage-tx: exit due to {:?}", err);
+                    break;
+                }
+            }
+        }
+        unprocessed_packets
     }
 
     pub fn num_threads() -> u32 {

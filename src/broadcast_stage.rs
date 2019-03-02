@@ -32,7 +32,6 @@ pub enum BroadcastStageReturnType {
 
 struct Broadcast {
     id: Pubkey,
-    blob_index: u64,
 
     #[cfg(feature = "erasure")]
     coding_generator: CodingGenerator,
@@ -41,25 +40,47 @@ struct Broadcast {
 impl Broadcast {
     fn run(
         &mut self,
-        slot_height: u64,
-        max_tick_height: u64,
-        broadcast_table: &[NodeInfo],
-        receiver: &Receiver<Vec<(Entry, u64)>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        receiver: &Receiver<(Arc<Bank>, Vec<(Entry, u64)>)>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
-        let entries = receiver.recv_timeout(timer)?;
+        let (bank, entries) = receiver.recv_timeout(timer)?;
+        let mut broadcast_table = cluster_info
+            .read()
+            .unwrap()
+            .sorted_tvu_peers(&staking_utils::node_stakes(&bank));
+        // Layer 1, leader nodes are limited to the fanout size.
+        broadcast_table.truncate(DATA_PLANE_FANOUT);
+        inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
+
+        let slot_height = bank.slot();
+        let max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
+        // TODO: Fix BankingStage/BroadcastStage to operate on `slot` directly instead of
+        // `max_tick_height`
+        let blob_index = self
+            .blocktree
+            .meta(bank.slot())
+            .expect("Database error")
+            .map(|meta| meta.consumed)
+            .unwrap_or(0);
+
         let now = Instant::now();
         let mut num_entries = entries.len();
         let mut ventries = Vec::new();
         let mut last_tick = entries.last().map(|v| v.1).unwrap_or(0);
         ventries.push(entries);
 
-        while let Ok(entries) = receiver.try_recv() {
+        while let Ok((same_bank, entries)) = receiver.try_recv() {
             num_entries += entries.len();
             last_tick = entries.last().map(|v| v.1).unwrap_or(0);
             ventries.push(entries);
+            assert!(last_tick <= max_tick_height);
+            assert!(same_bank.slot() == bank.slot());
+            if last_tick == max_tick_height {
+                break;
+            }
         }
 
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
@@ -76,13 +97,7 @@ impl Broadcast {
 
         // TODO: blob_index should be slot-relative...
         index_blobs(&blobs, &self.id, &mut self.blob_index, slot_height);
-        let parent = {
-            if slot_height == 0 {
-                0
-            } else {
-                slot_height - 1
-            }
-        };
+        let parent = bank.parent.map(|bank| bank.slot()).unwrap_or(0);
         for b in blobs.iter() {
             b.write().unwrap().set_parent(parent);
         }
@@ -163,12 +178,10 @@ pub struct BroadcastStage {
 impl BroadcastStage {
     #[allow(clippy::too_many_arguments)]
     fn run(
-        slot_height: u64,
-        bank: &Arc<Bank>,
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blob_index: u64,
-        receiver: &Receiver<Vec<(Entry, u64)>>,
+        receiver: &Receiver<(Arc<Bank>, Vec<(Entry, u64)>)>,
         exit_signal: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
     ) -> BroadcastStageReturnType {
@@ -181,27 +194,11 @@ impl BroadcastStage {
             coding_generator: CodingGenerator::new(),
         };
 
-        let max_tick_height = (slot_height + 1) * bank.ticks_per_slot() - 1;
-
         loop {
             if exit_signal.load(Ordering::Relaxed) {
                 return BroadcastStageReturnType::ExitSignal;
             }
-            let mut broadcast_table = cluster_info
-                .read()
-                .unwrap()
-                .sorted_tvu_peers(&staking_utils::node_stakes(&bank));
-            // Layer 1, leader nodes are limited to the fanout size.
-            broadcast_table.truncate(DATA_PLANE_FANOUT);
-            inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
-            if let Err(e) = broadcast.run(
-                slot_height,
-                max_tick_height,
-                &broadcast_table,
-                receiver,
-                sock,
-                blocktree,
-            ) {
+            if let Err(e) = broadcast.run(&cluster_info, receiver, sock, blocktree) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
                         return BroadcastStageReturnType::ChannelDisconnected;
@@ -234,32 +231,19 @@ impl BroadcastStage {
     /// completing the cycle.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        slot_height: u64,
-        bank: &Arc<Bank>,
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        blob_index: u64,
         receiver: Receiver<Vec<(Entry, u64)>>,
         exit_sender: Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
     ) -> Self {
         let exit_signal = Arc::new(AtomicBool::new(false));
         let blocktree = blocktree.clone();
-        let bank = bank.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
-                Self::run(
-                    slot_height,
-                    &bank,
-                    &sock,
-                    &cluster_info,
-                    blob_index,
-                    &receiver,
-                    &exit_signal,
-                    &blocktree,
-                )
+                Self::run(&sock, &cluster_info, &receiver, &exit_signal, &blocktree)
             })
             .unwrap();
 

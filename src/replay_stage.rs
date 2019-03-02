@@ -21,7 +21,7 @@ use solana_sdk::timing::duration_as_ms;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
@@ -62,7 +62,7 @@ impl ReplayStage {
         _bank_forks_info: &[BankForksInfo],
         cluster_info: Arc<RwLock<ClusterInfo>>,
         exit: Arc<AtomicBool>,
-        to_leader_sender: &TvuRotationSender,
+        banking_stage_sender: Sender<Bank>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
     ) -> (Self, Receiver<(u64, Pubkey)>, EntryReceiver)
@@ -73,7 +73,6 @@ impl ReplayStage {
         let (slot_full_sender, slot_full_receiver) = channel();
         trace!("replay stage");
         let exit_ = exit.clone();
-        let to_leader_sender = to_leader_sender.clone();
         let subscriptions = subscriptions.clone();
         let bank_forks = bank_forks.clone();
 
@@ -145,17 +144,14 @@ impl ReplayStage {
                         if next_leader == my_id {
                             let tpu_bank = Bank::new_from_parent(&parent, my_id, next_slot);
                             bank_forks.write().unwrap().insert(next_slot, tpu_bank);
+
+                            debug!(
+                                "banking_stage_sender: me: {} next_slot: {} next_leader: {}",
+                                my_id, next_slot, next_leader
+                            );
+
+                            banking_stage_sender.send(tpu_bank);
                         }
-                        debug!(
-                            "to_leader_sender: me: {} next_slot: {} next_leader: {}",
-                            my_id, next_slot, next_leader
-                        );
-                        to_leader_sender.send(TvuRotationInfo {
-                            tick_height: parent.tick_height(),
-                            last_id: parent.last_id(),
-                            slot: next_slot,
-                            leader_id: next_leader,
-                        })?;
                     }
                     inc_new_counter_info!(
                         "replicate_stage-duration",

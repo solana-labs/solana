@@ -9,7 +9,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
@@ -22,6 +22,7 @@ pub enum ConfirmationError {
 pub const COMPUTE_CONFIRMATION_MS: u64 = 100;
 
 pub struct LeaderConfirmationService {
+    current_bank: Arc<Mutex<Option<Arc<Bank>>>>, // super ugly!!!
     thread_hdl: JoinHandle<()>,
 }
 
@@ -73,7 +74,7 @@ impl LeaderConfirmationService {
     }
 
     pub fn compute_confirmation(
-        bank: &Arc<Bank>,
+        bank: &Bank,
         leader_id: Pubkey,
         last_valid_validator_timestamp: &mut u64,
     ) {
@@ -96,28 +97,40 @@ impl LeaderConfirmationService {
         }
     }
 
+    pub fn set_bank(&self, bank: Arc<Bank>) {
+        *self.current_bank.lock().unwrap() = Some(bank);
+    }
+
     /// Create a new LeaderConfirmationService for computing confirmation.
-    pub fn new(bank: &Arc<Bank>, leader_id: Pubkey, exit: Arc<AtomicBool>) -> Self {
-        let bank = bank.clone();
+    pub fn new(leader_id: Pubkey, exit: Arc<AtomicBool>) -> Self {
+        let current_bank = Arc::new(Mutex::new(None));
         let thread_hdl = Builder::new()
             .name("solana-leader-confirmation-service".to_string())
             .spawn(move || {
                 let mut last_valid_validator_timestamp = 0;
+                let current_bank = current_bank.clone();
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                    Self::compute_confirmation(
-                        &bank,
-                        leader_id,
-                        &mut last_valid_validator_timestamp,
-                    );
+                    // dont hold this lock to long
+                    let maybe_bank = current_bank.lock().unwrap().clone();
+                    if let Some(bank) = maybe_bank {
+                        Self::compute_confirmation(
+                            bank,
+                            leader_id,
+                            &mut last_valid_validator_timestamp,
+                        );
+                    }
                     sleep(Duration::from_millis(COMPUTE_CONFIRMATION_MS));
                 }
             })
             .unwrap();
 
-        Self { thread_hdl }
+        Self {
+            current_bank,
+            thread_hdl,
+        }
     }
 }
 
