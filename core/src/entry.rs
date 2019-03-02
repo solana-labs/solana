@@ -8,7 +8,7 @@ use crate::result::Result;
 use bincode::{deserialize, serialize_into, serialized_size};
 use chrono::prelude::Utc;
 use rayon::prelude::*;
-use solana_sdk::budget_transaction::BudgetTransaction;
+use solana_budget_api::budget_transaction::BudgetTransaction;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
