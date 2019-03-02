@@ -157,7 +157,7 @@ impl Fullnode {
 
         let storage_state = StorageState::new();
 
-        let rpc_service = JsonRpcService::new(
+        let mut rpc_service = JsonRpcService::new(
             &cluster_info,
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
             drone_addr,

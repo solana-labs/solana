@@ -2,7 +2,6 @@
 //! to generate a thread which regularly calculates the last confirmation times
 //! observed by the leader
 
-use crate::service::Service;
 use solana_metrics::{influxdb, submit};
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
@@ -11,7 +10,7 @@ use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
-use std::thread::{self, Builder, JoinHandle};
+use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -23,7 +22,6 @@ pub const COMPUTE_CONFIRMATION_MS: u64 = 100;
 
 pub struct LeaderConfirmationService {
     current_bank: Arc<Mutex<Option<Arc<Bank>>>>, // super ugly!!!
-    thread_hdl: JoinHandle<()>,
 }
 
 impl LeaderConfirmationService {
@@ -102,7 +100,7 @@ impl LeaderConfirmationService {
     }
 
     /// Create a new LeaderConfirmationService for computing confirmation.
-    pub fn new(leader_id: Pubkey, exit: Arc<AtomicBool>) -> Self {
+    pub fn new(leader_id: Pubkey, exit: Arc<AtomicBool>) -> (Self, JoinHandle<()>) {
         let current_bank: Arc<Mutex<Option<Arc<Bank>>>> = Arc::new(Mutex::new(None));
         let thread_hdl = Builder::new()
             .name("solana-leader-confirmation-service".to_string())
@@ -127,18 +125,11 @@ impl LeaderConfirmationService {
             })
             .unwrap();
 
-        Self {
+        (Self {
             current_bank,
+        },
             thread_hdl,
-        }
-    }
-}
-
-impl Service for LeaderConfirmationService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
-        self.thread_hdl.join()
+		)
     }
 }
 

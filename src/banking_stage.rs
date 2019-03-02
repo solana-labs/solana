@@ -35,7 +35,7 @@ pub const NUM_THREADS: u32 = 10;
 pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<Result<()>>>,
     exit: Arc<AtomicBool>,
-    leader_confirmation_service: LeaderConfirmationService,
+    lcs_handle: JoinHandle<()>,
 }
 
 impl BankingStage {
@@ -57,20 +57,20 @@ impl BankingStage {
         let exit = Arc::new(AtomicBool::new(false));
 
         // Single thread to compute confirmation
-        let leader_confirmation_service = LeaderConfirmationService::new(leader_id, exit.clone());
-        let (waiter, notifier) = sync_channel();
+        let (leader_confirmation_service, lcs_handle) = LeaderConfirmationService::new(leader_id, exit.clone());
+        let (waiter, notifier) = sync_channel(Self::num_threads() as usize);
         // Many banks that process transactions in parallel.
         let mut bank_thread_hdls: Vec<JoinHandle<Result<()>>> = (0..Self::num_threads())
             .map(|_| {
                 let verified_receiver = verified_receiver.clone();
                 let poh_recorder = poh_recorder.clone();
-                let cluster_info = cluster_info.clone();
+        		let cluster_info = cluster_info.clone();
                 let waiter = waiter.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || loop {
-                        waiter.send()?;
-                        let bank = poh_recorder.lock().unwrap().get_bank();
+                        waiter.send(())?;
+                        let bank = poh_recorder.lock().unwrap().bank();
                         if let Some(bank) = bank {
                             let packets =
                                 Self::process_loop(&bank, &verified_receiver, &poh_recorder);
@@ -82,8 +82,10 @@ impl BankingStage {
             })
             .collect();
 
+        let cluster_info = cluster_info.clone();
+        let poh_recorder = poh_recorder.clone();
         let bank_thread_hdl: JoinHandle<Result<()>> = Builder::new()
-            .name("solana-banking-bank-recv".to_string())
+            .name("solana-banking-working_bank".to_string())
             .spawn(move || loop {
                 let bank =
                     Self::forward_until_bank(&cluster_info, &bank_receiver, &verified_receiver)?;
@@ -113,7 +115,7 @@ impl BankingStage {
             Self {
                 bank_thread_hdls,
                 exit,
-                leader_confirmation_service,
+                lcs_handle,
             },
             entry_receiver,
         )
@@ -413,7 +415,7 @@ impl Service for BankingStage {
             let _ = bank_thread_hdl.join()?;
         }
         self.exit.store(true, Ordering::Relaxed);
-        self.leader_confirmation_service.join()?;
+        self.lcs_handle.join()?;
         Ok(())
     }
 }

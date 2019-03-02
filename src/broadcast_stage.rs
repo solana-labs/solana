@@ -59,7 +59,7 @@ impl Broadcast {
         let max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
         // TODO: Fix BankingStage/BroadcastStage to operate on `slot` directly instead of
         // `max_tick_height`
-        let blob_index = blocktree
+        let mut blob_index = blocktree
             .meta(bank.slot())
             .expect("Database error")
             .map(|meta| meta.consumed)
