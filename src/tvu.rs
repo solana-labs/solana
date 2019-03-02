@@ -32,15 +32,6 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-pub struct TvuRotationInfo {
-    pub tick_height: u64,  // tick height, bank might not exist yet
-    pub last_id: Hash,     // last_id that was voted on
-    pub slot: u64,         // slot height to initiate a rotation
-    pub leader_id: Pubkey, // leader upon rotation
-}
-pub type TvuRotationSender = Sender<TvuRotationInfo>;
-pub type TvuRotationReceiver = Receiver<TvuRotationInfo>;
-
 pub struct Tvu {
     fetch_stage: BlobFetchStage,
     retransmit_stage: RetransmitStage,

@@ -16,7 +16,7 @@ use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
-use crate::tvu::{Sockets, Tvu, TvuRotationInfo, TvuRotationReceiver};
+use crate::tvu::{Sockets, Tvu};
 use crate::voting_keypair::VotingKeypair;
 use solana_metrics::counter::Counter;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -31,6 +31,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, RwLock};
+use std::thread::sleep;
 use std::thread::JoinHandle;
 use std::thread::{spawn, Result};
 use std::time::Duration;
@@ -88,16 +89,10 @@ pub struct Fullnode {
     exit: Arc<AtomicBool>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
+    rpc_working_bank_handle: JoinHandle<()>,
     gossip_service: GossipService,
-    sigverify_disabled: bool,
-    tpu_sockets: Vec<UdpSocket>,
-    broadcast_socket: UdpSocket,
     node_services: NodeServices,
-    rotation_receiver: TvuRotationReceiver,
-    blocktree: Arc<Blocktree>,
     poh_service: PohService,
-    poh_recorder: Arc<Mutex<PohRecorder>>,
-    bank_forks: Arc<RwLock<BankForks>>,
 }
 
 impl Fullnode {
@@ -221,7 +216,7 @@ impl Fullnode {
         };
 
         // Setup channel for rotation indications
-        let (rotation_sender, rotation_receiver) = channel();
+        let (bank_sender, bank_receiver) = channel();
 
         let tvu = Tvu::new(
             voting_keypair_option,
@@ -231,132 +226,43 @@ impl Fullnode {
             sockets,
             blocktree.clone(),
             config.storage_rotate_count,
-            &rotation_sender,
+            &bank_sender,
             &storage_state,
             config.blockstream.as_ref(),
             ledger_signal_receiver,
             &subscriptions,
         );
-        let tpu = Tpu::new(id, &cluster_info);
+        let tpu = Tpu::new(
+            id,
+            &cluster_info,
+            bank_receiver,
+            poh_recorder,
+            node.sockets.tpu,
+            node.sockets.broadcast,
+            config.sigverify_disabled,
+            blocktree,
+        );
+        let exit_ = exit.clone();
+        let bank_forks_ = exit.clone();
+        let rpc_working_bank_handle = spawn(move || loop {
+            if exit_.load(Ordering::Relaxed) {
+                break;
+            }
+            rpc_service.set_bank(&bank_forks_.read().unwrap().working_bank());
+            let timer = Duration::from_millis(100);
+            sleep(timer);
+        });
 
         inc_new_counter_info!("fullnode-new", 1);
         Self {
             id,
-            sigverify_disabled: config.sigverify_disabled,
             gossip_service,
             rpc_service: Some(rpc_service),
             rpc_pubsub_service: Some(rpc_pubsub_service),
+            rpc_working_bank_handle,
             node_services: NodeServices::new(tpu, tvu),
             exit,
-            tpu_sockets: node.sockets.tpu,
-            broadcast_socket: node.sockets.broadcast,
-            rotation_receiver,
-            blocktree,
             poh_service,
-            poh_recorder,
-            bank_forks,
-        }
-    }
-
-    fn rotate(&mut self, rotation_info: TvuRotationInfo) {
-        trace!(
-            "{:?}: rotate for slot={} to leader={:?}",
-            self.id,
-            rotation_info.slot,
-            rotation_info.leader_id,
-        );
-
-        if let Some(ref mut rpc_service) = self.rpc_service {
-            // TODO: This is not the correct bank.  Instead TVU should pass along the
-            // frozen Bank for each completed block for RPC to use from it's notion of the "best"
-            // available fork (until we want to surface multiple forks to RPC)
-            rpc_service.set_bank(&self.bank_forks.read().unwrap().working_bank());
-        }
-
-        if rotation_info.leader_id == self.id {
-            debug!("{:?} rotating to leader role", self.id);
-            let tpu_bank = self
-                .bank_forks
-                .read()
-                .unwrap()
-                .get(rotation_info.slot)
-                .unwrap()
-                .clone();
-            self.node_services.tpu.switch_to_leader(
-                &tpu_bank,
-                &self.poh_recorder,
-                self.tpu_sockets
-                    .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
-                    .collect(),
-                self.broadcast_socket
-                    .try_clone()
-                    .expect("Failed to clone broadcast socket"),
-                self.sigverify_disabled,
-                rotation_info.slot,
-                &self.blocktree,
-            );
-        } else {
-            self.node_services.tpu.switch_to_forwarder(
-                rotation_info.leader_id,
-                self.tpu_sockets
-                    .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
-                    .collect(),
-            );
-        }
-    }
-
-    // Runs a thread to manage node role transitions.  The returned closure can be used to signal the
-    // node to exit.
-    pub fn start(
-        mut self,
-        rotation_notifier: Option<Sender<u64>>,
-    ) -> (JoinHandle<()>, Arc<AtomicBool>, Receiver<bool>) {
-        let (sender, receiver) = channel();
-        let exit = self.exit.clone();
-        let timeout = Duration::from_secs(1);
-        let handle = spawn(move || loop {
-            if self.exit.load(Ordering::Relaxed) {
-                debug!("node shutdown requested");
-                self.close().expect("Unable to close node");
-                let _ = sender.send(true);
-                break;
-            }
-
-            match self.rotation_receiver.recv_timeout(timeout) {
-                Ok(rotation_info) => {
-                    trace!("{:?}: rotate at slot={}", self.id, rotation_info.slot);
-                    //TODO: this will be called by the TVU every time it votes
-                    //instead of here
-                    info!(
-                        "reset PoH... {} {}",
-                        rotation_info.tick_height, rotation_info.last_id
-                    );
-                    self.poh_recorder
-                        .lock()
-                        .unwrap()
-                        .reset(rotation_info.tick_height, rotation_info.last_id);
-                    let slot = rotation_info.slot;
-                    self.rotate(rotation_info);
-                    debug!("role transition complete");
-                    if let Some(ref rotation_notifier) = rotation_notifier {
-                        rotation_notifier.send(slot).unwrap();
-                    }
-                }
-                Err(RecvTimeoutError::Timeout) => continue,
-                _ => (),
-            }
-        });
-        (handle, exit, receiver)
-    }
-
-    pub fn run(self, rotation_notifier: Option<Sender<u64>>) -> impl FnOnce() {
-        let (_, exit, receiver) = self.start(rotation_notifier);
-        move || {
-            exit.store(true, Ordering::Relaxed);
-            receiver.recv().unwrap();
-            debug!("node shutdown complete");
         }
     }
 
@@ -421,6 +327,7 @@ impl Service for Fullnode {
             rpc_pubsub_service.join()?;
         }
 
+        self.rpc_working_bank_handle.join()?;
         self.gossip_service.join()?;
         self.node_services.join()?;
         trace!("exit node_services!");
