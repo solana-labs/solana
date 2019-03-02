@@ -24,7 +24,7 @@ fn test_rpc_send_tx() {
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
-       "method": "getLastId",
+       "method": "getRecentBlockHash",
        "params": json!([])
     });
     let rpc_addr = leader_data.rpc;

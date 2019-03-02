@@ -155,7 +155,7 @@ pub trait RpcSol {
     #[rpc(meta, name = "getBalance")]
     fn get_balance(&self, _: Self::Metadata, _: String) -> Result<u64>;
 
-    #[rpc(meta, name = "getLastId")]
+    #[rpc(meta, name = "getRecentBlockHash")]
     fn get_recent_block_hash(&self, _: Self::Metadata) -> Result<String>;
 
     #[rpc(meta, name = "getSignatureStatus")]
@@ -532,7 +532,7 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let (io, meta, block_hash, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getLastId"}}"#);
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getRecentBlockHash"}}"#);
         let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":"{}","id":1}}"#, block_hash);
         let expected: Response =

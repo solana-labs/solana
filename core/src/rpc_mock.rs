@@ -64,7 +64,7 @@ impl MockRpcClient {
                 let n = if self.addr == "airdrop" { 0 } else { 50 };
                 Value::Number(Number::from(n))
             }
-            RpcRequest::GetLastId => Value::String(PUBKEY.to_string()),
+            RpcRequest::GetRecentBlockHash => Value::String(PUBKEY.to_string()),
             RpcRequest::GetSignatureStatus => {
                 let str = if self.addr == "account_in_use" {
                     "AccountInUse"

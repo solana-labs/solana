@@ -714,7 +714,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
 }
 
 fn get_recent_block_hash(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
-    let result = rpc_client.retry_make_rpc_request(1, &RpcRequest::GetLastId, None, 5)?;
+    let result = rpc_client.retry_make_rpc_request(1, &RpcRequest::GetRecentBlockHash, None, 5)?;
     if result.as_str().is_none() {
         Err(WalletError::RpcRequestError(
             "Received bad block_hash".to_string(),
