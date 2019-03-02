@@ -170,7 +170,7 @@ fn main() {
     airdrop_tokens(&mut barrier_client, &drone_addr, &barrier_id, 1);
 
     println!("Get last ID...");
-    let mut last_id = client.get_last_id();
+    let mut last_id = client.get_recent_block_hash();
     println!("Got last ID {:?}", last_id);
 
     let first_tx_count = client.transaction_count();

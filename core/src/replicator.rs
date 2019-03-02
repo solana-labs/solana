@@ -254,7 +254,7 @@ impl Replicator {
 
         match sample_file(&ledger_data_file_encrypted, &sampling_offsets) {
             Ok(hash) => {
-                let last_id = client.get_last_id();
+                let last_id = client.get_recent_block_hash();
                 info!("sampled hash: {}", hash);
                 let mut tx = StorageTransaction::new_mining_proof(
                     &keypair,
@@ -366,7 +366,7 @@ impl Replicator {
 
             let airdrop_amount = 1;
 
-            let last_id = client.get_last_id();
+            let last_id = client.get_recent_block_hash();
             match request_airdrop_transaction(
                 &drone_addr,
                 &keypair.pubkey(),

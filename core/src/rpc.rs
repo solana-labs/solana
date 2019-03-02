@@ -57,7 +57,7 @@ impl JsonRpcRequestProcessor {
         Ok(val)
     }
 
-    fn get_last_id(&self) -> Result<String> {
+    fn get_recent_block_hash(&self) -> Result<String> {
         let id = self.bank()?.last_id();
         Ok(bs58::encode(id).into_string())
     }
@@ -156,7 +156,7 @@ pub trait RpcSol {
     fn get_balance(&self, _: Self::Metadata, _: String) -> Result<u64>;
 
     #[rpc(meta, name = "getLastId")]
-    fn get_last_id(&self, _: Self::Metadata) -> Result<String>;
+    fn get_recent_block_hash(&self, _: Self::Metadata) -> Result<String>;
 
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(&self, _: Self::Metadata, _: String) -> Result<RpcSignatureStatus>;
@@ -209,9 +209,9 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.read().unwrap().get_balance(pubkey)
     }
 
-    fn get_last_id(&self, meta: Self::Metadata) -> Result<String> {
-        info!("get_last_id rpc request received");
-        meta.request_processor.read().unwrap().get_last_id()
+    fn get_recent_block_hash(&self, meta: Self::Metadata) -> Result<String> {
+        info!("get_recent_block_hash rpc request received");
+        meta.request_processor.read().unwrap().get_recent_block_hash()
     }
 
     fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus> {
@@ -528,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rpc_get_last_id() {
+    fn test_rpc_get_recent_block_hash() {
         let bob_pubkey = Keypair::new().pubkey();
         let (io, meta, last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 

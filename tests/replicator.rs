@@ -72,7 +72,7 @@ fn test_replicator_startup_basic() {
         let voting_keypair = VotingKeypair::new_local(&validator_keypair);
 
         let mut leader_client = mk_client(&leader_info);
-        let last_id = leader_client.get_last_id();
+        let last_id = leader_client.get_recent_block_hash();
         debug!("last_id: {:?}", last_id);
 
         leader_client
@@ -98,7 +98,7 @@ fn test_replicator_startup_basic() {
         info!("starting transfers..");
         for i in 0..64 {
             debug!("transfer {}", i);
-            let last_id = leader_client.get_last_id();
+            let last_id = leader_client.get_recent_block_hash();
             let mut transaction =
                 SystemTransaction::new_account(&mint_keypair, bob.pubkey(), 1, last_id, 0);
             leader_client
@@ -116,7 +116,7 @@ fn test_replicator_startup_basic() {
 
         info!("giving replicator tokens..");
 
-        let last_id = leader_client.get_last_id();
+        let last_id = leader_client.get_recent_block_hash();
         // Give the replicator some tokens
         let mut tx = SystemTransaction::new_account(
             &mint_keypair,

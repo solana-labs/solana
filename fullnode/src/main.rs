@@ -74,7 +74,7 @@ fn create_and_fund_vote_account(
             ));
         }
         loop {
-            let last_id = client.get_last_id();
+            let last_id = client.get_recent_block_hash();
             info!("create_and_fund_vote_account last_id={:?}", last_id);
             let transaction =
                 VoteTransaction::fund_staking_account(node_keypair, vote_account, last_id, 1, 1);

@@ -237,7 +237,7 @@ impl StorageStage {
 
             let mut last_id = None;
             for _ in 0..10 {
-                if let Some(new_last_id) = client.try_get_last_id(1) {
+                if let Some(new_last_id) = client.try_get_recent_block_hash(1) {
                     last_id = Some(new_last_id);
                     break;
                 }

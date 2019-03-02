@@ -112,7 +112,7 @@ pub fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut H
             );
         }
 
-        *last_id = barrier_client.get_last_id();
+        *last_id = barrier_client.get_recent_block_hash();
         let signature = barrier_client
             .transfer(0, &id, id.pubkey(), last_id)
             .expect("Unable to send barrier transaction");
@@ -154,7 +154,7 @@ pub fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut H
             exit(1);
         }
 
-        let new_last_id = barrier_client.get_last_id();
+        let new_last_id = barrier_client.get_recent_block_hash();
         if new_last_id == *last_id {
             if poll_count > 0 && poll_count % 8 == 0 {
                 println!("last_id is not advancing, still at {:?}", *last_id);
@@ -176,7 +176,7 @@ pub fn generate_txs(
     leader: &NodeInfo,
 ) {
     let mut client = mk_client(leader);
-    let last_id = client.get_last_id();
+    let last_id = client.get_recent_block_hash();
     let tx_count = source.len();
     println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
     let signing_start = Instant::now();
@@ -366,7 +366,7 @@ pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], t
                     to_fund_txs.len(),
                 );
 
-                let last_id = client.get_last_id();
+                let last_id = client.get_recent_block_hash();
 
                 // re-sign retained to_fund_txes with updated last_id
                 to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
@@ -410,7 +410,7 @@ pub fn airdrop_tokens(
             id.pubkey(),
         );
 
-        let last_id = client.get_last_id();
+        let last_id = client.get_recent_block_hash();
         match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, last_id) {
             Ok(transaction) => {
                 let signature = client.transfer_signed(&transaction).unwrap();
