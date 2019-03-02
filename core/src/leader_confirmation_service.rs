@@ -154,7 +154,7 @@ mod tests {
             tick_hash = hash(&serialize(&tick_hash).unwrap());
             bank.register_tick(&tick_hash);
         }
-        let block_hash = bank.last_block_hash();
+        let blockhash = bank.last_blockhash();
 
         // Create a total of 10 vote accounts, each will have a balance of 1 (after giving 1 to
         // their vote account), for a total staking pool of 10 tokens.
@@ -166,7 +166,7 @@ mod tests {
                 let voting_pubkey = voting_keypair.pubkey();
 
                 // Give the validator some tokens
-                bank.transfer(2, &mint_keypair, validator_keypair.pubkey(), block_hash)
+                bank.transfer(2, &mint_keypair, validator_keypair.pubkey(), blockhash)
                     .unwrap();
                 new_vote_account(&validator_keypair, &voting_pubkey, &bank, 1);
 
@@ -188,7 +188,7 @@ mod tests {
 
         // Get another validator to vote, so we now have 2/3 consensus
         let voting_keypair = &vote_accounts[7].0;
-        let vote_tx = VoteTransaction::new_vote(voting_keypair, 7, block_hash, 0);
+        let vote_tx = VoteTransaction::new_vote(voting_keypair, 7, blockhash, 0);
         bank.process_transaction(&vote_tx).unwrap();
 
         LeaderConfirmationService::compute_confirmation(

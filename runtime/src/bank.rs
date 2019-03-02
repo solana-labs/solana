@@ -23,7 +23,7 @@ use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::storage_program;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCK_HASHES, NUM_TICKS_PER_SECOND};
+use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES, NUM_TICKS_PER_SECOND};
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteState};
@@ -50,12 +50,12 @@ pub enum BankError {
 
     /// The bank has seen `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
-    /// its `recent_block_hash`, or as a double-spend attack.
+    /// its `recent_blockhash`, or as a double-spend attack.
     DuplicateSignature,
 
-    /// The bank has not seen the given `recent_block_hash` or the transaction is too old and
-    /// the `recent_block_hash` has been discarded.
-    BlockHashNotFound,
+    /// The bank has not seen the given `recent_blockhash` or the transaction is too old and
+    /// the `recent_blockhash` has been discarded.
+    BlockhashNotFound,
 
     /// Proof of History verification failed.
     LedgerVerificationFailed,
@@ -85,8 +85,8 @@ pub struct Bank {
     /// A cache of signature statuses
     status_cache: RwLock<BankStatusCache>,
 
-    /// FIFO queue of `recent_block_hash` items
-    block_hash_queue: RwLock<HashQueue>,
+    /// FIFO queue of `recent_blockhash` items
+    blockhash_queue: RwLock<HashQueue>,
 
     /// Previous checkpoint of this bank
     parent: RwLock<Option<Arc<Bank>>>,
@@ -122,7 +122,7 @@ pub struct Bank {
 
 impl Default for HashQueue {
     fn default() -> Self {
-        Self::new(MAX_RECENT_BLOCK_HASHES)
+        Self::new(MAX_RECENT_BLOCKHASHES)
     }
 }
 
@@ -152,7 +152,7 @@ impl Bank {
         parent.freeze();
 
         let mut bank = Self::default();
-        bank.block_hash_queue = RwLock::new(parent.block_hash_queue.read().unwrap().clone());
+        bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
         bank.tick_height
             .store(parent.tick_height.load(Ordering::SeqCst), Ordering::SeqCst);
         bank.ticks_per_slot = parent.ticks_per_slot;
@@ -264,7 +264,7 @@ impl Bank {
             &bootstrap_leader_vote_account,
         );
 
-        self.block_hash_queue
+        self.blockhash_queue
             .write()
             .unwrap()
             .genesis_hash(&genesis_block.hash());
@@ -289,8 +289,8 @@ impl Bank {
     }
 
     /// Return the last block hash registered.
-    pub fn last_block_hash(&self) -> Hash {
-        self.block_hash_queue.read().unwrap().last_hash()
+    pub fn last_blockhash(&self) -> Hash {
+        self.blockhash_queue.read().unwrap().last_hash()
     }
 
     /// Forget all signatures. Useful for benchmarking.
@@ -303,7 +303,7 @@ impl Bank {
         for (i, tx) in txs.iter().enumerate() {
             match &res[i] {
                 Ok(_) => status_cache.add(&tx.signatures[0]),
-                Err(BankError::BlockHashNotFound) => (),
+                Err(BankError::BlockhashNotFound) => (),
                 Err(BankError::DuplicateSignature) => (),
                 Err(BankError::AccountNotFound) => (),
                 Err(e) => {
@@ -325,7 +325,7 @@ impl Bank {
         slots_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
 
         let max_slot = self.slot_height();
-        let min_slot = max_slot.saturating_sub(MAX_RECENT_BLOCK_HASHES as u64);
+        let min_slot = max_slot.saturating_sub(MAX_RECENT_BLOCKHASHES as u64);
 
         let mut total_stake = 0;
         for (slot, stake) in slots_and_stakes.iter() {
@@ -333,7 +333,7 @@ impl Bank {
                 total_stake += stake;
                 if total_stake > supermajority_stake {
                     return self
-                        .block_hash_queue
+                        .blockhash_queue
                         .read()
                         .unwrap()
                         .hash_height_to_timestamp(*slot);
@@ -364,8 +364,8 @@ impl Bank {
 
         // Register a new block hash if at the last tick in the slot
         if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
-            let mut block_hash_queue = self.block_hash_queue.write().unwrap();
-            block_hash_queue.register_hash(hash);
+            let mut blockhash_queue = self.blockhash_queue.write().unwrap();
+            blockhash_queue.register_hash(hash);
         }
 
         if current_tick_height % NUM_TICKS_PER_SECOND == 0 {
@@ -411,13 +411,13 @@ impl Bank {
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let hash_queue = self.block_hash_queue.read().unwrap();
+        let hash_queue = self.blockhash_queue.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && !hash_queue.check_entry_age(tx.recent_block_hash, max_age) {
-                    error_counters.reserve_block_hash += 1;
-                    Err(BankError::BlockHashNotFound)
+                if lock_res.is_ok() && !hash_queue.check_entry_age(tx.recent_blockhash, max_age) {
+                    error_counters.reserve_blockhash += 1;
+                    Err(BankError::BlockhashNotFound)
                 } else {
                     lock_res
                 }
@@ -513,16 +513,16 @@ impl Bank {
             .increment_transaction_count(self.slot, tx_count);
 
         inc_new_counter_info!("bank-process_transactions-txs", tx_count);
-        if 0 != error_counters.block_hash_not_found {
+        if 0 != error_counters.blockhash_not_found {
             inc_new_counter_info!(
-                "bank-process_transactions-error-block_hash_not_found",
-                error_counters.block_hash_not_found
+                "bank-process_transactions-error-blockhash_not_found",
+                error_counters.blockhash_not_found
             );
         }
-        if 0 != error_counters.reserve_block_hash {
+        if 0 != error_counters.reserve_blockhash {
             inc_new_counter_info!(
-                "bank-process_transactions-error-reserve_block_hash",
-                error_counters.reserve_block_hash
+                "bank-process_transactions-error-reserve_blockhash",
+                error_counters.reserve_blockhash
             );
         }
         if 0 != error_counters.duplicate_signature {
@@ -617,21 +617,21 @@ impl Bank {
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let lock_results = self.lock_accounts(txs);
         let results =
-            self.load_execute_and_commit_transactions(txs, lock_results, MAX_RECENT_BLOCK_HASHES);
+            self.load_execute_and_commit_transactions(txs, lock_results, MAX_RECENT_BLOCKHASHES);
         self.unlock_accounts(txs, &results);
         results
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
-    /// `n` tokens where `block_hash` is the last Entry ID observed by the client.
+    /// `n` tokens where `blockhash` is the last Entry ID observed by the client.
     pub fn transfer(
         &self,
         n: u64,
         keypair: &Keypair,
         to: Pubkey,
-        block_hash: Hash,
+        blockhash: Hash,
     ) -> Result<Signature> {
-        let tx = SystemTransaction::new_account(keypair, to, n, block_hash, 0);
+        let tx = SystemTransaction::new_account(keypair, to, n, blockhash, 0);
         let signature = tx.signatures[0];
         self.process_transaction(&tx).map(|_| signature)
     }
@@ -868,7 +868,7 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         let pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.last_block_hash(), genesis_block.hash());
+        assert_eq!(bank.last_blockhash(), genesis_block.hash());
 
         bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.hash())
             .unwrap();
@@ -886,7 +886,7 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.last_block_hash(), genesis_block.hash());
+        assert_eq!(bank.last_blockhash(), genesis_block.hash());
 
         let t1 = SystemTransaction::new_move(&mint_keypair, key1, 1, genesis_block.hash(), 0);
         let t2 = SystemTransaction::new_move(&mint_keypair, key2, 1, genesis_block.hash(), 0);
@@ -1229,7 +1229,7 @@ mod tests {
         let results_alice = bank.load_execute_and_commit_transactions(
             &pay_alice,
             lock_result,
-            MAX_RECENT_BLOCK_HASHES,
+            MAX_RECENT_BLOCKHASHES,
         );
         assert_eq!(results_alice[0], Ok(()));
 
@@ -1381,11 +1381,11 @@ mod tests {
 
         let pubkey = Keypair::new().pubkey();
         bank0
-            .transfer(1_000, &mint_keypair, pubkey, bank0.last_block_hash())
+            .transfer(1_000, &mint_keypair, pubkey, bank0.last_blockhash())
             .unwrap();
         assert_ne!(bank0.hash_internal_state(), initial_state);
         bank1
-            .transfer(1_000, &mint_keypair, pubkey, bank1.last_block_hash())
+            .transfer(1_000, &mint_keypair, pubkey, bank1.last_blockhash())
             .unwrap();
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
 

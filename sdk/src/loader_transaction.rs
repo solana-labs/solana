@@ -14,7 +14,7 @@ impl LoaderTransaction {
         loader: Pubkey,
         offset: u32,
         bytes: Vec<u8>,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
         let instruction = LoaderInstruction::Write { offset, bytes };
@@ -23,7 +23,7 @@ impl LoaderTransaction {
             &[],
             loader,
             &instruction,
-            recent_block_hash,
+            recent_blockhash,
             fee,
         )
     }
@@ -31,7 +31,7 @@ impl LoaderTransaction {
     pub fn new_finalize(
         from_keypair: &Keypair,
         loader: Pubkey,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
         let instruction = LoaderInstruction::Finalize;
@@ -40,7 +40,7 @@ impl LoaderTransaction {
             &[],
             loader,
             &instruction,
-            recent_block_hash,
+            recent_blockhash,
             fee,
         )
     }

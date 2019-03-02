@@ -83,7 +83,7 @@ fn entrypoint(
                 };
                 storage_account_state.proofs[segment_index].push(proof_info);
             }
-            StorageProgram::AdvertiseStorageRecentBlockHash { hash, entry_height } => {
+            StorageProgram::AdvertiseStorageRecentBlockhash { hash, entry_height } => {
                 let original_segments = storage_account_state.entry_height / ENTRIES_PER_SEGMENT;
                 let segments = entry_height / ENTRIES_PER_SEGMENT;
                 debug!(
@@ -229,7 +229,7 @@ mod test {
         let pubkey = keypair.pubkey();
         keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
 
-        let tx = StorageTransaction::new_advertise_recent_block_hash(
+        let tx = StorageTransaction::new_advertise_recent_blockhash(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -287,7 +287,7 @@ mod test {
         let mut accounts = [Account::default(), Account::default()];
         accounts[0].userdata.resize(16 * 1024, 0);
 
-        let tx = StorageTransaction::new_advertise_recent_block_hash(
+        let tx = StorageTransaction::new_advertise_recent_blockhash(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -316,7 +316,7 @@ mod test {
 
         let entry_height = 0;
 
-        let tx = StorageTransaction::new_advertise_recent_block_hash(
+        let tx = StorageTransaction::new_advertise_recent_blockhash(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -334,7 +334,7 @@ mod test {
         );
         test_transaction(&tx, &mut accounts).unwrap();
 
-        let tx = StorageTransaction::new_advertise_recent_block_hash(
+        let tx = StorageTransaction::new_advertise_recent_blockhash(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -350,7 +350,7 @@ mod test {
         );
         test_transaction(&tx, &mut accounts).unwrap();
 
-        let tx = StorageTransaction::new_advertise_recent_block_hash(
+        let tx = StorageTransaction::new_advertise_recent_blockhash(
             &keypair,
             Hash::default(),
             Hash::default(),

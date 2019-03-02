@@ -20,7 +20,7 @@ impl BudgetTransaction {
         from_keypair: &Keypair,
         to: Pubkey,
         tokens: u64,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
         let contract = Keypair::new().pubkey();
@@ -29,7 +29,7 @@ impl BudgetTransaction {
         TransactionBuilder::new(fee)
             .push(SystemInstruction::new_move(from, contract, tokens))
             .push(Instruction::new_budget(contract, payment))
-            .sign(&[from_keypair], recent_block_hash)
+            .sign(&[from_keypair], recent_blockhash)
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
@@ -38,9 +38,9 @@ impl BudgetTransaction {
         from_keypair: &Keypair,
         to: Pubkey,
         tokens: u64,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
     ) -> Transaction {
-        Self::new_payment(from_keypair, to, tokens, recent_block_hash, 0)
+        Self::new_payment(from_keypair, to, tokens, recent_blockhash, 0)
     }
 
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
@@ -49,7 +49,7 @@ impl BudgetTransaction {
         contract: Pubkey,
         to: Pubkey,
         dt: DateTime<Utc>,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
     ) -> Transaction {
         let instruction = Instruction::ApplyTimestamp(dt);
         Transaction::new(
@@ -57,7 +57,7 @@ impl BudgetTransaction {
             &[contract, to],
             budget_program::id(),
             &instruction,
-            recent_block_hash,
+            recent_blockhash,
             0,
         )
     }
@@ -67,7 +67,7 @@ impl BudgetTransaction {
         from_keypair: &Keypair,
         contract: Pubkey,
         to: Pubkey,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
     ) -> Transaction {
         let instruction = Instruction::ApplySignature;
         let mut keys = vec![contract];
@@ -79,7 +79,7 @@ impl BudgetTransaction {
             &keys,
             budget_program::id(),
             &instruction,
-            recent_block_hash,
+            recent_blockhash,
             0,
         )
     }
@@ -93,7 +93,7 @@ impl BudgetTransaction {
         dt_pubkey: Pubkey,
         cancelable: Option<Pubkey>,
         tokens: u64,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
     ) -> Transaction {
         let expr = if let Some(from) = cancelable {
             BudgetExpr::Or(
@@ -118,7 +118,7 @@ impl BudgetTransaction {
             &[contract],
             budget_program::id(),
             &instruction,
-            recent_block_hash,
+            recent_blockhash,
             0,
         )
     }
@@ -130,7 +130,7 @@ impl BudgetTransaction {
         witness: Pubkey,
         cancelable: Option<Pubkey>,
         tokens: u64,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
     ) -> Transaction {
         let expr = if let Some(from) = cancelable {
             BudgetExpr::Or(
@@ -155,7 +155,7 @@ impl BudgetTransaction {
             &[contract],
             budget_program::id(),
             &instruction,
-            recent_block_hash,
+            recent_blockhash,
             0,
         )
     }

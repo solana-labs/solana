@@ -14,7 +14,7 @@ impl SystemTransaction {
     pub fn new_program_account(
         from_keypair: &Keypair,
         to: Pubkey,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         tokens: u64,
         space: u64,
         program_id: Pubkey,
@@ -30,7 +30,7 @@ impl SystemTransaction {
             &[to],
             system_program::id(),
             &create,
-            recent_block_hash,
+            recent_blockhash,
             fee,
         )
     }
@@ -40,14 +40,14 @@ impl SystemTransaction {
         from_keypair: &Keypair,
         to: Pubkey,
         tokens: u64,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
         let program_id = system_program::id();
         Self::new_program_account(
             from_keypair,
             to,
-            recent_block_hash,
+            recent_blockhash,
             tokens,
             0,
             program_id,
@@ -57,7 +57,7 @@ impl SystemTransaction {
     /// Create and sign new SystemInstruction::Assign transaction
     pub fn new_assign(
         from_keypair: &Keypair,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         program_id: Pubkey,
         fee: u64,
     ) -> Transaction {
@@ -67,7 +67,7 @@ impl SystemTransaction {
             &[],
             system_program::id(),
             &assign,
-            recent_block_hash,
+            recent_blockhash,
             fee,
         )
     }
@@ -76,7 +76,7 @@ impl SystemTransaction {
         from_keypair: &Keypair,
         to: Pubkey,
         tokens: u64,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
         let move_tokens = SystemInstruction::Move { tokens };
@@ -85,7 +85,7 @@ impl SystemTransaction {
             &[to],
             system_program::id(),
             &move_tokens,
-            recent_block_hash,
+            recent_blockhash,
             fee,
         )
     }
@@ -93,7 +93,7 @@ impl SystemTransaction {
     pub fn new_move_many(
         from: &Keypair,
         moves: &[(Pubkey, u64)],
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
         let instructions: Vec<_> = moves
@@ -109,7 +109,7 @@ impl SystemTransaction {
         Transaction::new_with_instructions(
             &[from],
             &to_keys,
-            recent_block_hash,
+            recent_blockhash,
             fee,
             vec![system_program::id()],
             instructions,

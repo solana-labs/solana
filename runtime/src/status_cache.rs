@@ -31,8 +31,8 @@ impl<T: Clone> Default for StatusCache<T> {
 }
 
 impl<T: Clone> StatusCache<T> {
-    pub fn new(block_hash: &Hash) -> Self {
-        let keys = (0..27).map(|i| block_hash.hash_at_index(i)).collect();
+    pub fn new(blockhash: &Hash) -> Self {
+        let keys = (0..27).map(|i| blockhash.hash_at_index(i)).collect();
         Self {
             signatures: Bloom::new(38_340_234, keys),
             failures: HashMap::new(),
@@ -118,8 +118,8 @@ impl<T: Clone> StatusCache<T> {
     }
 
     /// Crate a new cache, pushing the old cache into the merged queue
-    pub fn new_cache(&mut self, block_hash: &Hash) {
-        let mut old = Self::new(block_hash);
+    pub fn new_cache(&mut self, blockhash: &Hash) {
+        let mut old = Self::new(blockhash);
         std::mem::swap(&mut old.signatures, &mut self.signatures);
         std::mem::swap(&mut old.failures, &mut self.failures);
         assert!(old.merges.is_empty());
@@ -175,8 +175,8 @@ mod tests {
     #[test]
     fn test_has_signature() {
         let sig = Signature::default();
-        let block_hash = hash(Hash::default().as_ref());
-        let mut status_cache = BankStatusCache::new(&block_hash);
+        let blockhash = hash(Hash::default().as_ref());
+        let mut status_cache = BankStatusCache::new(&blockhash);
         assert_eq!(status_cache.has_signature(&sig), false);
         assert_eq!(status_cache.get_signature_status(&sig), None);
         status_cache.add(&sig);
@@ -187,12 +187,12 @@ mod tests {
     #[test]
     fn test_has_signature_checkpoint() {
         let sig = Signature::default();
-        let block_hash = hash(Hash::default().as_ref());
-        let mut first = BankStatusCache::new(&block_hash);
+        let blockhash = hash(Hash::default().as_ref());
+        let mut first = BankStatusCache::new(&blockhash);
         first.add(&sig);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
-        let block_hash = hash(block_hash.as_ref());
-        let second = StatusCache::new(&block_hash);
+        let blockhash = hash(blockhash.as_ref());
+        let second = StatusCache::new(&blockhash);
         let checkpoints = [&second, &first];
         assert_eq!(
             BankStatusCache::get_signature_status_all(&checkpoints, &sig),
@@ -204,12 +204,12 @@ mod tests {
     #[test]
     fn test_new_cache() {
         let sig = Signature::default();
-        let block_hash = hash(Hash::default().as_ref());
-        let mut first = BankStatusCache::new(&block_hash);
+        let blockhash = hash(Hash::default().as_ref());
+        let mut first = BankStatusCache::new(&blockhash);
         first.add(&sig);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
-        let block_hash = hash(block_hash.as_ref());
-        first.new_cache(&block_hash);
+        let blockhash = hash(blockhash.as_ref());
+        first.new_cache(&blockhash);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
         assert!(first.has_signature(&sig));
         first.clear();
@@ -220,13 +220,13 @@ mod tests {
     #[test]
     fn test_new_cache_full() {
         let sig = Signature::default();
-        let block_hash = hash(Hash::default().as_ref());
-        let mut first = BankStatusCache::new(&block_hash);
+        let blockhash = hash(Hash::default().as_ref());
+        let mut first = BankStatusCache::new(&blockhash);
         first.add(&sig);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
         for _ in 0..(MAX_CACHE_ENTRIES + 1) {
-            let block_hash = hash(block_hash.as_ref());
-            first.new_cache(&block_hash);
+            let blockhash = hash(blockhash.as_ref());
+            first.new_cache(&blockhash);
         }
         assert_eq!(first.get_signature_status(&sig), None);
         assert!(!first.has_signature(&sig));
@@ -235,17 +235,17 @@ mod tests {
     #[test]
     fn test_status_cache_squash_has_signature() {
         let sig = Signature::default();
-        let block_hash = hash(Hash::default().as_ref());
-        let mut first = BankStatusCache::new(&block_hash);
+        let blockhash = hash(Hash::default().as_ref());
+        let mut first = BankStatusCache::new(&blockhash);
         first.add(&sig);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
 
         // give first a merge
-        let block_hash = hash(block_hash.as_ref());
-        first.new_cache(&block_hash);
+        let blockhash = hash(blockhash.as_ref());
+        first.new_cache(&blockhash);
 
-        let block_hash = hash(block_hash.as_ref());
-        let mut second = BankStatusCache::new(&block_hash);
+        let blockhash = hash(blockhash.as_ref());
+        let mut second = BankStatusCache::new(&blockhash);
 
         second.squash(&[&first]);
 
@@ -256,21 +256,21 @@ mod tests {
     #[test]
     #[ignore] // takes a lot of time or RAM or both..
     fn test_status_cache_squash_overflow() {
-        let mut block_hash = hash(Hash::default().as_ref());
-        let mut cache = BankStatusCache::new(&block_hash);
+        let mut blockhash = hash(Hash::default().as_ref());
+        let mut cache = BankStatusCache::new(&blockhash);
 
         let parents: Vec<_> = (0..MAX_CACHE_ENTRIES)
             .map(|_| {
-                block_hash = hash(block_hash.as_ref());
+                blockhash = hash(blockhash.as_ref());
 
-                BankStatusCache::new(&block_hash)
+                BankStatusCache::new(&blockhash)
             })
             .collect();
 
         let mut parents_refs: Vec<_> = parents.iter().collect();
 
-        block_hash = hash(Hash::default().as_ref());
-        let mut root = BankStatusCache::new(&block_hash);
+        blockhash = hash(Hash::default().as_ref());
+        let mut root = BankStatusCache::new(&blockhash);
 
         let sig = Signature::default();
         root.add(&sig);
@@ -290,8 +290,8 @@ mod tests {
     #[test]
     fn test_failure_status() {
         let sig = Signature::default();
-        let block_hash = hash(Hash::default().as_ref());
-        let mut first = StatusCache::new(&block_hash);
+        let blockhash = hash(Hash::default().as_ref());
+        let mut first = StatusCache::new(&blockhash);
         first.add(&sig);
         first.save_failure_status(&sig, BankError::DuplicateSignature);
         assert_eq!(first.has_signature(&sig), true);
@@ -304,8 +304,8 @@ mod tests {
     #[test]
     fn test_clear_signatures() {
         let sig = Signature::default();
-        let block_hash = hash(Hash::default().as_ref());
-        let mut first = StatusCache::new(&block_hash);
+        let blockhash = hash(Hash::default().as_ref());
+        let mut first = StatusCache::new(&blockhash);
         first.add(&sig);
         assert_eq!(first.has_signature(&sig), true);
         first.save_failure_status(&sig, BankError::DuplicateSignature);
@@ -320,11 +320,11 @@ mod tests {
     #[test]
     fn test_clear_signatures_all() {
         let sig = Signature::default();
-        let block_hash = hash(Hash::default().as_ref());
-        let mut first = StatusCache::new(&block_hash);
+        let blockhash = hash(Hash::default().as_ref());
+        let mut first = StatusCache::new(&blockhash);
         first.add(&sig);
         assert_eq!(first.has_signature(&sig), true);
-        let mut second = StatusCache::new(&block_hash);
+        let mut second = StatusCache::new(&blockhash);
         let mut checkpoints = [&mut second, &mut first];
         BankStatusCache::clear_all(&mut checkpoints);
         assert_eq!(

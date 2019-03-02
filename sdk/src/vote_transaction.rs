@@ -16,20 +16,20 @@ impl VoteTransaction {
     pub fn new_vote<T: KeypairUtil>(
         voting_keypair: &T,
         slot_height: u64,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
         let vote = Vote { slot_height };
         TransactionBuilder::new(fee)
             .push(VoteInstruction::new_vote(voting_keypair.pubkey(), vote))
-            .sign(&[voting_keypair], recent_block_hash)
+            .sign(&[voting_keypair], recent_blockhash)
     }
 
     /// Fund or create the staking account with tokens
     pub fn fund_staking_account(
         from_keypair: &Keypair,
         vote_account_id: Pubkey,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         num_tokens: u64,
         fee: u64,
     ) -> Transaction {
@@ -41,7 +41,7 @@ impl VoteTransaction {
         Transaction::new_with_instructions(
             &[from_keypair],
             &[vote_account_id],
-            recent_block_hash,
+            recent_blockhash,
             fee,
             vec![system_program::id(), vote_program::id()],
             vec![
@@ -54,7 +54,7 @@ impl VoteTransaction {
     /// Choose a node id to `delegate` or `assign` this vote account to
     pub fn delegate_vote_account<T: KeypairUtil>(
         vote_keypair: &T,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         node_id: Pubkey,
         fee: u64,
     ) -> Transaction {
@@ -63,7 +63,7 @@ impl VoteTransaction {
                 vote_keypair.pubkey(),
                 node_id,
             ))
-            .sign(&[vote_keypair], recent_block_hash)
+            .sign(&[vote_keypair], recent_blockhash)
     }
 
     fn get_vote(tx: &Transaction, ix_index: usize) -> Option<(Pubkey, Vote, Hash)> {
@@ -72,7 +72,7 @@ impl VoteTransaction {
         }
         let instruction = deserialize(&tx.userdata(ix_index)).unwrap();
         if let VoteInstruction::Vote(vote) = instruction {
-            Some((tx.account_keys[0], vote, tx.recent_block_hash))
+            Some((tx.account_keys[0], vote, tx.recent_blockhash))
         } else {
             None
         }
@@ -93,11 +93,11 @@ mod tests {
     fn test_get_votes() {
         let keypair = Keypair::new();
         let slot_height = 1;
-        let recent_block_hash = Hash::default();
-        let transaction = VoteTransaction::new_vote(&keypair, slot_height, recent_block_hash, 0);
+        let recent_blockhash = Hash::default();
+        let transaction = VoteTransaction::new_vote(&keypair, slot_height, recent_blockhash, 0);
         assert_eq!(
             VoteTransaction::get_votes(&transaction),
-            vec![(keypair.pubkey(), Vote::new(slot_height), recent_block_hash)]
+            vec![(keypair.pubkey(), Vote::new(slot_height), recent_blockhash)]
         );
     }
 }

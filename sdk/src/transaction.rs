@@ -79,13 +79,13 @@ impl Instruction<u8, u8> {
 /// An atomic transaction
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    /// A set of digital signatures of `account_keys`, `program_ids`, `recent_block_hash`, `fee` and `instructions`, signed by the first
+    /// A set of digital signatures of `account_keys`, `program_ids`, `recent_blockhash`, `fee` and `instructions`, signed by the first
     /// signatures.len() keys of account_keys
     pub signatures: Vec<Signature>,
     /// All the account keys used by this transaction
     pub account_keys: Vec<Pubkey>,
     /// The id of a recent ledger entry.
-    pub recent_block_hash: Hash,
+    pub recent_blockhash: Hash,
     /// The number of tokens paid for processing and storing of this transaction.
     pub fee: u64,
     /// All the program id keys used to execute this transaction's instructions
@@ -101,7 +101,7 @@ impl Transaction {
         transaction_keys: &[Pubkey],
         program_id: Pubkey,
         userdata: &S,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         fee: u64,
     ) -> Self {
         let program_ids = vec![program_id];
@@ -110,7 +110,7 @@ impl Transaction {
         Self::new_with_instructions(
             &[from_keypair],
             transaction_keys,
-            recent_block_hash,
+            recent_blockhash,
             fee,
             program_ids,
             instructions,
@@ -121,7 +121,7 @@ impl Transaction {
         transaction_keys: &[Pubkey],
         program_id: Pubkey,
         userdata: &T,
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         fee: u64,
     ) -> Self {
         let program_ids = vec![program_id];
@@ -132,7 +132,7 @@ impl Transaction {
         Self::new_with_instructions::<Keypair>(
             &[],
             &keys[..],
-            recent_block_hash,
+            recent_blockhash,
             fee,
             program_ids,
             instructions,
@@ -142,14 +142,14 @@ impl Transaction {
     /// * `from_keypair` - The key used to sign the transaction.  This key is stored as keys[0]
     /// * `account_keys` - The keys for the transaction.  These are the program state
     ///    instances or token recipient keys.
-    /// * `recent_block_hash` - The PoH hash.
+    /// * `recent_blockhash` - The PoH hash.
     /// * `fee` - The transaction fee.
     /// * `program_ids` - The keys that identify programs used in the `instruction` vector.
     /// * `instructions` - The programs and their arguments that the transaction will execute atomically
     pub fn new_with_instructions<T: KeypairUtil>(
         from_keypairs: &[&T],
         keys: &[Pubkey],
-        recent_block_hash: Hash,
+        recent_blockhash: Hash,
         fee: u64,
         program_ids: Vec<Pubkey>,
         instructions: Vec<Instruction<u8, u8>>,
@@ -162,12 +162,12 @@ impl Transaction {
         let mut tx = Transaction {
             signatures: vec![],
             account_keys,
-            recent_block_hash: Hash::default(),
+            recent_blockhash: Hash::default(),
             fee,
             program_ids,
             instructions,
         };
-        tx.sign(from_keypairs, recent_block_hash);
+        tx.sign(from_keypairs, recent_blockhash);
         tx
     }
     pub fn userdata(&self, instruction_index: usize) -> &[u8] {
@@ -205,8 +205,8 @@ impl Transaction {
         let mut wr = Cursor::new(&mut buf[..]);
         serialize_vec_with(&mut wr, &self.account_keys, Transaction::serialize_pubkey)
             .expect("serialize account_keys");
-        wr.write_all(self.recent_block_hash.as_ref())
-            .expect("serialize recent_block_hash");
+        wr.write_all(self.recent_blockhash.as_ref())
+            .expect("serialize recent_blockhash");
         wr.write_u64::<LittleEndian>(self.fee)
             .expect("serialize fee");
         serialize_vec_with(&mut wr, &self.program_ids, Transaction::serialize_pubkey)
@@ -218,8 +218,8 @@ impl Transaction {
     }
 
     /// Sign this transaction.
-    pub fn sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_block_hash: Hash) {
-        self.recent_block_hash = recent_block_hash;
+    pub fn sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
+        self.recent_blockhash = recent_blockhash;
         let message = self.message();
         self.signatures = keypairs
             .iter()
@@ -332,7 +332,7 @@ impl Serialize for Transaction {
             .map_err(Error::custom)?;
         serialize_vec_with(&mut wr, &self.account_keys, Transaction::serialize_pubkey)
             .map_err(Error::custom)?;
-        wr.write_all(self.recent_block_hash.as_ref())
+        wr.write_all(self.recent_blockhash.as_ref())
             .map_err(Error::custom)?;
         wr.write_u64::<LittleEndian>(self.fee)
             .map_err(Error::custom)?;
@@ -366,7 +366,7 @@ impl<'a> serde::de::Visitor<'a> for TransactionVisitor {
                 .map_err(Error::custom)?;
         let mut buf = [0; size_of::<Hash>()];
         rd.read_exact(&mut buf).map_err(Error::custom)?;
-        let recent_block_hash: Hash = Hash::new(&buf);
+        let recent_blockhash: Hash = Hash::new(&buf);
         let fee = rd.read_u64::<LittleEndian>().map_err(Error::custom)?;
         let program_ids: Vec<Pubkey> =
             deserialize_vec_with(&mut rd, Transaction::deserialize_pubkey)
@@ -376,7 +376,7 @@ impl<'a> serde::de::Visitor<'a> for TransactionVisitor {
         Ok(Transaction {
             signatures,
             account_keys,
-            recent_block_hash,
+            recent_blockhash,
             fee,
             program_ids,
             instructions,

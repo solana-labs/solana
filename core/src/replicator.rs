@@ -80,7 +80,7 @@ pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
     Ok(hasher.result())
 }
 
-fn get_entry_heights_from_block_hash(
+fn get_entry_heights_from_blockhash(
     signature: &ring::signature::Signature,
     storage_entry_height: u64,
 ) -> u64 {
@@ -158,11 +158,11 @@ impl Replicator {
 
         info!("Got leader: {:?}", leader);
 
-        let (storage_block_hash, storage_entry_height) =
-            Self::poll_for_block_hash_and_entry_height(&cluster_info)?;
+        let (storage_blockhash, storage_entry_height) =
+            Self::poll_for_blockhash_and_entry_height(&cluster_info)?;
 
-        let signature = keypair.sign(storage_block_hash.as_ref());
-        let entry_height = get_entry_heights_from_block_hash(&signature, storage_entry_height);
+        let signature = keypair.sign(storage_blockhash.as_ref());
+        let entry_height = get_entry_heights_from_blockhash(&signature, storage_entry_height);
 
         info!("replicating entry_height: {}", entry_height);
 
@@ -254,12 +254,12 @@ impl Replicator {
 
         match sample_file(&ledger_data_file_encrypted, &sampling_offsets) {
             Ok(hash) => {
-                let block_hash = client.get_recent_block_hash();
+                let blockhash = client.get_recent_blockhash();
                 info!("sampled hash: {}", hash);
                 let mut tx = StorageTransaction::new_mining_proof(
                     &keypair,
                     hash,
-                    block_hash,
+                    blockhash,
                     entry_height,
                     Signature::new(signature.as_ref()),
                 );
@@ -326,7 +326,7 @@ impl Replicator {
         }
     }
 
-    fn poll_for_block_hash_and_entry_height(
+    fn poll_for_blockhash_and_entry_height(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Result<(String, u64)> {
         for _ in 0..10 {
@@ -338,8 +338,8 @@ impl Replicator {
                 RpcClient::new_from_socket(rpc_peers[node_idx].rpc)
             };
 
-            let storage_block_hash = rpc_client
-                .make_rpc_request(2, RpcRequest::GetStorageBlockHash, None)
+            let storage_blockhash = rpc_client
+                .make_rpc_request(2, RpcRequest::GetStorageBlockhash, None)
                 .expect("rpc request")
                 .to_string();
             let storage_entry_height = rpc_client
@@ -348,14 +348,14 @@ impl Replicator {
                 .as_u64()
                 .unwrap();
             if get_segment_from_entry(storage_entry_height) != 0 {
-                return Ok((storage_block_hash, storage_entry_height));
+                return Ok((storage_blockhash, storage_entry_height));
             }
             info!("max entry_height: {}", storage_entry_height);
             sleep(Duration::from_secs(3));
         }
         Err(Error::new(
             ErrorKind::Other,
-            "Couldn't get block_hash or entry_height",
+            "Couldn't get blockhash or entry_height",
         ))?
     }
 
@@ -366,12 +366,12 @@ impl Replicator {
 
             let airdrop_amount = 1;
 
-            let block_hash = client.get_recent_block_hash();
+            let blockhash = client.get_recent_blockhash();
             match request_airdrop_transaction(
                 &drone_addr,
                 &keypair.pubkey(),
                 airdrop_amount,
-                block_hash,
+                blockhash,
             ) {
                 Ok(transaction) => {
                     let signature = client.transfer_signed(&transaction).unwrap();

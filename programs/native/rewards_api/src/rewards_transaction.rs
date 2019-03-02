@@ -18,14 +18,14 @@ impl RewardsTransaction {
     pub fn new_account(
         from_keypair: &Keypair,
         rewards_id: Pubkey,
-        block_hash: Hash,
+        blockhash: Hash,
         num_tokens: u64,
         fee: u64,
     ) -> Transaction {
         SystemTransaction::new_program_account(
             from_keypair,
             rewards_id,
-            block_hash,
+            blockhash,
             num_tokens,
             RewardsState::max_size() as u64,
             id(),
@@ -36,7 +36,7 @@ impl RewardsTransaction {
     pub fn new_redeem_credits(
         vote_keypair: &Keypair,
         rewards_id: Pubkey,
-        block_hash: Hash,
+        blockhash: Hash,
         fee: u64,
     ) -> Transaction {
         let vote_id = vote_keypair.pubkey();
@@ -45,6 +45,6 @@ impl RewardsTransaction {
                 vote_id, rewards_id,
             ))
             .push(VoteInstruction::new_clear_credits(vote_id))
-            .sign(&[vote_keypair], block_hash)
+            .sign(&[vote_keypair], blockhash)
     }
 }

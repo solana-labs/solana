@@ -39,7 +39,7 @@ pub struct StorageStateInner {
     storage_results: StorageResults,
     storage_keys: StorageKeys,
     replicator_map: ReplicatorMap,
-    storage_block_hash: Hash,
+    storage_blockhash: Hash,
     entry_height: u64,
 }
 
@@ -93,7 +93,7 @@ impl StorageState {
             storage_results,
             replicator_map,
             entry_height: 0,
-            storage_block_hash: Hash::default(),
+            storage_blockhash: Hash::default(),
         };
 
         StorageState {
@@ -111,8 +111,8 @@ impl StorageState {
         self.state.read().unwrap().storage_results[idx]
     }
 
-    pub fn get_storage_block_hash(&self) -> Hash {
-        self.state.read().unwrap().storage_block_hash
+    pub fn get_storage_blockhash(&self) -> Hash {
+        self.state.read().unwrap().storage_blockhash
     }
 
     pub fn get_entry_height(&self) -> u64 {
@@ -235,10 +235,10 @@ impl StorageStage {
                 }
             }
 
-            let mut block_hash = None;
+            let mut blockhash = None;
             for _ in 0..10 {
-                if let Some(new_block_hash) = client.try_get_recent_block_hash(1) {
-                    block_hash = Some(new_block_hash);
+                if let Some(new_blockhash) = client.try_get_recent_blockhash(1) {
+                    blockhash = Some(new_blockhash);
                     break;
                 }
 
@@ -247,8 +247,8 @@ impl StorageStage {
                 }
             }
 
-            if let Some(block_hash) = block_hash {
-                tx.sign(&[keypair.as_ref()], block_hash);
+            if let Some(blockhash) = blockhash {
+                tx.sign(&[keypair.as_ref()], blockhash);
 
                 if exit.load(Ordering::Relaxed) {
                     Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;
@@ -284,7 +284,7 @@ impl StorageStage {
         let mut seed = [0u8; 32];
         let signature = keypair.sign(&entry_id.as_ref());
 
-        let tx = StorageTransaction::new_advertise_recent_block_hash(
+        let tx = StorageTransaction::new_advertise_recent_blockhash(
             keypair,
             entry_id,
             Hash::default(),
@@ -505,7 +505,7 @@ mod tests {
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
         let ticks_per_slot = genesis_block.ticks_per_slot;
-        let (ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
         let entries = make_tiny_test_entries(64);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
@@ -567,7 +567,7 @@ mod tests {
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
         let ticks_per_slot = genesis_block.ticks_per_slot;;
-        let (ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
         let entries = make_tiny_test_entries(128);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();

@@ -34,7 +34,7 @@ impl LocalCluster {
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let (genesis_block, mint_keypair) =
             GenesisBlock::new_with_leader(cluster_lamports, leader_pubkey, lamports_per_node);
-        let (genesis_ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
+        let (genesis_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
         let mut ledger_paths = vec![];
         ledger_paths.push(genesis_ledger_path.clone());
@@ -121,10 +121,10 @@ impl LocalCluster {
         dest_pubkey: &Pubkey,
         lamports: u64,
     ) -> u64 {
-        trace!("getting leader block_hash");
-        let block_hash = client.get_recent_block_hash();
+        trace!("getting leader blockhash");
+        let blockhash = client.get_recent_blockhash();
         let mut tx =
-            SystemTransaction::new_account(&source_keypair, *dest_pubkey, lamports, block_hash, 0);
+            SystemTransaction::new_account(&source_keypair, *dest_pubkey, lamports, blockhash, 0);
         info!(
             "executing transfer of {} from {} to {}",
             lamports,
@@ -148,7 +148,7 @@ impl LocalCluster {
             let mut transaction = VoteTransaction::fund_staking_account(
                 from_account,
                 vote_account,
-                client.get_recent_block_hash(),
+                client.get_recent_blockhash(),
                 amount,
                 1,
             );
