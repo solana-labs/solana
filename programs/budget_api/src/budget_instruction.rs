@@ -15,20 +15,24 @@ pub struct Contract {
 
 /// An instruction to progress the smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Instruction {
+pub enum BudgetInstruction {
     /// Declare and instantiate `BudgetExpr`.
-    NewBudget(BudgetExpr),
+    InitializeAccount(BudgetExpr),
 
     /// Tell a payment plan acknowledge the given `DateTime` has past.
     ApplyTimestamp(DateTime<Utc>),
 
-    /// Tell the budget that the `NewBudget` with `Signature` has been
+    /// Tell the budget that the `InitializeAccount` with `Signature` has been
     /// signed by the containing transaction's `Pubkey`.
     ApplySignature,
 }
 
-impl Instruction {
-    pub fn new_budget(contract: Pubkey, expr: BudgetExpr) -> BuilderInstruction {
-        BuilderInstruction::new(id(), &Instruction::NewBudget(expr), vec![(contract, false)])
+impl BudgetInstruction {
+    pub fn new_initialize_account(contract: Pubkey, expr: BudgetExpr) -> BuilderInstruction {
+        BuilderInstruction::new(
+            id(),
+            &BudgetInstruction::InitializeAccount(expr),
+            vec![(contract, false)],
+        )
     }
 }

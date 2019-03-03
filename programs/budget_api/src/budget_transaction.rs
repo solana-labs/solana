@@ -1,7 +1,7 @@
 //! The `budget_transaction` module provides functionality for creating Budget transactions.
 
 use crate::budget_expr::{BudgetExpr, Condition};
-use crate::budget_instruction::Instruction;
+use crate::budget_instruction::BudgetInstruction;
 use crate::id;
 use bincode::deserialize;
 use chrono::prelude::*;
@@ -28,7 +28,7 @@ impl BudgetTransaction {
         let payment = BudgetExpr::new_payment(tokens - fee, to);
         TransactionBuilder::new(fee)
             .push(SystemInstruction::new_move(from, contract, tokens))
-            .push(Instruction::new_budget(contract, payment))
+            .push(BudgetInstruction::new_initialize_account(contract, payment))
             .sign(&[from_keypair], recent_blockhash)
     }
 
@@ -51,7 +51,7 @@ impl BudgetTransaction {
         dt: DateTime<Utc>,
         recent_blockhash: Hash,
     ) -> Transaction {
-        let instruction = Instruction::ApplyTimestamp(dt);
+        let instruction = BudgetInstruction::ApplyTimestamp(dt);
         Transaction::new(
             from_keypair,
             &[contract, to],
@@ -69,7 +69,7 @@ impl BudgetTransaction {
         to: Pubkey,
         recent_blockhash: Hash,
     ) -> Transaction {
-        let instruction = Instruction::ApplySignature;
+        let instruction = BudgetInstruction::ApplySignature;
         let mut keys = vec![contract];
         if from_keypair.pubkey() != to {
             keys.push(to);
@@ -105,7 +105,7 @@ impl BudgetTransaction {
                 Box::new(BudgetExpr::new_payment(tokens, to)),
             )
         };
-        let instruction = Instruction::NewBudget(expr);
+        let instruction = BudgetInstruction::InitializeAccount(expr);
         Transaction::new(
             from_keypair,
             &[contract],
@@ -142,7 +142,7 @@ impl BudgetTransaction {
                 Box::new(BudgetExpr::new_payment(tokens, to)),
             )
         };
-        let instruction = Instruction::NewBudget(expr);
+        let instruction = BudgetInstruction::InitializeAccount(expr);
         Transaction::new(
             from_keypair,
             &[contract],
@@ -157,14 +157,16 @@ impl BudgetTransaction {
         deserialize(&tx.userdata(index)).ok()
     }
 
-    pub fn instruction(tx: &Transaction, index: usize) -> Option<Instruction> {
+    pub fn instruction(tx: &Transaction, index: usize) -> Option<BudgetInstruction> {
         deserialize(&tx.userdata(index)).ok()
     }
 
     /// Verify only the payment plan.
     pub fn verify_plan(tx: &Transaction) -> bool {
         if let Some(SystemInstruction::Move { tokens }) = Self::system_instruction(tx, 0) {
-            if let Some(Instruction::NewBudget(expr)) = BudgetTransaction::instruction(&tx, 1) {
+            if let Some(BudgetInstruction::InitializeAccount(expr)) =
+                BudgetTransaction::instruction(&tx, 1)
+            {
                 if !(tx.fee <= tokens && expr.verify(tokens - tx.fee)) {
                     return false;
                 }
@@ -227,7 +229,7 @@ mod tests {
         if let SystemInstruction::Move { ref mut tokens } = system_instruction {
             *tokens = 1_000_000; // <-- attack, part 1!
             let mut instruction = BudgetTransaction::instruction(&tx, 1).unwrap();
-            if let Instruction::NewBudget(ref mut expr) = instruction {
+            if let BudgetInstruction::InitializeAccount(ref mut expr) = instruction {
                 if let BudgetExpr::Pay(ref mut payment) = expr {
                     payment.tokens = *tokens; // <-- attack, part 2!
                 }
@@ -248,7 +250,7 @@ mod tests {
         let zero = Hash::default();
         let mut tx = BudgetTransaction::new(&keypair0, pubkey1, 42, zero);
         let mut instruction = BudgetTransaction::instruction(&tx, 1);
-        if let Some(Instruction::NewBudget(ref mut expr)) = instruction {
+        if let Some(BudgetInstruction::InitializeAccount(ref mut expr)) = instruction {
             if let BudgetExpr::Pay(ref mut payment) = expr {
                 payment.to = thief_keypair.pubkey(); // <-- attack!
             }
@@ -265,7 +267,7 @@ mod tests {
         let zero = Hash::default();
         let mut tx = BudgetTransaction::new(&keypair0, keypair1.pubkey(), 1, zero);
         let mut instruction = BudgetTransaction::instruction(&tx, 1).unwrap();
-        if let Instruction::NewBudget(ref mut expr) = instruction {
+        if let BudgetInstruction::InitializeAccount(ref mut expr) = instruction {
             if let BudgetExpr::Pay(ref mut payment) = expr {
                 payment.tokens = 2; // <-- attack!
             }
@@ -275,7 +277,7 @@ mod tests {
 
         // Also, ensure all branchs of the plan spend all tokens
         let mut instruction = BudgetTransaction::instruction(&tx, 1).unwrap();
-        if let Instruction::NewBudget(ref mut expr) = instruction {
+        if let BudgetInstruction::InitializeAccount(ref mut expr) = instruction {
             if let BudgetExpr::Pay(ref mut payment) = expr {
                 payment.tokens = 0; // <-- whoops!
             }
