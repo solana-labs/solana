@@ -78,7 +78,7 @@ impl PohRecorder {
     pub fn set_working_bank(&mut self, working_bank: WorkingBank) {
         trace!("new working bank");
         self.working_bank = Some(working_bank);
-	}
+    }
     pub fn set_bank(&mut self, bank: &Arc<Bank>) {
         let max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
         let working_bank = WorkingBank {
@@ -86,7 +86,7 @@ impl PohRecorder {
             min_tick_height: bank.tick_height(),
             max_tick_height,
         };
-		self.set_working_bank(working_bank);
+        self.set_working_bank(working_bank);
     }
 
     // Flush cache will delay flushing the cache for a bank until it past the WorkingBank::min_tick_height

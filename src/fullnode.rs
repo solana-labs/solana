@@ -280,6 +280,7 @@ impl Fullnode {
         // in motion because exit()/close() are only called by the run() loop
         // which is the sole initiator of rotations.
         self.poh_recorder.lock().unwrap().clear_bank();
+        self.poh_service.exit();
         if let Some(ref rpc_service) = self.rpc_service {
             rpc_service.exit();
         }
@@ -287,7 +288,6 @@ impl Fullnode {
             rpc_pubsub_service.exit();
         }
         self.node_services.exit();
-        self.poh_service.exit()
     }
 
     pub fn close(self) -> Result<()> {
@@ -323,6 +323,8 @@ impl Service for Fullnode {
     type JoinReturnType = ();
 
     fn join(self) -> Result<()> {
+        self.poh_service.join()?;
+        drop(self.poh_recorder);
         if let Some(rpc_service) = self.rpc_service {
             rpc_service.join()?;
         }
@@ -334,8 +336,6 @@ impl Service for Fullnode {
         self.gossip_service.join()?;
         self.node_services.join()?;
         trace!("exit node_services!");
-        self.poh_service.join()?;
-        trace!("exit poh!");
         Ok(())
     }
 }

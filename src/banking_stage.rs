@@ -372,6 +372,7 @@ mod tests {
     use crate::cluster_info::Node;
     use crate::entry::EntrySlice;
     use crate::packet::to_packets;
+    use crate::poh_recorder::WorkingBank;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -408,7 +409,7 @@ mod tests {
         sleep(Duration::from_millis(500));
         drop(verified_sender);
         poh_service.close().unwrap();
-		drop(poh_recorder);
+        drop(poh_recorder);
 
         trace!("getting entries");
         let entries: Vec<_> = entry_receiver
@@ -421,280 +422,227 @@ mod tests {
         assert_eq!(entries[entries.len() - 1].hash, bank.last_id());
         banking_stage.join().unwrap();
     }
-    //
-    //    #[test]
-    //    fn test_banking_stage_entries_only() {
-    //        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
-    //        let bank = Arc::new(Bank::new(&genesis_block));
-    //        let start_hash = bank.last_id();
-    //        let (verified_sender, verified_receiver) = channel();
-    //        let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    //        let (bank_sender, bank_receiver) = channel();
-    //        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
-    //        let cluster_info = Arc::new(RwLock::new(cluster_info));
-    //        let (banking_stage, entry_receiver) = BankingStage::new(
-    //            &cluster_info,
-    //            bank_receiver,
-    //            &poh_recorder,
-    //            verified_receiver,
-    //        );
-    //        bank_sender.send(bank).expect("sending bank");
-    //
-    //        // good tx
-    //        let keypair = mint_keypair;
-    //        let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
-    //
-    //        // good tx, but no verify
-    //        let tx_no_ver =
-    //            SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
-    //
-    //        // bad tx, AccountNotFound
-    //        let keypair = Keypair::new();
-    //        let tx_anf = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
-    //
-    //        // send 'em over
-    //        let packets = to_packets(&[tx, tx_no_ver, tx_anf]);
-    //
-    //        // glad they all fit
-    //        assert_eq!(packets.len(), 1);
-    //        verified_sender // tx, no_ver, anf
-    //            .send(vec![(packets[0].clone(), vec![1u8, 0u8, 1u8])])
-    //            .unwrap();
-    //
-    //        drop(verified_sender);
-    //        drop(bank_sender);
-    //
-    //        //receive entries + ticks
-    //        let entries: Vec<Vec<Entry>> = entry_receiver
-    //            .iter()
-    //            .map(|x| x.1.into_iter().map(|e| e.0).collect())
-    //            .collect();
-    //
-    //        assert!(entries.len() >= 1);
-    //
-    //        let mut last_id = start_hash;
-    //        entries.iter().for_each(|entries| {
-    //            assert_eq!(entries.len(), 1);
-    //            assert!(entries.verify(&last_id));
-    //            last_id = entries.last().unwrap().hash;
-    //        });
-    //        drop(entry_receiver);
-    //        banking_stage.join().unwrap();
-    //        poh_service.close().unwrap();
-    //    }
-    //
-    //    #[test]
-    //    fn test_banking_stage_entryfication() {
-    //        // In this attack we'll demonstrate that a verifier can interpret the ledger
-    //        // differently if either the server doesn't signal the ledger to add an
-    //        // Entry OR if the verifier tries to parallelize across multiple Entries.
-    //        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
-    //        let bank = Arc::new(Bank::new(&genesis_block));
-    //        let (verified_sender, verified_receiver) = channel();
-    //        let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    //        let (bank_sender, bank_receiver) = channel();
-    //        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
-    //        let cluster_info = Arc::new(RwLock::new(cluster_info));
-    //        let (banking_stage, entry_receiver) = BankingStage::new(
-    //            &cluster_info,
-    //            bank_receiver,
-    //            &poh_recorder,
-    //            verified_receiver,
-    //        );
-    //        bank_sender.send(bank).expect("sending bank");
-    //
-    //        // Process a batch that includes a transaction that receives two tokens.
-    //        let alice = Keypair::new();
-    //        let tx = SystemTransaction::new_account(
-    //            &mint_keypair,
-    //            alice.pubkey(),
-    //            2,
-    //            genesis_block.hash(),
-    //            0,
-    //        );
-    //
-    //        let packets = to_packets(&[tx]);
-    //        verified_sender
-    //            .send(vec![(packets[0].clone(), vec![1u8])])
-    //            .unwrap();
-    //
-    //        // Process a second batch that spends one of those tokens.
-    //        let tx = SystemTransaction::new_account(
-    //            &alice,
-    //            mint_keypair.pubkey(),
-    //            1,
-    //            genesis_block.hash(),
-    //            0,
-    //        );
-    //        let packets = to_packets(&[tx]);
-    //        verified_sender
-    //            .send(vec![(packets[0].clone(), vec![1u8])])
-    //            .unwrap();
-    //        drop(verified_sender);
-    //        drop(bank_sender);
-    //        banking_stage.join().unwrap();
-    //
-    //        // Collect the ledger and feed it to a new bank.
-    //        let entries: Vec<_> = entry_receiver
-    //            .iter()
-    //            .flat_map(|x| x.1.into_iter().map(|e| e.0))
-    //            .collect();
-    //        // same assertion as running through the bank, really...
-    //        assert!(entries.len() >= 2);
-    //
-    //        // Assert the user holds one token, not two. If the stage only outputs one
-    //        // entry, then the second transaction will be rejected, because it drives
-    //        // the account balance below zero before the credit is added.
-    //        let bank = Bank::new(&genesis_block);
-    //        for entry in entries {
-    //            bank.process_transactions(&entry.transactions)
-    //                .iter()
-    //                .for_each(|x| assert_eq!(*x, Ok(())));
-    //        }
-    //        assert_eq!(bank.get_balance(&alice.pubkey()), 1);
-    //        poh_service.close().unwrap();
-    //    }
-    //
-    //    // Test that when the max_tick_height is reached, the banking stage exits
-    //    #[test]
-    //    fn test_max_tick_height_shutdown() {
-    //        solana_logger::setup();
-    //        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-    //        let bank = Arc::new(Bank::new(&genesis_block));
-    //        let (verified_sender, verified_receiver) = channel();
-    //        let max_tick_height = 10;
-    //        let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    //        let (bank_sender, bank_receiver) = channel();
-    //        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
-    //        let cluster_info = Arc::new(RwLock::new(cluster_info));
-    //        let (banking_stage, _entry_receiver) = BankingStage::new(
-    //            &cluster_info,
-    //            bank_receiver,
-    //            &poh_recorder,
-    //            verified_receiver,
-    //        );
-    //        bank_sender.send(bank.clone()).expect("sending bank");
-    //
-    //        loop {
-    //            let bank_tick_height = bank.tick_height();
-    //            if bank_tick_height >= max_tick_height {
-    //                break;
-    //            }
-    //            sleep(Duration::from_millis(10));
-    //        }
-    //
-    //        drop(verified_sender);
-    //        drop(bank_sender);
-    //        banking_stage.join().unwrap();
-    //        poh_service.close().unwrap();
-    //    }
-    //
-    //    #[test]
-    //    fn test_bank_record_transactions() {
-    //        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
-    //        let bank = Arc::new(Bank::new(&genesis_block));
-    //        let (entry_sender, entry_receiver) = channel();
-    //        let working_bank = WorkingBank {
-    //            bank: bank.clone(),
-    //            sender: entry_sender,
-    //            min_tick_height: bank.tick_height(),
-    //            max_tick_height: std::u64::MAX,
-    //        };
-    //
-    //        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
-    //            bank.tick_height(),
-    //            bank.last_id(),
-    //        )));
-    //        poh_recorder.lock().unwrap().set_working_bank(working_bank);
-    //        let pubkey = Keypair::new().pubkey();
-    //
-    //        let transactions = vec![
-    //            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.hash(), 0),
-    //            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.hash(), 0),
-    //        ];
-    //
-    //        let mut results = vec![Ok(()), Ok(())];
-    //        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
-    //        let (_, entries) = entry_receiver.recv().unwrap();
-    //        assert_eq!(entries[0].0.transactions.len(), transactions.len());
-    //
-    //        // ProgramErrors should still be recorded
-    //        results[0] = Err(BankError::ProgramError(
-    //            1,
-    //            ProgramError::ResultWithNegativeTokens,
-    //        ));
-    //        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
-    //        let (_, entries) = entry_receiver.recv().unwrap();
-    //        assert_eq!(entries[0].0.transactions.len(), transactions.len());
-    //
-    //        // Other BankErrors should not be recorded
-    //        results[0] = Err(BankError::AccountNotFound);
-    //        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
-    //        let (_, entries) = entry_receiver.recv().unwrap();
-    //        assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
-    //    }
-    //
-    //    #[test]
-    //    fn test_bank_process_and_record_transactions() {
-    //        solana_logger::setup();
-    //        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
-    //        let bank = Arc::new(Bank::new(&genesis_block));
-    //        let pubkey = Keypair::new().pubkey();
-    //
-    //        let transactions = vec![SystemTransaction::new_move(
-    //            &mint_keypair,
-    //            pubkey,
-    //            1,
-    //            genesis_block.hash(),
-    //            0,
-    //        )];
-    //
-    //        let (entry_sender, entry_receiver) = channel();
-    //        let working_bank = WorkingBank {
-    //            bank: bank.clone(),
-    //            sender: entry_sender,
-    //            min_tick_height: bank.tick_height(),
-    //            max_tick_height: bank.tick_height() + 1,
-    //        };
-    //        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
-    //            bank.tick_height(),
-    //            bank.last_id(),
-    //        )));
-    //        poh_recorder.lock().unwrap().set_working_bank(working_bank);
-    //
-    //        BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder).unwrap();
-    //        poh_recorder.lock().unwrap().tick();
-    //
-    //        let mut need_tick = true;
-    //        // read entries until I find mine, might be ticks...
-    //        while let Ok((_, entries)) = entry_receiver.recv() {
-    //            for (entry, _) in entries {
-    //                if !entry.is_tick() {
-    //                    trace!("got entry");
-    //                    assert_eq!(entry.transactions.len(), transactions.len());
-    //                    assert_eq!(bank.get_balance(&pubkey), 1);
-    //                    need_tick = false;
-    //                } else {
-    //                    break;
-    //                }
-    //            }
-    //        }
-    //
-    //        assert_eq!(need_tick, false);
-    //
-    //        let transactions = vec![SystemTransaction::new_move(
-    //            &mint_keypair,
-    //            pubkey,
-    //            2,
-    //            genesis_block.hash(),
-    //            0,
-    //        )];
-    //
-    //        assert_matches!(
-    //            BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder,),
-    //            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
-    //        );
-    //
-    //        assert_eq!(bank.get_balance(&pubkey), 1);
-    //    }
+
+    #[test]
+    fn test_banking_stage_entries_only() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let start_hash = bank.last_id();
+        let (verified_sender, verified_receiver) = channel();
+        let (poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
+        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        poh_recorder.lock().unwrap().set_bank(&bank);
+        let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
+
+        // good tx
+        let keypair = mint_keypair;
+        let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
+
+        // good tx, but no verify
+        let tx_no_ver =
+            SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
+
+        // bad tx, AccountNotFound
+        let keypair = Keypair::new();
+        let tx_anf = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
+
+        // send 'em over
+        let packets = to_packets(&[tx, tx_no_ver, tx_anf]);
+
+        // glad they all fit
+        assert_eq!(packets.len(), 1);
+        verified_sender // tx, no_ver, anf
+            .send(vec![(packets[0].clone(), vec![1u8, 0u8, 1u8])])
+            .unwrap();
+
+        drop(verified_sender);
+        poh_service.close();
+        drop(poh_recorder);
+
+        //receive entries + ticks
+        let entries: Vec<Vec<Entry>> = entry_receiver
+            .iter()
+            .map(|x| x.1.into_iter().map(|e| e.0).collect())
+            .collect();
+
+        assert!(entries.len() >= 1);
+
+        let mut last_id = start_hash;
+        entries.iter().for_each(|entries| {
+            assert_eq!(entries.len(), 1);
+            assert!(entries.verify(&last_id));
+            last_id = entries.last().unwrap().hash;
+        });
+        drop(entry_receiver);
+        banking_stage.join().unwrap();
+    }
+
+    #[test]
+    fn test_banking_stage_entryfication() {
+        // In this attack we'll demonstrate that a verifier can interpret the ledger
+        // differently if either the server doesn't signal the ledger to add an
+        // Entry OR if the verifier tries to parallelize across multiple Entries.
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let (verified_sender, verified_receiver) = channel();
+        let (poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
+        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        poh_recorder.lock().unwrap().set_bank(&bank);
+        let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
+
+        // Process a batch that includes a transaction that receives two tokens.
+        let alice = Keypair::new();
+        let tx = SystemTransaction::new_account(
+            &mint_keypair,
+            alice.pubkey(),
+            2,
+            genesis_block.hash(),
+            0,
+        );
+
+        let packets = to_packets(&[tx]);
+        verified_sender
+            .send(vec![(packets[0].clone(), vec![1u8])])
+            .unwrap();
+
+        // Process a second batch that spends one of those tokens.
+        let tx = SystemTransaction::new_account(
+            &alice,
+            mint_keypair.pubkey(),
+            1,
+            genesis_block.hash(),
+            0,
+        );
+        let packets = to_packets(&[tx]);
+        verified_sender
+            .send(vec![(packets[0].clone(), vec![1u8])])
+            .unwrap();
+
+        drop(verified_sender);
+        poh_service.close();
+        drop(poh_recorder);
+
+        // Collect the ledger and feed it to a new bank.
+        let entries: Vec<_> = entry_receiver
+            .iter()
+            .flat_map(|x| x.1.into_iter().map(|e| e.0))
+            .collect();
+        // same assertion as running through the bank, really...
+        assert!(entries.len() >= 2);
+
+        // Assert the user holds one token, not two. If the stage only outputs one
+        // entry, then the second transaction will be rejected, because it drives
+        // the account balance below zero before the credit is added.
+        let bank = Bank::new(&genesis_block);
+        for entry in entries {
+            bank.process_transactions(&entry.transactions)
+                .iter()
+                .for_each(|x| assert_eq!(*x, Ok(())));
+        }
+        assert_eq!(bank.get_balance(&alice.pubkey()), 1);
+    }
+    #[test]
+    fn test_bank_record_transactions() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let working_bank = WorkingBank {
+            bank: bank.clone(),
+            min_tick_height: bank.tick_height(),
+            max_tick_height: std::u64::MAX,
+        };
+
+        let (poh_recorder, entry_receiver) = PohRecorder::new(bank.tick_height(), bank.last_id());
+        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+
+        poh_recorder.lock().unwrap().set_working_bank(working_bank);
+        let pubkey = Keypair::new().pubkey();
+
+        let transactions = vec![
+            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.hash(), 0),
+            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.hash(), 0),
+        ];
+
+        let mut results = vec![Ok(()), Ok(())];
+        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        let (_, entries) = entry_receiver.recv().unwrap();
+        assert_eq!(entries[0].0.transactions.len(), transactions.len());
+
+        // ProgramErrors should still be recorded
+        results[0] = Err(BankError::ProgramError(
+            1,
+            ProgramError::ResultWithNegativeTokens,
+        ));
+        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        let (_, entries) = entry_receiver.recv().unwrap();
+        assert_eq!(entries[0].0.transactions.len(), transactions.len());
+
+        // Other BankErrors should not be recorded
+        results[0] = Err(BankError::AccountNotFound);
+        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        let (_, entries) = entry_receiver.recv().unwrap();
+        assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
+    }
+
+    #[test]
+    fn test_bank_process_and_record_transactions() {
+        solana_logger::setup();
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let pubkey = Keypair::new().pubkey();
+
+        let transactions = vec![SystemTransaction::new_move(
+            &mint_keypair,
+            pubkey,
+            1,
+            genesis_block.hash(),
+            0,
+        )];
+
+        let working_bank = WorkingBank {
+            bank: bank.clone(),
+            min_tick_height: bank.tick_height(),
+            max_tick_height: bank.tick_height() + 1,
+        };
+        let (poh_recorder, entry_receiver) = PohRecorder::new(bank.tick_height(), bank.last_id());
+        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+
+        poh_recorder.lock().unwrap().set_working_bank(working_bank);
+
+        BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder).unwrap();
+        poh_recorder.lock().unwrap().tick();
+
+        let mut need_tick = true;
+        // read entries until I find mine, might be ticks...
+        while let Ok((_, entries)) = entry_receiver.recv() {
+            for (entry, _) in entries {
+                if !entry.is_tick() {
+                    trace!("got entry");
+                    assert_eq!(entry.transactions.len(), transactions.len());
+                    assert_eq!(bank.get_balance(&pubkey), 1);
+                    need_tick = false;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        assert_eq!(need_tick, false);
+
+        let transactions = vec![SystemTransaction::new_move(
+            &mint_keypair,
+            pubkey,
+            2,
+            genesis_block.hash(),
+            0,
+        )];
+
+        assert_matches!(
+            BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder),
+            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
+        );
+
+        assert_eq!(bank.get_balance(&pubkey), 1);
+    }
 }
