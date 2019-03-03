@@ -99,7 +99,7 @@ impl LeaderConfirmationService {
     /// Create a new LeaderConfirmationService for computing confirmation.
     pub fn new(poh_recorder: &Arc<Mutex<PohRecorder>>, exit: Arc<AtomicBool>) -> JoinHandle<()> {
         let poh_recorder = poh_recorder.clone();
-        let thread_hdl = Builder::new()
+        Builder::new()
             .name("solana-leader-confirmation-service".to_string())
             .spawn(move || {
                 let mut last_valid_validator_timestamp = 0;
@@ -115,9 +115,7 @@ impl LeaderConfirmationService {
                     sleep(Duration::from_millis(COMPUTE_CONFIRMATION_MS));
                 }
             })
-            .unwrap();
-
-        thread_hdl
+            .unwrap()
     }
 }
 

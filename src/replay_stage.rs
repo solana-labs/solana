@@ -121,7 +121,7 @@ impl ReplayStage {
                     if votable.is_empty()
                         && frozen.len() == 1
                         && active_banks.is_empty()
-                        && first_block == false
+                        && !first_block
                     {
                         first_block = true;
                         votable.extend(frozen.keys());
