@@ -125,12 +125,11 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_hash = bank.last_id();
-        let (entry_sender, entry_receiver) = channel();
-        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(bank.tick_height(), prev_hash)));
+        let (poh_recorder, entry_receiver) = PohRecorder::new(bank.tick_height(), prev_hash);
+        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let exit = Arc::new(AtomicBool::new(false));
         let working_bank = WorkingBank {
             bank: bank.clone(),
-            sender: entry_sender,
             min_tick_height: bank.tick_height(),
             max_tick_height: std::u64::MAX,
         };
@@ -205,12 +204,11 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_hash = bank.last_id();
-        let (entry_sender, entry_receiver) = channel();
-        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(bank.tick_height(), prev_hash)));
+        let (poh_recorder, entry_receiver) = PohRecorder::new(bank.tick_height(), prev_hash);
+        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let exit = Arc::new(AtomicBool::new(false));
         let working_bank = WorkingBank {
             bank: bank.clone(),
-            sender: entry_sender,
             min_tick_height: bank.tick_height() + 3,
             max_tick_height: bank.tick_height() + 5,
         };

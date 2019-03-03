@@ -8,7 +8,7 @@ use crate::cluster_info::ClusterInfo;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
 use crate::leader_schedule_utils;
 use crate::packet::BlobError;
-use crate::poh_recorder::PohRecorder;
+use crate::poh_recorder::{PohRecorder, WorkingBank};
 use crate::result;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
@@ -62,7 +62,6 @@ impl ReplayStage {
         _bank_forks_info: &[BankForksInfo],
         cluster_info: Arc<RwLock<ClusterInfo>>,
         exit: Arc<AtomicBool>,
-        banking_stage_sender: Sender<Arc<Bank>>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -172,12 +171,19 @@ impl ReplayStage {
                             {
 								assert_eq!(bank_forks.read().unwrap().working_bank().slot(), tpu_bank.slot());
                                 debug!(
-                                    "banking_stage_sender: me: {} next_slot: {} next_leader: {}",
+                                    "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
                                     my_id,
                                     tpu_bank.slot(),
                                     next_leader
                                 );
-                                banking_stage_sender.send(tpu_bank)?;
+                			let max_tick_height = (tpu_bank.slot() + 1) * tpu_bank.ticks_per_slot() - 1;
+                			let working_bank = WorkingBank {
+                			    bank: tpu_bank.clone(),
+                			    min_tick_height: tpu_bank.tick_height(),
+                			    max_tick_height,
+                			};
+                			poh_recorder.lock().unwrap().set_working_bank(working_bank);
+
                             }
                         }
                     }
@@ -368,14 +374,13 @@ mod test {
         // Set up the replay stage
         let exit = Arc::new(AtomicBool::new(false));
         let voting_keypair = Arc::new(Keypair::new());
-        let (bank_sender, _bank_receiver) = channel();
         {
             let (bank_forks, bank_forks_info, blocktree, l_receiver) =
                 new_banks_from_blocktree(&my_ledger_path, None);
             let bank = bank_forks.working_bank();
 
             let blocktree = Arc::new(blocktree);
-            let (poh_recorder, poh_service) = create_test_recorder(&bank);
+            let (poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
             let (replay_stage, _slot_full_receiver, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
                 Some(voting_keypair.clone()),
@@ -384,7 +389,6 @@ mod test {
                 &bank_forks_info,
                 cluster_info_me.clone(),
                 exit.clone(),
-                bank_sender,
                 l_receiver,
                 &Arc::new(RpcSubscriptions::default()),
                 &poh_recorder,

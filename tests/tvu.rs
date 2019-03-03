@@ -3,6 +3,7 @@ extern crate solana;
 
 use log::*;
 use solana::bank_forks::BankForks;
+use solana::banking_stage::create_test_recorder;
 use solana::blocktree::{get_tmp_ledger_path, Blocktree};
 use solana::blocktree_processor::BankForksInfo;
 use solana::cluster_info::{ClusterInfo, Node};
@@ -37,20 +38,6 @@ fn new_gossip(
     exit: Arc<AtomicBool>,
 ) -> GossipService {
     GossipService::new(&cluster_info, None, None, gossip, exit)
-}
-
-fn create_test_recorder(bank: &Arc<Bank>) -> (Arc<Mutex<PohRecorder>>, PohService) {
-    let exit = Arc::new(AtomicBool::new(false));
-    let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
-        bank.tick_height(),
-        bank.last_id(),
-    )));
-    let poh_service = PohService::new(
-        poh_recorder.clone(),
-        &PohServiceConfig::default(),
-        exit.clone(),
-    );
-    (poh_recorder, poh_service)
 }
 
 /// Test that message sent from leader to target1 and replayed to target2
@@ -127,8 +114,7 @@ fn test_replay() {
             .expect("Expected to successfully open ledger");
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
-    let (to_leader_sender, _to_leader_receiver) = channel();
-    let (poh_recorder, poh_service) = create_test_recorder(&bank);
+    let (poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
     let tvu = Tvu::new(
         Some(Arc::new(voting_keypair)),
         &Arc::new(RwLock::new(bank_forks)),
@@ -144,7 +130,6 @@ fn test_replay() {
         Arc::new(blocktree),
         STORAGE_ROTATE_TEST_COUNT,
         &StorageState::default(),
-        to_leader_sender,
         None,
         ledger_signal_receiver,
         &Arc::new(RpcSubscriptions::default()),

@@ -120,10 +120,8 @@ impl Fullnode {
         let bank = bank_forks[bank_info.bank_id].clone();
 
         info!("starting PoH... {} {}", bank.tick_height(), bank.last_id(),);
-        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
-            bank.tick_height(),
-            bank.last_id(),
-        )));
+        let (poh_recorder, entry_receiver) = PohRecorder::new(bank.tick_height(), bank.last_id());
+        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, exit.clone());
 
         info!("node info: {:?}", node.info);
@@ -216,8 +214,6 @@ impl Fullnode {
         };
 
         // Setup channel for rotation indications
-        let (bank_sender, bank_receiver) = channel();
-
         let tvu = Tvu::new(
             voting_keypair_option,
             &bank_forks,
@@ -227,7 +223,6 @@ impl Fullnode {
             blocktree.clone(),
             config.storage_rotate_count,
             &storage_state,
-            bank_sender,
             config.blockstream.as_ref(),
             ledger_signal_receiver,
             &subscriptions,
@@ -236,8 +231,8 @@ impl Fullnode {
         let tpu = Tpu::new(
             id,
             &cluster_info,
-            bank_receiver,
             &poh_recorder,
+            entry_receiver,
             node.sockets.tpu,
             node.sockets.broadcast,
             config.sigverify_disabled,

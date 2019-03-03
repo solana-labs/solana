@@ -1,12 +1,12 @@
 //! A stage to broadcast data from a leader node to validators
 //!
-use crate::banking_stage::TpuBankEntries;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT};
 use crate::entry::EntrySlice;
 #[cfg(feature = "erasure")]
 use crate::erasure::CodingGenerator;
 use crate::packet::index_blobs;
+use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
@@ -40,7 +40,7 @@ impl Broadcast {
     fn run(
         &mut self,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<TpuBankEntries>,
+        receiver: &Receiver<WorkingBankEntries>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
@@ -178,7 +178,7 @@ impl BroadcastStage {
     fn run(
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        receiver: &Receiver<TpuBankEntries>,
+        receiver: &Receiver<WorkingBankEntries>,
         exit_signal: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
     ) -> BroadcastStageReturnType {
@@ -229,7 +229,7 @@ impl BroadcastStage {
     pub fn new(
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        receiver: Receiver<TpuBankEntries>,
+        receiver: Receiver<WorkingBankEntries>,
         exit_sender: Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
     ) -> Self {
@@ -281,7 +281,7 @@ mod test {
     fn setup_dummy_broadcast_service(
         leader_pubkey: Pubkey,
         ledger_path: &str,
-        entry_receiver: Receiver<TpuBankEntries>,
+        entry_receiver: Receiver<WorkingBankEntries>,
     ) -> MockBroadcastStage {
         // Make the database ledger
         let blocktree = Arc::new(Blocktree::open(ledger_path).unwrap());

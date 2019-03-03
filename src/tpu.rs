@@ -7,7 +7,7 @@ use crate::broadcast_stage::BroadcastStage;
 use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
 use crate::fetch_stage::FetchStage;
-use crate::poh_recorder::PohRecorder;
+use crate::poh_recorder::{PohRecorder, WorkingBankEntries};
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
 use solana_runtime::bank::Bank;
@@ -77,8 +77,8 @@ impl Tpu {
     pub fn new(
         id: Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        bank_receiver: Receiver<Arc<Bank>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
+        entry_receiver: Receiver<WorkingBankEntries>,
         transactions_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
@@ -96,12 +96,7 @@ impl Tpu {
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
-        let (banking_stage, entry_receiver) = BankingStage::new(
-            &cluster_info,
-            bank_receiver,
-            poh_recorder,
-            verified_receiver,
-        );
+        let banking_stage = BankingStage::new(&cluster_info, poh_recorder, verified_receiver);
 
         let broadcast_stage = BroadcastStage::new(
             broadcast_socket,

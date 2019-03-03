@@ -3,6 +3,7 @@
 //! observed by the leader
 
 use crate::leader_schedule_utils;
+use crate::poh_recorder::PohRecorder;
 use solana_metrics::{influxdb, submit};
 use solana_runtime::bank::Bank;
 use solana_sdk::timing;
@@ -96,20 +97,18 @@ impl LeaderConfirmationService {
     }
 
     /// Create a new LeaderConfirmationService for computing confirmation.
-    pub fn new(exit: Arc<AtomicBool>) -> (Self, JoinHandle<()>) {
-        let current_bank: Arc<Mutex<Option<Arc<Bank>>>> = Arc::new(Mutex::new(None));
-        let current_bank_ = current_bank.clone();
+    pub fn new(poh_recorder: &Arc<Mutex<PohRecorder>>, exit: Arc<AtomicBool>) -> JoinHandle<()> {
+        let poh_recorder = poh_recorder.clone();
         let thread_hdl = Builder::new()
             .name("solana-leader-confirmation-service".to_string())
             .spawn(move || {
                 let mut last_valid_validator_timestamp = 0;
-                let current_bank = current_bank_.clone();
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
                     // dont hold this lock too long
-                    let maybe_bank = current_bank.lock().unwrap().clone();
+                    let maybe_bank = poh_recorder.lock().unwrap().bank();
                     if let Some(ref bank) = maybe_bank {
                         Self::compute_confirmation(bank, &mut last_valid_validator_timestamp);
                     }
@@ -118,7 +117,7 @@ impl LeaderConfirmationService {
             })
             .unwrap();
 
-        (Self { current_bank }, thread_hdl)
+        thread_hdl
     }
 }
 
