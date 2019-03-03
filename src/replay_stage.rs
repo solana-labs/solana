@@ -382,67 +382,68 @@ mod test {
             replay_stage
                 .close()
                 .expect("Expect successful ReplayStage exit");
+            poh_service.close();
         }
         let _ignored = remove_dir_all(&my_ledger_path);
     }
 
-    //     #[test]
-    //     fn test_replay_stage_poh_ok_entry_receiver() {
-    //         let (forward_entry_sender, forward_entry_receiver) = channel();
-    //         let genesis_block = GenesisBlock::new(10_000).0;
-    //         let bank = Arc::new(Bank::new(&genesis_block));
-    //         let mut last_id = bank.last_id();
-    //         let mut entries = Vec::new();
-    //         for _ in 0..5 {
-    //             let entry = next_entry_mut(&mut last_id, 1, vec![]); //just ticks
-    //             entries.push(entry);
-    //         }
-    //
-    //         let mut progress = HashMap::new();
-    //         let res = ReplayStage::replay_entries_into_bank(
-    //             &bank,
-    //             entries.clone(),
-    //             &mut progress,
-    //             &forward_entry_sender,
-    //             0,
-    //         );
-    //         assert!(res.is_ok(), "replay failed {:?}", res);
-    //         let res = forward_entry_receiver.try_recv();
-    //         match res {
-    //             Ok(_) => (),
-    //             Err(e) => assert!(false, "Entries were not sent correctly {:?}", e),
-    //         }
-    //     }
-    //
-    //     #[test]
-    //     fn test_replay_stage_poh_error_entry_receiver() {
-    //         let (forward_entry_sender, forward_entry_receiver) = channel();
-    //         let mut entries = Vec::new();
-    //         for _ in 0..5 {
-    //             let entry = Entry::new(&mut Hash::default(), 1, vec![]); //just broken entries
-    //             entries.push(entry);
-    //         }
-    //
-    //         let genesis_block = GenesisBlock::new(10_000).0;
-    //         let bank = Arc::new(Bank::new(&genesis_block));
-    //         let mut progress = HashMap::new();
-    //         let res = ReplayStage::replay_entries_into_bank(
-    //             &bank,
-    //             entries.clone(),
-    //             &mut progress,
-    //             &forward_entry_sender,
-    //             0,
-    //         );
-    //
-    //         match res {
-    //             Ok(_) => assert!(false, "Should have failed because entries are broken"),
-    //             Err(Error::BlobError(BlobError::VerificationFailed)) => (),
-    //             Err(e) => assert!(
-    //                 false,
-    //                 "Should have failed because with blob error, instead, got {:?}",
-    //                 e
-    //             ),
-    //         }
-    //         assert!(forward_entry_receiver.try_recv().is_err());
-    //     }
+    #[test]
+    fn test_replay_stage_poh_ok_entry_receiver() {
+        let (forward_entry_sender, forward_entry_receiver) = channel();
+        let genesis_block = GenesisBlock::new(10_000).0;
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let mut last_id = bank.last_id();
+        let mut entries = Vec::new();
+        for _ in 0..5 {
+            let entry = next_entry_mut(&mut last_id, 1, vec![]); //just ticks
+            entries.push(entry);
+        }
+
+        let mut progress = HashMap::new();
+        let res = ReplayStage::replay_entries_into_bank(
+            &bank,
+            entries.clone(),
+            &mut progress,
+            &forward_entry_sender,
+            0,
+        );
+        assert!(res.is_ok(), "replay failed {:?}", res);
+        let res = forward_entry_receiver.try_recv();
+        match res {
+            Ok(_) => (),
+            Err(e) => assert!(false, "Entries were not sent correctly {:?}", e),
+        }
+    }
+
+    #[test]
+    fn test_replay_stage_poh_error_entry_receiver() {
+        let (forward_entry_sender, forward_entry_receiver) = channel();
+        let mut entries = Vec::new();
+        for _ in 0..5 {
+            let entry = Entry::new(&mut Hash::default(), 1, vec![]); //just broken entries
+            entries.push(entry);
+        }
+
+        let genesis_block = GenesisBlock::new(10_000).0;
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let mut progress = HashMap::new();
+        let res = ReplayStage::replay_entries_into_bank(
+            &bank,
+            entries.clone(),
+            &mut progress,
+            &forward_entry_sender,
+            0,
+        );
+
+        match res {
+            Ok(_) => assert!(false, "Should have failed because entries are broken"),
+            Err(Error::BlobError(BlobError::VerificationFailed)) => (),
+            Err(e) => assert!(
+                false,
+                "Should have failed because with blob error, instead, got {:?}",
+                e
+            ),
+        }
+        assert!(forward_entry_receiver.try_recv().is_err());
+    }
 }
