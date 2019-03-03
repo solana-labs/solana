@@ -7,7 +7,7 @@ use solana_metrics::counter::Counter;
 use solana_runtime::bank::{Bank, BankError, Result};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::timing::duration_as_ms;
-use solana_sdk::timing::MAX_RECENT_TICK_HASHES;
+use solana_sdk::timing::MAX_RECENT_BLOCKHASHES;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -35,7 +35,7 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> Re
             let results = bank.load_execute_and_commit_transactions(
                 &e.transactions,
                 lock_results.to_vec(),
-                MAX_RECENT_TICK_HASHES,
+                MAX_RECENT_BLOCKHASHES,
             );
             bank.unlock_accounts(&e.transactions, &results);
             first_err(&results)
