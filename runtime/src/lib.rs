@@ -1,5 +1,5 @@
 mod accounts;
-pub mod appendvec;
+pub mod append_vec;
 pub mod bank;
 pub mod bloom;
 mod hash_queue;
