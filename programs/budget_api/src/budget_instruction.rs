@@ -29,10 +29,13 @@ pub enum BudgetInstruction {
 
 impl BudgetInstruction {
     pub fn new_initialize_account(contract: Pubkey, expr: BudgetExpr) -> BuilderInstruction {
-        BuilderInstruction::new(
-            id(),
-            &BudgetInstruction::InitializeAccount(expr),
-            vec![(contract, false)],
-        )
+        let mut keys = vec![];
+        if let BudgetExpr::Pay(payment) = &expr {
+            keys.push((payment.to, false));
+        } else {
+            panic!("unsupported Budget instruction");
+        }
+        keys.push((contract, false));
+        BuilderInstruction::new(id(), &BudgetInstruction::InitializeAccount(expr), keys)
     }
 }
