@@ -179,7 +179,6 @@ impl Bank {
         bank.epoch_vote_accounts = {
             let mut epoch_vote_accounts = parent.epoch_vote_accounts.clone();
             let epoch = bank.epoch_from_stakers_slot_offset();
-
             // update epoch_vote_states cache
             //  if my parent didn't populate for this epoch, we've
             //  crossed a boundary
@@ -788,33 +787,8 @@ impl Bank {
     }
 
     ///  vote accounts for the specific epoch
-    pub fn epoch_vote_accounts<F, T>(&self, epoch: u64, filter: F) -> Option<HashMap<Pubkey, T>>
-    where
-        F: Fn(&Pubkey, &Account) -> Option<(Pubkey, T)>,
-    {
-        self.epoch_vote_accounts.get(&epoch).map(|accounts| {
-            accounts
-                .iter()
-                .filter_map(|(pubkey, account)| filter(pubkey, account))
-                .collect()
-        })
-    }
-
-    pub fn vote_states<F>(&self, cond: F) -> HashMap<Pubkey, VoteState>
-    where
-        F: Fn(&Pubkey, &VoteState) -> bool,
-    {
-        self.accounts()
-            .get_vote_accounts(self.accounts_id)
-            .filter_map(|(p, account)| {
-                if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
-                    if cond(&p, &vote_state) {
-                        return Some((p, vote_state));
-                    }
-                }
-                None
-            })
-            .collect()
+    pub fn epoch_vote_accounts(&self, epoch: u64) -> Option<&HashMap<Pubkey, Account>> {
+        self.epoch_vote_accounts.get(&epoch)
     }
 
     /// Return the number of slots since the last epoch boundary.
@@ -1497,30 +1471,31 @@ mod tests {
 
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let vote_accounts0 = parent.epoch_vote_accounts(0, |pubkey, account| {
-            if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
-                if vote_state.delegate_id == leader_id {
-                    Some((*pubkey, true))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
+        let vote_accounts0: Option<HashMap<_, _>> = parent.epoch_vote_accounts(0).map(|accounts| {
+            accounts
+                .iter()
+                .filter_map(|(pubkey, account)| {
+                    if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
+                        if vote_state.delegate_id == leader_id {
+                            Some((*pubkey, true))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect()
         });
         assert!(vote_accounts0.is_some());
         assert!(vote_accounts0.iter().len() != 0);
-
-        fn all(key: &Pubkey, _account: &Account) -> Option<(Pubkey, Option<()>)> {
-            Some((*key, None))
-        }
 
         let mut i = 1;
         loop {
             if i > STAKERS_SLOT_OFFSET / SLOTS_PER_EPOCH {
                 break;
             }
-            assert!(parent.epoch_vote_accounts(i, all).is_some());
+            assert!(parent.epoch_vote_accounts(i).is_some());
             i += 1;
         }
 
@@ -1531,7 +1506,7 @@ mod tests {
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH),
         );
 
-        assert!(child.epoch_vote_accounts(i, all).is_some());
+        assert!(child.epoch_vote_accounts(i).is_some());
 
         // child crosses epoch boundary but isn't the first slot in the epoch
         let child = Bank::new_from_parent(
@@ -1539,7 +1514,7 @@ mod tests {
             leader_id,
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH) + 1,
         );
-        assert!(child.epoch_vote_accounts(i, all).is_some());
+        assert!(child.epoch_vote_accounts(i).is_some());
     }
 
 }

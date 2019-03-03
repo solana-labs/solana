@@ -1,7 +1,9 @@
 use hashbrown::HashMap;
 use solana_runtime::bank::Bank;
+use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::VoteState;
+use std::borrow::Borrow;
 
 /// Looks through vote accounts, and finds the latest slot that has achieved
 /// supermajority lockout
@@ -15,97 +17,97 @@ pub fn get_supermajority_slot(bank: &Bank, epoch_height: u64) -> Option<u64> {
     find_supermajority_slot(supermajority_stake, stakes_and_lockouts.iter())
 }
 
-/// Collect the node Pubkey and staker account balance for nodes
-/// that have non-zero balance in their corresponding staking accounts
-pub fn node_stakes(bank: &Bank) -> HashMap<Pubkey, u64> {
-    sum_node_stakes(&node_stakes_extractor(bank, |stake, _| stake))
-}
-
-/// Return the checkpointed stakes that should be used to generate a leader schedule.
-pub fn node_stakes_at_epoch(bank: &Bank, epoch_height: u64) -> HashMap<Pubkey, u64> {
-    sum_node_stakes(&node_stakes_at_epoch_extractor(
-        bank,
-        epoch_height,
-        |stake, _| stake,
-    ))
-}
-
-/// Sum up all the staking accounts for each delegate
-fn sum_node_stakes(stakes: &HashMap<Pubkey, Vec<u64>>) -> HashMap<Pubkey, u64> {
-    stakes
-        .iter()
-        .map(|(delegate, stakes)| (*delegate, stakes.iter().sum()))
+pub fn vote_account_balances(bank: &Bank) -> HashMap<Pubkey, u64> {
+    let node_staked_accounts = node_staked_accounts(bank);
+    node_staked_accounts
+        .map(|(id, stake, _)| (id, stake))
         .collect()
 }
 
-/// Return the checkpointed stakes that should be used to generate a leader schedule.
-/// state_extractor takes (stake, vote_state) and maps to an output.
-fn node_stakes_at_epoch_extractor<F, T: Clone>(
+/// Collect the delegate account balance and vote states for delegates have non-zero balance in
+/// any of their managed staking accounts
+pub fn delegated_stakes(bank: &Bank) -> HashMap<Pubkey, u64> {
+    let node_staked_accounts = node_staked_accounts(bank);
+    let node_staked_vote_states = to_vote_state(node_staked_accounts);
+    to_delegated_stakes(node_staked_vote_states)
+}
+
+/// At the specified epoch, collect the node account balance and vote states for nodes that
+/// have non-zero balance in their corresponding staking accounts
+pub fn vote_account_balances_at_epoch(
     bank: &Bank,
     epoch_height: u64,
-    state_extractor: F,
-) -> HashMap<Pubkey, Vec<T>>
-where
-    F: Fn(u64, &VoteState) -> T,
-{
-    let epoch_slot_height = epoch_height * bank.slots_per_epoch();
-    node_stakes_at_slot_extractor(bank, epoch_slot_height, state_extractor)
+) -> Option<HashMap<Pubkey, u64>> {
+    let node_staked_accounts = node_staked_accounts_at_epoch(bank, epoch_height);
+    node_staked_accounts.map(|epoch_state| epoch_state.map(|(id, stake, _)| (*id, stake)).collect())
 }
 
-/// Return the checkpointed stakes that should be used to generate a leader schedule.
-/// state_extractor takes (stake, vote_state) and maps to an output
-fn node_stakes_at_slot_extractor<F, T: Clone>(
+/// At the specified epoch, collect the delgate account balance and vote states for delegates
+/// that have non-zero balance in any of their managed staking accounts
+pub fn delegated_stakes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashMap<Pubkey, u64>> {
+    let node_staked_accounts = node_staked_accounts_at_epoch(bank, epoch_height);
+    let node_staked_vote_states = node_staked_accounts.map(to_vote_state);
+    node_staked_vote_states.map(to_delegated_stakes)
+}
+
+/// Collect the node account balance and vote states for nodes have non-zero balance in
+/// their corresponding staking accounts
+fn node_staked_accounts(bank: &Bank) -> impl Iterator<Item = (Pubkey, u64, Account)> {
+    bank.vote_accounts().filter_map(|(account_id, account)| {
+        filter_zero_balances(&account).map(|stake| (account_id, stake, account))
+    })
+}
+
+fn node_staked_accounts_at_epoch(
     bank: &Bank,
-    current_slot_height: u64,
-    state_extractor: F,
-) -> HashMap<Pubkey, Vec<T>>
-where
-    F: Fn(u64, &VoteState) -> T,
-{
-    let slot_height = current_slot_height.saturating_sub(bank.stakers_slot_offset());
-
-    let parents = bank.parents();
-    let mut banks = vec![bank];
-    banks.extend(parents.iter().map(|x| x.as_ref()));
-
-    let bank = banks
-        .iter()
-        .find(|bank| bank.slot() <= slot_height)
-        .unwrap_or_else(|| banks.last().unwrap());
-
-    node_stakes_extractor(bank, state_extractor)
+    epoch_height: u64,
+) -> Option<impl Iterator<Item = (&Pubkey, u64, &Account)>> {
+    bank.epoch_vote_accounts(epoch_height).map(|epoch_state| {
+        epoch_state.into_iter().filter_map(|(account_id, account)| {
+            filter_zero_balances(account).map(|stake| (account_id, stake, account))
+        })
+    })
 }
 
-/// Collect the node Pubkey and staker account balance for nodes
-/// that have non-zero balance in their corresponding staker accounts.
-/// state_extractor takes (stake, vote_state) and maps to an output
-fn node_stakes_extractor<F, T: Clone>(bank: &Bank, state_extractor: F) -> HashMap<Pubkey, Vec<T>>
-where
-    F: Fn(u64, &VoteState) -> T,
-{
-    let mut map: HashMap<Pubkey, Vec<T>> = HashMap::new();
-    let vote_states = bank.vote_states(|account_id, _| bank.get_balance(&account_id) > 0);
-    vote_states.into_iter().for_each(|(account_id, state)| {
-        if map.contains_key(&state.delegate_id) {
-            let entry = map.get_mut(&state.delegate_id).unwrap();
-            entry.push(state_extractor(bank.get_balance(&account_id), &state));
-        } else {
-            map.insert(
-                state.delegate_id,
-                vec![state_extractor(bank.get_balance(&account_id), &state)],
-            );
-        }
+fn filter_zero_balances(account: &Account) -> Option<u64> {
+    let balance = Bank::read_balance(&account);
+    if balance > 0 {
+        Some(balance)
+    } else {
+        None
+    }
+}
+
+fn to_vote_state(
+    node_staked_accounts: impl Iterator<Item = (impl Borrow<Pubkey>, u64, impl Borrow<Account>)>,
+) -> impl Iterator<Item = (u64, VoteState)> {
+    node_staked_accounts.filter_map(|(_, stake, account)| {
+        VoteState::deserialize(&account.borrow().userdata)
+            .ok()
+            .map(|vote_state| (stake, vote_state))
+    })
+}
+
+fn to_delegated_stakes(
+    node_staked_accounts: impl Iterator<Item = (u64, VoteState)>,
+) -> HashMap<Pubkey, u64> {
+    let mut map: HashMap<Pubkey, u64> = HashMap::new();
+    node_staked_accounts.for_each(|(stake, state)| {
+        let delegate = &state.delegate_id;
+        map.entry(*delegate)
+            .and_modify(|s| *s += stake)
+            .or_insert(stake);
     });
     map
 }
 
 fn epoch_stakes_and_lockouts(bank: &Bank, epoch_height: u64) -> Vec<(u64, Option<u64>)> {
-    node_stakes_at_epoch_extractor(bank, epoch_height, |stake, states| {
-        (stake, states.root_slot)
-    })
-    .into_iter()
-    .flat_map(|(_, stake_and_states)| stake_and_states)
-    .collect()
+    let node_staked_accounts =
+        node_staked_accounts_at_epoch(bank, epoch_height).expect("Bank state for epoch is missing");
+    let node_staked_vote_states = to_vote_state(node_staked_accounts);
+    node_staked_vote_states
+        .map(|(stake, states)| (stake, states.root_slot))
+        .collect()
 }
 
 fn find_supermajority_slot<'a, I>(supermajority_stake: u64, stakes_and_lockouts: I) -> Option<u64>
@@ -138,21 +140,13 @@ mod tests {
     use crate::voting_keypair::tests as voting_keypair_tests;
     use hashbrown::HashSet;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::iter::FromIterator;
     use std::sync::Arc;
 
-    fn register_ticks(bank: &Bank, n: u64) -> (u64, u64, u64) {
-        for _ in 0..n {
-            bank.register_tick(&Hash::default());
-        }
-        (bank.tick_index(), bank.slot_index(), bank.epoch_height())
-    }
-
-    fn new_from_parent(parent: &Arc<Bank>) -> Bank {
-        Bank::new_from_parent(parent, Pubkey::default(), parent.slot() + 1)
+    fn new_from_parent(parent: &Arc<Bank>, slot: u64) -> Bank {
+        Bank::new_from_parent(parent, Pubkey::default(), slot)
     }
 
     #[test]
@@ -162,18 +156,20 @@ mod tests {
         let (genesis_block, _) =
             GenesisBlock::new_with_leader(bootstrap_tokens, pubkey, bootstrap_tokens);
         let bank = Bank::new(&genesis_block);
-        let bank = new_from_parent(&Arc::new(bank));
-        let ticks_per_offset = bank.stakers_slot_offset() * bank.ticks_per_slot();
-        register_ticks(&bank, ticks_per_offset);
-        assert_eq!(bank.slot_height(), bank.stakers_slot_offset());
 
+        // Epoch doesn't exist
         let mut expected = HashMap::new();
-        expected.insert(pubkey, vec![bootstrap_tokens - 2]);
-        let bank = new_from_parent(&Arc::new(bank));
-        assert_eq!(
-            node_stakes_at_slot_extractor(&bank, bank.slot_height(), |s, _| s),
-            expected
-        );
+        assert_eq!(vote_account_balances_at_epoch(&bank, 10), None);
+
+        // First epoch has the bootstrap leader
+        expected.insert(genesis_block.bootstrap_leader_vote_account_id, 1);
+        let expected = Some(expected);
+        assert_eq!(vote_account_balances_at_epoch(&bank, 0), expected);
+
+        // Second epoch carries same information
+        let bank = new_from_parent(&Arc::new(bank), 1);
+        assert_eq!(vote_account_balances_at_epoch(&bank, 0), expected);
+        assert_eq!(vote_account_balances_at_epoch(&bank, 1), expected);
     }
 
     #[test]
@@ -185,17 +181,27 @@ mod tests {
         let bank_voter = Keypair::new();
 
         // Give the validator some stake but don't setup a staking account
+        // Validator has no tokens staked, so they get filtered out. Only the bootstrap leader
+        // created by the genesis block will get included
         bank.transfer(1, &mint_keypair, validator.pubkey(), genesis_block.hash())
             .unwrap();
 
-        // Validator has no token staked, so they get filtered out. Only the bootstrap leader
-        // created by the genesis block will get included
-        let expected: Vec<_> = epoch_stakes_and_lockouts(&bank, 0);
-        assert_eq!(expected, vec![(1, None)]);
-
+        // Make a mint vote account. Because the mint has nonzero stake, this
+        // should show up in the active set
         voting_keypair_tests::new_vote_account_with_vote(&mint_keypair, &bank_voter, &bank, 499, 0);
 
-        let result: HashSet<_> = HashSet::from_iter(epoch_stakes_and_lockouts(&bank, 0));
+        // Have to wait until the epoch at (stakers_slot_offset / slots_per_epoch) + 1
+        // for the new votes to take effect. Earlier epochs were generated by genesis
+        let epoch = (bank.stakers_slot_offset() / bank.slots_per_epoch()) + 1;
+        let epoch_slot = epoch * bank.slots_per_epoch();
+        let epoch_slot_offset = epoch_slot - bank.stakers_slot_offset();
+
+        let bank = new_from_parent(&Arc::new(bank), epoch_slot_offset);
+
+        let result: Vec<_> = epoch_stakes_and_lockouts(&bank, 0);
+        assert_eq!(result, vec![(1, None)]);
+
+        let result: HashSet<_> = HashSet::from_iter(epoch_stakes_and_lockouts(&bank, epoch));
         let expected: HashSet<_> = HashSet::from_iter(vec![(1, None), (499, None)]);
         assert_eq!(result, expected);
     }
@@ -248,13 +254,22 @@ mod tests {
     }
 
     #[test]
-    fn test_sum_node_stakes() {
-        let mut stakes = HashMap::new();
-        stakes.insert(Pubkey::default(), vec![1, 2, 3, 4, 5]);
-        assert_eq!(sum_node_stakes(&stakes).len(), 1);
-        assert_eq!(
-            sum_node_stakes(&stakes).get(&Pubkey::default()),
-            Some(&15_u64)
-        );
+    fn test_to_delegated_stakes() {
+        let mut stakes = Vec::new();
+        let delegate1 = Keypair::new().pubkey();
+        let delegate2 = Keypair::new().pubkey();
+
+        // Delegate 1 has stake of 3
+        for i in 0..3 {
+            stakes.push((i, VoteState::new(delegate1)));
+        }
+
+        // Delegate 1 has stake of 5
+        stakes.push((5, VoteState::new(delegate2)));
+
+        let result = to_delegated_stakes(stakes.into_iter());
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[&delegate1], 3);
+        assert_eq!(result[&delegate2], 5);
     }
 }

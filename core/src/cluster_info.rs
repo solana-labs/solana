@@ -877,9 +877,9 @@ impl ClusterInfo {
                 loop {
                     let start = timestamp();
                     let stakes: HashMap<_, _> = match bank_forks {
-                        Some(ref bank_forks) => {
-                            staking_utils::node_stakes(&bank_forks.read().unwrap().working_bank())
-                        }
+                        Some(ref bank_forks) => staking_utils::delegated_stakes(
+                            &bank_forks.read().unwrap().working_bank(),
+                        ),
                         None => HashMap::new(),
                     };
                     let _ = Self::run_gossip(&obj, &stakes, &blob_sender);
