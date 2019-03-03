@@ -139,14 +139,14 @@ impl BankingStage {
                     return Ok(bank);
                 }
             }
-            if let Some(leader) = cluster_info.read().unwrap().leader_data() {
-                while let Ok(mms) = verified_receiver.lock().unwrap().try_recv() {
+            while let Ok(mms) = verified_receiver.lock().unwrap().try_recv() {
+                if let Some(leader) = cluster_info.read().unwrap().leader_data() {
                     let _ = Self::forward_verified_packets(&leader.tpu, mms);
-                    let result = bank_receiver.try_recv();
-                    if result.is_ok() {
-                        let bank = result?;
-                        return Ok(bank);
-                    }
+                }
+                let result = bank_receiver.try_recv();
+                if result.is_ok() {
+                    let bank = result?;
+                    return Ok(bank);
                 }
             }
         }
