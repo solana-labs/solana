@@ -1,95 +1,141 @@
 //! budget program
-use bincode::{self, deserialize, serialize_into, serialized_size};
+use crate::budget_state::{BudgetError, BudgetState};
+use bincode::deserialize;
 use chrono::prelude::{DateTime, Utc};
 use log::*;
-use serde_derive::{Deserialize, Serialize};
-use solana_budget_api::budget_expr::BudgetExpr;
-use solana_budget_api::budget_instruction::Instruction;
+use solana_budget_api::budget_instruction::BudgetInstruction;
 use solana_budget_api::payment_plan::Witness;
 use solana_sdk::account::KeyedAccount;
-use std::io;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum BudgetError {
-    InsufficientFunds,
-    ContractAlreadyExists,
-    ContractNotPending,
-    SourceIsPendingContract,
-    UninitializedContract,
-    NegativeTokens,
-    DestinationMissing,
-    FailedWitness,
-    UserdataTooSmall,
-    UserdataDeserializeFailure,
-    UnsignedKey,
+/// Process a Witness Signature. Any payment plans waiting on this signature
+/// will progress one step.
+fn apply_signature(
+    budget_state: &mut BudgetState,
+    keyed_accounts: &mut [KeyedAccount],
+) -> Result<(), BudgetError> {
+    let mut final_payment = None;
+    if let Some(ref mut expr) = budget_state.pending_budget {
+        let key = match keyed_accounts[0].signer_key() {
+            None => return Err(BudgetError::UnsignedKey),
+            Some(key) => key,
+        };
+        expr.apply_witness(&Witness::Signature, key);
+        final_payment = expr.final_payment();
+    }
+
+    if let Some(payment) = final_payment {
+        if let Some(key) = keyed_accounts[0].signer_key() {
+            if &payment.to == key {
+                budget_state.pending_budget = None;
+                keyed_accounts[1].account.tokens -= payment.tokens;
+                keyed_accounts[0].account.tokens += payment.tokens;
+                return Ok(());
+            }
+        }
+        if &payment.to != keyed_accounts[2].unsigned_key() {
+            trace!("destination missing");
+            return Err(BudgetError::DestinationMissing);
+        }
+        budget_state.pending_budget = None;
+        keyed_accounts[1].account.tokens -= payment.tokens;
+        keyed_accounts[2].account.tokens += payment.tokens;
+    }
+    Ok(())
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
-pub struct BudgetProgram {
-    pub initialized: bool,
-    pub pending_budget: Option<BudgetExpr>,
+/// Process a Witness Timestamp. Any payment plans waiting on this timestamp
+/// will progress one step.
+fn apply_timestamp(
+    budget_state: &mut BudgetState,
+    keyed_accounts: &mut [KeyedAccount],
+    dt: DateTime<Utc>,
+) -> Result<(), BudgetError> {
+    // Check to see if any timelocked transactions can be completed.
+    let mut final_payment = None;
+
+    if let Some(ref mut expr) = budget_state.pending_budget {
+        let key = match keyed_accounts[0].signer_key() {
+            None => return Err(BudgetError::UnsignedKey),
+            Some(key) => key,
+        };
+        expr.apply_witness(&Witness::Timestamp(dt), key);
+        final_payment = expr.final_payment();
+    }
+
+    if let Some(payment) = final_payment {
+        if &payment.to != keyed_accounts[2].unsigned_key() {
+            trace!("destination missing");
+            return Err(BudgetError::DestinationMissing);
+        }
+        budget_state.pending_budget = None;
+        keyed_accounts[1].account.tokens -= payment.tokens;
+        keyed_accounts[2].account.tokens += payment.tokens;
+    }
+    Ok(())
 }
 
 fn apply_debits(
     keyed_accounts: &mut [KeyedAccount],
-    instruction: &Instruction,
+    instruction: &BudgetInstruction,
 ) -> Result<(), BudgetError> {
     if !keyed_accounts[0].account.userdata.is_empty() {
         trace!("source is pending");
         return Err(BudgetError::SourceIsPendingContract);
     }
     match instruction {
-        Instruction::NewBudget(expr) => {
+        BudgetInstruction::InitializeAccount(expr) => {
             let expr = expr.clone();
             if let Some(payment) = expr.final_payment() {
                 keyed_accounts[1].account.tokens += payment.tokens;
                 Ok(())
             } else {
-                let existing = BudgetProgram::deserialize(&keyed_accounts[1].account.userdata).ok();
+                let existing = BudgetState::deserialize(&keyed_accounts[1].account.userdata).ok();
                 if Some(true) == existing.map(|x| x.initialized) {
                     trace!("contract already exists");
                     Err(BudgetError::ContractAlreadyExists)
                 } else {
-                    let mut program = BudgetProgram::default();
-                    program.pending_budget = Some(expr);
+                    let mut budget_state = BudgetState::default();
+                    budget_state.pending_budget = Some(expr);
                     keyed_accounts[1].account.tokens += keyed_accounts[0].account.tokens;
                     keyed_accounts[0].account.tokens = 0;
-                    program.initialized = true;
-                    program.serialize(&mut keyed_accounts[1].account.userdata)
+                    budget_state.initialized = true;
+                    budget_state.serialize(&mut keyed_accounts[1].account.userdata)
                 }
             }
         }
-        Instruction::ApplyTimestamp(dt) => {
-            if let Ok(mut program) = BudgetProgram::deserialize(&keyed_accounts[1].account.userdata)
+        BudgetInstruction::ApplyTimestamp(dt) => {
+            if let Ok(mut budget_state) =
+                BudgetState::deserialize(&keyed_accounts[1].account.userdata)
             {
-                if !program.is_pending() {
+                if !budget_state.is_pending() {
                     Err(BudgetError::ContractNotPending)
-                } else if !program.initialized {
+                } else if !budget_state.initialized {
                     trace!("contract is uninitialized");
                     Err(BudgetError::UninitializedContract)
                 } else {
                     trace!("apply timestamp");
-                    program.apply_timestamp(keyed_accounts, *dt)?;
+                    apply_timestamp(&mut budget_state, keyed_accounts, *dt)?;
                     trace!("apply timestamp committed");
-                    program.serialize(&mut keyed_accounts[1].account.userdata)
+                    budget_state.serialize(&mut keyed_accounts[1].account.userdata)
                 }
             } else {
                 Err(BudgetError::UninitializedContract)
             }
         }
-        Instruction::ApplySignature => {
-            if let Ok(mut program) = BudgetProgram::deserialize(&keyed_accounts[1].account.userdata)
+        BudgetInstruction::ApplySignature => {
+            if let Ok(mut budget_state) =
+                BudgetState::deserialize(&keyed_accounts[1].account.userdata)
             {
-                if !program.is_pending() {
+                if !budget_state.is_pending() {
                     Err(BudgetError::ContractNotPending)
-                } else if !program.initialized {
+                } else if !budget_state.initialized {
                     trace!("contract is uninitialized");
                     Err(BudgetError::UninitializedContract)
                 } else {
                     trace!("apply signature");
-                    program.apply_signature(keyed_accounts)?;
+                    apply_signature(&mut budget_state, keyed_accounts)?;
                     trace!("apply signature committed");
-                    program.serialize(&mut keyed_accounts[1].account.userdata)
+                    budget_state.serialize(&mut keyed_accounts[1].account.userdata)
                 }
             } else {
                 Err(BudgetError::UninitializedContract)
@@ -115,115 +161,9 @@ pub fn process_instruction(
     }
 }
 
-impl BudgetProgram {
-    fn is_pending(&self) -> bool {
-        self.pending_budget != None
-    }
-    /// Process a Witness Signature. Any payment plans waiting on this signature
-    /// will progress one step.
-    fn apply_signature(&mut self, keyed_accounts: &mut [KeyedAccount]) -> Result<(), BudgetError> {
-        let mut final_payment = None;
-        if let Some(ref mut expr) = self.pending_budget {
-            let key = match keyed_accounts[0].signer_key() {
-                None => return Err(BudgetError::UnsignedKey),
-                Some(key) => key,
-            };
-            expr.apply_witness(&Witness::Signature, key);
-            final_payment = expr.final_payment();
-        }
-
-        if let Some(payment) = final_payment {
-            if let Some(key) = keyed_accounts[0].signer_key() {
-                if &payment.to == key {
-                    self.pending_budget = None;
-                    keyed_accounts[1].account.tokens -= payment.tokens;
-                    keyed_accounts[0].account.tokens += payment.tokens;
-                    return Ok(());
-                }
-            }
-            if &payment.to != keyed_accounts[2].unsigned_key() {
-                trace!("destination missing");
-                return Err(BudgetError::DestinationMissing);
-            }
-            self.pending_budget = None;
-            keyed_accounts[1].account.tokens -= payment.tokens;
-            keyed_accounts[2].account.tokens += payment.tokens;
-        }
-        Ok(())
-    }
-
-    /// Process a Witness Timestamp. Any payment plans waiting on this timestamp
-    /// will progress one step.
-    fn apply_timestamp(
-        &mut self,
-        keyed_accounts: &mut [KeyedAccount],
-        dt: DateTime<Utc>,
-    ) -> Result<(), BudgetError> {
-        // Check to see if any timelocked transactions can be completed.
-        let mut final_payment = None;
-
-        if let Some(ref mut expr) = self.pending_budget {
-            let key = match keyed_accounts[0].signer_key() {
-                None => return Err(BudgetError::UnsignedKey),
-                Some(key) => key,
-            };
-            expr.apply_witness(&Witness::Timestamp(dt), key);
-            final_payment = expr.final_payment();
-        }
-
-        if let Some(payment) = final_payment {
-            if &payment.to != keyed_accounts[2].unsigned_key() {
-                trace!("destination missing");
-                return Err(BudgetError::DestinationMissing);
-            }
-            self.pending_budget = None;
-            keyed_accounts[1].account.tokens -= payment.tokens;
-            keyed_accounts[2].account.tokens += payment.tokens;
-        }
-        Ok(())
-    }
-
-    fn serialize(&self, output: &mut [u8]) -> Result<(), BudgetError> {
-        let len = serialized_size(self).unwrap() as u64;
-        if output.len() < len as usize {
-            warn!(
-                "{} bytes required to serialize, only have {} bytes",
-                len,
-                output.len()
-            );
-            return Err(BudgetError::UserdataTooSmall);
-        }
-        {
-            let writer = io::BufWriter::new(&mut output[..8]);
-            serialize_into(writer, &len).unwrap();
-        }
-
-        {
-            let writer = io::BufWriter::new(&mut output[8..8 + len as usize]);
-            serialize_into(writer, self).unwrap();
-        }
-        Ok(())
-    }
-
-    pub fn deserialize(input: &[u8]) -> bincode::Result<Self> {
-        if input.len() < 8 {
-            return Err(Box::new(bincode::ErrorKind::SizeLimit));
-        }
-        let len: u64 = deserialize(&input[..8]).unwrap();
-        if len < 2 {
-            return Err(Box::new(bincode::ErrorKind::SizeLimit));
-        }
-        if input.len() < 8 + len as usize {
-            return Err(Box::new(bincode::ErrorKind::SizeLimit));
-        }
-        deserialize(&input[8..8 + len as usize])
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use bincode::serialize;
     use solana_budget_api::budget_transaction::BudgetTransaction;
     use solana_budget_api::id;
     use solana_sdk::account::Account;
@@ -256,26 +196,6 @@ mod test {
         super::process_instruction(&mut keyed_accounts, &userdata)
     }
     #[test]
-    fn test_serializer() {
-        let mut a = Account::new(0, 512, id());
-        let b = BudgetProgram::default();
-        b.serialize(&mut a.userdata).unwrap();
-        let buf = serialize(&b).unwrap();
-        assert_eq!(a.userdata[8..8 + buf.len()], buf[0..]);
-        let c = BudgetProgram::deserialize(&a.userdata).unwrap();
-        assert_eq!(b, c);
-    }
-
-    #[test]
-    fn test_serializer_userdata_too_small() {
-        let mut a = Account::new(0, 1, id());
-        let b = BudgetProgram::default();
-        assert_eq!(
-            b.serialize(&mut a.userdata),
-            Err(BudgetError::UserdataTooSmall)
-        );
-    }
-    #[test]
     fn test_invalid_instruction() {
         let mut accounts = vec![Account::new(1, 0, id()), Account::new(0, 512, id())];
         let from = Keypair::new();
@@ -300,7 +220,7 @@ mod test {
             Account::new(0, 0, id()),
         ];
 
-        // Initialize BudgetProgram
+        // Initialize BudgetState
         let from = Keypair::new();
         let contract = Keypair::new().pubkey();
         let to = Keypair::new().pubkey();
@@ -339,7 +259,7 @@ mod test {
             Account::new(0, 0, id()),
         ];
 
-        // Initialize BudgetProgram
+        // Initialize BudgetState
         let from = Keypair::new();
         let contract = Keypair::new().pubkey();
         let to = Keypair::new().pubkey();
@@ -399,8 +319,8 @@ mod test {
         process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 1);
-        let program = BudgetProgram::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert!(program.is_pending());
+        let budget_state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(budget_state.is_pending());
 
         // Attack! Try to payout to a rando key
         let tx = BudgetTransaction::new_timestamp(
@@ -418,8 +338,8 @@ mod test {
         assert_eq!(accounts[contract_account].tokens, 1);
         assert_eq!(accounts[to_account].tokens, 0);
 
-        let program = BudgetProgram::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert!(program.is_pending());
+        let budget_state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(budget_state.is_pending());
 
         // Now, acknowledge the time in the condition occurred and
         // that pubkey's funds are now available.
@@ -435,8 +355,8 @@ mod test {
         assert_eq!(accounts[contract_account].tokens, 0);
         assert_eq!(accounts[to_account].tokens, 1);
 
-        let program = BudgetProgram::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert!(!program.is_pending());
+        let budget_state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(!budget_state.is_pending());
 
         // try to replay the timestamp contract
         assert_eq!(
@@ -474,8 +394,8 @@ mod test {
         process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 1);
-        let program = BudgetProgram::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert!(program.is_pending());
+        let budget_state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(budget_state.is_pending());
 
         // Attack! try to put the tokens into the wrong account with cancel
         let tx =
@@ -539,7 +459,7 @@ mod test {
         );
 
         assert!(process_transaction(&tx, &mut accounts).is_err());
-        assert!(BudgetProgram::deserialize(&accounts[1].userdata).is_err());
+        assert!(BudgetState::deserialize(&accounts[1].userdata).is_err());
 
         let tx = BudgetTransaction::new_timestamp(
             &from,
@@ -549,7 +469,7 @@ mod test {
             Hash::default(),
         );
         assert!(process_transaction(&tx, &mut accounts).is_err());
-        assert!(BudgetProgram::deserialize(&accounts[1].userdata).is_err());
+        assert!(BudgetState::deserialize(&accounts[1].userdata).is_err());
 
         // Success if there was no panic...
     }
