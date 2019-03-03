@@ -37,20 +37,16 @@ fn main() {
 
         rerun_if_changed(
             &[
-                "../../../sdk/bpf/bpf.ld",
-                "../../../sdk/bpf/bpf.mk",
-                "../../bpf/c/makefile",
+                "../../sdk/bpf/bpf.ld",
+                "../../sdk/bpf/bpf.mk",
+                "../bpf/c/makefile",
             ],
-            &[
-                "../../../sdk/bpf/inc",
-                "../../../sdk/bpf/scripts",
-                "../../bpf/c/src",
-            ],
+            &["../../sdk/bpf/inc", "../../sdk/bpf/scripts", "../bpf/c/src"],
         );
 
         println!("cargo:warning=(not a warning) Compiling C-based BPF programs");
         let status = Command::new("make")
-            .current_dir("../../bpf/c")
+            .current_dir("../bpf/c")
             .arg("programs")
             .arg(&out_dir)
             .status()
@@ -61,10 +57,10 @@ fn main() {
     let bpf_rust = !env::var("CARGO_FEATURE_BPF_RUST").is_err();
     if bpf_rust {
         let install_dir =
-            "../../../../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
+            "../../../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
 
         if !Path::new(
-            "../../bpf/rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
+            "../bpf/rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
         )
         .is_file()
         {
@@ -79,19 +75,19 @@ fn main() {
 
         rerun_if_changed(
             &[
-                "../../bpf/rust/noop/bpf.ld",
-                "../../bpf/rust/noop/build.sh",
-                "../../bpf/rust/noop/Cargo.toml",
-                "../../bpf/rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
+                "../bpf/rust/noop/bpf.ld",
+                "../bpf/rust/noop/build.sh",
+                "../bpf/rust/noop/Cargo.toml",
+                "../bpf/rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
             ],
-            &["../../bpf/rust/noop/src"],
+            &["../bpf/rust/noop/src"],
         );
 
         println!(
             "cargo:warning=(not a warning) Installing Rust-based BPF program: solana_bpf_rust_noop"
         );
         let status = Command::new("mkdir")
-            .current_dir("../../bpf/rust/noop")
+            .current_dir("../bpf/rust/noop")
             .arg("-p")
             .arg(&install_dir)
             .status()
@@ -99,7 +95,7 @@ fn main() {
         assert!(status.success());
 
         let status = Command::new("cp")
-            .current_dir("../../bpf/rust/noop")
+            .current_dir("../bpf/rust/noop")
             .arg("target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so")
             .arg(&install_dir)
             .status()
