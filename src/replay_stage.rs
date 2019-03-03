@@ -176,14 +176,7 @@ impl ReplayStage {
                                     tpu_bank.slot(),
                                     next_leader
                                 );
-                			let max_tick_height = (tpu_bank.slot() + 1) * tpu_bank.ticks_per_slot() - 1;
-                			let working_bank = WorkingBank {
-                			    bank: tpu_bank.clone(),
-                			    min_tick_height: tpu_bank.tick_height(),
-                			    max_tick_height,
-                			};
-                			poh_recorder.lock().unwrap().set_working_bank(working_bank);
-
+                				poh_recorder.lock().unwrap().set_bank(&tpu_bank);
                             }
                         }
                     }

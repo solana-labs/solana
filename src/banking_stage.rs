@@ -392,41 +392,35 @@ mod tests {
         poh_service.close().unwrap();
     }
 
-    //    #[test]
-    //    fn test_banking_stage_tick() {
-    //        solana_logger::setup();
-    //        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-    //        let bank = Arc::new(Bank::new(&genesis_block));
-    //        let start_hash = bank.last_id();
-    //        let (bank_sender, bank_receiver) = channel();
-    //        let (verified_sender, verified_receiver) = channel();
-    //        let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    //        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
-    //        let cluster_info = Arc::new(RwLock::new(cluster_info));
-    //        let (banking_stage, entry_receiver) = BankingStage::new(
-    //            &cluster_info,
-    //            bank_receiver,
-    //            &poh_recorder,
-    //            verified_receiver,
-    //        );
-    //        trace!("sending bank");
-    //        bank_sender.send(bank.clone()).expect("send");
-    //        sleep(Duration::from_millis(500));
-    //        drop(verified_sender);
-    //        drop(bank_sender);
-    //
-    //        trace!("getting entries");
-    //        let entries: Vec<_> = entry_receiver
-    //            .iter()
-    //            .flat_map(|x| x.1.into_iter().map(|e| e.0))
-    //            .collect();
-    //        trace!("done");
-    //        assert!(entries.len() != 0);
-    //        assert!(entries.verify(&start_hash));
-    //        assert_eq!(entries[entries.len() - 1].hash, bank.last_id());
-    //        banking_stage.join().unwrap();
-    //        poh_service.close().unwrap();
-    //    }
+    #[test]
+    fn test_banking_stage_tick() {
+        solana_logger::setup();
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let start_hash = bank.last_id();
+        let (verified_sender, verified_receiver) = channel();
+        let (poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
+        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        poh_recorder.lock().unwrap().set_bank(&bank);
+        let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
+        trace!("sending bank");
+        sleep(Duration::from_millis(500));
+        drop(verified_sender);
+        poh_service.close().unwrap();
+		drop(poh_recorder);
+
+        trace!("getting entries");
+        let entries: Vec<_> = entry_receiver
+            .iter()
+            .flat_map(|x| x.1.into_iter().map(|e| e.0))
+            .collect();
+        trace!("done");
+        assert!(entries.len() != 0);
+        assert!(entries.verify(&start_hash));
+        assert_eq!(entries[entries.len() - 1].hash, bank.last_id());
+        banking_stage.join().unwrap();
+    }
     //
     //    #[test]
     //    fn test_banking_stage_entries_only() {

@@ -161,7 +161,10 @@ mod tests {
             &PohServiceConfig::Tick(HASHES_PER_TICK as usize),
             Arc::new(AtomicBool::new(false)),
         );
-        poh_recorder.lock().unwrap().set_working_bank(working_bank);
+        poh_recorder
+            .lock()
+            .unwrap()
+            .set_working_bank(working_bank);
 
         // get some events
         let mut hashes = 0;
@@ -219,7 +222,10 @@ mod tests {
             Arc::new(AtomicBool::new(false)),
         );
 
-        poh_recorder.lock().unwrap().set_working_bank(working_bank);
+        poh_recorder
+            .lock()
+            .unwrap()
+            .set_working_bank(working_bank);
 
         // all 5 ticks are expected, there is no tick 0
         // First 4 ticks must be sent all at once, since bank shouldn't see them until
