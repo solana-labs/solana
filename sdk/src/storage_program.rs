@@ -61,7 +61,7 @@ pub enum StorageProgram {
     },
 }
 
-pub const STORAGE_PROGRAM_ID: [u8; 32] = [
+const STORAGE_PROGRAM_ID: [u8; 32] = [
     130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0,
 ];

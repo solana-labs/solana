@@ -5,7 +5,7 @@ pub mod payment_plan;
 
 use solana_sdk::pubkey::Pubkey;
 
-pub const BUDGET_PROGRAM_ID: [u8; 32] = [
+const BUDGET_PROGRAM_ID: [u8; 32] = [
     129, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0,
 ];

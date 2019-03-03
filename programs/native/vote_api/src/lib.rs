@@ -4,7 +4,7 @@ pub mod vote_transaction;
 
 use solana_sdk::pubkey::Pubkey;
 
-pub const VOTE_PROGRAM_ID: [u8; 32] = [
+const VOTE_PROGRAM_ID: [u8; 32] = [
     132, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0,
 ];
