@@ -19,12 +19,12 @@ erasure = ["solana/erasure"]
 
 [dependencies]
 solana = { path = "../core", version = "0.12.0" }
-solana-bpfloader = { path = "native/bpf_loader", version = "0.12.0" }
+solana-bpfloader = { path = "bpf_loader", version = "0.12.0" }
 solana-logger = { path = "../logger", version = "0.12.0" }
-solana-native-loader = { path = "native/native_loader", version = "0.12.0" }
+solana-native-loader = { path = "native_loader", version = "0.12.0" }
 solana-runtime = { path = "../runtime", version = "0.12.0" }
 solana-sdk = { path = "../sdk", version = "0.12.0" }
 
 [dev-dependencies]
-solana-noop = { path = "native/noop", version = "0.12.0" }
-solana-failure = { path = "native/failure", version = "0.12.0" }
+solana-noop = { path = "noop", version = "0.12.0" }
+solana-failure = { path = "failure", version = "0.12.0" }
