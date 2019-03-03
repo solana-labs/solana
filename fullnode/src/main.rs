@@ -4,6 +4,7 @@ use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
+use solana::service::Service;
 use solana::socketaddr;
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::voting_keypair::{RemoteVoteSigner, VotingKeypair};
@@ -17,7 +18,6 @@ use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
-use std::sync::mpsc::channel;
 use std::sync::Arc;
 
 fn parse_identity(matches: &ArgMatches<'_>) -> (Keypair, SocketAddr) {
@@ -286,9 +286,6 @@ fn main() {
         &fullnode_config,
     );
 
-    let (rotation_sender, rotation_receiver) = channel();
-    fullnode.run(Some(rotation_sender));
-
     if !fullnode_config.voting_disabled {
         let leader_node_info = loop {
             info!("Looking for leader...");
@@ -313,10 +310,6 @@ fn main() {
         File::create(filename).unwrap_or_else(|_| panic!("Unable to create: {}", filename));
     }
     info!("Node initialized");
-    loop {
-        info!(
-            "Node rotation event: {:?}",
-            rotation_receiver.recv().unwrap()
-        );
-    }
+    fullnode.join().expect("fullnode exit");
+    info!("Node exiting..");
 }
