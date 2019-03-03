@@ -1,9 +1,9 @@
 //! budget program
-use crate::budget_state::{BudgetError, BudgetState};
 use bincode::deserialize;
 use chrono::prelude::{DateTime, Utc};
 use log::*;
 use solana_budget_api::budget_instruction::BudgetInstruction;
+use solana_budget_api::budget_state::{BudgetError, BudgetState};
 use solana_budget_api::payment_plan::Witness;
 use solana_sdk::account::KeyedAccount;
 
@@ -86,7 +86,8 @@ fn apply_debits(
         BudgetInstruction::InitializeAccount(expr) => {
             let expr = expr.clone();
             if let Some(payment) = expr.final_payment() {
-                keyed_accounts[1].account.tokens += payment.tokens;
+                keyed_accounts[1].account.tokens = 0;
+                keyed_accounts[0].account.tokens += payment.tokens;
                 Ok(())
             } else {
                 let existing = BudgetState::deserialize(&keyed_accounts[1].account.userdata).ok();

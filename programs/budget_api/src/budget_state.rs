@@ -1,7 +1,7 @@
 //! budget state
+use crate::budget_expr::BudgetExpr;
 use bincode::{self, deserialize, serialize_into};
 use serde_derive::{Deserialize, Serialize};
-use solana_budget_api::budget_expr::BudgetExpr;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum BudgetError {
@@ -25,6 +25,13 @@ pub struct BudgetState {
 }
 
 impl BudgetState {
+    pub fn new(budget_expr: BudgetExpr) -> Self {
+        Self {
+            initialized: true,
+            pending_budget: Some(budget_expr),
+        }
+    }
+
     pub fn is_pending(&self) -> bool {
         self.pending_budget.is_some()
     }
@@ -43,7 +50,7 @@ impl BudgetState {
 #[cfg(test)]
 mod test {
     use super::*;
-    use solana_budget_api::id;
+    use crate::id;
     use solana_sdk::account::Account;
 
     #[test]

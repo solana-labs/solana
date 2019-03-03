@@ -2,8 +2,9 @@
 
 use crate::budget_expr::{BudgetExpr, Condition};
 use crate::budget_instruction::BudgetInstruction;
+use crate::budget_state::BudgetState;
 use crate::id;
-use bincode::deserialize;
+use bincode::{deserialize, serialized_size};
 use chrono::prelude::*;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -26,8 +27,15 @@ impl BudgetTransaction {
         let contract = Keypair::new().pubkey();
         let from = from_keypair.pubkey();
         let payment = BudgetExpr::new_payment(tokens - fee, to);
+        let space = serialized_size(&BudgetState::new(payment.clone())).unwrap();
         TransactionBuilder::new(fee)
-            .push(SystemInstruction::new_move(from, contract, tokens))
+            .push(SystemInstruction::new_program_account(
+                from,
+                contract,
+                tokens,
+                space,
+                id(),
+            ))
             .push(BudgetInstruction::new_initialize_account(contract, payment))
             .sign(&[from_keypair], recent_blockhash)
     }
@@ -163,7 +171,9 @@ impl BudgetTransaction {
 
     /// Verify only the payment plan.
     pub fn verify_plan(tx: &Transaction) -> bool {
-        if let Some(SystemInstruction::Move { tokens }) = Self::system_instruction(tx, 0) {
+        if let Some(SystemInstruction::CreateAccount { tokens, .. }) =
+            Self::system_instruction(tx, 0)
+        {
             if let Some(BudgetInstruction::InitializeAccount(expr)) =
                 BudgetTransaction::instruction(&tx, 1)
             {
@@ -226,7 +236,7 @@ mod tests {
         let pubkey = keypair.pubkey();
         let mut tx = BudgetTransaction::new(&keypair, pubkey, 42, zero);
         let mut system_instruction = BudgetTransaction::system_instruction(&tx, 0).unwrap();
-        if let SystemInstruction::Move { ref mut tokens } = system_instruction {
+        if let SystemInstruction::CreateAccount { ref mut tokens, .. } = system_instruction {
             *tokens = 1_000_000; // <-- attack, part 1!
             let mut instruction = BudgetTransaction::instruction(&tx, 1).unwrap();
             if let BudgetInstruction::InitializeAccount(ref mut expr) = instruction {

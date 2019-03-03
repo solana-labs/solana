@@ -1,5 +1,4 @@
 mod budget_program;
-mod budget_state;
 
 use crate::budget_program::process_instruction;
 use log::*;
