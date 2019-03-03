@@ -2028,6 +2028,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-programs"
+version = "0.12.0"
+dependencies = [
+ "solana 0.12.0",
+ "solana-bpfloader 0.12.0",
+ "solana-logger 0.12.0",
+ "solana-native-loader 0.12.0",
+ "solana-sdk 0.12.0",
+]
+
+[[package]]
 name = "solana-bpfloader"
 version = "0.12.0"
 dependencies = [
@@ -2213,17 +2224,6 @@ dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-logger 0.12.0",
  "solana-runtime 0.12.0",
- "solana-sdk 0.12.0",
-]
-
-[[package]]
-name = "solana-programs"
-version = "0.12.0"
-dependencies = [
- "solana 0.12.0",
- "solana-bpfloader 0.12.0",
- "solana-logger 0.12.0",
- "solana-native-loader 0.12.0",
  "solana-sdk 0.12.0",
 ]
 
