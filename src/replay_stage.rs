@@ -8,7 +8,7 @@ use crate::cluster_info::ClusterInfo;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
 use crate::leader_schedule_utils;
 use crate::packet::BlobError;
-use crate::poh_recorder::{PohRecorder, WorkingBank};
+use crate::poh_recorder::PohRecorder;
 use crate::result;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
@@ -373,7 +373,7 @@ mod test {
             let bank = bank_forks.working_bank();
 
             let blocktree = Arc::new(blocktree);
-            let (poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
+            let (poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
             let (replay_stage, _slot_full_receiver, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
                 Some(voting_keypair.clone()),

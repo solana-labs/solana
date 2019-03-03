@@ -34,7 +34,6 @@ pub const NUM_THREADS: u32 = 10;
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<()>>,
-    exit: Arc<AtomicBool>,
 }
 
 impl BankingStage {
@@ -71,10 +70,7 @@ impl BankingStage {
             })
             .collect();
         bank_thread_hdls.push(lcs_handle);
-        Self {
-            bank_thread_hdls,
-            exit,
-        }
+        Self { bank_thread_hdls }
     }
 
     fn forward_unprocessed_packets(
@@ -457,7 +453,7 @@ mod tests {
             .unwrap();
 
         drop(verified_sender);
-        poh_service.close();
+        poh_service.close().expect("close");
         drop(poh_recorder);
 
         //receive entries + ticks
@@ -490,7 +486,7 @@ mod tests {
         let cluster_info = ClusterInfo::new(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         poh_recorder.lock().unwrap().set_bank(&bank);
-        let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
+        let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = Keypair::new();
@@ -521,7 +517,7 @@ mod tests {
             .unwrap();
 
         drop(verified_sender);
-        poh_service.close();
+        poh_service.close().expect("close");;
         drop(poh_recorder);
 
         // Collect the ledger and feed it to a new bank.
@@ -613,7 +609,7 @@ mod tests {
         BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder).unwrap();
         poh_recorder.lock().unwrap().tick();
 
-        let mut need_tick = true;
+        let mut done = false;
         // read entries until I find mine, might be ticks...
         while let Ok((_, entries)) = entry_receiver.recv() {
             for (entry, _) in entries {
@@ -621,14 +617,16 @@ mod tests {
                     trace!("got entry");
                     assert_eq!(entry.transactions.len(), transactions.len());
                     assert_eq!(bank.get_balance(&pubkey), 1);
-                    need_tick = false;
-                } else {
-                    break;
+                    done = true;
                 }
             }
+            if done {
+                break;
+            }
         }
+        trace!("done ticking");
 
-        assert_eq!(need_tick, false);
+        assert_eq!(done, true);
 
         let transactions = vec![SystemTransaction::new_move(
             &mint_keypair,
