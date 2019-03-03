@@ -197,42 +197,4 @@ mod tests {
         let _ = poh_service.join().unwrap();
         let _ = entry_producer.join().unwrap();
     }
-
-    #[test]
-    fn test_poh_service_drops_working_bank() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_id();
-        let (poh_recorder, entry_receiver) = PohRecorder::new(bank.tick_height(), prev_hash);
-        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-        let exit = Arc::new(AtomicBool::new(false));
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            min_tick_height: bank.tick_height() + 3,
-            max_tick_height: bank.tick_height() + 5,
-        };
-
-        let poh_service = PohService::new(
-            poh_recorder.clone(),
-            &PohServiceConfig::default(),
-            Arc::new(AtomicBool::new(false)),
-        );
-
-        poh_recorder.lock().unwrap().set_working_bank(working_bank);
-
-        // all 5 ticks are expected, there is no tick 0
-        // First 4 ticks must be sent all at once, since bank shouldn't see them until
-        // the after bank's min_tick_height(3) is reached.
-        let (_, entries) = entry_receiver.recv().expect("recv 1");
-        assert_eq!(entries.len(), 4);
-        let (_, entries) = entry_receiver.recv().expect("recv 2");
-        assert_eq!(entries.len(), 1);
-
-        //WorkingBank should be dropped by the PohService thread as well
-        assert_eq!(entry_receiver.recv().err(), Some(RecvError));
-
-        exit.store(true, Ordering::Relaxed);
-        poh_service.exit();
-        let _ = poh_service.join().unwrap();
-    }
 }
