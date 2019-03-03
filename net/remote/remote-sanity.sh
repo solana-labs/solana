@@ -57,19 +57,6 @@ source net/common.sh
 loadConfigFile
 
 case $deployMethod in
-snap)
-  PATH="/snap/bin:$PATH"
-  export USE_SNAP=1
-  entrypointRsyncUrl="$entrypointIp"
-
-  solana_bench_tps=solana.bench-tps
-  solana_ledger_tool=solana.ledger-tool
-  solana_keygen=solana.keygen
-
-  ledger=/var/snap/solana/current/config-local/bootstrap-leader-ledger
-  client_id=~/snap/solana/current/config/client-id.json
-
-  ;;
 local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1

@@ -10,12 +10,6 @@ source "$here"/common.sh
 # shellcheck source=scripts/oom-score-adj.sh
 source "$here"/../scripts/oom-score-adj.sh
 
-if [[ -d "$SNAP" ]]; then
-  # Exit if mode is not yet configured
-  # (typically the case after the Snap is first installed)
-  [[ -n "$(snapctl get mode)" ]] || exit 0
-fi
-
 [[ -f "$SOLANA_CONFIG_DIR"/bootstrap-leader.json ]] || {
   echo "$SOLANA_CONFIG_DIR/bootstrap-leader.json not found, create it by running:"
   echo
@@ -48,13 +42,6 @@ while [[ -n $1 ]]; do
     exit 1
   fi
 done
-
-
-if [[ -d $SNAP ]]; then
-  if [[ $(snapctl get leader-rotation) = false ]]; then
-    maybe_no_leader_rotation="--no-leader-rotation"
-  fi
-fi
 
 tune_system
 

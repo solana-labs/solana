@@ -239,7 +239,7 @@ start() {
           ${maybeReuseLedger:+-r} \
           ${maybeDelete:+-D}
         #ci/testnet-deploy.sh testnet-solana-com gce us-east1-c \
-        #  -s "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a testnet-solana-com  \
+        #  -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a testnet-solana-com  \
         #  ${maybeReuseLedger:+-r} \
         #  ${maybeDelete:+-D}
     )
