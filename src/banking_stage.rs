@@ -8,6 +8,8 @@ use crate::leader_confirmation_service::LeaderConfirmationService;
 use crate::packet::Packets;
 use crate::packet::SharedPackets;
 use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBank};
+#[cfg(test)]
+use crate::poh_service::{PohService, PohServiceConfig};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
@@ -426,31 +428,31 @@ impl Service for BankingStage {
 }
 
 #[cfg(test)]
+pub fn create_test_recorder(bank: &Arc<Bank>) -> (Arc<Mutex<PohRecorder>>, PohService) {
+    let exit = Arc::new(AtomicBool::new(false));
+    let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
+        bank.tick_height(),
+        bank.last_id(),
+    )));
+    let poh_service = PohService::new(
+        poh_recorder.clone(),
+        &PohServiceConfig::default(),
+        exit.clone(),
+    );
+    (poh_recorder, poh_service)
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::cluster_info::Node;
     use crate::entry::EntrySlice;
     use crate::packet::to_packets;
-    use crate::poh_service::{PohService, PohServiceConfig};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use std::thread::sleep;
-
-    fn create_test_recorder(bank: &Arc<Bank>) -> (Arc<Mutex<PohRecorder>>, PohService) {
-        let exit = Arc::new(AtomicBool::new(false));
-        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
-            bank.tick_height(),
-            bank.last_id(),
-        )));
-        let poh_service = PohService::new(
-            poh_recorder.clone(),
-            &PohServiceConfig::default(),
-            exit.clone(),
-        );
-        (poh_recorder, poh_service)
-    }
 
     #[test]
     fn test_banking_stage_shutdown1() {

@@ -303,143 +303,146 @@ impl Service for ReplayStage {
     }
 }
 
-// #[cfg(test)]
-// mod test {
-//     use super::*;
-//     use crate::blocktree::create_new_tmp_ledger;
-//     use crate::cluster_info::{ClusterInfo, Node};
-//     use crate::entry::create_ticks;
-//     use crate::entry::{next_entry_mut, Entry};
-//     use crate::fullnode::new_banks_from_blocktree;
-//     use crate::replay_stage::ReplayStage;
-//     use crate::result::Error;
-//     use solana_sdk::genesis_block::GenesisBlock;
-//     use solana_sdk::hash::Hash;
-//     use solana_sdk::signature::{Keypair, KeypairUtil};
-//     use std::fs::remove_dir_all;
-//     use std::sync::atomic::AtomicBool;
-//     use std::sync::mpsc::channel;
-//     use std::sync::{Arc, RwLock};
-//
-//     #[test]
-//     fn test_vote_error_replay_stage_correctness() {
-//         solana_logger::setup();
-//         // Set up dummy node to host a ReplayStage
-//         let my_keypair = Keypair::new();
-//         let my_id = my_keypair.pubkey();
-//         let my_node = Node::new_localhost_with_pubkey(my_id);
-//
-//         // Create keypair for the leader
-//         let leader_id = Keypair::new().pubkey();
-//
-//         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10_000, leader_id, 500);
-//
-//         let (my_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
-//
-//         // Set up the cluster info
-//         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
-//
-//         // Set up the replay stage
-//         let exit = Arc::new(AtomicBool::new(false));
-//         let voting_keypair = Arc::new(Keypair::new());
-//         let (bank_sender, _bank_receiver) = channel();
-//         {
-//             let (bank_forks, bank_forks_info, blocktree, l_receiver) =
-//                 new_banks_from_blocktree(&my_ledger_path, None);
-//             let bank = bank_forks.working_bank();
-//
-//             let blocktree = Arc::new(blocktree);
-//             let (replay_stage, _slot_full_receiver, ledger_writer_recv) = ReplayStage::new(
-//                 my_keypair.pubkey(),
-//                 Some(voting_keypair.clone()),
-//                 blocktree.clone(),
-//                 &Arc::new(RwLock::new(bank_forks)),
-//                 &bank_forks_info,
-//                 cluster_info_me.clone(),
-//                 exit.clone(),
-//                 bank_sender,
-//                 l_receiver,
-//                 &Arc::new(RpcSubscriptions::default()),
-//             );
-//
-//             let keypair = voting_keypair.as_ref();
-//             let vote = VoteTransaction::new_vote(keypair, 0, bank.last_id(), 0);
-//             cluster_info_me.write().unwrap().push_vote(vote);
-//
-//             info!("Send ReplayStage an entry, should see it on the ledger writer receiver");
-//             let next_tick = create_ticks(1, bank.last_id());
-//             blocktree.write_entries(1, 0, 0, next_tick.clone()).unwrap();
-//
-//             let received_tick = ledger_writer_recv
-//                 .recv()
-//                 .expect("Expected to receive an entry on the ledger writer receiver");
-//
-//             assert_eq!(next_tick[0], received_tick[0]);
-//
-//             replay_stage
-//                 .close()
-//                 .expect("Expect successful ReplayStage exit");
-//         }
-//         let _ignored = remove_dir_all(&my_ledger_path);
-//     }
-//
-//     #[test]
-//     fn test_replay_stage_poh_ok_entry_receiver() {
-//         let (forward_entry_sender, forward_entry_receiver) = channel();
-//         let genesis_block = GenesisBlock::new(10_000).0;
-//         let bank = Arc::new(Bank::new(&genesis_block));
-//         let mut last_id = bank.last_id();
-//         let mut entries = Vec::new();
-//         for _ in 0..5 {
-//             let entry = next_entry_mut(&mut last_id, 1, vec![]); //just ticks
-//             entries.push(entry);
-//         }
-//
-//         let mut progress = HashMap::new();
-//         let res = ReplayStage::replay_entries_into_bank(
-//             &bank,
-//             entries.clone(),
-//             &mut progress,
-//             &forward_entry_sender,
-//             0,
-//         );
-//         assert!(res.is_ok(), "replay failed {:?}", res);
-//         let res = forward_entry_receiver.try_recv();
-//         match res {
-//             Ok(_) => (),
-//             Err(e) => assert!(false, "Entries were not sent correctly {:?}", e),
-//         }
-//     }
-//
-//     #[test]
-//     fn test_replay_stage_poh_error_entry_receiver() {
-//         let (forward_entry_sender, forward_entry_receiver) = channel();
-//         let mut entries = Vec::new();
-//         for _ in 0..5 {
-//             let entry = Entry::new(&mut Hash::default(), 1, vec![]); //just broken entries
-//             entries.push(entry);
-//         }
-//
-//         let genesis_block = GenesisBlock::new(10_000).0;
-//         let bank = Arc::new(Bank::new(&genesis_block));
-//         let mut progress = HashMap::new();
-//         let res = ReplayStage::replay_entries_into_bank(
-//             &bank,
-//             entries.clone(),
-//             &mut progress,
-//             &forward_entry_sender,
-//             0,
-//         );
-//
-//         match res {
-//             Ok(_) => assert!(false, "Should have failed because entries are broken"),
-//             Err(Error::BlobError(BlobError::VerificationFailed)) => (),
-//             Err(e) => assert!(
-//                 false,
-//                 "Should have failed because with blob error, instead, got {:?}",
-//                 e
-//             ),
-//         }
-//         assert!(forward_entry_receiver.try_recv().is_err());
-//     }
-// }
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::banking_stage::create_test_recorder;
+    use crate::blocktree::create_new_tmp_ledger;
+    use crate::cluster_info::{ClusterInfo, Node};
+    use crate::entry::create_ticks;
+    use crate::entry::{next_entry_mut, Entry};
+    use crate::fullnode::new_banks_from_blocktree;
+    use crate::replay_stage::ReplayStage;
+    use crate::result::Error;
+    use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::fs::remove_dir_all;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::mpsc::channel;
+    use std::sync::{Arc, RwLock};
+
+    #[test]
+    fn test_vote_error_replay_stage_correctness() {
+        solana_logger::setup();
+        // Set up dummy node to host a ReplayStage
+        let my_keypair = Keypair::new();
+        let my_id = my_keypair.pubkey();
+        let my_node = Node::new_localhost_with_pubkey(my_id);
+
+        // Create keypair for the leader
+        let leader_id = Keypair::new().pubkey();
+
+        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10_000, leader_id, 500);
+
+        let (my_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
+
+        // Set up the cluster info
+        let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
+
+        // Set up the replay stage
+        let exit = Arc::new(AtomicBool::new(false));
+        let voting_keypair = Arc::new(Keypair::new());
+        let (bank_sender, _bank_receiver) = channel();
+        {
+            let (bank_forks, bank_forks_info, blocktree, l_receiver) =
+                new_banks_from_blocktree(&my_ledger_path, None);
+            let bank = bank_forks.working_bank();
+
+            let blocktree = Arc::new(blocktree);
+            let (poh_recorder, poh_service) = create_test_recorder(&bank);
+            let (replay_stage, _slot_full_receiver, ledger_writer_recv) = ReplayStage::new(
+                my_keypair.pubkey(),
+                Some(voting_keypair.clone()),
+                blocktree.clone(),
+                &Arc::new(RwLock::new(bank_forks)),
+                &bank_forks_info,
+                cluster_info_me.clone(),
+                exit.clone(),
+                bank_sender,
+                l_receiver,
+                &Arc::new(RpcSubscriptions::default()),
+                &poh_recorder,
+            );
+
+            let keypair = voting_keypair.as_ref();
+            let vote = VoteTransaction::new_vote(keypair, 0, bank.last_id(), 0);
+            cluster_info_me.write().unwrap().push_vote(vote);
+
+            info!("Send ReplayStage an entry, should see it on the ledger writer receiver");
+            let next_tick = create_ticks(1, bank.last_id());
+            blocktree.write_entries(1, 0, 0, next_tick.clone()).unwrap();
+
+            let received_tick = ledger_writer_recv
+                .recv()
+                .expect("Expected to receive an entry on the ledger writer receiver");
+
+            assert_eq!(next_tick[0], received_tick[0]);
+
+            replay_stage
+                .close()
+                .expect("Expect successful ReplayStage exit");
+        }
+        let _ignored = remove_dir_all(&my_ledger_path);
+    }
+
+    //     #[test]
+    //     fn test_replay_stage_poh_ok_entry_receiver() {
+    //         let (forward_entry_sender, forward_entry_receiver) = channel();
+    //         let genesis_block = GenesisBlock::new(10_000).0;
+    //         let bank = Arc::new(Bank::new(&genesis_block));
+    //         let mut last_id = bank.last_id();
+    //         let mut entries = Vec::new();
+    //         for _ in 0..5 {
+    //             let entry = next_entry_mut(&mut last_id, 1, vec![]); //just ticks
+    //             entries.push(entry);
+    //         }
+    //
+    //         let mut progress = HashMap::new();
+    //         let res = ReplayStage::replay_entries_into_bank(
+    //             &bank,
+    //             entries.clone(),
+    //             &mut progress,
+    //             &forward_entry_sender,
+    //             0,
+    //         );
+    //         assert!(res.is_ok(), "replay failed {:?}", res);
+    //         let res = forward_entry_receiver.try_recv();
+    //         match res {
+    //             Ok(_) => (),
+    //             Err(e) => assert!(false, "Entries were not sent correctly {:?}", e),
+    //         }
+    //     }
+    //
+    //     #[test]
+    //     fn test_replay_stage_poh_error_entry_receiver() {
+    //         let (forward_entry_sender, forward_entry_receiver) = channel();
+    //         let mut entries = Vec::new();
+    //         for _ in 0..5 {
+    //             let entry = Entry::new(&mut Hash::default(), 1, vec![]); //just broken entries
+    //             entries.push(entry);
+    //         }
+    //
+    //         let genesis_block = GenesisBlock::new(10_000).0;
+    //         let bank = Arc::new(Bank::new(&genesis_block));
+    //         let mut progress = HashMap::new();
+    //         let res = ReplayStage::replay_entries_into_bank(
+    //             &bank,
+    //             entries.clone(),
+    //             &mut progress,
+    //             &forward_entry_sender,
+    //             0,
+    //         );
+    //
+    //         match res {
+    //             Ok(_) => assert!(false, "Should have failed because entries are broken"),
+    //             Err(Error::BlobError(BlobError::VerificationFailed)) => (),
+    //             Err(e) => assert!(
+    //                 false,
+    //                 "Should have failed because with blob error, instead, got {:?}",
+    //                 e
+    //             ),
+    //         }
+    //         assert!(forward_entry_receiver.try_recv().is_err());
+    //     }
+}
