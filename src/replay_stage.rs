@@ -382,7 +382,7 @@ mod test {
             replay_stage
                 .close()
                 .expect("Expect successful ReplayStage exit");
-            poh_service.close();
+            poh_service.close().unwrap();
         }
         let _ignored = remove_dir_all(&my_ledger_path);
     }
