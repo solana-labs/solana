@@ -187,61 +187,65 @@ impl Service for Tvu {
     }
 }
 
-// #[cfg(test)]
-// pub mod tests {
-//     use super::*;
-//     use crate::blocktree::get_tmp_ledger_path;
-//     use crate::cluster_info::{ClusterInfo, Node};
-//     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
-//     use solana_runtime::bank::Bank;
-//     use solana_sdk::genesis_block::GenesisBlock;
-//
-//     #[test]
-//     fn test_tvu_exit() {
-//         solana_logger::setup();
-//         let leader = Node::new_localhost();
-//         let target1_keypair = Keypair::new();
-//         let target1 = Node::new_localhost_with_pubkey(target1_keypair.pubkey());
-//
-//         let starting_balance = 10_000;
-//         let (genesis_block, _mint_keypair) = GenesisBlock::new(starting_balance);
-//
-//         let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
-//         let bank_forks_info = vec![BankForksInfo {
-//             bank_id: 0,
-//             entry_height: 0,
-//         }];
-//
-//         //start cluster_info1
-//         let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
-//         cluster_info1.insert_info(leader.info.clone());
-//         cluster_info1.set_leader(leader.info.id);
-//         let cref1 = Arc::new(RwLock::new(cluster_info1));
-//
-//         let blocktree_path = get_tmp_ledger_path!();
-//         let (blocktree, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
-//             .expect("Expected to successfully open ledger");
-//         let (sender, _receiver) = channel();
-//         let tvu = Tvu::new(
-//             Some(Arc::new(Keypair::new())),
-//             &Arc::new(RwLock::new(bank_forks)),
-//             &bank_forks_info,
-//             &cref1,
-//             {
-//                 Sockets {
-//                     repair: target1.sockets.repair,
-//                     retransmit: target1.sockets.retransmit,
-//                     fetch: target1.sockets.tvu,
-//                 }
-//             },
-//             Arc::new(blocktree),
-//             STORAGE_ROTATE_TEST_COUNT,
-//             &sender,
-//             &StorageState::default(),
-//             None,
-//             l_receiver,
-//             &Arc::new(RpcSubscriptions::default()),
-//         );
-//         tvu.close().expect("close");
-//     }
-// }
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::blocktree::get_tmp_ledger_path;
+    use crate::cluster_info::{ClusterInfo, Node};
+    use crate::banking_stage::create_test_recorder;
+    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
+    use solana_runtime::bank::Bank;
+    use solana_sdk::genesis_block::GenesisBlock;
+
+    #[test]
+    fn test_tvu_exit() {
+        solana_logger::setup();
+        let leader = Node::new_localhost();
+        let target1_keypair = Keypair::new();
+        let target1 = Node::new_localhost_with_pubkey(target1_keypair.pubkey());
+
+        let starting_balance = 10_000;
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(starting_balance);
+
+        let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
+        let bank_forks_info = vec![BankForksInfo {
+            bank_id: 0,
+            entry_height: 0,
+        }];
+
+        //start cluster_info1
+        let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
+        cluster_info1.insert_info(leader.info.clone());
+        cluster_info1.set_leader(leader.info.id);
+        let cref1 = Arc::new(RwLock::new(cluster_info1));
+
+        let blocktree_path = get_tmp_ledger_path!();
+        let (blocktree, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
+            .expect("Expected to successfully open ledger");
+        let (bank_sender, _bank_receiver) = channel();
+		let bank = bank_forks.working_bank();
+        let (poh_recorder, poh_service) = create_test_recorder(&bank);
+        let tvu = Tvu::new(
+            Some(Arc::new(Keypair::new())),
+            &Arc::new(RwLock::new(bank_forks)),
+            &bank_forks_info,
+            &cref1,
+            {
+                Sockets {
+                    repair: target1.sockets.repair,
+                    retransmit: target1.sockets.retransmit,
+                    fetch: target1.sockets.tvu,
+                }
+            },
+            Arc::new(blocktree),
+            STORAGE_ROTATE_TEST_COUNT,
+            &StorageState::default(),
+            bank_sender,
+            None,
+            l_receiver,
+            &Arc::new(RpcSubscriptions::default()),
+			&poh_recorder,
+        );
+        tvu.close().expect("close");
+    }
+}
