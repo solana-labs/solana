@@ -190,9 +190,9 @@ impl Service for Tvu {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::banking_stage::create_test_recorder;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::banking_stage::create_test_recorder;
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::GenesisBlock;
@@ -223,7 +223,7 @@ pub mod tests {
         let (blocktree, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
         let (bank_sender, _bank_receiver) = channel();
-		let bank = bank_forks.working_bank();
+        let bank = bank_forks.working_bank();
         let (poh_recorder, poh_service) = create_test_recorder(&bank);
         let tvu = Tvu::new(
             Some(Arc::new(Keypair::new())),
@@ -244,8 +244,9 @@ pub mod tests {
             None,
             l_receiver,
             &Arc::new(RpcSubscriptions::default()),
-			&poh_recorder,
+            &poh_recorder,
         );
         tvu.close().expect("close");
+        poh_service.close().expect("close");
     }
 }

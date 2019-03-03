@@ -255,116 +255,112 @@ impl Service for BroadcastStage {
     }
 }
 
-// #[cfg(test)]
-// mod test {
-//     use super::*;
-//     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
-//     use crate::cluster_info::{ClusterInfo, Node};
-//     use crate::entry::create_ticks;
-//     use crate::service::Service;
-//     use solana_sdk::hash::Hash;
-//     use solana_sdk::signature::{Keypair, KeypairUtil};
-//     use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
-//     use std::sync::atomic::AtomicBool;
-//     use std::sync::mpsc::channel;
-//     use std::sync::{Arc, RwLock};
-//     use std::thread::sleep;
-//     use std::time::Duration;
-//
-//     struct MockBroadcastStage {
-//         blocktree: Arc<Blocktree>,
-//         broadcast_service: BroadcastStage,
-//     }
-//
-//     fn setup_dummy_broadcast_service(
-//         slot_height: u64,
-//         leader_pubkey: Pubkey,
-//         ledger_path: &str,
-//         entry_receiver: Receiver<Vec<(Entry, u64)>>,
-//         blob_index: u64,
-//     ) -> MockBroadcastStage {
-//         // Make the database ledger
-//         let blocktree = Arc::new(Blocktree::open(ledger_path).unwrap());
-//
-//         // Make the leader node and scheduler
-//         let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);
-//
-//         // Make a node to broadcast to
-//         let buddy_keypair = Keypair::new();
-//         let broadcast_buddy = Node::new_localhost_with_pubkey(buddy_keypair.pubkey());
-//
-//         // Fill the cluster_info with the buddy's info
-//         let mut cluster_info = ClusterInfo::new(leader_info.info.clone());
-//         cluster_info.insert_info(broadcast_buddy.info);
-//         let cluster_info = Arc::new(RwLock::new(cluster_info));
-//
-//         let exit_sender = Arc::new(AtomicBool::new(false));
-//         let bank = Arc::new(Bank::default());
-//
-//         // Start up the broadcast stage
-//         let broadcast_service = BroadcastStage::new(
-//             slot_height,
-//             &bank,
-//             leader_info.sockets.broadcast,
-//             cluster_info,
-//             blob_index,
-//             entry_receiver,
-//             exit_sender,
-//             &blocktree,
-//         );
-//
-//         MockBroadcastStage {
-//             blocktree,
-//             broadcast_service,
-//         }
-//     }
-//
-//     #[test]
-//     #[ignore]
-//     //TODO this test won't work since broadcast stage no longer edits the ledger
-//     fn test_broadcast_ledger() {
-//         let ledger_path = get_tmp_ledger_path("test_broadcast_ledger");
-//         {
-//             // Create the leader scheduler
-//             let leader_keypair = Keypair::new();
-//             let start_tick_height = 0;
-//             let max_tick_height = start_tick_height + DEFAULT_TICKS_PER_SLOT;
-//
-//             let (entry_sender, entry_receiver) = channel();
-//             let broadcast_service = setup_dummy_broadcast_service(
-//                 0,
-//                 leader_keypair.pubkey(),
-//                 &ledger_path,
-//                 entry_receiver,
-//                 0,
-//             );
-//
-//             let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
-//             for (i, tick) in ticks.into_iter().enumerate() {
-//                 entry_sender
-//                     .send(vec![(tick, i as u64 + 1)])
-//                     .expect("Expect successful send to broadcast service");
-//             }
-//
-//             sleep(Duration::from_millis(2000));
-//             let blocktree = broadcast_service.blocktree;
-//             let mut blob_index = 0;
-//             for i in 0..max_tick_height - start_tick_height {
-//                 let slot = (start_tick_height + i + 1) / DEFAULT_TICKS_PER_SLOT;
-//
-//                 let result = blocktree.get_data_blob(slot, blob_index).unwrap();
-//
-//                 blob_index += 1;
-//                 assert!(result.is_some());
-//             }
-//
-//             drop(entry_sender);
-//             broadcast_service
-//                 .broadcast_service
-//                 .join()
-//                 .expect("Expect successful join of broadcast service");
-//         }
-//
-//         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
-//     }
-// }
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::blocktree::{get_tmp_ledger_path, Blocktree};
+    use crate::cluster_info::{ClusterInfo, Node};
+    use crate::entry::create_ticks;
+    use crate::service::Service;
+    use solana_runtime::bank::Bank;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::mpsc::channel;
+    use std::sync::{Arc, RwLock};
+    use std::thread::sleep;
+    use std::time::Duration;
+
+    struct MockBroadcastStage {
+        blocktree: Arc<Blocktree>,
+        broadcast_service: BroadcastStage,
+        bank: Arc<Bank>,
+    }
+
+    fn setup_dummy_broadcast_service(
+        leader_pubkey: Pubkey,
+        ledger_path: &str,
+        entry_receiver: Receiver<TpuBankEntries>,
+    ) -> MockBroadcastStage {
+        // Make the database ledger
+        let blocktree = Arc::new(Blocktree::open(ledger_path).unwrap());
+
+        // Make the leader node and scheduler
+        let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);
+
+        // Make a node to broadcast to
+        let buddy_keypair = Keypair::new();
+        let broadcast_buddy = Node::new_localhost_with_pubkey(buddy_keypair.pubkey());
+
+        // Fill the cluster_info with the buddy's info
+        let mut cluster_info = ClusterInfo::new(leader_info.info.clone());
+        cluster_info.insert_info(broadcast_buddy.info);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+
+        let exit_sender = Arc::new(AtomicBool::new(false));
+        let bank = Arc::new(Bank::default());
+
+        // Start up the broadcast stage
+        let broadcast_service = BroadcastStage::new(
+            leader_info.sockets.broadcast,
+            cluster_info,
+            entry_receiver,
+            exit_sender,
+            &blocktree,
+        );
+
+        MockBroadcastStage {
+            blocktree,
+            broadcast_service,
+            bank,
+        }
+    }
+
+    #[test]
+    //TODO this test won't work since broadcast stage no longer edits the ledger
+    fn test_broadcast_ledger() {
+        let ledger_path = get_tmp_ledger_path("test_broadcast_ledger");
+        {
+            // Create the leader scheduler
+            let leader_keypair = Keypair::new();
+            let start_tick_height = 0;
+            let max_tick_height = start_tick_height + DEFAULT_TICKS_PER_SLOT;
+
+            let (entry_sender, entry_receiver) = channel();
+            let broadcast_service = setup_dummy_broadcast_service(
+                leader_keypair.pubkey(),
+                &ledger_path,
+                entry_receiver,
+            );
+            let bank = broadcast_service.bank.clone();
+
+            let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
+            for (i, tick) in ticks.into_iter().enumerate() {
+                entry_sender
+                    .send((bank.clone(), vec![(tick, i as u64 + 1)]))
+                    .expect("Expect successful send to broadcast service");
+            }
+
+            sleep(Duration::from_millis(2000));
+            let blocktree = broadcast_service.blocktree;
+            let mut blob_index = 0;
+            for i in 0..max_tick_height - start_tick_height {
+                let slot = (start_tick_height + i + 1) / DEFAULT_TICKS_PER_SLOT;
+
+                let result = blocktree.get_data_blob(slot, blob_index).unwrap();
+
+                blob_index += 1;
+                assert!(result.is_some());
+            }
+
+            drop(entry_sender);
+            broadcast_service
+                .broadcast_service
+                .join()
+                .expect("Expect successful join of broadcast service");
+        }
+
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+}
