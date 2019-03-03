@@ -70,7 +70,7 @@ members = [
     "ledger-tool",
     "logger",
     "metrics",
-    "programs",
+    "programs/bpf",
     "programs/bpf_loader",
     "programs/budget",
     "programs/budget_api",
