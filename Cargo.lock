@@ -2034,7 +2034,6 @@ dependencies = [
  "solana 0.12.0",
  "solana-bpfloader 0.12.0",
  "solana-logger 0.12.0",
- "solana-native-loader 0.12.0",
  "solana-runtime 0.12.0",
  "solana-sdk 0.12.0",
 ]
@@ -2194,17 +2193,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-native-loader"
-version = "0.12.0"
-dependencies = [
- "bincode 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "libc 0.2.49 (registry+https://github.com/rust-lang/crates.io-index)",
- "libloading 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk 0.12.0",
-]
-
-[[package]]
 name = "solana-netutil"
 version = "0.12.0"
 dependencies = [
@@ -2272,6 +2260,8 @@ dependencies = [
  "bv 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.49 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libloading 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "memmap 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2281,7 +2271,6 @@ dependencies = [
  "solana-budget-api 0.12.0",
  "solana-logger 0.12.0",
  "solana-metrics 0.12.0",
- "solana-native-loader 0.12.0",
  "solana-sdk 0.12.0",
  "solana-system-program 0.12.0",
  "solana-vote-api 0.12.0",

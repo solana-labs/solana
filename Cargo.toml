@@ -76,7 +76,6 @@ members = [
     "programs/budget_api",
     "programs/token",
     "programs/failure",
-    "programs/native_loader",
     "programs/noop",
     "programs/rewards",
     "programs/rewards_api",
