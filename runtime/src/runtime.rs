@@ -1,10 +1,9 @@
-use solana_native_loader;
+use crate::native_loader;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
-use solana_system_program;
 
 /// Reasons the runtime might have rejected a transaction.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -46,7 +45,7 @@ fn process_instruction(
             tick_height,
         )
     } else {
-        solana_native_loader::entrypoint(
+        native_loader::entrypoint(
             &program_id,
             &mut keyed_accounts,
             &tx.instructions[instruction_index].userdata,
