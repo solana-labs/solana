@@ -11,8 +11,6 @@ use solana::entry::next_entry_mut;
 use solana::entry::EntrySlice;
 use solana::gossip_service::GossipService;
 use solana::packet::index_blobs;
-use solana::poh_recorder::PohRecorder;
-use solana::poh_service::{PohService, PohServiceConfig};
 use solana::rpc_subscriptions::RpcSubscriptions;
 use solana::service::Service;
 use solana::storage_stage::StorageState;
@@ -28,7 +26,6 @@ use std::fs::remove_dir_all;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::Mutex;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 

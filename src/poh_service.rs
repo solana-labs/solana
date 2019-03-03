@@ -117,7 +117,6 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
-    use std::sync::mpsc::channel;
     use std::sync::mpsc::RecvError;
 
     #[test]

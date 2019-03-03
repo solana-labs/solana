@@ -28,7 +28,7 @@ use solana_sdk::timing::timestamp;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::sleep;
 use std::thread::JoinHandle;
