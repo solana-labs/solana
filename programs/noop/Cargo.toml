@@ -13,6 +13,9 @@ solana-sdk = { path = "../../sdk", version = "0.12.0" }
 solana-logger = { path = "../../logger", version = "0.12.0" }
 log = "0.4.2"
 
+[dev-dependencies]
+solana-runtime = { path = "../../runtime", version = "0.12.0" }
+
 [lib]
 name = "noop"
 crate-type = ["cdylib"]
