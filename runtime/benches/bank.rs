@@ -7,7 +7,7 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::MAX_RECENT_TICK_HASHES;
+use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES};
 use test::Bencher;
 
 #[bench]
@@ -43,7 +43,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
 
     let mut id = bank.last_blockhash();
 
-    for _ in 0..(MAX_RECENT_TICK_HASHES - 1) {
+    for _ in 0..(MAX_RECENT_BLOCKHASHES * DEFAULT_TICKS_PER_SLOT as usize) {
         bank.register_tick(&id);
         id = hash(&id.as_ref())
     }

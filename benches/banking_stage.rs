@@ -15,7 +15,7 @@ use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::MAX_RECENT_TICK_HASHES;
+use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES};
 use std::iter;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver};
@@ -122,7 +122,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         BankingStage::new(&bank, &poh_recorder, verified_receiver, std::u64::MAX);
 
     let mut id = genesis_block.hash();
-    for _ in 0..MAX_RECENT_TICK_HASHES {
+    for _ in 0..(MAX_RECENT_BLOCKHASHES * DEFAULT_TICKS_PER_SLOT as usize) {
         id = hash(&id.as_ref());
         bank.register_tick(&id);
     }
@@ -226,7 +226,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         BankingStage::new(&bank, &poh_recorder, verified_receiver, std::u64::MAX);
 
     let mut id = genesis_block.hash();
-    for _ in 0..MAX_RECENT_TICK_HASHES {
+    for _ in 0..(MAX_RECENT_BLOCKHASHES * DEFAULT_TICKS_PER_SLOT as usize) {
         id = hash(&id.as_ref());
         bank.register_tick(&id);
     }

@@ -105,12 +105,11 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use solana_sdk::hash::hash;
-    use solana_sdk::timing::MAX_RECENT_TICK_HASHES;
 
     #[test]
     fn test_register_hash() {
         let last_hash = Hash::default();
-        let mut entry_queue = HashQueue::new(MAX_RECENT_TICK_HASHES);
+        let mut entry_queue = HashQueue::new(100);
         assert!(!entry_queue.check_entry(last_hash));
         entry_queue.register_hash(&last_hash);
         assert!(entry_queue.check_entry(last_hash));
@@ -119,8 +118,8 @@ mod tests {
     #[test]
     fn test_reject_old_last_hash() {
         let last_hash = Hash::default();
-        let mut entry_queue = HashQueue::new(MAX_RECENT_TICK_HASHES);
-        for i in 0..MAX_RECENT_TICK_HASHES {
+        let mut entry_queue = HashQueue::new(100);
+        for i in 0..100 {
             let last_hash = hash(&serialize(&i).unwrap()); // Unique hash
             entry_queue.register_hash(&last_hash);
         }
