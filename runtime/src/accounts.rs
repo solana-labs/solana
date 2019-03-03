@@ -1354,10 +1354,46 @@ mod tests {
         assert_eq!(loaded_accounts[0], Err(BankError::AccountLoadedTwice));
     }
 
+    #[macro_export]
+    macro_rules! tmp_accounts_name {
+        () => {
+            &format!("{}-{}", file!(), line!())
+        };
+    }
+
+    #[macro_export]
+    macro_rules! get_tmp_accounts_path {
+        () => {
+            get_tmp_accounts_path(tmp_accounts_name!())
+        };
+    }
+
+    struct TempPaths {
+        pub paths: String,
+    }
+
+    impl Drop for TempPaths {
+        fn drop(&mut self) {
+            cleanup_paths(&self.paths);
+        }
+    }
+
+    fn get_tmp_accounts_path(paths: &str) -> TempPaths {
+        let vpaths = get_paths_vec(paths);
+        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+        let vpaths: Vec<_> = vpaths
+            .iter()
+            .map(|path| format!("{}/{}", out_dir, path))
+            .collect();
+        TempPaths {
+            paths: vpaths.join(","),
+        }
+    }
+
     #[test]
     fn test_accountsdb_squash_one_fork() {
-        let paths = "squash_one_fork".to_string();
-        let db = AccountsDB::new(0, &paths);
+        let paths = get_tmp_accounts_path!();
+        let db = AccountsDB::new(0, &paths.paths);
         let key = Pubkey::default();
         let account0 = Account::new(1, 0, key);
 
@@ -1401,14 +1437,12 @@ mod tests {
         //
         assert_eq!(db.load(1, &key, true), None); // purged
         assert_eq!(&db.load(2, &key, true).unwrap(), &account0); // original value
-
-        cleanup_paths(&paths);
     }
 
     #[test]
     fn test_accountsdb_squash() {
-        let paths = "squash".to_string();
-        let db = AccountsDB::new(0, &paths);
+        let paths = get_tmp_accounts_path!();
+        let db = AccountsDB::new(0, &paths.paths);
 
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&db, &mut pubkeys, 100, 0);
@@ -1450,7 +1484,6 @@ mod tests {
             assert_eq!(&default_account, &account0);
             assert_eq!(&default_account, &account1);
         }
-        cleanup_paths(&paths);
     }
 
     #[test]
@@ -1458,8 +1491,8 @@ mod tests {
         let key = Pubkey::default();
 
         // 1 token in the "root", i.e. db zero
-        let paths = "unsquash".to_string();
-        let db0 = AccountsDB::new(0, &paths);
+        let paths = get_tmp_accounts_path!();
+        let db0 = AccountsDB::new(0, &paths.paths);
         let account0 = Account::new(1, 0, key);
         db0.store(0, &key, &account0);
 
@@ -1476,7 +1509,6 @@ mod tests {
         accounts1.accounts_db = db0;
         assert_eq!(accounts1.load_slow(1, &key), None);
         assert_eq!(accounts1.load_slow(0, &key), Some(account0));
-        cleanup_paths(&paths);
     }
 
     fn create_account(
@@ -1534,21 +1566,20 @@ mod tests {
 
     #[test]
     fn test_account_one() {
-        let paths = "one".to_string();
-        let accounts = AccountsDB::new(0, &paths);
+        let paths = get_tmp_accounts_path!();
+        let accounts = AccountsDB::new(0, &paths.paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 1, 0);
         let account = accounts.load(0, &pubkeys[0], true).unwrap();
         let mut default_account = Account::default();
         default_account.tokens = 1;
         assert_eq!(compare_account(&default_account, &account), true);
-        cleanup_paths(&paths);
     }
 
     #[test]
     fn test_account_many() {
-        let paths = "many0,many1".to_string();
-        let accounts = AccountsDB::new(0, &paths);
+        let paths = get_tmp_accounts_path("many0,many1");
+        let accounts = AccountsDB::new(0, &paths.paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 100, 0);
         for _ in 1..100 {
@@ -1558,13 +1589,12 @@ mod tests {
             default_account.tokens = (idx + 1) as u64;
             assert_eq!(compare_account(&default_account, &account), true);
         }
-        cleanup_paths(&paths);
     }
 
     #[test]
     fn test_account_update() {
-        let paths = "update0".to_string();
-        let accounts = AccountsDB::new(0, &paths);
+        let paths = get_tmp_accounts_path!();
+        let accounts = AccountsDB::new(0, &paths.paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 100, 0);
         update_accounts(&accounts, pubkeys, 99);
@@ -1577,13 +1607,12 @@ mod tests {
                 AccountStorageStatus::StorageAvailable
             );
         }
-        cleanup_paths(&paths);
     }
 
     #[test]
     fn test_account_grow() {
-        let paths = "grow0".to_string();
-        let accounts = AccountsDB::new(0, &paths);
+        let paths = get_tmp_accounts_path!();
+        let accounts = AccountsDB::new(0, &paths.paths);
         let count = [0, 1];
         let status = [
             AccountStorageStatus::StorageAvailable,
@@ -1629,12 +1658,10 @@ mod tests {
             assert_eq!(accounts.load(0, &pubkey1, true).unwrap(), account1);
             assert_eq!(accounts.load(0, &pubkey2, true).unwrap(), account2);
         }
-        cleanup_paths(&paths);
     }
 
     #[test]
     fn test_accounts_vote_filter() {
-        solana_logger::setup();
         let accounts = Accounts::new(0, None);
         let mut vote_account = Account::new(1, 0, solana_vote_api::id());
         let key = Keypair::new().pubkey();
@@ -1671,9 +1698,8 @@ mod tests {
 
     #[test]
     fn test_account_vote() {
-        solana_logger::setup();
-        let paths = "vote0".to_string();
-        let accounts_db = AccountsDB::new(0, &paths);
+        let paths = get_tmp_accounts_path!();
+        let accounts_db = AccountsDB::new(0, &paths.paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts_db, &mut pubkeys, 0, 1);
         let accounts = accounts_db.get_vote_accounts(0);
@@ -1728,37 +1754,33 @@ mod tests {
         );
         assert_eq!(accounts_db.get_vote_accounts(1).len(), 1);
         assert_eq!(accounts_db.get_vote_accounts(2).len(), 1);
-
-        cleanup_paths(&paths);
     }
 
     #[test]
     fn test_accounts_empty_hash_internal_state() {
-        let paths = "empty_hash".to_string();
-        let accounts = AccountsDB::new(0, &paths);
+        let paths = get_tmp_accounts_path!();
+        let accounts = AccountsDB::new(0, &paths.paths);
         assert_eq!(accounts.hash_internal_state(0), None);
-        cleanup_paths(&paths);
     }
 
     #[test]
     #[should_panic]
     fn test_accountsdb_duplicate_fork_should_panic() {
-        let paths = "duplicate_fork".to_string();
-        let accounts = AccountsDB::new(0, &paths);
-        cleanup_paths(&paths);
+        let paths = get_tmp_accounts_path!();
+        let accounts = AccountsDB::new(0, &paths.paths);
+        cleanup_paths(&paths.paths);
         accounts.add_fork(0, None);
     }
 
     #[test]
     fn test_accountsdb_account_not_found() {
-        let paths = "account_not_found".to_string();
-        let accounts = AccountsDB::new(0, &paths);
+        let paths = get_tmp_accounts_path!();
+        let accounts = AccountsDB::new(0, &paths.paths);
         let mut error_counters = ErrorCounters::default();
         assert_eq!(
             accounts.load_executable_accounts(0, Keypair::new().pubkey(), &mut error_counters),
             Err(BankError::AccountNotFound)
         );
         assert_eq!(error_counters.account_not_found, 1);
-        cleanup_paths(&paths);
     }
 }
