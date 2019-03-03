@@ -318,6 +318,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     //TODO this test won't work since broadcast stage no longer edits the ledger
     fn test_broadcast_ledger() {
         let ledger_path = get_tmp_ledger_path("test_broadcast_ledger");
