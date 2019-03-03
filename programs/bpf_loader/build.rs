@@ -57,7 +57,7 @@ fn main() {
     let bpf_rust = !env::var("CARGO_FEATURE_BPF_RUST").is_err();
     if bpf_rust {
         let install_dir =
-            "../../../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
+            "../../../../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
 
         if !Path::new(
             "../bpf/rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
@@ -69,7 +69,7 @@ fn main() {
             // would deadlock due to recursive cargo calls
             panic!(
                 "solana_bpf_rust_noop.so not found, you must manually run \
-                 `build.sh` in programs/bpf/rust/noop to build it"
+                 `programs/bpf/rust/noop/build.sh` to build it"
             );
         }
 
