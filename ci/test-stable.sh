@@ -55,7 +55,7 @@ test-stable-perf)
   ./build.sh
   popd
 
-  _ cargo test --manifest-path programs/Cargo.toml --no-default-features --features="$PROGRAM_FEATURES"
+  _ cargo test --manifest-path programs/bpf/Cargo.toml --no-default-features --features="$PROGRAM_FEATURES"
   _ cargo test --manifest-path programs/bpf_loader/Cargo.toml --no-default-features --features="$PROGRAM_FEATURES"
 
   # Run root package tests witht these features
