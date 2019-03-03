@@ -231,7 +231,8 @@ mod tests {
     #[test]
     fn test_poh_recorder_no_zero_tick() {
         let prev_hash = Hash::default();
-        let (poh_recorder, _entry_receiver) = PohRecorder::new(0, prev_hash);
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, prev_hash);
+        poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 1);
         assert_eq!(poh_recorder.tick_cache[0].1, 1);
         assert_eq!(poh_recorder.poh.tick_height, 1);
