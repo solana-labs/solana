@@ -4,7 +4,7 @@ pub mod rewards_transaction;
 
 use solana_sdk::pubkey::Pubkey;
 
-pub const REWARDS_PROGRAM_ID: [u8; 32] = [
+const REWARDS_PROGRAM_ID: [u8; 32] = [
     133, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0,
 ];
