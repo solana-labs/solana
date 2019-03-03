@@ -52,7 +52,7 @@ impl BankingStage {
         let exit = Arc::new(AtomicBool::new(false));
 
         // Single thread to compute confirmation
-        let lcs_handle = LeaderConfirmationService::new(&poh_recorder, exit.clone());
+        let lcs_handle = LeaderConfirmationService::start(&poh_recorder, exit.clone());
         // Many banks that process transactions in parallel.
         let mut bank_thread_hdls: Vec<JoinHandle<()>> = (0..Self::num_threads())
             .map(|_| {
