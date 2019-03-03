@@ -11,13 +11,11 @@ clientNodeCount=0
 additionalFullNodeCount=10
 publicNetwork=false
 skipSetup=false
-snapChannel=edge
 tarChannelOrTag=edge
 delete=false
 enableGpu=false
 bootDiskType=""
 leaderRotation=true
-useTarReleaseChannel=false
 blockstreamer=false
 
 usage() {
@@ -36,8 +34,6 @@ Deploys a CD testnet
   zone  - cloud provider zone to deploy the network into
 
   options:
-   -s edge|beta|stable  - Deploy the specified Snap release channel
-                          (default: $snapChannel)
    -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
                                  specified release channel (edge|beta|stable) or release tag
                                  (vX.Y.Z)
@@ -69,7 +65,7 @@ zone=$3
 [[ -n $zone ]] || usage "Zone not specified"
 shift 3
 
-while getopts "h?p:Pn:c:s:t:gG:a:Dbd:ru" opt; do
+while getopts "h?p:Pn:c:t:gG:a:Dbd:ru" opt; do
   case $opt in
   h | \?)
     usage
@@ -83,21 +79,10 @@ while getopts "h?p:Pn:c:s:t:gG:a:Dbd:ru" opt; do
   c)
     clientNodeCount=$OPTARG
     ;;
-  s)
-    case $OPTARG in
-    edge|beta|stable)
-      snapChannel=$OPTARG
-      ;;
-    *)
-      usage "Invalid snap channel: $OPTARG"
-      ;;
-    esac
-    ;;
   t)
     case $OPTARG in
     edge|beta|stable|v*)
       tarChannelOrTag=$OPTARG
-      useTarReleaseChannel=true
       ;;
     *)
       usage "Invalid release channel: $OPTARG"
@@ -242,14 +227,8 @@ ok=true
     op=start
   fi
 
-  if $useTarReleaseChannel; then
-    deploySource="-t $tarChannelOrTag"
-  else
-    deploySource="-s $snapChannel"
-  fi
-
   # shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
-  time net/net.sh $op $deploySource \
+  time net/net.sh $op -t "$tarChannelOrTag" \
     $maybeSkipSetup $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
 ) || ok=false
 

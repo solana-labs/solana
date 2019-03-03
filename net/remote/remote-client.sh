@@ -27,12 +27,6 @@ if [[ $threadCount -gt 4 ]]; then
 fi
 
 case $deployMethod in
-snap)
-  net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/solana/solana.snap" .
-  sudo snap install solana.snap --devmode --dangerous
-
-  solana_bench_tps=/snap/bin/solana.bench-tps
-  ;;
 local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1

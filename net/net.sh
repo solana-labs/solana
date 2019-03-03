@@ -26,8 +26,6 @@ Operate a configured testnet
  logs     - Fetch remote logs from each network node
 
  start/update-specific options:
-   -S [snapFilename]           - Deploy the specified Snap file
-   -s edge|beta|stable         - Deploy the latest Snap on the specified Snap release channel
    -T [tarFilename]            - Deploy the specified release tarball
    -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
                                  specified release channel (edge|beta|stable) or release tag
@@ -55,9 +53,7 @@ EOF
   exit $exitcode
 }
 
-snapChannel=
 releaseChannel=
-snapFilename=
 deployMethod=local
 sanityExtraArgs=
 cargoFeatures=
@@ -69,30 +65,14 @@ command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?S:s:T:t:o:f:r:D:" opt; do
+while getopts "h?T:t:o:f:r:D:" opt; do
   case $opt in
   h | \?)
     usage
     ;;
-  S)
-    snapFilename=$OPTARG
-    [[ -f $snapFilename ]] || usage "Snap not readable: $snapFilename"
-    deployMethod=snap
-    ;;
-  s)
-    case $OPTARG in
-    edge|beta|stable)
-      snapChannel=$OPTARG
-      deployMethod=snap
-      ;;
-    *)
-      usage "Invalid snap channel: $OPTARG"
-      ;;
-    esac
-    ;;
   T)
     tarballFilename=$OPTARG
-    [[ -f $tarballFilename ]] || usage "Snap not readable: $tarballFilename"
+    [[ -r $tarballFilename ]] || usage "File not readable: $tarballFilename"
     deployMethod=tar
     ;;
   t)
@@ -199,9 +179,6 @@ startBootstrapLeader() {
     set -x
     startCommon "$ipAddress" || exit 1
     case $deployMethod in
-    snap)
-      rsync -vPrc -e "ssh ${sshOptions[*]}" "$snapFilename" "$ipAddress:~/solana/solana.snap"
-      ;;
     tar)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:~/.cargo/bin/"
       ;;
@@ -295,36 +272,6 @@ sanity() {
 
 start() {
   case $deployMethod in
-  snap)
-    if [[ -n $snapChannel ]]; then
-      rm -f "$SOLANA_ROOT"/solana_*.snap
-      if [[ $(uname) != Linux ]]; then
-        (
-          set -x
-          SOLANA_DOCKER_RUN_NOSETUID=1 "$SOLANA_ROOT"/ci/docker-run.sh ubuntu:18.04 bash -c "
-            set -ex;
-            apt-get -qq update;
-            apt-get -qq -y install snapd;
-            until snap download --channel=$snapChannel solana; do
-              sleep 1;
-            done
-          "
-        )
-      else
-        (
-          cd "$SOLANA_ROOT"
-          until snap download --channel="$snapChannel" solana; do
-            sleep 1
-          done
-        )
-      fi
-      snapFilename="$(echo "$SOLANA_ROOT"/solana_*.snap)"
-      [[ -r $snapFilename ]] || {
-        echo "Error: Snap not readable: $snapFilename"
-        exit 1
-      }
-    fi
-    ;;
   tar)
     if [[ -n $releaseChannel ]]; then
       rm -f "$SOLANA_ROOT"/solana-release.tar.bz2
@@ -421,13 +368,6 @@ start() {
 
   declare networkVersion=unknown
   case $deployMethod in
-  snap)
-    IFS=\  read -r _ networkVersion _ < <(
-      ssh "${sshOptions[@]}" "${fullnodeIpList[0]}" \
-        "snap info solana | grep \"^installed:\""
-    )
-    networkVersion=${networkVersion/0+git./}
-    ;;
   tar)
     networkVersion="$(
       tail -n1 "$SOLANA_ROOT"/solana-release/version.txt || echo "tar-unknown"
@@ -461,9 +401,6 @@ stopNode() {
     ssh "${sshOptions[@]}" "$ipAddress" "
       PS4=\"$PS4\"
       set -x
-      if snap list solana; then
-        sudo snap set solana mode=
-      fi
       ! tmux list-sessions || tmux kill-session
       for pid in solana/{net-stats,oom-monitor}.pid; do
         pgid=\$(ps opgid= \$(cat \$pid) | tr -d '[:space:]')

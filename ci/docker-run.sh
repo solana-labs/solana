@@ -71,7 +71,6 @@ ARGS+=(
   --env CI
   --env CODECOV_TOKEN
   --env CRATES_IO_TOKEN
-  --env SNAPCRAFT_CREDENTIALS_KEY
 )
 
 if $INTERACTIVE; then

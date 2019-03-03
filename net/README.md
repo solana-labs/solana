@@ -52,12 +52,12 @@ or
 $ ./ec2.sh create -P ...
 ```
 
-### Deploying a Snap-based network
-To deploy the latest pre-built `edge` channel Snap (ie, latest from the `master`
+### Deploying a tarball-based network
+To deploy the latest pre-built `edge` channel tarball (ie, latest from the `master`
 branch), once the testnet has been created run:
 
 ```bash
-$ ./net.sh start -s edge
+$ ./net.sh start -t edge
 ```
 
 ### Enabling CUDA
@@ -70,7 +70,7 @@ or
 $ ./ec2.sh create -g ...
 ```
 
-If deploying a Snap-based network nothing further is required, as GPU presence
+If deploying a tarball-based network nothing further is required, as GPU presence
 is detected at runtime and the CUDA build is auto selected.
 
 If deploying a locally-built network, first run `./fetch-perf-libs.sh` then

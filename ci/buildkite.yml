@@ -26,10 +26,6 @@ steps:
   #   timeout_in_minutes: 20
   #   agents:
   #     - "queue=large"
-  - command: "ci/pr-snap.sh"
-    timeout_in_minutes: 20
-    name: "snap"
-    branches: "pull/*"
   - wait
   - trigger: "solana-secondary"
     branches: "!pull/*"

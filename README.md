@@ -110,10 +110,7 @@ We maintain several testnets:
 
 They are deployed with the `ci/testnet-manager.sh` script through a list of [scheduled
 buildkite jobs](https://buildkite.com/solana-labs/testnet-management/settings/schedules).
-Each testnet can be manually manipulated from buildkite as well.  The `-perf`
-testnets use a release tarball while the non`-perf` builds use the snap build
-(we've observed that the snap build runs slower than a tarball but this has yet
-to be root caused).
+Each testnet can be manually manipulated from buildkite as well.
 
 ## How do I reset the testnet?
 Manually trigger the [testnet-management](https://buildkite.com/solana-labs/testnet-management) pipeline

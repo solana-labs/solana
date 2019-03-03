@@ -9,12 +9,6 @@ source "$here"/common.sh
 # shellcheck source=scripts/oom-score-adj.sh
 source "$here"/../scripts/oom-score-adj.sh
 
-if [[ -d "$SNAP" ]]; then
-  # Exit if mode is not yet configured
-  # (typically the case after the Snap is first installed)
-  [[ -n "$(snapctl get mode)" ]] || exit 0
-fi
-
 usage() {
   if [[ -n $1 ]]; then
     echo "$*"
@@ -79,12 +73,6 @@ while [[ ${1:0:1} = - ]]; do
   fi
 done
 
-if [[ -d $SNAP ]]; then
-  if [[ $(snapctl get leader-rotation) = false ]]; then
-    maybe_no_leader_rotation="--no-leader-rotation"
-  fi
-fi
-
 if [[ -n $3 ]]; then
   usage
 fi
@@ -92,47 +80,30 @@ fi
 find_leader() {
   declare leader leader_address
   declare shift=0
-  if [[ -d $SNAP ]]; then
-    if [[ -n $1 ]]; then
-      usage "Error: unexpected parameter: $1"
-    fi
 
-    # Select leader from the Snap configuration
-    leader_ip=$(snapctl get entrypoint-ip)
-    if [[ -z $leader_ip ]]; then
-      leader=testnet.solana.com
+  if [[ -z $1 ]]; then
+    leader=${here}/..        # Default to local tree for rsync
+    leader_address=127.0.0.1:8001 # Default to local leader
+  elif [[ -z $2 ]]; then
+    leader=$1
+
+    declare leader_ip
+    if [[ $leader =~ ^[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}$ ]]; then
+      leader_ip=$leader
+    else
       leader_ip=$(dig +short "${leader%:*}" | head -n1)
+
       if [[ -z $leader_ip ]]; then
           usage "Error: unable to resolve IP address for $leader"
       fi
     fi
-    leader=$leader_ip
+
     leader_address=$leader_ip:8001
+    shift=1
   else
-    if [[ -z $1 ]]; then
-      leader=${here}/..        # Default to local tree for rsync
-      leader_address=127.0.0.1:8001 # Default to local leader
-    elif [[ -z $2 ]]; then
-      leader=$1
-
-      declare leader_ip
-      if [[ $leader =~ ^[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}$ ]]; then
-        leader_ip=$leader
-      else
-        leader_ip=$(dig +short "${leader%:*}" | head -n1)
-
-        if [[ -z $leader_ip ]]; then
-            usage "Error: unable to resolve IP address for $leader"
-        fi
-      fi
-
-      leader_address=$leader_ip:8001
-      shift=1
-    else
-      leader=$1
-      leader_address=$2
-      shift=2
-    fi
+    leader=$1
+    leader_address=$2
+    shift=2
   fi
 
   echo "$leader" "$leader_address" "$shift"

@@ -43,8 +43,7 @@ the `master` branch as late as possible prior to the milestone release.
 
 ### v*X.Y.Z* release tag
 The release tags are created as desired by the owner of the given stabilization
-branch, and cause that *X.Y.Z* release to be shipped to https://crates.io,
-https://snapcraft.io/, and elsewhere.
+branch, and cause that *X.Y.Z* release to be shipped to https://crates.io
 
 Immediately after a new v*X.Y.Z* branch tag has been created, the `Cargo.toml`
 patch version number (*Z*) of the stabilization branch is incremented by the
