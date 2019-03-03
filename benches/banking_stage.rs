@@ -118,13 +118,16 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         })
         .collect();
     let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    let (_stage, signal_receiver) = BankingStage::new(
-        &bank,
+    let (bank_sender, bank_receiver) = channel();
+    let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+    let cluster_info = Arc::new(RwLock::new(cluster_info));
+    let (banking_stage, signal_receiver) = BankingStage::new(
+        &cluster_info,
+        bank_receiver,
         &poh_recorder,
         verified_receiver,
-        std::u64::MAX,
-        genesis_block.bootstrap_leader_id,
     );
+    bank_sender.send(bank.clone()).expect("sending bank");
 
     let mut id = genesis_block.hash();
     for _ in 0..MAX_RECENT_TICK_HASHES {
@@ -227,13 +230,16 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         })
         .collect();
     let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    let (_stage, signal_receiver) = BankingStage::new(
-        &bank,
+    let (bank_sender, bank_receiver) = channel();
+    let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+    let cluster_info = Arc::new(RwLock::new(cluster_info));
+    let (banking_stage, signal_receiver) = BankingStage::new(
+        &cluster_info,
+        bank_receiver,
         &poh_recorder,
         verified_receiver,
-        std::u64::MAX,
-        genesis_block.bootstrap_leader_id,
     );
+    bank_sender.send(bank.clone()).expect("sending bank");
 
     let mut id = genesis_block.hash();
     for _ in 0..MAX_RECENT_TICK_HASHES {
