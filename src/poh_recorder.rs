@@ -57,6 +57,14 @@ impl PohRecorder {
     }
     // synchronize PoH with a bank
     pub fn reset(&mut self, tick_height: u64, last_id: Hash) {
+        if self.poh.hash == last_id {
+            assert_eq!(self.poh.tick_height, tick_height);
+            info!(
+                "reset skipped for: {},{}",
+                self.poh.hash, self.poh.tick_height
+            );
+            return;
+        }
         let mut cache = vec![];
         info!(
             "reset poh from: {},{} to: {},{}",
@@ -117,7 +125,10 @@ impl PohRecorder {
             Ok(())
         };
         if self.poh.tick_height >= working_bank.max_tick_height {
-            info!("poh_record: max_tick_height reached, setting working bank to None");
+            info!(
+                "poh_record: max_tick_height reached, setting working bank {} to None",
+                working_bank.bank.slot()
+            );
             self.working_bank = None;
         }
         if e.is_err() {

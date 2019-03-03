@@ -73,15 +73,11 @@ impl BankingStage {
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || loop {
                         waiter.send(())?;
-                        let bank = poh_recorder.lock().unwrap().bank();
-                        if let Some(bank) = bank {
-                            debug!("banking-stage-tx bank {}", bank.slot());
                             let packets =
-                                Self::process_loop(&bank, &verified_receiver, &poh_recorder);
+                                Self::process_loop(&verified_receiver, &poh_recorder);
                             if let Some(leader) = cluster_info.read().unwrap().leader_data() {
                                 Self::forward_unprocessed_packets(&leader.tpu, packets)?;
                             }
-                        }
                     })
                     .unwrap()
             })
@@ -92,8 +88,12 @@ impl BankingStage {
         let bank_thread_hdl: JoinHandle<Result<()>> = Builder::new()
             .name("solana-banking-working_bank".to_string())
             .spawn(move || loop {
-                let bank =
-                    Self::forward_until_bank(&cluster_info, &bank_receiver, &verified_receiver)?;
+                let result =
+                    Self::forward_until_bank(&cluster_info, &bank_receiver, &verified_receiver);
+                if result.is_err() {
+                    warn!("exiting working_bank thread");
+                }
+                let bank = result?;
                 let max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
                 let working_bank = WorkingBank {
                     bank: bank.clone(),
@@ -103,7 +103,8 @@ impl BankingStage {
                 };
 
                 info!(
-                    "new working bank {} {} {}",
+                    "new working bank slot: {} min: {} max: {} current: {}",
+                    working_bank.bank.slot(),
                     working_bank.min_tick_height,
                     working_bank.max_tick_height,
                     poh_recorder.lock().unwrap().poh.tick_height
@@ -111,7 +112,11 @@ impl BankingStage {
                 leader_confirmation_service.set_bank(bank.clone());
                 poh_recorder.lock().unwrap().set_working_bank(working_bank);
                 for _ in 0..Self::num_threads() {
-                    notifier.recv()?;
+                    let result = notifier.recv();
+                    if result.is_err() {
+                        warn!("exiting working_bank thread {:?}", result);
+                        result?
+                    }
                 }
             })
             .unwrap();
@@ -186,13 +191,12 @@ impl BankingStage {
     }
 
     pub fn process_loop(
-        bank: &Bank,
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> UnprocessedPackets {
         let mut unprocessed_packets: UnprocessedPackets = vec![];
         loop {
-            match Self::process_packets(&bank, &verified_receiver, &poh_recorder) {
+            match Self::process_packets(&verified_receiver, &poh_recorder) {
                 Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                 Ok(more_unprocessed_packets) => {
                     unprocessed_packets.extend(more_unprocessed_packets);
@@ -285,7 +289,8 @@ impl BankingStage {
         bank.unlock_accounts(&txs, &results);
         let unlock_time = now.elapsed();
         debug!(
-            "lock: {}us load_execute: {}us record: {}us commit: {}us unlock: {}us txs_len: {}",
+            "bank: {} lock: {}us load_execute: {}us record: {}us commit: {}us unlock: {}us txs_len: {}",
+            bank.slot(),
             duration_as_us(&lock_time),
             duration_as_us(&load_execute_time),
             duration_as_us(&record_time),
@@ -316,7 +321,11 @@ impl BankingStage {
             );
             trace!("process_transcations: {:?}", result);
             if let Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) = result {
-                info!("process transactions: max height reached");
+                info!(
+                    "process transactions: max height reached slot: {} height: {}",
+                    bank.slot(),
+                    bank.tick_height()
+                );
                 break;
             }
             result?;
@@ -327,7 +336,6 @@ impl BankingStage {
 
     /// Process the incoming packets
     pub fn process_packets(
-        bank: &Bank,
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
         poh: &Arc<Mutex<PohRecorder>>,
     ) -> Result<UnprocessedPackets> {
@@ -336,11 +344,15 @@ impl BankingStage {
             .lock()
             .unwrap()
             .recv_timeout(Duration::from_millis(100))?;
+
+     	let bank = poh.lock().unwrap().bank().ok_or(PohRecorderError::MaxHeightReached)?;
+       	debug!("banking-stage-tx bank {}", bank.slot());
         let mut reqs_len = 0;
         let mms_len = mms.len();
         info!(
-            "@{:?} process start stalled for: {:?}ms batches: {}",
+            "@{:?} bank: {} process start stalled for: {:?}ms batches: {}",
             timing::timestamp(),
+			bank.slot(),
             timing::duration_as_ms(&recv_start.elapsed()),
             mms.len(),
         );
@@ -360,7 +372,7 @@ impl BankingStage {
             let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
             reqs_len += transactions.len();
 
-            debug!("transactions received {}", transactions.len());
+            debug!("bank: {} transactions received {}", bank.slot(), transactions.len());
             let (verified_transactions, verified_transaction_index): (Vec<_>, Vec<_>) =
                 transactions
                     .into_iter()
@@ -378,9 +390,9 @@ impl BankingStage {
                     })
                     .unzip();
 
-            debug!("verified transactions {}", verified_transactions.len());
+            debug!("bank: {} verified transactions {}", bank.slot(), verified_transactions.len());
 
-            let processed = Self::process_transactions(bank, &verified_transactions, poh)?;
+            let processed = Self::process_transactions(&bank, &verified_transactions, poh)?;
             if processed < verified_transactions.len() {
                 bank_shutdown = true;
                 // Collect any unprocessed transactions in this batch for forwarding
@@ -396,8 +408,9 @@ impl BankingStage {
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
         info!(
-            "@{:?} done processing transaction batches: {} time: {:?}ms reqs: {} reqs/s: {}",
+            "@{:?} bank: {} done processing transaction batches: {} time: {:?}ms reqs: {} reqs/s: {}",
             timing::timestamp(),
+			bank.slot(),
             mms_len,
             total_time_ms,
             reqs_len,

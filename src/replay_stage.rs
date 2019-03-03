@@ -85,6 +85,7 @@ impl ReplayStage {
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_.clone());
+                let mut first_block = false;
                 loop {
                     let now = Instant::now();
                     // Stop getting entries if we get exit signal
@@ -92,11 +93,11 @@ impl ReplayStage {
                         break;
                     }
                     Self::generate_new_bank_forks(&blocktree, &mut bank_forks.write().unwrap());
-                    let live_bank_ids = bank_forks.read().unwrap().active_banks();
-                    trace!("live banks {:?}", live_bank_ids);
+                    let active_banks = bank_forks.read().unwrap().active_banks();
+                    trace!("active banks {:?}", active_banks);
                     let mut votable: Vec<u64> = vec![];
-                    for bank_id in live_bank_ids {
-                        let bank = bank_forks.read().unwrap().get(bank_id).unwrap().clone();
+                    for bank_id in &active_banks {
+                        let bank = bank_forks.read().unwrap().get(*bank_id).unwrap().clone();
                         if !Self::is_tpu(&bank, my_id) {
                             Self::replay_blocktree_into_bank(
                                 &bank,
@@ -105,16 +106,27 @@ impl ReplayStage {
                                 &forward_entry_sender,
                             )?;
                         }
-                        let max_tick_height = (bank_id + 1) * bank.ticks_per_slot() - 1;
+                        let max_tick_height = (*bank_id + 1) * bank.ticks_per_slot() - 1;
                         if bank.tick_height() == max_tick_height {
                             bank.freeze();
-                            votable.push(bank_id);
-                            progress.remove(&bank_id);
+                            info!("bank frozen {}", bank.slot());
+                            votable.push(*bank_id);
+                            progress.remove(bank_id);
                             let id = leader_schedule_utils::slot_leader_at(bank.slot(), &bank);
                             if let Err(e) = slot_full_sender.send((bank.slot(), id)) {
                                 info!("{} slot_full alert failed: {:?}", my_id, e);
                             }
                         }
+                    }
+                    let frozen = bank_forks.read().unwrap().frozen_banks();
+                    if votable.is_empty()
+                        && frozen.len() == 1
+                        && active_banks.is_empty()
+                        && first_block == false
+                    {
+                        first_block = true;
+                        votable.extend(frozen.keys());
+                        info!("voting on first block {:?}", votable);
                     }
                     // TODO: fork selection
                     // vote on the latest one for now
@@ -142,22 +154,29 @@ impl ReplayStage {
                                 0,
                             );
                             cluster_info.write().unwrap().push_vote(vote);
-                            poh_recorder
-                                .lock()
-                                .unwrap()
-                                .reset(parent.tick_height(), parent.last_id());
                         }
+                        poh_recorder
+                            .lock()
+                            .unwrap()
+                            .reset(parent.tick_height(), parent.last_id());
+
                         if next_leader == my_id {
+                    		let frozen = bank_forks.read().unwrap().frozen_banks();
+							assert!(frozen.get(&next_slot).is_none());
+                            assert!(bank_forks.read().unwrap().get(next_slot).is_none());
+
                             let tpu_bank = Bank::new_from_parent(&parent, my_id, next_slot);
                             bank_forks.write().unwrap().insert(next_slot, tpu_bank);
-
-                            debug!(
-                                "banking_stage_sender: me: {} next_slot: {} next_leader: {}",
-                                my_id, next_slot, next_leader
-                            );
                             if let Some(tpu_bank) =
                                 bank_forks.read().unwrap().get(next_slot).cloned()
                             {
+								assert_eq!(bank_forks.read().unwrap().working_bank().slot(), tpu_bank.slot());
+                                debug!(
+                                    "banking_stage_sender: me: {} next_slot: {} next_leader: {}",
+                                    my_id,
+                                    tpu_bank.slot(),
+                                    next_leader
+                                );
                                 banking_stage_sender.send(tpu_bank)?;
                             }
                         }
@@ -171,7 +190,7 @@ impl ReplayStage {
                     match result {
                         Err(RecvTimeoutError::Timeout) => continue,
                         Err(_) => break,
-                        Ok(_) => debug!("blocktree signal"),
+                        Ok(_) => trace!("blocktree signal"),
                     };
                 }
                 Ok(())
@@ -271,25 +290,31 @@ impl ReplayStage {
         // Find the next slot that chains to the old slot
         let frozen_banks = forks.frozen_banks();
         let frozen_bank_ids: Vec<u64> = frozen_banks.keys().cloned().collect();
-        trace!("generate new forks {:?}", frozen_bank_ids);
+        trace!("frozen_banks {:?}", frozen_bank_ids);
         let next_slots = blocktree
             .get_slots_since(&frozen_bank_ids)
             .expect("Db error");
+        trace!("generate new forks {:?}", next_slots);
         for (parent_id, children) in next_slots {
             let parent_bank = frozen_banks
                 .get(&parent_id)
                 .expect("missing parent in bank forks")
                 .clone();
             for child_id in children {
-                let new_fork = forks.get(child_id).is_none();
-                if new_fork {
-                    let leader = leader_schedule_utils::slot_leader_at(child_id, &parent_bank);
-                    trace!("new fork:{} parent:{}", child_id, parent_id);
-                    forks.insert(
-                        child_id,
-                        Bank::new_from_parent(&parent_bank, leader, child_id),
-                    );
+                if frozen_banks.get(&child_id).is_some() {
+                    trace!("child already frozen {}", child_id);
+                    continue;
                 }
+                if forks.get(child_id).is_some() {
+                    trace!("child already active {}", child_id);
+                    continue;
+                }
+                let leader = leader_schedule_utils::slot_leader_at(child_id, &parent_bank);
+                info!("new fork:{} parent:{}", child_id, parent_id);
+                forks.insert(
+                    child_id,
+                    Bank::new_from_parent(&parent_bank, leader, child_id),
+                );
             }
         }
     }

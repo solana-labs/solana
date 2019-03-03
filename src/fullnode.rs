@@ -250,6 +250,8 @@ impl Fullnode {
             if exit_.load(Ordering::Relaxed) {
                 break;
             }
+            let bank = bank_forks_.read().unwrap().working_bank();
+            trace!("rpc working bank {} {}", bank.slot(), bank.last_id());
             rpc_service_rp
                 .write()
                 .unwrap()

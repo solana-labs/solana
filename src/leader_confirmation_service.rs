@@ -108,7 +108,7 @@ impl LeaderConfirmationService {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                    // dont hold this lock to long
+                    // dont hold this lock too long
                     let maybe_bank = current_bank.lock().unwrap().clone();
                     if let Some(ref bank) = maybe_bank {
                         Self::compute_confirmation(bank, &mut last_valid_validator_timestamp);
