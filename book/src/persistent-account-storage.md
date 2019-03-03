@@ -37,22 +37,22 @@ type AppendVecId = usize;
 
 type Fork = u64;
 
-struct AccountMap(Vec<Fork, (AppendVecId, u64)>);
+struct AccountMap(Hashmap<Fork, (AppendVecId, u64)>);
 
 type AccountIndex = HashMap<Pubkey, AccountMap>;
 
 ```
 
-The index is a map of account Pubkeys to a map of forks and the location of the
-Account data in an AppendVec.  To get the latest version of an account:
+The index is a map of account Pubkeys to a map of Forks and the location of the
+Account data in an AppendVec.  To get the version of an account for a specific Fork:
 
 ```
 /// Load the account for the pubkey.
-/// This function will load the account from the greatest or equal to fork. 
-/// * forks - A vector of forks indicating a priority list of forks. The earlier
-///   forks are loaded first if available.
+/// This function will load the account from the specified fork, falling back to the fork's parents
+/// * fork - a virtual Accounts instance, keyed by Fork.  Accounts keep track of their parents with Forks,
+///       the persistent store
 /// * pubkey - The Account's public key.
-pub fn load_slow(&self, forks: &[u64], pubkey: &Pubkey) -> Option<&Account>
+pub fn load_slow(&self, id: Fork, pubkey: &Pubkey) -> Option<&Account>
 ```
 
 The read is satisfied by pointing to a memory mapped location in the
@@ -62,9 +62,9 @@ The read is satisfied by pointing to a memory mapped location in the
 
 The [fork selection algorithm](fork-selection.md), eventually selects a fork
 that is committed as a root fork.  No further rollback to the root fork is
-possible.  When a fork is picked as a root fork, it is combined with a direct
-descendant.  All other direct descendants and forks derived from them can be
-cleaned up.
+possible.  When a fork is picked as a root fork, it is populated from all of
+its parents.  If any of those parents become unreachable as a result, they can
+be cleaned up.
 
 Three possible options exist
 
