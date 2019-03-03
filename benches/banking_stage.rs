@@ -4,8 +4,9 @@ extern crate test;
 
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana::banking_stage::BankingStage;
-use solana::entry::Entry;
+use solana::banking_stage::{BankingStage, TpuBankEntries};
+use solana::cluster_info::ClusterInfo;
+use solana::cluster_info::Node;
 use solana::packet::to_packets_chunked;
 use solana::poh_recorder::PohRecorder;
 use solana::poh_service::{PohService, PohServiceConfig};
@@ -19,15 +20,15 @@ use solana_sdk::timing::MAX_RECENT_TICK_HASHES;
 use std::iter;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 use test::Bencher;
 
-fn check_txs(receiver: &Receiver<Vec<(Entry, u64)>>, ref_tx_count: usize) {
+fn check_txs(receiver: &Receiver<TpuBankEntries>, ref_tx_count: usize) {
     let mut total = 0;
     loop {
         let entries = receiver.recv_timeout(Duration::new(1, 0));
-        if let Ok(entries) = entries {
+        if let Ok((_, entries)) = entries {
             for (entry, _) in &entries {
                 total += entry.transactions.len();
             }
@@ -149,6 +150,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         start %= verified.len();
     });
     poh_service.close().unwrap();
+    banking_stage.exit();
 }
 
 #[bench]
@@ -261,4 +263,5 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         start %= verified.len();
     });
     poh_service.close().unwrap();
+    banking_stage.exit();
 }
