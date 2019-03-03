@@ -12,6 +12,9 @@ edition = "2018"
 solana-sdk = { path = "../../sdk", version = "0.12.0" }
 log = "0.4.2"
 
+[dev-dependencies]
+solana-runtime = { path = "../../runtime", version = "0.12.0" }
+
 [lib]
 name = "failure"
 crate-type = ["cdylib"]
