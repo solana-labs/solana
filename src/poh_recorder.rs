@@ -195,228 +195,228 @@ impl PohRecorder {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::test_tx::test_tx;
-//     use solana_sdk::genesis_block::GenesisBlock;
-//     use solana_sdk::hash::hash;
-//     use std::sync::mpsc::channel;
-//     use std::sync::Arc;
-//
-//     #[test]
-//     fn test_poh_recorder_no_zero_tick() {
-//         let prev_hash = Hash::default();
-//         let mut poh_recorder = PohRecorder::new(0, prev_hash);
-//         poh_recorder.tick();
-//         assert_eq!(poh_recorder.tick_cache.len(), 1);
-//         assert_eq!(poh_recorder.tick_cache[0].1, 1);
-//         assert_eq!(poh_recorder.poh.tick_height, 1);
-//     }
-//
-//     #[test]
-//     fn test_poh_recorder_tick_height_is_last_tick() {
-//         let prev_hash = Hash::default();
-//         let mut poh_recorder = PohRecorder::new(0, prev_hash);
-//         poh_recorder.tick();
-//         poh_recorder.tick();
-//         assert_eq!(poh_recorder.tick_cache.len(), 2);
-//         assert_eq!(poh_recorder.tick_cache[1].1, 2);
-//         assert_eq!(poh_recorder.poh.tick_height, 2);
-//     }
-//
-//     #[test]
-//     fn test_poh_recorder_reset_clears_cache() {
-//         let mut poh_recorder = PohRecorder::new(0, Hash::default());
-//         poh_recorder.tick();
-//         assert_eq!(poh_recorder.tick_cache.len(), 1);
-//         poh_recorder.reset(0, Hash::default());
-//         assert_eq!(poh_recorder.tick_cache.len(), 0);
-//     }
-//
-//     #[test]
-//     fn test_poh_recorder_clear() {
-//         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-//         let bank = Arc::new(Bank::new(&genesis_block));
-//         let prev_hash = bank.last_id();
-//         let (entry_sender, _) = channel();
-//         let mut poh_recorder = PohRecorder::new(0, prev_hash);
-//
-//         let working_bank = WorkingBank {
-//             bank,
-//             sender: entry_sender,
-//             min_tick_height: 2,
-//             max_tick_height: 3,
-//         };
-//         poh_recorder.set_working_bank(working_bank);
-//         assert!(poh_recorder.working_bank.is_some());
-//         poh_recorder.clear_bank();
-//         assert!(poh_recorder.working_bank.is_none());
-//     }
-//
-//     #[test]
-//     fn test_poh_recorder_tick_sent_after_min() {
-//         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-//         let bank = Arc::new(Bank::new(&genesis_block));
-//         let prev_hash = bank.last_id();
-//         let (entry_sender, entry_receiver) = channel();
-//         let mut poh_recorder = PohRecorder::new(0, prev_hash);
-//
-//         let working_bank = WorkingBank {
-//             bank,
-//             sender: entry_sender,
-//             min_tick_height: 2,
-//             max_tick_height: 3,
-//         };
-//         poh_recorder.set_working_bank(working_bank);
-//         poh_recorder.tick();
-//         poh_recorder.tick();
-//         //tick height equal to min_tick_height
-//         //no tick has been sent
-//         assert_eq!(poh_recorder.tick_cache.last().unwrap().1, 2);
-//         assert!(entry_receiver.try_recv().is_err());
-//
-//         // all ticks are sent after height > min
-//         poh_recorder.tick();
-//         assert_eq!(poh_recorder.poh.tick_height, 3);
-//         assert_eq!(poh_recorder.tick_cache.len(), 0);
-//         let e = entry_receiver.recv().expect("recv 1");
-//         assert_eq!(e.len(), 3);
-//         assert!(poh_recorder.working_bank.is_none());
-//     }
-//
-//     #[test]
-//     fn test_poh_recorder_tick_sent_upto_and_including_max() {
-//         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-//         let bank = Arc::new(Bank::new(&genesis_block));
-//         let prev_hash = bank.last_id();
-//         let (entry_sender, entry_receiver) = channel();
-//         let mut poh_recorder = PohRecorder::new(0, prev_hash);
-//
-//         poh_recorder.tick();
-//         poh_recorder.tick();
-//         poh_recorder.tick();
-//         poh_recorder.tick();
-//         assert_eq!(poh_recorder.tick_cache.last().unwrap().1, 4);
-//         assert_eq!(poh_recorder.poh.tick_height, 4);
-//
-//         let working_bank = WorkingBank {
-//             bank,
-//             sender: entry_sender,
-//             min_tick_height: 2,
-//             max_tick_height: 3,
-//         };
-//         poh_recorder.set_working_bank(working_bank);
-//         poh_recorder.tick();
-//
-//         assert_eq!(poh_recorder.poh.tick_height, 5);
-//         assert!(poh_recorder.working_bank.is_none());
-//         let e = entry_receiver.recv().expect("recv 1");
-//         assert_eq!(e.len(), 3);
-//     }
-//
-//     #[test]
-//     fn test_poh_recorder_record_to_early() {
-//         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-//         let bank = Arc::new(Bank::new(&genesis_block));
-//         let prev_hash = bank.last_id();
-//         let (entry_sender, entry_receiver) = channel();
-//         let mut poh_recorder = PohRecorder::new(0, prev_hash);
-//
-//         let working_bank = WorkingBank {
-//             bank,
-//             sender: entry_sender,
-//             min_tick_height: 2,
-//             max_tick_height: 3,
-//         };
-//         poh_recorder.set_working_bank(working_bank);
-//         poh_recorder.tick();
-//         let tx = test_tx();
-//         let h1 = hash(b"hello world!");
-//         assert!(poh_recorder.record(h1, vec![tx.clone()]).is_err());
-//         assert!(entry_receiver.try_recv().is_err());
-//     }
-//
-//     #[test]
-//     fn test_poh_recorder_record_at_min_passes() {
-//         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-//         let bank = Arc::new(Bank::new(&genesis_block));
-//         let prev_hash = bank.last_id();
-//         let (entry_sender, entry_receiver) = channel();
-//         let mut poh_recorder = PohRecorder::new(0, prev_hash);
-//
-//         let working_bank = WorkingBank {
-//             bank,
-//             sender: entry_sender,
-//             min_tick_height: 1,
-//             max_tick_height: 2,
-//         };
-//         poh_recorder.set_working_bank(working_bank);
-//         poh_recorder.tick();
-//         assert_eq!(poh_recorder.tick_cache.len(), 1);
-//         assert_eq!(poh_recorder.poh.tick_height, 1);
-//         let tx = test_tx();
-//         let h1 = hash(b"hello world!");
-//         assert!(poh_recorder.record(h1, vec![tx.clone()]).is_ok());
-//         assert_eq!(poh_recorder.tick_cache.len(), 0);
-//
-//         //tick in the cache + entry
-//         let e = entry_receiver.recv().expect("recv 1");
-//         assert_eq!(e.len(), 1);
-//         assert!(e[0].0.is_tick());
-//         let e = entry_receiver.recv().expect("recv 2");
-//         assert!(!e[0].0.is_tick());
-//     }
-//
-//     #[test]
-//     fn test_poh_recorder_record_at_max_fails() {
-//         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-//         let bank = Arc::new(Bank::new(&genesis_block));
-//         let prev_hash = bank.last_id();
-//         let (entry_sender, entry_receiver) = channel();
-//         let mut poh_recorder = PohRecorder::new(0, prev_hash);
-//
-//         let working_bank = WorkingBank {
-//             bank,
-//             sender: entry_sender,
-//             min_tick_height: 1,
-//             max_tick_height: 2,
-//         };
-//         poh_recorder.set_working_bank(working_bank);
-//         poh_recorder.tick();
-//         poh_recorder.tick();
-//         assert_eq!(poh_recorder.poh.tick_height, 2);
-//         let tx = test_tx();
-//         let h1 = hash(b"hello world!");
-//         assert!(poh_recorder.record(h1, vec![tx.clone()]).is_err());
-//
-//         let e = entry_receiver.recv().expect("recv 1");
-//         assert_eq!(e.len(), 2);
-//         assert!(e[0].0.is_tick());
-//         assert!(e[1].0.is_tick());
-//     }
-//
-//     #[test]
-//     fn test_poh_cache_on_disconnect() {
-//         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-//         let bank = Arc::new(Bank::new(&genesis_block));
-//         let prev_hash = bank.last_id();
-//         let (entry_sender, entry_receiver) = channel();
-//         let mut poh_recorder = PohRecorder::new(0, prev_hash);
-//
-//         let working_bank = WorkingBank {
-//             bank,
-//             sender: entry_sender,
-//             min_tick_height: 2,
-//             max_tick_height: 3,
-//         };
-//         poh_recorder.set_working_bank(working_bank);
-//         poh_recorder.tick();
-//         poh_recorder.tick();
-//         assert_eq!(poh_recorder.poh.tick_height, 2);
-//         drop(entry_receiver);
-//         poh_recorder.tick();
-//         assert!(poh_recorder.working_bank.is_none());
-//         assert_eq!(poh_recorder.tick_cache.len(), 3);
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_tx::test_tx;
+    use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::hash::hash;
+    use std::sync::mpsc::channel;
+    use std::sync::Arc;
+
+    #[test]
+    fn test_poh_recorder_no_zero_tick() {
+        let prev_hash = Hash::default();
+        let mut poh_recorder = PohRecorder::new(0, prev_hash);
+        poh_recorder.tick();
+        assert_eq!(poh_recorder.tick_cache.len(), 1);
+        assert_eq!(poh_recorder.tick_cache[0].1, 1);
+        assert_eq!(poh_recorder.poh.tick_height, 1);
+    }
+
+    #[test]
+    fn test_poh_recorder_tick_height_is_last_tick() {
+        let prev_hash = Hash::default();
+        let mut poh_recorder = PohRecorder::new(0, prev_hash);
+        poh_recorder.tick();
+        poh_recorder.tick();
+        assert_eq!(poh_recorder.tick_cache.len(), 2);
+        assert_eq!(poh_recorder.tick_cache[1].1, 2);
+        assert_eq!(poh_recorder.poh.tick_height, 2);
+    }
+    //
+    //     #[test]
+    //     fn test_poh_recorder_reset_clears_cache() {
+    //         let mut poh_recorder = PohRecorder::new(0, Hash::default());
+    //         poh_recorder.tick();
+    //         assert_eq!(poh_recorder.tick_cache.len(), 1);
+    //         poh_recorder.reset(0, Hash::default());
+    //         assert_eq!(poh_recorder.tick_cache.len(), 0);
+    //     }
+    //
+    //     #[test]
+    //     fn test_poh_recorder_clear() {
+    //         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+    //         let bank = Arc::new(Bank::new(&genesis_block));
+    //         let prev_hash = bank.last_id();
+    //         let (entry_sender, _) = channel();
+    //         let mut poh_recorder = PohRecorder::new(0, prev_hash);
+    //
+    //         let working_bank = WorkingBank {
+    //             bank,
+    //             sender: entry_sender,
+    //             min_tick_height: 2,
+    //             max_tick_height: 3,
+    //         };
+    //         poh_recorder.set_working_bank(working_bank);
+    //         assert!(poh_recorder.working_bank.is_some());
+    //         poh_recorder.clear_bank();
+    //         assert!(poh_recorder.working_bank.is_none());
+    //     }
+    //
+    //     #[test]
+    //     fn test_poh_recorder_tick_sent_after_min() {
+    //         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+    //         let bank = Arc::new(Bank::new(&genesis_block));
+    //         let prev_hash = bank.last_id();
+    //         let (entry_sender, entry_receiver) = channel();
+    //         let mut poh_recorder = PohRecorder::new(0, prev_hash);
+    //
+    //         let working_bank = WorkingBank {
+    //             bank,
+    //             sender: entry_sender,
+    //             min_tick_height: 2,
+    //             max_tick_height: 3,
+    //         };
+    //         poh_recorder.set_working_bank(working_bank);
+    //         poh_recorder.tick();
+    //         poh_recorder.tick();
+    //         //tick height equal to min_tick_height
+    //         //no tick has been sent
+    //         assert_eq!(poh_recorder.tick_cache.last().unwrap().1, 2);
+    //         assert!(entry_receiver.try_recv().is_err());
+    //
+    //         // all ticks are sent after height > min
+    //         poh_recorder.tick();
+    //         assert_eq!(poh_recorder.poh.tick_height, 3);
+    //         assert_eq!(poh_recorder.tick_cache.len(), 0);
+    //         let e = entry_receiver.recv().expect("recv 1");
+    //         assert_eq!(e.len(), 3);
+    //         assert!(poh_recorder.working_bank.is_none());
+    //     }
+    //
+    //     #[test]
+    //     fn test_poh_recorder_tick_sent_upto_and_including_max() {
+    //         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+    //         let bank = Arc::new(Bank::new(&genesis_block));
+    //         let prev_hash = bank.last_id();
+    //         let (entry_sender, entry_receiver) = channel();
+    //         let mut poh_recorder = PohRecorder::new(0, prev_hash);
+    //
+    //         poh_recorder.tick();
+    //         poh_recorder.tick();
+    //         poh_recorder.tick();
+    //         poh_recorder.tick();
+    //         assert_eq!(poh_recorder.tick_cache.last().unwrap().1, 4);
+    //         assert_eq!(poh_recorder.poh.tick_height, 4);
+    //
+    //         let working_bank = WorkingBank {
+    //             bank,
+    //             sender: entry_sender,
+    //             min_tick_height: 2,
+    //             max_tick_height: 3,
+    //         };
+    //         poh_recorder.set_working_bank(working_bank);
+    //         poh_recorder.tick();
+    //
+    //         assert_eq!(poh_recorder.poh.tick_height, 5);
+    //         assert!(poh_recorder.working_bank.is_none());
+    //         let e = entry_receiver.recv().expect("recv 1");
+    //         assert_eq!(e.len(), 3);
+    //     }
+    //
+    //     #[test]
+    //     fn test_poh_recorder_record_to_early() {
+    //         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+    //         let bank = Arc::new(Bank::new(&genesis_block));
+    //         let prev_hash = bank.last_id();
+    //         let (entry_sender, entry_receiver) = channel();
+    //         let mut poh_recorder = PohRecorder::new(0, prev_hash);
+    //
+    //         let working_bank = WorkingBank {
+    //             bank,
+    //             sender: entry_sender,
+    //             min_tick_height: 2,
+    //             max_tick_height: 3,
+    //         };
+    //         poh_recorder.set_working_bank(working_bank);
+    //         poh_recorder.tick();
+    //         let tx = test_tx();
+    //         let h1 = hash(b"hello world!");
+    //         assert!(poh_recorder.record(h1, vec![tx.clone()]).is_err());
+    //         assert!(entry_receiver.try_recv().is_err());
+    //     }
+    //
+    //     #[test]
+    //     fn test_poh_recorder_record_at_min_passes() {
+    //         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+    //         let bank = Arc::new(Bank::new(&genesis_block));
+    //         let prev_hash = bank.last_id();
+    //         let (entry_sender, entry_receiver) = channel();
+    //         let mut poh_recorder = PohRecorder::new(0, prev_hash);
+    //
+    //         let working_bank = WorkingBank {
+    //             bank,
+    //             sender: entry_sender,
+    //             min_tick_height: 1,
+    //             max_tick_height: 2,
+    //         };
+    //         poh_recorder.set_working_bank(working_bank);
+    //         poh_recorder.tick();
+    //         assert_eq!(poh_recorder.tick_cache.len(), 1);
+    //         assert_eq!(poh_recorder.poh.tick_height, 1);
+    //         let tx = test_tx();
+    //         let h1 = hash(b"hello world!");
+    //         assert!(poh_recorder.record(h1, vec![tx.clone()]).is_ok());
+    //         assert_eq!(poh_recorder.tick_cache.len(), 0);
+    //
+    //         //tick in the cache + entry
+    //         let e = entry_receiver.recv().expect("recv 1");
+    //         assert_eq!(e.len(), 1);
+    //         assert!(e[0].0.is_tick());
+    //         let e = entry_receiver.recv().expect("recv 2");
+    //         assert!(!e[0].0.is_tick());
+    //     }
+    //
+    //     #[test]
+    //     fn test_poh_recorder_record_at_max_fails() {
+    //         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+    //         let bank = Arc::new(Bank::new(&genesis_block));
+    //         let prev_hash = bank.last_id();
+    //         let (entry_sender, entry_receiver) = channel();
+    //         let mut poh_recorder = PohRecorder::new(0, prev_hash);
+    //
+    //         let working_bank = WorkingBank {
+    //             bank,
+    //             sender: entry_sender,
+    //             min_tick_height: 1,
+    //             max_tick_height: 2,
+    //         };
+    //         poh_recorder.set_working_bank(working_bank);
+    //         poh_recorder.tick();
+    //         poh_recorder.tick();
+    //         assert_eq!(poh_recorder.poh.tick_height, 2);
+    //         let tx = test_tx();
+    //         let h1 = hash(b"hello world!");
+    //         assert!(poh_recorder.record(h1, vec![tx.clone()]).is_err());
+    //
+    //         let e = entry_receiver.recv().expect("recv 1");
+    //         assert_eq!(e.len(), 2);
+    //         assert!(e[0].0.is_tick());
+    //         assert!(e[1].0.is_tick());
+    //     }
+    //
+    //     #[test]
+    //     fn test_poh_cache_on_disconnect() {
+    //         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+    //         let bank = Arc::new(Bank::new(&genesis_block));
+    //         let prev_hash = bank.last_id();
+    //         let (entry_sender, entry_receiver) = channel();
+    //         let mut poh_recorder = PohRecorder::new(0, prev_hash);
+    //
+    //         let working_bank = WorkingBank {
+    //             bank,
+    //             sender: entry_sender,
+    //             min_tick_height: 2,
+    //             max_tick_height: 3,
+    //         };
+    //         poh_recorder.set_working_bank(working_bank);
+    //         poh_recorder.tick();
+    //         poh_recorder.tick();
+    //         assert_eq!(poh_recorder.poh.tick_height, 2);
+    //         drop(entry_receiver);
+    //         poh_recorder.tick();
+    //         assert!(poh_recorder.working_bank.is_none());
+    //         assert_eq!(poh_recorder.tick_cache.len(), 3);
+    //     }
+}
