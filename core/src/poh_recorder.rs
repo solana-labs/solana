@@ -487,6 +487,6 @@ mod tests {
         poh_recorder.reset(1, hash(b"hello"));
         assert_eq!(poh_recorder.tick_cache.len(), 0);
         poh_recorder.tick();
-        assert_eq!(poh_recorder.poh.tick_height, 1);
+        assert_eq!(poh_recorder.poh.tick_height, 2);
     }
 }
