@@ -18,8 +18,6 @@ chacha = []
 cuda = []
 erasure = []
 ipv6 = ["solana-netutil/ipv6"]
-test = []
-unstable = []
 
 [dependencies]
 bincode = "1.1.2"
