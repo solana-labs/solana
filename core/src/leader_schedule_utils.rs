@@ -5,7 +5,8 @@ use solana_sdk::pubkey::Pubkey;
 
 /// Return the leader schedule for the given epoch.
 fn leader_schedule(epoch_height: u64, bank: &Bank) -> LeaderSchedule {
-    let stakes = staking_utils::node_stakes_at_epoch(bank, epoch_height);
+    let stakes = staking_utils::delegated_stakes_at_epoch(bank, epoch_height)
+        .expect("epoch state must exist");
     let mut seed = [0u8; 32];
     seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
     let mut stakes: Vec<_> = stakes.into_iter().collect();
@@ -110,7 +111,7 @@ mod tests {
             GenesisBlock::new_with_leader(BOOTSTRAP_LEADER_TOKENS, pubkey, BOOTSTRAP_LEADER_TOKENS);
         let bank = Bank::new(&genesis_block);
 
-        let ids_and_stakes: Vec<_> = staking_utils::node_stakes(&bank).into_iter().collect();
+        let ids_and_stakes: Vec<_> = staking_utils::delegated_stakes(&bank).into_iter().collect();
         let seed = [0u8; 32];
         let leader_schedule =
             LeaderSchedule::new(&ids_and_stakes, seed, genesis_block.slots_per_epoch);
