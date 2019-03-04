@@ -121,14 +121,8 @@ pub fn process_blocktree(
 
     let mut fork_info = vec![];
     while !pending_slots.is_empty() {
-        let (slot, starting_bank, starting_entry_height, mut last_entry_hash) =
-            pending_slots.pop().unwrap();
+        let (slot, bank, starting_entry_height, mut last_entry_hash) = pending_slots.pop().unwrap();
 
-        let bank = Arc::new(Bank::new_from_parent(
-            &starting_bank,
-            leader_schedule_utils::slot_leader_at(slot, &starting_bank),
-            starting_bank.slot(),
-        ));
         let mut entry_height = starting_entry_height;
 
         // Load the metadata for this slot
@@ -193,11 +187,11 @@ pub fn process_blocktree(
                 bank_slot: slot,
                 entry_height: starting_entry_height,
             };
-            fork_info.push((starting_bank, bfi));
+            fork_info.push((bank, bfi));
             continue;
         }
 
-        // TODO merge with locktower, voting
+        // TODO merge with locktower, voting, bank.vote_accounts()...
         bank.squash();
 
         if meta.next_slots.is_empty() {
