@@ -82,10 +82,10 @@ impl Tpu {
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
         blocktree: &Arc<Blocktree>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         cluster_info.write().unwrap().set_leader(id);
 
-        let exit = Arc::new(AtomicBool::new(false));
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage =
             FetchStage::new_with_sender(transactions_sockets, exit.clone(), &packet_sender.clone());

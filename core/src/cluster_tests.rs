@@ -7,6 +7,8 @@ use crate::contact_info::ContactInfo;
 use crate::gossip_service::discover;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
+use std::thread::sleep;
+use std::time::Duration;
 
 /// Spend and verify from every node in the network
 pub fn spend_and_verify_all_nodes(
@@ -37,5 +39,19 @@ pub fn spend_and_verify_all_nodes(
             let mut client = mk_client(&validator);
             client.poll_for_signature(&sig).unwrap();
         }
+    }
+}
+
+pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {
+    let cluster_nodes = discover(&entry_point_info, nodes);
+    assert!(cluster_nodes.len() >= nodes);
+    for node in &cluster_nodes {
+        let mut client = mk_client(&node);
+        assert!(client.fullnode_exit().unwrap());
+    }
+    sleep(Duration::from_millis(250));
+    for node in &cluster_nodes {
+        let mut client = mk_client(&node);
+        assert!(client.fullnode_exit().is_err());
     }
 }

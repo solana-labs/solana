@@ -10,6 +10,7 @@ use crate::entry::Entry;
 use crate::gossip_service::GossipService;
 use crate::poh_recorder::PohRecorder;
 use crate::poh_service::{PohService, PohServiceConfig};
+use crate::rpc::JsonRpcConfig;
 use crate::rpc_pubsub_service::PubSubService;
 use crate::rpc_service::JsonRpcService;
 use crate::rpc_subscriptions::RpcSubscriptions;
@@ -65,6 +66,7 @@ pub struct FullnodeConfig {
     pub storage_rotate_count: u64,
     pub tick_config: PohServiceConfig,
     pub account_paths: Option<String>,
+    pub rpc_config: JsonRpcConfig,
 }
 impl Default for FullnodeConfig {
     fn default() -> Self {
@@ -79,6 +81,7 @@ impl Default for FullnodeConfig {
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
             tick_config: PohServiceConfig::default(),
             account_paths: None,
+            rpc_config: JsonRpcConfig::default(),
         }
     }
 }
@@ -165,6 +168,8 @@ impl Fullnode {
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
             drone_addr,
             storage_state.clone(),
+            config.rpc_config.clone(),
+            exit.clone(),
         );
 
         let subscriptions = Arc::new(RpcSubscriptions::default());
@@ -232,6 +237,7 @@ impl Fullnode {
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,
+            exit.clone(),
         );
         let tpu = Tpu::new(
             id,
@@ -242,6 +248,7 @@ impl Fullnode {
             node.sockets.broadcast,
             config.sigverify_disabled,
             &blocktree,
+            exit.clone(),
         );
         let exit_ = exit.clone();
         let bank_forks_ = bank_forks.clone();

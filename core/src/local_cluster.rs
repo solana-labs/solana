@@ -3,6 +3,7 @@ use crate::client::mk_client;
 use crate::cluster_info::{Node, NodeInfo};
 use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::gossip_service::discover;
+use crate::rpc::JsonRpcConfig;
 use crate::service::Service;
 use crate::thin_client::retry_get_balance;
 use crate::thin_client::ThinClient;
@@ -28,6 +29,25 @@ pub struct LocalCluster {
 
 impl LocalCluster {
     pub fn new(num_nodes: usize, cluster_lamports: u64, lamports_per_node: u64) -> Self {
+        Self::new_with_config(
+            num_nodes,
+            cluster_lamports,
+            lamports_per_node,
+            &FullnodeConfig::default(),
+        )
+    }
+    pub fn new_unsafe(num_nodes: usize, cluster_lamports: u64, lamports_per_node: u64) -> Self {
+        let mut unsafe_rpc = FullnodeConfig::default();
+        unsafe_rpc.rpc_config = JsonRpcConfig::Unsafe;
+        Self::new_with_config(num_nodes, cluster_lamports, lamports_per_node, &unsafe_rpc)
+    }
+
+    pub fn new_with_config(
+        num_nodes: usize,
+        cluster_lamports: u64,
+        lamports_per_node: u64,
+        fullnode_config: &FullnodeConfig,
+    ) -> Self {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -39,7 +59,6 @@ impl LocalCluster {
         ledger_paths.push(genesis_ledger_path.clone());
         ledger_paths.push(leader_ledger_path.clone());
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
-        let fullnode_config = FullnodeConfig::default();
         let leader_node_info = leader_node.info.clone();
         let leader_server = Fullnode::new(
             leader_node,
@@ -47,7 +66,7 @@ impl LocalCluster {
             &leader_ledger_path,
             voting_keypair,
             None,
-            &fullnode_config,
+            fullnode_config,
         );
         let mut fullnodes = vec![leader_server];
         let mut client = mk_client(&leader_node_info);
@@ -84,7 +103,7 @@ impl LocalCluster {
                 &ledger_path,
                 voting_keypair,
                 Some(&leader_node_info),
-                &fullnode_config,
+                fullnode_config,
             );
             fullnodes.push(validator_server);
         }
@@ -189,4 +208,12 @@ mod test {
         let network = LocalCluster::new(1, 100, 3);
         drop(network)
     }
+
+    #[test]
+    fn test_local_cluster_start_and_exit_unsafe() {
+        solana_logger::setup();
+        let network = LocalCluster::new_unsafe(1, 100, 3);
+        drop(network)
+    }
+
 }
