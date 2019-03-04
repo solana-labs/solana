@@ -53,6 +53,9 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = --blockstream ]]; then
     extra_fullnode_args+=("$1" "$2")
     shift 2
+  elif [[ $1 = --enable-rpc-exit ]]; then
+    extra_fullnode_args+=("$1")
+    shift
   elif [[ $1 = --init-complete-file ]]; then
     extra_fullnode_args+=("$1" "$2")
     shift 2
