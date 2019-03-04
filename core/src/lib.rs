@@ -72,7 +72,6 @@ pub mod streamer;
 pub mod test_tx;
 pub mod thin_client;
 pub mod tpu;
-pub mod tpu_forwarder;
 pub mod tvu;
 pub mod voting_keypair;
 #[cfg(test)]
