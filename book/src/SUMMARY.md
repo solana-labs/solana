@@ -39,6 +39,7 @@
   - [Fork Selection](fork-selection.md)
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
   - [Bank Forks](bank-forks.md)
+  - [Leader to Leader Transition](leader-leader-transition.md)
   - [Cluster Economics](ed_overview.md)
     - [Validation-client Economics](ed_validation_client_economics.md)
       - [State-validation Protocol-based Rewards](ed_vce_state_validation_protocol_based_rewards.md)
