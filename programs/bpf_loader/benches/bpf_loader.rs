@@ -1,8 +1,5 @@
 #![feature(test)]
 #![cfg(feature = "bpf_c")]
-extern crate byteorder;
-extern crate solana_bpf_loader;
-extern crate solana_rbpf;
 extern crate test;
 
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
@@ -33,15 +30,20 @@ fn empty_check(_prog: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
+fn load_elf() -> Result<Vec<u8>, std::io::Error> {
+    let path = create_bpf_path("bench_alu");
+    let mut file = File::open(&path).expect(&format!("Unable to open {:?}", path));
+    let mut elf = Vec::new();
+    file.read_to_end(&mut elf).unwrap();
+    Ok(elf)
+}
+
 const ARMSTRONG_LIMIT: u64 = 500;
 const ARMSTRONG_EXPECTED: u64 = 5;
 
 #[bench]
 fn bench_program_load_elf(bencher: &mut Bencher) {
-    let mut file = File::open(create_bpf_path("bench_alu")).expect("file open failed");
-    let mut elf = Vec::new();
-    file.read_to_end(&mut elf).unwrap();
-
+    let elf = load_elf().unwrap();
     let mut vm = EbpfVmRaw::new(None).unwrap();
     vm.set_verifier(empty_check).unwrap();
 
@@ -52,10 +54,7 @@ fn bench_program_load_elf(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_program_verify(bencher: &mut Bencher) {
-    let mut file = File::open(create_bpf_path("bench_alu")).expect("file open failed");
-    let mut elf = Vec::new();
-    file.read_to_end(&mut elf).unwrap();
-
+    let elf = load_elf().unwrap();
     let mut vm = EbpfVmRaw::new(None).unwrap();
     vm.set_verifier(empty_check).unwrap();
     vm.set_elf(&elf).unwrap();
@@ -76,9 +75,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .unwrap();
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
 
-    let mut file = File::open(create_bpf_path("bench_alu")).expect("file open failed");
-    let mut elf = Vec::new();
-    file.read_to_end(&mut elf).unwrap();
+    let elf = load_elf().unwrap();
     let mut vm = solana_bpf_loader::create_vm(&elf).unwrap();
 
     println!("Interpreted:");
