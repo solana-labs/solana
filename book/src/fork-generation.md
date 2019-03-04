@@ -59,9 +59,11 @@ Validators vote based on a greedy choice to maximize their reward described in
 
 ### Validator's View
 
-#### Time Progression The diagram below represents a validator's view of the
-PoH stream with possible forks over time.  L1, L2, etc. are leader slot, and
-`E`s represent entries from that leader during that leader's slot.  The 'x's
+#### Time Progression
+
+The diagram below represents a validator's view of the
+PoH stream with possible forks over time.  L1, L2, etc. are leader slots, and
+`E`s represent entries from that leader during that leader's slot.  The `x`s
 represent ticks only, and time flows downwards in the diagram.
 
 

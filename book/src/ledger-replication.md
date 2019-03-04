@@ -23,7 +23,7 @@ PoH ledger. Thus the segments stay in the exact same order for every PoRep and
 verification can stream the data and verify all the proofs in a single batch.
 This way we can verify multiple proofs concurrently, each one on its own CUDA
 core. The total space required for verification is `1_ledger_segment +
-2_cbc_blocks * number_of_identities` with core count of equal to
+2_cbc_blocks * number_of_identities` with core count equal to
 `number_of_identities`. We use a 64-byte chacha CBC block size.
 
 ## Network
@@ -86,7 +86,7 @@ ledger data, they have to rely on other full nodes (validators) for
 information. Any given validator may or may not be malicious and give incorrect
 information, although there are not any obvious attack vectors that this could
 accomplish besides having the replicator do extra wasted work.  For many of the
-operations there are number of options depending on how paranoid a replicator
+operations there are a number of options depending on how paranoid a replicator
 is:
     - (a) replicator can ask a validator
     - (b) replicator can ask multiple validators
