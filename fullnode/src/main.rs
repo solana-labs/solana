@@ -164,6 +164,12 @@ fn main() {
                 .help("RPC port to use for this node"),
         )
         .arg(
+            Arg::with_name("enable_rpc_exit")
+                .long("enable-rpc-exit")
+                .takes_value(false)
+                .help("Enable the JSON RPC 'fullnodeExit' API.  Only enable in a debug environment"),
+        )
+        .arg(
             Arg::with_name("signer")
                 .short("s")
                 .long("signer")
@@ -209,6 +215,10 @@ fn main() {
     let no_signer = matches.is_present("no_signer");
     fullnode_config.voting_disabled = no_signer;
     let use_only_bootstrap_leader = matches.is_present("no_leader_rotation");
+
+    if matches.is_present("enable_rpc_exit") {
+        fullnode_config.rpc_config = solana::rpc::JsonRpcConfig::TestOnlyAllowRpcFullnodeExit;
+    }
 
     let gossip_addr = {
         let mut addr = solana_netutil::parse_port_or_addr(
