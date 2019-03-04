@@ -73,7 +73,7 @@ cluster sizes change.
 
 The following diagram shows how two neighborhoods in different layers interact.
 What this diagram doesn't capture is that each neighbor actually receives
-blobs from 1 one validator per neighborhood above it. This means that, to
+blobs from one validator per neighborhood above it. This means that, to
 cripple a neighborhood, enough nodes (erasure codes +1 per neighborhood) from
 the layer above need to fail.  Since multiple neighborhoods exist in the upper
 layer and a node will receive blobs from a node in each of those neighborhoods,
