@@ -32,7 +32,7 @@ pub struct ValidationInfo {
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct StorageProgramState {
     pub entry_height: u64,
-    pub id: Hash,
+    pub hash: Hash,
 
     pub proofs: Vec<Vec<ProofInfo>>,
     pub previous_proofs: Vec<Vec<ProofInfo>>,
@@ -48,8 +48,8 @@ pub enum StorageProgram {
         entry_height: u64,
         signature: Signature,
     },
-    AdvertiseStorageLastId {
-        id: Hash,
+    AdvertiseStorageRecentBlockhash {
+        hash: Hash,
         entry_height: u64,
     },
     ClaimStorageReward {
@@ -61,13 +61,8 @@ pub enum StorageProgram {
     },
 }
 
-pub const STORAGE_PROGRAM_ID: [u8; 32] = [
+const STORAGE_PROGRAM_ID: [u8; 32] = [
     130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0,
-];
-
-pub const STORAGE_SYSTEM_ACCOUNT_ID: [u8; 32] = [
-    133, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0,
 ];
 
@@ -79,17 +74,13 @@ pub fn id() -> Pubkey {
     Pubkey::new(&STORAGE_PROGRAM_ID)
 }
 
-pub fn system_id() -> Pubkey {
-    Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)
-}
-
 pub struct StorageTransaction {}
 
 impl StorageTransaction {
     pub fn new_mining_proof(
         from_keypair: &Keypair,
         sha_state: Hash,
-        last_id: Hash,
+        recent_blockhash: Hash,
         entry_height: u64,
         signature: Signature,
     ) -> Transaction {
@@ -98,39 +89,25 @@ impl StorageTransaction {
             entry_height,
             signature,
         };
-        Transaction::new(
-            from_keypair,
-            &[Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)],
-            id(),
-            &program,
-            last_id,
-            0,
-        )
+        Transaction::new(from_keypair, &[], id(), &program, recent_blockhash, 0)
     }
 
-    pub fn new_advertise_last_id(
+    pub fn new_advertise_recent_blockhash(
         from_keypair: &Keypair,
-        storage_id: Hash,
-        last_id: Hash,
+        storage_hash: Hash,
+        recent_blockhash: Hash,
         entry_height: u64,
     ) -> Transaction {
-        let program = StorageProgram::AdvertiseStorageLastId {
-            id: storage_id,
+        let program = StorageProgram::AdvertiseStorageRecentBlockhash {
+            hash: storage_hash,
             entry_height,
         };
-        Transaction::new(
-            from_keypair,
-            &[Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)],
-            id(),
-            &program,
-            last_id,
-            0,
-        )
+        Transaction::new(from_keypair, &[], id(), &program, recent_blockhash, 0)
     }
 
     pub fn new_proof_validation(
         from_keypair: &Keypair,
-        last_id: Hash,
+        recent_blockhash: Hash,
         entry_height: u64,
         proof_mask: Vec<ProofStatus>,
     ) -> Transaction {
@@ -138,29 +115,15 @@ impl StorageTransaction {
             entry_height,
             proof_mask,
         };
-        Transaction::new(
-            from_keypair,
-            &[Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)],
-            id(),
-            &program,
-            last_id,
-            0,
-        )
+        Transaction::new(from_keypair, &[], id(), &program, recent_blockhash, 0)
     }
 
     pub fn new_reward_claim(
         from_keypair: &Keypair,
-        last_id: Hash,
+        recent_blockhash: Hash,
         entry_height: u64,
     ) -> Transaction {
         let program = StorageProgram::ClaimStorageReward { entry_height };
-        Transaction::new(
-            from_keypair,
-            &[Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)],
-            id(),
-            &program,
-            last_id,
-            0,
-        )
+        Transaction::new(from_keypair, &[], id(), &program, recent_blockhash, 0)
     }
 }

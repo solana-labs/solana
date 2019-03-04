@@ -3,21 +3,21 @@ use log::*;
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
 use solana::fullnode::{Fullnode, FullnodeConfig};
-use solana::genesis_block::GenesisBlock;
 use solana::local_vote_signer_service::LocalVoteSignerService;
+use solana::service::Service;
 use solana::socketaddr;
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::voting_keypair::{RemoteVoteSigner, VotingKeypair};
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::vote_program::VoteState;
-use solana_sdk::vote_transaction::VoteTransaction;
+use solana_vote_api::vote_state::VoteState;
+use solana_vote_api::vote_transaction::VoteTransaction;
 use solana_vote_signer::rpc::{LocalVoteSigner, VoteSigner};
 use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
-use std::sync::mpsc::channel;
 use std::sync::Arc;
 
 fn parse_identity(matches: &ArgMatches<'_>) -> (Keypair, SocketAddr) {
@@ -74,10 +74,10 @@ fn create_and_fund_vote_account(
             ));
         }
         loop {
-            let last_id = client.get_last_id();
-            info!("create_and_fund_vote_account last_id={:?}", last_id);
+            let blockhash = client.get_recent_blockhash();
+            info!("create_and_fund_vote_account blockhash={:?}", blockhash);
             let transaction =
-                VoteTransaction::new_account(node_keypair, vote_account, last_id, 1, 1);
+                VoteTransaction::fund_staking_account(node_keypair, vote_account, blockhash, 1, 1);
 
             match client.transfer_signed(&transaction) {
                 Ok(signature) => {
@@ -110,7 +110,7 @@ fn create_and_fund_vote_account(
     let vote_account_user_data = client.get_account_userdata(&vote_account);
     if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
         if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
-            if vote_state.node_id == pubkey {
+            if vote_state.delegate_id == pubkey {
                 return Ok(());
             }
         }
@@ -126,14 +126,14 @@ fn main() {
     solana_logger::setup();
     solana_metrics::set_panic_hook("fullnode");
 
-    let matches = App::new("fullnode")
+    let matches = App::new("solana-fullnode")
         .version(crate_version!())
         .arg(
-            Arg::with_name("entry_stream")
-                .long("entry-stream")
+            Arg::with_name("blockstream")
+                .long("blockstream")
                 .takes_value(true)
                 .value_name("UNIX DOMAIN SOCKET")
-                .help("Open entry stream at this unix domain socket location")
+                .help("Open blockstream at this unix domain socket location")
         )
         .arg(
             Arg::with_name("identity")
@@ -200,6 +200,14 @@ fn main() {
                 .takes_value(true)
                 .help("Rendezvous with the vote signer at this RPC end point"),
         )
+        .arg(
+            Arg::with_name("accounts")
+                .short("a")
+                .long("accounts")
+                .value_name("PATHS")
+                .takes_value(true)
+                .help("Comma separated persistent accounts location"),
+        )
         .get_matches();
 
     let mut fullnode_config = FullnodeConfig::default();
@@ -209,6 +217,11 @@ fn main() {
     let use_only_bootstrap_leader = matches.is_present("no_leader_rotation");
     let (keypair, gossip) = parse_identity(&matches);
     let ledger_path = matches.value_of("ledger").unwrap();
+    if let Some(paths) = matches.value_of("accounts") {
+        fullnode_config.account_paths = Some(paths.to_string());
+    } else {
+        fullnode_config.account_paths = None;
+    }
     let cluster_entrypoint = matches
         .value_of("network")
         .map(|network| network.parse().expect("failed to parse network address"));
@@ -238,7 +251,7 @@ fn main() {
         )
     };
     let init_complete_file = matches.value_of("init_complete_file");
-    fullnode_config.entry_stream = matches.value_of("entry_stream").map(|s| s.to_string());
+    fullnode_config.blockstream = matches.value_of("blockstream").map(|s| s.to_string());
 
     let keypair = Arc::new(keypair);
     let mut node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
@@ -273,9 +286,6 @@ fn main() {
         &fullnode_config,
     );
 
-    let (rotation_sender, rotation_receiver) = channel();
-    fullnode.run(Some(rotation_sender));
-
     if !fullnode_config.voting_disabled {
         let leader_node_info = loop {
             info!("Looking for leader...");
@@ -300,10 +310,6 @@ fn main() {
         File::create(filename).unwrap_or_else(|_| panic!("Unable to create: {}", filename));
     }
     info!("Node initialized");
-    loop {
-        info!(
-            "Node rotation event: {:?}",
-            rotation_receiver.recv().unwrap()
-        );
-    }
+    fullnode.join().expect("fullnode exit");
+    info!("Node exiting..");
 }

@@ -17,8 +17,8 @@ CRATES=(
   keygen
   metrics
   drone
-  programs/native/{budget,bpf_loader,native_loader,noop,system,vote}
-  .
+  programs/{budget,bpf_loader,native_loader,noop,system,vote}
+  core
   fullnode-config
   fullnode
   genesis

@@ -46,7 +46,7 @@ desired cluster.
 
 ## Attack vectors
 
-### Invalid last_id
+### Invalid recent_blockhash
 
 The drone may prefer its airdrops only target a particular Solana cluster.  To
 do that, it listens to the cluster for new entry IDs and ensure any requests
@@ -68,8 +68,8 @@ A client may request multiple airdrops before the first has been submitted to
 the ledger. The client may do this maliciously or simply because it thinks the
 first request was dropped. The drone should not simply query the cluster to
 ensure the client has not already received an airdrop. Instead, it should use
-`last_id` to ensure the previous request is expired before signing another.
-Note that the Solana cluster will reject any transaction with a `last_id`
+`recent_blockhash` to ensure the previous request is expired before signing another.
+Note that the Solana cluster will reject any transaction with a `recent_blockhash`
 beyond a certain *age*.
 
 ### Denial of Service

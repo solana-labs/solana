@@ -25,7 +25,7 @@ A contiguous set of [entries](#entry) on the ledger covered by a
 #### block height
 
 The number of [blocks](#block) beneath the current block. The first block after
-the [genesis block](#genesis block) has height zero.
+the [genesis block](#genesis-block) has height zero.
 
 #### block id
 
@@ -34,6 +34,11 @@ The [entry id](#entry-id) of the last entry in a [block](#block).
 #### bootstrap leader
 
 The first [fullnode](#fullnode) to take the [leader](#leader) role.
+
+#### CBC block
+
+Smallest encrypted chunk of ledger, an encrypted ledger segment would be made of
+many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
 
 #### client
 
@@ -62,6 +67,12 @@ consensus.
 
 An off-chain service that acts as a custodian for a user's private key. It
 typically serves to validate and sign transactions.
+
+#### fake storage proof
+
+A proof which has the same format as a storage proof, but the sha state is
+actually from hashing a known ledger value which the storage client can reveal
+and is also easily verifiable by the network on-chain.
 
 #### entry
 
@@ -138,6 +149,11 @@ at any moment in time.
 A list of [entries](#entry) containing [transactions](#transaction) signed by
 [clients](#client).
 
+#### ledger segment
+
+Portion of the ledger which is downloaded by the replicator where storage proof
+data is derived.
+
 #### ledger vote
 
 A [hash](#hash) of the [fullnode's state](#fullnode-state) at a given [tick
@@ -163,7 +179,7 @@ The [token](#token) used to track work done by [nodes](#node) in a cluster.
 
 #### node
 
-A computer particpating in a [cluster](#cluster).
+A computer participating in a [cluster](#cluster).
 
 #### node count
 
@@ -192,6 +208,11 @@ verified in less time than it took to produce.
 
 The public key of a [keypair](#keypair).
 
+#### replicator
+
+Storage mining client, stores some part of the ledger enumerated in blocks and
+submits storage proofs to the chain. Not a full-node.
+
 #### runtime
 
 The component of a [fullnode](#fullnode) responsible for [program](#program)
@@ -215,6 +236,32 @@ by the company Solana.
 
 Tokens forfeit to the [cluster](#cluster) if malicious [fullnode](#fullnode)
 behavior can be proven.
+
+#### storage proof
+
+A set of sha hash state which is constructed by sampling the encrypted version
+of the stored ledger segment at certain offsets.
+
+#### storage proof challenge
+
+A transaction from a replicator that verifiably proves that a validator
+confirmed a fake proof.
+
+#### storage proof claim
+
+A transaction from a validator which is after the timeout period given from the
+storage proof confirmation and which no successful challenges have been
+observed which rewards the parties of the storage proofs and confirmations.
+
+#### storage proof confirmation
+
+A transaction by a validator which indicates the set of real and fake proofs
+submitted by a storage miner. The transaction would contain a list of proof
+hash values and a bit which says if this hash is valid or fake.
+
+#### storage validation capacity
+
+The number of keys and samples that a validator can verify each storage epoch.
 
 #### thin client
 

@@ -1,7 +1,10 @@
-use solana::blocktree::{create_tmp_sample_ledger, BlocktreeConfig};
-use solana_sdk::signature::{Keypair, KeypairUtil};
+#[macro_use]
+extern crate solana;
 
 use assert_cmd::prelude::*;
+use solana::blocktree::create_new_tmp_ledger;
+use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::process::Command;
 use std::process::Output;
 use std::sync::Arc;
@@ -32,16 +35,11 @@ fn bad_arguments() {
 #[test]
 fn nominal() {
     let keypair = Arc::new(Keypair::new());
-    let blocktree_config = BlocktreeConfig::default();
-    let (_mint_keypair, ledger_path, tick_height, _last_entry_height, _last_id, _last_entry_id) =
-        create_tmp_sample_ledger(
-            "test_ledger_tool_nominal",
-            100,
-            blocktree_config.ticks_per_slot - 2,
-            keypair.pubkey(),
-            50,
-            &blocktree_config,
-        );
+    let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(100, keypair.pubkey(), 50);
+    let ticks_per_slot = genesis_block.ticks_per_slot;
+
+    let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+    let ticks = ticks_per_slot as usize;
 
     // Basic validation
     let output = run_ledger_tool(&["-l", &ledger_path, "verify"]);
@@ -50,7 +48,7 @@ fn nominal() {
     // Print everything
     let output = run_ledger_tool(&["-l", &ledger_path, "print"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), tick_height as usize);
+    assert_eq!(count_newlines(&output.stdout), ticks);
 
     // Only print the first 5 items
     let output = run_ledger_tool(&["-l", &ledger_path, "-n", "5", "print"]);
@@ -60,7 +58,7 @@ fn nominal() {
     // Skip entries with no hashes
     let output = run_ledger_tool(&["-l", &ledger_path, "-h", "1", "print"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), tick_height as usize);
+    assert_eq!(count_newlines(&output.stdout), ticks);
 
     // Skip entries with fewer than 2 hashes (skip everything)
     let output = run_ledger_tool(&["-l", &ledger_path, "-h", "2", "print"]);

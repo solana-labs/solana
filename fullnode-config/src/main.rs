@@ -2,7 +2,7 @@ use solana_sdk::signature::read_pkcs8;
 use std::io;
 
 fn main() {
-    let matches = clap::App::new("fullnode-config")
+    let matches = clap::App::new("solana-fullnode-config")
         .version(clap::crate_version!())
         .arg(
             clap::Arg::with_name("local")

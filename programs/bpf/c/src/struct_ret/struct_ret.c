@@ -1,18 +1,21 @@
 #include <solana_sdk.h>
 
-struct foo {const uint8_t *input;};
-struct foo bar(const uint8_t *input);
+struct test_struct { uint64_t x; uint64_t y; uint64_t z;};
 
-extern bool entrypoint(const uint8_t *input) {
-  struct foo foo = bar(input);
-  sol_log_64(0, 0, 0, (uint64_t)input, (uint64_t)foo.input);
-  sol_assert(input == foo.input);
-  return true;
+static struct test_struct __attribute__ ((noinline)) test_function(void) {
+  struct test_struct s;
+  s.x = 3;
+  s.y = 4;
+  s.z = 5;
+  return s;
 }
 
-struct foo bar(const uint8_t *input) {
-  struct foo foo;
-  foo.input = input;
-  return foo;
+extern bool entrypoint(const uint8_t* input) {
+  struct test_struct s = test_function();
+  sol_log("foobar");
+  if (s.x + s.y + s.z == 12 ) {
+    return true;
+  }
+  return false;
 }
 

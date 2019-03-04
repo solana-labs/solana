@@ -9,26 +9,20 @@ source "$here"/common.sh
 # shellcheck source=scripts/oom-score-adj.sh
 source "$here"/../scripts/oom-score-adj.sh
 
-if [[ -d "$SNAP" ]]; then
-  # Exit if mode is not yet configured
-  # (typically the case after the Snap is first installed)
-  [[ -n "$(snapctl get mode)" ]] || exit 0
-fi
-
 usage() {
   if [[ -n $1 ]]; then
     echo "$*"
     echo
   fi
   cat <<EOF
-usage: $0 [-x] [--entry-stream PATH] [--init-complete-file FILE] [--no-leader-rotation] [--no-signer] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
+usage: $0 [-x] [--blockstream PATH] [--init-complete-file FILE] [--no-leader-rotation] [--no-signer] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
 
 Start a full node on the specified network
 
   -x                    - start a new, dynamically-configured full node
   -X [label]            - start or restart a dynamically-configured full node with
                           the specified label
-  --entry-stream PATH   - open entry stream at this unix domain socket location
+  --blockstream PATH    - open blockstream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --no-leader-rotation  - disable leader rotation
   --no-signer           - start node without vote signer
@@ -42,7 +36,7 @@ if [[ $1 = -h ]]; then
   usage
 fi
 
-maybe_entry_stream=
+maybe_blockstream=
 maybe_init_complete_file=
 maybe_no_leader_rotation=
 maybe_no_signer=
@@ -58,8 +52,8 @@ while [[ ${1:0:1} = - ]]; do
     self_setup=1
     self_setup_label=$$
     shift
-  elif [[ $1 = --entry-stream ]]; then
-    maybe_entry_stream="$1 $2"
+  elif [[ $1 = --blockstream ]]; then
+    maybe_blockstream="$1 $2"
     shift 2
   elif [[ $1 = --init-complete-file ]]; then
     maybe_init_complete_file="--init-complete-file $2"
@@ -79,12 +73,6 @@ while [[ ${1:0:1} = - ]]; do
   fi
 done
 
-if [[ -d $SNAP ]]; then
-  if [[ $(snapctl get leader-rotation) = false ]]; then
-    maybe_no_leader_rotation="--no-leader-rotation"
-  fi
-fi
-
 if [[ -n $3 ]]; then
   usage
 fi
@@ -92,47 +80,30 @@ fi
 find_leader() {
   declare leader leader_address
   declare shift=0
-  if [[ -d $SNAP ]]; then
-    if [[ -n $1 ]]; then
-      usage "Error: unexpected parameter: $1"
-    fi
 
-    # Select leader from the Snap configuration
-    leader_ip=$(snapctl get entrypoint-ip)
-    if [[ -z $leader_ip ]]; then
-      leader=testnet.solana.com
+  if [[ -z $1 ]]; then
+    leader=${here}/..        # Default to local tree for rsync
+    leader_address=127.0.0.1:8001 # Default to local leader
+  elif [[ -z $2 ]]; then
+    leader=$1
+
+    declare leader_ip
+    if [[ $leader =~ ^[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}$ ]]; then
+      leader_ip=$leader
+    else
       leader_ip=$(dig +short "${leader%:*}" | head -n1)
+
       if [[ -z $leader_ip ]]; then
           usage "Error: unable to resolve IP address for $leader"
       fi
     fi
-    leader=$leader_ip
+
     leader_address=$leader_ip:8001
+    shift=1
   else
-    if [[ -z $1 ]]; then
-      leader=${here}/..        # Default to local tree for rsync
-      leader_address=127.0.0.1:8001 # Default to local leader
-    elif [[ -z $2 ]]; then
-      leader=$1
-
-      declare leader_ip
-      if [[ $leader =~ ^[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}$ ]]; then
-        leader_ip=$leader
-      else
-        leader_ip=$(dig +short "${leader%:*}" | head -n1)
-
-        if [[ -z $leader_ip ]]; then
-            usage "Error: unable to resolve IP address for $leader"
-        fi
-      fi
-
-      leader_address=$leader_ip:8001
-      shift=1
-    else
-      leader=$1
-      leader_address=$2
-      shift=2
-    fi
+    leader=$1
+    leader_address=$2
+    shift=2
   fi
 
   echo "$leader" "$leader_address" "$shift"
@@ -157,6 +128,7 @@ if ((!self_setup)); then
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id.json
   fullnode_json_path=$SOLANA_CONFIG_DIR/fullnode.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger
+  accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts
 else
   mkdir -p "$SOLANA_CONFIG_DIR"
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id-x$self_setup_label.json
@@ -181,6 +153,7 @@ else
   }
 
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger-x$self_setup_label
+  accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts-x$self_setup_label
 fi
 
 [[ -r $fullnode_id_path ]] || {
@@ -246,9 +219,9 @@ if [[ ! -d "$ledger_config_dir" ]]; then
 fi
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
-# shellcheck disable=SC2086 # Don't want to double quote maybe_entry_stream or maybe_init_complete_file or maybe_no_signer or maybe_rpc_port
+# shellcheck disable=SC2086 # Don't want to double quote maybe_blockstream or maybe_init_complete_file or maybe_no_signer or maybe_rpc_port
 $program \
-  $maybe_entry_stream \
+  $maybe_blockstream \
   $maybe_init_complete_file \
   $maybe_no_leader_rotation \
   $maybe_no_signer \
@@ -256,6 +229,7 @@ $program \
   --identity "$fullnode_json_path" \
   --network "$leader_address" \
   --ledger "$ledger_config_dir" \
+  --accounts "$accounts_config_dir" \
   > >($fullnode_logger) 2>&1 &
 pid=$!
 oom_score_adj "$pid" 1000

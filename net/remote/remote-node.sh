@@ -45,81 +45,6 @@ else
 fi
 
 case $deployMethod in
-snap)
-  SECONDS=0
-
-  if [[ $skipSetup = true ]]; then
-    for configDir in /var/snap/solana/current/config{,-local}; do
-      if [[ ! -d $configDir ]]; then
-        echo Error: not a directory: $configDir
-        exit 1
-      fi
-    done
-    (
-      set -x
-      sudo rm -rf /saved-node-config
-      sudo mkdir /saved-node-config
-      sudo mv /var/snap/solana/current/config{,-local} /saved-node-config
-    )
-  fi
-
-  [[ $nodeType = bootstrap-leader ]] ||
-    net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/solana/solana.snap" .
-  if snap list solana; then
-    sudo snap remove solana
-  fi
-  sudo snap install solana.snap --devmode --dangerous
-
-  if [[ $skipSetup = true ]]; then
-    (
-      set -x
-      sudo rm -rf /var/snap/solana/current/config{,-local}
-      sudo mv /saved-node-config/* /var/snap/solana/current/
-      sudo rm -rf /saved-node-config
-    )
-  fi
-
-  # shellcheck disable=SC2089
-  commonNodeConfig="\
-    entrypoint-ip=\"$entrypointIp\" \
-    metrics-config=\"$SOLANA_METRICS_CONFIG\" \
-    rust-log=\"$RUST_LOG\" \
-    setup-args=\"$setupArgs\" \
-    skip-setup=$skipSetup \
-    leader-rotation=\"$leaderRotation\" \
-  "
-
-  if [[ -e /dev/nvidia0 ]]; then
-    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-    echo
-    echo "WARNING: GPU detected by snap builds to not support CUDA."
-    echo "         Consider using instances with a GPU to reduce cost."
-    echo
-    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-  fi
-
-  if [[ $nodeType = bootstrap-leader ]]; then
-    nodeConfig="mode=bootstrap-leader+drone $commonNodeConfig"
-    ln -sf -T /var/snap/solana/current/bootstrap-leader/current fullnode.log
-    ln -sf -T /var/snap/solana/current/drone/current drone.log
-  else
-    nodeConfig="mode=fullnode $commonNodeConfig"
-    ln -sf -T /var/snap/solana/current/fullnode/current fullnode.log
-  fi
-
-  logmarker="solana deploy $(date)/$RANDOM"
-  logger "$logmarker"
-
-  # shellcheck disable=SC2086,SC2090 # Don't want to double quote "$nodeConfig"
-  sudo snap set solana $nodeConfig
-  snap info solana
-  sudo snap get solana
-  echo Slight delay to get more syslog output
-  sleep 2
-  sudo grep -Pzo "$logmarker(.|\\n)*" /var/log/syslog
-
-  echo "Succeeded in ${SECONDS} seconds"
-  ;;
 local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
@@ -143,12 +68,6 @@ local|tar)
   scripts/net-stats.sh  > net-stats.log 2>&1 &
   echo $! > net-stats.pid
 
-  maybeNoLeaderRotation=
-  if ! $leaderRotation; then
-    maybeNoLeaderRotation="--no-leader-rotation"
-  fi
-
-
   case $nodeType in
   bootstrap-leader)
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
@@ -160,10 +79,15 @@ local|tar)
       ./multinode-demo/setup.sh -t bootstrap-leader $setupArgs
     fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
+
+    maybeNoLeaderRotation=
+    if ! $leaderRotation; then
+      maybeNoLeaderRotation="--no-leader-rotation"
+    fi
     ./multinode-demo/bootstrap-leader.sh $maybeNoLeaderRotation > bootstrap-leader.log 2>&1 &
     ln -sTf bootstrap-leader.log fullnode.log
     ;;
-  fullnode)
+  fullnode|blockstreamer)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
 
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
@@ -171,11 +95,27 @@ local|tar)
       export SOLANA_CUDA=1
     fi
 
+    args=()
+    if ! $leaderRotation; then
+      args+=("--no-leader-rotation")
+    fi
+    if [[ $nodeType = blockstreamer ]]; then
+      args+=(
+        --blockstream /tmp/solana-blockstream.sock
+        --no-signer
+      )
+    fi
+
     set -x
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/setup.sh -t fullnode $setupArgs
     fi
-    ./multinode-demo/fullnode.sh $maybeNoLeaderRotation "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
+
+    if [[ $nodeType = blockstreamer ]]; then
+      npm install @solana/blockexplorer@1
+      npx solana-blockexplorer > blockexplorer.log 2>&1 &
+    fi
+    ./multinode-demo/fullnode.sh "${args[@]}" "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
     ;;
   *)
     echo "Error: unknown node type: $nodeType"

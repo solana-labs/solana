@@ -9,7 +9,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::net::TcpListener;
-use tokio::prelude::*;
+use tokio::prelude::{Future, Sink, Stream};
 use tokio_codec::{BytesCodec, Decoder};
 
 fn main() -> Result<(), Box<error::Error>> {

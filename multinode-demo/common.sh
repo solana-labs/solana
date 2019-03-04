@@ -15,36 +15,13 @@ drone_logger="tee drone.log"
 if [[ $(uname) != Linux ]]; then
   # Protect against unsupported configurations to prevent non-obvious errors
   # later. Arguably these should be fatal errors but for now prefer tolerance.
-  if [[ -n $USE_SNAP ]]; then
-    echo "Warning: Snap is not supported on $(uname)"
-    USE_SNAP=
-  fi
   if [[ -n $SOLANA_CUDA ]]; then
     echo "Warning: CUDA is not supported on $(uname)"
     SOLANA_CUDA=
   fi
 fi
 
-if [[ -d $SNAP ]]; then # Running inside a Linux Snap?
-  solana_program() {
-    declare program="$1"
-    printf "%s/command-%s.wrapper" "$SNAP" "$program"
-  }
-  rsync="$SNAP"/bin/rsync
-  multilog="$SNAP/bin/multilog t s16777215 n200"
-  bootstrap_leader_logger="$multilog $SNAP_DATA/bootstrap-leader"
-  fullnode_logger="$multilog t $SNAP_DATA/fullnode"
-  drone_logger="$multilog $SNAP_DATA/drone"
-  # Create log directories manually to prevent multilog from creating them as
-  # 0700
-  mkdir -p "$SNAP_DATA"/{drone,bootstrap-leader,fullnode}
-
-elif [[ -n $USE_SNAP ]]; then # Use the Linux Snap binaries
-  solana_program() {
-    declare program="$1"
-    printf "solana.%s" "$program"
-  }
-elif [[ -n $USE_INSTALL ]]; then # Assume |./scripts/cargo-install-all.sh| was run
+if [[ -n $USE_INSTALL ]]; then # Assume |./scripts/cargo-install-all.sh| was run
   solana_program() {
     declare program="$1"
     printf "solana-%s" "$program"
@@ -136,7 +113,7 @@ tune_system() {
 
 # The directory on the bootstrap leader that is rsynced by other full nodes as
 # they boot (TODO: Eventually this should go away)
-SOLANA_RSYNC_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
+SOLANA_RSYNC_CONFIG_DIR=$PWD/config
 
 # Configuration that remains local
-SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config-local
+SOLANA_CONFIG_DIR=$PWD/config-local

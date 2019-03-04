@@ -16,15 +16,14 @@ use std::time::Duration;
 fn test_rpc_send_tx() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path) = new_fullnode("test_rpc_send_tx");
-    let server_exit = server.run(None);
+    let (server, leader_data, alice, ledger_path) = new_fullnode();
     let bob_pubkey = Keypair::new().pubkey();
 
     let client = reqwest::Client::new();
     let request = json!({
        "jsonrpc": "2.0",
        "id": 1,
-       "method": "getLastId",
+       "method": "getRecentBlockhash",
        "params": json!([])
     });
     let rpc_addr = leader_data.rpc;
@@ -36,13 +35,13 @@ fn test_rpc_send_tx() {
         .send()
         .unwrap();
     let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
-    let last_id_vec = bs58::decode(json["result"].as_str().unwrap())
+    let blockhash_vec = bs58::decode(json["result"].as_str().unwrap())
         .into_vec()
         .unwrap();
-    let last_id = Hash::new(&last_id_vec);
+    let blockhash = Hash::new(&blockhash_vec);
 
-    info!("last_id: {:?}", last_id);
-    let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
+    info!("blockhash: {:?}", blockhash);
+    let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, blockhash, 0);
     let serial_tx = serialize(&tx).unwrap();
 
     let client = reqwest::Client::new();
@@ -73,7 +72,7 @@ fn test_rpc_send_tx() {
        "params": [signature],
     });
 
-    for _ in 0..10 {
+    for _ in 0..solana_sdk::timing::DEFAULT_TICKS_PER_SLOT {
         let mut response = client
             .post(&rpc_string)
             .header(CONTENT_TYPE, "application/json")
@@ -93,6 +92,6 @@ fn test_rpc_send_tx() {
 
     assert_eq!(confirmed_tx, true);
 
-    server_exit();
+    server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
 }

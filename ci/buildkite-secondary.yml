@@ -1,7 +1,4 @@
 steps:
-  #- command: "ci/publish-snap.sh"
-  #  timeout_in_minutes: 40
-  #  name: "publish snap"
   - command: "sdk/docker-solana/build.sh"
     timeout_in_minutes: 20
     name: "publish docker"

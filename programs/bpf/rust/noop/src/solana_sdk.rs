@@ -1,39 +1,80 @@
 //! @brief Solana Rust-based BPF program utility functions and types
 
-extern crate heapless;
+// extern crate heapless;
 
-use self::heapless::consts::*;
-use self::heapless::String; // fixed capacity `std::Vec` // type level integer used to specify capacity
+// use self::heapless::consts::*;
+// use self::heapless::String; // fixed capacity `std::Vec` // type level integer used to specify capacity
 #[cfg(test)]
 use self::tests::process;
 use core::mem::size_of;
+use core::panic::PanicInfo;
 use core::slice::from_raw_parts;
+
 #[cfg(not(test))]
 use process;
+
+// Panic handling
+extern "C" {
+    pub fn sol_panic_() -> !;
+}
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    sol_log("Panic!");
+    // TODO rashes! sol_log(_info.payload().downcast_ref::<&str>().unwrap());
+    if let Some(location) = _info.location() {
+        if !location.file().is_empty() {
+            // TODO location.file() returns empty str, if we get here its been fixed
+            sol_log(location.file());
+            sol_log("location.file() is fixed!!");
+            unsafe {
+                sol_panic_();
+            }
+        }
+        sol_log_64(0, 0, 0, location.line() as u64, location.column() as u64);
+    } else {
+        sol_log("Panic! but could not get location information");
+    }
+    unsafe {
+        sol_panic_();
+    }
+}
 
 extern "C" {
     fn sol_log_(message: *const u8);
 }
 /// Helper function that prints a string to stdout
+#[inline(never)] // stack intensive, block inline so everyone does not incur
 pub fn sol_log(message: &str) {
-    let mut c_string: String<U256> = String::new();
-    if message.len() < 256 {
-        if c_string.push_str(message).is_err() {
-            c_string
-                .push_str("Attempted to log a malformed string\0")
-                .is_ok();
+    // TODO This is extremely slow, do something better
+    let mut buf: [u8; 128] = [0; 128];
+    for (i, b) in message.as_bytes().iter().enumerate() {
+        if i >= 126 {
+            break;
         }
-        if c_string.push('\0').is_err() {
-            c_string.push_str("Failed to log string\0").is_ok();
-        };
-    } else {
-        c_string
-            .push_str("Attempted to log a string that is too long\0")
-            .is_ok();
+        buf[i] = *b;
     }
     unsafe {
-        sol_log_(c_string.as_bytes().as_ptr());
+        sol_log_(buf.as_ptr());
     }
+
+    // let mut c_string: String<U256> = String::new();
+    // if message.len() < 256 {
+    //     if c_string.push_str(message).is_err() {
+    //         c_string
+    //             .push_str("Attempted to log a malformed string\0")
+    //             .is_ok();
+    //     }
+    //     if c_string.push('\0').is_err() {
+    //         c_string.push_str("Failed to log string\0").is_ok();
+    //     };
+    // } else {
+    //     c_string
+    //         .push_str("Attempted to log a string that is too long\0")
+    //         .is_ok();
+    // }
+    // unsafe {
+    //     sol_log_(message.as_ptr());
+    // }
 }
 
 extern "C" {

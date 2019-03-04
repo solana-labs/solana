@@ -41,7 +41,8 @@ fn converge(
     spy_cluster_info.insert_info(leader.clone());
     spy_cluster_info.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_cluster_info));
-    let gossip_service = GossipService::new(&spy_ref, None, gossip_socket, exit_signal.clone());
+    let gossip_service =
+        GossipService::new(&spy_ref, None, None, gossip_socket, exit_signal.clone());
     let mut v: Vec<NodeInfo> = vec![];
     // wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {
@@ -169,8 +170,8 @@ fn main() {
     airdrop_tokens(&mut barrier_client, &drone_addr, &barrier_id, 1);
 
     println!("Get last ID...");
-    let mut last_id = client.get_last_id();
-    println!("Got last ID {:?}", last_id);
+    let mut blockhash = client.get_recent_blockhash();
+    println!("Got last ID {:?}", blockhash);
 
     let first_tx_count = client.transaction_count();
     println!("Initial transaction count {}", first_tx_count);
@@ -253,7 +254,7 @@ fn main() {
         // It's not feasible (would take too much time) to confirm each of the `tx_count / 2`
         // transactions sent by `generate_txs()` so instead send and confirm a single transaction
         // to validate the network is still functional.
-        send_barrier_transaction(&mut barrier_client, &mut last_id, &barrier_id);
+        send_barrier_transaction(&mut barrier_client, &mut blockhash, &barrier_id);
 
         i += 1;
         if should_switch_directions(num_tokens_per_account, i) {

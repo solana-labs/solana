@@ -11,7 +11,7 @@ fn test_local_drone() {
     let keypair = Keypair::new();
     let to = Keypair::new().pubkey();
     let tokens = 50;
-    let last_id = Hash::new(&to.as_ref());
+    let blockhash = Hash::new(&to.as_ref());
     let expected_instruction = SystemInstruction::CreateAccount {
         tokens,
         space: 0,
@@ -22,15 +22,15 @@ fn test_local_drone() {
         &[to],
         system_program::id(),
         &expected_instruction,
-        last_id,
+        blockhash,
         0,
     );
-    expected_tx.sign(&[&keypair], last_id);
+    expected_tx.sign(&[&keypair], blockhash);
 
     let (sender, receiver) = channel();
     run_local_drone(keypair, sender);
     let drone_addr = receiver.recv().unwrap();
 
-    let result = request_airdrop_transaction(&drone_addr, &to, tokens, last_id);
+    let result = request_airdrop_transaction(&drone_addr, &to, tokens, blockhash);
     assert_eq!(expected_tx, result.unwrap());
 }

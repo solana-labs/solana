@@ -1,5 +1,5 @@
 //! The `netutil` module assists with networking
-use log::trace;
+use log::*;
 use nix::sys::socket::setsockopt;
 use nix::sys::socket::sockopt::{ReuseAddr, ReusePort};
 use pnet_datalink as datalink;

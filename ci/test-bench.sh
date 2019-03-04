@@ -43,10 +43,10 @@ _ cargo +nightly bench --features=unstable ${V:+--verbose} \
   -- -Z unstable-options --format=json | tee "$BENCH_FILE"
 
 # Run bpf_loader bench with bpf_c feature enabled
-echo --- program/native/bpf_loader bench --features=bpf_c
+echo --- program/bpf_loader bench --features=bpf_c
 (
   set -x
-  cd programs/native/bpf_loader
+  cd programs/bpf_loader
   cargo +nightly bench ${V:+--verbose} --features="bpf_c" \
     -- -Z unstable-options --format=json --nocapture | tee -a ../../../"$BENCH_FILE"
 )

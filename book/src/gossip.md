@@ -77,3 +77,52 @@ Nodes retain prior versions of values (those updated by a pull or push) and
 expired values (those older than `GOSSIP_PULL_CRDS_TIMEOUT_MS`) in
 `purged_values` (things I recently had).  Nodes purge `purged_values` that are
 older than `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
+
+## Eclipse Attacks
+
+An eclipse attack is an attempt to take over the set of node connections with
+adversarial endpoints.
+
+This is relevant to our implementation in the following ways.
+
+* Pull messages select a random node from the network.  An eclipse attack on
+*pull* would require an attacker to influence the random selection in such a way
+that only adversarial nodes are selected for pull.
+
+* Push messages maintain an active set of nodes and select a random fanout for
+every push message.  An eclipse attack on *push* would influence the active set
+selection, or the random fanout selection.
+
+### Time and Stake based weights
+
+Weights are calculated based on `time since last picked` and the `natural log` of the `stake weight`.
+
+Taking the `ln` of the stake weight allows giving all nodes a fairer chance of network
+coverage in a reasonable amount of time. It helps normalize the large possible `stake weight` differences between nodes.
+This way a node with low `stake weight`, compared to a node with large `stake weight` will only have to wait a
+few multiples of ln(`stake`) seconds before it gets picked.
+
+There is no way for an adversary to influence these parameters.
+
+### Pull Message
+
+A node is selected as a pull target based on the weights described above.
+
+### Push Message
+
+A prune message can only remove an adversary from a potential connection.
+
+Just like *pull message*, nodes are selected into the active set based on weights.
+
+## Notable differences from PlumTree
+
+The active push protocol described here is based on (Plum
+Tree)[https://haslab.uminho.pt/jop/files/lpr07a.pdf].  The main differences are:
+
+* Push messages have a wallclock that is signed by the originator.  Once the
+wallclock expires the message is dropped.  A hop limit is difficult to implement
+in an adversarial setting.
+
+* Lazy Push is not implemented because its not obvious how to prevent an
+adversary from forging the message fingerprint.  A naive approach would allow an
+adversary to be prioritized for pull based on their input.

@@ -1,10 +1,10 @@
 steps:
   - command: "ci/shellcheck.sh"
     name: "shellcheck"
-    timeout_in_minutes: 20
-  - command: "ci/docker-run.sh solanalabs/rust:1.31.0 ci/test-checks.sh"
+    timeout_in_minutes: 5
+  - command: "ci/docker-run.sh solanalabs/rust:1.32.0 ci/test-checks.sh"
     name: "checks"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 15
   - wait
   - command: "ci/test-stable-perf.sh"
     name: "stable-perf"
@@ -13,23 +13,19 @@ steps:
       - "queue=cuda"
   - command: "ci/test-bench.sh"
     name: "bench"
-    timeout_in_minutes: 30
-  - command: "ci/docker-run.sh solanalabs/rust:1.31.0 ci/test-stable.sh"
+    timeout_in_minutes: 20
+  - command: "ci/docker-run.sh solanalabs/rust:1.32.0 ci/test-stable.sh"
     name: "stable"
-    timeout_in_minutes: 40
+    timeout_in_minutes: 20
   - command: "ci/docker-run.sh solanalabs/rust-nightly:2019-01-31 ci/test-coverage.sh"
     name: "coverage"
-    timeout_in_minutes: 40
+    timeout_in_minutes: 20
   # TODO: Fix and re-enable test-large-network.sh
   # - command: "ci/test-large-network.sh || true"
   #   name: "large-network [ignored]"
   #   timeout_in_minutes: 20
   #   agents:
   #     - "queue=large"
-  - command: "ci/pr-snap.sh"
-    timeout_in_minutes: 20
-    name: "snap"
-    branches: "pull/*"
   - wait
   - trigger: "solana-secondary"
     branches: "!pull/*"

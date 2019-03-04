@@ -26,8 +26,6 @@ Operate a configured testnet
  logs     - Fetch remote logs from each network node
 
  start/update-specific options:
-   -S [snapFilename]           - Deploy the specified Snap file
-   -s edge|beta|stable         - Deploy the latest Snap on the specified Snap release channel
    -T [tarFilename]            - Deploy the specified release tarball
    -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
                                  specified release channel (edge|beta|stable) or release tag
@@ -35,7 +33,8 @@ Operate a configured testnet
    -f [cargoFeatures]          - List of |cargo --feaures=| to activate
                                  (ignored if -s or -S is specified)
    -r                          - Reuse existing node/ledger configuration from a
-                                 previous |start| (ie, don't run ./mulitnode-demo/setup.sh).
+                                 previous |start| (ie, don't run ./multinode-demo/setup.sh).
+   -D /path/to/programs        - Deploy custom programs from this location
 
  sanity/start/update-specific options:
    -o noLedgerVerify    - Skip ledger verification
@@ -54,43 +53,26 @@ EOF
   exit $exitcode
 }
 
-snapChannel=
 releaseChannel=
-snapFilename=
 deployMethod=local
 sanityExtraArgs=
 cargoFeatures=
 skipSetup=false
 updateNodes=false
+customPrograms=
 
 command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?S:s:T:t:o:f:r" opt; do
+while getopts "h?T:t:o:f:r:D:" opt; do
   case $opt in
   h | \?)
     usage
     ;;
-  S)
-    snapFilename=$OPTARG
-    [[ -f $snapFilename ]] || usage "Snap not readable: $snapFilename"
-    deployMethod=snap
-    ;;
-  s)
-    case $OPTARG in
-    edge|beta|stable)
-      snapChannel=$OPTARG
-      deployMethod=snap
-      ;;
-    *)
-      usage "Invalid snap channel: $OPTARG"
-      ;;
-    esac
-    ;;
   T)
     tarballFilename=$OPTARG
-    [[ -f $tarballFilename ]] || usage "Snap not readable: $tarballFilename"
+    [[ -r $tarballFilename ]] || usage "File not readable: $tarballFilename"
     deployMethod=tar
     ;;
   t)
@@ -109,6 +91,9 @@ while getopts "h?S:s:T:t:o:f:r" opt; do
     ;;
   r)
     skipSetup=true
+    ;;
+  D)
+    customPrograms=$OPTARG
     ;;
   o)
     case $OPTARG in
@@ -149,6 +134,9 @@ build() {
     $MAYBE_DOCKER bash -c "
       set -ex
       scripts/cargo-install-all.sh farf \"$cargoFeatures\"
+      if [[ -n \"$customPrograms\" ]]; then
+        scripts/cargo-install-custom-programs.sh farf $customPrograms
+      fi
     "
   )
   echo "Build took $SECONDS seconds"
@@ -191,9 +179,6 @@ startBootstrapLeader() {
     set -x
     startCommon "$ipAddress" || exit 1
     case $deployMethod in
-    snap)
-      rsync -vPrc -e "ssh ${sshOptions[*]}" "$snapFilename" "$ipAddress:~/solana/solana.snap"
-      ;;
     tar)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:~/.cargo/bin/"
       ;;
@@ -225,9 +210,10 @@ startBootstrapLeader() {
 
 startNode() {
   declare ipAddress=$1
+  declare nodeType=$2
   declare logFile="$netLogDir/fullnode-$ipAddress.log"
 
-  echo "--- Starting fullnode: $ipAddress"
+  echo "--- Starting $nodeType: $ipAddress"
   echo "start log: $logFile"
   (
     set -x
@@ -235,7 +221,7 @@ startNode() {
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh \
          $deployMethod \
-         fullnode \
+         $nodeType \
          $publicNetwork \
          $entrypointIp \
          ${#fullnodeIpList[@]} \
@@ -286,36 +272,6 @@ sanity() {
 
 start() {
   case $deployMethod in
-  snap)
-    if [[ -n $snapChannel ]]; then
-      rm -f "$SOLANA_ROOT"/solana_*.snap
-      if [[ $(uname) != Linux ]]; then
-        (
-          set -x
-          SOLANA_DOCKER_RUN_NOSETUID=1 "$SOLANA_ROOT"/ci/docker-run.sh ubuntu:18.04 bash -c "
-            set -ex;
-            apt-get -qq update;
-            apt-get -qq -y install snapd;
-            until snap download --channel=$snapChannel solana; do
-              sleep 1;
-            done
-          "
-        )
-      else
-        (
-          cd "$SOLANA_ROOT"
-          until snap download --channel="$snapChannel" solana; do
-            sleep 1
-          done
-        )
-      fi
-      snapFilename="$(echo "$SOLANA_ROOT"/solana_*.snap)"
-      [[ -r $snapFilename ]] || {
-        echo "Error: Snap not readable: $snapFilename"
-        exit 1
-      }
-    fi
-    ;;
   tar)
     if [[ -n $releaseChannel ]]; then
       rm -f "$SOLANA_ROOT"/solana-release.tar.bz2
@@ -347,8 +303,13 @@ start() {
     $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
   fi
 
-  bootstrapLeader=true
-  for ipAddress in "${fullnodeIpList[@]}"; do
+  declare bootstrapLeader=true
+  declare nodeType=fullnode
+  for ipAddress in "${fullnodeIpList[@]}" - "${blockstreamerIpList[@]}"; do
+    if [[ $ipAddress = - ]]; then
+      nodeType=blockstreamer
+      continue
+    fi
     if $updateNodes; then
       stopNode "$ipAddress"
     fi
@@ -364,7 +325,7 @@ start() {
       pids=()
       loopCount=0
     else
-      startNode "$ipAddress"
+      startNode "$ipAddress" $nodeType
 
       # Stagger additional node start time. If too many nodes start simultaneously
       # the bootstrap node gets more rsync requests from the additional nodes than
@@ -407,13 +368,6 @@ start() {
 
   declare networkVersion=unknown
   case $deployMethod in
-  snap)
-    IFS=\  read -r _ networkVersion _ < <(
-      ssh "${sshOptions[@]}" "${fullnodeIpList[0]}" \
-        "snap info solana | grep \"^installed:\""
-    )
-    networkVersion=${networkVersion/0+git./}
-    ;;
   tar)
     networkVersion="$(
       tail -n1 "$SOLANA_ROOT"/solana-release/version.txt || echo "tar-unknown"
@@ -431,7 +385,7 @@ start() {
   echo
   echo "+++ Deployment Successful"
   echo "Bootstrap leader deployment took $bootstrapNodeDeployTime seconds"
-  echo "Additional fullnode deployment (${#fullnodeIpList[@]} instances) took $additionalNodeDeployTime seconds"
+  echo "Additional fullnode deployment (${#fullnodeIpList[@]} full nodes, ${#blockstreamerIpList[@]} blockstreamer nodes) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir:"
   ls -l "$netLogDir"
@@ -447,9 +401,6 @@ stopNode() {
     ssh "${sshOptions[@]}" "$ipAddress" "
       PS4=\"$PS4\"
       set -x
-      if snap list solana; then
-        sudo snap set solana mode=
-      fi
       ! tmux list-sessions || tmux kill-session
       for pid in solana/{net-stats,oom-monitor}.pid; do
         pgid=\$(ps opgid= \$(cat \$pid) | tr -d '[:space:]')
@@ -466,7 +417,7 @@ stop() {
   SECONDS=0
   $metricsWriteDatapoint "testnet-deploy net-stop-begin=1"
 
-  for ipAddress in "${fullnodeIpList[@]}" "${clientIpList[@]}"; do
+  for ipAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${clientIpList[@]}"; do
     stopNode "$ipAddress"
   done
 
@@ -514,6 +465,9 @@ logs)
   done
   for ipAddress in "${clientIpList[@]}"; do
     fetchRemoteLog "$ipAddress" client
+  done
+  for ipAddress in "${blockstreamerIpList[@]}"; do
+    fetchRemoteLog "$ipAddress" fullnode
   done
   ;;
 

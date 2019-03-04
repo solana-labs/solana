@@ -100,7 +100,11 @@ pub fn sample_tx_count(
 }
 
 /// Send loopback payment of 0 tokens and confirm the network processed it
-pub fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash, id: &Keypair) {
+pub fn send_barrier_transaction(
+    barrier_client: &mut ThinClient,
+    blockhash: &mut Hash,
+    id: &Keypair,
+) {
     let transfer_start = Instant::now();
 
     let mut poll_count = 0;
@@ -112,9 +116,9 @@ pub fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut H
             );
         }
 
-        *last_id = barrier_client.get_last_id();
+        *blockhash = barrier_client.get_recent_blockhash();
         let signature = barrier_client
-            .transfer(0, &id, id.pubkey(), last_id)
+            .transfer(0, &id, id.pubkey(), blockhash)
             .expect("Unable to send barrier transaction");
 
         let confirmatiom = barrier_client.poll_for_signature(&signature);
@@ -154,13 +158,13 @@ pub fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut H
             exit(1);
         }
 
-        let new_last_id = barrier_client.get_last_id();
-        if new_last_id == *last_id {
+        let new_blockhash = barrier_client.get_recent_blockhash();
+        if new_blockhash == *blockhash {
             if poll_count > 0 && poll_count % 8 == 0 {
-                println!("last_id is not advancing, still at {:?}", *last_id);
+                println!("blockhash is not advancing, still at {:?}", *blockhash);
             }
         } else {
-            *last_id = new_last_id;
+            *blockhash = new_blockhash;
         }
 
         poll_count += 1;
@@ -176,7 +180,7 @@ pub fn generate_txs(
     leader: &NodeInfo,
 ) {
     let mut client = mk_client(leader);
-    let last_id = client.get_last_id();
+    let blockhash = client.get_recent_blockhash();
     let tx_count = source.len();
     println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
     let signing_start = Instant::now();
@@ -190,7 +194,7 @@ pub fn generate_txs(
         .par_iter()
         .map(|(id, keypair)| {
             (
-                SystemTransaction::new_account(id, keypair.pubkey(), 1, last_id, 0),
+                SystemTransaction::new_account(id, keypair.pubkey(), 1, blockhash, 0),
                 timestamp(),
             )
         })
@@ -205,7 +209,7 @@ pub fn generate_txs(
         bsps * 1_000_000_f64,
         nsps / 1_000_f64,
         duration_as_ms(&duration),
-        last_id,
+        blockhash,
     );
     solana_metrics::submit(
         influxdb::Point::new("bench-tps")
@@ -328,7 +332,7 @@ pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], t
             }
         }
 
-        // try to transfer a "few" at a time with recent last_id
+        // try to transfer a "few" at a time with recent blockhash
         //  assume 4MB network buffers, and 512 byte packets
         const FUND_CHUNK_LEN: usize = 4 * 1024 * 1024 / 512;
 
@@ -366,11 +370,11 @@ pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], t
                     to_fund_txs.len(),
                 );
 
-                let last_id = client.get_last_id();
+                let blockhash = client.get_recent_blockhash();
 
-                // re-sign retained to_fund_txes with updated last_id
+                // re-sign retained to_fund_txes with updated blockhash
                 to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
-                    tx.sign(&[*k], last_id);
+                    tx.sign(&[*k], blockhash);
                 });
 
                 to_fund_txs.iter().for_each(|(_, tx)| {
@@ -410,8 +414,8 @@ pub fn airdrop_tokens(
             id.pubkey(),
         );
 
-        let last_id = client.get_last_id();
-        match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, last_id) {
+        let blockhash = client.get_recent_blockhash();
+        match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, blockhash) {
             Ok(transaction) => {
                 let signature = client.transfer_signed(&transaction).unwrap();
                 client.poll_for_signature(&signature).unwrap();

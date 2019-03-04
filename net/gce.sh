@@ -17,6 +17,7 @@ gce)
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=n1-standard-16
   clientMachineType=n1-standard-16
+  blockstreamerMachineType=n1-standard-8
   ;;
 ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
@@ -27,6 +28,7 @@ ec2)
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=m4.2xlarge
   clientMachineType=m4.2xlarge
+  blockstreamerMachineType=m4.2xlarge
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
@@ -37,12 +39,13 @@ esac
 prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
 additionalFullNodeCount=5
 clientNodeCount=1
+blockstreamer=false
 fullNodeBootDiskSizeInGb=1000
 clientBootDiskSizeInGb=75
 
 publicNetwork=false
 enableGpu=false
-bootstrapLeaderAddress=
+customAddress=
 leaderRotation=true
 
 usage() {
@@ -69,14 +72,17 @@ Manage testnet instances
  create-specific options:
    -n [number]      - Number of additional fullnodes (default: $additionalFullNodeCount)
    -c [number]      - Number of client nodes (default: $clientNodeCount)
+   -u               - Include a Blockstreamer (default: $blockstreamer)
    -P               - Use public network IP addresses (default: $publicNetwork)
    -g               - Enable GPU (default: $enableGpu)
-   -G               - Enable GPU, and set count/type of GPUs to use (e.g $cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80)
-   -a [address]     - Set the bootstreap fullnode's external IP address to this value.
-                      For GCE, [address] is the "name" of the desired External
-                      IP Address.
-                      For EC2, [address] is the "allocation ID" of the desired
-                      Elastic IP.
+   -G               - Enable GPU, and set count/type of GPUs to use
+                      (e.g $cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80)
+   -a [address]     - Address to be be assigned to the Blockstreamer if present,
+                      otherwise the bootstrap fullnode.
+                      * For GCE, [address] is the "name" of the desired External
+                        IP Address.
+                      * For EC2, [address] is the "allocation ID" of the desired
+                        Elastic IP.
    -d [disk-type]   - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
    -b               - Disable leader rotation
 
@@ -100,7 +106,7 @@ shift
 [[ $command = create || $command = config || $command = info || $command = delete ]] ||
   usage "Invalid command: $command"
 
-while getopts "h?p:Pn:c:z:gG:a:d:b" opt; do
+while getopts "h?p:Pn:c:z:gG:a:d:bu" opt; do
   case $opt in
   h | \?)
     usage
@@ -133,10 +139,13 @@ while getopts "h?p:Pn:c:z:gG:a:d:b" opt; do
     bootstrapLeaderMachineType="$OPTARG"
     ;;
   a)
-    bootstrapLeaderAddress=$OPTARG
+    customAddress=$OPTARG
     ;;
   d)
     bootDiskType=$OPTARG
+    ;;
+  u)
+    blockstreamer=true
     ;;
   *)
     usage "unhandled option: $opt"
@@ -159,6 +168,11 @@ case $cloudProvider in
 gce)
   if $enableGpu; then
     # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
+    #
+    # TODO: Unfortunately this image is not public.  When this becomes an issue,
+    # use the stock Ubuntu 18.04 image and programmatically install CUDA after the
+    # instance boots
+    #
     imageName="ubuntu-1804-bionic-v20181029-with-cuda-10-and-cuda-9-2"
   else
     # Upstream Ubuntu 18.04 LTS image
@@ -166,23 +180,45 @@ gce)
   fi
   ;;
 ec2)
-  #
-  # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
-  #
-  case $region in # (region global variable is set by cloud_SetZone)
-  us-east-1)
-    imageName="ami-0a8bd6fb204473f78"
-    ;;
-  us-west-1)
-    imageName="ami-07011f0795513c59d"
-    ;;
-  us-west-2)
-    imageName="ami-0a11ef42b62b82b68"
-    ;;
-  *)
-    usage "Unsupported region: $region"
-    ;;
-  esac
+  if $enableGpu; then
+    #
+    # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
+    #
+    # TODO: Unfortunately these AMIs are not public.  When this becomes an issue,
+    # use the stock Ubuntu 18.04 image and programmatically install CUDA after the
+    # instance boots
+    #
+    case $region in
+    us-east-1)
+      imageName="ami-0a8bd6fb204473f78"
+      ;;
+    us-west-1)
+      imageName="ami-07011f0795513c59d"
+      ;;
+    us-west-2)
+      imageName="ami-0a11ef42b62b82b68"
+      ;;
+    *)
+      usage "Unsupported region: $region"
+      ;;
+    esac
+  else
+    # Select an upstream Ubuntu 18.04 AMI from https://cloud-images.ubuntu.com/locator/ec2/
+    case $region in
+    us-east-1)
+      imageName="ami-0a313d6098716f372"
+      ;;
+    us-west-1)
+      imageName="ami-06397100adf427136"
+      ;;
+    us-west-2)
+      imageName="ami-0dc34f4b016c9ce49"
+      ;;
+    *)
+      usage "Unsupported region: $region"
+      ;;
+    esac
+  fi
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
@@ -327,6 +363,15 @@ EOF
     cloud_ForEachInstance waitForStartupComplete
   }
 
+  echo "blockstreamerIpList=()" >> "$configFile"
+  echo "blockstreamerIpListPrivate=()" >> "$configFile"
+  echo "Looking for blockstreamer instances..."
+  cloud_FindInstances "$prefix-blockstreamer"
+  [[ ${#instances[@]} -eq 0 ]] || {
+    cloud_ForEachInstance recordInstanceIp blockstreamerIpList
+    cloud_ForEachInstance waitForStartupComplete
+  }
+
   echo "Wrote $configFile"
   $metricsWriteDatapoint "testnet-deploy net-config-complete=1"
 }
@@ -382,6 +427,7 @@ Network composition:
   Bootstrap leader = $bootstrapLeaderMachineType (GPU=$enableGpu)
   Additional fullnodes = $additionalFullNodeCount x $fullNodeMachineType
   Client(s) = $clientNodeCount x $clientMachineType
+  Blockstreamer = $blockstreamer
 
 Leader rotation: $leaderRotation
 
@@ -431,6 +477,8 @@ $(
     add-solana-user-authorized_keys.sh \
     install-earlyoom.sh \
     install-libssl-compatability.sh \
+    install-nodejs.sh \
+    install-redis.sh \
     install-rsync.sh \
     network-config.sh \
     remove-docker-interface.sh \
@@ -449,6 +497,14 @@ touch /.instance-startup-complete
 
 EOF
 
+  if $blockstreamer; then
+    blockstreamerAddress=$customAddress
+  else
+    bootstrapLeaderAddress=$customAddress
+  fi
+
+  cloud_Initialize "$prefix"
+
   cloud_CreateInstances "$prefix" "$prefix-bootstrap-leader" 1 \
     "$imageName" "$bootstrapLeaderMachineType" "$fullNodeBootDiskSizeInGb" \
     "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType"
@@ -461,6 +517,12 @@ EOF
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
       "$imageName" "$clientMachineType" "$clientBootDiskSizeInGb" \
       "$startupScript" "" "$bootDiskType"
+  fi
+
+  if $blockstreamer; then
+    cloud_CreateInstances "$prefix" "$prefix-blockstreamer" "1" \
+      "$imageName" "$blockstreamerMachineType" "$fullNodeBootDiskSizeInGb" \
+      "$startupScript" "$blockstreamerAddress" "$bootDiskType"
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
@@ -494,6 +556,12 @@ info)
     ipAddress=${clientIpList[$i]}
     ipAddressPrivate=${clientIpListPrivate[$i]}
     printNode bench-tps "$ipAddress" "$ipAddressPrivate"
+  done
+
+  for i in $(seq 0 $(( ${#blockstreamerIpList[@]} - 1)) ); do
+    ipAddress=${blockstreamerIpList[$i]}
+    ipAddressPrivate=${blockstreamerIpListPrivate[$i]}
+    printNode blockstreamer "$ipAddress" "$ipAddressPrivate"
   done
   ;;
 *)

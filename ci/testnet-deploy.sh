@@ -11,13 +11,12 @@ clientNodeCount=0
 additionalFullNodeCount=10
 publicNetwork=false
 skipSetup=false
-snapChannel=edge
 tarChannelOrTag=edge
 delete=false
 enableGpu=false
 bootDiskType=""
 leaderRotation=true
-useTarReleaseChannel=false
+blockstreamer=false
 
 usage() {
   exitcode=0
@@ -35,14 +34,13 @@ Deploys a CD testnet
   zone  - cloud provider zone to deploy the network into
 
   options:
-   -s edge|beta|stable  - Deploy the specified Snap release channel
-                          (default: $snapChannel)
    -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
                                  specified release channel (edge|beta|stable) or release tag
                                  (vX.Y.Z)
                                  (default: $tarChannelOrTag)
    -n [number]          - Number of additional full nodes (default: $additionalFullNodeCount)
    -c [number]          - Number of client bencher nodes (default: $clientNodeCount)
+   -u                   - Include a Blockstreamer (default: $blockstreamer)
    -P                   - Use public network IP addresses (default: $publicNetwork)
    -G                   - Enable GPU, and set count/type of GPUs to use (e.g n1-standard-16 --accelerator count=4,type=nvidia-tesla-k80)
    -g                   - Enable GPU (default: $enableGpu)
@@ -51,7 +49,7 @@ Deploys a CD testnet
    -d [disk-type]       - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
    -D                   - Delete the network
    -r                   - Reuse existing node/ledger configuration from a
-                          previous |start| (ie, don't run ./mulitnode-demo/setup.sh).
+                          previous |start| (ie, don't run ./multinode-demo/setup.sh).
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
@@ -67,7 +65,7 @@ zone=$3
 [[ -n $zone ]] || usage "Zone not specified"
 shift 3
 
-while getopts "h?p:Pn:c:s:t:gG:a:Dbd:r" opt; do
+while getopts "h?p:Pn:c:t:gG:a:Dbd:ru" opt; do
   case $opt in
   h | \?)
     usage
@@ -81,21 +79,10 @@ while getopts "h?p:Pn:c:s:t:gG:a:Dbd:r" opt; do
   c)
     clientNodeCount=$OPTARG
     ;;
-  s)
-    case $OPTARG in
-    edge|beta|stable)
-      snapChannel=$OPTARG
-      ;;
-    *)
-      usage "Invalid snap channel: $OPTARG"
-      ;;
-    esac
-    ;;
   t)
     case $OPTARG in
     edge|beta|stable|v*)
       tarChannelOrTag=$OPTARG
-      useTarReleaseChannel=true
       ;;
     *)
       usage "Invalid release channel: $OPTARG"
@@ -123,6 +110,9 @@ while getopts "h?p:Pn:c:s:t:gG:a:Dbd:r" opt; do
     ;;
   r)
     skipSetup=true
+    ;;
+  u)
+    blockstreamer=true
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -165,6 +155,10 @@ if ! $skipSetup; then
     -c "$clientNodeCount"
     -n "$additionalFullNodeCount"
   )
+
+  if $blockstreamer; then
+    create_args+=(-u)
+  fi
 
   if [[ -n $bootDiskType ]]; then
     create_args+=(-d "$bootDiskType")
@@ -233,14 +227,8 @@ ok=true
     op=start
   fi
 
-  if $useTarReleaseChannel; then
-    deploySource="-t $tarChannelOrTag"
-  else
-    deploySource="-s $snapChannel"
-  fi
-
   # shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
-  time net/net.sh $op $deploySource \
+  time net/net.sh $op -t "$tarChannelOrTag" \
     $maybeSkipSetup $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
 ) || ok=false
 
