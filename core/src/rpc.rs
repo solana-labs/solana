@@ -23,13 +23,13 @@ use std::time::{Duration, Instant};
 
 #[derive(Clone)]
 pub enum JsonRpcConfig {
-    Safe,
-    Unsafe,
+    DefaultConfig,
+    TestOnlyAllowRpcFullnodeExit,
 }
 
 impl Default for JsonRpcConfig {
     fn default() -> Self {
-        JsonRpcConfig::Safe
+        JsonRpcConfig::DefaultConfig
     }
 }
 
@@ -111,12 +111,12 @@ impl JsonRpcRequestProcessor {
 
     pub fn fullnode_exit(&self) -> Result<bool> {
         match self.config {
-            JsonRpcConfig::Safe => {
-                debug!("safe config, fullnode_exit ignored");
+            JsonRpcConfig::DefaultConfig => {
+                debug!("default config, fullnode_exit ignored");
                 Ok(false)
             }
-            JsonRpcConfig::Unsafe => {
-                warn!("JsonRPC fullnode_exit request...");
+            JsonRpcConfig::TestOnlyAllowRpcFullnodeExit => {
+                warn!("TEST_ONLY JsonRPC fullnode_exit request...");
                 self.fullnode_exit.store(true, Ordering::Relaxed);
                 Ok(true)
             }
@@ -705,7 +705,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rpc_request_processor_default_exit_is_a_noop() {
+    fn test_rpc_request_processor_config_default_trait_fullnode_exit_fails() {
         let exit = Arc::new(AtomicBool::new(false));
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
@@ -716,11 +716,11 @@ mod tests {
         assert_eq!(exit.load(Ordering::Relaxed), false);
     }
     #[test]
-    fn test_rpc_request_processor_safe_exit_is_a_noop() {
+    fn test_rpc_request_processor_default_config_fullnode_exit_fails() {
         let exit = Arc::new(AtomicBool::new(false));
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
-            JsonRpcConfig::Safe,
+            JsonRpcConfig::DefaultConfig,
             exit.clone(),
         );
         assert_eq!(request_processor.fullnode_exit(), Ok(false));
@@ -728,15 +728,14 @@ mod tests {
     }
 
     #[test]
-    fn test_rpc_request_processor_unsafe_exit() {
+    fn test_rpc_request_processor_allow_fullnode_exit_config() {
         let exit = Arc::new(AtomicBool::new(false));
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
-            JsonRpcConfig::Unsafe,
+            JsonRpcConfig::TestOnlyAllowRpcFullnodeExit,
             exit.clone(),
         );
         assert_eq!(request_processor.fullnode_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
     }
-
 }

@@ -3,7 +3,6 @@ use crate::client::mk_client;
 use crate::cluster_info::{Node, NodeInfo};
 use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::gossip_service::discover;
-use crate::rpc::JsonRpcConfig;
 use crate::service::Service;
 use crate::thin_client::retry_get_balance;
 use crate::thin_client::ThinClient;
@@ -35,11 +34,6 @@ impl LocalCluster {
             lamports_per_node,
             &FullnodeConfig::default(),
         )
-    }
-    pub fn new_unsafe(num_nodes: usize, cluster_lamports: u64, lamports_per_node: u64) -> Self {
-        let mut unsafe_rpc = FullnodeConfig::default();
-        unsafe_rpc.rpc_config = JsonRpcConfig::Unsafe;
-        Self::new_with_config(num_nodes, cluster_lamports, lamports_per_node, &unsafe_rpc)
     }
 
     pub fn new_with_config(
@@ -201,19 +195,22 @@ impl Drop for LocalCluster {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::rpc::JsonRpcConfig;
 
     #[test]
     fn test_local_cluster_start_and_exit() {
         solana_logger::setup();
-        let network = LocalCluster::new(1, 100, 3);
-        drop(network)
+        let cluster = LocalCluster::new(1, 100, 3);
+        drop(cluster)
     }
 
     #[test]
-    fn test_local_cluster_start_and_exit_unsafe() {
+    fn test_local_cluster_start_and_exit_with_config() {
         solana_logger::setup();
-        let network = LocalCluster::new_unsafe(1, 100, 3);
-        drop(network)
+        let mut fullnode_exit = FullnodeConfig::default();
+        fullnode_exit.rpc_config = JsonRpcConfig::TestOnlyAllowRpcFullnodeExit;
+        let cluster = LocalCluster::new_with_config(1, 100, 3, &fullnode_exit);
+        drop(cluster)
     }
 
 }
