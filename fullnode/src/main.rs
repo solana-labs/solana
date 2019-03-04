@@ -1,52 +1,22 @@
-use clap::{crate_version, App, Arg, ArgMatches};
+use clap::{crate_version, App, Arg};
 use log::*;
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
-use solana::socketaddr;
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::voting_keypair::{RemoteVoteSigner, VotingKeypair};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use solana_vote_api::vote_state::VoteState;
 use solana_vote_api::vote_transaction::VoteTransaction;
 use solana_vote_signer::rpc::{LocalVoteSigner, VoteSigner};
 use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
-use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
 use std::sync::Arc;
-
-fn parse_identity(matches: &ArgMatches<'_>) -> (Keypair, SocketAddr) {
-    if let Some(i) = matches.value_of("identity") {
-        let path = i.to_string();
-        if let Ok(file) = File::open(path.clone()) {
-            let parse: serde_json::Result<solana_fullnode_config::Config> =
-                serde_json::from_reader(file);
-
-            if let Ok(config_data) = parse {
-                let keypair = config_data.keypair();
-                let node_info = NodeInfo::new_with_pubkey_socketaddr(
-                    keypair.pubkey(),
-                    &config_data.bind_addr(FULLNODE_PORT_RANGE.0),
-                );
-
-                (keypair, node_info.gossip)
-            } else {
-                eprintln!("failed to parse {}", path);
-                exit(1);
-            }
-        } else {
-            eprintln!("failed to read {}", path);
-            exit(1);
-        }
-    } else {
-        (Keypair::new(), socketaddr!(0, 8000))
-    }
-}
 
 fn create_and_fund_vote_account(
     client: &mut ThinClient,
@@ -141,7 +111,7 @@ fn main() {
                 .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("Run with the identity found in FILE"),
+                .help("File containing an identity (keypair)"),
         )
         .arg(
             Arg::with_name("init_complete_file")
@@ -183,6 +153,7 @@ fn main() {
             Arg::with_name("no_sigverify")
                 .short("v")
                 .long("no-sigverify")
+                .takes_value(false)
                 .help("Run without signature verification"),
         )
         .arg(
@@ -208,15 +179,50 @@ fn main() {
                 .takes_value(true)
                 .help("Comma separated persistent accounts location"),
         )
+        .arg(
+            clap::Arg::with_name("public_address")
+                .long("public-address")
+                .takes_value(false)
+                .help("Advertise public machine address in gossip.  By default the local machine address is advertised"),
+        )
+        .arg(
+            clap::Arg::with_name("gossip_port")
+                .long("gossip-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .help("Gossip port number for the node"),
+        )
         .get_matches();
 
     let mut fullnode_config = FullnodeConfig::default();
+    let keypair = if let Some(identity) = matches.value_of("identity") {
+        read_keypair(identity).unwrap_or_else(|err| {
+            eprintln!("{}: Unable to open keypair file: {}", err, identity);
+            exit(1);
+        })
+    } else {
+        Keypair::new()
+    };
+    let ledger_path = matches.value_of("ledger").unwrap();
+
     fullnode_config.sigverify_disabled = matches.is_present("no_sigverify");
     let no_signer = matches.is_present("no_signer");
     fullnode_config.voting_disabled = no_signer;
     let use_only_bootstrap_leader = matches.is_present("no_leader_rotation");
-    let (keypair, gossip) = parse_identity(&matches);
-    let ledger_path = matches.value_of("ledger").unwrap();
+
+    let gossip_addr = {
+        let mut addr = solana_netutil::parse_port_or_addr(
+            &matches.value_of("gossip_port"),
+            FULLNODE_PORT_RANGE.0 + 1,
+        );
+        if matches.is_present("public_address") {
+            addr.set_ip(solana_netutil::get_public_ip_addr().unwrap());
+        } else {
+            addr.set_ip(solana_netutil::get_ip_addr(false).unwrap());
+        }
+        addr
+    };
+
     if let Some(paths) = matches.value_of("accounts") {
         fullnode_config.account_paths = Some(paths.to_string());
     } else {
@@ -254,7 +260,7 @@ fn main() {
     fullnode_config.blockstream = matches.value_of("blockstream").map(|s| s.to_string());
 
     let keypair = Arc::new(keypair);
-    let mut node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
+    let mut node = Node::new_with_external_ip(keypair.pubkey(), &gossip_addr);
     node.info.rpc.set_port(rpc_port);
     node.info.rpc_pubsub.set_port(rpc_pubsub_port);
 

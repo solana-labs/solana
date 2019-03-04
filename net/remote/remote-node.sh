@@ -38,12 +38,6 @@ EOF
 source net/common.sh
 loadConfigFile
 
-if [[ $publicNetwork = true ]]; then
-  setupArgs="-p"
-else
-  setupArgs="-l"
-fi
-
 case $deployMethod in
 local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
@@ -76,7 +70,7 @@ local|tar)
     fi
     set -x
     if [[ $skipSetup != true ]]; then
-      ./multinode-demo/setup.sh -t bootstrap-leader $setupArgs
+      ./multinode-demo/setup.sh -t bootstrap-leader
     fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
 
@@ -84,7 +78,12 @@ local|tar)
     if ! $leaderRotation; then
       maybeNoLeaderRotation="--no-leader-rotation"
     fi
-    ./multinode-demo/bootstrap-leader.sh $maybeNoLeaderRotation > bootstrap-leader.log 2>&1 &
+    maybePublicAddress=
+    if $publicNetwork; then
+      maybePublicAddress="--public-address"
+    fi
+
+    ./multinode-demo/bootstrap-leader.sh $maybeNoLeaderRotation $maybePublicAddress > bootstrap-leader.log 2>&1 &
     ln -sTf bootstrap-leader.log fullnode.log
     ;;
   fullnode|blockstreamer)
@@ -99,6 +98,9 @@ local|tar)
     if ! $leaderRotation; then
       args+=("--no-leader-rotation")
     fi
+    if $publicNetwork; then
+      args+=("--public-address")
+    fi
     if [[ $nodeType = blockstreamer ]]; then
       args+=(
         --blockstream /tmp/solana-blockstream.sock
@@ -108,7 +110,7 @@ local|tar)
 
     set -x
     if [[ $skipSetup != true ]]; then
-      ./multinode-demo/setup.sh -t fullnode $setupArgs
+      ./multinode-demo/setup.sh -t fullnode
     fi
 
     if [[ $nodeType = blockstreamer ]]; then

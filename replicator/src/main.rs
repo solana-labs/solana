@@ -1,10 +1,8 @@
 use clap::{crate_version, App, Arg};
-use serde_json;
-use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
+use solana::cluster_info::{Node, NodeInfo};
 use solana::replicator::Replicator;
 use solana::socketaddr;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use std::fs::File;
+use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
 
@@ -19,7 +17,7 @@ fn main() {
                 .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("Run with the identity found in FILE"),
+                .help("File containing an identity (keypair)"),
         )
         .arg(
             Arg::with_name("network")
@@ -39,40 +37,40 @@ fn main() {
                 .required(true)
                 .help("use DIR as persistent ledger location"),
         )
+        .arg(
+            clap::Arg::with_name("public_address")
+                .long("public-address")
+                .takes_value(false)
+                .help("Advertise public machine address in gossip.  By default the local machine address is advertised"),
+        )
         .get_matches();
 
     let ledger_path = matches.value_of("ledger").unwrap();
 
-    let (keypair, gossip) = if let Some(i) = matches.value_of("identity") {
-        let path = i.to_string();
-        if let Ok(file) = File::open(path.clone()) {
-            let parse: serde_json::Result<solana_fullnode_config::Config> =
-                serde_json::from_reader(file);
-            if let Ok(config_data) = parse {
-                let keypair = config_data.keypair();
-                let node_info = NodeInfo::new_with_pubkey_socketaddr(
-                    keypair.pubkey(),
-                    &config_data.bind_addr(FULLNODE_PORT_RANGE.0),
-                );
-                (keypair, node_info.gossip)
-            } else {
-                eprintln!("failed to parse {}", path);
-                exit(1);
-            }
-        } else {
-            eprintln!("failed to read {}", path);
+    let keypair = if let Some(identity) = matches.value_of("identity") {
+        read_keypair(identity).unwrap_or_else(|err| {
+            eprintln!("{}: Unable to open keypair file: {}", err, identity);
             exit(1);
-        }
+        })
     } else {
-        (Keypair::new(), socketaddr!([127, 0, 0, 1], 8700))
+        Keypair::new()
     };
 
-    let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
+    let gossip_addr = {
+        let mut addr = socketaddr!([127, 0, 0, 1], 8700);
+        if matches.is_present("public_address") {
+            addr.set_ip(solana_netutil::get_public_ip_addr().unwrap());
+        } else {
+            addr.set_ip(solana_netutil::get_ip_addr(false).unwrap());
+        }
+        addr
+    };
+    let node = Node::new_with_external_ip(keypair.pubkey(), &gossip_addr);
 
     println!(
-        "replicating the data with keypair: {:?} gossip:{:?}",
+        "replicating the data with keypair={:?} gossip_addr={:?}",
         keypair.pubkey(),
-        gossip
+        gossip_addr
     );
 
     let network_addr = matches
