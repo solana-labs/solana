@@ -36,17 +36,13 @@ fn main() {
             + &"/bpf".to_string();
 
         rerun_if_changed(
-            &[
-                "../../sdk/bpf/bpf.ld",
-                "../../sdk/bpf/bpf.mk",
-                "../bpf/c/makefile",
-            ],
-            &["../../sdk/bpf/inc", "../../sdk/bpf/scripts", "../bpf/c/src"],
+            &["../../sdk/bpf/bpf.ld", "../../sdk/bpf/bpf.mk", "c/makefile"],
+            &["../../sdk/bpf/inc", "../../sdk/bpf/scripts", "c/src"],
         );
 
         println!("cargo:warning=(not a warning) Compiling C-based BPF programs");
         let status = Command::new("make")
-            .current_dir("../bpf/c")
+            .current_dir("c")
             .arg("programs")
             .arg(&out_dir)
             .status()
@@ -59,10 +55,8 @@ fn main() {
         let install_dir =
             "../../../../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
 
-        if !Path::new(
-            "../bpf/rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
-        )
-        .is_file()
+        if !Path::new("rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so")
+            .is_file()
         {
             // Cannot build Rust BPF programs as part of main build because
             // to build it requires calling Cargo with different parameters which
@@ -75,19 +69,19 @@ fn main() {
 
         rerun_if_changed(
             &[
-                "../bpf/rust/noop/bpf.ld",
-                "../bpf/rust/noop/build.sh",
-                "../bpf/rust/noop/Cargo.toml",
-                "../bpf/rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
+                "rust/noop/bpf.ld",
+                "rust/noop/build.sh",
+                "rust/noop/Cargo.toml",
+                "rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
             ],
-            &["../bpf/rust/noop/src"],
+            &["rust/noop/src"],
         );
 
         println!(
             "cargo:warning=(not a warning) Installing Rust-based BPF program: solana_bpf_rust_noop"
         );
         let status = Command::new("mkdir")
-            .current_dir("../bpf/rust/noop")
+            .current_dir("rust/noop")
             .arg("-p")
             .arg(&install_dir)
             .status()
@@ -95,7 +89,7 @@ fn main() {
         assert!(status.success());
 
         let status = Command::new("cp")
-            .current_dir("../bpf/rust/noop")
+            .current_dir("rust/noop")
             .arg("target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so")
             .arg(&install_dir)
             .status()
