@@ -1,10 +1,15 @@
 //! The `bank_forks` module implments BankForks a DAG of checkpointed Banks
 
-use hashbrown::{HashMap, HashSet};
+use bincode::{deserialize_from, serialize_into};
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing;
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Error, ErrorKind};
 use std::ops::Index;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -132,14 +137,72 @@ impl BankForks {
         self.banks
             .retain(|slot, _| descendants[&root].contains(slot))
     }
+
+    fn get_io_error(error: &str) -> Error {
+        Error::new(ErrorKind::Other, error)
+    }
+
+    pub fn save_snapshot(&self, path: &str) -> Result<(), Error> {
+        let mut bank_index: HashMap<u64, PathBuf> = HashMap::new();
+        let path = Path::new(&path);
+        fs::create_dir_all(path)?;
+        for (slot, bank) in &self.frozen_banks() {
+            let bank_file = format!("bank-{}.snapshot", slot);
+            let bank_file_path = path.join(bank_file);
+            bank_index.insert(*slot, bank_file_path.clone());
+            let file = File::create(bank_file_path)?;
+            let mut stream = BufWriter::new(file);
+            serialize_into(&mut stream, &bank)
+                .map_err(|_| BankForks::get_io_error("serialize bank error"))?;
+        }
+        let index_path = Path::new(&path).join("bank.index");
+        fs::create_dir_all(path)?;
+        {
+            let file = File::create(index_path)?;
+            let mut stream = BufWriter::new(file);
+            serialize_into(&mut stream, &bank_index)
+                .map_err(|_| BankForks::get_io_error("serialize bank error"))?;
+        }
+        Ok(())
+    }
+
+    pub fn load_from_snapshot(path: &str) -> Result<Self, Error> {
+        let bank_index = {
+            let path = Path::new(path).join("bank.index");
+            let index_file = File::open(path)?;
+            let mut stream = BufReader::new(index_file);
+            let index: HashMap<u64, PathBuf> = deserialize_from(&mut stream)
+                .map_err(|_| BankForks::get_io_error("deserialize snapshot index error"))?;
+            index
+        };
+
+        let mut banks: HashMap<u64, Arc<Bank>> = HashMap::new();
+        for (slot, bank_path) in &bank_index {
+            let file = File::open(bank_path)?;
+            let mut stream = BufReader::new(file);
+            let bank: Bank = deserialize_from(&mut stream)
+                .map_err(|_| BankForks::get_io_error("deserialize bank error"))?;
+            banks.insert(*slot, Arc::new(bank));
+        }
+        let working_bank = banks[&0].clone();
+        Ok(BankForks {
+            banks,
+            working_bank,
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bincode::{deserialize, serialize};
     use crate::genesis_utils::create_genesis_block;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::system_transaction;
+    use std::env;
+    use std::fs::remove_dir_all;
 
     #[test]
     fn test_bank_forks() {
@@ -165,7 +228,7 @@ mod tests {
         bank_forks.insert(bank);
         let descendants = bank_forks.descendants();
         let children: Vec<u64> = descendants[&0].iter().cloned().collect();
-        assert_eq!(children, vec![1, 2]);
+        assert_eq!(children, vec![2, 1]);
         assert!(descendants[&1].is_empty());
         assert!(descendants[&2].is_empty());
     }
@@ -209,4 +272,94 @@ mod tests {
         assert_eq!(bank_forks.active_banks(), vec![1]);
     }
 
+    struct TempPaths {
+        pub paths: String,
+    }
+
+    #[macro_export]
+    macro_rules! tmp_bank_accounts_name {
+        () => {
+            &format!("{}-{}", file!(), line!())
+        };
+    }
+
+    #[macro_export]
+    macro_rules! get_tmp_bank_accounts_path {
+        () => {
+            get_tmp_bank_accounts_path(tmp_bank_accounts_name!())
+        };
+    }
+
+    impl Drop for TempPaths {
+        fn drop(&mut self) {
+            let paths: Vec<String> = self.paths.split(',').map(|s| s.to_string()).collect();
+            paths.iter().for_each(|p| {
+                let _ignored = remove_dir_all(p);
+            });
+        }
+    }
+
+    fn get_paths_vec(paths: &str) -> Vec<String> {
+        paths.split(',').map(|s| s.to_string()).collect()
+    }
+
+    fn get_tmp_bank_accounts_path(paths: &str) -> TempPaths {
+        let vpaths = get_paths_vec(paths);
+        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+        let vpaths: Vec<_> = vpaths
+            .iter()
+            .map(|path| format!("{}/{}", out_dir, path))
+            .collect();
+        TempPaths {
+            paths: vpaths.join(","),
+        }
+    }
+
+    fn save_and_load_snapshot(bank_forks: &BankForks) {
+        let bank = bank_forks.banks.get(&0).unwrap();
+        let tick_height = bank.tick_height();
+        let bank_ser = serialize(&bank).unwrap();
+        let child_bank = bank_forks.banks.get(&1).unwrap();
+        let child_bank_ser = serialize(&child_bank).unwrap();
+        let snapshot_path = "snapshots";
+        bank_forks.save_snapshot(snapshot_path).unwrap();
+        drop(bank_forks);
+
+        let new = BankForks::load_from_snapshot(snapshot_path).unwrap();
+        assert_eq!(new[0].tick_height(), tick_height);
+        let bank: Bank = deserialize(&bank_ser).unwrap();
+        let new_bank = new.banks.get(&0).unwrap();
+        bank.compare_bank(&new_bank);
+        let child_bank: Bank = deserialize(&child_bank_ser).unwrap();
+        let new_bank = new.banks.get(&1).unwrap();
+        child_bank.compare_bank(&new_bank);
+        drop(new);
+        let _ = fs::remove_dir_all(snapshot_path);
+    }
+
+    #[test]
+    fn test_bank_forks_snapshot_n() {
+        solana_logger::setup();
+        let path = get_tmp_bank_accounts_path!();
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let bank0 = Bank::new_with_paths(&genesis_block, Some(path.paths.clone()));
+        bank0.freeze();
+        let mut bank_forks = BankForks::new(0, bank0);
+        for index in 0..10 {
+            let bank = Bank::new_from_parent(&bank_forks[index], &Pubkey::default(), index + 1);
+            let key1 = Keypair::new().pubkey();
+            let tx = system_transaction::create_user_account(
+                &mint_keypair,
+                &key1,
+                1,
+                genesis_block.hash(),
+                0,
+            );
+            assert_eq!(bank.process_transaction(&tx), Ok(()));
+            bank.freeze();
+            bank_forks.insert(bank);
+            save_and_load_snapshot(&bank_forks);
+        }
+        assert_eq!(bank_forks.working_bank().slot(), 10);
+    }
 }

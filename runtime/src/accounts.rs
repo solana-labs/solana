@@ -6,8 +6,8 @@ use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::StoredAccount;
 use crate::message_processor::has_duplicates;
 use bincode::serialize;
-use hashbrown::{HashMap, HashSet};
 use log::*;
+use serde::{Deserialize, Serialize};
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
@@ -18,6 +18,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
 use std::borrow::Borrow;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::remove_dir_all;
 use std::iter::once;
@@ -50,7 +51,7 @@ type RecordLocks = (
 );
 
 /// This structure handles synchronization for db
-#[derive(Default)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Accounts {
     /// Single global AccountsDB
     pub accounts_db: Arc<AccountsDB>,
@@ -71,16 +72,16 @@ pub struct Accounts {
 
 impl Drop for Accounts {
     fn drop(&mut self) {
-        let paths = get_paths_vec(&self.paths);
-        paths.iter().for_each(|p| {
-            let _ignored = remove_dir_all(p);
+        if self.own_paths {
+            let paths = get_paths_vec(&self.paths);
+            paths.iter().for_each(|p| {
+                let _ignored = remove_dir_all(p);
 
-            // it is safe to delete the parent
-            if self.own_paths {
+                // it is safe to delete the parent
                 let path = Path::new(p);
                 let _ignored = remove_dir_all(path.parent().unwrap());
-            }
-        });
+            });
+        }
     }
 }
 
@@ -564,6 +565,12 @@ impl Accounts {
     pub fn add_root(&self, fork: Fork) {
         self.accounts_db.add_root(fork)
     }
+
+    pub fn compare_accounts(accounts: &Accounts, daccounts: &Accounts) {
+        assert_eq!(accounts.hash_internal_state(0), daccounts.hash_internal_state(0));
+        assert_eq!(accounts.paths, daccounts.paths);
+        assert_eq!(accounts.own_paths, daccounts.own_paths);
+    }
 }
 
 #[cfg(test)]
@@ -571,6 +578,8 @@ mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
 
     use super::*;
+    use bincode::{deserialize_from, serialize_into, serialized_size};
+    use rand::{Rng, thread_rng};
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::CompiledInstruction;
@@ -578,6 +587,7 @@ mod tests {
     use solana_sdk::transaction::Transaction;
     use std::thread::{sleep, Builder};
     use std::time::{Duration, Instant};
+    use std::io::Cursor;
 
     fn load_accounts_with_fee(
         tx: Transaction,
@@ -1109,5 +1119,43 @@ mod tests {
             let (_, ref mut parent_record_locks2) = *child2.record_locks.lock().unwrap();
             assert!(parent_record_locks2.is_empty());
         }
+    }
+
+    fn create_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize) {
+        for t in 0..num {
+            let pubkey = Pubkey::new_rand();
+            let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
+            accounts.store_slow(0, &pubkey, &account);
+            pubkeys.push(pubkey.clone());
+        }
+    }
+
+    fn check_accounts(accounts: &Accounts, pubkeys: &Vec<Pubkey>, num: usize) {
+        for _ in 1..num {
+            let idx = thread_rng().gen_range(0, num - 1);
+            let ancestors = vec![(0, 0)].into_iter().collect();
+            let account = accounts.load_slow(&ancestors, &pubkeys[idx]).unwrap();
+            let account1 = Account::new((idx + 1) as u64, 0, &Account::default().owner);
+            assert_eq!(account, (account1, 0));
+        }
+    }
+
+    #[test]
+    fn test_accounts_serialize() {
+        solana_logger::setup();
+        let accounts = Accounts::new(Some("serialize_accounts".to_string()));
+
+        let mut pubkeys: Vec<Pubkey> = vec![];
+        create_accounts(&accounts, &mut pubkeys, 100);
+        check_accounts(&accounts, &pubkeys, 100);
+
+        let mut buf = vec![0u8; serialized_size(&accounts).unwrap() as usize];
+        let mut writer = Cursor::new(&mut buf[..]);
+        serialize_into(&mut writer, &accounts).unwrap();
+
+        let mut reader = Cursor::new(&mut buf[..]);
+        let daccounts: Accounts = deserialize_from(&mut reader).unwrap();
+        check_accounts(&daccounts, &pubkeys, 100);
+        Accounts::compare_accounts(&accounts, &daccounts);
     }
 }

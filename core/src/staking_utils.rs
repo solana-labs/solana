@@ -1,9 +1,9 @@
-use hashbrown::HashMap;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::VoteState;
 use std::borrow::Borrow;
+use std::collections::HashMap;
 
 /// Looks through vote accounts, and finds the latest slot that has achieved
 /// supermajority lockout
@@ -66,7 +66,7 @@ pub fn node_staked_accounts_at_epoch(
 ) -> Option<impl Iterator<Item = (&Pubkey, u64, &Account)>> {
     bank.epoch_vote_accounts(epoch_height).map(|epoch_state| {
         epoch_state
-            .into_iter()
+            .iter()
             .filter_map(|(account_id, account)| {
                 filter_zero_balances(account).map(|stake| (account_id, stake, account))
             })
@@ -155,6 +155,7 @@ pub mod tests {
     use hashbrown::HashSet;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::collections::HashSet;
     use std::iter::FromIterator;
     use std::sync::Arc;
 

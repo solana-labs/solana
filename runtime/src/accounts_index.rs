@@ -1,10 +1,11 @@
-use hashbrown::{HashMap, HashSet};
 use log::*;
 use solana_sdk::pubkey::Pubkey;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
 pub type Fork = u64;
 
-#[derive(Default)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct AccountsIndex<T> {
     account_maps: HashMap<Pubkey, Vec<(Fork, T)>>,
     roots: HashSet<Fork>,

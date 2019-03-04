@@ -20,12 +20,13 @@
 
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::{AppendVec, StorageMeta, StoredAccount};
-use hashbrown::{HashMap, HashSet};
+use crate::serde_utils::{deserialize_atomicusize, serialize_atomicusize};
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
+use std::collections::{HashMap, HashSet};
 use std::fs::{create_dir_all, remove_dir_all};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -49,7 +50,7 @@ pub struct ErrorCounters {
     pub missing_signature_for_fee: usize,
 }
 
-#[derive(Default, Clone)]
+#[derive(Deserialize, Serialize, Default, Debug, PartialEq, Clone)]
 pub struct AccountInfo {
     /// index identifying the append storage
     id: AppendVecId,
@@ -67,13 +68,14 @@ pub type AccountStorage = HashMap<usize, Arc<AccountStorageEntry>>;
 pub type InstructionAccounts = Vec<Account>;
 pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum AccountStorageStatus {
     StorageAvailable = 0,
     StorageFull = 1,
 }
 
 /// Persistent storage structure holding the accounts
+#[derive(Debug, Deserialize, Serialize)]
 pub struct AccountStorageEntry {
     id: AppendVecId,
 
@@ -165,7 +167,7 @@ impl AccountStorageEntry {
 }
 
 // This structure handles the load/store of the accounts
-#[derive(Default)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct AccountsDB {
     /// Keeps tracks of index into AppendVec on a per fork basis
     pub accounts_index: RwLock<AccountsIndex<AccountInfo>>,
@@ -174,9 +176,13 @@ pub struct AccountsDB {
     pub storage: RwLock<AccountStorage>,
 
     /// distribute the accounts across storage lists
+    #[serde(serialize_with = "serialize_atomicusize")]
+    #[serde(deserialize_with = "deserialize_atomicusize")]
     next_id: AtomicUsize,
 
     /// write version
+    #[serde(serialize_with = "serialize_atomicusize")]
+    #[serde(deserialize_with = "deserialize_atomicusize")]
     write_version: AtomicUsize,
 
     /// Set of storage paths to pick from
@@ -428,8 +434,10 @@ impl AccountsDB {
 mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
     use super::*;
+    use bincode::{deserialize_from, serialize_into, serialized_size};
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
+    use std::io::Cursor;
 
     fn cleanup_paths(paths: &str) {
         let paths = get_paths_vec(&paths);
@@ -712,14 +720,13 @@ mod tests {
         stores[&0].count() == count
     }
 
-    fn check_accounts(accounts: &AccountsDB, pubkeys: &Vec<Pubkey>, fork: Fork) {
-        for _ in 1..100 {
-            let idx = thread_rng().gen_range(0, 99);
+    fn check_accounts(accounts: &AccountsDB, pubkeys: &Vec<Pubkey>, fork: Fork, num: usize) {
+        for _ in 1..num {
+            let idx = thread_rng().gen_range(0, num - 1);
             let ancestors = vec![(fork, 0)].into_iter().collect();
             let account = accounts.load_slow(&ancestors, &pubkeys[idx]).unwrap();
-            let mut default_account = Account::default();
-            default_account.lamports = (idx + 1) as u64;
-            assert_eq!((default_account, 0), account);
+            let account1 = Account::new((idx + 1) as u64, 0, &Account::default().owner);
+            assert_eq!(account, (account1, fork));
         }
     }
 
@@ -742,7 +749,7 @@ mod tests {
         let accounts = AccountsDB::new(&paths.paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
-        check_accounts(&accounts, &pubkeys, 0);
+        check_accounts(&accounts, &pubkeys, 0, 100);
     }
 
     #[test]
@@ -912,4 +919,26 @@ mod tests {
         assert_eq!(accounts.load_slow(&ancestors, &pubkey), Some((account, 1)));
     }
 
+    #[test]
+    fn test_accounts_db_serialize() {
+        solana_logger::setup();
+        let paths = get_tmp_accounts_path!();
+        let accounts = AccountsDB::new(&paths.paths);
+        let mut pubkeys: Vec<Pubkey> = vec![];
+        create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
+        assert_eq!(check_storage(&accounts, 100), true);
+        check_accounts(&accounts, &pubkeys, 0, 100);
+
+        let mut pubkeys1: Vec<Pubkey> = vec![];
+        create_account(&accounts, &mut pubkeys1, 1, 10, 0, 0);
+
+        let mut buf = vec![0u8; serialized_size(&accounts).unwrap() as usize];
+        let mut writer = Cursor::new(&mut buf[..]);
+        serialize_into(&mut writer, &accounts).unwrap();
+
+        let mut reader = Cursor::new(&mut buf[..]);
+        let daccounts: AccountsDB = deserialize_from(&mut reader).unwrap();
+        check_accounts(&daccounts, &pubkeys, 0, 100);
+        check_accounts(&daccounts, &pubkeys1, 1, 10);
+    }
 }

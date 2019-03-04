@@ -9,10 +9,13 @@ use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::locked_accounts_results::LockedAccountsResults;
 use crate::message_processor::{MessageProcessor, ProcessInstruction};
+use crate::serde_utils::{
+    deserialize_atomicbool, deserialize_atomicusize, serialize_atomicbool, serialize_atomicusize,
+};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
-use hashbrown::HashMap;
 use log::*;
+use serde::{Deserialize, Serialize};
 use solana_metrics::counter::Counter;
 use solana_metrics::influxdb;
 use solana_sdk::account::Account;
@@ -28,13 +31,14 @@ use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use solana_vote_api::vote_state::MAX_LOCKOUT_HISTORY;
 use std::borrow::Borrow;
 use std::cmp;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 pub const MINIMUM_SLOT_LENGTH: usize = MAX_LOCKOUT_HISTORY + 1;
 
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct EpochSchedule {
     /// The maximum number of slots in each epoch.
     pub slots_per_epoch: u64,
@@ -133,7 +137,7 @@ impl EpochSchedule {
 type BankStatusCache = StatusCache<Result<()>>;
 
 /// Manager for the state of all accounts and programs after processing its entries.
-#[derive(Default)]
+#[derive(Deserialize, Serialize, Default)]
 pub struct Bank {
     /// where all the Accounts are stored
     accounts: Arc<Accounts>,
@@ -157,9 +161,13 @@ pub struct Bank {
     parent_hash: Hash,
 
     /// The number of transactions processed without error
+    #[serde(serialize_with = "serialize_atomicusize")]
+    #[serde(deserialize_with = "deserialize_atomicusize")]
     transaction_count: AtomicUsize, // TODO: Use AtomicU64 if/when available
 
     /// Bank tick height
+    #[serde(serialize_with = "serialize_atomicusize")]
+    #[serde(deserialize_with = "deserialize_atomicusize")]
     tick_height: AtomicUsize, // TODO: Use AtomicU64 if/when available
 
     // Bank max_tick_height
@@ -192,6 +200,8 @@ pub struct Bank {
 
     /// A boolean reflecting whether any entries were recorded into the PoH
     /// stream for the slot == self.slot
+    #[serde(serialize_with = "serialize_atomicbool")]
+    #[serde(deserialize_with = "deserialize_atomicbool")]
     is_delta: AtomicBool,
 
     /// The Message processor
@@ -907,6 +917,14 @@ impl Bank {
         self.store(pubkey, &account);
     }
 
+    pub fn accounts(&self) -> Arc<Accounts> {
+        self.accounts.clone()
+    }
+
+    pub fn set_accounts(&mut self, accounts: &Arc<Accounts>) {
+        self.accounts = accounts.clone();
+    }
+
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
         self.accounts
             .load_slow(&self.ancestors, pubkey)
@@ -1059,6 +1077,37 @@ impl Bank {
         // Register a bogus executable account, which will be loaded and ignored.
         self.register_native_instruction_processor("", &program_id);
     }
+
+    pub fn compare_bank(&self, dbank: &Bank) {
+        assert_eq!(self.slot, dbank.slot);
+        assert_eq!(self.collector_id, dbank.collector_id);
+        assert_eq!(self.epoch_schedule, dbank.epoch_schedule);
+        assert_eq!(self.epoch_vote_accounts, dbank.epoch_vote_accounts);
+        assert_eq!(self.ticks_per_slot, dbank.ticks_per_slot);
+        assert_eq!(self.parent_hash, dbank.parent_hash);
+        assert_eq!(
+            self.tick_height.load(Ordering::SeqCst),
+            dbank.tick_height.load(Ordering::SeqCst)
+        );
+        assert_eq!(
+            self.is_delta.load(Ordering::SeqCst),
+            dbank.is_delta.load(Ordering::SeqCst)
+        );
+
+        let bh = self.hash.read().unwrap();
+        let dbh = dbank.hash.read().unwrap();
+        assert_eq!(*bh, *dbh);
+
+        let bhq = self.blockhash_queue.read().unwrap();
+        let dbhq = dbank.blockhash_queue.read().unwrap();
+        assert_eq!(*bhq, *dbhq);
+
+        let sc = self.status_cache.read().unwrap();
+        let dsc = dbank.status_cache.read().unwrap();
+        assert_eq!(*sc, *dsc);
+
+        Accounts::compare_accounts(&self.accounts, &dbank.accounts);
+    }
 }
 
 impl Drop for Bank {
@@ -1073,6 +1122,7 @@ mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::genesis_block::create_genesis_block;
+    use bincode::{deserialize_from, serialize_into, serialized_size};
     use solana_sdk::hash;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -1080,6 +1130,42 @@ mod tests {
     use solana_sdk::system_transaction;
     use solana_vote_api::vote_instruction;
     use solana_vote_api::vote_state::VoteState;
+    use std::io::Cursor;
+
+    // The default stake placed with the bootstrap leader
+    pub(crate) const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
+
+    pub(crate) fn create_genesis_block_with_leader(
+        mint_lamports: u64,
+        leader_id: &Pubkey,
+        leader_stake_lamports: u64,
+    ) -> (GenesisBlock, Keypair, Keypair) {
+        let mint_keypair = Keypair::new();
+        let voting_keypair = Keypair::new();
+
+        let genesis_block = GenesisBlock::new(
+            &leader_id,
+            &[
+                (
+                    mint_keypair.pubkey(),
+                    Account::new(mint_lamports, 0, &system_program::id()),
+                ),
+                (
+                    voting_keypair.pubkey(),
+                    vote_state::create_bootstrap_leader_account(
+                        &voting_keypair.pubkey(),
+                        &leader_id,
+                        0,
+                        leader_stake_lamports,
+                    ),
+                ),
+            ],
+            &[],
+        );
+
+        (genesis_block, mint_keypair, voting_keypair)
+    }
+>>>>>>> 639513c0... Be able to create bank snapshots
 
     #[test]
     fn test_bank_new() {
@@ -1983,5 +2069,20 @@ mod tests {
         );
 
         assert!(bank.is_delta.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_bank_serialize() {
+        let (genesis_block, _) = GenesisBlock::new(500);
+        let bank0 = Arc::new(Bank::new(&genesis_block));
+        let bank = new_from_parent(&bank0);
+
+        let mut buf = vec![0u8; serialized_size(&bank).unwrap() as usize];
+        let mut writer = Cursor::new(&mut buf[..]);
+        serialize_into(&mut writer, &bank).unwrap();
+
+        let mut reader = Cursor::new(&mut buf[..]);
+        let dbank: Bank = deserialize_from(&mut reader).unwrap();
+        bank.compare_bank(&dbank);
     }
 }
