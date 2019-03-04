@@ -139,7 +139,7 @@ impl ContactInfo {
         nxt_addr.set_port(addr.port() + nxt);
         nxt_addr
     }
-    pub fn new_with_pubkey_socketaddr(pubkey: Pubkey, bind_addr: &SocketAddr) -> Self {
+    fn new_with_pubkey_socketaddr(pubkey: Pubkey, bind_addr: &SocketAddr) -> Self {
         let tpu_addr = *bind_addr;
         let gossip_addr = Self::next_port(&bind_addr, 1);
         let tvu_addr = Self::next_port(&bind_addr, 2);
