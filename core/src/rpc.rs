@@ -712,7 +712,7 @@ mod tests {
             JsonRpcConfig::default(),
             exit.clone(),
         );
-        assert_eq!(request_processor.fullnode_exit(), false);
+        assert_eq!(request_processor.fullnode_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
     }
     #[test]
@@ -723,7 +723,7 @@ mod tests {
             JsonRpcConfig::Safe,
             exit.clone(),
         );
-        assert_eq!(request_processor.fullnode_exit(), false);
+        assert_eq!(request_processor.fullnode_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
     }
 
@@ -735,7 +735,7 @@ mod tests {
             JsonRpcConfig::Unsafe,
             exit.clone(),
         );
-        assert_eq!(request_processor.fullnode_exit(), true);
+        assert_eq!(request_processor.fullnode_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
     }
 
