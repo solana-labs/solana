@@ -25,6 +25,7 @@ Start a full node on the specified network
   --blockstream PATH    - open blockstream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --no-leader-rotation  - disable leader rotation
+  --public-address      - advertise public machine address in gossip.  By default the local machine address is advertised
   --no-signer           - start node without vote signer
   --rpc-port port       - custom RPC port for this node
 
@@ -36,7 +37,9 @@ if [[ $1 = -h ]]; then
   usage
 fi
 
+gossip_port=9000
 maybe_blockstream=
+maybe_public_address=
 maybe_init_complete_file=
 maybe_no_leader_rotation=
 maybe_no_signer=
@@ -56,13 +59,16 @@ while [[ ${1:0:1} = - ]]; do
     maybe_blockstream="$1 $2"
     shift 2
   elif [[ $1 = --init-complete-file ]]; then
-    maybe_init_complete_file="--init-complete-file $2"
+    maybe_init_complete_file="$1 $2"
     shift 2
   elif [[ $1 = --no-leader-rotation ]]; then
-    maybe_no_leader_rotation="--no-leader-rotation"
+    maybe_no_leader_rotation=$1
+    shift
+  elif [[ $1 = --public-address ]]; then
+    maybe_public_address=$1
     shift
   elif [[ $1 = --no-signer ]]; then
-    maybe_no_signer="--no-signer"
+    maybe_no_signer=$1
     shift
   elif [[ $1 = --rpc-port ]]; then
     maybe_rpc_port="$1 $2"
@@ -119,14 +125,13 @@ else
 fi
 
 if ((!self_setup)); then
-  [[ -f $SOLANA_CONFIG_DIR/fullnode.json ]] || {
-    echo "$SOLANA_CONFIG_DIR/fullnode.json not found, create it by running:"
+  [[ -f $SOLANA_CONFIG_DIR/fullnode-id.json ]] || {
+    echo "$SOLANA_CONFIG_DIR/fullnode-id.json not found, create it by running:"
     echo
     echo "  ${here}/setup.sh"
     exit 1
   }
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id.json
-  fullnode_json_path=$SOLANA_CONFIG_DIR/fullnode.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts
 else
@@ -134,24 +139,18 @@ else
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id-x$self_setup_label.json
   [[ -f "$fullnode_id_path" ]] || $solana_keygen -o "$fullnode_id_path"
 
-  mkdir -p "$SOLANA_CONFIG_DIR"
-  fullnode_json_path=$SOLANA_CONFIG_DIR/fullnode-x$self_setup_label.json
-  [[ -f "$fullnode_json_path" ]] || {
-    echo "Finding a port.."
-    # Find an available port in the range 9100-9899
-    (( port = 9100 + ($$ % 800) ))
-    while true; do
-      (( port = port >= 9900 ? 9100 : ++port ))
-      echo "Testing $port"
-      if ! nc -w 10 -z 127.0.0.1 $port; then
-        echo "Selected port $port"
-        break;
-      fi
-      echo "Port $port is in use"
-    done
-    $solana_fullnode_config --keypair="$fullnode_id_path" -l -b "$port" > "$fullnode_json_path"
-  }
-
+  echo "Finding a port.."
+  # Find an available port in the range 9100-9899
+  (( gossip_port = 9100 + ($$ % 800) ))
+  while true; do
+    (( gossip_port = gossip_port >= 9900 ? 9100 : ++gossip_port ))
+    echo "Testing $gossip_port"
+    if ! nc -w 10 -z 127.0.0.1 $gossip_port; then
+      echo "Selected gossip_port $gossip_port"
+      break;
+    fi
+    echo "Port $gossip_port is in use"
+  done
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger-x$self_setup_label
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts-x$self_setup_label
 fi
@@ -219,14 +218,16 @@ if [[ ! -d "$ledger_config_dir" ]]; then
 fi
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
-# shellcheck disable=SC2086 # Don't want to double quote maybe_blockstream or maybe_init_complete_file or maybe_no_signer or maybe_rpc_port
+# shellcheck disable=SC2086 # Don't want to double quote maybe_blockstream or maybe_init_complete_file or ...
 $program \
   $maybe_blockstream \
   $maybe_init_complete_file \
   $maybe_no_leader_rotation \
   $maybe_no_signer \
   $maybe_rpc_port \
-  --identity "$fullnode_json_path" \
+  $maybe_public_address \
+  --gossip-port "$gossip_port" \
+  --identity "$fullnode_id_path" \
   --network "$leader_address" \
   --ledger "$ledger_config_dir" \
   --accounts "$accounts_config_dir" \

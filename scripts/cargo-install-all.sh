@@ -27,7 +27,6 @@ BIN_CRATES=(
   fullnode
   bench-streamer
   bench-tps
-  fullnode-config
   genesis
   ledger-tool
   wallet

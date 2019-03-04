@@ -42,8 +42,6 @@ set -x
 solana-keygen -o "$dataDir"/config/leader-keypair.json
 solana-keygen -o "$dataDir"/config/drone-keypair.json
 
-solana-fullnode-config \
-  --keypair="$dataDir"/config/leader-keypair.json -l > "$dataDir"/config/leader-config.json
 solana-genesis \
   --num_tokens 1000000000 \
   --mint "$dataDir"/config/drone-keypair.json \
@@ -54,7 +52,7 @@ solana-drone --keypair "$dataDir"/config/drone-keypair.json &
 drone=$!
 
 args=(
-  --identity "$dataDir"/config/leader-config.json
+  --identity "$dataDir"/config/leader-keypair.json
   --ledger "$dataDir"/ledger/
   --rpc-port 8899
 )
