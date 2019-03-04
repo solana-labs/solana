@@ -4,18 +4,18 @@ import {Account} from '../../src';
 import {url} from '../url';
 import {mockRpc} from '../__mocks__/node-fetch';
 
-export function mockGetLastId() {
-  const lastId = new Account();
+export function mockGetRecentBlockhash() {
+  const recentBlockhash = new Account();
 
   mockRpc.push([
     url,
     {
-      method: 'getLastId',
+      method: 'getRecentBlockhash',
       params: [],
     },
     {
       error: null,
-      result: lastId.publicKey.toBase58(),
+      result: recentBlockhash.publicKey.toBase58(),
     },
   ]);
 }

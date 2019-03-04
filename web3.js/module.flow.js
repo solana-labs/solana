@@ -22,6 +22,9 @@ declare module '@solana/web3.js' {
     toBuffer(): Buffer;
   }
 
+  // === src/blockhash.js ===
+  declare export type Blockhash = string;
+
   // === src/account.js ===
   declare export class Account {
     constructor(secretKey: ?Buffer): Account;
@@ -58,7 +61,7 @@ declare module '@solana/web3.js' {
       signature: TransactionSignature,
     ): Promise<SignatureStatus>;
     getTransactionCount(): Promise<number>;
-    getLastId(): Promise<TransactionId>;
+    getRecentBlockhash(): Promise<Blockhash>;
     requestAirdrop(
       to: PublicKey,
       amount: number,
@@ -92,7 +95,6 @@ declare module '@solana/web3.js' {
 
   // === src/transaction.js ===
   declare export type TransactionSignature = string;
-  declare export type TransactionId = string;
 
   declare type TransactionInstructionCtorFields = {|
     keys: ?Array<PublicKey>,
@@ -113,7 +115,7 @@ declare module '@solana/web3.js' {
 
   declare type TransactionCtorFields = {|
     fee?: number,
-    lastId?: TransactionId,
+    recentBlockhash?: Blockhash,
     signatures?: Array<SignaturePubkeyPair>,
   |};
 
@@ -121,7 +123,7 @@ declare module '@solana/web3.js' {
     signatures: Array<SignaturePubkeyPair>;
     signature: ?Buffer;
     instructions: Array<TransactionInstruction>;
-    lastId: ?TransactionId;
+    recentBlockhash: ?Blockhash;
     fee: number;
 
     constructor(opts?: TransactionCtorFields): Transaction;
