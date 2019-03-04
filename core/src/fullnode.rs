@@ -48,7 +48,6 @@ impl NodeServices {
 
     fn join(self) -> Result<()> {
         self.tpu.join()?;
-        //tvu will never stop unless exit is signaled
         self.tvu.join()?;
         Ok(())
     }
@@ -179,6 +178,7 @@ impl Fullnode {
                 IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
                 node.info.rpc_pubsub.port(),
             ),
+            &exit,
         );
 
         let gossip_service = GossipService::new(
@@ -296,9 +296,6 @@ impl Fullnode {
         if let Some(ref rpc_service) = self.rpc_service {
             rpc_service.exit();
         }
-        if let Some(ref rpc_pubsub_service) = self.rpc_pubsub_service {
-            rpc_pubsub_service.exit();
-        }
         self.node_services.exit();
     }
 
@@ -347,7 +344,6 @@ impl Service for Fullnode {
         self.rpc_working_bank_handle.join()?;
         self.gossip_service.join()?;
         self.node_services.join()?;
-        trace!("exit node_services!");
         Ok(())
     }
 }

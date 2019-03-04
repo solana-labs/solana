@@ -13,7 +13,6 @@ use std::time::Duration;
 
 pub struct PubSubService {
     thread_hdl: JoinHandle<()>,
-    exit: Arc<AtomicBool>,
 }
 
 impl Service for PubSubService {
@@ -25,10 +24,13 @@ impl Service for PubSubService {
 }
 
 impl PubSubService {
-    pub fn new(subscriptions: &Arc<RpcSubscriptions>, pubsub_addr: SocketAddr) -> Self {
+    pub fn new(
+        subscriptions: &Arc<RpcSubscriptions>,
+        pubsub_addr: SocketAddr,
+        exit: &Arc<AtomicBool>,
+    ) -> Self {
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
         let rpc = RpcSolPubSubImpl::new(subscriptions.clone());
-        let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
             .name("solana-pubsub".to_string())
@@ -56,15 +58,10 @@ impl PubSubService {
                 server.unwrap().close();
             })
             .unwrap();
-        Self { thread_hdl, exit }
-    }
-
-    pub fn exit(&self) {
-        self.exit.store(true, Ordering::Relaxed);
+        Self { thread_hdl }
     }
 
     pub fn close(self) -> thread::Result<()> {
-        self.exit();
         self.join()
     }
 }
@@ -78,7 +75,8 @@ mod tests {
     fn test_pubsub_new() {
         let subscriptions = Arc::new(RpcSubscriptions::default());
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr);
+        let exit = Arc::new(AtomicBool::new(false));
+        let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr, &exit);
         let thread = pubsub_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-pubsub");
     }
