@@ -2,16 +2,16 @@
 //! to generate a thread which regularly calculates the last confirmation times
 //! observed by the leader
 
-use crate::service::Service;
+use crate::poh_recorder::PohRecorder;
 use solana_metrics::{influxdb, submit};
 use solana_runtime::bank::Bank;
 use solana_sdk::timing;
 use solana_vote_api::vote_state::VoteState;
 use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::sleep;
-use std::thread::{self, Builder, JoinHandle};
+use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -20,14 +20,11 @@ pub enum ConfirmationError {
 }
 
 pub const COMPUTE_CONFIRMATION_MS: u64 = 100;
-
-pub struct LeaderConfirmationService {
-    thread_hdl: JoinHandle<()>,
-}
+pub struct LeaderConfirmationService {}
 
 impl LeaderConfirmationService {
     fn get_last_supermajority_timestamp(
-        bank: &Arc<Bank>,
+        bank: &Bank,
         last_valid_validator_timestamp: u64,
     ) -> result::Result<u64, ConfirmationError> {
         let mut total_stake = 0;
@@ -69,7 +66,7 @@ impl LeaderConfirmationService {
         Err(ConfirmationError::NoValidSupermajority)
     }
 
-    pub fn compute_confirmation(bank: &Arc<Bank>, last_valid_validator_timestamp: &mut u64) {
+    pub fn compute_confirmation(bank: &Bank, last_valid_validator_timestamp: &mut u64) {
         if let Ok(super_majority_timestamp) =
             Self::get_last_supermajority_timestamp(bank, *last_valid_validator_timestamp)
         {
@@ -90,9 +87,9 @@ impl LeaderConfirmationService {
     }
 
     /// Create a new LeaderConfirmationService for computing confirmation.
-    pub fn new(bank: &Arc<Bank>, exit: Arc<AtomicBool>) -> Self {
-        let bank = bank.clone();
-        let thread_hdl = Builder::new()
+    pub fn start(poh_recorder: &Arc<Mutex<PohRecorder>>, exit: Arc<AtomicBool>) -> JoinHandle<()> {
+        let poh_recorder = poh_recorder.clone();
+        Builder::new()
             .name("solana-leader-confirmation-service".to_string())
             .spawn(move || {
                 let mut last_valid_validator_timestamp = 0;
@@ -100,21 +97,15 @@ impl LeaderConfirmationService {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                    Self::compute_confirmation(&bank, &mut last_valid_validator_timestamp);
+                    // dont hold this lock too long
+                    let maybe_bank = poh_recorder.lock().unwrap().bank();
+                    if let Some(ref bank) = maybe_bank {
+                        Self::compute_confirmation(bank, &mut last_valid_validator_timestamp);
+                    }
                     sleep(Duration::from_millis(COMPUTE_CONFIRMATION_MS));
                 }
             })
-            .unwrap();
-
-        Self { thread_hdl }
-    }
-}
-
-impl Service for LeaderConfirmationService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
-        self.thread_hdl.join()
+            .unwrap()
     }
 }
 

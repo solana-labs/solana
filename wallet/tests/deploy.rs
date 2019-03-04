@@ -20,7 +20,6 @@ fn test_wallet_deploy_program() {
     pathbuf.set_extension("so");
 
     let (server, leader_data, alice, ledger_path) = new_fullnode();
-    let server_exit = server.run(None);
 
     let (sender, receiver) = channel();
     run_local_drone(alice, sender);
@@ -76,6 +75,6 @@ fn test_wallet_deploy_program() {
         &elf
     );
 
-    server_exit();
+    server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
 }

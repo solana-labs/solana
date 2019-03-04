@@ -16,7 +16,7 @@ use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
-use crate::tvu::{Sockets, Tvu, TvuRotationInfo, TvuRotationReceiver};
+use crate::tvu::{Sockets, Tvu};
 use crate::voting_keypair::VotingKeypair;
 use solana_metrics::counter::Counter;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -26,11 +26,11 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::timestamp;
 use solana_vote_api::vote_transaction::VoteTransaction;
-use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, RwLock};
+use std::thread::sleep;
 use std::thread::JoinHandle;
 use std::thread::{spawn, Result};
 use std::time::Duration;
@@ -84,20 +84,15 @@ impl Default for FullnodeConfig {
 }
 
 pub struct Fullnode {
-    id: Pubkey,
+    pub id: Pubkey,
     exit: Arc<AtomicBool>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
+    rpc_working_bank_handle: JoinHandle<()>,
     gossip_service: GossipService,
-    sigverify_disabled: bool,
-    tpu_sockets: Vec<UdpSocket>,
-    broadcast_socket: UdpSocket,
     node_services: NodeServices,
-    rotation_receiver: TvuRotationReceiver,
-    blocktree: Arc<Blocktree>,
     poh_service: PohService,
     poh_recorder: Arc<Mutex<PohRecorder>>,
-    bank_forks: Arc<RwLock<BankForks>>,
 }
 
 impl Fullnode {
@@ -129,10 +124,9 @@ impl Fullnode {
             bank.tick_height(),
             bank.last_blockhash(),
         );
-        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
-            bank.tick_height(),
-            bank.last_blockhash(),
-        )));
+        let (poh_recorder, entry_receiver) =
+            PohRecorder::new(bank.tick_height(), bank.last_blockhash());
+        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, exit.clone());
 
         info!("node info: {:?}", node.info);
@@ -225,8 +219,6 @@ impl Fullnode {
         };
 
         // Setup channel for rotation indications
-        let (rotation_sender, rotation_receiver) = channel();
-
         let tvu = Tvu::new(
             voting_keypair_option,
             &bank_forks,
@@ -235,137 +227,55 @@ impl Fullnode {
             sockets,
             blocktree.clone(),
             config.storage_rotate_count,
-            &rotation_sender,
             &storage_state,
             config.blockstream.as_ref(),
             ledger_signal_receiver,
             &subscriptions,
+            &poh_recorder,
         );
-        let tpu = Tpu::new(id, &cluster_info);
+        let tpu = Tpu::new(
+            id,
+            &cluster_info,
+            &poh_recorder,
+            entry_receiver,
+            node.sockets.tpu,
+            node.sockets.broadcast,
+            config.sigverify_disabled,
+            &blocktree,
+        );
+        let exit_ = exit.clone();
+        let bank_forks_ = bank_forks.clone();
+        let rpc_service_rp = rpc_service.request_processor.clone();
+        let rpc_working_bank_handle = spawn(move || loop {
+            if exit_.load(Ordering::Relaxed) {
+                break;
+            }
+            let bank = bank_forks_.read().unwrap().working_bank();
+            trace!("rpc working bank {} {}", bank.slot(), bank.last_blockhash());
+            rpc_service_rp
+                .write()
+                .unwrap()
+                .set_bank(&bank_forks_.read().unwrap().working_bank());
+            let timer = Duration::from_millis(100);
+            sleep(timer);
+        });
 
         inc_new_counter_info!("fullnode-new", 1);
         Self {
             id,
-            sigverify_disabled: config.sigverify_disabled,
             gossip_service,
             rpc_service: Some(rpc_service),
             rpc_pubsub_service: Some(rpc_pubsub_service),
+            rpc_working_bank_handle,
             node_services: NodeServices::new(tpu, tvu),
             exit,
-            tpu_sockets: node.sockets.tpu,
-            broadcast_socket: node.sockets.broadcast,
-            rotation_receiver,
-            blocktree,
             poh_service,
             poh_recorder,
-            bank_forks,
-        }
-    }
-
-    fn rotate(&mut self, rotation_info: TvuRotationInfo) {
-        trace!(
-            "{:?}: rotate for slot={} to leader={:?}",
-            self.id,
-            rotation_info.slot,
-            rotation_info.leader_id,
-        );
-
-        if let Some(ref mut rpc_service) = self.rpc_service {
-            // TODO: This is not the correct bank.  Instead TVU should pass along the
-            // frozen Bank for each completed block for RPC to use from it's notion of the "best"
-            // available fork (until we want to surface multiple forks to RPC)
-            rpc_service.set_bank(&self.bank_forks.read().unwrap().working_bank());
-        }
-
-        if rotation_info.leader_id == self.id {
-            debug!("{:?} rotating to leader role", self.id);
-            let tpu_bank = self
-                .bank_forks
-                .read()
-                .unwrap()
-                .get(rotation_info.slot)
-                .unwrap()
-                .clone();
-            self.node_services.tpu.switch_to_leader(
-                &tpu_bank,
-                &self.poh_recorder,
-                self.tpu_sockets
-                    .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
-                    .collect(),
-                self.broadcast_socket
-                    .try_clone()
-                    .expect("Failed to clone broadcast socket"),
-                self.sigverify_disabled,
-                rotation_info.slot,
-                &self.blocktree,
-            );
-        } else {
-            self.node_services.tpu.switch_to_forwarder(
-                rotation_info.leader_id,
-                self.tpu_sockets
-                    .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
-                    .collect(),
-            );
-        }
-    }
-
-    // Runs a thread to manage node role transitions.  The returned closure can be used to signal the
-    // node to exit.
-    pub fn start(
-        mut self,
-        rotation_notifier: Option<Sender<u64>>,
-    ) -> (JoinHandle<()>, Arc<AtomicBool>, Receiver<bool>) {
-        let (sender, receiver) = channel();
-        let exit = self.exit.clone();
-        let timeout = Duration::from_secs(1);
-        let handle = spawn(move || loop {
-            if self.exit.load(Ordering::Relaxed) {
-                debug!("node shutdown requested");
-                self.close().expect("Unable to close node");
-                let _ = sender.send(true);
-                break;
-            }
-
-            match self.rotation_receiver.recv_timeout(timeout) {
-                Ok(rotation_info) => {
-                    trace!("{:?}: rotate at slot={}", self.id, rotation_info.slot);
-                    //TODO: this will be called by the TVU every time it votes
-                    //instead of here
-                    info!(
-                        "reset PoH... {} {}",
-                        rotation_info.tick_height, rotation_info.blockhash
-                    );
-                    self.poh_recorder
-                        .lock()
-                        .unwrap()
-                        .reset(rotation_info.tick_height, rotation_info.blockhash);
-                    let slot = rotation_info.slot;
-                    self.rotate(rotation_info);
-                    debug!("role transition complete");
-                    if let Some(ref rotation_notifier) = rotation_notifier {
-                        rotation_notifier.send(slot).unwrap();
-                    }
-                }
-                Err(RecvTimeoutError::Timeout) => continue,
-                _ => (),
-            }
-        });
-        (handle, exit, receiver)
-    }
-
-    pub fn run(self, rotation_notifier: Option<Sender<u64>>) -> impl FnOnce() {
-        let (_, exit, receiver) = self.start(rotation_notifier);
-        move || {
-            exit.store(true, Ordering::Relaxed);
-            receiver.recv().unwrap();
-            debug!("node shutdown complete");
         }
     }
 
     // Used for notifying many nodes in parallel to exit
-    fn exit(&self) {
+    pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
         // Need to force the poh_recorder to drop the WorkingBank,
         // which contains the channel to BroadcastStage. This should be
@@ -375,6 +285,7 @@ impl Fullnode {
         // in motion because exit()/close() are only called by the run() loop
         // which is the sole initiator of rotations.
         self.poh_recorder.lock().unwrap().clear_bank();
+        self.poh_service.exit();
         if let Some(ref rpc_service) = self.rpc_service {
             rpc_service.exit();
         }
@@ -382,10 +293,9 @@ impl Fullnode {
             rpc_pubsub_service.exit();
         }
         self.node_services.exit();
-        self.poh_service.exit()
     }
 
-    fn close(self) -> Result<()> {
+    pub fn close(self) -> Result<()> {
         self.exit();
         self.join()
     }
@@ -418,6 +328,8 @@ impl Service for Fullnode {
     type JoinReturnType = ();
 
     fn join(self) -> Result<()> {
+        self.poh_service.join()?;
+        drop(self.poh_recorder);
         if let Some(rpc_service) = self.rpc_service {
             rpc_service.join()?;
         }
@@ -425,11 +337,10 @@ impl Service for Fullnode {
             rpc_pubsub_service.join()?;
         }
 
+        self.rpc_working_bank_handle.join()?;
         self.gossip_service.join()?;
         self.node_services.join()?;
         trace!("exit node_services!");
-        self.poh_service.join()?;
-        trace!("exit poh!");
         Ok(())
     }
 }
@@ -483,12 +394,7 @@ pub fn make_active_set_entries(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree};
-    use crate::entry::make_consecutive_blobs;
-    use crate::streamer::responder;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
-    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
+    use crate::blocktree::create_new_tmp_ledger;
     use std::fs::remove_dir_all;
 
     #[test]
@@ -550,241 +456,5 @@ mod tests {
         for path in ledger_paths {
             remove_dir_all(path).unwrap();
         }
-    }
-
-    #[test]
-    fn test_leader_to_leader_transition() {
-        solana_logger::setup();
-
-        let bootstrap_leader_keypair = Keypair::new();
-        let bootstrap_leader_node =
-            Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
-
-        // Once the bootstrap leader hits the second epoch, because there are no other choices in
-        // the active set, this leader will remain the leader in the second epoch. In the second
-        // epoch, check that the same leader knows to shut down and restart as a leader again.
-        let ticks_per_slot = 5;
-        let slots_per_epoch = 2;
-
-        let voting_keypair = Keypair::new();
-        let fullnode_config = FullnodeConfig::default();
-
-        let (mut genesis_block, _mint_keypair) =
-            GenesisBlock::new_with_leader(10_000, bootstrap_leader_keypair.pubkey(), 500);
-        genesis_block.ticks_per_slot = ticks_per_slot;
-        genesis_block.slots_per_epoch = slots_per_epoch;
-
-        let (bootstrap_leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
-
-        // Start the bootstrap leader
-        let bootstrap_leader = Fullnode::new(
-            bootstrap_leader_node,
-            &Arc::new(bootstrap_leader_keypair),
-            &bootstrap_leader_ledger_path,
-            voting_keypair,
-            None,
-            &fullnode_config,
-        );
-
-        let (rotation_sender, rotation_receiver) = channel();
-        let bootstrap_leader_exit = bootstrap_leader.run(Some(rotation_sender));
-
-        // Wait for the bootstrap leader to transition.  Since there are no other nodes in the
-        // cluster it will continue to be the leader
-        assert_eq!(rotation_receiver.recv().unwrap(), 1);
-        bootstrap_leader_exit();
-    }
-
-    #[test]
-    #[ignore]
-    fn test_ledger_role_transition() {
-        solana_logger::setup();
-
-        let fullnode_config = FullnodeConfig::default();
-        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
-
-        // Create the leader and validator nodes
-        let bootstrap_leader_keypair = Arc::new(Keypair::new());
-        let validator_keypair = Arc::new(Keypair::new());
-        let (bootstrap_leader_node, validator_node, bootstrap_leader_ledger_path, _, _) =
-            setup_leader_validator(
-                &bootstrap_leader_keypair,
-                &validator_keypair,
-                ticks_per_slot,
-                0,
-            );
-        let bootstrap_leader_info = bootstrap_leader_node.info.clone();
-
-        let validator_ledger_path = tmp_copy_blocktree!(&bootstrap_leader_ledger_path);
-
-        let ledger_paths = vec![
-            bootstrap_leader_ledger_path.clone(),
-            validator_ledger_path.clone(),
-        ];
-
-        {
-            // Test that a node knows to transition to a validator based on parsing the ledger
-            let bootstrap_leader = Fullnode::new(
-                bootstrap_leader_node,
-                &bootstrap_leader_keypair,
-                &bootstrap_leader_ledger_path,
-                Keypair::new(),
-                Some(&bootstrap_leader_info),
-                &fullnode_config,
-            );
-            let (rotation_sender, rotation_receiver) = channel();
-            let bootstrap_leader_exit = bootstrap_leader.run(Some(rotation_sender));
-            assert_eq!(rotation_receiver.recv().unwrap(), (DEFAULT_SLOTS_PER_EPOCH));
-
-            // Test that a node knows to transition to a leader based on parsing the ledger
-            let validator = Fullnode::new(
-                validator_node,
-                &validator_keypair,
-                &validator_ledger_path,
-                Keypair::new(),
-                Some(&bootstrap_leader_info),
-                &fullnode_config,
-            );
-
-            let (rotation_sender, rotation_receiver) = channel();
-            let validator_exit = validator.run(Some(rotation_sender));
-            assert_eq!(rotation_receiver.recv().unwrap(), (DEFAULT_SLOTS_PER_EPOCH));
-
-            validator_exit();
-            bootstrap_leader_exit();
-        }
-        for path in ledger_paths {
-            Blocktree::destroy(&path).expect("Expected successful database destruction");
-            let _ignored = remove_dir_all(&path);
-        }
-    }
-
-    // TODO: Rework this test or TVU (make_consecutive_blobs sends blobs that can't be handled by
-    //       the replay_stage)
-    #[test]
-    #[ignore]
-    fn test_validator_to_leader_transition() {
-        solana_logger::setup();
-        // Make leader and validator node
-        let ticks_per_slot = 10;
-        let slots_per_epoch = 4;
-        let leader_keypair = Arc::new(Keypair::new());
-        let validator_keypair = Arc::new(Keypair::new());
-        let fullnode_config = FullnodeConfig::default();
-        let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, blockhash) =
-            setup_leader_validator(&leader_keypair, &validator_keypair, ticks_per_slot, 0);
-
-        let leader_id = leader_keypair.pubkey();
-        let validator_info = validator_node.info.clone();
-
-        info!("leader: {:?}", leader_id);
-        info!("validator: {:?}", validator_info.id);
-
-        let voting_keypair = Keypair::new();
-
-        // Start the validator
-        let validator = Fullnode::new(
-            validator_node,
-            &validator_keypair,
-            &validator_ledger_path,
-            voting_keypair,
-            Some(&leader_node.info),
-            &fullnode_config,
-        );
-
-        let blobs_to_send = slots_per_epoch * ticks_per_slot + ticks_per_slot;
-
-        // Send blobs to the validator from our mock leader
-        let t_responder = {
-            let (s_responder, r_responder) = channel();
-            let blob_sockets: Vec<Arc<UdpSocket>> =
-                leader_node.sockets.tvu.into_iter().map(Arc::new).collect();
-            let t_responder = responder(
-                "test_validator_to_leader_transition",
-                blob_sockets[0].clone(),
-                r_responder,
-            );
-
-            let tvu_address = &validator_info.tvu;
-
-            let msgs = make_consecutive_blobs(
-                &leader_id,
-                blobs_to_send,
-                ledger_initial_len,
-                blockhash,
-                &tvu_address,
-            )
-            .into_iter()
-            .rev()
-            .collect();
-            s_responder.send(msgs).expect("send");
-            t_responder
-        };
-
-        info!("waiting for validator to rotate into the leader role");
-        let (rotation_sender, rotation_receiver) = channel();
-        let validator_exit = validator.run(Some(rotation_sender));
-        let rotation = rotation_receiver.recv().unwrap();
-        assert_eq!(rotation, blobs_to_send);
-
-        // Close the validator so that rocksdb has locks available
-        validator_exit();
-        let (bank_forks, bank_forks_info, _, _) =
-            new_banks_from_blocktree(&validator_ledger_path, None);
-        let bank = bank_forks.working_bank();
-        let entry_height = bank_forks_info[0].entry_height;
-
-        assert!(bank.tick_height() >= bank.ticks_per_slot() * bank.slots_per_epoch());
-
-        assert!(entry_height >= ledger_initial_len);
-
-        // Shut down
-        t_responder.join().expect("responder thread join");
-        Blocktree::destroy(&validator_ledger_path)
-            .expect("Expected successful database destruction");
-        let _ignored = remove_dir_all(&validator_ledger_path).unwrap();
-    }
-
-    fn setup_leader_validator(
-        leader_keypair: &Arc<Keypair>,
-        validator_keypair: &Arc<Keypair>,
-        ticks_per_slot: u64,
-        num_ending_slots: u64,
-    ) -> (Node, Node, String, u64, Hash) {
-        info!("validator: {}", validator_keypair.pubkey());
-        info!("leader: {}", leader_keypair.pubkey());
-
-        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-
-        let (mut genesis_block, mint_keypair) =
-            GenesisBlock::new_with_leader(10_000, leader_node.info.id, 500);
-        genesis_block.ticks_per_slot = ticks_per_slot;
-
-        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
-
-        // Add entries so that the validator is in the active set, then finish up the slot with
-        // ticks (and maybe add extra slots full of empty ticks)
-        let (entries, _) = make_active_set_entries(
-            validator_keypair,
-            &mint_keypair,
-            10,
-            0,
-            &blockhash,
-            ticks_per_slot * (num_ending_slots + 1),
-        );
-
-        let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
-        let blockhash = entries.last().unwrap().hash;
-        let entry_height = ticks_per_slot + entries.len() as u64;
-        blocktree.write_entries(1, 0, 0, entries).unwrap();
-
-        (
-            leader_node,
-            validator_node,
-            ledger_path,
-            entry_height,
-            blockhash,
-        )
     }
 }

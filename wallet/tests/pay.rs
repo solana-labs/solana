@@ -21,7 +21,6 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: Pubkey) {
 #[test]
 fn test_wallet_timestamp_tx() {
     let (server, leader_data, alice, ledger_path) = new_fullnode();
-    let server_exit = server.run(None);
     let bob_pubkey = Keypair::new().pubkey();
 
     let (sender, receiver) = channel();
@@ -75,14 +74,13 @@ fn test_wallet_timestamp_tx() {
     check_balance(1, &rpc_client, process_id); // contract balance
     check_balance(10, &rpc_client, bob_pubkey); // recipient balance
 
-    server_exit();
+    server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
 }
 
 #[test]
 fn test_wallet_witness_tx() {
     let (server, leader_data, alice, ledger_path) = new_fullnode();
-    let server_exit = server.run(None);
     let bob_pubkey = Keypair::new().pubkey();
 
     let (sender, receiver) = channel();
@@ -133,14 +131,13 @@ fn test_wallet_witness_tx() {
     check_balance(1, &rpc_client, process_id); // contract balance
     check_balance(10, &rpc_client, bob_pubkey); // recipient balance
 
-    server_exit();
+    server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
 }
 
 #[test]
 fn test_wallet_cancel_tx() {
     let (server, leader_data, alice, ledger_path) = new_fullnode();
-    let server_exit = server.run(None);
     let bob_pubkey = Keypair::new().pubkey();
 
     let (sender, receiver) = channel();
@@ -191,6 +188,6 @@ fn test_wallet_cancel_tx() {
     check_balance(1, &rpc_client, process_id); // contract balance
     check_balance(0, &rpc_client, bob_pubkey); // recipient balance
 
-    server_exit();
+    server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
 }

@@ -4,11 +4,11 @@ extern crate test;
 
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana::banking_stage::BankingStage;
-use solana::entry::Entry;
+use solana::banking_stage::{create_test_recorder, BankingStage};
+use solana::cluster_info::ClusterInfo;
+use solana::cluster_info::Node;
 use solana::packet::to_packets_chunked;
-use solana::poh_recorder::PohRecorder;
-use solana::poh_service::{PohService, PohServiceConfig};
+use solana::poh_recorder::WorkingBankEntries;
 use solana_runtime::bank::Bank;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
@@ -17,17 +17,16 @@ use solana_sdk::signature::{KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES};
 use std::iter;
-use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use test::Bencher;
 
-fn check_txs(receiver: &Receiver<Vec<(Entry, u64)>>, ref_tx_count: usize) {
+fn check_txs(receiver: &Receiver<WorkingBankEntries>, ref_tx_count: usize) {
     let mut total = 0;
     loop {
         let entries = receiver.recv_timeout(Duration::new(1, 0));
-        if let Ok(entries) = entries {
+        if let Ok((_, entries)) = entries {
             for (entry, _) in &entries {
                 total += entry.transactions.len();
             }
@@ -39,20 +38,6 @@ fn check_txs(receiver: &Receiver<Vec<(Entry, u64)>>, ref_tx_count: usize) {
         }
     }
     assert_eq!(total, ref_tx_count);
-}
-
-fn create_test_recorder(bank: &Arc<Bank>) -> (Arc<Mutex<PohRecorder>>, PohService) {
-    let exit = Arc::new(AtomicBool::new(false));
-    let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
-        bank.tick_height(),
-        bank.last_blockhash(),
-    )));
-    let poh_service = PohService::new(
-        poh_recorder.clone(),
-        &PohServiceConfig::default(),
-        exit.clone(),
-    );
-    (poh_recorder, poh_service)
 }
 
 #[bench]
@@ -117,9 +102,11 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             (x, iter::repeat(1).take(len).collect())
         })
         .collect();
-    let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    let (_stage, signal_receiver) =
-        BankingStage::new(&bank, &poh_recorder, verified_receiver, std::u64::MAX);
+    let (poh_recorder, poh_service, signal_receiver) = create_test_recorder(&bank);
+    let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+    let cluster_info = Arc::new(RwLock::new(cluster_info));
+    let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
+    poh_recorder.lock().unwrap().set_bank(&bank);
 
     let mut id = genesis_block.hash();
     for _ in 0..(MAX_RECENT_BLOCKHASHES * DEFAULT_TICKS_PER_SLOT as usize) {
@@ -221,9 +208,11 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             (x, iter::repeat(1).take(len).collect())
         })
         .collect();
-    let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    let (_stage, signal_receiver) =
-        BankingStage::new(&bank, &poh_recorder, verified_receiver, std::u64::MAX);
+    let (poh_recorder, poh_service, signal_receiver) = create_test_recorder(&bank);
+    let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+    let cluster_info = Arc::new(RwLock::new(cluster_info));
+    let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
+    poh_recorder.lock().unwrap().set_bank(&bank);
 
     let mut id = genesis_block.hash();
     for _ in 0..(MAX_RECENT_BLOCKHASHES * DEFAULT_TICKS_PER_SLOT as usize) {

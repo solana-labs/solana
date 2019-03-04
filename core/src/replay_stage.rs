@@ -8,10 +8,10 @@ use crate::cluster_info::ClusterInfo;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
 use crate::leader_schedule_utils;
 use crate::packet::BlobError;
+use crate::poh_recorder::PohRecorder;
 use crate::result;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
-use crate::tvu::{TvuRotationInfo, TvuRotationSender};
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
@@ -22,7 +22,7 @@ use solana_vote_api::vote_transaction::VoteTransaction;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
@@ -62,9 +62,9 @@ impl ReplayStage {
         _bank_forks_info: &[BankForksInfo],
         cluster_info: Arc<RwLock<ClusterInfo>>,
         exit: Arc<AtomicBool>,
-        to_leader_sender: &TvuRotationSender,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> (Self, Receiver<(u64, Pubkey)>, EntryReceiver)
     where
         T: 'static + KeypairUtil + Send + Sync,
@@ -73,9 +73,9 @@ impl ReplayStage {
         let (slot_full_sender, slot_full_receiver) = channel();
         trace!("replay stage");
         let exit_ = exit.clone();
-        let to_leader_sender = to_leader_sender.clone();
         let subscriptions = subscriptions.clone();
         let bank_forks = bank_forks.clone();
+        let poh_recorder = poh_recorder.clone();
 
         let mut progress = HashMap::new();
 
@@ -84,6 +84,7 @@ impl ReplayStage {
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_.clone());
+                let mut first_block = false;
                 loop {
                     let now = Instant::now();
                     // Stop getting entries if we get exit signal
@@ -91,11 +92,11 @@ impl ReplayStage {
                         break;
                     }
                     Self::generate_new_bank_forks(&blocktree, &mut bank_forks.write().unwrap());
-                    let live_bank_ids = bank_forks.read().unwrap().active_banks();
-                    trace!("live banks {:?}", live_bank_ids);
+                    let active_banks = bank_forks.read().unwrap().active_banks();
+                    trace!("active banks {:?}", active_banks);
                     let mut votable: Vec<u64> = vec![];
-                    for bank_id in live_bank_ids {
-                        let bank = bank_forks.read().unwrap().get(bank_id).unwrap().clone();
+                    for bank_id in &active_banks {
+                        let bank = bank_forks.read().unwrap().get(*bank_id).unwrap().clone();
                         if !Self::is_tpu(&bank, my_id) {
                             Self::replay_blocktree_into_bank(
                                 &bank,
@@ -104,16 +105,27 @@ impl ReplayStage {
                                 &forward_entry_sender,
                             )?;
                         }
-                        let max_tick_height = (bank_id + 1) * bank.ticks_per_slot() - 1;
+                        let max_tick_height = (*bank_id + 1) * bank.ticks_per_slot() - 1;
                         if bank.tick_height() == max_tick_height {
                             bank.freeze();
-                            votable.push(bank_id);
-                            progress.remove(&bank_id);
+                            info!("bank frozen {}", bank.slot());
+                            votable.push(*bank_id);
+                            progress.remove(bank_id);
                             let id = leader_schedule_utils::slot_leader_at(bank.slot(), &bank);
                             if let Err(e) = slot_full_sender.send((bank.slot(), id)) {
                                 info!("{} slot_full alert failed: {:?}", my_id, e);
                             }
                         }
+                    }
+                    let frozen = bank_forks.read().unwrap().frozen_banks();
+                    if votable.is_empty()
+                        && frozen.len() == 1
+                        && active_banks.is_empty()
+                        && !first_block
+                    {
+                        first_block = true;
+                        votable.extend(frozen.keys());
+                        info!("voting on first block {:?}", votable);
                     }
                     // TODO: fork selection
                     // vote on the latest one for now
@@ -142,20 +154,31 @@ impl ReplayStage {
                             );
                             cluster_info.write().unwrap().push_vote(vote);
                         }
+                        poh_recorder
+                            .lock()
+                            .unwrap()
+                            .reset(parent.tick_height(), parent.last_blockhash());
+
                         if next_leader == my_id {
+                    		let frozen = bank_forks.read().unwrap().frozen_banks();
+							assert!(frozen.get(&next_slot).is_none());
+                            assert!(bank_forks.read().unwrap().get(next_slot).is_none());
+
                             let tpu_bank = Bank::new_from_parent(&parent, my_id, next_slot);
                             bank_forks.write().unwrap().insert(next_slot, tpu_bank);
+                            if let Some(tpu_bank) =
+                                bank_forks.read().unwrap().get(next_slot).cloned()
+                            {
+								assert_eq!(bank_forks.read().unwrap().working_bank().slot(), tpu_bank.slot());
+                                debug!(
+                                    "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
+                                    my_id,
+                                    tpu_bank.slot(),
+                                    next_leader
+                                );
+                				poh_recorder.lock().unwrap().set_bank(&tpu_bank);
+                            }
                         }
-                        debug!(
-                            "to_leader_sender: me: {} next_slot: {} next_leader: {}",
-                            my_id, next_slot, next_leader
-                        );
-                        to_leader_sender.send(TvuRotationInfo {
-                            tick_height: parent.tick_height(),
-                            blockhash: parent.last_blockhash(),
-                            slot: next_slot,
-                            leader_id: next_leader,
-                        })?;
                     }
                     inc_new_counter_info!(
                         "replicate_stage-duration",
@@ -166,7 +189,7 @@ impl ReplayStage {
                     match result {
                         Err(RecvTimeoutError::Timeout) => continue,
                         Err(_) => break,
-                        Ok(_) => debug!("blocktree signal"),
+                        Ok(_) => trace!("blocktree signal"),
                     };
                 }
                 Ok(())
@@ -270,25 +293,31 @@ impl ReplayStage {
         // Find the next slot that chains to the old slot
         let frozen_banks = forks.frozen_banks();
         let frozen_bank_ids: Vec<u64> = frozen_banks.keys().cloned().collect();
-        trace!("generate new forks {:?}", frozen_bank_ids);
+        trace!("frozen_banks {:?}", frozen_bank_ids);
         let next_slots = blocktree
             .get_slots_since(&frozen_bank_ids)
             .expect("Db error");
+        trace!("generate new forks {:?}", next_slots);
         for (parent_id, children) in next_slots {
             let parent_bank = frozen_banks
                 .get(&parent_id)
                 .expect("missing parent in bank forks")
                 .clone();
             for child_id in children {
-                let new_fork = forks.get(child_id).is_none();
-                if new_fork {
-                    let leader = leader_schedule_utils::slot_leader_at(child_id, &parent_bank);
-                    trace!("new fork:{} parent:{}", child_id, parent_id);
-                    forks.insert(
-                        child_id,
-                        Bank::new_from_parent(&parent_bank, leader, child_id),
-                    );
+                if frozen_banks.get(&child_id).is_some() {
+                    trace!("child already frozen {}", child_id);
+                    continue;
                 }
+                if forks.get(child_id).is_some() {
+                    trace!("child already active {}", child_id);
+                    continue;
+                }
+                let leader = leader_schedule_utils::slot_leader_at(child_id, &parent_bank);
+                info!("new fork:{} parent:{}", child_id, parent_id);
+                forks.insert(
+                    child_id,
+                    Bank::new_from_parent(&parent_bank, leader, child_id),
+                );
             }
         }
     }
@@ -305,6 +334,7 @@ impl Service for ReplayStage {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::banking_stage::create_test_recorder;
     use crate::blocktree::create_new_tmp_ledger;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
@@ -341,13 +371,13 @@ mod test {
         // Set up the replay stage
         let exit = Arc::new(AtomicBool::new(false));
         let voting_keypair = Arc::new(Keypair::new());
-        let (to_leader_sender, _to_leader_receiver) = channel();
         {
             let (bank_forks, bank_forks_info, blocktree, l_receiver) =
                 new_banks_from_blocktree(&my_ledger_path, None);
             let bank = bank_forks.working_bank();
 
             let blocktree = Arc::new(blocktree);
+            let (poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
             let (replay_stage, _slot_full_receiver, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
                 Some(voting_keypair.clone()),
@@ -356,9 +386,9 @@ mod test {
                 &bank_forks_info,
                 cluster_info_me.clone(),
                 exit.clone(),
-                &to_leader_sender,
                 l_receiver,
                 &Arc::new(RpcSubscriptions::default()),
+                &poh_recorder,
             );
 
             let keypair = voting_keypair.as_ref();
@@ -378,6 +408,7 @@ mod test {
             replay_stage
                 .close()
                 .expect("Expect successful ReplayStage exit");
+            poh_service.close().unwrap();
         }
         let _ignored = remove_dir_all(&my_ledger_path);
     }
