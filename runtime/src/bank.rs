@@ -254,7 +254,7 @@ impl Bank {
 
         // Construct a vote account for the bootstrap_leader such that the leader_scheduler
         // will be forced to select it as the leader for height 0
-        let mut bootstrap_leader_staking_account = Account {
+        let mut bootstrap_leader_vote_account = Account {
             tokens: bootstrap_leader_stake,
             userdata: vec![0; VoteState::max_size() as usize],
             owner: solana_vote_api::id(),
@@ -264,13 +264,13 @@ impl Bank {
         let mut vote_state = VoteState::new(genesis_block.bootstrap_leader_id);
         vote_state.votes.push_back(Lockout::new(&Vote::new(0)));
         vote_state
-            .serialize(&mut bootstrap_leader_staking_account.userdata)
+            .serialize(&mut bootstrap_leader_vote_account.userdata)
             .unwrap();
 
         self.accounts().store_slow(
             self.accounts_id,
             &genesis_block.bootstrap_leader_vote_account_id,
-            &bootstrap_leader_staking_account,
+            &bootstrap_leader_vote_account,
         );
 
         self.blockhash_queue

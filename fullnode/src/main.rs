@@ -77,7 +77,7 @@ fn create_and_fund_vote_account(
             let blockhash = client.get_recent_blockhash();
             info!("create_and_fund_vote_account blockhash={:?}", blockhash);
             let transaction =
-                VoteTransaction::fund_staking_account(node_keypair, vote_account, blockhash, 1, 1);
+                VoteTransaction::new_account(node_keypair, vote_account, blockhash, 1, 1);
 
             match client.transfer_signed(&transaction) {
                 Ok(signature) => {

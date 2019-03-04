@@ -22,8 +22,8 @@ pub enum VoteInstruction {
     /// * Transaction::keys[0] - the staker id that is also assumed to be the delegate by default
     /// * Transaction::keys[1] - the new "vote account" to be associated with the delegate
     InitializeAccount,
-    /// `Delegate` or `Assign` A staking account to a particular node
-    DelegateStake(Pubkey),
+    /// `Delegate` or `Assign` a vote account to a particular node
+    Delegate(Pubkey),
     Vote(Vote),
     /// Clear the credits in the vote account
     /// * Transaction::keys[0] - the "vote account"
@@ -34,10 +34,10 @@ impl VoteInstruction {
     pub fn new_clear_credits(vote_id: Pubkey) -> BuilderInstruction {
         BuilderInstruction::new(id(), &VoteInstruction::ClearCredits, vec![(vote_id, true)])
     }
-    pub fn new_delegate_stake(vote_id: Pubkey, delegate_id: Pubkey) -> BuilderInstruction {
+    pub fn new_delegate(vote_id: Pubkey, delegate_id: Pubkey) -> BuilderInstruction {
         BuilderInstruction::new(
             id(),
-            &VoteInstruction::DelegateStake(delegate_id),
+            &VoteInstruction::Delegate(delegate_id),
             vec![(vote_id, true)],
         )
     }

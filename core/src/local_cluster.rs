@@ -155,7 +155,7 @@ impl LocalCluster {
     ) -> Result<()> {
         // Create the vote account if necessary
         if client.poll_get_balance(&vote_account).unwrap_or(0) == 0 {
-            let mut transaction = VoteTransaction::fund_staking_account(
+            let mut transaction = VoteTransaction::new_account(
                 from_account,
                 vote_account,
                 client.get_recent_blockhash(),

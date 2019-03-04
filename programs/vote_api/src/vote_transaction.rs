@@ -28,7 +28,7 @@ impl VoteTransaction {
     }
 
     /// Fund or create the staking account with tokens
-    pub fn fund_staking_account(
+    pub fn new_account(
         from_keypair: &Keypair,
         vote_account_id: Pubkey,
         recent_blockhash: Hash,
@@ -61,7 +61,7 @@ impl VoteTransaction {
         fee: u64,
     ) -> Transaction {
         TransactionBuilder::new(fee)
-            .push(VoteInstruction::new_delegate_stake(
+            .push(VoteInstruction::new_delegate(
                 vote_keypair.pubkey(),
                 node_id,
             ))

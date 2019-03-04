@@ -606,13 +606,8 @@ mod tests {
         let vote_account_id = validator_vote_account_keypair.pubkey();
         let blockhash = client.get_recent_blockhash();
 
-        let transaction = VoteTransaction::fund_staking_account(
-            &validator_keypair,
-            vote_account_id,
-            blockhash,
-            1,
-            1,
-        );
+        let transaction =
+            VoteTransaction::new_account(&validator_keypair, vote_account_id, blockhash, 1, 1);
         let signature = client.transfer_signed(&transaction).unwrap();
         client.poll_for_signature(&signature).unwrap();
 

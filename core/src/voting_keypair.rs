@@ -110,13 +110,8 @@ pub mod tests {
         num_tokens: u64,
     ) {
         let blockhash = bank.last_blockhash();
-        let tx = VoteTransaction::fund_staking_account(
-            from_keypair,
-            *voting_pubkey,
-            blockhash,
-            num_tokens,
-            0,
-        );
+        let tx =
+            VoteTransaction::new_account(from_keypair, *voting_pubkey, blockhash, num_tokens, 0);
         bank.process_transaction(&tx).unwrap();
     }
 
