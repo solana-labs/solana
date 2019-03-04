@@ -44,21 +44,12 @@ test-stable-perf)
     exit 0
   }
 
-  # Run program package with these features
-  PROGRAM_FEATURES=bpf_c,bpf_rust
-
-  # Run all BPF C tests
+  # BPF program tests
   _ make -C programs/bpf/c tests
+  _ programs/bpf/rust/noop/build.sh # Must be built out of band
+  _ cargo test --manifest-path programs/bpf/Cargo.toml --no-default-features --features=bpf_c,bpf_rust
 
-  # Must be built out of band
-  _ pushd programs/bpf/rust/noop
-  ./build.sh
-  popd
-
-  _ cargo test --manifest-path programs/bpf/Cargo.toml --no-default-features --features="$PROGRAM_FEATURES"
-  _ cargo test --manifest-path programs/bpf_loader/Cargo.toml --no-default-features --features="$PROGRAM_FEATURES"
-
-  # Run root package tests witht these features
+  # Run root package tests with these features
   ROOT_FEATURES=erasure,chacha
   if [[ $(uname) = Darwin ]]; then
     ./build-perf-libs.sh
