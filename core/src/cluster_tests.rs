@@ -1,14 +1,17 @@
-/// Cluster independant integration tests
+/// Cluster independent integration tests
 ///
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
 use crate::client::mk_client;
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::discover;
+use crate::thin_client;
+use hashbrown::HashMap;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use std::thread::sleep;
 use std::time::Duration;
+use std::time::Instant;
 
 /// Spend and verify from every node in the network
 pub fn spend_and_verify_all_nodes(
@@ -53,5 +56,31 @@ pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {
     for node in &cluster_nodes {
         let mut client = mk_client(&node);
         assert!(client.fullnode_exit().is_err());
+    }
+}
+
+pub fn wait_for_abs_num_nodes(entry_point_info: &ContactInfo, nodes: usize, timeout: Duration) {
+    let mut cluster_nodes = discover(&entry_point_info, nodes).len();
+
+    let now = Instant::now();
+    while cluster_nodes != nodes {
+        assert!(now.elapsed() < timeout);
+        cluster_nodes = discover(&entry_point_info, nodes).len();
+    }
+}
+
+pub fn rotate_leader_through_all_nodes(
+    entry_point_info: &ContactInfo,
+    nodes: usize,
+    timeout: Duration,
+) {
+    let cluster_nodes = discover(&entry_point_info, nodes);
+    let mut node_was_leader = HashMap::new();
+
+    let now = Instant::now();
+    while node_was_leader.len() < nodes {
+        assert!(now.elapsed() < timeout);
+        let leader = thin_client::poll_gossip_for_leader(cluster_nodes[0].gossip, Some(5)).unwrap();
+        node_was_leader.insert(leader.id, true);
     }
 }
