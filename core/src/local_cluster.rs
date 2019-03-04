@@ -83,8 +83,13 @@ impl LocalCluster {
                 validator_pubkey, validator_balance
             );
 
-            Self::create_and_fund_vote_account(&mut client, &voting_keypair, &validator_keypair, 1)
-                .unwrap();
+            Self::create_and_fund_vote_account(
+                &mut client,
+                &voting_keypair,
+                &validator_keypair,
+                lamports_per_node - 1,
+            )
+            .unwrap();
             let validator_server = Fullnode::new(
                 validator_node,
                 &validator_keypair,
