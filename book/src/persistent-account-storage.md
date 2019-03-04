@@ -60,11 +60,15 @@ The read is satisfied by pointing to a memory mapped location in the
 
 ## Root Forks
 
-The [fork selection algorithm](fork-selection.md), eventually selects a fork
-that is committed as a root fork.  No further rollback to the root fork is
-possible.  When a fork is picked as a root fork, it is populated from all of
-its parents.  If any of those parents become unreachable as a result, they can
-be cleaned up.
+The [fork selection algorithm](fork-selection.md) eventually selects a fork as a
+root fork and the fork is squashed.  A squashed/root fork cannot be rolled back.
+
+When a fork is squashed, all accounts in its parents not already present in the
+fork are pulled up into the fork by updating the indexes.  Accounts with zero
+balance in the squashed fork are removed from fork by updating the
+indexes.
+
+Accounts in storage that become unreachable as a result can be cleaned up.
 
 Three possible options exist
 
