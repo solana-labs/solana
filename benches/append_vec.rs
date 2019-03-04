@@ -4,7 +4,7 @@ extern crate test;
 
 use bincode::{deserialize, serialize_into, serialized_size};
 use rand::{thread_rng, Rng};
-use solana_runtime::appendvec::{
+use solana_runtime::append_vec::{
     deserialize_account, get_serialized_size, serialize_account, AppendVec,
 };
 use solana_sdk::account::Account;
@@ -20,7 +20,7 @@ use test::Bencher;
 const START_SIZE: u64 = 4 * 1024 * 1024;
 const INC_SIZE: u64 = 1 * 1024 * 1024;
 
-fn get_appendvec_bench_path(path: &str) -> PathBuf {
+fn get_append_vec_bench_path(path: &str) -> PathBuf {
     let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
     let mut buf = PathBuf::new();
     buf.push(&format!("{}/{}", out_dir, path));
@@ -28,8 +28,8 @@ fn get_appendvec_bench_path(path: &str) -> PathBuf {
 }
 
 #[bench]
-fn appendvec_atomic_append(bencher: &mut Bencher) {
-    let path = get_appendvec_bench_path("bench_append");
+fn append_vec_atomic_append(bencher: &mut Bencher) {
+    let path = get_append_vec_bench_path("bench_append");
     let mut vec = AppendVec::<AtomicUsize>::new(&path, true, START_SIZE, INC_SIZE);
     bencher.iter(|| {
         if vec.append(AtomicUsize::new(0)).is_none() {
@@ -41,8 +41,8 @@ fn appendvec_atomic_append(bencher: &mut Bencher) {
 }
 
 #[bench]
-fn appendvec_atomic_random_access(bencher: &mut Bencher) {
-    let path = get_appendvec_bench_path("bench_ra");
+fn append_vec_atomic_random_access(bencher: &mut Bencher) {
+    let path = get_append_vec_bench_path("bench_ra");
     let mut vec = AppendVec::<AtomicUsize>::new(&path, true, START_SIZE, INC_SIZE);
     let size = 1_000_000;
     for _ in 0..size {
@@ -59,8 +59,8 @@ fn appendvec_atomic_random_access(bencher: &mut Bencher) {
 }
 
 #[bench]
-fn appendvec_atomic_random_change(bencher: &mut Bencher) {
-    let path = get_appendvec_bench_path("bench_rax");
+fn append_vec_atomic_random_change(bencher: &mut Bencher) {
+    let path = get_append_vec_bench_path("bench_rax");
     let mut vec = AppendVec::<AtomicUsize>::new(&path, true, START_SIZE, INC_SIZE);
     let size = 1_000_000;
     for _ in 0..size {
@@ -83,8 +83,8 @@ fn appendvec_atomic_random_change(bencher: &mut Bencher) {
 }
 
 #[bench]
-fn appendvec_atomic_random_read(bencher: &mut Bencher) {
-    let path = get_appendvec_bench_path("bench_read");
+fn append_vec_atomic_random_read(bencher: &mut Bencher) {
+    let path = get_append_vec_bench_path("bench_read");
     let mut vec = AppendVec::<AtomicUsize>::new(&path, true, START_SIZE, INC_SIZE);
     let size = 1_000_000;
     for _ in 0..size {
@@ -103,8 +103,8 @@ fn appendvec_atomic_random_read(bencher: &mut Bencher) {
 }
 
 #[bench]
-fn appendvec_concurrent_lock_append(bencher: &mut Bencher) {
-    let path = get_appendvec_bench_path("bench_lock_append");
+fn append_vec_concurrent_lock_append(bencher: &mut Bencher) {
+    let path = get_append_vec_bench_path("bench_lock_append");
     let vec = Arc::new(RwLock::new(AppendVec::<AtomicUsize>::new(
         &path, true, START_SIZE, INC_SIZE,
     )));
@@ -143,8 +143,8 @@ fn appendvec_concurrent_lock_append(bencher: &mut Bencher) {
 }
 
 #[bench]
-fn appendvec_concurrent_get_append(bencher: &mut Bencher) {
-    let path = get_appendvec_bench_path("bench_get_append");
+fn append_vec_concurrent_get_append(bencher: &mut Bencher) {
+    let path = get_append_vec_bench_path("bench_get_append");
     let vec = Arc::new(RwLock::new(AppendVec::<AtomicUsize>::new(
         &path, true, START_SIZE, INC_SIZE,
     )));
