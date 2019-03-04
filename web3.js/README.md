@@ -77,26 +77,26 @@ console.log(solanaWeb3);
 ```
 
 ## Local Network
-The `solana-localnet` program is provided to easily start a test Solana network
+The `solana-localnet` program is provided to easily start a test Solana cluster
 locally on your machine.  Docker must be installed.  The JSON RPC endpoint of
-the local network is `http://localhost:8899`.
+the local cluster is `http://localhost:8899`.
 
 To start, first fetch the latest Docker image by running:
 ```bash
 $ npx solana-localnet update
 ```
 
-Then run the following command to start the network
+Then run the following command to start the cluster
 ```bash
 $ npx solana-localnet up
 ```
 
-While the network is running logs are available with:
+While the cluster is running logs are available with:
 ```bash
 $ npx solana-localnet logs -f
 ```
 
-Stop the network with:
+Stop the cluster with:
 ```bash
 $ npx solana-localnet down
 ```

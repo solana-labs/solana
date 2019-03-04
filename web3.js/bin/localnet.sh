@@ -26,9 +26,9 @@ usage: $0 [update|up|down|logs|deploy] [command-specific options]
 Operate a local testnet
 
  update   - Update the image from dockerhub.com
- up       - Start the network
- down     - Stop the network
- logs     - Display network logging
+ up       - Start the cluster
+ down     - Stop the cluster
+ logs     - Display cluster logging
  deploy   - Deploy a native program.
 
 
@@ -52,7 +52,7 @@ Operate a local testnet
  deploy-specific options:
    program - The program to deploy.
 
-   Note that deployments are discarded on network stop
+   Note that deployments are discarded on cluster stop
 
 EOF
   exit $exitcode
