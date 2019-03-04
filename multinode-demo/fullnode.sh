@@ -38,12 +38,7 @@ if [[ $1 = -h ]]; then
 fi
 
 gossip_port=9000
-maybe_blockstream=
-maybe_public_address=
-maybe_init_complete_file=
-maybe_no_leader_rotation=
-maybe_no_signer=
-maybe_rpc_port=
+extra_fullnode_args=()
 self_setup=0
 
 while [[ ${1:0:1} = - ]]; do
@@ -56,22 +51,22 @@ while [[ ${1:0:1} = - ]]; do
     self_setup_label=$$
     shift
   elif [[ $1 = --blockstream ]]; then
-    maybe_blockstream="$1 $2"
+    extra_fullnode_args+=("$1" "$2")
     shift 2
   elif [[ $1 = --init-complete-file ]]; then
-    maybe_init_complete_file="$1 $2"
+    extra_fullnode_args+=("$1" "$2")
     shift 2
   elif [[ $1 = --no-leader-rotation ]]; then
-    maybe_no_leader_rotation=$1
+    extra_fullnode_args+=("$1")
     shift
   elif [[ $1 = --public-address ]]; then
-    maybe_public_address=$1
+    extra_fullnode_args+=("$1")
     shift
   elif [[ $1 = --no-signer ]]; then
-    maybe_no_signer=$1
+    extra_fullnode_args+=("$1")
     shift
   elif [[ $1 = --rpc-port ]]; then
-    maybe_rpc_port="$1 $2"
+    extra_fullnode_args+=("$1" "$2")
     shift 2
   else
     echo "Unknown argument: $1"
@@ -218,19 +213,13 @@ if [[ ! -d "$ledger_config_dir" ]]; then
 fi
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
-# shellcheck disable=SC2086 # Don't want to double quote maybe_blockstream or maybe_init_complete_file or ...
 $program \
-  $maybe_blockstream \
-  $maybe_init_complete_file \
-  $maybe_no_leader_rotation \
-  $maybe_no_signer \
-  $maybe_rpc_port \
-  $maybe_public_address \
   --gossip-port "$gossip_port" \
   --identity "$fullnode_id_path" \
   --network "$leader_address" \
   --ledger "$ledger_config_dir" \
   --accounts "$accounts_config_dir" \
+  "${extra_fullnode_args[@]}" \
   > >($fullnode_logger) 2>&1 &
 pid=$!
 oom_score_adj "$pid" 1000
