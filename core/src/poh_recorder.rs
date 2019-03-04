@@ -56,10 +56,18 @@ impl PohRecorder {
     pub fn bank(&self) -> Option<Arc<Bank>> {
         self.working_bank.clone().map(|w| w.bank)
     }
+    pub fn tick_height(&self) -> u64 {
+        self.poh.tick_height
+    }
     // synchronize PoH with a bank
     pub fn reset(&mut self, tick_height: u64, blockhash: Hash) {
-        if self.poh.hash == blockhash {
-            assert_eq!(self.poh.tick_height, tick_height);
+        let existing = self.tick_cache.iter().any(|(entry, entry_tick_height)| {
+            if entry.hash == blockhash {
+                assert_eq!(*entry_tick_height, tick_height);
+            }
+            entry.hash == blockhash
+        });
+        if existing {
             info!(
                 "reset skipped for: {},{}",
                 self.poh.hash, self.poh.tick_height
@@ -424,5 +432,61 @@ mod tests {
         poh_recorder.tick();
         assert!(poh_recorder.working_bank.is_none());
         assert_eq!(poh_recorder.tick_cache.len(), 3);
+    }
+
+    #[test]
+    fn test_reset_current() {
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        poh_recorder.tick();
+        poh_recorder.tick();
+        assert_eq!(poh_recorder.tick_cache.len(), 2);
+        poh_recorder.reset(poh_recorder.poh.tick_height, poh_recorder.poh.hash);
+        assert_eq!(poh_recorder.tick_cache.len(), 2);
+    }
+
+    #[test]
+    fn test_reset_with_cached() {
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        poh_recorder.tick();
+        poh_recorder.tick();
+        assert_eq!(poh_recorder.tick_cache.len(), 2);
+        poh_recorder.reset(
+            poh_recorder.tick_cache[0].1,
+            poh_recorder.tick_cache[0].0.hash,
+        );
+        assert_eq!(poh_recorder.tick_cache.len(), 2);
+        poh_recorder.reset(
+            poh_recorder.tick_cache[1].1,
+            poh_recorder.tick_cache[1].0.hash,
+        );
+        assert_eq!(poh_recorder.tick_cache.len(), 2);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_reset_with_cached_bad_height() {
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        poh_recorder.tick();
+        poh_recorder.tick();
+        assert_eq!(poh_recorder.tick_cache.len(), 2);
+        //mixed up heights
+        poh_recorder.reset(
+            poh_recorder.tick_cache[0].1,
+            poh_recorder.tick_cache[1].0.hash,
+        );
+    }
+
+    #[test]
+    fn test_reset_to_new_value() {
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        poh_recorder.tick();
+        poh_recorder.tick();
+        poh_recorder.tick();
+        assert_eq!(poh_recorder.tick_cache.len(), 3);
+        assert_eq!(poh_recorder.poh.tick_height, 3);
+        poh_recorder.reset(1, hash(b"hello"));
+        assert_eq!(poh_recorder.tick_cache.len(), 0);
+        poh_recorder.tick();
+        assert_eq!(poh_recorder.poh.tick_height, 1);
     }
 }
