@@ -6,7 +6,6 @@
 //! (see [ThinClient](thin_client/struct.ThinClient.html)) to interact with them.
 //!
 
-#![cfg_attr(feature = "unstable", feature(test))]
 pub mod bank_forks;
 pub mod banking_stage;
 pub mod blob_fetch_stage;

@@ -18,8 +18,6 @@ chacha = ["solana/chacha"]
 cuda = ["solana/cuda"]
 erasure = ["solana/erasure"]
 ipv6 = ["solana/ipv6", "solana-netutil/ipv6"]
-test = ["solana/test"]
-unstable = ["solana/unstable"]
 
 [dev-dependencies]
 bincode = "1.1.2"

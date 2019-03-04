@@ -1,4 +1,5 @@
-#![cfg_attr(feature = "unstable", feature(test))]
+#![feature(test)]
+
 extern crate rand;
 extern crate test;
 

@@ -134,7 +134,8 @@ Edit `ci/testnet-manager.sh`
 Benchmarking
 ---
 
-First install the nightly build of rustc. `cargo bench` requires unstable features:
+First install the nightly build of rustc. `cargo bench` requires use of the
+unstable features only available in the nightly build.
 
 ```bash
 $ rustup install nightly
@@ -143,7 +144,7 @@ $ rustup install nightly
 Run the benchmarks:
 
 ```bash
-$ cargo +nightly bench --features="unstable"
+$ cargo +nightly bench
 ```
 
 Release Process
