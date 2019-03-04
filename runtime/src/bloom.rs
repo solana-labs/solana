@@ -1,10 +1,16 @@
 //! Simple Bloom Filter
+use crate::accounts::{deserialize_object, serialize_object};
+use bitintr::Popcnt;
 use bv::BitVec;
+use bv::{Bits, BitsMut};
+use byteorder::LittleEndian;
+use byteorder::{ReadBytesExt, WriteBytesExt};
 use fnv::FnvHasher;
 use rand::{self, Rng};
 use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::hash::Hasher;
+use std::io::{Read, Write};
 use std::marker::PhantomData;
 
 /// Generate a stable hash of `self` for each `hash_index`
@@ -16,7 +22,8 @@ pub trait BloomHashIndex {
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct Bloom<T: BloomHashIndex> {
     pub keys: Vec<u64>,
-    pub bits: BitVec<u8>,
+    pub bits: BitVec<u64>,
+    num_bits_set: u64,
     _phantom: PhantomData<T>,
 }
 
@@ -26,6 +33,7 @@ impl<T: BloomHashIndex> Bloom<T> {
         Bloom {
             keys,
             bits,
+            num_bits_set: 0,
             _phantom: PhantomData::default(),
         }
     }
@@ -47,11 +55,15 @@ impl<T: BloomHashIndex> Bloom<T> {
     }
     pub fn clear(&mut self) {
         self.bits = BitVec::new_fill(false, self.bits.len());
+        self.num_bits_set = 0;
     }
     pub fn add(&mut self, key: &T) {
         for k in &self.keys {
             let pos = self.pos(key, *k);
-            self.bits.set(pos, true);
+            if !self.bits.get(pos) {
+                self.num_bits_set += 1;
+                self.bits.set(pos, true);
+            }
         }
     }
     pub fn contains(&self, key: &T) -> bool {
@@ -62,6 +74,47 @@ impl<T: BloomHashIndex> Bloom<T> {
             }
         }
         true
+    }
+
+    pub fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<(), ()> {
+        serialize_object(&self.keys, writer).unwrap();
+        writer
+            .write_u64::<LittleEndian>(self.bits.len() as u64)
+            .unwrap();
+        let mut set: Vec<(u64, u64)> = vec![];
+
+        let mut total = 0;
+        for i in 0..self.bits.block_len() {
+            let block = self.bits.get_block(i);
+            if block != 0 {
+                set.push((i as u64, block));
+                total += block.popcnt();
+            }
+            if total >= self.num_bits_set {
+                break;
+            }
+        }
+
+        serialize_object(&set, writer).unwrap();
+        Ok(())
+    }
+
+    pub fn deserialize_from<R: Read>(reader: &mut R) -> Result<Self, ()> {
+        let keys = deserialize_object(reader).unwrap();
+        let len = reader.read_u64::<LittleEndian>().unwrap();
+        let set: Vec<(u64, u64)> = deserialize_object(reader).unwrap();
+        let mut bits = BitVec::new_fill(false, len);
+        let mut num_bits_set = 0;
+        for (i, block) in &set {
+            bits.set_block(*i as usize, *block);
+            num_bits_set += block.popcnt();
+        }
+        Ok(Bloom {
+            keys,
+            bits,
+            num_bits_set,
+            _phantom: PhantomData::default(),
+        })
     }
 }
 

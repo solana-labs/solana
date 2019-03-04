@@ -1,10 +1,12 @@
 use crate::append_vec::AppendVec;
 use crate::bank::{BankError, Result};
 use crate::runtime::has_duplicates;
-use bincode::serialize;
-use hashbrown::{HashMap, HashSet};
+use bincode::{deserialize_from, serialize, serialize_into, serialized_size};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use log::*;
 use rand::{thread_rng, Rng};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::hash::{hash, Hash};
@@ -13,9 +15,12 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use solana_vote_api;
+use std::boxed::Box;
 use std::collections::BTreeMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::{create_dir_all, remove_dir_all};
+use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -35,6 +40,18 @@ pub struct ErrorCounters {
     pub duplicate_signature: usize,
     pub call_chain_too_deep: usize,
     pub missing_signature_for_fee: usize,
+}
+
+impl std::convert::From<std::io::Error> for BankError {
+    fn from(_e: std::io::Error) -> BankError {
+        BankError::AccountNotFound
+    }
+}
+
+impl std::convert::From<Box<bincode::ErrorKind>> for BankError {
+    fn from(_e: Box<bincode::ErrorKind>) -> BankError {
+        BankError::AccountNotFound
+    }
 }
 
 //
@@ -83,6 +100,19 @@ enum AccountStorageStatus {
     StorageFull = 1,
 }
 
+pub fn serialize_object<T: Serialize, W: Write>(object: &T, writer: &mut W) -> Result<()> {
+    let len = serialized_size(object)?;
+    writer.write_u64::<LittleEndian>(len as u64).unwrap();
+    serialize_into(writer, object)?;
+    Ok(())
+}
+
+pub fn deserialize_object<T: DeserializeOwned, R: Read>(reader: &mut R) -> Result<T> {
+    let _len = reader.read_u64::<LittleEndian>().unwrap();
+    let x = deserialize_from(reader).unwrap();
+    Ok(x)
+}
+
 impl From<usize> for AccountStorageStatus {
     fn from(status: usize) -> Self {
         use self::AccountStorageStatus::*;
@@ -125,6 +155,9 @@ struct AccountStorageEntry {
 
     /// status corresponding to the storage
     status: AtomicUsize,
+
+    /// Path of this entry, used for recovery
+    path: String,
 }
 
 impl AccountStorageEntry {
@@ -144,6 +177,7 @@ impl AccountStorageEntry {
             accounts,
             count: AtomicUsize::new(0),
             status: AtomicUsize::new(AccountStorageStatus::StorageAvailable as usize),
+            path: p,
         }
     }
 
@@ -165,11 +199,40 @@ impl AccountStorageEntry {
             self.set_status(AccountStorageStatus::StorageAvailable);
         }
     }
+
+    fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+        let count = self.count.load(Ordering::Relaxed) as u64;
+        writer.write_u64::<LittleEndian>(count)?;
+        let status = self.status.load(Ordering::Relaxed) as u64;
+        writer.write_u64::<LittleEndian>(status)?;
+        serialize_object(&self.path, writer)?;
+        {
+            let accounts = self.accounts.write().unwrap();
+            accounts.serialize_into(writer)?;
+        }
+        Ok(())
+    }
+
+    fn deserialize_from<R: Read>(reader: &mut R) -> Result<Self> {
+        let count = reader.read_u64::<LittleEndian>()?;
+        let status = reader.read_u64::<LittleEndian>()?;
+        let path: String = { deserialize_object(reader)? };
+        let data_path = Path::new(&path).join(ACCOUNT_DATA_FILE);
+        let accounts = Arc::new(RwLock::new(AppendVec::deserialize_from(
+            &data_path, reader,
+        )?));
+        Ok(AccountStorageEntry {
+            accounts,
+            count: AtomicUsize::new(count as usize),
+            status: AtomicUsize::new(status as usize),
+            path,
+        })
+    }
 }
 
 type AccountStorage = Vec<AccountStorageEntry>;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 struct ForkInfo {
     /// The number of transactions processed without error
     transaction_count: u64,
@@ -223,35 +286,43 @@ fn get_paths_vec(paths: &str) -> Vec<String> {
 
 impl Drop for Accounts {
     fn drop(&mut self) {
-        let paths = get_paths_vec(&self.paths);
-        paths.iter().for_each(|p| {
-            let _ignored = remove_dir_all(p);
+        if self.own_paths {
+            let paths = get_paths_vec(&self.paths);
+            paths.iter().for_each(|p| {
+                let _ignored = remove_dir_all(p);
 
-            // it is safe to delete the parent
-            if self.own_paths {
+                // it is safe to delete the parent
                 let path = Path::new(p);
                 let _ignored = remove_dir_all(path.parent().unwrap());
-            }
-        });
+            });
+        }
     }
 }
 
 impl AccountsDB {
-    pub fn new_with_file_size(fork: Fork, paths: &str, file_size: u64, inc_size: u64) -> Self {
+    fn default() -> Self {
         let account_index = AccountIndex {
             account_maps: RwLock::new(HashMap::new()),
             vote_accounts: RwLock::new(HashSet::new()),
         };
-        let paths = get_paths_vec(&paths);
-        let accounts_db = AccountsDB {
+
+        AccountsDB {
             account_index,
             storage: RwLock::new(vec![]),
             next_id: AtomicUsize::new(0),
             fork_infos: RwLock::new(HashMap::new()),
-            paths,
-            file_size,
-            inc_size,
-        };
+            paths: vec![],
+            file_size: 0,
+            inc_size: 0,
+        }
+    }
+
+    pub fn new_with_file_size(fork: Fork, paths: &str, file_size: u64, inc_size: u64) -> Self {
+        let mut accounts_db = Self::default();
+        accounts_db.file_size = file_size;
+        accounts_db.inc_size = inc_size;
+        let paths = get_paths_vec(&paths);
+        accounts_db.paths = paths;
         accounts_db.add_storage(&accounts_db.paths);
         accounts_db.add_fork(fork, None);
         accounts_db
@@ -266,12 +337,11 @@ impl AccountsDB {
         let mut fork_info = ForkInfo::default();
         if let Some(parent) = parent {
             fork_info.parents.push(parent);
-            if let Some(parent_fork_info) = fork_infos.get(&parent) {
-                fork_info.transaction_count = parent_fork_info.transaction_count;
-                fork_info
-                    .parents
-                    .extend_from_slice(&parent_fork_info.parents);
-            }
+            let parent_fork_info = fork_infos.get(&parent).expect("parent fork should exist");
+            fork_info.transaction_count = parent_fork_info.transaction_count;
+            fork_info
+                .parents
+                .extend_from_slice(&parent_fork_info.parents);
         }
         if let Some(old_fork_info) = fork_infos.insert(fork, fork_info) {
             panic!("duplicate forks! {} {:?}", fork, old_fork_info);
@@ -285,6 +355,52 @@ impl AccountsDB {
             self.file_size,
             self.inc_size,
         )
+    }
+
+    pub fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+        serialize_object(&self.paths, writer)?;
+        {
+            let storage = self.storage.write().unwrap();
+            let len = storage.len();
+            writer.write_u64::<LittleEndian>(len as u64)?;
+            for s in storage.iter() {
+                s.accounts.write().unwrap().flush();
+                s.serialize_into(writer)?;
+            }
+        }
+        let account_maps = self.account_index.account_maps.read().unwrap();
+        let vote_accounts = self.account_index.vote_accounts.read().unwrap();
+        let fork_infos = self.fork_infos.read().unwrap();
+        serialize_object(&*account_maps, writer)?;
+        serialize_object(&*vote_accounts, writer)?;
+        serialize_object(&*fork_infos, writer)?;
+        Ok(())
+    }
+
+    pub fn deserialize_from<R: Read>(reader: &mut R) -> Result<Self> {
+        let mut accounts_db = Self::default();
+
+        accounts_db.paths = deserialize_object(reader)?;
+        let len = reader.read_u64::<LittleEndian>()?;
+
+        {
+            let mut storage = accounts_db.storage.write().unwrap();
+            for _ in 0..len {
+                let account_store = AccountStorageEntry::deserialize_from(reader)?;
+                storage.push(account_store);
+            }
+        }
+
+        let account_maps: HashMap<Pubkey, AccountMap> = deserialize_object(reader)?;
+        *accounts_db.account_index.account_maps.write().unwrap() = account_maps;
+
+        let vote_accounts: HashSet<Pubkey> = deserialize_object(reader)?;
+        *accounts_db.account_index.vote_accounts.write().unwrap() = vote_accounts;
+
+        let fork_infos: HashMap<Fork, ForkInfo> = deserialize_object(reader)?;
+        *accounts_db.fork_infos.write().unwrap() = fork_infos;
+
+        Ok(accounts_db)
     }
 
     fn add_storage(&self, paths: &[String]) {
@@ -714,7 +830,7 @@ impl AccountsDB {
 
     pub fn increment_transaction_count(&self, fork: Fork, tx_count: usize) {
         let mut fork_infos = self.fork_infos.write().unwrap();
-        let fork_info = fork_infos.entry(fork).or_insert(ForkInfo::default());
+        let fork_info = fork_infos.entry(fork).or_insert_with(ForkInfo::default);
         fork_info.transaction_count += tx_count as u64;
     }
 
@@ -798,6 +914,21 @@ impl AccountsDB {
 }
 
 impl Accounts {
+    pub fn new(fork: Fork, in_paths: Option<String>) -> Self {
+        let (paths, own_paths) = if in_paths.is_none() {
+            (Self::make_default_paths(), true)
+        } else {
+            (in_paths.unwrap(), false)
+        };
+        let accounts_db = AccountsDB::new(fork, &paths);
+        Accounts {
+            accounts_db,
+            account_locks: Mutex::new(HashMap::new()),
+            paths,
+            own_paths,
+        }
+    }
+
     fn make_new_dir() -> String {
         static ACCOUNT_DIR: AtomicUsize = AtomicUsize::new(0);
         let dir = ACCOUNT_DIR.fetch_add(1, Ordering::Relaxed);
@@ -821,21 +952,6 @@ impl Accounts {
             paths.push_str(&Self::make_new_dir());
         }
         paths
-    }
-
-    pub fn new(fork: Fork, in_paths: Option<String>) -> Self {
-        let (paths, own_paths) = if in_paths.is_none() {
-            (Self::make_default_paths(), true)
-        } else {
-            (in_paths.unwrap(), false)
-        };
-        let accounts_db = AccountsDB::new(fork, &paths);
-        Accounts {
-            accounts_db,
-            account_locks: Mutex::new(HashMap::new()),
-            paths,
-            own_paths,
-        }
     }
 
     pub fn new_from_parent(&self, fork: Fork, parent: Fork) {
@@ -881,7 +997,7 @@ impl Accounts {
         error_counters: &mut ErrorCounters,
     ) -> Result<()> {
         // Copy all the accounts
-        let locks = account_locks.entry(fork).or_insert(HashSet::new());
+        let locks = account_locks.entry(fork).or_insert_with(HashSet::new);
         for k in keys {
             if locks.contains(k) {
                 error_counters.account_in_use += 1;
@@ -1001,6 +1117,19 @@ impl Accounts {
             .into_iter()
             .filter(|(_, acc)| acc.lamports != 0)
     }
+
+    pub fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+        serialize_object(&self.paths, writer)?;
+        self.accounts_db.serialize_into(writer)?;
+        Ok(())
+    }
+
+    pub fn deserialize_from<R: Read>(reader: &mut R) -> Result<Self> {
+        let paths: String = deserialize_object(reader)?;
+        let mut accounts = Accounts::new(0, Some(paths));
+        accounts.accounts_db = AccountsDB::deserialize_from(reader)?;
+        Ok(accounts)
+    }
 }
 
 #[cfg(test)]
@@ -1015,6 +1144,8 @@ mod tests {
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::transaction::Instruction;
     use solana_sdk::transaction::Transaction;
+    use std::io::Cursor;
+    use std::io::{Seek, SeekFrom};
 
     fn cleanup_paths(paths: &str) {
         let paths = get_paths_vec(&paths);
@@ -1695,15 +1826,16 @@ mod tests {
 
     #[test]
     fn test_account_grow() {
+        let size = 4096;
         let paths = get_tmp_accounts_path!();
-        let accounts = AccountsDB::new(0, &paths.paths);
+        let accounts = AccountsDB::new_with_file_size(0, &paths.paths, size, 0);
         let count = [0, 1];
         let status = [
             AccountStorageStatus::StorageAvailable,
             AccountStorageStatus::StorageFull,
         ];
         let pubkey1 = Keypair::new().pubkey();
-        let account1 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, pubkey1);
+        let account1 = Account::new(1, size as usize / 2, pubkey1);
         accounts.store(0, &pubkey1, &account1);
         {
             let stores = accounts.storage.read().unwrap();
@@ -1713,7 +1845,7 @@ mod tests {
         }
 
         let pubkey2 = Keypair::new().pubkey();
-        let account2 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, pubkey2);
+        let account2 = Account::new(1, size as usize / 2, pubkey2);
         accounts.store(0, &pubkey2, &account2);
         {
             let stores = accounts.storage.read().unwrap();
@@ -1917,5 +2049,74 @@ mod tests {
         assert_eq!(accounts.len(), 2);
         let accounts = accounts_proper.load_by_program_slow_no_parent(0, &Pubkey::new(&[4; 32]));
         assert_eq!(accounts, vec![]);
+    }
+
+    #[test]
+    fn test_accounts_index_serialize() {
+        solana_logger::setup();
+        let paths = get_tmp_accounts_path!();
+        let accounts = AccountsDB::new(0, &paths.paths);
+        let mut account = Account::new(1, 0, solana_vote_api::id());
+        let mut keys = vec![];
+        for k in 0..10 {
+            account.lamports = k + 1;
+            let key = Keypair::new().pubkey();
+            accounts.store(0, &key, &account);
+            keys.push(key);
+        }
+        accounts.add_fork(1, Some(0));
+        let key1 = Keypair::new().pubkey();
+        account.lamports = 20;
+        accounts.store(1, &key1, &account);
+        accounts.increment_transaction_count(1, 1);
+
+        let mut memory = vec![0u8; 4096];
+        let mut cursor = Cursor::new(&mut memory);
+        accounts.serialize_into(&mut cursor).unwrap();
+        info!("orign: {:?}", accounts.account_index.account_maps);
+        info!("orig: {:?}", accounts.account_index.vote_accounts);
+        info!("orig.fork_infos:{:?}", *accounts.fork_infos.read().unwrap());
+        drop(accounts);
+
+        cursor.seek(SeekFrom::Start(0)).unwrap();
+        let new = AccountsDB::deserialize_from(&mut cursor).unwrap();
+        //assert_eq!(y.next_id.load(Ordering::Relaxed), accounts.next_id.load(Ordering::Relaxed));
+        info!("deser: {:?}", new.account_index.account_maps);
+        //assert_eq!(y.account_index.account_maps.read().unwrap().len(),
+        //    accounts.account_index.account_maps.read().unwrap().len());
+
+        info!("deser: {:?}", new.account_index.vote_accounts);
+        //assert_eq!(y.account_index.vote_accounts.read().unwrap().len(),
+        //    accounts.account_index.vote_accounts.read().unwrap().len());
+
+        account.lamports = 11;
+        let key = Keypair::new().pubkey();
+        new.store(0, &key, &account);
+        keys.push(key);
+
+        for (i, key) in keys.iter().enumerate() {
+            assert_eq!(new.load(0, key, false).unwrap().lamports, i as u64 + 1);
+        }
+        assert_eq!(new.load(1, &key1, false).unwrap().lamports, 20);
+        info!("fork_infos:{:?}", *new.fork_infos.read().unwrap());
+        new.add_fork(2, Some(1));
+        assert_eq!(new.transaction_count(0), 0);
+        assert_eq!(new.transaction_count(1), 1);
+    }
+
+    #[test]
+    fn test_serialize_accounts() {
+        solana_logger::setup();
+        let accounts = Accounts::new(0, Some("serialize_accounts".to_string()));
+        let paths = accounts.paths.clone();
+
+        let mut memory = vec![0u8; 4096];
+        let mut cursor = Cursor::new(&mut memory);
+        accounts.serialize_into(&mut cursor).unwrap();
+        drop(accounts);
+
+        cursor.seek(SeekFrom::Start(0)).unwrap();
+        let new = Accounts::deserialize_from(&mut cursor).unwrap();
+        assert_eq!(new.paths, paths);
     }
 }

@@ -1,4 +1,4 @@
-mod accounts;
+pub mod accounts;
 pub mod append_vec;
 pub mod bank;
 pub mod bloom;

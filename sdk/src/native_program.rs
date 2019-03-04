@@ -3,7 +3,7 @@ use crate::pubkey::Pubkey;
 use std;
 
 /// Reasons a program might have rejected an instruction.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum ProgramError {
     /// The program instruction returned an error
     GenericError,

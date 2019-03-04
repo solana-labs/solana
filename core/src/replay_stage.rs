@@ -380,7 +380,7 @@ mod test {
         {
             let voting_keypair = Arc::new(Keypair::new());
             let (bank_forks, _bank_forks_info, blocktree, l_receiver) =
-                new_banks_from_blocktree(&my_ledger_path, None);
+                new_banks_from_blocktree(&my_ledger_path, None, false);
             let bank = bank_forks.working_bank();
 
             let blocktree = Arc::new(blocktree);

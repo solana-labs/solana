@@ -63,7 +63,7 @@ fn node_staked_accounts_at_epoch(
     epoch_height: u64,
 ) -> Option<impl Iterator<Item = (&Pubkey, u64, &Account)>> {
     bank.epoch_vote_accounts(epoch_height).map(|epoch_state| {
-        epoch_state.into_iter().filter_map(|(account_id, account)| {
+        epoch_state.iter().filter_map(|(account_id, account)| {
             filter_zero_balances(account).map(|stake| (account_id, stake, account))
         })
     })

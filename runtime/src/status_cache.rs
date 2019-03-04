@@ -1,8 +1,12 @@
 use crate::bloom::{Bloom, BloomHashIndex};
-use hashbrown::HashMap;
+use bincode::{deserialize_from, serialize_into};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
+use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::io::{Read, Write};
 use std::ops::Deref;
 #[cfg(test)]
 use std::ops::DerefMut;
@@ -24,13 +28,13 @@ pub struct StatusCache<T> {
     merges: VecDeque<StatusCache<T>>,
 }
 
-impl<T: Clone> Default for StatusCache<T> {
+impl<T: Clone + Serialize + DeserializeOwned> Default for StatusCache<T> {
     fn default() -> Self {
         Self::new(&Hash::default())
     }
 }
 
-impl<T: Clone> StatusCache<T> {
+impl<T: Clone + Serialize + DeserializeOwned> StatusCache<T> {
     pub fn new(blockhash: &Hash) -> Self {
         let keys = (0..27).map(|i| blockhash.hash_at_index(i)).collect();
         Self {
@@ -162,6 +166,24 @@ impl<T: Clone> StatusCache<T> {
             c.clear();
         }
         false
+    }
+
+    pub fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<(), ()> {
+        self.signatures.serialize_into(writer)?;
+        serialize_into(writer, &self.failures).unwrap();
+        //serialize_into(writer, &self.merges)?;
+        Ok(())
+    }
+
+    pub fn deserialize_from<R: Read>(reader: &mut R) -> Result<Self, ()> {
+        let signatures = Bloom::deserialize_from(reader).unwrap();
+        let failures = deserialize_from(reader).unwrap();
+        //let merges = deserialize_from(reader).unwrap();
+        Ok(StatusCache {
+            signatures,
+            failures,
+            merges: VecDeque::new(),
+        })
     }
 }
 #[cfg(test)]

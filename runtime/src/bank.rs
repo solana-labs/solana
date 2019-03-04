@@ -8,8 +8,9 @@ use crate::hash_queue::HashQueue;
 use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
-use hashbrown::HashMap;
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use log::*;
+use serde::{Deserialize, Serialize};
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
@@ -25,13 +26,15 @@ use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES, NUM_TICKS_PER_S
 use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState};
+use std::collections::HashMap;
+use std::io::{Read, Write};
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 /// Reasons a transaction might be rejected.
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct EpochSchedule {
     /// The maximum number of slots in each epoch.
     pub slots_per_epoch: u64,
@@ -108,7 +111,7 @@ impl EpochSchedule {
 }
 
 /// Reasons a transaction might be rejected.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum BankError {
     /// This Pubkey is being processed in another transaction
     AccountInUse,
@@ -308,6 +311,64 @@ impl Bank {
     /// Return the more recent checkpoint of this bank instance.
     pub fn parent(&self) -> Option<Arc<Bank>> {
         self.parent.read().unwrap().clone()
+    }
+
+    pub fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+        use crate::accounts::serialize_object;
+        writer.write_u64::<LittleEndian>(self.accounts_id)?;
+        writer.write_u64::<LittleEndian>(self.slot)?;
+        writer.write_u64::<LittleEndian>(self.ticks_per_slot)?;
+        serialize_object(&self.collector_id, writer)?;
+        let status_cache = self.status_cache.read().unwrap();
+        let blockhash_queue = self.blockhash_queue.read().unwrap();
+        let hash = self.hash.read().unwrap();
+        let parent_hash = self.hash.read().unwrap();
+        info!("status cache");
+        status_cache.serialize_into(writer).unwrap();
+        info!("blockhash_queue");
+        serialize_object(&*blockhash_queue, writer)?;
+        serialize_object(&*hash, writer)?;
+        serialize_object(&*parent_hash, writer)?;
+        let tick_height = self.tick_height.load(Ordering::Relaxed) as u64;
+        writer.write_u64::<LittleEndian>(tick_height)?;
+        info!("epoch schedule");
+        serialize_object(&self.epoch_schedule, writer)?;
+        info!("epoch vote");
+        serialize_object(&self.epoch_vote_accounts, writer)?;
+        Ok(())
+    }
+
+    pub fn deserialize_from<R: Read>(reader: &mut R) -> Result<Self> {
+        use crate::accounts::deserialize_object;
+        let accounts_id = reader.read_u64::<LittleEndian>()?;
+        let slot = reader.read_u64::<LittleEndian>()?;
+        let ticks_per_slot = reader.read_u64::<LittleEndian>()?;
+        let collector_id = deserialize_object(reader)?;
+        let status_cache: BankStatusCache = StatusCache::deserialize_from(reader).unwrap();
+        let blockhash_queue: HashQueue = deserialize_object(reader)?;
+        let hash: Hash = deserialize_object(reader)?;
+        let parent_hash: Hash = deserialize_object(reader)?;
+        let tick_height = reader.read_u64::<LittleEndian>()?;
+        info!("epoch schedule");
+        let epoch_schedule: EpochSchedule = deserialize_object(reader)?;
+        info!("epoch vote");
+        let epoch_vote_accounts = deserialize_object(reader)?;
+        let bank = Bank {
+            accounts: None,
+            accounts_id,
+            blockhash_queue: RwLock::new(blockhash_queue),
+            parent: RwLock::new(None),
+            hash: RwLock::new(hash),
+            parent_hash,
+            tick_height: AtomicUsize::new(tick_height as usize),
+            status_cache: RwLock::new(status_cache),
+            slot,
+            ticks_per_slot,
+            collector_id,
+            epoch_schedule,
+            epoch_vote_accounts,
+        };
+        Ok(bank)
     }
 
     fn process_genesis_block(&mut self, genesis_block: &GenesisBlock) {
@@ -784,12 +845,16 @@ impl Bank {
             .store_slow(self.accounts_id, pubkey, &account);
     }
 
-    fn accounts(&self) -> Arc<Accounts> {
+    pub fn accounts(&self) -> Arc<Accounts> {
         if let Some(accounts) = &self.accounts {
             accounts.clone()
         } else {
             panic!("no accounts!");
         }
+    }
+
+    pub fn set_accounts(&mut self, accounts: Arc<Accounts>) {
+        self.accounts = Some(accounts);
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
@@ -896,6 +961,8 @@ mod tests {
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
+    use std::io::Cursor;
+    use std::io::{Seek, SeekFrom};
 
     #[test]
     fn test_bank_new() {
@@ -1664,6 +1731,27 @@ mod tests {
             // assert that we got to "normal" mode
             assert!(last_slots_in_epoch == slots_per_epoch);
         }
+    }
+
+    #[test]
+    fn test_bank_serialize() {
+        let (genesis_block, _) = GenesisBlock::new(500);
+        let bank0 = Arc::new(Bank::new(&genesis_block));
+        let bank = new_from_parent(&bank0);
+        let slot = bank.slot;
+        let accounts_id = bank.accounts_id;
+        let collector_id = bank.collector_id;
+
+        let mut memory = vec![0u8; 8 * 1024];
+        let mut cursor = Cursor::new(&mut memory);
+        bank.serialize_into(&mut cursor).unwrap();
+        drop(bank);
+
+        cursor.seek(SeekFrom::Start(0)).unwrap();
+        let new = Bank::deserialize_from(&mut cursor).unwrap();
+        assert_eq!(slot, new.slot);
+        assert_eq!(accounts_id, new.accounts_id);
+        assert_eq!(collector_id, new.collector_id);
     }
 
 }

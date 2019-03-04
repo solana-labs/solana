@@ -30,6 +30,7 @@ solana-system-program = { path = "../programs/system", version = "0.12.0" }
 solana-storage-api = { path = "../programs/storage_api", version = "0.12.0" }
 solana-token-api = { path = "../programs/token_api", version = "0.12.0" }
 solana-vote-api = { path = "../programs/vote_api", version = "0.12.0" }
+bitintr = "0.2.0"
 
 [lib]
 name = "solana_runtime"

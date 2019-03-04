@@ -133,6 +133,39 @@ where
         }
     }
 
+    pub fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<()> {
+        writer.write_u64::<LittleEndian>(self.current_offset.load(Ordering::Relaxed) as u64)?;
+        writer.write_u64::<LittleEndian>(self.file_size)?;
+        writer.write_u64::<LittleEndian>(self.inc_size)?;
+        Ok(())
+    }
+
+    pub fn deserialize_from<R: Read>(path: &Path, reader: &mut R) -> Result<Self> {
+        let data = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(false)
+            .open(path)
+            .unwrap();
+
+        let current_offset = reader.read_u64::<LittleEndian>()?;
+        let file_size = reader.read_u64::<LittleEndian>()?;
+        let inc_size = reader.read_u64::<LittleEndian>()?;
+
+        let mmap = unsafe { Mmap::map(&data).expect("failed to map the data file") };
+        let mmap_mut = unsafe { MmapMut::map_mut(&data).expect("failed to map the data file") };
+
+        Ok(AppendVec {
+            data,
+            mmap,
+            current_offset: AtomicUsize::new(current_offset as usize),
+            mmap_mut: Mutex::new(mmap_mut),
+            file_size,
+            inc_size,
+            phantom: PhantomData,
+        })
+    }
+
     pub fn reset(&mut self) {
         let _mmap_mut = self.mmap_mut.lock().unwrap();
         self.current_offset.store(0, Ordering::Relaxed);
@@ -220,6 +253,10 @@ where
         self.current_offset
             .store(data_at + len + SIZEOF_U64, Ordering::Relaxed);
         Some(data_at as u64)
+    }
+
+    pub fn flush(&mut self) {
+        self.data.flush().unwrap();
     }
 }
 
