@@ -180,10 +180,16 @@ impl ReplayStage {
             let poh_tick_height = poh_recorder.lock().unwrap().tick_height();
             let poh_slot = leader_schedule_utils::tick_height_to_slot(parent, poh_tick_height + 1);
             assert!(frozen.get(&poh_slot).is_none());
+            trace!("checking poh slot for leader {}", poh_slot);
             if bank_forks.read().unwrap().get(poh_slot).is_none() {
                 let next_leader = leader_schedule_utils::slot_leader_at(poh_slot, parent);
+                debug!(
+                    "me: {} leader {} at poh slot {}",
+                    my_id, next_leader, poh_slot
+                );
                 cluster_info.write().unwrap().set_leader(next_leader);
                 if next_leader == my_id {
+                    debug!("starting tpu for slot {}", poh_slot);
                     let tpu_bank = Bank::new_from_parent(parent, my_id, poh_slot);
                     bank_forks.write().unwrap().insert(poh_slot, tpu_bank);
                     if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
