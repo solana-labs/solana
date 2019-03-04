@@ -10,8 +10,9 @@ import {Client as RpcWebSocketClient} from 'rpc-websockets';
 import {Transaction} from './transaction';
 import {PublicKey} from './publickey';
 import {sleep} from './util/sleep';
+import type {Blockhash} from './blockhash';
 import type {Account} from './account';
-import type {TransactionSignature, TransactionId} from './transaction';
+import type {TransactionSignature} from './transaction';
 
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
@@ -124,9 +125,9 @@ const GetSignatureStatusRpcResult = jsonRpcResult(
 const GetTransactionCountRpcResult = jsonRpcResult('number');
 
 /**
- * Expected JSON RPC response for the "getLastId" message
+ * Expected JSON RPC response for the "getRecentBlockhash" message
  */
-const GetLastId = jsonRpcResult('string');
+const GetRecentBlockhash = jsonRpcResult('string');
 
 /**
  * Expected JSON RPC response for the "requestAirdrop" message
@@ -188,12 +189,12 @@ export class Connection {
   _rpcWebSocket: RpcWebSocketClient;
   _rpcWebSocketConnected: boolean = false;
 
-  _lastIdInfo: {
-    lastId: TransactionId | null,
+  _blockhashInfo: {
+    recentBlockhash: Blockhash | null,
     seconds: number,
     transactionSignatures: Array<string>,
   };
-  _disableLastIdCaching: boolean = false;
+  _disableBlockhashCaching: boolean = false;
   _accountChangeSubscriptions: {[number]: AccountSubscriptionInfo} = {};
   _accountChangeSubscriptionCounter: number = 0;
 
@@ -206,8 +207,8 @@ export class Connection {
     let url = urlParse(endpoint);
 
     this._rpcRequest = createRpcRequest(url.href);
-    this._lastIdInfo = {
-      lastId: null,
+    this._blockhashInfo = {
+      recentBlockhash: null,
       seconds: -1,
       transactionSignatures: [],
     };
@@ -283,7 +284,7 @@ export class Connection {
   }
 
   /**
-   * Fetch the current transaction count of the network
+   * Fetch the current transaction count of the cluster
    */
   async getSignatureStatus(
     signature: TransactionSignature,
@@ -298,7 +299,7 @@ export class Connection {
   }
 
   /**
-   * Fetch the current transaction count of the network
+   * Fetch the current transaction count of the cluster
    */
   async getTransactionCount(): Promise<number> {
     const unsafeRes = await this._rpcRequest('getTransactionCount', []);
@@ -311,11 +312,11 @@ export class Connection {
   }
 
   /**
-   * Fetch the identifier to the latest transaction on the network
+   * Fetch a recent blockhash from the cluster
    */
-  async getLastId(): Promise<TransactionId> {
-    const unsafeRes = await this._rpcRequest('getLastId', []);
-    const res = GetLastId(unsafeRes);
+  async getRecentBlockhash(): Promise<Blockhash> {
+    const unsafeRes = await this._rpcRequest('getRecentBlockhash', []);
+    const res = GetRecentBlockhash(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
@@ -353,22 +354,22 @@ export class Connection {
       // Attempt to use the previous last id for up to 1 second
       const seconds = new Date().getSeconds();
       if (
-        this._lastIdInfo.lastId != null &&
-        this._lastIdInfo.seconds === seconds
+        this._blockhashInfo.recentBlockhash != null &&
+        this._blockhashInfo.seconds === seconds
       ) {
-        transaction.lastId = this._lastIdInfo.lastId;
+        transaction.recentBlockhash = this._blockhashInfo.recentBlockhash;
         transaction.sign(...signers);
         if (!transaction.signature) {
           throw new Error('!signature'); // should never happen
         }
 
         // If the signature of this transaction has not been seen before with the
-        // current lastId, all done.
+        // current recentBlockhash, all done.
         const signature = transaction.signature.toString();
-        if (!this._lastIdInfo.transactionSignatures.includes(signature)) {
-          this._lastIdInfo.transactionSignatures.push(signature);
-          if (this._disableLastIdCaching) {
-            this._lastIdInfo.seconds = -1;
+        if (!this._blockhashInfo.transactionSignatures.includes(signature)) {
+          this._blockhashInfo.transactionSignatures.push(signature);
+          if (this._disableBlockhashCaching) {
+            this._blockhashInfo.seconds = -1;
           }
           break;
         }
@@ -378,11 +379,11 @@ export class Connection {
       let attempts = 0;
       const startTime = Date.now();
       for (;;) {
-        const lastId = await this.getLastId();
+        const recentBlockhash = await this.getRecentBlockhash();
 
-        if (this._lastIdInfo.lastId != lastId) {
-          this._lastIdInfo = {
-            lastId,
+        if (this._blockhashInfo.recentBlockhash != recentBlockhash) {
+          this._blockhashInfo = {
+            recentBlockhash,
             seconds: new Date().getSeconds(),
             transactionSignatures: [],
           };

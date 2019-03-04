@@ -8,7 +8,7 @@ import {
   sendAndConfirmTransaction,
 } from '../src';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
-import {mockGetLastId} from './mockrpc/getlastid';
+import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
 import {url} from './url';
 import {sleep} from '../src/util/sleep';
 
@@ -117,10 +117,10 @@ test('get transaction count', async () => {
 test('get last Id', async () => {
   const connection = new Connection(url);
 
-  mockGetLastId();
+  mockGetRecentBlockhash();
 
-  const lastId = await connection.getLastId();
-  expect(lastId.length).toBeGreaterThanOrEqual(43);
+  const recentBlockhash = await connection.getRecentBlockhash();
+  expect(recentBlockhash.length).toBeGreaterThanOrEqual(43);
 });
 
 test('request airdrop', async () => {
@@ -282,7 +282,7 @@ test('transaction', async () => {
   await connection.requestAirdrop(accountTo.publicKey, 21);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
 
-  mockGetLastId();
+  mockGetRecentBlockhash();
   mockRpc.push([
     url,
     {

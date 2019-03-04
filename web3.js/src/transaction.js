@@ -9,16 +9,12 @@ import * as Layout from './layout';
 import {PublicKey} from './publickey';
 import {Account} from './account';
 import * as shortvec from './util/shortvec-encoding';
+import type {Blockhash} from './blockhash';
 
 /**
  * @typedef {string} TransactionSignature
  */
 export type TransactionSignature = string;
-
-/**
- * @typedef {string} TransactionId
- */
-export type TransactionId = string;
 
 /**
  * Maximum over-the-wire size of a Transaction
@@ -76,13 +72,13 @@ type SignaturePubkeyPair = {|
  *
  * @typedef {Object} TransactionCtorFields
  * @property {?number} fee
- * @property (?lastId} A recent transaction id
+ * @property (?recentBlockhash} A recent block hash
  * @property (?signatures} One or more signatures
  *
  */
 type TransactionCtorFields = {|
   fee?: number,
-  lastId?: TransactionId,
+  recentBlockhash?: Blockhash,
   signatures?: Array<SignaturePubkeyPair>,
 |};
 
@@ -114,7 +110,7 @@ export class Transaction {
   /**
    * A recent transaction id.  Must be populated by the caller
    */
-  lastId: ?TransactionId;
+  recentBlockhash: ?Blockhash;
 
   /**
    * Fee for this transaction
@@ -152,9 +148,9 @@ export class Transaction {
    * @private
    */
   _getSignData(): Buffer {
-    const {lastId} = this;
-    if (!lastId) {
-      throw new Error('Transaction lastId required');
+    const {recentBlockhash} = this;
+    if (!recentBlockhash) {
+      throw new Error('Transaction recentBlockhash required');
     }
 
     if (this.instructions.length < 1) {
@@ -245,7 +241,7 @@ export class Transaction {
     const signDataLayout = BufferLayout.struct([
       BufferLayout.blob(keyCount.length, 'keyCount'),
       BufferLayout.seq(Layout.publicKey('key'), keys.length, 'keys'),
-      Layout.publicKey('lastId'),
+      Layout.publicKey('recentBlockhash'),
       BufferLayout.ns64('fee'),
 
       BufferLayout.blob(programIdCount.length, 'programIdCount'),
@@ -259,7 +255,7 @@ export class Transaction {
     const transaction = {
       keyCount: Buffer.from(keyCount),
       keys: keys.map(key => new PublicKey(key).toBuffer()),
-      lastId: Buffer.from(bs58.decode(lastId)),
+      recentBlockhash: Buffer.from(bs58.decode(recentBlockhash)),
       fee: this.fee,
       programIdCount: Buffer.from(programIdCount),
       programIds: programIds.map(programId =>
@@ -284,7 +280,7 @@ export class Transaction {
    * as doing so may invalidate the signature and cause the Transaction to be
    * rejected.
    *
-   * The Transaction must be assigned a valid `lastId` before invoking this method
+   * The Transaction must be assigned a valid `recentBlockhash` before invoking this method
    */
   sign(...signers: Array<Account>) {
     this.signPartial(...signers);
@@ -442,7 +438,7 @@ export class Transaction {
       accounts.push(account);
     }
 
-    const lastId = byteArray.slice(0, PUBKEY_LENGTH);
+    const recentBlockhash = byteArray.slice(0, PUBKEY_LENGTH);
     byteArray = byteArray.slice(PUBKEY_LENGTH);
 
     let fee = 0;
@@ -473,7 +469,7 @@ export class Transaction {
     }
 
     // Populate Transaction object
-    transaction.lastId = new PublicKey(lastId).toBase58();
+    transaction.recentBlockhash = new PublicKey(recentBlockhash).toBase58();
     transaction.fee = fee;
     for (let i = 0; i < signatureCount; i++) {
       const sigPubkeyPair = {
