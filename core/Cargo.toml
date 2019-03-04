@@ -17,7 +17,6 @@ codecov = { repository = "solana-labs/solana", branch = "master", service = "git
 chacha = []
 cuda = []
 erasure = []
-ipv6 = ["solana-netutil/ipv6"]
 
 [dependencies]
 bincode = "1.1.2"

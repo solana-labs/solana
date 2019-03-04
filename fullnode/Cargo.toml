@@ -27,4 +27,3 @@ solana-vote-signer = { path = "../vote-signer", version = "0.12.0" }
 chacha = ["solana/chacha"]
 cuda = ["solana/cuda"]
 erasure = ["solana/erasure"]
-ipv6 = ["solana/ipv6"]

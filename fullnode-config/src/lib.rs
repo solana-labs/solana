@@ -24,7 +24,7 @@ impl Config {
         let mut bind_addr =
             solana_netutil::parse_port_or_addr(&self.bind_port_or_address, default_port);
         if self.use_local_address {
-            let ip = solana_netutil::get_ip_addr().unwrap();
+            let ip = solana_netutil::get_ip_addr(false).unwrap();
             bind_addr.set_ip(ip);
         }
         if self.use_public_address {
