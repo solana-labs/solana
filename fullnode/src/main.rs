@@ -212,7 +212,7 @@ fn main() {
 
     let gossip_addr = {
         let mut addr = solana_netutil::parse_port_or_addr(
-            &matches.value_of("gossip_port"),
+            matches.value_of("gossip_port"),
             FULLNODE_PORT_RANGE.0 + 1,
         );
         if matches.is_present("public_address") {
