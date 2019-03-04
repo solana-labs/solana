@@ -79,9 +79,11 @@ nodes=(
   "multinode-demo/drone.sh"
   "multinode-demo/bootstrap-leader.sh \
     $maybeNoLeaderRotation \
+    --enable-rpc-exit \
     --init-complete-file init-complete-node1.log"
   "multinode-demo/fullnode.sh \
     $maybeNoLeaderRotation \
+    --enable-rpc-exit \
     --init-complete-file init-complete-node2.log \
     --rpc-port 18899"
 )
@@ -177,6 +179,24 @@ killNode() {
 }
 
 killNodes() {
+  [[ ${#pids[@]} -gt 0 ]] || return
+
+  # Try to use the RPC exit API to cleanly exit the first two nodes
+  # (dynamic nodes, -x, are just killed since their RPC port is not known)
+  echo "--- RPC exit"
+  for port in 8899 18899; do
+    (
+      set -x
+      curl --retry 5 --retry-delay 2 --retry-connrefused \
+        -X POST -H 'Content-Type: application/json' \
+        -d '{"jsonrpc":"2.0","id":1, "method":"fullnodeExit"}' \
+        http://localhost:$port
+    )
+  done
+
+  # Give the nodes a splash of time to cleanly exit before killing them
+  sleep 2
+
   echo "--- Killing nodes"
   for pid in "${pids[@]}"; do
     killNode "$pid"
