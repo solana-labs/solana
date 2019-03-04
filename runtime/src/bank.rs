@@ -14,7 +14,7 @@ use solana_budget_api;
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
-use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_STAKE};
 use solana_sdk::hash::{extend_and_hash, Hash};
 use solana_sdk::native_loader;
 use solana_sdk::native_program::ProgramError;
@@ -241,25 +241,19 @@ impl Bank {
     fn process_genesis_block(&mut self, genesis_block: &GenesisBlock) {
         assert!(genesis_block.mint_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
-        assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
-        assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_tokens);
-        assert!(genesis_block.bootstrap_leader_tokens >= 3);
+        assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_stake);
+        assert!(genesis_block.bootstrap_leader_stake >= BOOTSTRAP_LEADER_STAKE);
 
         // Bootstrap leader collects fees until `new_from_parent` is called.
         self.collector_id = genesis_block.bootstrap_leader_id;
 
-        let mint_tokens = genesis_block.tokens - genesis_block.bootstrap_leader_tokens;
+        let mint_tokens = genesis_block.tokens - genesis_block.bootstrap_leader_stake;
         self.deposit(&genesis_block.mint_id, mint_tokens);
-
-        let bootstrap_leader_tokens = 2;
-        let bootstrap_leader_stake =
-            genesis_block.bootstrap_leader_tokens - bootstrap_leader_tokens;
-        self.deposit(&genesis_block.bootstrap_leader_id, bootstrap_leader_tokens);
 
         // Construct a vote account for the bootstrap_leader such that the leader_scheduler
         // will be forced to select it as the leader for height 0
         let mut bootstrap_leader_vote_account = Account {
-            tokens: bootstrap_leader_stake,
+            tokens: genesis_block.bootstrap_leader_stake,
             userdata: vec![0; VoteState::max_size() as usize],
             owner: solana_vote_api::id(),
             executable: false,
@@ -819,7 +813,7 @@ impl Bank {
 mod tests {
     use super::*;
     use hashbrown::HashSet;
-    use solana_sdk::genesis_block::BOOTSTRAP_LEADER_TOKENS;
+    use solana_sdk::genesis_block::BOOTSTRAP_LEADER_STAKE;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
@@ -836,19 +830,16 @@ mod tests {
     #[test]
     fn test_bank_new_with_leader() {
         let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = BOOTSTRAP_LEADER_TOKENS;
+        let dummy_leader_stake = BOOTSTRAP_LEADER_STAKE;
         let (genesis_block, _) =
-            GenesisBlock::new_with_leader(10_000, dummy_leader_id, dummy_leader_tokens);
-        assert_eq!(genesis_block.bootstrap_leader_tokens, dummy_leader_tokens);
+            GenesisBlock::new_with_leader(10_000, dummy_leader_id, dummy_leader_stake);
+        assert_eq!(genesis_block.bootstrap_leader_stake, dummy_leader_stake);
         let bank = Bank::new(&genesis_block);
         assert_eq!(
             bank.get_balance(&genesis_block.mint_id),
-            10_000 - dummy_leader_tokens
+            10_000 - dummy_leader_stake
         );
-        assert_eq!(
-            bank.get_balance(&dummy_leader_id),
-            dummy_leader_tokens - 1 /* 1 token goes to the vote account associated with dummy_leader_tokens */
-        );
+        assert_eq!(bank.get_balance(&dummy_leader_id), dummy_leader_stake);
     }
 
     #[test]
@@ -1156,11 +1147,11 @@ mod tests {
     #[test]
     fn test_process_genesis() {
         let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 3;
+        let dummy_leader_stake = 2;
         let (genesis_block, _) =
-            GenesisBlock::new_with_leader(5, dummy_leader_id, dummy_leader_tokens);
+            GenesisBlock::new_with_leader(5, dummy_leader_id, dummy_leader_stake);
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.get_balance(&genesis_block.mint_id), 2);
+        assert_eq!(bank.get_balance(&genesis_block.mint_id), 3);
         assert_eq!(bank.get_balance(&dummy_leader_id), 2);
     }
 
@@ -1470,8 +1461,8 @@ mod tests {
     #[test]
     fn test_bank_epoch_vote_accounts() {
         let leader_id = Keypair::new().pubkey();
-        let leader_tokens = 3;
-        let (mut genesis_block, _) = GenesisBlock::new_with_leader(5, leader_id, leader_tokens);
+        let leader_stake = 3;
+        let (mut genesis_block, _) = GenesisBlock::new_with_leader(5, leader_id, leader_stake);
 
         // set this up weird, forces:
         //  1. genesis bank to cover epochs 0, 1, *and* 2

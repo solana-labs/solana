@@ -152,9 +152,9 @@ mod tests {
     #[test]
     fn test_bank_staked_nodes_at_epoch() {
         let pubkey = Keypair::new().pubkey();
-        let bootstrap_tokens = 3;
+        let bootstrap_stake = 2;
         let (genesis_block, _) =
-            GenesisBlock::new_with_leader(bootstrap_tokens, pubkey, bootstrap_tokens);
+            GenesisBlock::new_with_leader(bootstrap_stake, pubkey, bootstrap_stake);
         let bank = Bank::new(&genesis_block);
 
         // Epoch doesn't exist
@@ -162,7 +162,7 @@ mod tests {
         assert_eq!(vote_account_balances_at_epoch(&bank, 10), None);
 
         // First epoch has the bootstrap leader
-        expected.insert(genesis_block.bootstrap_leader_vote_account_id, 1);
+        expected.insert(genesis_block.bootstrap_leader_id, 2);
         let expected = Some(expected);
         assert_eq!(vote_account_balances_at_epoch(&bank, 0), expected);
 
@@ -199,10 +199,10 @@ mod tests {
         let bank = new_from_parent(&Arc::new(bank), epoch_slot_offset);
 
         let result: Vec<_> = epoch_stakes_and_lockouts(&bank, 0);
-        assert_eq!(result, vec![(1, None)]);
+        assert_eq!(result, vec![(2, None)]);
 
         let result: HashSet<_> = HashSet::from_iter(epoch_stakes_and_lockouts(&bank, epoch));
-        let expected: HashSet<_> = HashSet::from_iter(vec![(1, None), (499, None)]);
+        let expected: HashSet<_> = HashSet::from_iter(vec![(2, None), (499, None)]);
         assert_eq!(result, expected);
     }
 

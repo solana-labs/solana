@@ -9,15 +9,14 @@ use std::io::Write;
 use std::path::Path;
 
 // The default (and minimal) amount of tokens given to the bootstrap leader:
-// * 2 tokens for the bootstrap leader ID account to later setup another vote account
-// * 1 token for the bootstrap leader vote account
-pub const BOOTSTRAP_LEADER_TOKENS: u64 = 3;
+// * 2 tokens for the bootstrap leader's staking account. It can create a new staking account
+//   later, if needed
+pub const BOOTSTRAP_LEADER_STAKE: u64 = 2;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GenesisBlock {
     pub bootstrap_leader_id: Pubkey,
-    pub bootstrap_leader_tokens: u64,
-    pub bootstrap_leader_vote_account_id: Pubkey,
+    pub bootstrap_leader_stake: u64,
     pub mint_id: Pubkey,
     pub tokens: u64,
     pub ticks_per_slot: u64,
@@ -28,24 +27,20 @@ pub struct GenesisBlock {
 impl GenesisBlock {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(tokens: u64) -> (Self, Keypair) {
-        let tokens = tokens
-            .checked_add(BOOTSTRAP_LEADER_TOKENS)
-            .unwrap_or(tokens);
-        Self::new_with_leader(tokens, Keypair::new().pubkey(), BOOTSTRAP_LEADER_TOKENS)
+        let tokens = tokens.checked_add(BOOTSTRAP_LEADER_STAKE).unwrap_or(tokens);
+        Self::new_with_leader(tokens, Keypair::new().pubkey(), BOOTSTRAP_LEADER_STAKE)
     }
 
     pub fn new_with_leader(
         tokens: u64,
         bootstrap_leader_id: Pubkey,
-        bootstrap_leader_tokens: u64,
+        bootstrap_leader_stake: u64,
     ) -> (Self, Keypair) {
         let mint_keypair = Keypair::new();
-        let bootstrap_leader_vote_account_keypair = Keypair::new();
         (
             Self {
                 bootstrap_leader_id,
-                bootstrap_leader_tokens,
-                bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
+                bootstrap_leader_stake,
                 mint_id: mint_keypair.pubkey(),
                 tokens,
                 ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
@@ -81,14 +76,10 @@ mod tests {
     #[test]
     fn test_genesis_block_new() {
         let (genesis_block, mint) = GenesisBlock::new(10_000);
-        assert_eq!(genesis_block.tokens, 10_000 + BOOTSTRAP_LEADER_TOKENS);
+        assert_eq!(genesis_block.tokens, 10_000 + BOOTSTRAP_LEADER_STAKE);
         assert_eq!(genesis_block.mint_id, mint.pubkey());
         assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
-        assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
-        assert_eq!(
-            genesis_block.bootstrap_leader_tokens,
-            BOOTSTRAP_LEADER_TOKENS
-        );
+        assert_eq!(genesis_block.bootstrap_leader_stake, BOOTSTRAP_LEADER_STAKE);
     }
 
     #[test]
@@ -100,6 +91,6 @@ mod tests {
         assert_eq!(genesis_block.tokens, 20_000);
         assert_eq!(genesis_block.mint_id, mint.pubkey());
         assert_eq!(genesis_block.bootstrap_leader_id, leader_keypair.pubkey());
-        assert_eq!(genesis_block.bootstrap_leader_tokens, 123);
+        assert_eq!(genesis_block.bootstrap_leader_stake, 123);
     }
 }
