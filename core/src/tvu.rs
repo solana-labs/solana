@@ -67,11 +67,11 @@ impl Tvu {
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
+        exit: Arc<AtomicBool>,
     ) -> Self
     where
         T: 'static + KeypairUtil + Sync + Send,
     {
-        let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
             .read()
             .expect("Unable to read from cluster_info during Tvu creation")
@@ -221,6 +221,7 @@ pub mod tests {
             .expect("Expected to successfully open ledger");
         let bank = bank_forks.working_bank();
         let (poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
+        let exit = Arc::new(AtomicBool::new(false));
         let tvu = Tvu::new(
             Some(Arc::new(Keypair::new())),
             &Arc::new(RwLock::new(bank_forks)),
@@ -240,6 +241,7 @@ pub mod tests {
             l_receiver,
             &Arc::new(RpcSubscriptions::default()),
             &poh_recorder,
+            exit,
         );
         tvu.close().expect("close");
         poh_service.close().expect("close");

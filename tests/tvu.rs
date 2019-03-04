@@ -131,6 +131,7 @@ fn test_replay() {
         ledger_signal_receiver,
         &Arc::new(RpcSubscriptions::default()),
         &poh_recorder,
+        exit.clone(),
     );
 
     let mut alice_ref_balance = starting_balance;

@@ -364,6 +364,23 @@ impl ThinClient {
             };
         }
     }
+    pub fn fullnode_exit(&mut self) -> io::Result<bool> {
+        trace!("fullnode_exit sending request to {}", self.rpc_addr);
+        let response = self
+            .rpc_client
+            .make_rpc_request(1, RpcRequest::FullnodeExit, None)
+            .map_err(|error| {
+                debug!("Response from {} fullndoe_exit: {}", self.rpc_addr, error);
+                io::Error::new(io::ErrorKind::Other, "FullodeExit request failure")
+            })?;
+        serde_json::from_value(response).map_err(|error| {
+            debug!(
+                "ParseError: from {} fullndoe_exit: {}",
+                self.rpc_addr, error
+            );
+            io::Error::new(io::ErrorKind::Other, "FullodeExit parse failure")
+        })
+    }
 }
 
 impl Drop for ThinClient {
