@@ -255,7 +255,12 @@ fn main() {
         // It's not feasible (would take too much time) to confirm each of the `tx_count / 2`
         // transactions sent by `generate_txs()` so instead send and confirm a single transaction
         // to validate the network is still functional.
-        send_barrier_transaction(&mut barrier_client, &mut blockhash, &barrier_source_id, &barrier_dest_id);
+        send_barrier_transaction(
+            &mut barrier_client,
+            &mut blockhash,
+            &barrier_source_id,
+            &barrier_dest_id,
+        );
 
         i += 1;
         if should_switch_directions(num_tokens_per_account, i) {
