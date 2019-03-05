@@ -9,7 +9,7 @@ use solana::gen_keys::GenKeys;
 use solana::service::Service;
 use solana::thin_client::poll_gossip_for_leader;
 use solana_metrics;
-use solana_sdk::signature::KeypairUtil;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 
 use std::collections::VecDeque;
 use std::process::exit;
@@ -146,9 +146,8 @@ fn main() {
         target /= MAX_SPENDS_PER_TX;
     }
     let gen_keypairs = rnd.gen_n_keypairs(total_keys as u64);
-    let mut barrier_ids = rnd.gen_n_keypairs(2);
-    let barrier_source_id = barrier_ids.pop().unwrap();
-    let barrier_dest_id = barrier_ids.pop().unwrap().pubkey();
+    let barrier_keypair = Keypair::new();
+    let barrier_dest_id = Keypair::new().pubkey();
 
     println!("Get tokens...");
     let num_tokens_per_account = 20;
@@ -168,7 +167,7 @@ fn main() {
     }
     let start = gen_keypairs.len() - (tx_count * 2) as usize;
     let keypairs = &gen_keypairs[start..];
-    airdrop_tokens(&mut barrier_client, &drone_addr, &barrier_source_id, 1);
+    airdrop_tokens(&mut barrier_client, &drone_addr, &barrier_keypair, 1);
 
     println!("Get last ID...");
     let mut blockhash = client.get_recent_blockhash();
@@ -258,7 +257,7 @@ fn main() {
         send_barrier_transaction(
             &mut barrier_client,
             &mut blockhash,
-            &barrier_source_id,
+            &barrier_keypair,
             &barrier_dest_id,
         );
 
