@@ -811,8 +811,10 @@ impl Bank {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bincode::serialize;
     use hashbrown::HashSet;
-    use solana_sdk::genesis_block::BOOTSTRAP_LEADER_TOKENS;
+    use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
+    use solana_sdk::hash::hash;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
@@ -1158,9 +1160,20 @@ mod tests {
     }
 
     // Register n ticks and return the tick, slot and epoch indexes.
-    fn register_ticks(bank: &Bank, n: u64) -> (u64, u64, u64) {
+    fn register_ticks(bank: &mut Arc<Bank>, tick_hash: &mut Hash, n: u64) -> (u64, u64, u64) {
+        let mut max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
         for _ in 0..n {
-            bank.register_tick(&Hash::default());
+            if bank.tick_height() == max_tick_height {
+                *bank = Arc::new(Bank::new_from_parent(
+                    &bank,
+                    Pubkey::default(),
+                    bank.slot() + 1,
+                ));
+                max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
+            }
+
+            *tick_hash = hash(&serialize(tick_hash).unwrap());
+            bank.register_tick(&tick_hash);
         }
         (bank.tick_index(), bank.slot_index(), bank.epoch_height())
     }
@@ -1168,25 +1181,29 @@ mod tests {
     #[test]
     fn test_tick_slot_epoch_indexes() {
         let (genesis_block, _) = GenesisBlock::new(5);
-        let bank = Bank::new(&genesis_block);
+        let mut tick_hash = genesis_block.hash();
+        let mut bank = Arc::new(Bank::new(&genesis_block));
         let ticks_per_slot = bank.ticks_per_slot();
         let slots_per_epoch = bank.slots_per_epoch();
         let ticks_per_epoch = ticks_per_slot * slots_per_epoch;
 
         // All indexes are zero-based.
-        assert_eq!(register_ticks(&bank, 0), (0, 0, 0));
+        assert_eq!(register_ticks(&mut bank, &mut tick_hash, 0), (0, 0, 0));
 
         // Slot index remains zero through the last tick.
         assert_eq!(
-            register_ticks(&bank, ticks_per_slot - 1),
+            register_ticks(&mut bank, &mut tick_hash, ticks_per_slot - 1),
             (ticks_per_slot - 1, 0, 0)
         );
 
         // Cross a slot boundary.
-        assert_eq!(register_ticks(&bank, 1), (0, 1, 0));
+        assert_eq!(register_ticks(&mut bank, &mut tick_hash, 1), (0, 1, 0));
 
         // Cross an epoch boundary.
-        assert_eq!(register_ticks(&bank, ticks_per_epoch), (0, 1, 1));
+        assert_eq!(
+            register_ticks(&mut bank, &mut tick_hash, ticks_per_epoch),
+            (0, 1, 1)
+        );
     }
 
     #[test]
