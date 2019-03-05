@@ -10,30 +10,28 @@ use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 
 pub struct ClusterInfoVoteListener {
-    exit: Arc<AtomicBool>,
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl ClusterInfoVoteListener {
     pub fn new(
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         sender: PacketSender,
     ) -> Self {
-        let exit1 = exit.clone();
+        let exit = exit.clone();
         let thread = Builder::new()
             .name("solana-cluster_info_vote_listener".to_string())
             .spawn(move || {
-                let _ = Self::recv_loop(&exit1, &cluster_info, &sender);
+                let _ = Self::recv_loop(exit, &cluster_info, &sender);
             })
             .unwrap();
         Self {
-            exit,
             thread_hdls: vec![thread],
         }
     }
     fn recv_loop(
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sender: &PacketSender,
     ) -> Result<()> {
@@ -51,9 +49,6 @@ impl ClusterInfoVoteListener {
             }
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
         }
-    }
-    pub fn close(&self) {
-        self.exit.store(true, Ordering::Relaxed);
     }
 }
 

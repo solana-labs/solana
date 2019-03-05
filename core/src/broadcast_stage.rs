@@ -224,14 +224,15 @@ impl BroadcastStage {
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         receiver: Receiver<WorkingBankEntries>,
-        exit_sender: Arc<AtomicBool>,
+        exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
     ) -> Self {
         let blocktree = blocktree.clone();
+        let exit_sender = exit_sender.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
-                let _exit = Finalizer::new(exit_sender);
+                let _finalizer = Finalizer::new(exit_sender);
                 Self::run(&sock, &cluster_info, &receiver, &blocktree)
             })
             .unwrap();
@@ -299,7 +300,7 @@ mod test {
             leader_info.sockets.broadcast,
             cluster_info,
             entry_receiver,
-            exit_sender,
+            &exit_sender,
             &blocktree,
         );
 

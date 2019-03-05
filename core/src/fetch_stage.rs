@@ -14,13 +14,13 @@ pub struct FetchStage {
 
 impl FetchStage {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(sockets: Vec<UdpSocket>, exit: Arc<AtomicBool>) -> (Self, PacketReceiver) {
+    pub fn new(sockets: Vec<UdpSocket>, exit: &Arc<AtomicBool>) -> (Self, PacketReceiver) {
         let (sender, receiver) = channel();
         (Self::new_with_sender(sockets, exit, &sender), receiver)
     }
     pub fn new_with_sender(
         sockets: Vec<UdpSocket>,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
         sender: &PacketSender,
     ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
@@ -28,7 +28,7 @@ impl FetchStage {
     }
     fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
         sender: &PacketSender,
     ) -> Self {
         let thread_hdls: Vec<_> = sockets
