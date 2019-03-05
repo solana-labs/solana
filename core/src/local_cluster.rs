@@ -83,13 +83,8 @@ impl LocalCluster {
                 validator_pubkey, validator_balance
             );
 
-            Self::create_and_fund_vote_account(
-                &mut client,
-                &voting_keypair,
-                &validator_keypair,
-                1,
-            )
-            .unwrap();
+            Self::create_and_fund_vote_account(&mut client, &voting_keypair, &validator_keypair, 1)
+                .unwrap();
             let validator_server = Fullnode::new(
                 validator_node,
                 &validator_keypair,
@@ -175,12 +170,12 @@ impl LocalCluster {
                 vote_account,
                 client.get_recent_blockhash(),
                 delegate_id,
-                1,
+                0,
             );
 
             client
-                .retry_transfer(&from_account, &mut transaction, 5)
-                .expect("client transfer");
+                .retry_transfer(&vote_account, &mut transaction, 5)
+                .expect("client transfer 2");
         }
 
         info!("Checking for vote account registration");
@@ -226,5 +221,4 @@ mod test {
         let cluster = LocalCluster::new_with_config(1, 100, 3, &fullnode_exit);
         drop(cluster)
     }
-
 }
