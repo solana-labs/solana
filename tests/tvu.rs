@@ -184,9 +184,9 @@ fn test_replay() {
     let bob_balance = bank.get_balance(&bob_keypair.pubkey());
     assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
-    poh_service.close().expect("close");
-    tvu.close().expect("close");
     exit.store(true, Ordering::Relaxed);
+    poh_service.close().expect("close");
+    tvu.join().expect("join");
     dr_l.join().expect("join");
     dr_2.join().expect("join");
     dr_1.join().expect("join");

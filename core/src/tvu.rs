@@ -26,7 +26,7 @@ use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
@@ -37,7 +37,6 @@ pub struct Tvu {
     replay_stage: ReplayStage,
     blockstream_service: Option<BlockstreamService>,
     storage_stage: StorageStage,
-    exit: Arc<AtomicBool>,
 }
 
 pub struct Sockets {
@@ -147,24 +146,7 @@ impl Tvu {
             replay_stage,
             blockstream_service,
             storage_stage,
-            exit: exit.clone(),
         }
-    }
-
-    pub fn is_exited(&self) -> bool {
-        self.exit.load(Ordering::Relaxed)
-    }
-
-    pub fn exit(&self) {
-        // Call exit to make sure replay stage is unblocked from a channel it may be blocked on.
-        // Then replay stage will set the self.exit variable and cause the rest of the
-        // pipeline to exit
-        self.replay_stage.exit();
-    }
-
-    pub fn close(self) -> thread::Result<()> {
-        self.exit();
-        self.join()
     }
 }
 
@@ -192,6 +174,7 @@ pub mod tests {
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::GenesisBlock;
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn test_tvu_exit() {
@@ -242,7 +225,8 @@ pub mod tests {
             &poh_recorder,
             &exit,
         );
-        tvu.close().expect("close");
-        poh_service.close().expect("close");
+        exit.store(true, Ordering::Relaxed);
+        tvu.join().unwrap();
+        poh_service.close().unwrap();
     }
 }

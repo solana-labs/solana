@@ -36,28 +36,6 @@ use std::thread::JoinHandle;
 use std::thread::{spawn, Result};
 use std::time::Duration;
 
-struct NodeServices {
-    tpu: Tpu,
-    tvu: Tvu,
-}
-
-impl NodeServices {
-    fn new(tpu: Tpu, tvu: Tvu) -> Self {
-        NodeServices { tpu, tvu }
-    }
-
-    fn join(self) -> Result<()> {
-        self.tpu.join()?;
-        self.tvu.join()?;
-        Ok(())
-    }
-
-    fn exit(&self) {
-        self.tpu.exit();
-        self.tvu.exit();
-    }
-}
-
 pub struct FullnodeConfig {
     pub sigverify_disabled: bool,
     pub voting_disabled: bool,
@@ -92,9 +70,10 @@ pub struct Fullnode {
     rpc_pubsub_service: Option<PubSubService>,
     rpc_working_bank_handle: JoinHandle<()>,
     gossip_service: GossipService,
-    node_services: NodeServices,
-    poh_service: PohService,
     poh_recorder: Arc<Mutex<PohRecorder>>,
+    poh_service: PohService,
+    tpu: Tpu,
+    tvu: Tvu,
 }
 
 impl Fullnode {
@@ -274,7 +253,8 @@ impl Fullnode {
             rpc_service: Some(rpc_service),
             rpc_pubsub_service: Some(rpc_pubsub_service),
             rpc_working_bank_handle,
-            node_services: NodeServices::new(tpu, tvu),
+            tpu,
+            tvu,
             exit,
             poh_service,
             poh_recorder,
@@ -293,7 +273,6 @@ impl Fullnode {
         // which is the sole initiator of rotations.
         self.poh_recorder.lock().unwrap().clear_bank();
         self.poh_service.exit();
-        self.node_services.exit();
     }
 
     pub fn close(self) -> Result<()> {
@@ -340,7 +319,9 @@ impl Service for Fullnode {
 
         self.rpc_working_bank_handle.join()?;
         self.gossip_service.join()?;
-        self.node_services.join()?;
+        self.tpu.join()?;
+        self.tvu.join()?;
+
         Ok(())
     }
 }
