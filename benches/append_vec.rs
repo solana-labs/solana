@@ -21,6 +21,12 @@ use test::Bencher;
 const START_SIZE: u64 = 4 * 1024 * 1024;
 const INC_SIZE: u64 = 1 * 1024 * 1024;
 
+macro_rules! align_up {
+    ($addr: expr, $align: expr) => {
+        ($addr + ($align - 1)) & !($align - 1)
+    };
+}
+
 fn get_append_vec_bench_path(path: &str) -> PathBuf {
     let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
     let mut buf = PathBuf::new();
@@ -64,19 +70,24 @@ fn append_vec_atomic_random_change(bencher: &mut Bencher) {
     let path = get_append_vec_bench_path("bench_rax");
     let mut vec = AppendVec::<AtomicUsize>::new(&path, true, START_SIZE, INC_SIZE);
     let size = 1_000_000;
-    for _ in 0..size {
-        if vec.append(AtomicUsize::new(0)).is_none() {
+    for k in 0..size {
+        if vec.append(AtomicUsize::new(k)).is_none() {
             assert!(vec.grow_file().is_ok());
-            assert!(vec.append(AtomicUsize::new(0)).is_some());
+            assert!(vec.append(AtomicUsize::new(k)).is_some());
         }
     }
     bencher.iter(|| {
         let index = thread_rng().gen_range(0, size as u64);
         let atomic1 = vec.get(index * std::mem::size_of::<AtomicUsize>() as u64);
         let current1 = atomic1.load(Ordering::Relaxed);
+        assert_eq!(current1, index as usize);
         let next = current1 + 1;
-        atomic1.store(next, Ordering::Relaxed);
-        let atomic2 = vec.get(index * std::mem::size_of::<AtomicUsize>() as u64);
+        let mut index = vec.append(AtomicUsize::new(next));
+        if index.is_none() {
+            assert!(vec.grow_file().is_ok());
+            index = vec.append(AtomicUsize::new(next));
+        }
+        let atomic2 = vec.get(index.unwrap());
         let current2 = atomic2.load(Ordering::Relaxed);
         assert_eq!(current2, next);
     });
@@ -191,11 +202,12 @@ fn bench_account_serialize(bencher: &mut Bencher) {
     let num: usize = 1000;
     let account = Account::new(2, 100, Keypair::new().pubkey());
     let len = get_serialized_size(&account);
-    let memory = vec![0; num * len];
+    let ser_len = align_up!(len + std::mem::size_of::<u64>(), std::mem::size_of::<u64>());
+    let mut memory = vec![0; num * ser_len];
     bencher.iter(|| {
         for i in 0..num {
-            let start = i * len;
-            serialize_account(&memory[start..start + len], &account, len);
+            let start = i * ser_len;
+            serialize_account(&mut memory[start..start + ser_len], &account, len);
         }
     });
 
@@ -205,8 +217,8 @@ fn bench_account_serialize(bencher: &mut Bencher) {
         println!("memory: {}", memory[index]);
     }
 
-    let start = index * len;
-    let new_account = deserialize_account(&memory[start..start + len], 0, len + 8).unwrap();
+    let start = index * ser_len;
+    let new_account = deserialize_account(&memory[start..start + ser_len], 0, num * len).unwrap();
     assert_eq!(new_account, account);
 }
 

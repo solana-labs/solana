@@ -1,8 +1,9 @@
-use memmap::MmapMut;
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use memmap::{Mmap, MmapMut};
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::fs::{File, OpenOptions};
-use std::io::{Error, ErrorKind, Result, Seek, SeekFrom, Write};
+use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
 use std::marker::PhantomData;
 use std::mem;
 use std::path::Path;
@@ -11,64 +12,62 @@ use std::sync::Mutex;
 
 const SIZEOF_U64: usize = mem::size_of::<u64>();
 
+macro_rules! align_up {
+    ($addr: expr, $align: expr) => {
+        ($addr + ($align - 1)) & !($align - 1)
+    };
+}
+
 pub struct AppendVec<T> {
     data: File,
-    map: MmapMut,
+    mmap: Mmap,
     current_offset: AtomicUsize,
-    append_lock: Mutex<()>,
+    mmap_mut: Mutex<MmapMut>,
     file_size: u64,
     inc_size: u64,
     phantom: PhantomData<T>,
 }
 
 fn get_account_size_static() -> usize {
-    mem::size_of::<u64>()
-        + mem::size_of::<Pubkey>()
-        + mem::size_of::<bool>()
-        + mem::size_of::<Pubkey>()
+    mem::size_of::<Account>() - mem::size_of::<Vec<u8>>()
 }
 
 pub fn get_serialized_size(account: &Account) -> usize {
     get_account_size_static() + account.userdata.len()
 }
 
-pub fn serialize_account(dst_slice: &[u8], account: &Account, len: usize) {
+pub fn serialize_account(dst_slice: &mut [u8], account: &Account, len: usize) {
     let mut at = 0;
 
-    write_object_unaligned(&mut at, dst_slice, len);
-    write_object_unaligned(&mut at, dst_slice, account.tokens);
-
-    let data = &dst_slice[at..at + account.userdata.len()];
-    let dst = data.as_ptr() as *mut u8;
-    let data = &account.userdata[0..account.userdata.len()];
-    let src = data.as_ptr();
-    unsafe {
-        std::ptr::copy_nonoverlapping(src, dst, account.userdata.len());
-    }
-    at += account.userdata.len();
-
-    write_object(&mut at, dst_slice, account.owner);
-    write_object(&mut at, dst_slice, account.executable);
+    write_u64(&mut at, dst_slice, len as u64);
+    write_u64(&mut at, dst_slice, account.tokens);
+    write_bytes(&mut at, dst_slice, &account.userdata);
+    write_bytes(&mut at, dst_slice, account.owner.as_ref());
+    write_bytes(&mut at, dst_slice, &[account.executable as u8]);
 }
 
-fn write_object_unaligned<X: Sized>(at: &mut usize, dst_slice: &[u8], value: X) {
-    let data = &dst_slice[*at..*at + mem::size_of::<X>()];
-    #[allow(clippy::cast_ptr_alignment)]
-    let ptr = data.as_ptr() as *mut X;
-    unsafe {
-        std::ptr::write_unaligned(ptr, value);
-    }
-    *at += mem::size_of::<X>();
+fn read_bytes(at: &mut usize, dst_slice: &mut [u8], src_slice: &[u8], len: usize) {
+    let data = &src_slice[*at..*at + len];
+    (&data[..]).read_exact(&mut dst_slice[..]).unwrap();
+    *at += len;
 }
 
-fn write_object<X: Sized>(at: &mut usize, dst_slice: &[u8], value: X) {
-    let data = &dst_slice[*at..*at + mem::size_of::<X>()];
-    #[allow(clippy::cast_ptr_alignment)]
-    let ptr = data.as_ptr() as *mut X;
-    unsafe {
-        std::ptr::write(ptr, value);
-    }
-    *at += mem::size_of::<X>();
+fn write_bytes(at: &mut usize, dst_slice: &mut [u8], src_slice: &[u8]) {
+    let data = &mut dst_slice[*at..*at + src_slice.len()];
+    (&mut data[..]).write_all(&src_slice).unwrap();
+    *at += src_slice.len();
+}
+
+fn read_u64(at: &mut usize, src_slice: &[u8]) -> u64 {
+    let data = &src_slice[*at..*at + mem::size_of::<u64>()];
+    *at += mem::size_of::<u64>();
+    (&data[..]).read_u64::<LittleEndian>().unwrap()
+}
+
+fn write_u64(at: &mut usize, dst_slice: &mut [u8], value: u64) {
+    let data = &mut dst_slice[*at..*at + mem::size_of::<u64>()];
+    (&mut data[..]).write_u64::<LittleEndian>(value).unwrap();
+    *at += mem::size_of::<u64>();
 }
 
 pub fn deserialize_account(
@@ -77,30 +76,24 @@ pub fn deserialize_account(
     current_offset: usize,
 ) -> Result<Account> {
     let mut at = index;
-    let data = &src_slice[at..(at + mem::size_of::<u64>())];
-    #[allow(clippy::cast_ptr_alignment)]
-    let size: u64 = unsafe { std::ptr::read_unaligned(data.as_ptr() as *const _) };
-    let len = size as usize;
-    at += SIZEOF_U64 as usize;
 
+    let size = read_u64(&mut at, &src_slice);
+    let len = size as usize;
     assert!(current_offset >= at + len);
 
-    let data = &src_slice[at..(at + mem::size_of::<u64>())];
-    #[allow(clippy::cast_ptr_alignment)]
-    let tokens: u64 = unsafe { std::ptr::read_unaligned(data.as_ptr() as *const _) };
-    at += mem::size_of::<u64>();
+    let tokens = read_u64(&mut at, &src_slice);
 
     let userdata_len = len - get_account_size_static();
-    let mut userdata = vec![];
-    userdata.extend_from_slice(&src_slice[at..at + userdata_len]);
-    at += userdata_len;
+    let mut userdata = vec![0; userdata_len];
+    read_bytes(&mut at, &mut userdata, &src_slice, userdata_len);
 
-    let data = &src_slice[at..(at + mem::size_of::<Pubkey>())];
-    let owner: Pubkey = unsafe { std::ptr::read(data.as_ptr() as *const _) };
-    at += mem::size_of::<Pubkey>();
+    let mut pubkey = vec![0; mem::size_of::<Pubkey>()];
+    read_bytes(&mut at, &mut pubkey, &src_slice, mem::size_of::<Pubkey>());
+    let owner = Pubkey::new(&pubkey);
 
-    let data = &src_slice[at..(at + mem::size_of::<bool>())];
-    let executable: bool = unsafe { std::ptr::read(data.as_ptr() as *const _) };
+    let mut exec = vec![0; mem::size_of::<bool>()];
+    read_bytes(&mut at, &mut exec, &src_slice, mem::size_of::<bool>());
+    let executable: bool = exec[0] != 0;
 
     Ok(Account {
         tokens,
@@ -126,13 +119,14 @@ where
         data.write_all(&[0]).unwrap();
         data.seek(SeekFrom::Start(0)).unwrap();
         data.flush().unwrap();
-        let map = unsafe { MmapMut::map_mut(&data).expect("failed to map the data file") };
+        let mmap = unsafe { Mmap::map(&data).expect("failed to map the data file") };
+        let mmap_mut = unsafe { MmapMut::map_mut(&data).expect("failed to map the data file") };
 
         AppendVec {
             data,
-            map,
+            mmap,
             current_offset: AtomicUsize::new(0),
-            append_lock: Mutex::new(()),
+            mmap_mut: Mutex::new(mmap_mut),
             file_size: size,
             inc_size: inc,
             phantom: PhantomData,
@@ -140,7 +134,7 @@ where
     }
 
     pub fn reset(&mut self) {
-        let _append_lock = self.append_lock.lock().unwrap();
+        let _mmap_mut = self.mmap_mut.lock().unwrap();
         self.current_offset.store(0, Ordering::Relaxed);
     }
 
@@ -149,7 +143,7 @@ where
         let offset = self.current_offset.load(Ordering::Relaxed);
         let at = index as usize;
         assert!(offset >= at + mem::size_of::<T>());
-        let data = &self.map[at..at + mem::size_of::<T>()];
+        let data = &self.mmap[at..at + mem::size_of::<T>()];
         let ptr = data.as_ptr() as *const T;
         let x: Option<&T> = unsafe { ptr.as_ref() };
         x.unwrap()
@@ -160,33 +154,33 @@ where
         if self.inc_size == 0 {
             return Err(Error::new(ErrorKind::WriteZero, "Grow not supported"));
         }
-        let _append_lock = self.append_lock.lock().unwrap();
+        let mut mmap_mut = self.mmap_mut.lock().unwrap();
         let index = self.current_offset.load(Ordering::Relaxed) + mem::size_of::<T>();
         if index as u64 + self.inc_size < self.file_size {
             // grow was already called
             return Ok(());
         }
         let end = self.file_size + self.inc_size;
-        drop(self.map.to_owned());
+        drop(mmap_mut.to_owned());
+        drop(self.mmap.to_owned());
         self.data.seek(SeekFrom::Start(end))?;
         self.data.write_all(&[0])?;
-        self.data.seek(SeekFrom::Start(0))?;
-        self.data.flush()?;
-        self.map = unsafe { MmapMut::map_mut(&self.data)? };
+        self.mmap = unsafe { Mmap::map(&self.data)? };
+        *mmap_mut = unsafe { MmapMut::map_mut(&self.data)? };
         self.file_size = end;
         Ok(())
     }
 
     #[allow(dead_code)]
     pub fn append(&self, val: T) -> Option<u64> {
-        let _append_lock = self.append_lock.lock().unwrap();
+        let mmap_mut = self.mmap_mut.lock().unwrap();
         let index = self.current_offset.load(Ordering::Relaxed);
 
         if (self.file_size as usize) < index + mem::size_of::<T>() {
             return None;
         }
 
-        let data = &self.map[index..(index + mem::size_of::<T>())];
+        let data = &mmap_mut[index..(index + mem::size_of::<T>())];
         unsafe {
             let ptr = data.as_ptr() as *mut T;
             std::ptr::write(ptr, val)
@@ -199,25 +193,32 @@ where
     pub fn get_account(&self, index: u64) -> Result<Account> {
         let index = index as usize;
         deserialize_account(
-            &self.map[..],
+            &self.mmap[..],
             index,
             self.current_offset.load(Ordering::Relaxed),
         )
     }
 
     pub fn append_account(&self, account: &Account) -> Option<u64> {
-        let _append_lock = self.append_lock.lock().unwrap();
-        let data_at = self.current_offset.load(Ordering::Relaxed);
+        let mut mmap_mut = self.mmap_mut.lock().unwrap();
+        let data_at = align_up!(
+            self.current_offset.load(Ordering::Relaxed),
+            mem::size_of::<u64>()
+        );
         let len = get_serialized_size(account);
 
         if (self.file_size as usize) < data_at + len + SIZEOF_U64 {
             return None;
         }
 
-        serialize_account(&self.map[data_at..data_at + len], account, len);
+        serialize_account(
+            &mut mmap_mut[data_at..data_at + len + SIZEOF_U64],
+            &account,
+            len,
+        );
 
         self.current_offset
-            .fetch_add(len + SIZEOF_U64, Ordering::Relaxed);
+            .store(data_at + len + SIZEOF_U64, Ordering::Relaxed);
         Some(data_at as u64)
     }
 }
@@ -337,17 +338,18 @@ pub mod tests {
         let path = Path::new("random");
         let mut vec = AppendVec::<AtomicUsize>::new(path, true, START_SIZE, INC_SIZE);
         let size = 1_000;
-        for _ in 0..size {
-            if vec.append(AtomicUsize::new(0)).is_none() {
+        for k in 0..size {
+            if vec.append(AtomicUsize::new(k)).is_none() {
                 assert!(vec.grow_file().is_ok());
                 assert!(vec.append(AtomicUsize::new(0)).is_some());
             }
         }
         let index = thread_rng().gen_range(0, size as u64);
-        let atomic1 = vec.get(index);
+        let atomic1 = vec.get(index * mem::size_of::<AtomicUsize>() as u64);
         let current1 = atomic1.load(Ordering::Relaxed);
+        assert_eq!(current1, index as usize);
         let next = current1 + 1;
-        atomic1.store(next, Ordering::Relaxed);
+        let index = vec.append(AtomicUsize::new(next)).unwrap();
         let atomic2 = vec.get(index);
         let current2 = atomic2.load(Ordering::Relaxed);
         assert_eq!(current2, next);
