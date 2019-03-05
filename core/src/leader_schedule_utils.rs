@@ -30,65 +30,13 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
     stakes.dedup();
 }
 
-/// Return the leader for the slot at the slot_index and epoch_height returned
-/// by the given function.
-fn slot_leader_by<F>(bank: &Bank, get_slot_index: F) -> Pubkey
-where
-    F: Fn(u64, u64, u64) -> (u64, u64),
-{
-    let (slot_index, epoch_height) = get_slot_index(
-        bank.slot_index(),
-        bank.epoch_height(),
-        bank.slots_per_epoch(),
-    );
-    let leader_schedule = leader_schedule(epoch_height, bank);
-    leader_schedule[slot_index as usize]
-}
-
-/// Return the leader for the current slot.
-pub fn slot_leader(bank: &Bank) -> Pubkey {
-    slot_leader_by(bank, |slot_index, epoch_height, _| {
-        (slot_index, epoch_height)
-    })
-}
-
 /// Return the leader for the given slot.
 pub fn slot_leader_at(slot: u64, bank: &Bank) -> Pubkey {
-    slot_leader_by(bank, |_, _, _| {
-        (slot % bank.slots_per_epoch(), slot / bank.slots_per_epoch())
-    })
-}
+    let slot_index = slot % bank.slots_per_epoch();
+    let epoch = slot / bank.slots_per_epoch();
 
-/// Return the epoch height and slot index of the slot before the current slot.
-fn prev_slot_leader_index(slot_index: u64, epoch_height: u64, slots_per_epoch: u64) -> (u64, u64) {
-    if epoch_height == 0 && slot_index == 0 {
-        return (0, 0);
-    }
-
-    if slot_index == 0 {
-        (slots_per_epoch - 1, epoch_height - 1)
-    } else {
-        (slot_index - 1, epoch_height)
-    }
-}
-
-/// Return the slot_index and epoch height of the slot following the current slot.
-fn next_slot_leader_index(slot_index: u64, epoch_height: u64, slots_per_epoch: u64) -> (u64, u64) {
-    if slot_index + 1 == slots_per_epoch {
-        (0, epoch_height + 1)
-    } else {
-        (slot_index + 1, epoch_height)
-    }
-}
-
-/// Return the leader for the slot before the current slot.
-pub fn prev_slot_leader(bank: &Bank) -> Pubkey {
-    slot_leader_by(bank, prev_slot_leader_index)
-}
-
-/// Return the leader for the slot following the current slot.
-pub fn next_slot_leader(bank: &Bank) -> Pubkey {
-    slot_leader_by(bank, next_slot_leader_index)
+    let leader_schedule = leader_schedule(epoch, bank);
+    leader_schedule[slot_index as usize]
 }
 
 // Returns the number of ticks remaining from the specified tick_height to the end of the
@@ -128,20 +76,7 @@ mod tests {
             GenesisBlock::new_with_leader(BOOTSTRAP_LEADER_TOKENS, pubkey, BOOTSTRAP_LEADER_TOKENS)
                 .0;
         let bank = Bank::new(&genesis_block);
-        assert_eq!(slot_leader(&bank), pubkey);
-    }
-
-    #[test]
-    fn test_leader_scheduler1_prev_slot_leader_index() {
-        assert_eq!(prev_slot_leader_index(0, 0, 2), (0, 0));
-        assert_eq!(prev_slot_leader_index(1, 0, 2), (0, 0));
-        assert_eq!(prev_slot_leader_index(0, 1, 2), (1, 0));
-    }
-
-    #[test]
-    fn test_leader_scheduler1_next_slot_leader_index() {
-        assert_eq!(next_slot_leader_index(0, 0, 2), (1, 0));
-        assert_eq!(next_slot_leader_index(1, 0, 2), (0, 1));
+        assert_eq!(slot_leader_at(bank.slot(), &bank), pubkey);
     }
 
     #[test]
