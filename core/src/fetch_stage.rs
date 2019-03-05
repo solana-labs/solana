@@ -3,13 +3,12 @@
 use crate::service::Service;
 use crate::streamer::{self, PacketReceiver, PacketSender};
 use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 pub struct FetchStage {
-    exit: Arc<AtomicBool>,
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
@@ -37,11 +36,7 @@ impl FetchStage {
             .map(|socket| streamer::receiver(socket, exit.clone(), sender.clone(), "fetch-stage"))
             .collect();
 
-        Self { exit, thread_hdls }
-    }
-
-    pub fn close(&self) {
-        self.exit.store(true, Ordering::Relaxed);
+        Self { thread_hdls }
     }
 }
 

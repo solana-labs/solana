@@ -12,7 +12,7 @@ use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
 use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
@@ -42,11 +42,7 @@ impl LeaderServices {
         }
     }
 
-    pub fn exit(&self) {
-        self.fetch_stage.close();
-    }
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         let mut results = vec![];
         results.push(self.fetch_stage.join());
         results.push(self.sigverify_stage.join());
@@ -59,16 +55,10 @@ impl LeaderServices {
         let _ = broadcast_result?;
         Ok(())
     }
-
-    pub fn close(self) -> thread::Result<()> {
-        self.exit();
-        self.join()
-    }
 }
 
 pub struct Tpu {
     leader_services: LeaderServices,
-    exit: Arc<AtomicBool>,
     pub id: Pubkey,
 }
 
@@ -114,22 +104,8 @@ impl Tpu {
         );
         Self {
             leader_services,
-            exit: exit.clone(),
             id,
         }
-    }
-
-    pub fn exit(&self) {
-        self.exit.store(true, Ordering::Relaxed);
-    }
-
-    pub fn is_exited(&self) -> bool {
-        self.exit.load(Ordering::Relaxed)
-    }
-
-    pub fn close(self) -> thread::Result<()> {
-        self.exit();
-        self.join()
     }
 }
 
