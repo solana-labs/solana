@@ -16,7 +16,6 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 pub struct GossipService {
-    exit: Arc<AtomicBool>,
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
@@ -53,15 +52,7 @@ impl GossipService {
             exit.clone(),
         );
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
-        Self {
-            exit: exit.clone(),
-            thread_hdls,
-        }
-    }
-
-    pub fn close(self) -> thread::Result<()> {
-        self.exit.store(true, Ordering::Relaxed);
-        self.join()
+        Self { thread_hdls }
     }
 }
 
@@ -99,8 +90,10 @@ pub fn discover(entry_point_info: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> 
 //TODO: deprecate this in favor of discover
 pub fn converge(node: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     info!("Wait for convergence with {} nodes", num_nodes);
+
+    let exit = Arc::new(AtomicBool::new(false));
     // Let's spy on the network
-    let (gossip_service, spy_ref, id) = make_spy_node(node);
+    let (gossip_service, spy_ref, id) = make_spy_node(node, &exit);
     trace!(
         "converge spy_node {} looking for at least {} nodes",
         id,
@@ -117,7 +110,8 @@ pub fn converge(node: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
                 num_nodes,
                 rpc_peers
             );
-            gossip_service.close().unwrap();
+            exit.store(true, Ordering::Relaxed);
+            gossip_service.join().unwrap();
             return rpc_peers;
         }
         debug!(
@@ -132,9 +126,11 @@ pub fn converge(node: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     panic!("Failed to converge");
 }
 
-pub fn make_spy_node(leader: &NodeInfo) -> (GossipService, Arc<RwLock<ClusterInfo>>, Pubkey) {
+fn make_spy_node(
+    leader: &NodeInfo,
+    exit: &Arc<AtomicBool>,
+) -> (GossipService, Arc<RwLock<ClusterInfo>>, Pubkey) {
     let keypair = Keypair::new();
-    let exit = Arc::new(AtomicBool::new(false));
     let mut spy = Node::new_localhost_with_pubkey(keypair.pubkey());
     let id = spy.info.id;
     let daddr = "0.0.0.0:0".parse().unwrap();
@@ -145,7 +141,7 @@ pub fn make_spy_node(leader: &NodeInfo) -> (GossipService, Arc<RwLock<ClusterInf
     spy_cluster_info.set_leader(leader.id);
     let spy_cluster_info_ref = Arc::new(RwLock::new(spy_cluster_info));
     let gossip_service =
-        GossipService::new(&spy_cluster_info_ref, None, None, spy.sockets.gossip, &exit);
+        GossipService::new(&spy_cluster_info_ref, None, None, spy.sockets.gossip, exit);
 
     (gossip_service, spy_cluster_info_ref, id)
 }
@@ -177,6 +173,7 @@ mod tests {
         let cluster_info = ClusterInfo::new(tn.info.clone());
         let c = Arc::new(RwLock::new(cluster_info));
         let d = GossipService::new(&c, None, None, tn.sockets.gossip, &exit);
-        d.close().expect("thread join");
+        exit.store(true, Ordering::Relaxed);
+        d.join().unwrap();
     }
 }

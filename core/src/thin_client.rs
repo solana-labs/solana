@@ -9,6 +9,7 @@ use crate::gossip_service::GossipService;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::result::{Error, Result};
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
+use crate::service::Service;
 use bincode::serialize_into;
 use bs58;
 use serde_json;
@@ -24,7 +25,7 @@ use solana_sdk::transaction::Transaction;
 use std;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
@@ -432,7 +433,8 @@ pub fn poll_gossip_for_leader(leader_gossip: SocketAddr, timeout: Option<u64>) -
         sleep(Duration::from_millis(100));
     }
 
-    gossip_service.close()?;
+    exit.store(true, Ordering::Relaxed);
+    gossip_service.join()?;
 
     if log_enabled!(log::Level::Trace) {
         trace!("{}", cluster_info.read().unwrap().node_info_trace());
