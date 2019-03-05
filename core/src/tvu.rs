@@ -89,8 +89,7 @@ impl Tvu {
         let mut blob_sockets: Vec<Arc<UdpSocket>> =
             fetch_sockets.into_iter().map(Arc::new).collect();
         blob_sockets.push(repair_socket.clone());
-        let fetch_stage =
-            BlobFetchStage::new_multi_socket(blob_sockets, &blob_fetch_sender, exit.clone());
+        let fetch_stage = BlobFetchStage::new_multi_socket(blob_sockets, &blob_fetch_sender, &exit);
 
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
@@ -102,7 +101,7 @@ impl Tvu {
             Arc::new(retransmit_socket),
             repair_socket,
             blob_fetch_receiver,
-            exit.clone(),
+            &exit,
         );
 
         let (replay_stage, slot_full_receiver, forward_entry_receiver) = ReplayStage::new(
@@ -111,7 +110,7 @@ impl Tvu {
             blocktree.clone(),
             &bank_forks,
             cluster_info.clone(),
-            exit.clone(),
+            &exit,
             ledger_signal_receiver,
             subscriptions,
             poh_recorder,
@@ -122,7 +121,7 @@ impl Tvu {
                 slot_full_receiver,
                 blocktree.clone(),
                 blockstream.unwrap().to_string(),
-                exit.clone(),
+                &exit,
             );
             Some(blockstream_service)
         } else {
@@ -134,7 +133,7 @@ impl Tvu {
             forward_entry_receiver,
             Some(blocktree),
             &keypair,
-            &exit.clone(),
+            &exit,
             bank_forks_info[0].entry_height, // TODO: StorageStage needs to deal with BankForks somehow still
             storage_rotate_count,
             &cluster_info,
@@ -202,8 +201,7 @@ pub mod tests {
         let (blocktree, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
         let bank = bank_forks.working_bank();
-        let (poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
-        let exit = Arc::new(AtomicBool::new(false));
+        let (exit, poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
         let tvu = Tvu::new(
             Some(Arc::new(Keypair::new())),
             &Arc::new(RwLock::new(bank_forks)),
@@ -227,6 +225,6 @@ pub mod tests {
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
-        poh_service.close().unwrap();
+        poh_service.join().unwrap();
     }
 }

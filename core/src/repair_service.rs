@@ -45,7 +45,7 @@ pub struct RepairService {
 impl RepairService {
     fn run(
         blocktree: &Arc<Blocktree>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         repair_socket: &Arc<UdpSocket>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) {
@@ -112,13 +112,14 @@ impl RepairService {
 
     pub fn new(
         blocktree: Arc<Blocktree>,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
     ) -> Self {
+        let exit = exit.clone();
         let t_repair = Builder::new()
             .name("solana-repair-service".to_string())
-            .spawn(move || Self::run(&blocktree, &exit, &repair_socket, &cluster_info))
+            .spawn(move || Self::run(&blocktree, exit, &repair_socket, &cluster_info))
             .unwrap();
 
         RepairService { t_repair }

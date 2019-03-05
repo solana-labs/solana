@@ -134,12 +134,7 @@ mod test {
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(
-            Arc::new(read),
-            exit.clone(),
-            s_reader,
-            "window-streamer-test",
-        );
+        let t_receiver = receiver(Arc::new(read), &exit, s_reader, "window-streamer-test");
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);

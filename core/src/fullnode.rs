@@ -264,6 +264,7 @@ impl Fullnode {
     // Used for notifying many nodes in parallel to exit
     pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
+
         // Need to force the poh_recorder to drop the WorkingBank,
         // which contains the channel to BroadcastStage. This should be
         // sufficient as long as no other rotations are happening that
@@ -272,7 +273,6 @@ impl Fullnode {
         // in motion because exit()/close() are only called by the run() loop
         // which is the sole initiator of rotations.
         self.poh_recorder.lock().unwrap().clear_bank();
-        self.poh_service.exit();
     }
 
     pub fn close(self) -> Result<()> {

@@ -156,7 +156,7 @@ fn test_replicator_startup_basic() {
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
         let repair_socket = Arc::new(tn.sockets.repair);
-        let t_receiver = blob_receiver(repair_socket.clone(), exit.clone(), s_reader);
+        let t_receiver = blob_receiver(repair_socket.clone(), &exit, s_reader);
 
         info!(
             "Sending repair requests from: {} to: {}",

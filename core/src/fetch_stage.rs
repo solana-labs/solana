@@ -33,7 +33,7 @@ impl FetchStage {
     ) -> Self {
         let thread_hdls: Vec<_> = sockets
             .into_iter()
-            .map(|socket| streamer::receiver(socket, exit.clone(), sender.clone(), "fetch-stage"))
+            .map(|socket| streamer::receiver(socket, &exit, sender.clone(), "fetch-stage"))
             .collect();
 
         Self { thread_hdls }

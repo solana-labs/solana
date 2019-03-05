@@ -347,6 +347,7 @@ impl Service for BankingStage {
 pub fn create_test_recorder(
     bank: &Arc<Bank>,
 ) -> (
+    Arc<AtomicBool>,
     Arc<Mutex<PohRecorder>>,
     PohService,
     Receiver<WorkingBankEntries>,
@@ -356,7 +357,7 @@ pub fn create_test_recorder(
         PohRecorder::new(bank.tick_height(), bank.last_blockhash());
     let poh_recorder = Arc::new(Mutex::new(poh_recorder));
     let poh_service = PohService::new(poh_recorder.clone(), &PohServiceConfig::default(), &exit);
-    (poh_recorder, poh_service, entry_receiver)
+    (exit, poh_recorder, poh_service, entry_receiver)
 }
 
 #[cfg(test)]
@@ -378,13 +379,14 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
-        let (poh_recorder, poh_service, _entry_receiever) = create_test_recorder(&bank);
+        let (exit, poh_recorder, poh_service, _entry_receiever) = create_test_recorder(&bank);
         let cluster_info = ClusterInfo::new(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
         drop(verified_sender);
+        exit.store(true, Ordering::Relaxed);
         banking_stage.join().unwrap();
-        poh_service.close().unwrap();
+        poh_service.join().unwrap();
     }
 
     #[test]
@@ -395,7 +397,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
-        let (poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
+        let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
         let cluster_info = ClusterInfo::new(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         poh_recorder.lock().unwrap().set_bank(&bank);
@@ -403,7 +405,8 @@ mod tests {
         trace!("sending bank");
         sleep(Duration::from_millis(600));
         drop(verified_sender);
-        poh_service.close().unwrap();
+        exit.store(true, Ordering::Relaxed);
+        poh_service.join().unwrap();
         drop(poh_recorder);
 
         trace!("getting entries");
@@ -424,7 +427,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
-        let (poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
+        let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
         let cluster_info = ClusterInfo::new(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         poh_recorder.lock().unwrap().set_bank(&bank);
@@ -452,7 +455,8 @@ mod tests {
             .unwrap();
 
         drop(verified_sender);
-        poh_service.close().expect("close");
+        exit.store(true, Ordering::Relaxed);
+        poh_service.join().unwrap();
         drop(poh_recorder);
 
         //receive entries + ticks
@@ -481,7 +485,7 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
-        let (poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
+        let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
         let cluster_info = ClusterInfo::new(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         poh_recorder.lock().unwrap().set_bank(&bank);
@@ -516,7 +520,8 @@ mod tests {
             .unwrap();
 
         drop(verified_sender);
-        poh_service.close().expect("close");;
+        exit.store(true, Ordering::Relaxed);
+        poh_service.join().unwrap();
         drop(poh_recorder);
 
         // Collect the ledger and feed it to a new bank.

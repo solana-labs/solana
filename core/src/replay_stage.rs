@@ -48,7 +48,6 @@ impl Drop for Finalizer {
 
 pub struct ReplayStage {
     t_replay: JoinHandle<result::Result<()>>,
-    exit: Arc<AtomicBool>,
 }
 
 impl ReplayStage {
@@ -59,7 +58,7 @@ impl ReplayStage {
         blocktree: Arc<Blocktree>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -199,7 +198,7 @@ impl ReplayStage {
             })
             .unwrap();
         (
-            Self { t_replay, exit },
+            Self { t_replay },
             slot_full_receiver,
             forward_entry_receiver,
         )
@@ -257,15 +256,6 @@ impl ReplayStage {
             forward_entry_sender.send(entries)?;
         }
         result
-    }
-
-    pub fn close(self) -> thread::Result<()> {
-        self.exit();
-        self.join()
-    }
-
-    pub fn exit(&self) {
-        self.exit.store(true, Ordering::Relaxed);
     }
 
     pub fn verify_and_process_entries(
@@ -345,7 +335,6 @@ mod test {
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
-    use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
 
@@ -368,22 +357,21 @@ mod test {
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
         // Set up the replay stage
-        let exit = Arc::new(AtomicBool::new(false));
-        let voting_keypair = Arc::new(Keypair::new());
         {
+            let voting_keypair = Arc::new(Keypair::new());
             let (bank_forks, _bank_forks_info, blocktree, l_receiver) =
                 new_banks_from_blocktree(&my_ledger_path, None);
             let bank = bank_forks.working_bank();
 
             let blocktree = Arc::new(blocktree);
-            let (poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
+            let (exit, poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
             let (replay_stage, _slot_full_receiver, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
                 Some(voting_keypair.clone()),
                 blocktree.clone(),
                 &Arc::new(RwLock::new(bank_forks)),
                 cluster_info_me.clone(),
-                exit.clone(),
+                &exit,
                 l_receiver,
                 &Arc::new(RpcSubscriptions::default()),
                 &poh_recorder,
@@ -403,10 +391,9 @@ mod test {
 
             assert_eq!(next_tick[0], received_tick[0]);
 
-            replay_stage
-                .close()
-                .expect("Expect successful ReplayStage exit");
-            poh_service.close().unwrap();
+            exit.store(true, Ordering::Relaxed);
+            replay_stage.join().unwrap();
+            poh_service.join().unwrap();
         }
         let _ignored = remove_dir_all(&my_ledger_path);
     }

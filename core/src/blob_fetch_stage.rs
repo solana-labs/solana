@@ -3,34 +3,29 @@
 use crate::service::Service;
 use crate::streamer::{self, BlobSender};
 use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 pub struct BlobFetchStage {
-    exit: Arc<AtomicBool>,
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl BlobFetchStage {
-    pub fn new(socket: Arc<UdpSocket>, sender: &BlobSender, exit: Arc<AtomicBool>) -> Self {
+    pub fn new(socket: Arc<UdpSocket>, sender: &BlobSender, exit: &Arc<AtomicBool>) -> Self {
         Self::new_multi_socket(vec![socket], sender, exit)
     }
     pub fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
         sender: &BlobSender,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
     ) -> Self {
         let thread_hdls: Vec<_> = sockets
             .into_iter()
-            .map(|socket| streamer::blob_receiver(socket, exit.clone(), sender.clone()))
+            .map(|socket| streamer::blob_receiver(socket, &exit, sender.clone()))
             .collect();
 
-        Self { exit, thread_hdls }
-    }
-
-    pub fn close(&self) {
-        self.exit.store(true, Ordering::Relaxed);
+        Self { thread_hdls }
     }
 }
 

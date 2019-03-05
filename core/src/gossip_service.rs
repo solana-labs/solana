@@ -34,8 +34,7 @@ impl GossipService {
             &cluster_info.read().unwrap().my_data().id,
             gossip_socket.local_addr().unwrap()
         );
-        let t_receiver =
-            streamer::blob_receiver(gossip_socket.clone(), exit.clone(), request_sender);
+        let t_receiver = streamer::blob_receiver(gossip_socket.clone(), &exit, request_sender);
         let (response_sender, response_receiver) = channel();
         let t_responder = streamer::responder("gossip", gossip_socket, response_receiver);
         let t_listen = ClusterInfo::listen(
@@ -43,14 +42,9 @@ impl GossipService {
             blocktree,
             request_receiver,
             response_sender.clone(),
-            exit.clone(),
+            exit,
         );
-        let t_gossip = ClusterInfo::gossip(
-            cluster_info.clone(),
-            bank_forks,
-            response_sender,
-            exit.clone(),
-        );
+        let t_gossip = ClusterInfo::gossip(cluster_info.clone(), bank_forks, response_sender, exit);
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
         Self { thread_hdls }
     }

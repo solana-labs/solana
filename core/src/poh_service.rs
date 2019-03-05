@@ -31,19 +31,9 @@ impl Default for PohServiceConfig {
 
 pub struct PohService {
     tick_producer: JoinHandle<()>,
-    poh_exit: Arc<AtomicBool>,
 }
 
 impl PohService {
-    pub fn exit(&self) {
-        self.poh_exit.store(true, Ordering::Relaxed);
-    }
-
-    pub fn close(self) -> thread::Result<()> {
-        self.exit();
-        self.join()
-    }
-
     pub fn new(
         poh_recorder: Arc<Mutex<PohRecorder>>,
         config: &PohServiceConfig,
@@ -64,10 +54,7 @@ impl PohService {
             })
             .unwrap();
 
-        Self {
-            tick_producer,
-            poh_exit: poh_exit.clone(),
-        }
+        Self { tick_producer }
     }
 
     fn tick_producer(
@@ -157,7 +144,7 @@ mod tests {
         let poh_service = PohService::new(
             poh_recorder.clone(),
             &PohServiceConfig::Tick(HASHES_PER_TICK as usize),
-            &Arc::new(AtomicBool::new(false)),
+            &exit,
         );
         poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
@@ -192,7 +179,6 @@ mod tests {
             }
         }
         exit.store(true, Ordering::Relaxed);
-        poh_service.exit();
         let _ = poh_service.join().unwrap();
         let _ = entry_producer.join().unwrap();
     }

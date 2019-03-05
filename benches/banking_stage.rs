@@ -9,6 +9,7 @@ use solana::cluster_info::ClusterInfo;
 use solana::cluster_info::Node;
 use solana::packet::to_packets_chunked;
 use solana::poh_recorder::WorkingBankEntries;
+use solana::service::Service;
 use solana_runtime::bank::Bank;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
@@ -17,6 +18,7 @@ use solana_sdk::signature::{KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES};
 use std::iter;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -102,7 +104,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             (x, iter::repeat(1).take(len).collect())
         })
         .collect();
-    let (poh_recorder, poh_service, signal_receiver) = create_test_recorder(&bank);
+    let (exit, poh_recorder, poh_service, signal_receiver) = create_test_recorder(&bank);
     let cluster_info = ClusterInfo::new(Node::new_localhost().info);
     let cluster_info = Arc::new(RwLock::new(cluster_info));
     let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
@@ -127,7 +129,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         start += half_len;
         start %= verified.len();
     });
-    poh_service.close().unwrap();
+    exit.store(true, Ordering::Relaxed);
+    poh_service.join().unwrap();
 }
 
 #[bench]
@@ -208,7 +211,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             (x, iter::repeat(1).take(len).collect())
         })
         .collect();
-    let (poh_recorder, poh_service, signal_receiver) = create_test_recorder(&bank);
+    let (exit, poh_recorder, poh_service, signal_receiver) = create_test_recorder(&bank);
     let cluster_info = ClusterInfo::new(Node::new_localhost().info);
     let cluster_info = Arc::new(RwLock::new(cluster_info));
     let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
@@ -233,5 +236,6 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         start += half_len;
         start %= verified.len();
     });
-    poh_service.close().unwrap();
+    exit.store(true, Ordering::Relaxed);
+    poh_service.join().unwrap();
 }

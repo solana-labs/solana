@@ -67,7 +67,7 @@ fn test_replay() {
     let (s_reader, r_reader) = channel();
     let blob_sockets: Vec<Arc<UdpSocket>> = target2.sockets.tvu.into_iter().map(Arc::new).collect();
 
-    let t_receiver = streamer::blob_receiver(blob_sockets[0].clone(), exit.clone(), s_reader);
+    let t_receiver = streamer::blob_receiver(blob_sockets[0].clone(), &exit, s_reader);
 
     // simulate leader sending messages
     let (s_responder, r_responder) = channel();
@@ -111,7 +111,8 @@ fn test_replay() {
             .expect("Expected to successfully open ledger");
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
-    let (poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
+    let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
+        create_test_recorder(&bank);
     let tvu = Tvu::new(
         Some(Arc::new(voting_keypair)),
         &Arc::new(RwLock::new(bank_forks)),
@@ -185,13 +186,14 @@ fn test_replay() {
     assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
     exit.store(true, Ordering::Relaxed);
-    poh_service.close().expect("close");
-    tvu.join().expect("join");
-    dr_l.join().expect("join");
-    dr_2.join().expect("join");
-    dr_1.join().expect("join");
-    t_receiver.join().expect("join");
-    t_responder.join().expect("join");
+    poh_service_exit.store(true, Ordering::Relaxed);
+    poh_service.join().unwrap();
+    tvu.join().unwrap();
+    dr_l.join().unwrap();
+    dr_2.join().unwrap();
+    dr_1.join().unwrap();
+    t_receiver.join().unwrap();
+    t_responder.join().unwrap();
     Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     let _ignored = remove_dir_all(&blocktree_path);
 }
