@@ -10,7 +10,6 @@ use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
 use log::*;
-use solana_budget_api;
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
@@ -24,9 +23,7 @@ use solana_sdk::storage_program;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES, NUM_TICKS_PER_SECOND};
-use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
-use solana_vote_api;
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState};
 use std::result;
@@ -299,7 +296,7 @@ impl Bank {
         self.add_native_program("solana_storage_program", &storage_program::id());
         self.add_native_program("solana_bpf_loader", &bpf_loader::id());
         self.add_native_program("solana_budget_program", &solana_budget_api::id());
-        self.add_native_program("solana_token_program", &token_program::id());
+        self.add_native_program("solana_token_program", &solana_token_api::id());
     }
 
     /// Return the last block hash registered.
@@ -1275,7 +1272,7 @@ mod tests {
         assert_eq!(bpf_loader::id(), bpf);
         assert_eq!(solana_budget_api::id(), budget);
         assert_eq!(storage_program::id(), storage);
-        assert_eq!(token_program::id(), token);
+        assert_eq!(solana_token_api::id(), token);
         assert_eq!(solana_vote_api::id(), vote);
     }
 
@@ -1288,7 +1285,7 @@ mod tests {
             bpf_loader::id(),
             solana_budget_api::id(),
             storage_program::id(),
-            token_program::id(),
+            solana_token_api::id(),
             solana_vote_api::id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
