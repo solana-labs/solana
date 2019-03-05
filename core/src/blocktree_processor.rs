@@ -388,9 +388,11 @@ mod tests {
             }
         );
 
-        // Ensure bank_forks holds the right banks
+        // Ensure bank_forks holds the right banks, and that everything's
+        //  frozen
         for info in bank_forks_info {
             assert_eq!(bank_forks[info.bank_slot].slot(), info.bank_slot);
+            assert!(bank_forks[info.bank_slot].is_frozen());
         }
     }
 
