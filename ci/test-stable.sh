@@ -26,6 +26,7 @@ test-stable)
 
   _ cargo build --all ${V:+--verbose}
   _ cargo test --all ${V:+--verbose} -- --nocapture --test-threads=1
+  _ cargo test --manifest-path programs/system/Cargo.toml
   ;;
 test-stable-perf)
   echo "Executing $testName"
@@ -68,6 +69,7 @@ test-stable-perf)
   # Run root package library tests
   _ cargo build --all ${V:+--verbose} --features="$ROOT_FEATURES"
   _ cargo test --all --lib ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture --test-threads=1
+  _ cargo test --manifest-path programs/system/Cargo.toml
 
   # Run root package integration tests
   for test in tests/*.rs; do
