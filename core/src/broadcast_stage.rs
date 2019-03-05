@@ -24,9 +24,7 @@ use std::time::{Duration, Instant};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
-    LeaderRotation,
     ChannelDisconnected,
-    ExitSignal,
 }
 
 struct Broadcast {
@@ -179,7 +177,6 @@ impl BroadcastStage {
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         receiver: &Receiver<WorkingBankEntries>,
-        exit_signal: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
     ) -> BroadcastStageReturnType {
         let me = cluster_info.read().unwrap().my_data().clone();
@@ -191,9 +188,6 @@ impl BroadcastStage {
         };
 
         loop {
-            if exit_signal.load(Ordering::Relaxed) {
-                return BroadcastStageReturnType::ExitSignal;
-            }
             if let Err(e) = broadcast.run(&cluster_info, receiver, sock, blocktree) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
@@ -233,13 +227,12 @@ impl BroadcastStage {
         exit_sender: Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
     ) -> Self {
-        let exit_signal = Arc::new(AtomicBool::new(false));
         let blocktree = blocktree.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
-                Self::run(&sock, &cluster_info, &receiver, &exit_signal, &blocktree)
+                Self::run(&sock, &cluster_info, &receiver, &blocktree)
             })
             .unwrap();
 
