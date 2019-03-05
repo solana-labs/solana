@@ -80,7 +80,7 @@ fn create_and_fund_vote_account(
     let vote_account_user_data = client.get_account_userdata(&vote_account);
     if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
         if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
-            if vote_state.delegate_id == pubkey {
+            if vote_state.delegate_id == vote_account {
                 return Ok(());
             }
         }
