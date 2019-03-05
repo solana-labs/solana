@@ -85,7 +85,7 @@ pub fn entrypoint(
         trace!("process_instruction: {:?}", syscall);
         trace!("keyed_accounts: {:?}", keyed_accounts);
 
-        // all system instructions require that accounts_keys[0] be a signer
+        // All system instructions require that accounts_keys[0] be a signer
         if keyed_accounts[FROM_ACCOUNT_INDEX].signer_key().is_none() {
             info!("account[from] is unsigned");
             Err(ProgramError::InvalidArgument)?;
@@ -145,14 +145,16 @@ mod tests {
         assert_eq!(to_owner, new_program_owner);
         assert_eq!(to_userdata, [0, 0]);
 
-        // Attempt to move more tokens than remaining in from_account
+        // Attempt to create account with more tokens than remaining in from_account
+        let to = Keypair::new().pubkey();
+        let mut to_account = Account::new(0, 0, Pubkey::default());
         let unchanged_account = to_account.clone();
         keyed_accounts = [
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&to, false, &mut to_account),
         ];
-        let result = move_tokens(&mut keyed_accounts, 100);
-        assert!(result.is_err());
+        let result = create_system_account(&mut keyed_accounts, 100, 2, new_program_owner);
+        assert_eq!(result, Err(SystemError::ResultWithNegativeTokens));
         let from_tokens = from_account.tokens;
         assert_eq!(from_tokens, 50);
         assert_eq!(to_account, unchanged_account);
@@ -167,7 +169,7 @@ mod tests {
             KeyedAccount::new(&owned_key, false, &mut owned_account),
         ];
         let result = create_system_account(&mut keyed_accounts, 50, 2, new_program_owner);
-        assert!(result.is_err());
+        assert_eq!(result, Err(SystemError::AccountAlreadyInUse));
         let from_tokens = from_account.tokens;
         assert_eq!(from_tokens, 50);
         assert_eq!(owned_account, unchanged_account);
@@ -186,9 +188,25 @@ mod tests {
             KeyedAccount::new(&populated_key, false, &mut populated_account),
         ];
         let result = create_system_account(&mut keyed_accounts, 50, 2, new_program_owner);
-        assert!(result.is_err());
+        assert_eq!(result, Err(SystemError::AccountAlreadyInUse));
         assert_eq!(from_account.tokens, 50);
         assert_eq!(populated_account, unchanged_account);
+    }
+
+    #[test]
+    fn test_create_not_system_account() {
+        let other_program = Pubkey::new(&[9; 32]);
+
+        let from = Keypair::new().pubkey();
+        let mut from_account = Account::new(100, 0, other_program);
+        let to = Keypair::new().pubkey();
+        let mut to_account = Account::new(0, 0, Pubkey::default());
+        let mut keyed_accounts = [
+            KeyedAccount::new(&from, true, &mut from_account),
+            KeyedAccount::new(&to, false, &mut to_account),
+        ];
+        let result = create_system_account(&mut keyed_accounts, 50, 2, other_program);
+        assert_eq!(result, Err(SystemError::SourceNotSystemAccount));
     }
 
     #[test]
@@ -206,7 +224,7 @@ mod tests {
         let another_program_owner = Pubkey::new(&[8; 32]);
         keyed_accounts = [KeyedAccount::new(&from, true, &mut from_account)];
         let result = assign_account_to_program(&mut keyed_accounts, another_program_owner);
-        assert!(result.is_err());
+        assert_eq!(result, Err(ProgramError::AssignOfUnownedAccount));
         assert_eq!(from_account.owner, new_program_owner);
     }
 
@@ -232,7 +250,7 @@ mod tests {
             KeyedAccount::new(&to, false, &mut to_account),
         ];
         let result = move_tokens(&mut keyed_accounts, 100);
-        assert!(result.is_err());
+        assert_eq!(result, Err(ProgramError::ResultWithNegativeTokens));
         assert_eq!(from_account.tokens, 50);
         assert_eq!(to_account.tokens, 51);
     }
