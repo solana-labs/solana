@@ -102,19 +102,15 @@ impl WindowService {
         r: BlobReceiver,
         retransmit: BlobSender,
         repair_socket: Arc<UdpSocket>,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
     ) -> WindowService {
-        let exit_ = exit.clone();
-        let repair_service = RepairService::new(
-            blocktree.clone(),
-            exit.clone(),
-            repair_socket,
-            cluster_info.clone(),
-        );
+        let repair_service =
+            RepairService::new(blocktree.clone(), exit, repair_socket, cluster_info.clone());
+        let exit = exit.clone();
         let t_window = Builder::new()
             .name("solana-window".to_string())
             .spawn(move || {
-                let _exit = Finalizer::new(exit_);
+                let _exit = Finalizer::new(exit.clone());
                 let id = cluster_info.read().unwrap().id();
                 trace!("{}: RECV_WINDOW started", id);
                 loop {
@@ -182,8 +178,7 @@ mod test {
         let subs = Arc::new(RwLock::new(cluster_info_me));
 
         let (s_reader, r_reader) = channel();
-        let t_receiver =
-            blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
+        let t_receiver = blob_receiver(Arc::new(leader_node.sockets.gossip), &exit, s_reader);
         let (s_retransmit, r_retransmit) = channel();
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Arc::new(
@@ -195,7 +190,7 @@ mod test {
             r_reader,
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
-            exit.clone(),
+            &exit,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -254,8 +249,7 @@ mod test {
         let subs = Arc::new(RwLock::new(cluster_info_me));
 
         let (s_reader, r_reader) = channel();
-        let t_receiver =
-            blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
+        let t_receiver = blob_receiver(Arc::new(leader_node.sockets.gossip), &exit, s_reader);
         let (s_retransmit, r_retransmit) = channel();
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Arc::new(
@@ -267,7 +261,7 @@ mod test {
             r_reader,
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
-            exit.clone(),
+            &exit,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();

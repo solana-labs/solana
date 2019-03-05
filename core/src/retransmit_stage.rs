@@ -113,7 +113,7 @@ impl RetransmitStage {
         retransmit_socket: Arc<UdpSocket>,
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: BlobReceiver,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 

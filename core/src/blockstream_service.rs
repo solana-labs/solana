@@ -27,9 +27,10 @@ impl BlockstreamService {
         slot_full_receiver: Receiver<(u64, Pubkey)>,
         blocktree: Arc<Blocktree>,
         blockstream_socket: String,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
     ) -> Self {
         let mut blockstream = Blockstream::new(blockstream_socket);
+        let exit = exit.clone();
         let t_blockstream = Builder::new()
             .name("solana-blockstream".to_string())
             .spawn(move || loop {

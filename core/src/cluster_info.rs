@@ -868,8 +868,9 @@ impl ClusterInfo {
         obj: Arc<RwLock<Self>>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         blob_sender: BlobSender,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
+        let exit = exit.clone();
         Builder::new()
             .name("solana-gossip".to_string())
             .spawn(move || {
@@ -1243,8 +1244,9 @@ impl ClusterInfo {
         blocktree: Option<Arc<Blocktree>>,
         requests_receiver: BlobReceiver,
         response_sender: BlobSender,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
+        let exit = exit.clone();
         Builder::new()
             .name("solana-listen".to_string())
             .spawn(move || loop {

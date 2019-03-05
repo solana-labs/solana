@@ -19,7 +19,7 @@ pub type BlobReceiver = Receiver<SharedBlobs>;
 
 fn recv_loop(
     sock: &UdpSocket,
-    exit: &Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
     channel: &PacketSender,
     channel_tag: &'static str,
 ) -> Result<()> {
@@ -47,7 +47,7 @@ fn recv_loop(
 
 pub fn receiver(
     sock: Arc<UdpSocket>,
-    exit: Arc<AtomicBool>,
+    exit: &Arc<AtomicBool>,
     packet_sender: PacketSender,
     sender_tag: &'static str,
 ) -> JoinHandle<()> {
@@ -55,10 +55,11 @@ pub fn receiver(
     if res.is_err() {
         panic!("streamer::receiver set_read_timeout error");
     }
+    let exit = exit.clone();
     Builder::new()
         .name("solana-receiver".to_string())
         .spawn(move || {
-            let _ = recv_loop(&sock, &exit, &packet_sender, sender_tag);
+            let _ = recv_loop(&sock, exit, &packet_sender, sender_tag);
         })
         .unwrap()
 }
@@ -116,12 +117,17 @@ fn recv_blobs(sock: &UdpSocket, s: &BlobSender) -> Result<()> {
     Ok(())
 }
 
-pub fn blob_receiver(sock: Arc<UdpSocket>, exit: Arc<AtomicBool>, s: BlobSender) -> JoinHandle<()> {
+pub fn blob_receiver(
+    sock: Arc<UdpSocket>,
+    exit: &Arc<AtomicBool>,
+    s: BlobSender,
+) -> JoinHandle<()> {
     //DOCUMENTED SIDE-EFFECT
     //1 second timeout on socket read
     let timer = Duration::new(1, 0);
     sock.set_read_timeout(Some(timer))
         .expect("set socket timeout");
+    let exit = exit.clone();
     Builder::new()
         .name("solana-blob_receiver".to_string())
         .spawn(move || loop {
@@ -173,7 +179,7 @@ mod test {
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(Arc::new(read), exit.clone(), s_reader, "streamer-test");
+        let t_receiver = receiver(Arc::new(read), &exit, s_reader, "streamer-test");
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);

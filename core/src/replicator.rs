@@ -171,8 +171,7 @@ impl Replicator {
             node.sockets.tvu.into_iter().map(Arc::new).collect();
         blob_sockets.push(repair_socket.clone());
         let (blob_fetch_sender, blob_fetch_receiver) = channel();
-        let fetch_stage =
-            BlobFetchStage::new_multi_socket(blob_sockets, &blob_fetch_sender, exit.clone());
+        let fetch_stage = BlobFetchStage::new_multi_socket(blob_sockets, &blob_fetch_sender, &exit);
 
         // todo: pull blobs off the retransmit_receiver and recycle them?
         let (retransmit_sender, retransmit_receiver) = channel();
@@ -183,7 +182,7 @@ impl Replicator {
             blob_fetch_receiver,
             retransmit_sender,
             repair_socket,
-            exit.clone(),
+            &exit,
         );
 
         info!("window created, waiting for ledger download done");
