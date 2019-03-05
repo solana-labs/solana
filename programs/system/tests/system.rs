@@ -59,9 +59,9 @@ fn test_create_cannot_overwrite_used_account() {
     );
 
     // create_account on an initialized account should fail
-    system_bank
+    assert!(system_bank
         .create_account(&from_keypair, other_account, 100)
-        .unwrap();
+        .is_err());
     assert_eq!(system_bank.bank.get_balance(&other_account), 1);
     assert_eq!(
         system_bank.bank.get_account(&other_account).unwrap().owner,
