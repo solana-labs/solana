@@ -26,7 +26,7 @@ impl GossipService {
         blocktree: Option<Arc<Blocktree>>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         gossip_socket: UdpSocket,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
     ) -> Self {
         let (request_sender, request_receiver) = channel();
         let gossip_socket = Arc::new(gossip_socket);
@@ -53,7 +53,10 @@ impl GossipService {
             exit.clone(),
         );
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
-        Self { exit, thread_hdls }
+        Self {
+            exit: exit.clone(),
+            thread_hdls,
+        }
     }
 
     pub fn close(self) -> thread::Result<()> {
@@ -83,7 +86,7 @@ pub fn make_listening_node(
             .gossip
             .try_clone()
             .expect("Failed to clone gossip"),
-        exit.clone(),
+        &exit,
     );
 
     (gossip_service, new_node_cluster_info_ref, new_node, id)
@@ -141,13 +144,8 @@ pub fn make_spy_node(leader: &NodeInfo) -> (GossipService, Arc<RwLock<ClusterInf
     spy_cluster_info.insert_info(leader.clone());
     spy_cluster_info.set_leader(leader.id);
     let spy_cluster_info_ref = Arc::new(RwLock::new(spy_cluster_info));
-    let gossip_service = GossipService::new(
-        &spy_cluster_info_ref,
-        None,
-        None,
-        spy.sockets.gossip,
-        exit.clone(),
-    );
+    let gossip_service =
+        GossipService::new(&spy_cluster_info_ref, None, None, spy.sockets.gossip, &exit);
 
     (gossip_service, spy_cluster_info_ref, id)
 }
@@ -178,7 +176,7 @@ mod tests {
         let tn = Node::new_localhost();
         let cluster_info = ClusterInfo::new(tn.info.clone());
         let c = Arc::new(RwLock::new(cluster_info));
-        let d = GossipService::new(&c, None, None, tn.sockets.gossip, exit.clone());
+        let d = GossipService::new(&c, None, None, tn.sockets.gossip, &exit);
         d.close().expect("thread join");
     }
 }

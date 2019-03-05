@@ -150,7 +150,7 @@ impl Replicator {
             Some(blocktree.clone()),
             None,
             node.sockets.gossip,
-            exit.clone(),
+            &exit,
         );
 
         info!("polling for leader");
