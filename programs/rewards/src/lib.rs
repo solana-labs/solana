@@ -110,18 +110,9 @@ mod tests {
 
     #[test]
     fn test_redeem_vote_credits_via_program() {
-        let staker_id = Keypair::new().pubkey();
-        let mut staker_account = Account::new(100, 0, Pubkey::default());
-
         let vote_id = Keypair::new().pubkey();
         let mut vote_account = vote_state::create_vote_account(100);
-        vote_state::initialize_and_deserialize(
-            &staker_id,
-            &mut staker_account,
-            &vote_id,
-            &mut vote_account,
-        )
-        .unwrap();
+        vote_state::initialize_and_deserialize(&vote_id, &mut vote_account).unwrap();
 
         for i in 0..vote_state::MAX_LOCKOUT_HISTORY {
             let vote = Vote::new(i as u64);

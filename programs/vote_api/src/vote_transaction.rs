@@ -48,7 +48,7 @@ impl VoteTransaction {
             vec![system_program::id(), id()],
             vec![
                 Instruction::new(0, &create_tx, vec![0, 1]),
-                Instruction::new(1, &VoteInstruction::InitializeAccount, vec![0, 1]),
+                Instruction::new(1, &VoteInstruction::InitializeAccount, vec![1]),
             ],
         )
     }

@@ -19,8 +19,7 @@ impl Vote {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {
     /// Initialize the VoteState for this `vote account`
-    /// * Transaction::keys[0] - the staker id that is also assumed to be the delegate by default
-    /// * Transaction::keys[1] - the new "vote account" to be associated with the delegate
+    /// * Instruction::keys[0] - the new "vote account" to be associated with the delegate
     InitializeAccount,
     /// `Delegate` or `Assign` a vote account to a particular node
     DelegateStake(Pubkey),
@@ -41,11 +40,11 @@ impl VoteInstruction {
             vec![(vote_id, true)],
         )
     }
-    pub fn new_initialize_account(vote_id: Pubkey, staker_id: Pubkey) -> BuilderInstruction {
+    pub fn new_initialize_account(vote_id: Pubkey) -> BuilderInstruction {
         BuilderInstruction::new(
             id(),
             &VoteInstruction::InitializeAccount,
-            vec![(staker_id, true), (vote_id, false)],
+            vec![(vote_id, false)],
         )
     }
     pub fn new_vote(vote_id: Pubkey, vote: Vote) -> BuilderInstruction {
