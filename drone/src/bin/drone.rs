@@ -77,7 +77,7 @@ fn main() -> Result<(), Box<error::Error>> {
     info!("Drone started. Listening on: {}", drone_addr);
     let done = socket
         .incoming()
-        .map_err(|e| println!("failed to accept socket; error = {:?}", e))
+        .map_err(|e| warn!("failed to accept socket; error = {:?}", e))
         .for_each(move |socket| {
             let drone2 = drone.clone();
             let framed = BytesCodec::new().framed(socket);

@@ -45,7 +45,7 @@ fn bench_sigs_bloom(bencher: &mut Bencher) {
     // 1.0E-8 false positive rate
     // https://hur.st/bloomfilter/?n=1000000&p=1.0E-8&m=&k=
     let blockhash = hash(Hash::default().as_ref());
-    //    eprintln!("blockhash = {:?}", blockhash);
+    //    info!("blockhash = {:?}", blockhash);
     let keys = (0..27)
         .into_iter()
         .map(|i| blockhash.hash_at_index(i))
@@ -77,7 +77,7 @@ fn bench_sigs_bloom(bencher: &mut Bencher) {
 fn bench_sigs_hashmap(bencher: &mut Bencher) {
     // same structure as above, new
     let blockhash = hash(Hash::default().as_ref());
-    //    eprintln!("blockhash = {:?}", blockhash);
+    //    info!("blockhash = {:?}", blockhash);
     let mut sigs: HashSet<Signature> = HashSet::new();
 
     let mut id = blockhash;
