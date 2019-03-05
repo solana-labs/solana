@@ -7,6 +7,7 @@ import {
   SystemProgram,
   sendAndConfirmTransaction,
 } from '../src';
+import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
 import {url} from './url';
@@ -114,7 +115,7 @@ test('get transaction count', async () => {
   expect(count).toBeGreaterThanOrEqual(0);
 });
 
-test('get last Id', async () => {
+test('get recent blockhash', async () => {
   const connection = new Connection(url);
 
   mockGetRecentBlockhash();
@@ -450,12 +451,10 @@ test('account change notification', async () => {
   const loader = new Loader(connection, BpfLoader.programId);
   await loader.load(programAccount, [1, 2, 3]);
 
-  // mockCallback should be called twice
-  //
-  // retry a couple times if needed
+  // Wait for mockCallback to receive a call
   let i = 0;
   for (;;) {
-    if (mockCallback.mock.calls.length === 2) {
+    if (mockCallback.mock.calls.length === 1) {
       break;
     }
 
@@ -463,21 +462,17 @@ test('account change notification', async () => {
       console.log(JSON.stringify(mockCallback.mock.calls));
       throw new Error('mockCallback should be called twice');
     }
-    await sleep(500);
+    // Sleep for a 1/4 of a slot, notifications only occur after a block is
+    // processed
+    await sleep((250 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
   }
 
   await connection.removeAccountChangeListener(subscriptionId);
 
-  // First mockCallback call is due to SystemProgram.createAccount()
-  expect(mockCallback.mock.calls[0][0].tokens).toBe(42);
+  expect(mockCallback.mock.calls[0][0].tokens).toBe(41);
+  expect(mockCallback.mock.calls[0][0].owner).toEqual(BpfLoader.programId);
   expect(mockCallback.mock.calls[0][0].executable).toBe(false);
   expect(mockCallback.mock.calls[0][0].userdata).toEqual(
-    Buffer.from([0, 0, 0]),
-  );
-  expect(mockCallback.mock.calls[0][0].owner).toEqual(BpfLoader.programId);
-
-  // Second mockCallback call is due to loader.load()
-  expect(mockCallback.mock.calls[1][0].userdata).toEqual(
     Buffer.from([1, 2, 3]),
   );
 });
