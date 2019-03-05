@@ -57,13 +57,13 @@ impl JsonRpcRequestProcessor {
     pub fn new(
         storage_state: StorageState,
         config: JsonRpcConfig,
-        fullnode_exit: Arc<AtomicBool>,
+        fullnode_exit: &Arc<AtomicBool>,
     ) -> Self {
         JsonRpcRequestProcessor {
             bank: None,
             storage_state,
             config,
-            fullnode_exit,
+            fullnode_exit: fullnode_exit.clone(),
         }
     }
 
@@ -428,7 +428,7 @@ mod tests {
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::default(),
-            exit,
+            &exit,
         )));
         request_processor.write().unwrap().set_bank(&bank);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
@@ -458,7 +458,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let exit = Arc::new(AtomicBool::new(false));
         let mut request_processor =
-            JsonRpcRequestProcessor::new(StorageState::default(), JsonRpcConfig::default(), exit);
+            JsonRpcRequestProcessor::new(StorageState::default(), JsonRpcConfig::default(), &exit);
         request_processor.set_bank(&bank);
         thread::spawn(move || {
             let blockhash = bank.last_blockhash();
@@ -631,7 +631,7 @@ mod tests {
                 let mut request_processor = JsonRpcRequestProcessor::new(
                     StorageState::default(),
                     JsonRpcConfig::default(),
-                    exit,
+                    &exit,
                 );
                 request_processor.set_bank(&bank);
                 Arc::new(RwLock::new(request_processor))
@@ -707,11 +707,8 @@ mod tests {
     #[test]
     fn test_rpc_request_processor_config_default_trait_fullnode_exit_fails() {
         let exit = Arc::new(AtomicBool::new(false));
-        let request_processor = JsonRpcRequestProcessor::new(
-            StorageState::default(),
-            JsonRpcConfig::default(),
-            exit.clone(),
-        );
+        let request_processor =
+            JsonRpcRequestProcessor::new(StorageState::default(), JsonRpcConfig::default(), &exit);
         assert_eq!(request_processor.fullnode_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
     }
@@ -721,7 +718,7 @@ mod tests {
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::DefaultConfig,
-            exit.clone(),
+            &exit,
         );
         assert_eq!(request_processor.fullnode_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
@@ -733,7 +730,7 @@ mod tests {
         let request_processor = JsonRpcRequestProcessor::new(
             StorageState::default(),
             JsonRpcConfig::TestOnlyAllowRpcFullnodeExit,
-            exit.clone(),
+            &exit,
         );
         assert_eq!(request_processor.fullnode_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);

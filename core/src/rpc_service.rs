@@ -17,7 +17,6 @@ pub const RPC_PORT: u16 = 8899;
 
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
-    exit: Arc<AtomicBool>,
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>, // Used only by tests...
 }
 
@@ -28,13 +27,13 @@ impl JsonRpcService {
         drone_addr: SocketAddr,
         storage_state: StorageState,
         config: JsonRpcConfig,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             storage_state,
             config,
-            exit.clone(),
+            exit,
         )));
         let request_processor_ = request_processor.clone();
 
@@ -71,22 +70,12 @@ impl JsonRpcService {
             .unwrap();
         Self {
             thread_hdl,
-            exit,
             request_processor,
         }
     }
 
     pub fn set_bank(&mut self, bank: &Arc<Bank>) {
         self.request_processor.write().unwrap().set_bank(bank);
-    }
-
-    pub fn exit(&self) {
-        self.exit.store(true, Ordering::Relaxed);
-    }
-
-    pub fn close(self) -> thread::Result<()> {
-        self.exit();
-        self.join()
     }
 }
 
@@ -127,7 +116,7 @@ mod tests {
             drone_addr,
             StorageState::default(),
             JsonRpcConfig::default(),
-            exit,
+            &exit,
         );
         rpc_service.set_bank(&Arc::new(bank));
         let thread = rpc_service.thread_hdl.thread();
@@ -142,7 +131,7 @@ mod tests {
                 .get_balance(alice.pubkey())
                 .unwrap()
         );
-
-        rpc_service.close().unwrap();
+        exit.store(true, Ordering::Relaxed);
+        rpc_service.join().unwrap();
     }
 }
