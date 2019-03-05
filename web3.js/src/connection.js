@@ -7,8 +7,9 @@ import jayson from 'jayson/lib/client/browser';
 import {struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 
-import {Transaction} from './transaction';
+import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from './timing';
 import {PublicKey} from './publickey';
+import {Transaction} from './transaction';
 import {sleep} from './util/sleep';
 import type {Blockhash} from './blockhash';
 import type {Account} from './account';
@@ -351,11 +352,11 @@ export class Connection {
     ...signers: Array<Account>
   ): Promise<TransactionSignature> {
     for (;;) {
-      // Attempt to use the previous last id for up to 1 second
+      // Attempt to use a recent blockhash for up to 30 seconds
       const seconds = new Date().getSeconds();
       if (
         this._blockhashInfo.recentBlockhash != null &&
-        this._blockhashInfo.seconds === seconds
+        this._blockhashInfo.seconds < seconds + 30
       ) {
         transaction.recentBlockhash = this._blockhashInfo.recentBlockhash;
         transaction.sign(...signers);
@@ -375,7 +376,7 @@ export class Connection {
         }
       }
 
-      // Fetch a new last id
+      // Fetch a new blockhash
       let attempts = 0;
       const startTime = Date.now();
       for (;;) {
@@ -391,10 +392,14 @@ export class Connection {
         }
         if (attempts === 16) {
           throw new Error(
-            `Unable to obtain a new last id after ${Date.now() - startTime}ms`,
+            `Unable to obtain a new blockhash after ${Date.now() -
+              startTime}ms`,
           );
         }
-        await sleep(250);
+
+        // Sleep for approximately half a slot
+        await sleep((500 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
+
         ++attempts;
       }
     }
