@@ -220,6 +220,7 @@ impl AccountsDB {
         if let Some(parent) = parent {
             fork_info.parents.push(parent);
             if let Some(parent_fork_info) = fork_infos.get(&parent) {
+                fork_info.transaction_count = parent_fork_info.transaction_count;
                 fork_info
                     .parents
                     .extend_from_slice(&parent_fork_info.parents);
@@ -720,10 +721,6 @@ impl AccountsDB {
     /// make fork a root, i.e. forget its heritage
     fn squash(&self, fork: Fork) {
         let parents = self.remove_parents(fork);
-        let tx_count = parents
-            .iter()
-            .fold(0, |sum, parent| sum + self.transaction_count(*parent));
-        self.increment_transaction_count(fork, tx_count as usize);
 
         // for every account in all the parents, load latest and update self if
         // absent
@@ -1782,5 +1779,25 @@ mod tests {
             Err(BankError::AccountNotFound)
         );
         assert_eq!(error_counters.account_not_found, 1);
+    }
+
+    #[test]
+    fn test_accountsdb_inherit_tx_count() {
+        let paths = get_tmp_accounts_path!();
+        let accounts = AccountsDB::new(0, &paths.paths);
+        cleanup_paths(&paths.paths);
+        assert_eq!(accounts.transaction_count(0), 0);
+        accounts.increment_transaction_count(0, 1);
+        assert_eq!(accounts.transaction_count(0), 1);
+        // fork and check that tx count is inherited
+        accounts.add_fork(1, Some(0));
+        assert_eq!(accounts.transaction_count(1), 1);
+        // Parent fork shouldn't change
+        accounts.increment_transaction_count(1, 1);
+        assert_eq!(accounts.transaction_count(1), 2);
+        assert_eq!(accounts.transaction_count(0), 1);
+        // Squash shouldn't effect tx count
+        accounts.squash(1);
+        assert_eq!(accounts.transaction_count(1), 2);
     }
 }
