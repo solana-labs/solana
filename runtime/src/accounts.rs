@@ -55,7 +55,7 @@ pub struct ErrorCounters {
 // The only required in memory data structure with a write lock is the index,
 // which should be fast to update.
 //
-// To garbage collect, data can be re-appended to defragmnted and truncated from
+// To garbage collect, data can be re-appended to defragmented and truncated from
 // the start. The AccountsDB data structure would allow for
 // - multiple readers
 // - multiple writers
