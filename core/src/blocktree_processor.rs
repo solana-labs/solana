@@ -121,7 +121,7 @@ pub fn process_blocktree(
         let meta = blocktree
             .meta(slot)
             .map_err(|err| {
-                eprintln!("Failed to load meta for slot {}: {:?}", slot, err);
+                warn!("Failed to load meta for slot {}: {:?}", slot, err);
                 BankError::LedgerVerificationFailed
             })?
             .unwrap();
@@ -194,7 +194,7 @@ pub fn process_blocktree(
             let next_meta = blocktree
                 .meta(next_slot)
                 .map_err(|err| {
-                    eprintln!("Failed to load meta for slot {}: {:?}", slot, err);
+                    warn!("Failed to load meta for slot {}: {:?}", slot, err);
                     BankError::LedgerVerificationFailed
                 })?
                 .unwrap();
