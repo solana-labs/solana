@@ -11,7 +11,7 @@ set -e
 PATH=$PWD/target/debug:$PATH
 
 ok=true
-for program in solana-{genesis,keygen,fullnode{,-config}}; do
+for program in solana-{genesis,keygen,fullnode}; do
   $program -V || ok=false
 done
 $ok || {
