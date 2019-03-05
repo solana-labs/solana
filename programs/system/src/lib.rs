@@ -99,10 +99,11 @@ pub fn entrypoint(
             } => {
                 create_system_account(keyed_accounts, tokens, space, program_id).map_err(
                     |e| match e {
+                        SystemError::AccountAlreadyInUse => ProgramError::InvalidArgument,
                         SystemError::ResultWithNegativeTokens => {
                             ProgramError::ResultWithNegativeTokens
                         }
-                        _ => ProgramError::InvalidArgument,
+                        SystemError::SourceNotSystemAccount => ProgramError::InvalidArgument,
                     },
                 )
             }
@@ -126,11 +127,12 @@ mod tests {
     #[test]
     fn test_create_system_account() {
         let new_program_owner = Pubkey::new(&[9; 32]);
-
         let from = Keypair::new().pubkey();
         let mut from_account = Account::new(100, 0, system_program::id());
+
         let to = Keypair::new().pubkey();
         let mut to_account = Account::new(0, 0, Pubkey::default());
+
         let mut keyed_accounts = [
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&to, false, &mut to_account),
@@ -144,37 +146,60 @@ mod tests {
         assert_eq!(to_tokens, 50);
         assert_eq!(to_owner, new_program_owner);
         assert_eq!(to_userdata, [0, 0]);
+    }
 
+    #[test]
+    fn test_create_negative_tokens() {
         // Attempt to create account with more tokens than remaining in from_account
+        let new_program_owner = Pubkey::new(&[9; 32]);
+        let from = Keypair::new().pubkey();
+        let mut from_account = Account::new(100, 0, system_program::id());
+
         let to = Keypair::new().pubkey();
         let mut to_account = Account::new(0, 0, Pubkey::default());
         let unchanged_account = to_account.clone();
-        keyed_accounts = [
+
+        let mut keyed_accounts = [
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&to, false, &mut to_account),
         ];
-        let result = create_system_account(&mut keyed_accounts, 100, 2, new_program_owner);
+        let result = create_system_account(&mut keyed_accounts, 150, 2, new_program_owner);
         assert_eq!(result, Err(SystemError::ResultWithNegativeTokens));
         let from_tokens = from_account.tokens;
-        assert_eq!(from_tokens, 50);
+        assert_eq!(from_tokens, 100);
         assert_eq!(to_account, unchanged_account);
+    }
 
+    #[test]
+    fn test_create_already_owned() {
         // Attempt to create system account in account already owned by another program
+        let new_program_owner = Pubkey::new(&[9; 32]);
+        let from = Keypair::new().pubkey();
+        let mut from_account = Account::new(100, 0, system_program::id());
+
         let original_program_owner = Pubkey::new(&[5; 32]);
         let owned_key = Keypair::new().pubkey();
         let mut owned_account = Account::new(0, 0, original_program_owner);
         let unchanged_account = owned_account.clone();
-        keyed_accounts = [
+
+        let mut keyed_accounts = [
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&owned_key, false, &mut owned_account),
         ];
         let result = create_system_account(&mut keyed_accounts, 50, 2, new_program_owner);
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse));
         let from_tokens = from_account.tokens;
-        assert_eq!(from_tokens, 50);
+        assert_eq!(from_tokens, 100);
         assert_eq!(owned_account, unchanged_account);
+    }
 
+    #[test]
+    fn test_create_userdata_populated() {
         // Attempt to create system account in account with populated userdata
+        let new_program_owner = Pubkey::new(&[9; 32]);
+        let from = Keypair::new().pubkey();
+        let mut from_account = Account::new(100, 0, system_program::id());
+
         let populated_key = Keypair::new().pubkey();
         let mut populated_account = Account {
             tokens: 0,
@@ -183,13 +208,14 @@ mod tests {
             executable: false,
         };
         let unchanged_account = populated_account.clone();
-        keyed_accounts = [
+
+        let mut keyed_accounts = [
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&populated_key, false, &mut populated_account),
         ];
         let result = create_system_account(&mut keyed_accounts, 50, 2, new_program_owner);
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse));
-        assert_eq!(from_account.tokens, 50);
+        assert_eq!(from_account.tokens, 100);
         assert_eq!(populated_account, unchanged_account);
     }
 
