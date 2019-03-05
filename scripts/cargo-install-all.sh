@@ -22,12 +22,12 @@ SECONDS=0
 )
 
 BIN_CRATES=(
-  drone
-  keygen
-  fullnode
   bench-streamer
   bench-tps
+  drone
+  fullnode
   genesis
+  keygen
   ledger-tool
   wallet
 )
@@ -39,7 +39,7 @@ for crate in "${BIN_CRATES[@]}"; do
   )
 done
 
-for dir in programs/native/*; do
+for dir in programs/*; do
   for program in echo target/release/deps/lib{,solana_}"$(basename "$dir")"{,_program}.{so,dylib,dll}; do
     if [[ -f $program ]]; then
       mkdir -p "$installDir/bin/deps"
