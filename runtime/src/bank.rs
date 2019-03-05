@@ -771,12 +771,7 @@ impl Bank {
         self.tick_height.load(Ordering::SeqCst) as u64
     }
 
-    /// Return the number of ticks since the last slot boundary.
-    pub fn tick_index(&self) -> u64 {
-        self.tick_height() % self.ticks_per_slot()
-    }
-
-    /// Return the number of slots per tick.
+    /// Return the number of slots per epoch for this epoch
     pub fn slots_per_epoch(&self) -> u64 {
         self.slots_per_epoch
     }
@@ -796,16 +791,6 @@ impl Bank {
     pub fn epoch_vote_accounts(&self, epoch: u64) -> Option<&HashMap<Pubkey, Account>> {
         self.epoch_vote_accounts.get(&epoch)
     }
-
-    /// Return the number of slots since the last epoch boundary.
-    pub fn slot_index(&self) -> u64 {
-        self.slot() % self.slots_per_epoch()
-    }
-
-    /// Return the epoch height of the last registered tick.
-    pub fn epoch_height(&self) -> u64 {
-        self.slot() / self.slots_per_epoch()
-    }
 }
 
 #[cfg(test)]
@@ -814,7 +799,6 @@ mod tests {
     use bincode::serialize;
     use hashbrown::HashSet;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
-    use solana_sdk::hash::hash;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
@@ -1157,53 +1141,6 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.get_balance(&genesis_block.mint_id), 2);
         assert_eq!(bank.get_balance(&dummy_leader_id), 2);
-    }
-
-    // Register n ticks and return the tick, slot and epoch indexes.
-    fn register_ticks(bank: &mut Arc<Bank>, tick_hash: &mut Hash, n: u64) -> (u64, u64, u64) {
-        let mut max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
-        for _ in 0..n {
-            if bank.tick_height() == max_tick_height {
-                *bank = Arc::new(Bank::new_from_parent(
-                    &bank,
-                    Pubkey::default(),
-                    bank.slot() + 1,
-                ));
-                max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
-            }
-
-            *tick_hash = hash(&serialize(tick_hash).unwrap());
-            bank.register_tick(&tick_hash);
-        }
-        (bank.tick_index(), bank.slot_index(), bank.epoch_height())
-    }
-
-    #[test]
-    fn test_tick_slot_epoch_indexes() {
-        let (genesis_block, _) = GenesisBlock::new(5);
-        let mut tick_hash = genesis_block.hash();
-        let mut bank = Arc::new(Bank::new(&genesis_block));
-        let ticks_per_slot = bank.ticks_per_slot();
-        let slots_per_epoch = bank.slots_per_epoch();
-        let ticks_per_epoch = ticks_per_slot * slots_per_epoch;
-
-        // All indexes are zero-based.
-        assert_eq!(register_ticks(&mut bank, &mut tick_hash, 0), (0, 0, 0));
-
-        // Slot index remains zero through the last tick.
-        assert_eq!(
-            register_ticks(&mut bank, &mut tick_hash, ticks_per_slot - 1),
-            (ticks_per_slot - 1, 0, 0)
-        );
-
-        // Cross a slot boundary.
-        assert_eq!(register_ticks(&mut bank, &mut tick_hash, 1), (0, 1, 0));
-
-        // Cross an epoch boundary.
-        assert_eq!(
-            register_ticks(&mut bank, &mut tick_hash, ticks_per_epoch),
-            (0, 1, 1)
-        );
     }
 
     #[test]
