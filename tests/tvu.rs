@@ -17,7 +17,6 @@ use solana::storage_stage::StorageState;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer;
 use solana::tvu::{Sockets, Tvu};
-use solana::voting_keypair::VotingKeypair;
 use solana_runtime::bank::Bank;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -109,8 +108,7 @@ fn test_replay() {
     let (blocktree, ledger_signal_receiver) =
         Blocktree::open_with_config_signal(&blocktree_path, ticks_per_slot)
             .expect("Expected to successfully open ledger");
-    let vote_account_keypair = Arc::new(Keypair::new());
-    let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
+    let voting_keypair = Keypair::new();
     let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
         create_test_recorder(&bank);
     let tvu = Tvu::new(

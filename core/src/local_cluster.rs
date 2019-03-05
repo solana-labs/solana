@@ -6,7 +6,6 @@ use crate::gossip_service::discover;
 use crate::service::Service;
 use crate::thin_client::retry_get_balance;
 use crate::thin_client::ThinClient;
-use crate::voting_keypair::VotingKeypair;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -52,7 +51,7 @@ impl LocalCluster {
         let mut ledger_paths = vec![];
         ledger_paths.push(genesis_ledger_path.clone());
         ledger_paths.push(leader_ledger_path.clone());
-        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
+        let voting_keypair = Keypair::new();
         let leader_node_info = leader_node.info.clone();
         let leader_server = Fullnode::new(
             leader_node,
@@ -66,7 +65,7 @@ impl LocalCluster {
         let mut client = mk_client(&leader_node_info);
         for _ in 0..(num_nodes - 1) {
             let validator_keypair = Arc::new(Keypair::new());
-            let voting_keypair = VotingKeypair::new_local(&validator_keypair);
+            let voting_keypair = Keypair::new();
             let validator_pubkey = validator_keypair.pubkey();
             let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
             let ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);

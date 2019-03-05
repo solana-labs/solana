@@ -19,7 +19,6 @@ use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::replicator::Replicator;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer::blob_receiver;
-use solana::voting_keypair::VotingKeypair;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -49,7 +48,7 @@ fn test_replicator_startup_basic() {
     let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
 
     {
-        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
+        let voting_keypair = Keypair::new();
 
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
@@ -68,7 +67,7 @@ fn test_replicator_startup_basic() {
         );
 
         let validator_keypair = Arc::new(Keypair::new());
-        let voting_keypair = VotingKeypair::new_local(&validator_keypair);
+        let voting_keypair = Keypair::new();
 
         let mut leader_client = mk_client(&leader_info);
         let blockhash = leader_client.get_recent_blockhash();
@@ -283,7 +282,7 @@ fn test_replicator_startup_ledger_hang() {
     let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
 
     {
-        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
+        let voting_keypair = Keypair::new();
 
         let fullnode_config = FullnodeConfig::default();
         let _ = Fullnode::new(
@@ -296,7 +295,7 @@ fn test_replicator_startup_ledger_hang() {
         );
 
         let validator_keypair = Arc::new(Keypair::new());
-        let voting_keypair = VotingKeypair::new_local(&validator_keypair);
+        let voting_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         let _ = Fullnode::new(
