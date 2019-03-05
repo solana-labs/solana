@@ -4,8 +4,10 @@ import * as BufferLayout from 'buffer-layout';
 
 import {Account} from './account';
 import {PublicKey} from './publickey';
+import {NUM_TICKS_PER_SECOND} from './timing';
 import {Transaction} from './transaction';
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
+import {sleep} from './util/sleep';
 import type {Connection} from './connection';
 
 /**
@@ -80,6 +82,10 @@ export class Loader {
       transactions.push(
         sendAndConfirmTransaction(this.connection, transaction, program),
       );
+
+      // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
+      // since all the write transactions modify the same program account
+      await sleep(1000 / NUM_TICKS_PER_SECOND);
 
       // Run up to 8 Loads in parallel to prevent too many parallel transactions from
       // getting rejected with AccountInUse.
