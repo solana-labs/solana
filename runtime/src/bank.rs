@@ -153,8 +153,10 @@ impl Bank {
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
-    pub fn new_from_parent(parent: &Arc<Bank>, collector_id: Pubkey, id: u64) -> Self {
+    pub fn new_from_parent(parent: &Arc<Bank>, collector_id: Pubkey, slot: u64) -> Self {
         parent.freeze();
+
+        assert_ne!(slot, parent.slot());
 
         let mut bank = Self::default();
         bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
@@ -164,7 +166,7 @@ impl Bank {
         bank.slots_per_epoch = parent.slots_per_epoch;
         bank.stakers_slot_offset = parent.stakers_slot_offset;
 
-        bank.slot = id;
+        bank.slot = slot;
         bank.parent = RwLock::new(Some(parent.clone()));
         bank.parent_hash = parent.hash();
         bank.collector_id = collector_id;

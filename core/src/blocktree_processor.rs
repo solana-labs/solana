@@ -116,29 +116,23 @@ pub fn process_blocktree(
         let bank = Arc::new(Bank::new_with_paths(&genesis_block, account_paths));
         let entry_height = 0;
         let last_entry_hash = bank.last_blockhash();
-        vec![(slot, bank, entry_height, last_entry_hash)]
-    };
-
-    let mut fork_info = vec![];
-    while !pending_slots.is_empty() {
-        let (slot, starting_bank, starting_entry_height, mut last_entry_hash) =
-            pending_slots.pop().unwrap();
-
-        let bank = Arc::new(Bank::new_from_parent(
-            &starting_bank,
-            leader_schedule_utils::slot_leader_at(slot, &starting_bank),
-            starting_bank.slot(),
-        ));
-        let mut entry_height = starting_entry_height;
 
         // Load the metadata for this slot
         let meta = blocktree
             .meta(slot)
             .map_err(|err| {
-                warn!("Failed to load meta for slot {}: {:?}", slot, err);
+                eprintln!("Failed to load meta for slot {}: {:?}", slot, err);
                 BankError::LedgerVerificationFailed
             })?
             .unwrap();
+
+        vec![(slot, meta, bank, entry_height, last_entry_hash)]
+    };
+
+    let mut fork_info = vec![];
+    while !pending_slots.is_empty() {
+        let (slot, meta, bank, mut entry_height, mut last_entry_hash) =
+            pending_slots.pop().unwrap();
 
         // Fetch all entries for this slot
         let mut entries = blocktree.get_slot_entries(slot, 0, None).map_err(|err| {
@@ -166,7 +160,10 @@ pub fn process_blocktree(
 
         if !entries.is_empty() {
             if !entries.verify(&last_entry_hash) {
-                warn!("Ledger proof of history failed at entry: {}", entry_height);
+                warn!(
+                    "Ledger proof of history failed at slot: {}, entry: {}",
+                    slot, entry_height
+                );
                 return Err(BankError::LedgerVerificationFailed);
             }
 
@@ -179,30 +176,11 @@ pub fn process_blocktree(
             entry_height += entries.len() as u64;
         }
 
-        let slot_complete =
-            leader_schedule_utils::num_ticks_left_in_slot(&bank, bank.tick_height()) == 0;
-        if !slot_complete {
-            // Slot was not complete, clear out any partial entries
-            // TODO: Walk |meta.next_slots| and clear all child slots too?
-            blocktree.reset_slot_consumed(slot).map_err(|err| {
-                warn!("Failed to reset partial slot {}: {:?}", slot, err);
-                BankError::LedgerVerificationFailed
-            })?;
-
-            let bfi = BankForksInfo {
-                bank_slot: slot,
-                entry_height: starting_entry_height,
-            };
-            fork_info.push((starting_bank, bfi));
-            continue;
-        }
-
-        // TODO merge with locktower, voting
+        // TODO merge with locktower, voting, bank.vote_accounts()...
         bank.squash();
 
         if meta.next_slots.is_empty() {
             // Reached the end of this fork.  Record the final entry height and last entry.hash
-
             let bfi = BankForksInfo {
                 bank_slot: slot,
                 entry_height,
@@ -212,16 +190,40 @@ pub fn process_blocktree(
         }
 
         // This is a fork point, create a new child bank for each fork
-        pending_slots.extend(meta.next_slots.iter().map(|next_slot| {
-            let child_bank = Arc::new(Bank::new_from_parent(
-                &bank,
-                leader_schedule_utils::slot_leader_at(*next_slot, &bank),
-                *next_slot,
-            ));
-            trace!("Add child bank for slot={}", next_slot);
-            // bank_forks.insert(*next_slot, child_bank);
-            (*next_slot, child_bank, entry_height, last_entry_hash)
-        }));
+        for next_slot in meta.next_slots {
+            let next_meta = blocktree
+                .meta(next_slot)
+                .map_err(|err| {
+                    eprintln!("Failed to load meta for slot {}: {:?}", slot, err);
+                    BankError::LedgerVerificationFailed
+                })?
+                .unwrap();
+
+            // only process full slots in blocktree_processor, replay_stage
+            //  handles any partials
+            if next_meta.is_full() {
+                let next_bank = Arc::new(Bank::new_from_parent(
+                    &bank,
+                    leader_schedule_utils::slot_leader_at(next_slot, &bank),
+                    next_slot,
+                ));
+                trace!("Add child bank for slot={}", next_slot);
+                // bank_forks.insert(*next_slot, child_bank);
+                pending_slots.push((
+                    next_slot,
+                    next_meta,
+                    next_bank,
+                    entry_height,
+                    last_entry_hash,
+                ));
+            } else {
+                let bfi = BankForksInfo {
+                    bank_slot: slot,
+                    entry_height,
+                };
+                fork_info.push((bank.clone(), bfi));
+            }
+        }
 
         // reverse sort by slot, so the next slot to be processed can be pop()ed
         // TODO: remove me once leader_scheduler can hang with out-of-order slots?
@@ -260,7 +262,7 @@ mod tests {
         let entries = create_ticks(ticks_per_slot, last_entry_hash);
         let last_entry_hash = entries.last().unwrap().hash;
 
-        let blobs = entries_to_blobs(&entries, slot, parent_slot);
+        let blobs = entries_to_blobs(&entries, slot, parent_slot, true);
         blocktree.insert_data_blobs(blobs.iter()).unwrap();
 
         last_entry_hash
@@ -276,11 +278,11 @@ mod tests {
         /*
           Build a blocktree in the ledger with the following fork structure:
 
-               slot 0
+               slot 0 (all ticks)
                  |
-               slot 1
+               slot 1 (all ticks but one)
                  |
-               slot 2
+               slot 2 (all ticks)
 
            where slot 1 is incomplete (missing 1 tick at the end)
         */
@@ -300,9 +302,10 @@ mod tests {
             let mut entries = create_ticks(ticks_per_slot, blockhash);
             blockhash = entries.last().unwrap().hash;
 
+            // throw away last one
             entries.pop();
 
-            let blobs = entries_to_blobs(&entries, slot, parent_slot);
+            let blobs = entries_to_blobs(&entries, slot, parent_slot, false);
             blocktree.insert_data_blobs(blobs.iter()).unwrap();
         }
 
@@ -316,7 +319,7 @@ mod tests {
         assert_eq!(
             bank_forks_info[0],
             BankForksInfo {
-                bank_slot: 1, // never finished first slot
+                bank_slot: 0, // slot 1 isn't "full", we stop at slot zero
                 entry_height: ticks_per_slot,
             }
         );
@@ -385,9 +388,11 @@ mod tests {
             }
         );
 
-        // Ensure bank_forks holds the right banks
+        // Ensure bank_forks holds the right banks, and that everything's
+        //  frozen
         for info in bank_forks_info {
             assert_eq!(bank_forks[info.bank_slot].slot(), info.bank_slot);
+            assert!(bank_forks[info.bank_slot].is_frozen());
         }
     }
 
