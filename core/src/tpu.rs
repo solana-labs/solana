@@ -17,49 +17,13 @@ use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
-pub struct LeaderServices {
+pub struct Tpu {
+    pub id: Pubkey,
     fetch_stage: FetchStage,
     sigverify_stage: SigVerifyStage,
     banking_stage: BankingStage,
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
-}
-
-impl LeaderServices {
-    fn new(
-        fetch_stage: FetchStage,
-        sigverify_stage: SigVerifyStage,
-        banking_stage: BankingStage,
-        cluster_info_vote_listener: ClusterInfoVoteListener,
-        broadcast_stage: BroadcastStage,
-    ) -> Self {
-        LeaderServices {
-            fetch_stage,
-            sigverify_stage,
-            banking_stage,
-            cluster_info_vote_listener,
-            broadcast_stage,
-        }
-    }
-
-    pub fn join(self) -> thread::Result<()> {
-        let mut results = vec![];
-        results.push(self.fetch_stage.join());
-        results.push(self.sigverify_stage.join());
-        results.push(self.cluster_info_vote_listener.join());
-        results.push(self.banking_stage.join());
-        let broadcast_result = self.broadcast_stage.join();
-        for result in results {
-            result?;
-        }
-        let _ = broadcast_result?;
-        Ok(())
-    }
-}
-
-pub struct Tpu {
-    leader_services: LeaderServices,
-    pub id: Pubkey,
 }
 
 impl Tpu {
@@ -95,16 +59,13 @@ impl Tpu {
             blocktree,
         );
 
-        let leader_services = LeaderServices::new(
+        Self {
+            id,
             fetch_stage,
             sigverify_stage,
             banking_stage,
             cluster_info_vote_listener,
             broadcast_stage,
-        );
-        Self {
-            leader_services,
-            id,
         }
     }
 }
@@ -113,6 +74,16 @@ impl Service for Tpu {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
-        self.leader_services.join()
+        let mut results = vec![];
+        results.push(self.fetch_stage.join());
+        results.push(self.sigverify_stage.join());
+        results.push(self.cluster_info_vote_listener.join());
+        results.push(self.banking_stage.join());
+        let broadcast_result = self.broadcast_stage.join();
+        for result in results {
+            result?;
+        }
+        let _ = broadcast_result?;
+        Ok(())
     }
 }
