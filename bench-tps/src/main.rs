@@ -146,7 +146,7 @@ fn main() {
         target /= MAX_SPENDS_PER_TX;
     }
     let gen_keypairs = rnd.gen_n_keypairs(total_keys as u64);
-    let barrier_keypair = Keypair::new();
+    let barrier_source_keypair = Keypair::new();
     let barrier_dest_id = Keypair::new().pubkey();
 
     println!("Get tokens...");
@@ -167,7 +167,7 @@ fn main() {
     }
     let start = gen_keypairs.len() - (tx_count * 2) as usize;
     let keypairs = &gen_keypairs[start..];
-    airdrop_tokens(&mut barrier_client, &drone_addr, &barrier_keypair, 1);
+    airdrop_tokens(&mut barrier_client, &drone_addr, &barrier_source_keypair, 1);
 
     println!("Get last ID...");
     let mut blockhash = client.get_recent_blockhash();
@@ -257,7 +257,7 @@ fn main() {
         send_barrier_transaction(
             &mut barrier_client,
             &mut blockhash,
-            &barrier_keypair,
+            &barrier_source_keypair,
             &barrier_dest_id,
         );
 
