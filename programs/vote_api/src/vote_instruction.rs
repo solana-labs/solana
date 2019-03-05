@@ -23,7 +23,7 @@ pub enum VoteInstruction {
     /// * Transaction::keys[1] - the new "vote account" to be associated with the delegate
     InitializeAccount,
     /// `Delegate` or `Assign` a vote account to a particular node
-    Delegate(Pubkey),
+    DelegateStake(Pubkey),
     Vote(Vote),
     /// Clear the credits in the vote account
     /// * Transaction::keys[0] - the "vote account"
@@ -34,10 +34,10 @@ impl VoteInstruction {
     pub fn new_clear_credits(vote_id: Pubkey) -> BuilderInstruction {
         BuilderInstruction::new(id(), &VoteInstruction::ClearCredits, vec![(vote_id, true)])
     }
-    pub fn new_delegate(vote_id: Pubkey, delegate_id: Pubkey) -> BuilderInstruction {
+    pub fn new_delegate_stake(vote_id: Pubkey, delegate_id: Pubkey) -> BuilderInstruction {
         BuilderInstruction::new(
             id(),
-            &VoteInstruction::Delegate(delegate_id),
+            &VoteInstruction::DelegateStake(delegate_id),
             vec![(vote_id, true)],
         )
     }

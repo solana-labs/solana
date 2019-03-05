@@ -61,7 +61,7 @@ impl VoteTransaction {
         fee: u64,
     ) -> Transaction {
         TransactionBuilder::new(fee)
-            .push(VoteInstruction::new_delegate(
+            .push(VoteInstruction::new_delegate_stake(
                 vote_keypair.pubkey(),
                 node_id,
             ))
