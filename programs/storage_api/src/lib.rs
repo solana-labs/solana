@@ -1,7 +1,8 @@
-use crate::hash::Hash;
-use crate::pubkey::Pubkey;
-use crate::signature::{Keypair, Signature};
-use crate::transaction::Transaction;
+use serde_derive::{Deserialize, Serialize};
+use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::transaction::Transaction;
 
 pub const ENTRIES_PER_SEGMENT: u64 = 16;
 

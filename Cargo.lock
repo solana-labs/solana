@@ -1994,6 +1994,7 @@ dependencies = [
  "solana-netutil 0.12.0",
  "solana-runtime 0.12.0",
  "solana-sdk 0.12.0",
+ "solana-storage-api 0.12.0",
  "solana-vote-api 0.12.0",
  "solana-vote-program 0.12.0",
  "solana-vote-signer 0.12.0",
@@ -2258,6 +2259,7 @@ dependencies = [
  "solana-logger 0.12.0",
  "solana-metrics 0.12.0",
  "solana-sdk 0.12.0",
+ "solana-storage-api 0.12.0",
  "solana-system-program 0.12.0",
  "solana-token-api 0.12.0",
  "solana-vote-api 0.12.0",
@@ -2284,6 +2286,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-storage-api"
+version = "0.12.0"
+dependencies = [
+ "bincode 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-sdk 0.12.0",
+]
+
+[[package]]
 name = "solana-storage-program"
 version = "0.12.0"
 dependencies = [
@@ -2294,6 +2306,7 @@ dependencies = [
  "solana-logger 0.12.0",
  "solana-runtime 0.12.0",
  "solana-sdk 0.12.0",
+ "solana-storage-api 0.12.0",
 ]
 
 [[package]]

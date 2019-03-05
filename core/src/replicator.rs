@@ -19,7 +19,7 @@ use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::storage_program::StorageTransaction;
+use solana_storage_api::StorageTransaction;
 use std::fs::File;
 use std::io;
 use std::io::BufReader;

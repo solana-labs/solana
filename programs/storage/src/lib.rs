@@ -9,7 +9,7 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
-use solana_sdk::storage_program::*;
+use solana_storage_api::*;
 
 pub const TOTAL_VALIDATOR_REWARDS: u64 = 1000;
 pub const TOTAL_REPLICATOR_REWARDS: u64 = 1000;
@@ -180,9 +180,8 @@ mod test {
     use solana_sdk::account::{create_keyed_accounts, Account};
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-    use solana_sdk::storage_program::ProofStatus;
-    use solana_sdk::storage_program::StorageTransaction;
     use solana_sdk::transaction::{Instruction, Transaction};
+    use solana_storage_api::{ProofStatus, StorageTransaction};
 
     fn test_transaction(
         tx: &Transaction,

@@ -10,7 +10,6 @@ pub mod packet;
 pub mod pubkey;
 pub mod shortvec;
 pub mod signature;
-pub mod storage_program;
 pub mod system_instruction;
 pub mod system_program;
 pub mod system_transaction;

@@ -19,7 +19,6 @@ use solana_sdk::native_loader;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
-use solana_sdk::storage_program;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES, NUM_TICKS_PER_SECOND};
@@ -295,7 +294,7 @@ impl Bank {
     fn add_builtin_programs(&self) {
         self.add_native_program("solana_system_program", &system_program::id());
         self.add_native_program("solana_vote_program", &solana_vote_api::id());
-        self.add_native_program("solana_storage_program", &storage_program::id());
+        self.add_native_program("solana_storage_program", &solana_storage_api::id());
         self.add_native_program("solana_bpf_loader", &bpf_loader::id());
         self.add_native_program("solana_budget_program", &solana_budget_api::id());
         self.add_native_program("solana_token_program", &solana_token_api::id());
@@ -1273,7 +1272,7 @@ mod tests {
         assert_eq!(native_loader::id(), native);
         assert_eq!(bpf_loader::id(), bpf);
         assert_eq!(solana_budget_api::id(), budget);
-        assert_eq!(storage_program::id(), storage);
+        assert_eq!(solana_storage_api::id(), storage);
         assert_eq!(solana_token_api::id(), token);
         assert_eq!(solana_vote_api::id(), vote);
     }
@@ -1286,7 +1285,7 @@ mod tests {
             native_loader::id(),
             bpf_loader::id(),
             solana_budget_api::id(),
-            storage_program::id(),
+            solana_storage_api::id(),
             solana_token_api::id(),
             solana_vote_api::id(),
         ];

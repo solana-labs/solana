@@ -5,16 +5,15 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::storage_program;
-use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
 use solana_sdk::system_transaction::SystemTransaction;
+use solana_storage_api::{StorageTransaction, ENTRIES_PER_SEGMENT};
 
 fn get_storage_entry_height(bank: &Bank, account: Pubkey) -> u64 {
     match bank.get_account(&account) {
         Some(storage_system_account) => {
             let state = deserialize(&storage_system_account.userdata);
             if let Ok(state) = state {
-                let state: storage_program::StorageProgramState = state;
+                let state: solana_storage_api::StorageProgramState = state;
                 return state.entry_height;
             }
         }
@@ -29,7 +28,7 @@ fn get_storage_blockhash(bank: &Bank, account: Pubkey) -> Hash {
     if let Some(storage_system_account) = bank.get_account(&account) {
         let state = deserialize(&storage_system_account.userdata);
         if let Ok(state) = state {
-            let state: storage_program::StorageProgramState = state;
+            let state: solana_storage_api::StorageProgramState = state;
             return state.hash;
         }
     }
@@ -63,7 +62,7 @@ fn test_bank_storage() {
         blockhash,
         1,
         4 * 1024,
-        storage_program::id(),
+        solana_storage_api::id(),
         0,
     );
 

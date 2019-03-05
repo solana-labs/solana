@@ -16,8 +16,8 @@ use rand_chacha::ChaChaRng;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
-use solana_sdk::storage_program::{self, StorageProgram, StorageTransaction};
 use solana_sdk::transaction::Transaction;
+use solana_storage_api::{self, StorageProgram, StorageTransaction};
 use std::collections::HashSet;
 use std::io;
 use std::mem::size_of;
@@ -377,7 +377,7 @@ impl StorageStage {
                             .copy_from_slice(tx.signatures[0].as_ref());
                         *current_key_idx += size_of::<Signature>();
                         *current_key_idx %= storage_keys.len();
-                    } else if storage_program::check_id(&program_id) {
+                    } else if solana_storage_api::check_id(&program_id) {
                         match deserialize(&tx.instructions[i].userdata) {
                             Ok(StorageProgram::SubmitMiningProof {
                                 entry_height: proof_entry_height,
