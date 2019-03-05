@@ -146,7 +146,9 @@ fn main() {
         target /= MAX_SPENDS_PER_TX;
     }
     let gen_keypairs = rnd.gen_n_keypairs(total_keys as u64);
-    let barrier_id = rnd.gen_n_keypairs(1).pop().unwrap();
+    let mut barrier_ids = rnd.gen_n_keypairs(2);
+    let barrier_source_id = barrier_ids.pop().unwrap();
+    let barrier_dest_id = barrier_ids.pop().unwrap().pubkey();
 
     println!("Get tokens...");
     let num_tokens_per_account = 20;
@@ -166,7 +168,7 @@ fn main() {
     }
     let start = gen_keypairs.len() - (tx_count * 2) as usize;
     let keypairs = &gen_keypairs[start..];
-    airdrop_tokens(&mut barrier_client, &drone_addr, &barrier_id, 1);
+    airdrop_tokens(&mut barrier_client, &drone_addr, &barrier_source_id, 1);
 
     println!("Get last ID...");
     let mut blockhash = client.get_recent_blockhash();
@@ -253,7 +255,7 @@ fn main() {
         // It's not feasible (would take too much time) to confirm each of the `tx_count / 2`
         // transactions sent by `generate_txs()` so instead send and confirm a single transaction
         // to validate the network is still functional.
-        send_barrier_transaction(&mut barrier_client, &mut blockhash, &barrier_id);
+        send_barrier_transaction(&mut barrier_client, &mut blockhash, &barrier_source_id, &barrier_dest_id);
 
         i += 1;
         if should_switch_directions(num_tokens_per_account, i) {
