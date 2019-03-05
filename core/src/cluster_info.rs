@@ -720,26 +720,25 @@ impl ClusterInfo {
         orders
     }
 
-    pub fn window_index_request_bytes(&self, slot_height: u64, blob_index: u64) -> Result<Vec<u8>> {
-        let req = Protocol::RequestWindowIndex(self.my_data().clone(), slot_height, blob_index);
+    pub fn window_index_request_bytes(&self, slot: u64, blob_index: u64) -> Result<Vec<u8>> {
+        let req = Protocol::RequestWindowIndex(self.my_data().clone(), slot, blob_index);
         let out = serialize(&req)?;
         Ok(out)
     }
 
     pub fn window_highest_index_request_bytes(
         &self,
-        slot_height: u64,
+        slot: u64,
         blob_index: u64,
     ) -> Result<Vec<u8>> {
-        let req =
-            Protocol::RequestHighestWindowIndex(self.my_data().clone(), slot_height, blob_index);
+        let req = Protocol::RequestHighestWindowIndex(self.my_data().clone(), slot, blob_index);
         let out = serialize(&req)?;
         Ok(out)
     }
 
     pub fn window_index_request(
         &self,
-        slot_height: u64,
+        slot: u64,
         blob_index: u64,
         get_highest: bool,
     ) -> Result<(SocketAddr, Vec<u8>)> {
@@ -753,9 +752,9 @@ impl ClusterInfo {
         let addr = valid[n].gossip; // send the request to the peer's gossip port
         let out = {
             if get_highest {
-                self.window_highest_index_request_bytes(slot_height, blob_index)?
+                self.window_highest_index_request_bytes(slot, blob_index)?
             } else {
-                self.window_index_request_bytes(slot_height, blob_index)?
+                self.window_index_request_bytes(slot, blob_index)?
             }
         };
 
@@ -909,12 +908,12 @@ impl ClusterInfo {
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
         me: &NodeInfo,
-        slot_height: u64,
+        slot: u64,
         blob_index: u64,
     ) -> Vec<SharedBlob> {
         if let Some(blocktree) = blocktree {
             // Try to find the requested index in one of the slots
-            let blob = blocktree.get_data_blob(slot_height, blob_index);
+            let blob = blocktree.get_data_blob(slot, blob_index);
 
             if let Ok(Some(mut blob)) = blob {
                 inc_new_counter_info!("cluster_info-window-request-ledger", 1);
@@ -929,7 +928,7 @@ impl ClusterInfo {
             "{}: failed RequestWindowIndex {} {} {}",
             me.id,
             from.id,
-            slot_height,
+            slot,
             blob_index,
         );
 
@@ -939,17 +938,17 @@ impl ClusterInfo {
     fn run_highest_window_request(
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
-        slot_height: u64,
+        slot: u64,
         highest_index: u64,
     ) -> Vec<SharedBlob> {
         if let Some(blocktree) = blocktree {
             // Try to find the requested index in one of the slots
-            let meta = blocktree.meta(slot_height);
+            let meta = blocktree.meta(slot);
 
             if let Ok(Some(meta)) = meta {
                 if meta.received > highest_index {
                     // meta.received must be at least 1 by this point
-                    let blob = blocktree.get_data_blob(slot_height, meta.received - 1);
+                    let blob = blocktree.get_data_blob(slot, meta.received - 1);
 
                     if let Ok(Some(mut blob)) = blob {
                         blob.meta.set_addr(from_addr);
@@ -1082,7 +1081,7 @@ impl ClusterInfo {
         me: &Arc<RwLock<Self>>,
         from: &ContactInfo,
         blocktree: Option<&Arc<Blocktree>>,
-        slot_height: u64,
+        slot: u64,
         blob_index: u64,
         from_addr: &SocketAddr,
         is_get_highest: bool,
@@ -1097,7 +1096,7 @@ impl ClusterInfo {
         if from.id == me.read().unwrap().gossip.id {
             warn!(
                 "{}: Ignored received RequestWindowIndex from ME {} {} {} ",
-                self_id, from.id, slot_height, blob_index,
+                self_id, from.id, slot, blob_index,
             );
             inc_new_counter_info!("cluster_info-window-request-address-eq", 1);
             return vec![];
@@ -1107,30 +1106,23 @@ impl ClusterInfo {
         let my_info = me.read().unwrap().my_data().clone();
         inc_new_counter_info!("cluster_info-window-request-recv", 1);
         trace!(
-            "{}: received RequestWindowIndex from: {} slot_height: {}, blob_index: {}",
+            "{}: received RequestWindowIndex from: {} slot: {}, blob_index: {}",
             self_id,
             from.id,
-            slot_height,
+            slot,
             blob_index,
         );
         let res = {
             if is_get_highest {
-                Self::run_highest_window_request(&from_addr, blocktree, slot_height, blob_index)
+                Self::run_highest_window_request(&from_addr, blocktree, slot, blob_index)
             } else {
-                Self::run_window_request(
-                    &from,
-                    &from_addr,
-                    blocktree,
-                    &my_info,
-                    slot_height,
-                    blob_index,
-                )
+                Self::run_window_request(&from, &from_addr, blocktree, &my_info, slot, blob_index)
             }
         };
         report_time_spent(
             "RequestWindowIndex",
             &now.elapsed(),
-            &format!("slot_height {}, blob_index: {}", slot_height, blob_index),
+            &format!("slot {}, blob_index: {}", slot, blob_index),
         );
         res
     }
@@ -1193,23 +1185,17 @@ impl ClusterInfo {
                 }
                 vec![]
             }
-            Protocol::RequestWindowIndex(from, slot_height, blob_index) => {
+            Protocol::RequestWindowIndex(from, slot, blob_index) => {
                 Self::handle_request_window_index(
-                    me,
-                    &from,
-                    blocktree,
-                    slot_height,
-                    blob_index,
-                    from_addr,
-                    false,
+                    me, &from, blocktree, slot, blob_index, from_addr, false,
                 )
             }
-            Protocol::RequestHighestWindowIndex(from, slot_height, highest_index) => {
+            Protocol::RequestHighestWindowIndex(from, slot, highest_index) => {
                 Self::handle_request_window_index(
                     me,
                     &from,
                     blocktree,
-                    slot_height,
+                    slot,
                     highest_index,
                     from_addr,
                     true,

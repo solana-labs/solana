@@ -17,14 +17,14 @@ pub const INITIAL_LOCKOUT: usize = 2;
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Lockout {
-    pub slot_height: u64,
+    pub slot: u64,
     pub confirmation_count: u32,
 }
 
 impl Lockout {
     pub fn new(vote: &Vote) -> Self {
         Self {
-            slot_height: vote.slot_height,
+            slot: vote.slot,
             confirmation_count: 1,
         }
     }
@@ -36,8 +36,8 @@ impl Lockout {
 
     // The slot height at which this vote expires (cannot vote for any slot
     // less than this)
-    pub fn expiration_slot_height(&self) -> u64 {
-        self.slot_height + self.lockout()
+    pub fn expiration_slot(&self) -> u64 {
+        self.slot + self.lockout()
     }
 }
 
@@ -87,7 +87,7 @@ impl VoteState {
         if self
             .votes
             .back()
-            .map_or(false, |old_vote| old_vote.slot_height >= vote.slot_height)
+            .map_or(false, |old_vote| old_vote.slot >= vote.slot)
         {
             return;
         }
@@ -97,11 +97,11 @@ impl VoteState {
         // TODO: Integrity checks
         // Verify the vote's bank hash matches what is expected
 
-        self.pop_expired_votes(vote.slot_height);
+        self.pop_expired_votes(vote.slot);
         // Once the stack is full, pop the oldest vote and distribute rewards
         if self.votes.len() == MAX_LOCKOUT_HISTORY {
             let vote = self.votes.pop_front().unwrap();
-            self.root_slot = Some(vote.slot_height);
+            self.root_slot = Some(vote.slot);
             self.credits += 1;
         }
         self.votes.push_back(vote);
@@ -119,12 +119,12 @@ impl VoteState {
         self.credits = 0;
     }
 
-    fn pop_expired_votes(&mut self, slot_height: u64) {
+    fn pop_expired_votes(&mut self, slot: u64) {
         loop {
             if self
                 .votes
                 .back()
-                .map_or(false, |v| v.expiration_slot_height() < slot_height)
+                .map_or(false, |v| v.expiration_slot() < slot)
             {
                 self.votes.pop_back();
             } else {
@@ -357,14 +357,14 @@ mod tests {
         // One more vote that confirms the entire stack,
         // the root_slot should change to the
         // second vote
-        let top_vote = vote_state.votes.front().unwrap().slot_height;
+        let top_vote = vote_state.votes.front().unwrap().slot;
         vote_state.process_vote(Vote::new(
-            vote_state.votes.back().unwrap().expiration_slot_height(),
+            vote_state.votes.back().unwrap().expiration_slot(),
         ));
         assert_eq!(Some(top_vote), vote_state.root_slot);
 
         // Expire everything except the first vote
-        let vote = Vote::new(vote_state.votes.front().unwrap().expiration_slot_height());
+        let vote = Vote::new(vote_state.votes.front().unwrap().expiration_slot());
         vote_state.process_vote(vote);
         // First vote and new vote are both stored for a total of 2 votes
         assert_eq!(vote_state.votes.len(), 2);

@@ -37,7 +37,7 @@ impl LeaderConfirmationService {
             if let Some(stake_and_state) = vote_state
                 .votes
                 .back()
-                .map(|vote| (vote.slot_height, account.tokens))
+                .map(|vote| (vote.slot, account.tokens))
             {
                 slots_and_stakes.push(stake_and_state);
             }
@@ -116,6 +116,7 @@ mod tests {
     use bincode::serialize;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
+    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_vote_api::vote_transaction::VoteTransaction;
     use std::sync::Arc;
@@ -125,14 +126,22 @@ mod tests {
         solana_logger::setup();
 
         let (genesis_block, mint_keypair) = GenesisBlock::new(1234);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let mut tick_hash = genesis_block.hash();
+
+        let mut bank = Arc::new(Bank::new(&genesis_block));
 
         // Move the bank up 10 slots
-        let mut tick_hash = genesis_block.hash();
-        while bank.slot_height() < 10 {
-            tick_hash = hash(&serialize(&tick_hash).unwrap());
-            bank.register_tick(&tick_hash);
+        for slot in 1..=10 {
+            let max_tick_height = slot * bank.ticks_per_slot() - 1;
+
+            while bank.tick_height() != max_tick_height {
+                tick_hash = hash(&serialize(&tick_hash).unwrap());
+                bank.register_tick(&tick_hash);
+            }
+
+            bank = Arc::new(Bank::new_from_parent(&bank, Pubkey::default(), slot));
         }
+
         let blockhash = bank.last_blockhash();
 
         // Create a total of 10 vote accounts, each will have a balance of 1 (after giving 1 to

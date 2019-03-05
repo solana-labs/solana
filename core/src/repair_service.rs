@@ -62,7 +62,7 @@ impl RepairService {
                 let reqs: Vec<_> = repairs
                     .into_iter()
                     .filter_map(|repair_request| {
-                        let (slot_height, blob_index, is_highest_request) = {
+                        let (slot, blob_index, is_highest_request) = {
                             match repair_request {
                                 RepairType::Blob(s, i) => (s, i, false),
                                 RepairType::HighestBlob(s, i) => (s, i, true),
@@ -71,20 +71,17 @@ impl RepairService {
                         cluster_info
                             .read()
                             .unwrap()
-                            .window_index_request(slot_height, blob_index, is_highest_request)
-                            .map(|result| (result, slot_height, blob_index))
+                            .window_index_request(slot, blob_index, is_highest_request)
+                            .map(|result| (result, slot, blob_index))
                             .ok()
                     })
                     .collect();
 
-                for ((to, req), slot_height, blob_index) in reqs {
+                for ((to, req), slot, blob_index) in reqs {
                     if let Ok(local_addr) = repair_socket.local_addr() {
                         submit(
                             influxdb::Point::new("repair_service")
-                                .add_field(
-                                    "repair_slot",
-                                    influxdb::Value::Integer(slot_height as i64),
-                                )
+                                .add_field("repair_slot", influxdb::Value::Integer(slot as i64))
                                 .to_owned()
                                 .add_field(
                                     "repair_blob",
@@ -127,24 +124,24 @@ impl RepairService {
 
     fn process_slot(
         blocktree: &Blocktree,
-        slot_height: u64,
-        slot: &SlotMeta,
+        slot: u64,
+        slot_meta: &SlotMeta,
         max_repairs: usize,
     ) -> Vec<RepairType> {
-        if slot.is_full() {
+        if slot_meta.is_full() {
             vec![]
-        } else if slot.consumed == slot.received {
-            vec![RepairType::HighestBlob(slot_height, slot.received)]
+        } else if slot_meta.consumed == slot_meta.received {
+            vec![RepairType::HighestBlob(slot, slot_meta.received)]
         } else {
             let reqs = blocktree.find_missing_data_indexes(
-                slot_height,
-                slot.consumed,
-                slot.received,
+                slot,
+                slot_meta.consumed,
+                slot_meta.received,
                 max_repairs,
             );
 
             reqs.into_iter()
-                .map(|i| RepairType::Blob(slot_height, i))
+                .map(|i| RepairType::Blob(slot, i))
                 .collect()
         }
     }
@@ -156,25 +153,25 @@ impl RepairService {
     ) -> Result<(Vec<RepairType>)> {
         // Slot height and blob indexes for blobs we want to repair
         let mut repairs: Vec<RepairType> = vec![];
-        let mut current_slot_height = Some(0);
-        while repairs.len() < max_repairs && current_slot_height.is_some() {
-            if current_slot_height.unwrap() > repair_info.max_slot {
+        let mut current_slot = Some(0);
+        while repairs.len() < max_repairs && current_slot.is_some() {
+            if current_slot.unwrap() > repair_info.max_slot {
                 repair_info.repair_tries = 0;
-                repair_info.max_slot = current_slot_height.unwrap();
+                repair_info.max_slot = current_slot.unwrap();
             }
 
-            let slot = blocktree.meta(current_slot_height.unwrap())?;
+            let slot = blocktree.meta(current_slot.unwrap())?;
             if slot.is_some() {
                 let slot = slot.unwrap();
                 let new_repairs = Self::process_slot(
                     blocktree,
-                    current_slot_height.unwrap(),
+                    current_slot.unwrap(),
                     &slot,
                     max_repairs - repairs.len(),
                 );
                 repairs.extend(new_repairs);
             }
-            current_slot_height = blocktree.get_next_slot(current_slot_height.unwrap())?;
+            current_slot = blocktree.get_next_slot(current_slot.unwrap())?;
         }
 
         // Only increment repair_tries if the ledger contains every blob for every slot
@@ -308,10 +305,10 @@ mod test {
                 .collect();
 
             let expected: Vec<RepairType> = (0..num_slots)
-                .flat_map(|slot_height| {
+                .flat_map(|slot| {
                     missing_indexes_per_slot
                         .iter()
-                        .map(move |blob_index| RepairType::Blob(slot_height as u64, *blob_index))
+                        .map(move |blob_index| RepairType::Blob(slot as u64, *blob_index))
                 })
                 .collect();
 

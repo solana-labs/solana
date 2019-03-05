@@ -6,13 +6,13 @@ use solana_sdk::transaction_builder::BuilderInstruction;
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
     // TODO: add signature of the state here as well
-    /// A vote for height slot_height
-    pub slot_height: u64,
+    /// A vote for height slot
+    pub slot: u64,
 }
 
 impl Vote {
-    pub fn new(slot_height: u64) -> Self {
-        Self { slot_height }
+    pub fn new(slot: u64) -> Self {
+        Self { slot }
     }
 }
 
