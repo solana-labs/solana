@@ -118,17 +118,16 @@ mod tests {
     use solana_sdk::hash::hash;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_api::vote_transaction::VoteTransaction;
-    use std::sync::Arc;
 
     #[test]
     fn test_compute_confirmation() {
         solana_logger::setup();
 
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1234);
+        let leader_keypair = Keypair::new();
+        let leader_id = leader_keypair.pubkey();
+        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(1234, leader_id, 1);
         let mut tick_hash = genesis_block.hash();
-
-        let mut bank = Arc::new(Bank::new(&genesis_block));
+        let mut bank = Bank::new(&genesis_block);
 
         // Move the bank up 10 slots
         for slot in 1..=10 {
@@ -139,31 +138,24 @@ mod tests {
                 bank.register_tick(&tick_hash);
             }
 
-            bank = Arc::new(Bank::new_from_parent(&bank, Pubkey::default(), slot));
+            bank = Bank::new_from_parent(&Arc::new(bank), Pubkey::default(), slot);
         }
-
-        let blockhash = bank.last_blockhash();
 
         // Create a total of 10 vote accounts, each will have a balance of 1 (after giving 1 to
         // their vote account), for a total staking pool of 10 lamports.
-        let vote_accounts: Vec<_> = (0..10)
-            .map(|i| {
-                // Create new validator to vote
-                let validator_keypair = Arc::new(Keypair::new());
-                let voting_keypair = Keypair::new();
-                let voting_pubkey = voting_keypair.pubkey();
+        push_vote(&leader_keypair, &bank, 1);
+        let mut vote_accounts = vec![leader_keypair];
 
-                // Give the validator some lamports
-                bank.transfer(2, &mint_keypair, validator_keypair.pubkey(), blockhash)
-                    .unwrap();
-                new_vote_account(&validator_keypair, &voting_pubkey, &bank, 1);
+        for i in 1..10 {
+            // Create new vote account to send votes to
+            let voting_keypair = Keypair::new();
+            new_vote_account(&mint_keypair, &voting_keypair.pubkey(), &bank, 1);
 
-                if i < 6 {
-                    push_vote(&voting_keypair, &bank, (i + 1) as u64);
-                }
-                (voting_keypair, validator_keypair)
-            })
-            .collect();
+            if i < 6 {
+                push_vote(&voting_keypair, &bank, (i + 1) as u64);
+            }
+            vote_accounts.push(voting_keypair);
+        }
 
         // There isn't 2/3 consensus, so the bank's confirmation value should be the default
         let mut last_confirmation_time = 0;
@@ -171,9 +163,7 @@ mod tests {
         assert_eq!(last_confirmation_time, 0);
 
         // Get another validator to vote, so we now have 2/3 consensus
-        let voting_keypair = &vote_accounts[7].0;
-        let vote_tx = VoteTransaction::new_vote(voting_keypair, 7, blockhash, 0);
-        bank.process_transaction(&vote_tx).unwrap();
+        push_vote(&vote_accounts[7], &bank, 7);
 
         LeaderConfirmationService::compute_confirmation(&bank, &mut last_confirmation_time);
         assert!(last_confirmation_time > 0);

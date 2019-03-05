@@ -162,7 +162,7 @@ mod tests {
         assert_eq!(vote_account_balances_at_epoch(&bank, 10), None);
 
         // First epoch has the bootstrap leader
-        expected.insert(genesis_block.bootstrap_leader_vote_account_id, 1);
+        expected.insert(genesis_block.bootstrap_leader_id, bootstrap_lamports);
         let expected = Some(expected);
         assert_eq!(vote_account_balances_at_epoch(&bank, 0), expected);
 

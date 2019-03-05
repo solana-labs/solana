@@ -23,8 +23,7 @@ use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES, NUM_TICKS_PER_SECOND};
 use solana_sdk::transaction::Transaction;
-use solana_vote_api::vote_instruction::Vote;
-use solana_vote_api::vote_state::{Lockout, VoteState};
+use solana_vote_api::vote_state::VoteState;
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -239,9 +238,8 @@ impl Bank {
     fn process_genesis_block(&mut self, genesis_block: &GenesisBlock) {
         assert!(genesis_block.mint_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
-        assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
         assert!(genesis_block.lamports >= genesis_block.bootstrap_leader_lamports);
-        assert!(genesis_block.bootstrap_leader_lamports >= 3);
+        assert!(genesis_block.bootstrap_leader_lamports > 0);
 
         // Bootstrap leader collects fees until `new_from_parent` is called.
         self.collector_id = genesis_block.bootstrap_leader_id;
@@ -249,32 +247,21 @@ impl Bank {
         let mint_lamports = genesis_block.lamports - genesis_block.bootstrap_leader_lamports;
         self.deposit(&genesis_block.mint_id, mint_lamports);
 
-        let bootstrap_leader_lamports = 2;
-        let bootstrap_leader_stake =
-            genesis_block.bootstrap_leader_lamports - bootstrap_leader_lamports;
-        self.deposit(
-            &genesis_block.bootstrap_leader_id,
-            bootstrap_leader_lamports,
-        );
-
         // Construct a vote account for the bootstrap_leader such that the leader_scheduler
         // will be forced to select it as the leader for height 0
-        let mut bootstrap_leader_vote_account = Account {
-            lamports: bootstrap_leader_stake,
-            userdata: vec![0; VoteState::max_size() as usize],
+        let vote_state = VoteState::new(genesis_block.bootstrap_leader_id);
+        let mut userdata = vec![0; VoteState::max_size() as usize];
+        vote_state.serialize(&mut userdata).unwrap();
+        let bootstrap_leader_vote_account = Account {
+            lamports: genesis_block.bootstrap_leader_lamports,
+            userdata,
             owner: solana_vote_api::id(),
             executable: false,
         };
 
-        let mut vote_state = VoteState::new(genesis_block.bootstrap_leader_id);
-        vote_state.votes.push_back(Lockout::new(&Vote::new(0)));
-        vote_state
-            .serialize(&mut bootstrap_leader_vote_account.userdata)
-            .unwrap();
-
         self.accounts().store_slow(
             self.accounts_id,
-            &genesis_block.bootstrap_leader_vote_account_id,
+            &genesis_block.bootstrap_leader_id,
             &bootstrap_leader_vote_account,
         );
 
@@ -830,10 +817,7 @@ mod tests {
             bank.get_balance(&genesis_block.mint_id),
             10_000 - dummy_leader_lamports
         );
-        assert_eq!(
-            bank.get_balance(&dummy_leader_id),
-            dummy_leader_lamports - 1 /* 1 token goes to the vote account associated with dummy_leader_lamports */
-        );
+        assert_eq!(bank.get_balance(&dummy_leader_id), dummy_leader_lamports);
     }
 
     #[test]
@@ -1146,7 +1130,7 @@ mod tests {
             GenesisBlock::new_with_leader(5, dummy_leader_id, dummy_leader_lamports);
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.get_balance(&genesis_block.mint_id), 2);
-        assert_eq!(bank.get_balance(&dummy_leader_id), 2);
+        assert_eq!(bank.get_balance(&dummy_leader_id), dummy_leader_lamports);
     }
 
     #[test]

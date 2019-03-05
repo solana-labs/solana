@@ -9,15 +9,13 @@ use std::io::Write;
 use std::path::Path;
 
 // The default (and minimal) amount of lamports given to the bootstrap leader:
-// * 2 lamports for the bootstrap leader ID account to later setup another vote account
 // * 1 lamport for the bootstrap leader vote account
-pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 3;
+pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 1;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GenesisBlock {
     pub bootstrap_leader_id: Pubkey,
     pub bootstrap_leader_lamports: u64,
-    pub bootstrap_leader_vote_account_id: Pubkey,
     pub mint_id: Pubkey,
     pub lamports: u64,
     pub ticks_per_slot: u64,
@@ -40,12 +38,10 @@ impl GenesisBlock {
         bootstrap_leader_lamports: u64,
     ) -> (Self, Keypair) {
         let mint_keypair = Keypair::new();
-        let bootstrap_leader_vote_account_keypair = Keypair::new();
         (
             Self {
                 bootstrap_leader_id,
                 bootstrap_leader_lamports,
-                bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
                 mint_id: mint_keypair.pubkey(),
                 lamports,
                 ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
@@ -84,7 +80,6 @@ mod tests {
         assert_eq!(genesis_block.lamports, 10_000 + BOOTSTRAP_LEADER_LAMPORTS);
         assert_eq!(genesis_block.mint_id, mint.pubkey());
         assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
-        assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
         assert_eq!(
             genesis_block.bootstrap_leader_lamports,
             BOOTSTRAP_LEADER_LAMPORTS
