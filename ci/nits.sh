@@ -15,7 +15,17 @@ declare prints=(
   'eprintln!'
 )
 
-if _ git grep "${prints[@]/#/-e }" src; then
+# Parts of the tree that are expected to be print free
+declare print_free_tree=(
+  'core/src'
+  'drone'
+  'metrics'
+  'netutil'
+  'runtime'
+  'sdk'
+)
+
+if _ git grep "${prints[@]/#/-e }" -- "${print_free_tree[@]}"; then
     exit 1
 fi
 
