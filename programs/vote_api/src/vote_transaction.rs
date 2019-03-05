@@ -8,8 +8,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::system_program;
-use solana_sdk::transaction::{Instruction, Transaction};
+use solana_sdk::transaction::Transaction;
 use solana_sdk::transaction_builder::TransactionBuilder;
 
 pub struct VoteTransaction {}
@@ -30,27 +29,48 @@ impl VoteTransaction {
     /// Fund or create the staking account with tokens
     pub fn new_account(
         from_keypair: &Keypair,
-        vote_account_id: Pubkey,
+        voter_id: Pubkey,
         recent_blockhash: Hash,
         num_tokens: u64,
         fee: u64,
     ) -> Transaction {
-        let create_tx = SystemInstruction::CreateAccount {
-            tokens: num_tokens,
-            space: VoteState::max_size() as u64,
-            program_id: id(),
-        };
-        Transaction::new_with_instructions(
-            &[from_keypair],
-            &[vote_account_id],
-            recent_blockhash,
-            fee,
-            vec![system_program::id(), id()],
-            vec![
-                Instruction::new(0, &create_tx, vec![0, 1]),
-                Instruction::new(1, &VoteInstruction::InitializeAccount, vec![1]),
-            ],
-        )
+        let from_id = from_keypair.pubkey();
+        let space = VoteState::max_size() as u64;
+        TransactionBuilder::new(fee)
+            .push(SystemInstruction::new_program_account(
+                from_id,
+                voter_id,
+                num_tokens,
+                space,
+                id(),
+            ))
+            .push(VoteInstruction::new_initialize_account(voter_id))
+            .sign(&[from_keypair], recent_blockhash)
+    }
+
+    /// Fund or create the staking account with tokens
+    pub fn new_account_with_delegate(
+        from_keypair: &Keypair,
+        voter_keypair: &Keypair,
+        delegate_id: Pubkey,
+        recent_blockhash: Hash,
+        num_tokens: u64,
+        fee: u64,
+    ) -> Transaction {
+        let from_id = from_keypair.pubkey();
+        let voter_id = voter_keypair.pubkey();
+        let space = VoteState::max_size() as u64;
+        TransactionBuilder::new(fee)
+            .push(SystemInstruction::new_program_account(
+                from_id,
+                voter_id,
+                num_tokens,
+                space,
+                id(),
+            ))
+            .push(VoteInstruction::new_initialize_account(voter_id))
+            .push(VoteInstruction::new_delegate_stake(voter_id, delegate_id))
+            .sign(&[from_keypair, voter_keypair], recent_blockhash)
     }
 
     /// Choose a node id to `delegate` or `assign` this vote account to
