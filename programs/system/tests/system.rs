@@ -1,9 +1,10 @@
-use solana_runtime::bank::{Bank, Result};
+use solana_runtime::bank::{Bank, BankError};
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::native_program::ProgramError;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::transaction_builder::{BuilderInstruction, TransactionBuilder};
 
 struct SystemBank<'a> {
     bank: &'a Bank,
@@ -14,91 +15,39 @@ impl<'a> SystemBank<'a> {
         bank.add_native_program("solana_system_program", &system_program::id());
         Self { bank }
     }
-    fn create_account(&self, from_keypair: &Keypair, to: Pubkey, lamports: u64) -> Result<()> {
-        let blockhash = self.bank.last_blockhash();
-        let tx = SystemTransaction::new_account(from_keypair, to, lamports, blockhash, 0);
-        self.bank.process_transaction(&tx)
-    }
-    fn move_lamports(&self, from_keypair: &Keypair, to: Pubkey, lamports: u64) -> Result<()> {
-        let blockhash = self.bank.last_blockhash();
-        let tx = SystemTransaction::new_move(from_keypair, to, lamports, blockhash, 0);
-        self.bank.process_transaction(&tx)
-    }
 }
-
 #[test]
-fn test_create_cannot_overwrite_used_account() {
-    let (genesis_block, from_keypair) = GenesisBlock::new(10_000);
+fn test_system_unsigned_transaction() {
+    let (genesis_block, from_keypair) = GenesisBlock::new(100);
     let bank = Bank::new(&genesis_block);
     let system_bank = SystemBank::new(&bank);
 
-    // create_account on uninitialized account should work
-    let system_account = Keypair::new().pubkey();
-    system_bank
-        .create_account(&from_keypair, system_account, 100)
-        .unwrap();
-    assert_eq!(system_bank.bank.get_balance(&system_account), 100);
-
-    // Create an account assigned to another program
-    let other_account = Keypair::new().pubkey();
-    let program_id = Pubkey::new(&[9; 32]);
-    let tx = SystemTransaction::new_program_account(
-        &from_keypair,
-        other_account,
-        system_bank.bank.last_blockhash(),
-        1,
-        0,
-        program_id,
-        0,
-    );
+    // Fund to account to bypass AccountNotFound error
+    let to_keypair = Keypair::new();
+    let blockhash = system_bank.bank.last_blockhash();
+    let tx = TransactionBuilder::default()
+        .push(SystemInstruction::new_move(
+            from_keypair.pubkey(),
+            to_keypair.pubkey(),
+            50,
+        ))
+        .sign(&[&from_keypair], blockhash);
     system_bank.bank.process_transaction(&tx).unwrap();
-    assert_eq!(system_bank.bank.get_balance(&other_account), 1);
-    assert_eq!(
-        system_bank.bank.get_account(&other_account).unwrap().owner,
-        program_id
-    );
 
-    // create_account on an initialized account should fail
-    assert!(system_bank
-        .create_account(&from_keypair, other_account, 100)
-        .is_err());
-    assert_eq!(system_bank.bank.get_balance(&other_account), 1);
+    // Erroneously sign transaction with recipient account key
+    // No signature case is tested by bank `test_zero_signatures()`
+    let blockhash = system_bank.bank.last_blockhash();
+    let tx = TransactionBuilder::default()
+        .push(BuilderInstruction::new(
+            system_program::id(),
+            &SystemInstruction::Move { tokens: 10 },
+            vec![(from_keypair.pubkey(), false), (to_keypair.pubkey(), true)],
+        ))
+        .sign(&[&to_keypair], blockhash);
     assert_eq!(
-        system_bank.bank.get_account(&other_account).unwrap().owner,
-        program_id
+        system_bank.bank.process_transaction(&tx),
+        Err(BankError::ProgramError(0, ProgramError::InvalidArgument))
     );
-}
-#[test]
-fn test_move_can_fund_used_account() {
-    let (genesis_block, from_keypair) = GenesisBlock::new(10_000);
-    let bank = Bank::new(&genesis_block);
-    let system_bank = SystemBank::new(&bank);
-
-    // Create an account assigned to another program
-    let other_account = Keypair::new().pubkey();
-    let program_id = Pubkey::new(&[9; 32]);
-    let tx = SystemTransaction::new_program_account(
-        &from_keypair,
-        other_account,
-        system_bank.bank.last_blockhash(),
-        1,
-        0,
-        program_id,
-        0,
-    );
-    system_bank.bank.process_transaction(&tx).unwrap();
-    assert_eq!(system_bank.bank.get_balance(&other_account), 1);
-    assert_eq!(
-        system_bank.bank.get_account(&other_account).unwrap().owner,
-        program_id
-    );
-
-    system_bank
-        .move_lamports(&from_keypair, other_account, 100)
-        .unwrap();
-    assert_eq!(system_bank.bank.get_balance(&other_account), 101);
-    assert_eq!(
-        system_bank.bank.get_account(&other_account).unwrap().owner,
-        program_id
-    );
+    assert_eq!(system_bank.bank.get_balance(&from_keypair.pubkey()), 50);
+    assert_eq!(system_bank.bank.get_balance(&to_keypair.pubkey()), 50);
 }
