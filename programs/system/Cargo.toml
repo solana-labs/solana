@@ -14,6 +14,9 @@ log = "0.4.2"
 serde = "1.0.89"
 solana-sdk = { path = "../../sdk", version = "0.12.0" }
 
+[dev-dependencies]
+solana-runtime = { path = "../../runtime", version = "0.12.0" }
+
 [lib]
 name = "solana_system_program"
 
@@ -21,4 +24,3 @@ name = "solana_system_program"
 # allocates Rust memory.
 # cc: https://github.com/solana-labs/solana/issues/2004#issuecomment-444570081
 crate-type = ["lib"]
-
