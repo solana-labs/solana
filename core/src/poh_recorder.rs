@@ -126,7 +126,7 @@ impl PohRecorder {
             .count();
         let e = if cnt > 0 {
             debug!(
-                "flush_cache: bank_id: {} tick_height: {} max: {} sending: {}",
+                "flush_cache: bank_slot: {} tick_height: {} max: {} sending: {}",
                 working_bank.bank.slot(),
                 working_bank.bank.tick_height(),
                 working_bank.max_tick_height,

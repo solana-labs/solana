@@ -206,7 +206,7 @@ pub mod tests {
 
         let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
         let bank_forks_info = vec![BankForksInfo {
-            bank_id: 0,
+            bank_slot: 0,
             entry_height: 0,
         }];
 

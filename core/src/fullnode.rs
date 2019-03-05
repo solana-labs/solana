@@ -117,7 +117,7 @@ impl Fullnode {
 
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
-        let bank = bank_forks[bank_info.bank_id].clone();
+        let bank = bank_forks[bank_info.bank_slot].clone();
 
         info!(
             "starting PoH... {} {}",
