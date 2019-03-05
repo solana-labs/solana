@@ -124,8 +124,8 @@ pub trait LedgerColumnFamilyRaw {
 // The Meta column family
 pub struct SlotMeta {
     // The number of slots above the root (the genesis block). The first
-    // slot has slot_height 0.
-    pub slot_height: u64,
+    // slot has slot 0.
+    pub slot: u64,
     // The total number of consecutive blobs starting from index 0
     // we have received for this slot.
     pub consumed: u64,
@@ -141,7 +141,7 @@ pub struct SlotMeta {
     // from this one.
     pub next_slots: Vec<u64>,
     // True if this slot is full (consumed == last_index + 1) and if every
-    // slot from 0..slot_height is also rooted.
+    // slot that is a parent of this slot is also rooted.
     pub is_rooted: bool,
 }
 
@@ -158,14 +158,14 @@ impl SlotMeta {
         self.consumed == self.last_index + 1
     }
 
-    fn new(slot_height: u64, parent_slot: u64) -> Self {
+    fn new(slot: u64, parent_slot: u64) -> Self {
         SlotMeta {
-            slot_height,
+            slot,
             consumed: 0,
             received: 0,
             parent_slot,
             next_slots: vec![],
-            is_rooted: slot_height == 0,
+            is_rooted: slot == 0,
             last_index: std::u64::MAX,
         }
     }
@@ -180,19 +180,19 @@ impl MetaCf {
         MetaCf { db }
     }
 
-    pub fn key(slot_height: u64) -> Vec<u8> {
+    pub fn key(slot: u64) -> Vec<u8> {
         let mut key = vec![0u8; 8];
-        BigEndian::write_u64(&mut key[0..8], slot_height);
+        BigEndian::write_u64(&mut key[0..8], slot);
         key
     }
 
-    pub fn get_slot_meta(&self, slot_height: u64) -> Result<Option<SlotMeta>> {
-        let key = Self::key(slot_height);
+    pub fn get_slot_meta(&self, slot: u64) -> Result<Option<SlotMeta>> {
+        let key = Self::key(slot);
         self.get(&key)
     }
 
-    pub fn put_slot_meta(&self, slot_height: u64, slot_meta: &SlotMeta) -> Result<()> {
-        let key = Self::key(slot_height);
+    pub fn put_slot_meta(&self, slot: u64, slot_meta: &SlotMeta) -> Result<()> {
+        let key = Self::key(slot);
         self.put(&key, slot_meta)
     }
 
@@ -225,34 +225,29 @@ impl DataCf {
         DataCf { db }
     }
 
-    pub fn get_by_slot_index(&self, slot_height: u64, index: u64) -> Result<Option<Vec<u8>>> {
-        let key = Self::key(slot_height, index);
+    pub fn get_by_slot_index(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
+        let key = Self::key(slot, index);
         self.get(&key)
     }
 
-    pub fn delete_by_slot_index(&self, slot_height: u64, index: u64) -> Result<()> {
-        let key = Self::key(slot_height, index);
+    pub fn delete_by_slot_index(&self, slot: u64, index: u64) -> Result<()> {
+        let key = Self::key(slot, index);
         self.delete(&key)
     }
 
-    pub fn put_by_slot_index(
-        &self,
-        slot_height: u64,
-        index: u64,
-        serialized_value: &[u8],
-    ) -> Result<()> {
-        let key = Self::key(slot_height, index);
+    pub fn put_by_slot_index(&self, slot: u64, index: u64, serialized_value: &[u8]) -> Result<()> {
+        let key = Self::key(slot, index);
         self.put(&key, serialized_value)
     }
 
-    pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
+    pub fn key(slot: u64, index: u64) -> Vec<u8> {
         let mut key = vec![0u8; 16];
-        BigEndian::write_u64(&mut key[0..8], slot_height);
+        BigEndian::write_u64(&mut key[0..8], slot);
         BigEndian::write_u64(&mut key[8..16], index);
         key
     }
 
-    pub fn slot_height_from_key(key: &[u8]) -> Result<u64> {
+    pub fn slot_from_key(key: &[u8]) -> Result<u64> {
         let mut rdr = io::Cursor::new(&key[0..8]);
         let height = rdr.read_u64::<BigEndian>()?;
         Ok(height)
@@ -284,32 +279,27 @@ impl ErasureCf {
     pub fn new(db: Arc<DB>) -> Self {
         ErasureCf { db }
     }
-    pub fn delete_by_slot_index(&self, slot_height: u64, index: u64) -> Result<()> {
-        let key = Self::key(slot_height, index);
+    pub fn delete_by_slot_index(&self, slot: u64, index: u64) -> Result<()> {
+        let key = Self::key(slot, index);
         self.delete(&key)
     }
 
-    pub fn get_by_slot_index(&self, slot_height: u64, index: u64) -> Result<Option<Vec<u8>>> {
-        let key = Self::key(slot_height, index);
+    pub fn get_by_slot_index(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
+        let key = Self::key(slot, index);
         self.get(&key)
     }
 
-    pub fn put_by_slot_index(
-        &self,
-        slot_height: u64,
-        index: u64,
-        serialized_value: &[u8],
-    ) -> Result<()> {
-        let key = Self::key(slot_height, index);
+    pub fn put_by_slot_index(&self, slot: u64, index: u64, serialized_value: &[u8]) -> Result<()> {
+        let key = Self::key(slot, index);
         self.put(&key, serialized_value)
     }
 
-    pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
-        DataCf::key(slot_height, index)
+    pub fn key(slot: u64, index: u64) -> Vec<u8> {
+        DataCf::key(slot, index)
     }
 
-    pub fn slot_height_from_key(key: &[u8]) -> Result<u64> {
-        DataCf::slot_height_from_key(key)
+    pub fn slot_from_key(key: &[u8]) -> Result<u64> {
+        DataCf::slot_from_key(key)
     }
 
     pub fn index_from_key(key: &[u8]) -> Result<u64> {
@@ -413,15 +403,15 @@ impl Blocktree {
         Ok((blocktree, signal_receiver))
     }
 
-    pub fn meta(&self, slot_height: u64) -> Result<Option<SlotMeta>> {
-        self.meta_cf.get(&MetaCf::key(slot_height))
+    pub fn meta(&self, slot: u64) -> Result<Option<SlotMeta>> {
+        self.meta_cf.get(&MetaCf::key(slot))
     }
 
-    pub fn reset_slot_consumed(&self, slot_height: u64) -> Result<()> {
-        let meta_key = MetaCf::key(slot_height);
+    pub fn reset_slot_consumed(&self, slot: u64) -> Result<()> {
+        let meta_key = MetaCf::key(slot);
         if let Some(mut meta) = self.meta_cf.get(&meta_key)? {
             for index in 0..meta.received {
-                self.data_cf.delete_by_slot_index(slot_height, index)?;
+                self.data_cf.delete_by_slot_index(slot, index)?;
             }
             meta.consumed = 0;
             meta.received = 0;
@@ -440,9 +430,9 @@ impl Blocktree {
         Ok(())
     }
 
-    pub fn get_next_slot(&self, slot_height: u64) -> Result<Option<u64>> {
+    pub fn get_next_slot(&self, slot: u64) -> Result<Option<u64>> {
         let mut db_iterator = self.db.raw_iterator_cf(self.meta_cf.handle())?;
-        db_iterator.seek(&MetaCf::key(slot_height + 1));
+        db_iterator.seek(&MetaCf::key(slot + 1));
         if !db_iterator.valid() {
             Ok(None)
         } else {
@@ -537,7 +527,7 @@ impl Blocktree {
         I::Item: Borrow<Blob>,
     {
         let mut write_batch = WriteBatch::default();
-        // A map from slot_height to a 2-tuple of metadata: (working copy, backup copy),
+        // A map from slot to a 2-tuple of metadata: (working copy, backup copy),
         // so we can detect changes to the slot metadata later
         let mut slot_meta_working_set = HashMap::new();
         let new_blobs: Vec<_> = new_blobs.into_iter().collect();
@@ -596,14 +586,14 @@ impl Blocktree {
 
         // Check if any metadata was changed, if so, insert the new version of the
         // metadata into the write batch
-        for (slot_height, (meta_copy, meta_backup)) in slot_meta_working_set.iter() {
+        for (slot, (meta_copy, meta_backup)) in slot_meta_working_set.iter() {
             let meta: &SlotMeta = &RefCell::borrow(&*meta_copy);
             // Check if the working copy of the metadata has changed
             if Some(meta) != meta_backup.as_ref() {
                 should_signal = should_signal || Self::slot_has_updates(meta, &meta_backup);
                 write_batch.put_cf(
                     self.meta_cf.handle(),
-                    &MetaCf::key(*slot_height),
+                    &MetaCf::key(*slot),
                     &serialize(&meta)?,
                 )?;
             }
@@ -628,9 +618,9 @@ impl Blocktree {
         start_index: u64,
         num_blobs: u64,
         buf: &mut [u8],
-        slot_height: u64,
+        slot: u64,
     ) -> Result<(u64, u64)> {
-        let start_key = DataCf::key(slot_height, start_index);
+        let start_key = DataCf::key(slot, start_index);
         let mut db_iterator = self.db.raw_iterator_cf(self.data_cf.handle())?;
         db_iterator.seek(&start_key);
         let mut total_blobs = 0;
@@ -721,11 +711,11 @@ impl Blocktree {
         self.data_cf.put_by_slot_index(slot, index, bytes)
     }
 
-    pub fn get_data_blob(&self, slot_height: u64, blob_index: u64) -> Result<Option<Blob>> {
-        let bytes = self.get_data_blob_bytes(slot_height, blob_index)?;
+    pub fn get_data_blob(&self, slot: u64, blob_index: u64) -> Result<Option<Blob>> {
+        let bytes = self.get_data_blob_bytes(slot, blob_index)?;
         Ok(bytes.map(|bytes| {
             let blob = Blob::new(&bytes);
-            assert!(blob.slot() == slot_height);
+            assert!(blob.slot() == slot);
             assert!(blob.index() == blob_index);
             blob
         }))
@@ -742,14 +732,14 @@ impl Blocktree {
 
     // Given a start and end entry index, find all the missing
     // indexes in the ledger in the range [start_index, end_index)
-    // for the slot with slot_height == slot
+    // for the slot with the specified slot
     fn find_missing_indexes(
         db_iterator: &mut BlocktreeRawIterator,
         slot: u64,
         start_index: u64,
         end_index: u64,
         key: &dyn Fn(u64, u64) -> Vec<u8>,
-        slot_height_from_key: &dyn Fn(&[u8]) -> Result<u64>,
+        slot_from_key: &dyn Fn(&[u8]) -> Result<u64>,
         index_from_key: &dyn Fn(&[u8]) -> Result<u64>,
         max_missing: usize,
     ) -> Vec<u64> {
@@ -775,7 +765,7 @@ impl Blocktree {
                 break;
             }
             let current_key = db_iterator.key().expect("Expect a valid key");
-            let current_slot = slot_height_from_key(&current_key)
+            let current_slot = slot_from_key(&current_key)
                 .expect("Expect to be able to parse slot from valid key");
             let current_index = {
                 if current_slot > slot {
@@ -824,7 +814,7 @@ impl Blocktree {
             start_index,
             end_index,
             &DataCf::key,
-            &DataCf::slot_height_from_key,
+            &DataCf::slot_from_key,
             &DataCf::index_from_key,
             max_missing,
         )
@@ -845,7 +835,7 @@ impl Blocktree {
             start_index,
             end_index,
             &ErasureCf::key,
-            &ErasureCf::slot_height_from_key,
+            &ErasureCf::slot_from_key,
             &ErasureCf::index_from_key,
             max_missing,
         )
@@ -854,42 +844,36 @@ impl Blocktree {
     /// Returns the entry vector for the slot starting with `blob_start_index`
     pub fn get_slot_entries(
         &self,
-        slot_height: u64,
+        slot: u64,
         blob_start_index: u64,
         max_entries: Option<u64>,
     ) -> Result<Vec<Entry>> {
-        self.get_slot_entries_with_blob_count(slot_height, blob_start_index, max_entries)
+        self.get_slot_entries_with_blob_count(slot, blob_start_index, max_entries)
             .map(|x| x.0)
     }
 
     pub fn get_slot_entries_with_blob_count(
         &self,
-        slot_height: u64,
+        slot: u64,
         blob_start_index: u64,
         max_entries: Option<u64>,
     ) -> Result<(Vec<Entry>, usize)> {
         // Find the next consecutive block of blobs.
-        let consecutive_blobs = self.get_slot_consecutive_blobs(
-            slot_height,
-            &HashMap::new(),
-            blob_start_index,
-            max_entries,
-        )?;
+        let consecutive_blobs =
+            self.get_slot_consecutive_blobs(slot, &HashMap::new(), blob_start_index, max_entries)?;
         let num = consecutive_blobs.len();
         Ok((Self::deserialize_blobs(&consecutive_blobs), num))
     }
 
-    // Returns slots connecting to any element of the list `slot_heights`.
-    pub fn get_slots_since(&self, slot_heights: &[u64]) -> Result<HashMap<u64, Vec<u64>>> {
+    // Returns slots connecting to any element of the list `slots`.
+    pub fn get_slots_since(&self, slots: &[u64]) -> Result<HashMap<u64, Vec<u64>>> {
         // Return error if there was a database error during lookup of any of the
         // slot indexes
-        let slot_metas: Result<Vec<Option<SlotMeta>>> = slot_heights
-            .iter()
-            .map(|slot_height| self.meta(*slot_height))
-            .collect();
+        let slot_metas: Result<Vec<Option<SlotMeta>>> =
+            slots.iter().map(|slot| self.meta(*slot)).collect();
 
         let slot_metas = slot_metas?;
-        let result: HashMap<u64, Vec<u64>> = slot_heights
+        let result: HashMap<u64, Vec<u64>> = slots
             .iter()
             .zip(slot_metas)
             .filter_map(|(height, meta)| meta.map(|meta| (*height, meta.next_slots)))
@@ -956,17 +940,17 @@ impl Blocktree {
         working_set: &HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
     ) -> Result<()> {
         let mut new_chained_slots = HashMap::new();
-        let working_set_slot_heights: Vec<_> = working_set.iter().map(|s| *s.0).collect();
-        for slot_height in working_set_slot_heights {
-            self.handle_chaining_for_slot(working_set, &mut new_chained_slots, slot_height)?;
+        let working_set_slots: Vec<_> = working_set.iter().map(|s| *s.0).collect();
+        for slot in working_set_slots {
+            self.handle_chaining_for_slot(working_set, &mut new_chained_slots, slot)?;
         }
 
         // Write all the newly changed slots in new_chained_slots to the write_batch
-        for (slot_height, meta_copy) in new_chained_slots.iter() {
+        for (slot, meta_copy) in new_chained_slots.iter() {
             let meta: &SlotMeta = &RefCell::borrow(&*meta_copy);
             write_batch.put_cf(
                 self.meta_cf.handle(),
-                &MetaCf::key(*slot_height),
+                &MetaCf::key(*slot),
                 &serialize(meta)?,
             )?;
         }
@@ -977,35 +961,32 @@ impl Blocktree {
         &self,
         working_set: &HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
         new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
-        slot_height: u64,
+        slot: u64,
     ) -> Result<()> {
         let (meta_copy, meta_backup) = working_set
-            .get(&slot_height)
+            .get(&slot)
             .expect("Slot must exist in the working_set hashmap");
         {
             let mut slot_meta = meta_copy.borrow_mut();
 
             // If:
             // 1) This is a new slot
-            // 2) slot_height != 0
+            // 2) slot != 0
             // then try to chain this slot to a previous slot
-            if slot_height != 0 {
-                let prev_slot_height = slot_meta.parent_slot;
+            if slot != 0 {
+                let prev_slot = slot_meta.parent_slot;
 
                 // Check if slot_meta is a new slot
                 if meta_backup.is_none() {
-                    let prev_slot = self.find_slot_meta_else_create(
-                        working_set,
-                        new_chained_slots,
-                        prev_slot_height,
-                    )?;
+                    let prev_slot =
+                        self.find_slot_meta_else_create(working_set, new_chained_slots, prev_slot)?;
 
                     // This is a newly inserted slot so:
                     // 1) Chain to the previous slot, and also
                     // 2) Determine whether to set the is_rooted flag
                     self.chain_new_slot_to_prev_slot(
                         &mut prev_slot.borrow_mut(),
-                        slot_height,
+                        slot,
                         &mut slot_meta,
                     );
                 }
@@ -1018,7 +999,7 @@ impl Blocktree {
             // This is a newly inserted slot and slot.is_rooted is true, so go through
             // and update all child slots with is_rooted if applicable
             let mut next_slots: Vec<(u64, Rc<RefCell<(SlotMeta)>>)> =
-                vec![(slot_height, meta_copy.clone())];
+                vec![(slot, meta_copy.clone())];
             while !next_slots.is_empty() {
                 let (_, current_slot) = next_slots.pop().unwrap();
                 current_slot.borrow_mut().is_rooted = true;
@@ -1042,12 +1023,12 @@ impl Blocktree {
 
     fn chain_new_slot_to_prev_slot(
         &self,
-        prev_slot: &mut SlotMeta,
-        current_slot_height: u64,
-        current_slot: &mut SlotMeta,
+        prev_slot_meta: &mut SlotMeta,
+        current_slot: u64,
+        current_slot_meta: &mut SlotMeta,
     ) {
-        prev_slot.next_slots.push(current_slot_height);
-        current_slot.is_rooted = prev_slot.is_rooted && prev_slot.is_full();
+        prev_slot_meta.next_slots.push(current_slot);
+        current_slot_meta.is_rooted = prev_slot_meta.is_rooted && prev_slot_meta.is_full();
     }
 
     fn is_newly_completed_slot(
@@ -1082,21 +1063,21 @@ impl Blocktree {
     // create a dummy placeholder slot in the database
     fn find_slot_meta_in_db_else_create<'a>(
         &self,
-        slot_height: u64,
+        slot: u64,
         insert_map: &'a mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     ) -> Result<Rc<RefCell<SlotMeta>>> {
-        if let Some(slot) = self.meta(slot_height)? {
-            insert_map.insert(slot_height, Rc::new(RefCell::new(slot)));
-            Ok(insert_map.get(&slot_height).unwrap().clone())
+        if let Some(slot_meta) = self.meta(slot)? {
+            insert_map.insert(slot, Rc::new(RefCell::new(slot_meta)));
+            Ok(insert_map.get(&slot).unwrap().clone())
         } else {
             // If this slot doesn't exist, make a placeholder slot. This way we
             // remember which slots chained to this one when we eventually get a real blob
             // for this slot
             insert_map.insert(
-                slot_height,
-                Rc::new(RefCell::new(SlotMeta::new(slot_height, std::u64::MAX))),
+                slot,
+                Rc::new(RefCell::new(SlotMeta::new(slot, std::u64::MAX))),
             );
-            Ok(insert_map.get(&slot_height).unwrap().clone())
+            Ok(insert_map.get(&slot).unwrap().clone())
         }
     }
 
@@ -1105,11 +1086,11 @@ impl Blocktree {
         &self,
         working_set: &'a HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
         chained_slots: &'a HashMap<u64, Rc<RefCell<SlotMeta>>>,
-        slot_height: u64,
+        slot: u64,
     ) -> Result<Option<Rc<RefCell<SlotMeta>>>> {
-        if let Some((entry, _)) = working_set.get(&slot_height) {
+        if let Some((entry, _)) = working_set.get(&slot) {
             Ok(Some(entry.clone()))
-        } else if let Some(entry) = chained_slots.get(&slot_height) {
+        } else if let Some(entry) = chained_slots.get(&slot) {
             Ok(Some(entry.clone()))
         } else {
             Ok(None)
@@ -1185,7 +1166,7 @@ impl Blocktree {
     /// range
     fn get_slot_consecutive_blobs<'a>(
         &self,
-        slot_height: u64,
+        slot: u64,
         prev_inserted_blob_datas: &HashMap<(u64, u64), &'a [u8]>,
         mut current_index: u64,
         max_blobs: Option<u64>,
@@ -1196,13 +1177,9 @@ impl Blocktree {
                 break;
             }
             // Try to find the next blob we're looking for in the prev_inserted_blob_datas
-            if let Some(prev_blob_data) =
-                prev_inserted_blob_datas.get(&(slot_height, current_index))
-            {
+            if let Some(prev_blob_data) = prev_inserted_blob_datas.get(&(slot, current_index)) {
                 blobs.push(Cow::Borrowed(*prev_blob_data));
-            } else if let Some(blob_data) =
-                self.data_cf.get_by_slot_index(slot_height, current_index)?
-            {
+            } else if let Some(blob_data) = self.data_cf.get_by_slot_index(slot, current_index)? {
                 // Try to find the next blob we're looking for in the database
                 blobs.push(Cow::Owned(blob_data));
             } else {
@@ -1791,22 +1768,20 @@ pub mod tests {
             // Write entries
             let num_slots = 5 as u64;
             let mut index = 0;
-            for slot_height in 0..num_slots {
-                let entries = make_tiny_test_entries(slot_height as usize + 1);
+            for slot in 0..num_slots {
+                let entries = make_tiny_test_entries(slot as usize + 1);
                 let last_entry = entries.last().unwrap().clone();
                 let mut blobs = entries.clone().to_blobs();
                 for b in blobs.iter_mut() {
                     b.set_index(index);
-                    b.set_slot(slot_height as u64);
+                    b.set_slot(slot as u64);
                     index += 1;
                 }
                 blocktree
                     .write_blobs(&blobs)
                     .expect("Expected successful write of blobs");
                 assert_eq!(
-                    blocktree
-                        .get_slot_entries(slot_height, index - 1, None)
-                        .unwrap(),
+                    blocktree.get_slot_entries(slot, index - 1, None).unwrap(),
                     vec![last_entry],
                 );
             }
@@ -2003,10 +1978,9 @@ pub mod tests {
         let num_slots = entries_per_slot;
         let mut blobs: Vec<Blob> = vec![];
         let mut missing_blobs = vec![];
-        for slot_height in 1..num_slots + 1 {
-            let (mut slot_blobs, _) =
-                make_slot_entries(slot_height, slot_height - 1, entries_per_slot);
-            let missing_blob = slot_blobs.remove(slot_height as usize - 1);
+        for slot in 1..num_slots + 1 {
+            let (mut slot_blobs, _) = make_slot_entries(slot, slot - 1, entries_per_slot);
+            let missing_blob = slot_blobs.remove(slot as usize - 1);
             blobs.extend(slot_blobs);
             missing_blobs.push(missing_blob);
         }
@@ -2018,8 +1992,8 @@ pub mod tests {
         // Insert a blob for each slot that doesn't make a consecutive block, we
         // should get no updates
         let blobs: Vec<_> = (1..num_slots + 1)
-            .flat_map(|slot_height| {
-                let (mut blob, _) = make_slot_entries(slot_height, slot_height - 1, 1);
+            .flat_map(|slot| {
+                let (mut blob, _) = make_slot_entries(slot, slot - 1, 1);
                 blob[0].set_index(2 * num_slots as u64);
                 blob
             })
@@ -2124,17 +2098,17 @@ pub mod tests {
             // Separate every other slot into two separate vectors
             let mut slots = vec![];
             let mut missing_slots = vec![];
-            for slot_height in 0..num_slots {
+            for slot in 0..num_slots {
                 let parent_slot = {
-                    if slot_height == 0 {
+                    if slot == 0 {
                         0
                     } else {
-                        slot_height - 1
+                        slot - 1
                     }
                 };
-                let (slot_blobs, _) = make_slot_entries(slot_height, parent_slot, entries_per_slot);
+                let (slot_blobs, _) = make_slot_entries(slot, parent_slot, entries_per_slot);
 
-                if slot_height % 2 == 1 {
+                if slot % 2 == 1 {
                     slots.extend(slot_blobs);
                 } else {
                     missing_slots.extend(slot_blobs);
@@ -2205,8 +2179,8 @@ pub mod tests {
             let (blobs, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
 
             // Write the blobs such that every 3rd slot has a gap in the beginning
-            for (slot_height, slot_ticks) in blobs.chunks(entries_per_slot as usize).enumerate() {
-                if slot_height % 3 == 0 {
+            for (slot, slot_ticks) in blobs.chunks(entries_per_slot as usize).enumerate() {
+                if slot % 3 == 0 {
                     blocktree
                         .write_blobs(&slot_ticks[1..entries_per_slot as usize])
                         .unwrap();
@@ -2296,17 +2270,17 @@ pub mod tests {
 
             // Get blobs for the slot
             slots.shuffle(&mut thread_rng());
-            for slot_height in slots {
-                // Get blobs for the slot "slot_height"
-                let slot_blobs = &mut blobs[(slot_height * entries_per_slot) as usize
-                    ..((slot_height + 1) * entries_per_slot) as usize];
+            for slot in slots {
+                // Get blobs for the slot "slot"
+                let slot_blobs = &mut blobs
+                    [(slot * entries_per_slot) as usize..((slot + 1) * entries_per_slot) as usize];
                 for blob in slot_blobs.iter_mut() {
                     // Get the parent slot of the slot in the tree
                     let slot_parent = {
-                        if slot_height == 0 {
+                        if slot == 0 {
                             0
                         } else {
-                            (slot_height - 1) / branching_factor
+                            (slot - 1) / branching_factor
                         }
                     };
                     blob.set_parent(slot_parent);
@@ -2318,27 +2292,25 @@ pub mod tests {
             // Make sure everything chains correctly
             let last_level =
                 (branching_factor.pow(num_tree_levels - 1) - 1) / (branching_factor - 1);
-            for slot_height in 0..num_slots {
-                let slot_meta = blocktree.meta(slot_height).unwrap().unwrap();
+            for slot in 0..num_slots {
+                let slot_meta = blocktree.meta(slot).unwrap().unwrap();
                 assert_eq!(slot_meta.consumed, entries_per_slot);
                 assert_eq!(slot_meta.received, entries_per_slot);
                 let slot_parent = {
-                    if slot_height == 0 {
+                    if slot == 0 {
                         0
                     } else {
-                        (slot_height - 1) / branching_factor
+                        (slot - 1) / branching_factor
                     }
                 };
                 assert_eq!(slot_meta.parent_slot, slot_parent);
 
                 let expected_children: HashSet<_> = {
-                    if slot_height >= last_level {
+                    if slot >= last_level {
                         HashSet::new()
                     } else {
-                        let first_child_slot =
-                            min(num_slots - 1, slot_height * branching_factor + 1);
-                        let last_child_slot =
-                            min(num_slots - 1, (slot_height + 1) * branching_factor);
+                        let first_child_slot = min(num_slots - 1, slot * branching_factor + 1);
+                        let last_child_slot = min(num_slots - 1, (slot + 1) * branching_factor);
                         (first_child_slot..last_child_slot + 1).collect()
                     }
                 };
@@ -2402,17 +2374,17 @@ pub mod tests {
             let num_entries = 20 as u64;
             let mut entries = vec![];
             let mut blobs = vec![];
-            for slot_height in 0..num_entries {
+            for slot in 0..num_entries {
                 let parent_slot = {
-                    if slot_height == 0 {
+                    if slot == 0 {
                         0
                     } else {
-                        slot_height - 1
+                        slot - 1
                     }
                 };
 
-                let (mut blob, entry) = make_slot_entries(slot_height, parent_slot, 1);
-                blob[0].set_index(slot_height);
+                let (mut blob, entry) = make_slot_entries(slot, parent_slot, 1);
+                blob[0].set_index(slot);
                 blobs.extend(blob);
                 entries.extend(entry);
             }
@@ -2451,14 +2423,14 @@ pub mod tests {
 
     pub fn entries_to_blobs(
         entries: &Vec<Entry>,
-        slot_height: u64,
+        slot: u64,
         parent_slot: u64,
         is_full_slot: bool,
     ) -> Vec<Blob> {
         let mut blobs = entries.clone().to_blobs();
         for (i, b) in blobs.iter_mut().enumerate() {
             b.set_index(i as u64);
-            b.set_slot(slot_height);
+            b.set_slot(slot);
             b.set_parent(parent_slot);
         }
         if is_full_slot {
@@ -2468,27 +2440,26 @@ pub mod tests {
     }
 
     pub fn make_slot_entries(
-        slot_height: u64,
+        slot: u64,
         parent_slot: u64,
         num_entries: u64,
     ) -> (Vec<Blob>, Vec<Entry>) {
         let entries = make_tiny_test_entries(num_entries as usize);
-        let blobs = entries_to_blobs(&entries, slot_height, parent_slot, true);
+        let blobs = entries_to_blobs(&entries, slot, parent_slot, true);
         (blobs, entries)
     }
 
     pub fn make_many_slot_entries(
-        start_slot_height: u64,
+        start_slot: u64,
         num_slots: u64,
         entries_per_slot: u64,
     ) -> (Vec<Blob>, Vec<Entry>) {
         let mut blobs = vec![];
         let mut entries = vec![];
-        for slot_height in start_slot_height..start_slot_height + num_slots {
-            let parent_slot = if slot_height == 0 { 0 } else { slot_height - 1 };
+        for slot in start_slot..start_slot + num_slots {
+            let parent_slot = if slot == 0 { 0 } else { slot - 1 };
 
-            let (slot_blobs, slot_entries) =
-                make_slot_entries(slot_height, parent_slot, entries_per_slot);
+            let (slot_blobs, slot_entries) = make_slot_entries(slot, parent_slot, entries_per_slot);
             blobs.extend(slot_blobs);
             entries.extend(slot_entries);
         }

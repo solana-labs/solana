@@ -52,7 +52,6 @@ impl Broadcast {
         broadcast_table.truncate(DATA_PLANE_FANOUT);
         inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
 
-        let slot_height = bank.slot();
         let max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
         // TODO: Fix BankingStage/BroadcastStage to operate on `slot` directly instead of
         // `max_tick_height`
@@ -91,8 +90,7 @@ impl Broadcast {
             })
             .collect();
 
-        // TODO: blob_index should be slot-relative...
-        index_blobs(&blobs, &self.id, &mut blob_index, slot_height);
+        index_blobs(&blobs, &self.id, &mut blob_index, bank.slot());
         let parent = bank.parents().first().map(|bank| bank.slot()).unwrap_or(0);
         for b in blobs.iter() {
             b.write().unwrap().set_parent(parent);

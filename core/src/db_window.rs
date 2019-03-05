@@ -360,10 +360,10 @@ mod test {
             .collect();
 
         // For each slot, find all missing indexes in the range [0, num_entries_per_slot * nth]
-        for slot_height in 0..num_slots {
+        for slot in 0..num_slots {
             assert_eq!(
                 blocktree.find_missing_data_indexes(
-                    slot_height as u64,
+                    slot as u64,
                     0,
                     (num_entries_per_slot * nth) as u64,
                     num_entries_per_slot * nth as usize
@@ -373,10 +373,10 @@ mod test {
         }
 
         // Test with a limit on the number of returned entries
-        for slot_height in 0..num_slots {
+        for slot in 0..num_slots {
             assert_eq!(
                 blocktree.find_missing_data_indexes(
-                    slot_height as u64,
+                    slot as u64,
                     0,
                     (num_entries_per_slot * nth) as u64,
                     num_entries_per_slot * (nth - 1)
@@ -392,10 +392,10 @@ mod test {
         expected.extend(extra_entries);
 
         // For each slot, find all missing indexes in the range [0, num_entries_per_slot * nth]
-        for slot_height in 0..num_slots {
+        for slot in 0..num_slots {
             assert_eq!(
                 blocktree.find_missing_data_indexes(
-                    slot_height as u64,
+                    slot as u64,
                     0,
                     (num_entries_per_slot * (nth + 1)) as u64,
                     num_entries_per_slot * (nth + 1),
@@ -441,8 +441,8 @@ mod test {
         // Setup the window
         let offset = 0;
         let num_blobs = NUM_DATA + 2;
-        let slot_height = 0;
-        let mut window = setup_window_ledger(offset, num_blobs, false, slot_height);
+        let slot = 0;
+        let mut window = setup_window_ledger(offset, num_blobs, false, slot);
         let end_index = (offset + num_blobs) % window.len();
 
         // Test erasing a data block and an erasure block
@@ -466,7 +466,7 @@ mod test {
         {
             let data_blobs: Vec<_> = window[erased_index..end_index]
                 .iter()
-                .map(|slot| slot.data.clone().unwrap())
+                .map(|entry| entry.data.clone().unwrap())
                 .collect();
 
             let locks: Vec<_> = data_blobs.iter().map(|blob| blob.read().unwrap()).collect();
@@ -490,7 +490,7 @@ mod test {
         let erased_coding_l = erased_coding.read().unwrap();
         assert_eq!(
             &blocktree
-                .get_coding_blob_bytes(slot_height, erased_index as u64)
+                .get_coding_blob_bytes(slot, erased_index as u64)
                 .unwrap()
                 .unwrap()[BLOB_HEADER_SIZE..],
             &erased_coding_l.data()[..erased_coding_l.size() as usize],

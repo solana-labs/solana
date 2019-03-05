@@ -342,7 +342,7 @@ impl Bank {
         // Sort by slot height
         slots_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
 
-        let max_slot = self.slot_height();
+        let max_slot = self.slot();
         let min_slot = max_slot.saturating_sub(MAX_RECENT_BLOCKHASHES as u64);
 
         let mut total_stake = 0;
@@ -757,7 +757,7 @@ impl Bank {
         self.stakers_slot_offset
     }
 
-    /// Return the number of ticks per slot that should be used calls to slot_height().
+    /// Return the number of ticks per slot
     pub fn ticks_per_slot(&self) -> u64 {
         self.ticks_per_slot
     }
@@ -774,11 +774,6 @@ impl Bank {
     /// Return the number of ticks since the last slot boundary.
     pub fn tick_index(&self) -> u64 {
         self.tick_height() % self.ticks_per_slot()
-    }
-
-    /// Return the slot_height of the last registered tick.
-    pub fn slot_height(&self) -> u64 {
-        self.tick_height() / self.ticks_per_slot()
     }
 
     /// Return the number of slots per tick.
@@ -804,12 +799,12 @@ impl Bank {
 
     /// Return the number of slots since the last epoch boundary.
     pub fn slot_index(&self) -> u64 {
-        self.slot_height() % self.slots_per_epoch()
+        self.slot() % self.slots_per_epoch()
     }
 
     /// Return the epoch height of the last registered tick.
     pub fn epoch_height(&self) -> u64 {
-        self.slot_height() / self.slots_per_epoch()
+        self.slot() / self.slots_per_epoch()
     }
 }
 

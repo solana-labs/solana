@@ -331,7 +331,7 @@ pub fn make_active_set_entries(
     active_keypair: &Arc<Keypair>,
     token_source: &Keypair,
     stake: u64,
-    slot_height_to_vote_on: u64,
+    slot_to_vote_on: u64,
     blockhash: &Hash,
     num_ending_ticks: u64,
 ) -> (Vec<Entry>, Keypair) {
@@ -360,7 +360,7 @@ pub fn make_active_set_entries(
     let new_vote_account_entry = next_entry_mut(&mut last_entry_hash, 1, vec![new_vote_account_tx]);
 
     // 3) Create vote entry
-    let vote_tx = VoteTransaction::new_vote(&voting_keypair, slot_height_to_vote_on, *blockhash, 0);
+    let vote_tx = VoteTransaction::new_vote(&voting_keypair, slot_to_vote_on, *blockhash, 0);
     let vote_entry = next_entry_mut(&mut last_entry_hash, 1, vec![vote_tx]);
 
     // 4) Create `num_ending_ticks` empty ticks

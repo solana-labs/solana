@@ -114,9 +114,9 @@ pub mod tests {
         bank.process_transaction(&tx).unwrap();
     }
 
-    pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot_height: u64) {
+    pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot: u64) {
         let blockhash = bank.last_blockhash();
-        let tx = VoteTransaction::new_vote(voting_keypair, slot_height, blockhash, 0);
+        let tx = VoteTransaction::new_vote(voting_keypair, slot, blockhash, 0);
         bank.process_transaction(&tx).unwrap();
     }
 
@@ -125,9 +125,9 @@ pub mod tests {
         voting_keypair: &T,
         bank: &Bank,
         num_tokens: u64,
-        slot_height: u64,
+        slot: u64,
     ) {
         new_vote_account(from_keypair, &voting_keypair.pubkey(), bank, num_tokens);
-        push_vote(voting_keypair, bank, slot_height);
+        push_vote(voting_keypair, bank, slot);
     }
 }
