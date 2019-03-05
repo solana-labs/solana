@@ -111,7 +111,6 @@ impl Tvu {
             voting_keypair,
             blocktree.clone(),
             &bank_forks,
-            &bank_forks_info,
             cluster_info.clone(),
             exit.clone(),
             ledger_signal_receiver,

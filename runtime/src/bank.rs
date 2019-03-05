@@ -191,6 +191,10 @@ impl Bank {
         bank
     }
 
+    pub fn collector_id(&self) -> Pubkey {
+        self.collector_id
+    }
+
     pub fn slot(&self) -> u64 {
         self.slot
     }
