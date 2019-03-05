@@ -471,7 +471,7 @@ fn process_pay(
     let blockhash = get_recent_blockhash(&rpc_client)?;
 
     if timestamp == None && *witnesses == None {
-        let mut tx = SystemTransaction::new_account(&config.id, to, tokens, blockhash, 0);
+        let mut tx = SystemTransaction::new_move(&config.id, to, tokens, blockhash, 0);
         let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
         Ok(signature_str.to_string())
     } else if *witnesses == None {
