@@ -32,6 +32,25 @@ impl<'a> VoteBank<'a> {
         self.bank.process_transaction(&tx)
     }
 
+    fn create_vote_account_with_delegate(
+        &self,
+        from_keypair: &Keypair,
+        vote_keypair: &Keypair,
+        delegate_id: Pubkey,
+        lamports: u64,
+    ) -> Result<()> {
+        let blockhash = self.bank.last_blockhash();
+        let tx = VoteTransaction::new_account_with_delegate(
+            from_keypair,
+            vote_keypair,
+            delegate_id,
+            blockhash,
+            lamports,
+            0,
+        );
+        self.bank.process_transaction(&tx)
+    }
+
     fn submit_vote(&self, vote_keypair: &Keypair, tick_height: u64) -> Result<VoteState> {
         let blockhash = self.bank.last_blockhash();
         let tx = VoteTransaction::new_vote(vote_keypair, tick_height, blockhash, 0);
@@ -44,7 +63,7 @@ impl<'a> VoteBank<'a> {
 }
 
 #[test]
-fn test_vote_via_bank() {
+fn test_vote_bank_basic() {
     let (genesis_block, from_keypair) = GenesisBlock::new(10_000);
     let bank = Bank::new(&genesis_block);
     let vote_bank = VoteBank::new(&bank);
@@ -57,6 +76,19 @@ fn test_vote_via_bank() {
 
     let vote_state = vote_bank.submit_vote(&vote_keypair, 0).unwrap();
     assert_eq!(vote_state.votes.len(), 1);
+}
+
+#[test]
+fn test_vote_bank_delegate() {
+    let (genesis_block, from_keypair) = GenesisBlock::new(10_000);
+    let bank = Bank::new(&genesis_block);
+    let vote_bank = VoteBank::new(&bank);
+    let vote_keypair = Keypair::new();
+    let delegate_keypair = Keypair::new();
+    let delegate_id = delegate_keypair.pubkey();
+    vote_bank
+        .create_vote_account_with_delegate(&from_keypair, &vote_keypair, delegate_id, 100)
+        .unwrap();
 }
 
 #[test]
