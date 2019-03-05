@@ -28,8 +28,7 @@ impl<'a> VoteBank<'a> {
         lamports: u64,
     ) -> Result<()> {
         let blockhash = self.bank.last_blockhash();
-        let tx =
-            VoteTransaction::fund_staking_account(from_keypair, vote_id, blockhash, lamports, 0);
+        let tx = VoteTransaction::new_account(from_keypair, vote_id, blockhash, lamports, 0);
         self.bank.process_transaction(&tx)
     }
 

@@ -28,7 +28,7 @@ impl VoteTransaction {
     }
 
     /// Fund or create the staking account with tokens
-    pub fn fund_staking_account(
+    pub fn new_account(
         from_keypair: &Keypair,
         vote_account_id: Pubkey,
         recent_blockhash: Hash,

@@ -22,7 +22,7 @@ pub enum VoteInstruction {
     /// * Transaction::keys[0] - the staker id that is also assumed to be the delegate by default
     /// * Transaction::keys[1] - the new "vote account" to be associated with the delegate
     InitializeAccount,
-    /// `Delegate` or `Assign` A staking account to a particular node
+    /// `Delegate` or `Assign` a vote account to a particular node
     DelegateStake(Pubkey),
     Vote(Vote),
     /// Clear the credits in the vote account

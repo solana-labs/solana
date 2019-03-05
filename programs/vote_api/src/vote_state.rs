@@ -173,7 +173,7 @@ pub fn delegate_stake(
     Ok(())
 }
 
-/// Initialize the vote_state for a staking account
+/// Initialize the vote_state for a vote account
 /// Assumes that the account is being init as part of a account creation or balance transfer and
 /// that the transaction must be signed by the staker's keys
 pub fn initialize_account(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
@@ -271,13 +271,13 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
-    fn test_initialize_staking_account() {
+    fn test_initialize_vote_account() {
         let staker_id = Keypair::new().pubkey();
         let mut staker_account = Account::new(100, 0, Pubkey::default());
         let mut bogus_staker_account = Account::new(100, 0, Pubkey::default());
 
-        let staking_account_id = Keypair::new().pubkey();
-        let mut staking_account = create_vote_account(100);
+        let vote_account_id = Keypair::new().pubkey();
+        let mut vote_account = create_vote_account(100);
 
         let bogus_account_id = Keypair::new().pubkey();
         let mut bogus_account = Account::new(100, 0, id());
@@ -297,7 +297,7 @@ mod tests {
         assert_eq!(res, Err(ProgramError::InvalidUserdata));
 
         //init should pass
-        keyed_accounts[1] = KeyedAccount::new(&staking_account_id, false, &mut staking_account);
+        keyed_accounts[1] = KeyedAccount::new(&vote_account_id, false, &mut vote_account);
         let res = initialize_account(&mut keyed_accounts);
         assert_eq!(res, Ok(()));
 

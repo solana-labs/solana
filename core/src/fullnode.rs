@@ -377,7 +377,7 @@ pub fn make_active_set_entries(
     let voting_keypair = VotingKeypair::new_local(active_keypair);
     let vote_account_id = voting_keypair.pubkey();
 
-    let new_vote_account_tx = VoteTransaction::fund_staking_account(
+    let new_vote_account_tx = VoteTransaction::new_account(
         active_keypair,
         vote_account_id,
         *blockhash,
