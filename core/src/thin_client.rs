@@ -619,8 +619,7 @@ mod tests {
 
             let vote_state = VoteState::deserialize(&account_user_data);
 
-            if vote_state.map(|vote_state| vote_state.delegate_id) == Ok(validator_keypair.pubkey())
-            {
+            if vote_state.map(|vote_state| vote_state.delegate_id) == Ok(vote_account_id) {
                 break;
             }
 

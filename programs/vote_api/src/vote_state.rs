@@ -177,28 +177,23 @@ pub fn delegate_stake(
 /// Assumes that the account is being init as part of a account creation or balance transfer and
 /// that the transaction must be signed by the staker's keys
 pub fn initialize_account(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
-    if !check_id(&keyed_accounts[1].account.owner) {
-        error!("account[1] is not assigned to the VOTE_PROGRAM");
+    if !check_id(&keyed_accounts[0].account.owner) {
+        error!("account[0] is not assigned to the VOTE_PROGRAM");
         Err(ProgramError::InvalidArgument)?;
     }
 
-    if keyed_accounts[0].signer_key().is_none() {
-        error!("account[0] should sign the transaction");
-        Err(ProgramError::InvalidArgument)?;
-    }
-
-    let staker_id = keyed_accounts[0].signer_key().unwrap();
-    let vote_state = VoteState::deserialize(&keyed_accounts[1].account.userdata);
+    let staker_id = keyed_accounts[0].unsigned_key();
+    let vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata);
     if let Ok(vote_state) = vote_state {
         if vote_state.delegate_id == Pubkey::default() {
             let vote_state = VoteState::new(*staker_id);
-            vote_state.serialize(&mut keyed_accounts[1].account.userdata)?;
+            vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
         } else {
-            error!("account[1] userdata already initialized");
+            error!("account[0] userdata already initialized");
             Err(ProgramError::InvalidUserdata)?;
         }
     } else {
-        error!("account[1] does not have valid userdata");
+        error!("account[0] does not have valid userdata");
         Err(ProgramError::InvalidUserdata)?;
     }
 
@@ -240,15 +235,10 @@ pub fn create_vote_account(tokens: u64) -> Account {
 }
 
 pub fn initialize_and_deserialize(
-    from_id: &Pubkey,
-    from_account: &mut Account,
     vote_id: &Pubkey,
     vote_account: &mut Account,
 ) -> Result<VoteState, ProgramError> {
-    let mut keyed_accounts = [
-        KeyedAccount::new(from_id, true, from_account),
-        KeyedAccount::new(vote_id, false, vote_account),
-    ];
+    let mut keyed_accounts = [KeyedAccount::new(vote_id, false, vote_account)];
     initialize_account(&mut keyed_accounts)?;
     let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
     Ok(vote_state)
@@ -272,32 +262,20 @@ mod tests {
 
     #[test]
     fn test_initialize_vote_account() {
-        let staker_id = Keypair::new().pubkey();
-        let mut staker_account = Account::new(100, 0, Pubkey::default());
-        let mut bogus_staker_account = Account::new(100, 0, Pubkey::default());
-
         let vote_account_id = Keypair::new().pubkey();
         let mut vote_account = create_vote_account(100);
 
         let bogus_account_id = Keypair::new().pubkey();
         let mut bogus_account = Account::new(100, 0, id());
 
-        let mut keyed_accounts = [
-            KeyedAccount::new(&staker_id, false, &mut bogus_staker_account),
-            KeyedAccount::new(&bogus_account_id, false, &mut bogus_account),
-        ];
-
-        //staker is not signer
-        let res = initialize_account(&mut keyed_accounts);
-        assert_eq!(res, Err(ProgramError::InvalidArgument));
-
-        //space was never initialized, deserialize will fail
-        keyed_accounts[0] = KeyedAccount::new(&staker_id, true, &mut staker_account);
-        let res = initialize_account(&mut keyed_accounts);
-        assert_eq!(res, Err(ProgramError::InvalidUserdata));
+        let mut keyed_accounts = [KeyedAccount::new(
+            &bogus_account_id,
+            false,
+            &mut bogus_account,
+        )];
 
         //init should pass
-        keyed_accounts[1] = KeyedAccount::new(&vote_account_id, false, &mut vote_account);
+        keyed_accounts[0] = KeyedAccount::new(&vote_account_id, false, &mut vote_account);
         let res = initialize_account(&mut keyed_accounts);
         assert_eq!(res, Ok(()));
 
@@ -319,27 +297,19 @@ mod tests {
 
     #[test]
     fn test_voter_registration() {
-        let from_id = Keypair::new().pubkey();
-        let mut from_account = Account::new(100, 0, Pubkey::default());
-
         let vote_id = Keypair::new().pubkey();
         let mut vote_account = create_vote_account(100);
 
-        let vote_state =
-            initialize_and_deserialize(&from_id, &mut from_account, &vote_id, &mut vote_account)
-                .unwrap();
-        assert_eq!(vote_state.delegate_id, from_id);
+        let vote_state = initialize_and_deserialize(&vote_id, &mut vote_account).unwrap();
+        assert_eq!(vote_state.delegate_id, vote_id);
         assert!(vote_state.votes.is_empty());
     }
 
     #[test]
     fn test_vote() {
-        let from_id = Keypair::new().pubkey();
-        let mut from_account = Account::new(100, 0, Pubkey::default());
         let vote_id = Keypair::new().pubkey();
         let mut vote_account = create_vote_account(100);
-        initialize_and_deserialize(&from_id, &mut from_account, &vote_id, &mut vote_account)
-            .unwrap();
+        initialize_and_deserialize(&vote_id, &mut vote_account).unwrap();
 
         let vote = Vote::new(1);
         let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
@@ -349,12 +319,9 @@ mod tests {
 
     #[test]
     fn test_vote_signature() {
-        let from_id = Keypair::new().pubkey();
-        let mut from_account = Account::new(100, 0, Pubkey::default());
         let vote_id = Keypair::new().pubkey();
         let mut vote_account = create_vote_account(100);
-        initialize_and_deserialize(&from_id, &mut from_account, &vote_id, &mut vote_account)
-            .unwrap();
+        initialize_and_deserialize(&vote_id, &mut vote_account).unwrap();
 
         let vote = Vote::new(1);
         let mut keyed_accounts = [KeyedAccount::new(&vote_id, false, &mut vote_account)];
