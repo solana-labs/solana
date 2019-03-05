@@ -794,6 +794,15 @@ impl Bank {
     pub fn epoch_vote_accounts(&self, epoch: u64) -> Option<&HashMap<Pubkey, Account>> {
         self.epoch_vote_accounts.get(&epoch)
     }
+
+    /// given a slot, return the epoch and offset into the epoch this slot falls
+    /// e.g. with a fixed number for slots_per_epoch, the calculation is simply:
+    ///
+    ///  ( slot/slots_per_epoch, slot % slots_per_epoch )
+    ///
+    pub fn get_epoch_and_slot_index(&self, slot: u64) -> (u64, u64) {
+        (slot / self.slots_per_epoch(), slot % self.slots_per_epoch())
+    }
 }
 
 #[cfg(test)]
@@ -1513,6 +1522,24 @@ mod tests {
 
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(bank.get_balance(&key.pubkey()), 0);
+    }
+
+    #[test]
+    fn test_bank_get_epoch_and_slot_offset() {
+        let (mut genesis_block, _) = GenesisBlock::new(500);
+
+        // set this up weird, forces:
+        //  1. genesis bank to cover epochs 0, 1, *and* 2
+        //  2. child banks to cover epochs in their future
+        //
+        const SLOTS_PER_EPOCH: u64 = 8;
+        genesis_block.slots_per_epoch = SLOTS_PER_EPOCH;
+
+        let bank = Bank::new(&genesis_block);
+
+        assert_eq!(bank.get_epoch_and_slot_index(0), (0, 0));
+        assert_eq!(bank.get_epoch_and_slot_index(SLOTS_PER_EPOCH), (1, 0));
+        assert_eq!(bank.get_epoch_and_slot_index(SLOTS_PER_EPOCH + 1), (1, 1));
     }
 
 }
