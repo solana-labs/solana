@@ -12,16 +12,16 @@ pub struct BankForks {
 
 impl Index<u64> for BankForks {
     type Output = Arc<Bank>;
-    fn index(&self, bank_id: u64) -> &Arc<Bank> {
-        &self.banks[&bank_id]
+    fn index(&self, bank_slot: u64) -> &Arc<Bank> {
+        &self.banks[&bank_slot]
     }
 }
 
 impl BankForks {
-    pub fn new(bank_id: u64, bank: Bank) -> Self {
+    pub fn new(bank_slot: u64, bank: Bank) -> Self {
         let mut banks = HashMap::new();
         let working_bank = Arc::new(bank);
-        banks.insert(bank_id, working_bank.clone());
+        banks.insert(bank_slot, working_bank.clone());
         Self {
             banks,
             working_bank,
@@ -45,8 +45,8 @@ impl BankForks {
             .map(|(k, _v)| *k)
             .collect()
     }
-    pub fn get(&self, bank_id: u64) -> Option<&Arc<Bank>> {
-        self.banks.get(&bank_id)
+    pub fn get(&self, bank_slot: u64) -> Option<&Arc<Bank>> {
+        self.banks.get(&bank_slot)
     }
 
     pub fn new_from_banks(initial_banks: &[Arc<Bank>]) -> Self {
@@ -62,13 +62,13 @@ impl BankForks {
     }
 
     // TODO: use the bank's own ID instead of receiving a parameter?
-    pub fn insert(&mut self, bank_id: u64, bank: Bank) {
+    pub fn insert(&mut self, bank_slot: u64, bank: Bank) {
         let mut bank = Arc::new(bank);
-        assert_eq!(bank_id, bank.slot());
-        let prev = self.banks.insert(bank_id, bank.clone());
+        assert_eq!(bank_slot, bank.slot());
+        let prev = self.banks.insert(bank_slot, bank.clone());
         assert!(prev.is_none());
 
-        if bank_id > self.working_bank.slot() {
+        if bank_slot > self.working_bank.slot() {
             self.working_bank = bank.clone()
         }
 

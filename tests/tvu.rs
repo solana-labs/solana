@@ -90,7 +90,7 @@ fn test_replay() {
     let blockhash = bank.last_blockhash();
     let bank_forks = BankForks::new(0, bank);
     let bank_forks_info = vec![BankForksInfo {
-        bank_id: 0,
+        bank_slot: 0,
         entry_height: 0,
     }];
 

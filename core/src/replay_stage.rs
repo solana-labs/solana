@@ -95,8 +95,8 @@ impl ReplayStage {
                     let active_banks = bank_forks.read().unwrap().active_banks();
                     trace!("active banks {:?}", active_banks);
                     let mut votable: Vec<u64> = vec![];
-                    for bank_id in &active_banks {
-                        let bank = bank_forks.read().unwrap().get(*bank_id).unwrap().clone();
+                    for bank_slot in &active_banks {
+                        let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
                         if !Self::is_tpu(&bank, my_id) {
                             Self::replay_blocktree_into_bank(
                                 &bank,
@@ -105,12 +105,12 @@ impl ReplayStage {
                                 &forward_entry_sender,
                             )?;
                         }
-                        let max_tick_height = (*bank_id + 1) * bank.ticks_per_slot() - 1;
+                        let max_tick_height = (*bank_slot + 1) * bank.ticks_per_slot() - 1;
                         if bank.tick_height() == max_tick_height {
                             bank.freeze();
                             info!("bank frozen {}", bank.slot());
-                            votable.push(*bank_id);
-                            progress.remove(bank_id);
+                            votable.push(*bank_slot);
+                            progress.remove(bank_slot);
                             let id = leader_schedule_utils::slot_leader_at(bank.slot(), &bank);
                             if let Err(e) = slot_full_sender.send((bank.slot(), id)) {
                                 info!("{} slot_full alert failed: {:?}", my_id, e);
@@ -228,11 +228,11 @@ impl ReplayStage {
         blocktree: &Blocktree,
         progress: &mut HashMap<u64, (Hash, usize)>,
     ) -> result::Result<(Vec<Entry>, usize)> {
-        let bank_id = bank.slot();
+        let bank_slot = bank.slot();
         let bank_progress = &mut progress
-            .entry(bank_id)
+            .entry(bank_slot)
             .or_insert((bank.last_blockhash(), 0));
-        blocktree.get_slot_entries_with_blob_count(bank_id, bank_progress.1 as u64, None)
+        blocktree.get_slot_entries_with_blob_count(bank_slot, bank_progress.1 as u64, None)
     }
 
     pub fn replay_entries_into_bank(
@@ -292,10 +292,10 @@ impl ReplayStage {
     fn generate_new_bank_forks(blocktree: &Blocktree, forks: &mut BankForks) {
         // Find the next slot that chains to the old slot
         let frozen_banks = forks.frozen_banks();
-        let frozen_bank_ids: Vec<u64> = frozen_banks.keys().cloned().collect();
-        trace!("frozen_banks {:?}", frozen_bank_ids);
+        let frozen_bank_slots: Vec<u64> = frozen_banks.keys().cloned().collect();
+        trace!("frozen_banks {:?}", frozen_bank_slots);
         let next_slots = blocktree
-            .get_slots_since(&frozen_bank_ids)
+            .get_slots_since(&frozen_bank_slots)
             .expect("Db error");
         trace!("generate new forks {:?}", next_slots);
         for (parent_id, children) in next_slots {
