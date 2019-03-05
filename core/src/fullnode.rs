@@ -130,7 +130,7 @@ impl Fullnode {
         let (poh_recorder, entry_receiver) =
             PohRecorder::new(bank.tick_height(), bank.last_blockhash());
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-        let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, exit.clone());
+        let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, &exit);
 
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
@@ -186,7 +186,7 @@ impl Fullnode {
             Some(blocktree.clone()),
             Some(bank_forks.clone()),
             node.sockets.gossip,
-            exit.clone(),
+            &exit,
         );
 
         // Insert the entrypoint info, should only be None if this node
@@ -237,7 +237,7 @@ impl Fullnode {
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,
-            exit.clone(),
+            &exit,
         );
         let tpu = Tpu::new(
             id,
@@ -248,7 +248,7 @@ impl Fullnode {
             node.sockets.broadcast,
             config.sigverify_disabled,
             &blocktree,
-            exit.clone(),
+            &exit,
         );
         let exit_ = exit.clone();
         let bank_forks_ = bank_forks.clone();

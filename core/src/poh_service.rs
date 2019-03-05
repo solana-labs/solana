@@ -47,7 +47,7 @@ impl PohService {
     pub fn new(
         poh_recorder: Arc<Mutex<PohRecorder>>,
         config: &PohServiceConfig,
-        poh_exit: Arc<AtomicBool>,
+        poh_exit: &Arc<AtomicBool>,
     ) -> Self {
         // PohService is a headless producer, so when it exits it should notify the banking stage.
         // Since channel are not used to talk between these threads an AtomicBool is used as a
@@ -66,7 +66,7 @@ impl PohService {
 
         Self {
             tick_producer,
-            poh_exit,
+            poh_exit: poh_exit.clone(),
         }
     }
 
@@ -157,7 +157,7 @@ mod tests {
         let poh_service = PohService::new(
             poh_recorder.clone(),
             &PohServiceConfig::Tick(HASHES_PER_TICK as usize),
-            Arc::new(AtomicBool::new(false)),
+            &Arc::new(AtomicBool::new(false)),
         );
         poh_recorder.lock().unwrap().set_working_bank(working_bank);
 

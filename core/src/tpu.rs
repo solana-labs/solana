@@ -82,7 +82,7 @@ impl Tpu {
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
         blocktree: &Arc<Blocktree>,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
     ) -> Self {
         cluster_info.write().unwrap().set_leader(id);
 
@@ -114,7 +114,7 @@ impl Tpu {
         );
         Self {
             leader_services,
-            exit,
+            exit: exit.clone(),
             id,
         }
     }

@@ -67,7 +67,7 @@ impl Tvu {
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
     ) -> Self
     where
         T: 'static + KeypairUtil + Sync + Send,
@@ -148,7 +148,7 @@ impl Tvu {
             replay_stage,
             blockstream_service,
             storage_stage,
-            exit,
+            exit: exit.clone(),
         }
     }
 
@@ -241,7 +241,7 @@ pub mod tests {
             l_receiver,
             &Arc::new(RpcSubscriptions::default()),
             &poh_recorder,
-            exit,
+            &exit,
         );
         tvu.close().expect("close");
         poh_service.close().expect("close");

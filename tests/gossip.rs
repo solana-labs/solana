@@ -16,7 +16,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 
-fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket) {
+fn test_node(exit: &Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket) {
     let keypair = Keypair::new();
     let mut tn = Node::new_localhost_with_pubkey(keypair.pubkey());
     let cluster_info = ClusterInfo::new_with_keypair(tn.info.clone(), Arc::new(keypair));
@@ -35,7 +35,7 @@ where
     F: Fn(&Vec<(Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket)>) -> (),
 {
     let exit = Arc::new(AtomicBool::new(false));
-    let listen: Vec<_> = (0..num).map(|_| test_node(exit.clone())).collect();
+    let listen: Vec<_> = (0..num).map(|_| test_node(&exit)).collect();
     topo(&listen);
     let mut done = true;
     for i in 0..(num * 32) {
@@ -142,11 +142,11 @@ pub fn cluster_info_retransmit() -> result::Result<()> {
     solana_logger::setup();
     let exit = Arc::new(AtomicBool::new(false));
     trace!("c1:");
-    let (c1, dr1, tn1) = test_node(exit.clone());
+    let (c1, dr1, tn1) = test_node(&exit);
     trace!("c2:");
-    let (c2, dr2, tn2) = test_node(exit.clone());
+    let (c2, dr2, tn2) = test_node(&exit);
     trace!("c3:");
-    let (c3, dr3, tn3) = test_node(exit.clone());
+    let (c3, dr3, tn3) = test_node(&exit);
     let c1_data = c1.read().unwrap().my_data().clone();
     c1.write().unwrap().set_leader(c1_data.id);
 
