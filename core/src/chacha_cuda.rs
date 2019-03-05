@@ -54,6 +54,9 @@ pub fn chacha_cbc_encrypt_file_many_keys(
                     "chacha_cuda: encrypting segment: {} num_entries: {} entry_len: {}",
                     segment, num_entries, entry_len
                 );
+                if num_entries == 0 {
+                    break;
+                }
                 let entry_len_usz = entry_len as usize;
                 unsafe {
                     chacha_cbc_encrypt_many_sample(
