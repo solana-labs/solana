@@ -22,8 +22,8 @@ pub struct GenesisBlock {
     pub ticks_per_slot: u64,
     pub slots_per_epoch: u64,
     pub stakers_slot_offset: u64,
-    /// use the same account for the bootstrap_leader as well as its vote_account
-    /// Or Else, create a separate vote_account and set the leader as the delegate
+    /// Use the same account for the bootstrap_leader as well as its vote_account
+    /// Else, create a separate vote_account and set the leader as the delegate
     pub link_vote_account: bool,
 }
 
