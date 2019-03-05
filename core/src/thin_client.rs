@@ -473,7 +473,6 @@ pub fn new_fullnode() -> (Fullnode, NodeInfo, Keypair, String) {
     use crate::blocktree::create_new_tmp_ledger;
     use crate::cluster_info::Node;
     use crate::fullnode::Fullnode;
-    use crate::voting_keypair::VotingKeypair;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::KeypairUtil;
 
@@ -484,8 +483,7 @@ pub fn new_fullnode() -> (Fullnode, NodeInfo, Keypair, String) {
     let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, node_info.id, 42);
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
-    let vote_account_keypair = Arc::new(Keypair::new());
-    let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
+    let voting_keypair = Keypair::new();
     let node = Fullnode::new(
         node,
         &node_keypair,

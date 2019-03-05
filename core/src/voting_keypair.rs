@@ -57,7 +57,10 @@ impl VoteSigner for RemoteVoteSigner {
 impl KeypairUtil for VotingKeypair {
     /// Return a local VotingKeypair with a new keypair. Used for unit-tests.
     fn new() -> Self {
-        Self::new_local(&Arc::new(Keypair::new()))
+        Self::new_with_signer(
+            &Arc::new(Keypair::new()),
+            Box::new(LocalVoteSigner::default()),
+        )
     }
 
     /// Return the public key of the keypair used to sign votes
@@ -89,10 +92,6 @@ impl VotingKeypair {
             signer,
             vote_account,
         }
-    }
-
-    pub fn new_local(keypair: &Arc<Keypair>) -> Self {
-        Self::new_with_signer(keypair, Box::new(LocalVoteSigner::default()))
     }
 }
 

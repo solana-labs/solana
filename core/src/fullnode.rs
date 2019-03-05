@@ -18,7 +18,6 @@ use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
-use crate::voting_keypair::VotingKeypair;
 use solana_metrics::counter::Counter;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
@@ -335,7 +334,7 @@ pub fn make_active_set_entries(
     slot_height_to_vote_on: u64,
     blockhash: &Hash,
     num_ending_ticks: u64,
-) -> (Vec<Entry>, VotingKeypair) {
+) -> (Vec<Entry>, Keypair) {
     // 1) Assume the active_keypair node has no tokens staked
     let transfer_tx = SystemTransaction::new_account(
         &token_source,
@@ -348,7 +347,7 @@ pub fn make_active_set_entries(
     let transfer_entry = next_entry_mut(&mut last_entry_hash, 1, vec![transfer_tx]);
 
     // 2) Create and register a vote account for active_keypair
-    let voting_keypair = VotingKeypair::new_local(active_keypair);
+    let voting_keypair = Keypair::new();
     let vote_account_id = voting_keypair.pubkey();
 
     let new_vote_account_tx = VoteTransaction::new_account(

@@ -113,7 +113,6 @@ impl LeaderConfirmationService {
 mod tests {
     use super::*;
     use crate::voting_keypair::tests::{new_vote_account, push_vote};
-    use crate::voting_keypair::VotingKeypair;
     use bincode::serialize;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
@@ -142,7 +141,7 @@ mod tests {
             .map(|i| {
                 // Create new validator to vote
                 let validator_keypair = Arc::new(Keypair::new());
-                let voting_keypair = VotingKeypair::new_local(&validator_keypair);
+                let voting_keypair = Keypair::new();
                 let voting_pubkey = voting_keypair.pubkey();
 
                 // Give the validator some tokens
