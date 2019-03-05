@@ -19,7 +19,7 @@ use solana_sdk::hash::{extend_and_hash, Hash};
 use solana_sdk::native_loader;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::storage_program;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
@@ -250,10 +250,20 @@ impl Bank {
         let mint_tokens = genesis_block.tokens - genesis_block.bootstrap_leader_stake;
         self.deposit(&genesis_block.mint_id, mint_tokens);
 
+        let mut bootstrap_leader_stake = genesis_block.bootstrap_leader_stake;
+        let mut vote_account_id = genesis_block.bootstrap_leader_id;
+
+        if !genesis_block.link_vote_account {
+            vote_account_id = Keypair::new().pubkey();
+            let bootstrap_leader_tokens = 2;
+            bootstrap_leader_stake = genesis_block.bootstrap_leader_stake - bootstrap_leader_tokens;
+            self.deposit(&genesis_block.bootstrap_leader_id, bootstrap_leader_tokens);
+        }
+
         // Construct a vote account for the bootstrap_leader such that the leader_scheduler
         // will be forced to select it as the leader for height 0
         let mut bootstrap_leader_vote_account = Account {
-            tokens: genesis_block.bootstrap_leader_stake,
+            tokens: bootstrap_leader_stake,
             userdata: vec![0; VoteState::max_size() as usize],
             owner: solana_vote_api::id(),
             executable: false,
@@ -267,7 +277,7 @@ impl Bank {
 
         self.accounts().store_slow(
             self.accounts_id,
-            &genesis_block.bootstrap_leader_vote_account_id,
+            &vote_account_id,
             &bootstrap_leader_vote_account,
         );
 

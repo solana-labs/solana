@@ -72,6 +72,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         BOOTSTRAP_LEADER_STAKE,
     );
     genesis_block.mint_id = mint_keypair.pubkey();
+    genesis_block.link_vote_account = false;
 
     create_new_ledger(ledger_path, &genesis_block)?;
     Ok(())
