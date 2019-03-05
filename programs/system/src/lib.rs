@@ -36,15 +36,21 @@ pub fn entrypoint(
                     Err(ProgramError::InvalidArgument)?;
                 }
 
-                if space > 0
-                    && (!keyed_accounts[to].account.userdata.is_empty()
-                        || !system_program::check_id(&keyed_accounts[to].account.owner))
+                if !keyed_accounts[to].account.userdata.is_empty()
+                    || !system_program::check_id(&keyed_accounts[to].account.owner)
                 {
-                    info!(
-                        "CreateAccount: invalid argument space: {} accounts.userdata.len(): {}",
-                        space,
-                        keyed_accounts[to].account.userdata.len(),
-                    );
+                    if space > 0 {
+                        info!(
+                            "CreateAccount: invalid argument space: {} accounts.userdata.len(): {}",
+                            space,
+                            keyed_accounts[to].account.userdata.len(),
+                        );
+                    } else {
+                        info!(
+                            "CreateAccount: invalid argument; account {} already in use",
+                            keyed_accounts[to].unsigned_key()
+                        );
+                    }
                     Err(ProgramError::InvalidArgument)?;
                 }
                 if tokens > keyed_accounts[from].account.tokens {
