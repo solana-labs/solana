@@ -168,7 +168,7 @@ impl Fullnode {
             drone_addr,
             storage_state.clone(),
             config.rpc_config.clone(),
-            exit.clone(),
+            &exit,
         );
 
         let subscriptions = Arc::new(RpcSubscriptions::default());
@@ -293,9 +293,6 @@ impl Fullnode {
         // which is the sole initiator of rotations.
         self.poh_recorder.lock().unwrap().clear_bank();
         self.poh_service.exit();
-        if let Some(ref rpc_service) = self.rpc_service {
-            rpc_service.exit();
-        }
         self.node_services.exit();
     }
 
