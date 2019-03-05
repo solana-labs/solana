@@ -323,10 +323,10 @@ On `signatureNotification`, the subscription is automatically cancelled
 ---
 
 ### signatureUnsubscribe
-Unsubscribe from account userdata change notifications
+Unsubscribe from signature confirmation notification
 
 ##### Parameters:
-* `integer` - id of account subscription to cancel
+* `integer` - subscription id to cancel
 
 ##### Results:
 * `bool` - unsubscribe success message

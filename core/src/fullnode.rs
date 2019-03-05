@@ -10,6 +10,7 @@ use crate::entry::Entry;
 use crate::gossip_service::GossipService;
 use crate::poh_recorder::PohRecorder;
 use crate::poh_service::{PohService, PohServiceConfig};
+use crate::rpc::JsonRpcConfig;
 use crate::rpc_pubsub_service::PubSubService;
 use crate::rpc_service::JsonRpcService;
 use crate::rpc_subscriptions::RpcSubscriptions;
@@ -65,6 +66,7 @@ pub struct FullnodeConfig {
     pub storage_rotate_count: u64,
     pub tick_config: PohServiceConfig,
     pub account_paths: Option<String>,
+    pub rpc_config: JsonRpcConfig,
 }
 impl Default for FullnodeConfig {
     fn default() -> Self {
@@ -79,6 +81,7 @@ impl Default for FullnodeConfig {
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
             tick_config: PohServiceConfig::default(),
             account_paths: None,
+            rpc_config: JsonRpcConfig::default(),
         }
     }
 }
@@ -117,7 +120,7 @@ impl Fullnode {
 
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
-        let bank = bank_forks[bank_info.bank_id].clone();
+        let bank = bank_forks[bank_info.bank_slot].clone();
 
         info!(
             "starting PoH... {} {}",
@@ -127,7 +130,7 @@ impl Fullnode {
         let (poh_recorder, entry_receiver) =
             PohRecorder::new(bank.tick_height(), bank.last_blockhash());
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-        let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, exit.clone());
+        let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, &exit);
 
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
@@ -165,6 +168,8 @@ impl Fullnode {
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
             drone_addr,
             storage_state.clone(),
+            config.rpc_config.clone(),
+            exit.clone(),
         );
 
         let subscriptions = Arc::new(RpcSubscriptions::default());
@@ -181,7 +186,7 @@ impl Fullnode {
             Some(blocktree.clone()),
             Some(bank_forks.clone()),
             node.sockets.gossip,
-            exit.clone(),
+            &exit,
         );
 
         // Insert the entrypoint info, should only be None if this node
@@ -232,6 +237,7 @@ impl Fullnode {
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,
+            &exit,
         );
         let tpu = Tpu::new(
             id,
@@ -242,6 +248,7 @@ impl Fullnode {
             node.sockets.broadcast,
             config.sigverify_disabled,
             &blocktree,
+            &exit,
         );
         let exit_ = exit.clone();
         let bank_forks_ = bank_forks.clone();
@@ -370,7 +377,7 @@ pub fn make_active_set_entries(
     let voting_keypair = VotingKeypair::new_local(active_keypair);
     let vote_account_id = voting_keypair.pubkey();
 
-    let new_vote_account_tx = VoteTransaction::fund_staking_account(
+    let new_vote_account_tx = VoteTransaction::new_account(
         active_keypair,
         vote_account_id,
         *blockhash,

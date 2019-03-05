@@ -67,12 +67,12 @@ fn get_matrix(m: i32, k: i32, w: i32) -> Vec<i32> {
     matrix
 }
 
-pub const ERASURE_W: i32 = 32;
+const ERASURE_W: i32 = 32;
 
 // Generate coding blocks into coding
 //   There are some alignment restrictions, blocks should be aligned by 16 bytes
 //   which means their size should be >= 16 bytes
-pub fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Result<()> {
+fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Result<()> {
     if data.is_empty() {
         return Ok(());
     }
@@ -123,11 +123,7 @@ pub fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Resul
 //   data: array of blocks to recover into
 //   coding: arry of coding blocks
 //   erasures: list of indices in data where blocks should be recovered
-pub fn decode_blocks(
-    data: &mut [&mut [u8]],
-    coding: &mut [&mut [u8]],
-    erasures: &[i32],
-) -> Result<()> {
+fn decode_blocks(data: &mut [&mut [u8]], coding: &mut [&mut [u8]], erasures: &[i32]) -> Result<()> {
     if data.is_empty() {
         return Ok(());
     }

@@ -54,9 +54,9 @@ function](https://eprint.iacr.org/2018/601.pdf) or *VDF*.
 A desirable property of a VDF is that verification time is very fast. Solana's
 approach to verifying its delay function is proportional to the time it took to
 create it. Split over a 4000 core GPU, it is sufficiently fast for Solana's
-needs, but if you asked the authors the paper cited above, they might tell you
+needs, but if you asked the authors of the paper cited above, they might tell you
 ([and have](https://github.com/solana-labs/solana/issues/388)) that Solana's
-approach is algorithmically slow it shouldn't be called a VDF. We argue the
+approach is algorithmically slow and it shouldn't be called a VDF. We argue the
 term VDF should represent the category of verifiable delay functions and not
 just the subset with certain performance characteristics. Until that's
 resolved, Solana will likely continue using the term PoH for its

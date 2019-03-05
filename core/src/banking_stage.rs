@@ -355,11 +355,7 @@ pub fn create_test_recorder(
     let (poh_recorder, entry_receiver) =
         PohRecorder::new(bank.tick_height(), bank.last_blockhash());
     let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-    let poh_service = PohService::new(
-        poh_recorder.clone(),
-        &PohServiceConfig::default(),
-        exit.clone(),
-    );
+    let poh_service = PohService::new(poh_recorder.clone(), &PohServiceConfig::default(), &exit);
     (poh_recorder, poh_service, entry_receiver)
 }
 

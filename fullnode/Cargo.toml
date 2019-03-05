@@ -14,7 +14,6 @@ log = "0.4.2"
 serde_json = "1.0.39"
 solana = { path = "../core", version = "0.12.0" }
 solana-drone = { path = "../drone", version = "0.12.0" }
-solana-fullnode-config = { path = "../fullnode-config", version = "0.12.0" }
 solana-logger = { path = "../logger", version = "0.12.0" }
 solana-netutil = { path = "../netutil", version = "0.12.0" }
 solana-metrics = { path = "../metrics", version = "0.12.0" }
@@ -27,5 +26,3 @@ solana-vote-signer = { path = "../vote-signer", version = "0.12.0" }
 chacha = ["solana/chacha"]
 cuda = ["solana/cuda"]
 erasure = ["solana/erasure"]
-ipv6 = ["solana/ipv6"]
-unstable = ["solana/unstable"]

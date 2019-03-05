@@ -191,6 +191,10 @@ impl Bank {
         bank
     }
 
+    pub fn collector_id(&self) -> Pubkey {
+        self.collector_id
+    }
+
     pub fn slot(&self) -> u64 {
         self.slot
     }
@@ -254,7 +258,7 @@ impl Bank {
 
         // Construct a vote account for the bootstrap_leader such that the leader_scheduler
         // will be forced to select it as the leader for height 0
-        let mut bootstrap_leader_staking_account = Account {
+        let mut bootstrap_leader_vote_account = Account {
             tokens: bootstrap_leader_stake,
             userdata: vec![0; VoteState::max_size() as usize],
             owner: solana_vote_api::id(),
@@ -264,13 +268,13 @@ impl Bank {
         let mut vote_state = VoteState::new(genesis_block.bootstrap_leader_id);
         vote_state.votes.push_back(Lockout::new(&Vote::new(0)));
         vote_state
-            .serialize(&mut bootstrap_leader_staking_account.userdata)
+            .serialize(&mut bootstrap_leader_vote_account.userdata)
             .unwrap();
 
         self.accounts().store_slow(
             self.accounts_id,
             &genesis_block.bootstrap_leader_vote_account_id,
-            &bootstrap_leader_staking_account,
+            &bootstrap_leader_vote_account,
         );
 
         self.blockhash_queue
@@ -312,13 +316,19 @@ impl Bank {
         let mut status_cache = self.status_cache.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
             match &res[i] {
-                Ok(_) => status_cache.add(&tx.signatures[0]),
+                Ok(_) => {
+                    if !tx.signatures.is_empty() {
+                        status_cache.add(&tx.signatures[0]);
+                    }
+                }
                 Err(BankError::BlockhashNotFound) => (),
                 Err(BankError::DuplicateSignature) => (),
                 Err(BankError::AccountNotFound) => (),
                 Err(e) => {
-                    status_cache.add(&tx.signatures[0]);
-                    status_cache.save_failure_status(&tx.signatures[0], e.clone());
+                    if !tx.signatures.is_empty() {
+                        status_cache.add(&tx.signatures[0]);
+                        status_cache.save_failure_status(&tx.signatures[0], e.clone());
+                    }
                 }
             }
         }
@@ -447,6 +457,9 @@ impl Bank {
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
+                if tx.signatures.is_empty() {
+                    return lock_res;
+                }
                 if lock_res.is_ok() && StatusCache::has_signature_all(&caches, &tx.signatures[0]) {
                     error_counters.duplicate_signature += 1;
                     Err(BankError::DuplicateSignature)
@@ -1515,6 +1528,37 @@ mod tests {
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH) + 1,
         );
         assert!(child.epoch_vote_accounts(i).is_some());
+    }
+
+    #[test]
+    fn test_zero_signatures() {
+        solana_logger::setup();
+        let (genesis_block, mint_keypair) = GenesisBlock::new(500);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let key = Keypair::new();
+
+        let move_tokens = SystemInstruction::Move { tokens: 1 };
+
+        let mut tx = Transaction::new_unsigned(
+            &mint_keypair.pubkey(),
+            &[key.pubkey()],
+            system_program::id(),
+            &move_tokens,
+            bank.last_blockhash(),
+            2,
+        );
+
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(BankError::MissingSignatureForFee)
+        );
+
+        // Set the fee to 0, this should give a ProgramError
+        // but since no signature we cannot look up the error.
+        tx.fee = 0;
+
+        assert_eq!(bank.process_transaction(&tx), Ok(()));
+        assert_eq!(bank.get_balance(&key.pubkey()), 0);
     }
 
 }

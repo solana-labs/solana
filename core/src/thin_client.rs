@@ -364,6 +364,23 @@ impl ThinClient {
             };
         }
     }
+    pub fn fullnode_exit(&mut self) -> io::Result<bool> {
+        trace!("fullnode_exit sending request to {}", self.rpc_addr);
+        let response = self
+            .rpc_client
+            .make_rpc_request(1, RpcRequest::FullnodeExit, None)
+            .map_err(|error| {
+                debug!("Response from {} fullndoe_exit: {}", self.rpc_addr, error);
+                io::Error::new(io::ErrorKind::Other, "FullodeExit request failure")
+            })?;
+        serde_json::from_value(response).map_err(|error| {
+            debug!(
+                "ParseError: from {} fullndoe_exit: {}",
+                self.rpc_addr, error
+            );
+            io::Error::new(io::ErrorKind::Other, "FullodeExit parse failure")
+        })
+    }
 }
 
 impl Drop for ThinClient {
@@ -377,13 +394,8 @@ pub fn poll_gossip_for_leader(leader_gossip: SocketAddr, timeout: Option<u64>) -
     let (node, gossip_socket) = ClusterInfo::spy_node();
     let my_addr = gossip_socket.local_addr().unwrap();
     let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(node)));
-    let gossip_service = GossipService::new(
-        &cluster_info.clone(),
-        None,
-        None,
-        gossip_socket,
-        exit.clone(),
-    );
+    let gossip_service =
+        GossipService::new(&cluster_info.clone(), None, None, gossip_socket, &exit);
 
     let leader_entry_point = NodeInfo::new_entry_point(&leader_gossip);
     cluster_info
@@ -589,13 +601,8 @@ mod tests {
         let vote_account_id = validator_vote_account_keypair.pubkey();
         let blockhash = client.get_recent_blockhash();
 
-        let transaction = VoteTransaction::fund_staking_account(
-            &validator_keypair,
-            vote_account_id,
-            blockhash,
-            1,
-            1,
-        );
+        let transaction =
+            VoteTransaction::new_account(&validator_keypair, vote_account_id, blockhash, 1, 1);
         let signature = client.transfer_signed(&transaction).unwrap();
         client.poll_for_signature(&signature).unwrap();
 

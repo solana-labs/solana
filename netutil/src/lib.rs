@@ -30,7 +30,7 @@ pub fn get_public_ip_addr() -> Result<IpAddr, String> {
     }
 }
 
-pub fn parse_port_or_addr(optstr: &Option<String>, default_port: u16) -> SocketAddr {
+pub fn parse_port_or_addr(optstr: Option<&str>, default_port: u16) -> SocketAddr {
     let daddr = SocketAddr::from(([0, 0, 0, 0], default_port));
 
     if let Some(addrstr) = optstr {
@@ -48,7 +48,10 @@ pub fn parse_port_or_addr(optstr: &Option<String>, default_port: u16) -> SocketA
     }
 }
 
-fn find_eth0ish_ip_addr(ifaces: &mut Vec<datalink::NetworkInterface>) -> Option<IpAddr> {
+fn find_eth0ish_ip_addr(
+    ifaces: &mut Vec<datalink::NetworkInterface>,
+    enable_ipv6: bool,
+) -> Option<IpAddr> {
     // put eth0 and wifi0, etc. up front of our list of candidates
     ifaces.sort_by(|a, b| {
         a.name
@@ -84,9 +87,8 @@ fn find_eth0ish_ip_addr(ifaces: &mut Vec<datalink::NetworkInterface>) -> Option<
                     return Some(p.ip());
                 }
                 IpAddr::V6(_addr) => {
-                    // Select an ipv6 address if the config is selected
-                    #[cfg(feature = "ipv6")]
-                    {
+                    // Select an ipv6 address if requested
+                    if enable_ipv6 {
                         if p.ip().is_loopback() {
                             trace!("    loopback");
                             lo = Some(p.ip());
@@ -102,10 +104,9 @@ fn find_eth0ish_ip_addr(ifaces: &mut Vec<datalink::NetworkInterface>) -> Option<
     lo
 }
 
-pub fn get_ip_addr() -> Option<IpAddr> {
+pub fn get_ip_addr(enable_ipv6: bool) -> Option<IpAddr> {
     let mut ifaces = datalink::interfaces();
-
-    find_eth0ish_ip_addr(&mut ifaces)
+    find_eth0ish_ip_addr(&mut ifaces, enable_ipv6)
 }
 
 fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
@@ -224,69 +225,81 @@ mod tests {
 
         // loopback bad when alternatives exist
         assert_eq!(
-            find_eth0ish_ip_addr(&mut vec![
-                mock_interface!(eth0, "192.168.137.1/8"),
-                mock_interface!(lo, "127.0.0.1/24")
-            ]),
+            find_eth0ish_ip_addr(
+                &mut vec![
+                    mock_interface!(eth0, "192.168.137.1/8"),
+                    mock_interface!(lo, "127.0.0.1/24")
+                ],
+                false
+            ),
             Some(mock_interface!(eth0, "192.168.137.1/8").ips[0].ip())
         );
         // find loopback as a last resort
         assert_eq!(
-            find_eth0ish_ip_addr(&mut vec![mock_interface!(lo, "127.0.0.1/24")]),
+            find_eth0ish_ip_addr(&mut vec![mock_interface!(lo, "127.0.0.1/24")], false),
             Some(mock_interface!(lo, "127.0.0.1/24").ips[0].ip()),
         );
         // multicast bad
         assert_eq!(
-            find_eth0ish_ip_addr(&mut vec![mock_interface!(eth0, "224.0.1.5/24")]),
+            find_eth0ish_ip_addr(&mut vec![mock_interface!(eth0, "224.0.1.5/24")], false),
             None
         );
 
         // finds "wifi0"
         assert_eq!(
-            find_eth0ish_ip_addr(&mut vec![
-                mock_interface!(eth0, "224.0.1.5/24"),
-                mock_interface!(eth2, "192.168.137.1/8"),
-                mock_interface!(eth3, "10.0.75.1/8"),
-                mock_interface!(eth4, "172.22.140.113/4"),
-                mock_interface!(lo, "127.0.0.1/24"),
-                mock_interface!(wifi0, "192.168.1.184/8"),
-            ]),
+            find_eth0ish_ip_addr(
+                &mut vec![
+                    mock_interface!(eth0, "224.0.1.5/24"),
+                    mock_interface!(eth2, "192.168.137.1/8"),
+                    mock_interface!(eth3, "10.0.75.1/8"),
+                    mock_interface!(eth4, "172.22.140.113/4"),
+                    mock_interface!(lo, "127.0.0.1/24"),
+                    mock_interface!(wifi0, "192.168.1.184/8"),
+                ],
+                false
+            ),
             Some(mock_interface!(wifi0, "192.168.1.184/8").ips[0].ip())
         );
         // finds "wifi0" in the middle
         assert_eq!(
-            find_eth0ish_ip_addr(&mut vec![
-                mock_interface!(eth0, "224.0.1.5/24"),
-                mock_interface!(eth2, "192.168.137.1/8"),
-                mock_interface!(eth3, "10.0.75.1/8"),
-                mock_interface!(wifi0, "192.168.1.184/8"),
-                mock_interface!(eth4, "172.22.140.113/4"),
-                mock_interface!(lo, "127.0.0.1/24"),
-            ]),
+            find_eth0ish_ip_addr(
+                &mut vec![
+                    mock_interface!(eth0, "224.0.1.5/24"),
+                    mock_interface!(eth2, "192.168.137.1/8"),
+                    mock_interface!(eth3, "10.0.75.1/8"),
+                    mock_interface!(wifi0, "192.168.1.184/8"),
+                    mock_interface!(eth4, "172.22.140.113/4"),
+                    mock_interface!(lo, "127.0.0.1/24"),
+                ],
+                false
+            ),
             Some(mock_interface!(wifi0, "192.168.1.184/8").ips[0].ip())
         );
         // picks "eth2", is lowest valid "eth"
         assert_eq!(
-            find_eth0ish_ip_addr(&mut vec![
-                mock_interface!(eth0, "224.0.1.5/24"),
-                mock_interface!(eth2, "192.168.137.1/8"),
-                mock_interface!(eth3, "10.0.75.1/8"),
-                mock_interface!(eth4, "172.22.140.113/4"),
-                mock_interface!(lo, "127.0.0.1/24"),
-            ]),
+            find_eth0ish_ip_addr(
+                &mut vec![
+                    mock_interface!(eth0, "224.0.1.5/24"),
+                    mock_interface!(eth2, "192.168.137.1/8"),
+                    mock_interface!(eth3, "10.0.75.1/8"),
+                    mock_interface!(eth4, "172.22.140.113/4"),
+                    mock_interface!(lo, "127.0.0.1/24"),
+                ],
+                false
+            ),
             Some(mock_interface!(eth2, "192.168.137.1/8").ips[0].ip())
         );
     }
 
     #[test]
     fn test_parse_port_or_addr() {
-        let p1 = parse_port_or_addr(&Some("9000".to_string()), 1);
+        let p1 = parse_port_or_addr(Some("9000"), 1);
         assert_eq!(p1.port(), 9000);
-        let p2 = parse_port_or_addr(&Some("127.0.0.1:7000".to_string()), 1);
+        let p2 = parse_port_or_addr(Some("127.0.0.1:7000"), 1);
         assert_eq!(p2.port(), 7000);
-        let p2 = parse_port_or_addr(&Some("hi there".to_string()), 1);
+        let p2 = parse_port_or_addr(Some("hi there"), 1);
         assert_eq!(p2.port(), 1);
-        let p3 = parse_port_or_addr(&None, 1);
+        let p3 = parse_port_or_addr(None, 1);
         assert_eq!(p3.port(), 1);
     }
 

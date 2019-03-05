@@ -39,15 +39,15 @@ fi
 
 BENCH_FILE=bench_output.log
 BENCH_ARTIFACT=current_bench_results.log
-_ cargo +nightly bench --features=unstable ${V:+--verbose} \
+_ cargo +nightly bench ${V:+--verbose} \
   -- -Z unstable-options --format=json | tee "$BENCH_FILE"
 
-# Run bpf_loader bench with bpf_c feature enabled
-echo --- program/bpf_loader bench --features=bpf_c
+# Run bpf benches
+echo --- program/bpf
 (
   set -x
-  cd programs/bpf_loader
-  cargo +nightly bench ${V:+--verbose} --features="bpf_c" \
+  cd programs/bpf
+  cargo +nightly bench ${V:+--verbose} --features=bpf_c \
     -- -Z unstable-options --format=json --nocapture | tee -a ../../../"$BENCH_FILE"
 )
 

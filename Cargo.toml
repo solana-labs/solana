@@ -17,9 +17,6 @@ codecov = { repository = "solana-labs/solana", branch = "master", service = "git
 chacha = ["solana/chacha"]
 cuda = ["solana/cuda"]
 erasure = ["solana/erasure"]
-ipv6 = ["solana/ipv6", "solana-netutil/ipv6"]
-test = ["solana/test"]
-unstable = ["solana/unstable"]
 
 [dev-dependencies]
 bincode = "1.1.2"
@@ -28,7 +25,7 @@ hashbrown = "0.1.8"
 log = "0.4.2"
 rand = "0.6.5"
 rayon = "1.0.0"
-reqwest = "0.9.10"
+reqwest = "0.9.11"
 serde_json = "1.0.39"
 solana = { path = "core", version = "0.12.0" }
 solana-logger = { path = "logger", version = "0.12.0" }
@@ -64,7 +61,6 @@ members = [
     "core",
     "drone",
     "fullnode",
-    "fullnode-config",
     "genesis",
     "keygen",
     "ledger-tool",

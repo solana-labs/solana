@@ -16,14 +16,29 @@ use solana_sdk::signature::Signature;
 use solana_sdk::transaction::Transaction;
 use std::mem;
 use std::net::{SocketAddr, UdpSocket};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 #[derive(Clone)]
+pub enum JsonRpcConfig {
+    DefaultConfig,
+    TestOnlyAllowRpcFullnodeExit,
+}
+
+impl Default for JsonRpcConfig {
+    fn default() -> Self {
+        JsonRpcConfig::DefaultConfig
+    }
+}
+
+#[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
     bank: Option<Arc<Bank>>,
     storage_state: StorageState,
+    config: JsonRpcConfig,
+    fullnode_exit: Arc<AtomicBool>,
 }
 
 impl JsonRpcRequestProcessor {
@@ -39,10 +54,16 @@ impl JsonRpcRequestProcessor {
         self.bank = Some(bank.clone());
     }
 
-    pub fn new(storage_state: StorageState) -> Self {
+    pub fn new(
+        storage_state: StorageState,
+        config: JsonRpcConfig,
+        fullnode_exit: Arc<AtomicBool>,
+    ) -> Self {
         JsonRpcRequestProcessor {
             bank: None,
             storage_state,
+            config,
+            fullnode_exit,
         }
     }
 
@@ -86,6 +107,20 @@ impl JsonRpcRequestProcessor {
         Ok(self
             .storage_state
             .get_pubkeys_for_entry_height(entry_height))
+    }
+
+    pub fn fullnode_exit(&self) -> Result<bool> {
+        match self.config {
+            JsonRpcConfig::DefaultConfig => {
+                debug!("default config, fullnode_exit ignored");
+                Ok(false)
+            }
+            JsonRpcConfig::TestOnlyAllowRpcFullnodeExit => {
+                warn!("TEST_ONLY JsonRPC fullnode_exit request...");
+                self.fullnode_exit.store(true, Ordering::Relaxed);
+                Ok(true)
+            }
+        }
     }
 }
 
@@ -182,6 +217,9 @@ pub trait RpcSol {
         _: Self::Metadata,
         _: u64,
     ) -> Result<Vec<Pubkey>>;
+
+    #[rpc(meta, name = "fullnodeExit")]
+    fn fullnode_exit(&self, _: Self::Metadata) -> Result<bool>;
 }
 
 pub struct RpcSolImpl;
@@ -360,6 +398,10 @@ impl RpcSol for RpcSolImpl {
             .unwrap()
             .get_storage_pubkeys_for_entry_height(entry_height)
     }
+
+    fn fullnode_exit(&self, meta: Self::Metadata) -> Result<bool> {
+        meta.request_processor.read().unwrap().fullnode_exit()
+    }
 }
 
 #[cfg(test)]
@@ -377,6 +419,7 @@ mod tests {
     fn start_rpc_handler_with_tx(pubkey: Pubkey) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair) {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
+        let exit = Arc::new(AtomicBool::new(false));
 
         let blockhash = bank.last_blockhash();
         let tx = SystemTransaction::new_move(&alice, pubkey, 20, blockhash, 0);
@@ -384,6 +427,8 @@ mod tests {
 
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             StorageState::default(),
+            JsonRpcConfig::default(),
+            exit,
         )));
         request_processor.write().unwrap().set_bank(&bank);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
@@ -411,7 +456,9 @@ mod tests {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
         let bank = Arc::new(Bank::new(&genesis_block));
-        let mut request_processor = JsonRpcRequestProcessor::new(StorageState::default());
+        let exit = Arc::new(AtomicBool::new(false));
+        let mut request_processor =
+            JsonRpcRequestProcessor::new(StorageState::default(), JsonRpcConfig::default(), exit);
         request_processor.set_bank(&bank);
         thread::spawn(move || {
             let blockhash = bank.last_blockhash();
@@ -574,13 +621,18 @@ mod tests {
     fn test_rpc_send_bad_tx() {
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
+        let exit = Arc::new(AtomicBool::new(false));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
         let meta = Meta {
             request_processor: {
-                let mut request_processor = JsonRpcRequestProcessor::new(StorageState::default());
+                let mut request_processor = JsonRpcRequestProcessor::new(
+                    StorageState::default(),
+                    JsonRpcConfig::default(),
+                    exit,
+                );
                 request_processor.set_bank(&bank);
                 Arc::new(RwLock::new(request_processor))
             },
@@ -650,5 +702,40 @@ mod tests {
             verify_signature(&bad_signature.to_string()),
             Err(Error::invalid_request())
         );
+    }
+
+    #[test]
+    fn test_rpc_request_processor_config_default_trait_fullnode_exit_fails() {
+        let exit = Arc::new(AtomicBool::new(false));
+        let request_processor = JsonRpcRequestProcessor::new(
+            StorageState::default(),
+            JsonRpcConfig::default(),
+            exit.clone(),
+        );
+        assert_eq!(request_processor.fullnode_exit(), Ok(false));
+        assert_eq!(exit.load(Ordering::Relaxed), false);
+    }
+    #[test]
+    fn test_rpc_request_processor_default_config_fullnode_exit_fails() {
+        let exit = Arc::new(AtomicBool::new(false));
+        let request_processor = JsonRpcRequestProcessor::new(
+            StorageState::default(),
+            JsonRpcConfig::DefaultConfig,
+            exit.clone(),
+        );
+        assert_eq!(request_processor.fullnode_exit(), Ok(false));
+        assert_eq!(exit.load(Ordering::Relaxed), false);
+    }
+
+    #[test]
+    fn test_rpc_request_processor_allow_fullnode_exit_config() {
+        let exit = Arc::new(AtomicBool::new(false));
+        let request_processor = JsonRpcRequestProcessor::new(
+            StorageState::default(),
+            JsonRpcConfig::TestOnlyAllowRpcFullnodeExit,
+            exit.clone(),
+        );
+        assert_eq!(request_processor.fullnode_exit(), Ok(true));
+        assert_eq!(exit.load(Ordering::Relaxed), true);
     }
 }

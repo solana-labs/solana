@@ -19,7 +19,6 @@ CRATES=(
   drone
   programs/{budget,bpf_loader,native_loader,noop,system,vote}
   core
-  fullnode-config
   fullnode
   genesis
   ledger-tool

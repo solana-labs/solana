@@ -90,25 +90,34 @@ impl TransactionBuilder {
             .collect()
     }
 
-    /// Return a signed transaction.
-    pub fn sign<T: KeypairUtil>(&self, keypairs: &[&T], recent_blockhash: Hash) -> Transaction {
+    /// Return an unsigned transaction that requires signatures. To more safely return an unsigned
+    /// transaction that *doesn't* require signatures, pass `sign()` zero keypairs.
+    pub fn unsigned(&self, recent_blockhash: Hash) -> Transaction {
         let program_ids = self.program_ids();
         let (mut signed_keys, unsigned_keys) = self.keys();
+        signed_keys.extend(&unsigned_keys);
+        let instructions = self.instructions(&signed_keys, &program_ids);
+        Transaction {
+            signatures: vec![],
+            account_keys: signed_keys,
+            recent_blockhash,
+            fee: self.fee,
+            program_ids,
+            instructions,
+        }
+    }
+
+    /// Return a signed transaction.
+    pub fn sign<T: KeypairUtil>(&self, keypairs: &[&T], recent_blockhash: Hash) -> Transaction {
+        let signed_keys = self.keys().0;
         for (i, keypair) in keypairs.iter().enumerate() {
             assert_eq!(keypair.pubkey(), signed_keys[i], "keypair-pubkey mismatch");
         }
         assert_eq!(keypairs.len(), signed_keys.len(), "not enough keypairs");
 
-        signed_keys.extend(&unsigned_keys);
-        let instructions = self.instructions(&signed_keys, &program_ids);
-        Transaction::new_with_instructions(
-            keypairs,
-            &unsigned_keys,
-            recent_blockhash,
-            self.fee,
-            program_ids,
-            instructions,
-        )
+        let mut tx = self.unsigned(Hash::default());
+        tx.sign(keypairs, recent_blockhash);
+        tx
     }
 }
 

@@ -32,7 +32,7 @@ use std::time::Duration;
 fn new_gossip(
     cluster_info: Arc<RwLock<ClusterInfo>>,
     gossip: UdpSocket,
-    exit: Arc<AtomicBool>,
+    exit: &Arc<AtomicBool>,
 ) -> GossipService {
     GossipService::new(&cluster_info, None, None, gossip, exit)
 }
@@ -52,14 +52,14 @@ fn test_replay() {
     cluster_info_l.set_leader(leader.info.id);
 
     let cref_l = Arc::new(RwLock::new(cluster_info_l));
-    let dr_l = new_gossip(cref_l, leader.sockets.gossip, exit.clone());
+    let dr_l = new_gossip(cref_l, leader.sockets.gossip, &exit);
 
     // start cluster_info2
     let mut cluster_info2 = ClusterInfo::new(target2.info.clone());
     cluster_info2.insert_info(leader.info.clone());
     cluster_info2.set_leader(leader.info.id);
     let cref2 = Arc::new(RwLock::new(cluster_info2));
-    let dr_2 = new_gossip(cref2, target2.sockets.gossip, exit.clone());
+    let dr_2 = new_gossip(cref2, target2.sockets.gossip, &exit);
 
     // setup some blob services to send blobs into the socket
     // to simulate the source peer and get blobs out of the socket to
@@ -90,7 +90,7 @@ fn test_replay() {
     let blockhash = bank.last_blockhash();
     let bank_forks = BankForks::new(0, bank);
     let bank_forks_info = vec![BankForksInfo {
-        bank_id: 0,
+        bank_slot: 0,
         entry_height: 0,
     }];
 
@@ -102,7 +102,7 @@ fn test_replay() {
     cluster_info1.insert_info(leader.info.clone());
     cluster_info1.set_leader(leader.info.id);
     let cref1 = Arc::new(RwLock::new(cluster_info1));
-    let dr_1 = new_gossip(cref1.clone(), target1.sockets.gossip, exit.clone());
+    let dr_1 = new_gossip(cref1.clone(), target1.sockets.gossip, &exit);
 
     let blocktree_path = get_tmp_ledger_path!();
 
@@ -131,6 +131,7 @@ fn test_replay() {
         ledger_signal_receiver,
         &Arc::new(RpcSubscriptions::default()),
         &poh_recorder,
+        &exit,
     );
 
     let mut alice_ref_balance = starting_balance;

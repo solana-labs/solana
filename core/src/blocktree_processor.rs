@@ -98,7 +98,7 @@ fn process_block(bank: &Bank, entries: &[Entry]) -> Result<()> {
 
 #[derive(Debug, PartialEq)]
 pub struct BankForksInfo {
-    pub bank_id: u64,
+    pub bank_slot: u64,
     pub entry_height: u64,
 }
 
@@ -190,7 +190,7 @@ pub fn process_blocktree(
             })?;
 
             let bfi = BankForksInfo {
-                bank_id: slot,
+                bank_slot: slot,
                 entry_height: starting_entry_height,
             };
             fork_info.push((starting_bank, bfi));
@@ -204,7 +204,7 @@ pub fn process_blocktree(
             // Reached the end of this fork.  Record the final entry height and last entry.hash
 
             let bfi = BankForksInfo {
-                bank_id: slot,
+                bank_slot: slot,
                 entry_height,
             };
             fork_info.push((bank, bfi));
@@ -316,7 +316,7 @@ mod tests {
         assert_eq!(
             bank_forks_info[0],
             BankForksInfo {
-                bank_id: 1, // never finished first slot
+                bank_slot: 1, // never finished first slot
                 entry_height: ticks_per_slot,
             }
         );
@@ -373,21 +373,21 @@ mod tests {
         assert_eq!(
             bank_forks_info[0],
             BankForksInfo {
-                bank_id: 3, // Fork 1's head is slot 3
+                bank_slot: 3, // Fork 1's head is slot 3
                 entry_height: ticks_per_slot * 4,
             }
         );
         assert_eq!(
             bank_forks_info[1],
             BankForksInfo {
-                bank_id: 4, // Fork 2's head is slot 4
+                bank_slot: 4, // Fork 2's head is slot 4
                 entry_height: ticks_per_slot * 3,
             }
         );
 
         // Ensure bank_forks holds the right banks
         for info in bank_forks_info {
-            assert_eq!(bank_forks[info.bank_id].slot(), info.bank_id);
+            assert_eq!(bank_forks[info.bank_slot].slot(), info.bank_slot);
         }
     }
 
@@ -493,7 +493,7 @@ mod tests {
         assert_eq!(
             bank_forks_info[0],
             BankForksInfo {
-                bank_id: 1,
+                bank_slot: 1,
                 entry_height,
             }
         );
@@ -518,7 +518,7 @@ mod tests {
         assert_eq!(
             bank_forks_info[0],
             BankForksInfo {
-                bank_id: 0,
+                bank_slot: 0,
                 entry_height: 1,
             }
         );

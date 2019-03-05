@@ -28,6 +28,20 @@ pub struct LocalCluster {
 
 impl LocalCluster {
     pub fn new(num_nodes: usize, cluster_lamports: u64, lamports_per_node: u64) -> Self {
+        Self::new_with_config(
+            num_nodes,
+            cluster_lamports,
+            lamports_per_node,
+            &FullnodeConfig::default(),
+        )
+    }
+
+    pub fn new_with_config(
+        num_nodes: usize,
+        cluster_lamports: u64,
+        lamports_per_node: u64,
+        fullnode_config: &FullnodeConfig,
+    ) -> Self {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -39,7 +53,6 @@ impl LocalCluster {
         ledger_paths.push(genesis_ledger_path.clone());
         ledger_paths.push(leader_ledger_path.clone());
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
-        let fullnode_config = FullnodeConfig::default();
         let leader_node_info = leader_node.info.clone();
         let leader_server = Fullnode::new(
             leader_node,
@@ -47,7 +60,7 @@ impl LocalCluster {
             &leader_ledger_path,
             voting_keypair,
             None,
-            &fullnode_config,
+            fullnode_config,
         );
         let mut fullnodes = vec![leader_server];
         let mut client = mk_client(&leader_node_info);
@@ -84,7 +97,7 @@ impl LocalCluster {
                 &ledger_path,
                 voting_keypair,
                 Some(&leader_node_info),
-                &fullnode_config,
+                fullnode_config,
             );
             fullnodes.push(validator_server);
         }
@@ -142,7 +155,7 @@ impl LocalCluster {
     ) -> Result<()> {
         // Create the vote account if necessary
         if client.poll_get_balance(&vote_account).unwrap_or(0) == 0 {
-            let mut transaction = VoteTransaction::fund_staking_account(
+            let mut transaction = VoteTransaction::new_account(
                 from_account,
                 vote_account,
                 client.get_recent_blockhash(),
@@ -182,11 +195,22 @@ impl Drop for LocalCluster {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::rpc::JsonRpcConfig;
 
     #[test]
     fn test_local_cluster_start_and_exit() {
         solana_logger::setup();
-        let network = LocalCluster::new(1, 100, 3);
-        drop(network)
+        let cluster = LocalCluster::new(1, 100, 3);
+        drop(cluster)
     }
+
+    #[test]
+    fn test_local_cluster_start_and_exit_with_config() {
+        solana_logger::setup();
+        let mut fullnode_exit = FullnodeConfig::default();
+        fullnode_exit.rpc_config = JsonRpcConfig::TestOnlyAllowRpcFullnodeExit;
+        let cluster = LocalCluster::new_with_config(1, 100, 3, &fullnode_exit);
+        drop(cluster)
+    }
+
 }
