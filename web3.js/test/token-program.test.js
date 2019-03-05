@@ -10,7 +10,7 @@ import {sleep} from '../src/util/sleep';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
-  jest.setTimeout(15000);
+  jest.setTimeout(20000);
 }
 
 function mockGetSignatureStatus(result: string = 'Confirmed') {
@@ -59,18 +59,15 @@ test('create new token', async () => {
     mockGetSignatureStatus();
 
     // mock Token.newAccount() transaction
-    mockGetRecentBlockhash();
     mockSendTransaction();
     mockGetSignatureStatus('SignatureNotFound');
     mockGetSignatureStatus();
 
     // mock SystemProgram.createAccount transaction for Token.createNewToken()
-    mockGetRecentBlockhash();
     mockSendTransaction();
     mockGetSignatureStatus();
 
     // mock Token.createNewToken() transaction
-    mockGetRecentBlockhash();
     mockSendTransaction();
     mockGetSignatureStatus('SignatureNotFound');
     mockGetSignatureStatus();
@@ -233,12 +230,10 @@ test('create new token account', async () => {
 
   {
     // mock SystemProgram.createAccount transaction for Token.newAccount()
-    mockGetRecentBlockhash();
     mockSendTransaction();
     mockGetSignatureStatus();
 
     // mock Token.newAccount() transaction
-    mockGetRecentBlockhash();
     mockSendTransaction();
     mockGetSignatureStatus();
   }
@@ -292,12 +287,10 @@ test('transfer', async () => {
 
   {
     // mock SystemProgram.createAccount transaction for Token.newAccount()
-    mockGetRecentBlockhash();
     mockSendTransaction();
     mockGetSignatureStatus();
 
     // mock Token.newAccount() transaction
-    mockGetRecentBlockhash();
     mockSendTransaction();
     mockGetSignatureStatus();
   }
@@ -337,7 +330,6 @@ test('transfer', async () => {
     ]);
 
     // mock Token.transfer() transaction
-    mockGetRecentBlockhash();
     mockSendTransaction();
     mockGetSignatureStatus();
   }
@@ -390,12 +382,10 @@ test('approve/revoke', async () => {
 
   {
     // mock SystemProgram.createAccount transaction for Token.newAccount()
-    mockGetRecentBlockhash();
     mockSendTransaction();
     mockGetSignatureStatus();
 
     // mock Token.newAccount() transaction
-    mockGetRecentBlockhash();
     mockSendTransaction();
     mockGetSignatureStatus();
   }
@@ -406,7 +396,6 @@ test('approve/revoke', async () => {
 
   {
     // mock Token.approve() transaction
-    mockGetRecentBlockhash();
     mockSendTransaction();
     mockGetSignatureStatus();
   }
@@ -474,7 +463,6 @@ test('approve/revoke', async () => {
 
   {
     // mock Token.revoke() transaction
-    mockGetRecentBlockhash();
     mockSendTransaction();
     mockGetSignatureStatus();
   }
@@ -542,7 +530,6 @@ test('invalid approve', async () => {
   }
 
   const connection = new Connection(url);
-  connection._disableBlockhashCaching = mockRpcEnabled;
   const owner = await newAccountWithTokens(connection);
 
   const account1 = await testToken.newAccount(owner);
@@ -567,7 +554,6 @@ test('fail on approve overspend', async () => {
   }
 
   const connection = new Connection(url);
-  connection._disableBlockhashCaching = mockRpcEnabled;
   const owner = await newAccountWithTokens(connection);
 
   const account1 = await testToken.newAccount(owner);
@@ -611,7 +597,6 @@ test('set owner', async () => {
   }
 
   const connection = new Connection(url);
-  connection._disableBlockhashCaching = mockRpcEnabled;
   const owner = await newAccountWithTokens(connection);
   const newOwner = await newAccountWithTokens(connection);
 
@@ -623,7 +608,4 @@ test('set owner', async () => {
   ).rejects.toThrow();
 
   await testToken.setOwner(newOwner, account, owner.publicKey);
-  await expect(
-    testToken.setOwner(newOwner, account, owner.publicKey),
-  ).rejects.toThrow();
 });
