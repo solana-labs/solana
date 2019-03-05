@@ -7,6 +7,7 @@ use solana::thin_client::ThinClient;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_metrics::influxdb;
 use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::timestamp;
@@ -103,7 +104,8 @@ pub fn sample_tx_count(
 pub fn send_barrier_transaction(
     barrier_client: &mut ThinClient,
     blockhash: &mut Hash,
-    id: &Keypair,
+    source_keypair: &Keypair,
+    dest_id: &Pubkey,
 ) {
     let transfer_start = Instant::now();
 
@@ -118,7 +120,7 @@ pub fn send_barrier_transaction(
 
         *blockhash = barrier_client.get_recent_blockhash();
         let signature = barrier_client
-            .transfer(0, &id, id.pubkey(), blockhash)
+            .transfer(0, &source_keypair, *dest_id, blockhash)
             .expect("Unable to send barrier transaction");
 
         let confirmatiom = barrier_client.poll_for_signature(&signature);
@@ -140,7 +142,7 @@ pub fn send_barrier_transaction(
             // Sanity check that the client balance is still 1
             let balance = barrier_client
                 .poll_balance_with_timeout(
-                    &id.pubkey(),
+                    &source_keypair.pubkey(),
                     &Duration::from_millis(100),
                     &Duration::from_secs(10),
                 )
