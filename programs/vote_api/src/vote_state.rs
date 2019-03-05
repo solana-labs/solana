@@ -147,7 +147,10 @@ impl VoteState {
     }
 }
 
-pub fn delegate_stake(keyed_accounts: &mut [KeyedAccount], node_id: Pubkey) -> Result<(), ProgramError> {
+pub fn delegate_stake(
+    keyed_accounts: &mut [KeyedAccount],
+    node_id: Pubkey,
+) -> Result<(), ProgramError> {
     if !check_id(&keyed_accounts[0].account.owner) {
         error!("account[0] is not assigned to the VOTE_PROGRAM");
         Err(ProgramError::InvalidArgument)?;
