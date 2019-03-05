@@ -141,7 +141,7 @@ impl LocalCluster {
         retry_get_balance(client, dest_pubkey, Some(lamports)).expect("get balance")
     }
 
-    fn create_and_fund_vote_account(
+    pub fn create_and_fund_vote_account(
         client: &mut ThinClient,
         vote_account: &Keypair,
         from_account: &Arc<Keypair>,
