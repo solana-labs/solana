@@ -85,7 +85,7 @@ impl LocalCluster {
 
             Self::create_and_fund_vote_account(
                 &mut client,
-                voting_keypair.pubkey(),
+                &voting_keypair,
                 &validator_keypair,
                 1,
             )
@@ -148,15 +148,18 @@ impl LocalCluster {
 
     fn create_and_fund_vote_account(
         client: &mut ThinClient,
-        vote_account: Pubkey,
+        vote_account: &Keypair,
         from_account: &Arc<Keypair>,
         amount: u64,
     ) -> Result<()> {
+        let vote_account_pubkey = vote_account.pubkey();
+        let delegate_id = from_account.pubkey();
         // Create the vote account if necessary
-        if client.poll_get_balance(&vote_account).unwrap_or(0) == 0 {
+        if client.poll_get_balance(&vote_account_pubkey).unwrap_or(0) == 0 {
+            // 1) Create vote account
             let mut transaction = VoteTransaction::new_account(
                 from_account,
-                vote_account,
+                vote_account_pubkey,
                 client.get_recent_blockhash(),
                 amount,
                 1,
@@ -165,14 +168,26 @@ impl LocalCluster {
             client
                 .retry_transfer(&from_account, &mut transaction, 5)
                 .expect("client transfer");
-            retry_get_balance(client, &vote_account, Some(amount)).expect("get balance");
+            retry_get_balance(client, &vote_account_pubkey, Some(amount)).expect("get balance");
+
+            // 2) Set delegate for new vote account
+            let mut transaction = VoteTransaction::delegate_vote_account(
+                vote_account,
+                client.get_recent_blockhash(),
+                delegate_id,
+                1,
+            );
+
+            client
+                .retry_transfer(&from_account, &mut transaction, 5)
+                .expect("client transfer");
         }
 
         info!("Checking for vote account registration");
-        let vote_account_user_data = client.get_account_userdata(&vote_account);
+        let vote_account_user_data = client.get_account_userdata(&vote_account_pubkey);
         if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
             if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
-                if vote_state.delegate_id == vote_account {
+                if vote_state.delegate_id == delegate_id {
                     return Ok(());
                 }
             }
