@@ -78,9 +78,9 @@ impl Tpu {
 
         let (packet_sender, packet_receiver) = channel();
         let fetch_stage =
-            FetchStage::new_with_sender(transactions_sockets, exit.clone(), &packet_sender.clone());
+            FetchStage::new_with_sender(transactions_sockets, &exit, &packet_sender.clone());
         let cluster_info_vote_listener =
-            ClusterInfoVoteListener::new(exit.clone(), cluster_info.clone(), packet_sender);
+            ClusterInfoVoteListener::new(&exit, cluster_info.clone(), packet_sender);
 
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
@@ -91,7 +91,7 @@ impl Tpu {
             broadcast_socket,
             cluster_info.clone(),
             entry_receiver,
-            exit.clone(),
+            &exit,
             blocktree,
         );
 
