@@ -1417,11 +1417,12 @@ mod tests {
         assert_eq!(parent.transaction_count(), 1);
 
         let bank = new_from_parent(&parent);
-        assert_eq!(bank.transaction_count(), 0);
+        assert_eq!(bank.transaction_count(), parent.transaction_count());
         let tx_move_1_to_2 =
             SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(bank.process_transaction(&tx_move_1_to_2), Ok(()));
-        assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.transaction_count(), 2);
+        assert_eq!(parent.transaction_count(), 1);
         assert_eq!(
             parent.get_signature_status(&tx_move_1_to_2.signatures[0]),
             None
