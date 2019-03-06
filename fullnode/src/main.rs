@@ -1,96 +1,16 @@
 use clap::{crate_version, App, Arg};
 use log::*;
-use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
-use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::voting_keypair::{RemoteVoteSigner, VotingKeypair};
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
-use solana_vote_api::vote_state::VoteState;
-use solana_vote_api::vote_transaction::VoteTransaction;
 use solana_vote_signer::rpc::{LocalVoteSigner, VoteSigner};
 use std::fs::File;
-use std::io::{Error, ErrorKind, Result};
 use std::process::exit;
 use std::sync::Arc;
-
-fn create_and_fund_vote_account(
-    client: &mut ThinClient,
-    vote_account: Pubkey,
-    node_keypair: &Arc<Keypair>,
-) -> Result<()> {
-    let pubkey = node_keypair.pubkey();
-    let node_balance = client.poll_get_balance(&pubkey)?;
-    info!("node balance is {}", node_balance);
-    if node_balance < 1 {
-        return Err(Error::new(
-            ErrorKind::Other,
-            "insufficient lamports, one lamport required",
-        ));
-    }
-
-    // Create the vote account if necessary
-    if client.poll_get_balance(&vote_account).unwrap_or(0) == 0 {
-        // Need at least two lamports as one lamport will be spent on a vote_account_new() transaction
-        if node_balance < 2 {
-            error!("insufficient lamports, two lamports required");
-            return Err(Error::new(
-                ErrorKind::Other,
-                "insufficient lamports, two lamports required",
-            ));
-        }
-        loop {
-            let blockhash = client.get_recent_blockhash();
-            info!("create_and_fund_vote_account blockhash={:?}", blockhash);
-            let transaction =
-                VoteTransaction::new_account(node_keypair, vote_account, blockhash, 1, 1);
-
-            match client.transfer_signed(&transaction) {
-                Ok(signature) => {
-                    match client.poll_for_signature(&signature) {
-                        Ok(_) => match client.poll_get_balance(&vote_account) {
-                            Ok(balance) => {
-                                info!("vote account balance: {}", balance);
-                                break;
-                            }
-                            Err(e) => {
-                                info!("Failed to get vote account balance: {:?}", e);
-                            }
-                        },
-                        Err(e) => {
-                            info!(
-                                "vote_account_new signature not found: {:?}: {:?}",
-                                signature, e
-                            );
-                        }
-                    };
-                }
-                Err(e) => {
-                    info!("Failed to send vote_account_new transaction: {:?}", e);
-                }
-            };
-        }
-    }
-
-    info!("Checking for vote account registration");
-    let vote_account_user_data = client.get_account_userdata(&vote_account);
-    if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
-        if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
-            if vote_state.delegate_id == vote_account {
-                return Ok(());
-            }
-        }
-    }
-
-    Err(Error::new(
-        ErrorKind::Other,
-        "expected successful vote account registration",
-    ))
-}
 
 fn main() {
     solana_logger::setup();
@@ -301,7 +221,6 @@ fn main() {
     let vote_account_id = vote_signer.pubkey();
     info!("New vote account ID is {:?}", vote_account_id);
 
-    let gossip_addr = node.info.gossip;
     let fullnode = Fullnode::new(
         node,
         &keypair,
@@ -310,26 +229,6 @@ fn main() {
         cluster_entrypoint.as_ref(),
         &fullnode_config,
     );
-
-    if !fullnode_config.voting_disabled {
-        let leader_node_info = loop {
-            info!("Looking for leader...");
-            match poll_gossip_for_leader(gossip_addr, Some(10)) {
-                Ok(leader_node_info) => {
-                    info!("Found leader: {:?}", leader_node_info);
-                    break leader_node_info;
-                }
-                Err(err) => {
-                    info!("Unable to find leader: {:?}", err);
-                }
-            };
-        };
-
-        let mut client = mk_client(&leader_node_info);
-        if let Err(err) = create_and_fund_vote_account(&mut client, vote_account_id, &keypair) {
-            panic!("Failed to create_and_fund_vote_account: {:?}", err);
-        }
-    }
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| panic!("Unable to create: {}", filename));
