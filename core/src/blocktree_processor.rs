@@ -204,7 +204,7 @@ pub fn process_blocktree(
             if next_meta.is_full() {
                 let next_bank = Arc::new(Bank::new_from_parent(
                     &bank,
-                    leader_schedule_utils::slot_leader_at(next_slot, &bank),
+                    leader_schedule_utils::slot_leader_at(next_slot, &bank).unwrap(),
                     next_slot,
                 ));
                 trace!("Add child bank for slot={}", next_slot);
