@@ -21,15 +21,17 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
     pub enable_fullnode_exit: bool, // Enable the 'fullnodeExit' command
+    pub drone_addr: Option<SocketAddr>,
 }
 
 impl Default for JsonRpcConfig {
     fn default() -> Self {
         Self {
             enable_fullnode_exit: false,
+            drone_addr: None,
         }
     }
 }
@@ -170,7 +172,6 @@ fn verify_signature(input: &str) -> Result<Signature> {
 pub struct Meta {
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
     pub cluster_info: Arc<RwLock<ClusterInfo>>,
-    pub drone_addr: SocketAddr,
 }
 impl Metadata for Meta {}
 
@@ -291,6 +292,14 @@ impl RpcSol for RpcSolImpl {
 
     fn request_airdrop(&self, meta: Self::Metadata, id: String, lamports: u64) -> Result<String> {
         trace!("request_airdrop id={} lamports={}", id, lamports);
+
+        let drone_addr = meta
+            .request_processor
+            .read()
+            .unwrap()
+            .config
+            .drone_addr
+            .ok_or_else(Error::invalid_request)?;
         let pubkey = verify_pubkey(id)?;
 
         let blockhash = meta
@@ -299,13 +308,11 @@ impl RpcSol for RpcSolImpl {
             .unwrap()
             .bank()?
             .last_blockhash();
-        let transaction =
-            request_airdrop_transaction(&meta.drone_addr, &pubkey, lamports, blockhash).map_err(
-                |err| {
-                    info!("request_airdrop_transaction failed: {:?}", err);
-                    Error::internal_error()
-                },
-            )?;;
+        let transaction = request_airdrop_transaction(&drone_addr, &pubkey, lamports, blockhash)
+            .map_err(|err| {
+                info!("request_airdrop_transaction failed: {:?}", err);
+                Error::internal_error()
+            })?;;
 
         let data = serialize(&transaction).map_err(|err| {
             info!("request_airdrop: serialize error: {:?}", err);
@@ -412,7 +419,7 @@ mod tests {
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::net::SocketAddr;
     use std::thread;
 
     fn start_rpc_handler_with_tx(pubkey: Pubkey) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair) {
@@ -435,7 +442,6 @@ mod tests {
 
         cluster_info.write().unwrap().insert_info(leader.clone());
         cluster_info.write().unwrap().set_leader(leader.id);
-        let drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -443,7 +449,6 @@ mod tests {
         let meta = Meta {
             request_processor,
             cluster_info,
-            drone_addr,
         };
         (io, meta, blockhash, alice)
     }
@@ -599,14 +604,14 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
-        // Expect internal error because no leader is running
+        // Expect internal error because no drone is available
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"requestAirdrop","params":["{}", 50]}}"#,
             bob_pubkey
         );
         let res = io.handle_request_sync(&req, meta);
         let expected =
-            r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1}"#;
+            r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":1}"#;
         let expected: Response =
             serde_json::from_str(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
@@ -634,7 +639,6 @@ mod tests {
                 Arc::new(RwLock::new(request_processor))
             },
             cluster_info: Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()))),
-            drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
         };
 
         let req =

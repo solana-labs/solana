@@ -125,25 +125,11 @@ impl Fullnode {
             keypair.clone(),
         )));
 
-        // TODO: The RPC service assumes that there is a drone running on the cluster
-        //       entrypoint, which is a bad assumption.
-        //       See https://github.com/solana-labs/solana/issues/1830 for the removal of drone
-        //       from the RPC API
-        let drone_addr = {
-            let mut entrypoint_drone_addr = match entrypoint_info_option {
-                Some(entrypoint_info_info) => entrypoint_info_info.rpc,
-                None => node.info.rpc,
-            };
-            entrypoint_drone_addr.set_port(solana_drone::drone::DRONE_PORT);
-            entrypoint_drone_addr
-        };
-
         let storage_state = StorageState::new();
 
         let rpc_service = JsonRpcService::new(
             &cluster_info,
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
-            drone_addr,
             storage_state.clone(),
             config.rpc_config.clone(),
             &exit,

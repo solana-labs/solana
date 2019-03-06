@@ -222,6 +222,7 @@ $program \
   --network "$leader_address" \
   --ledger "$ledger_config_dir" \
   --accounts "$accounts_config_dir" \
+  --rpc-drone-address "${leader_address%:*}:9900" \
   "${extra_fullnode_args[@]}" \
   > >($fullnode_logger) 2>&1 &
 pid=$!
