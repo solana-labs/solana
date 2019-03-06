@@ -170,6 +170,13 @@ fn main() {
                 .help("Enable the JSON RPC 'fullnodeExit' API.  Only enable in a debug environment"),
         )
         .arg(
+            Arg::with_name("rpc_drone_address")
+                .long("rpc-drone-address")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .help("Enable the JSON RPC 'requestAirdrop' API with this drone address."),
+        )
+        .arg(
             Arg::with_name("signer")
                 .short("s")
                 .long("signer")
@@ -219,6 +226,9 @@ fn main() {
     if matches.is_present("enable_rpc_exit") {
         fullnode_config.rpc_config.enable_fullnode_exit = true;
     }
+    fullnode_config.rpc_config.drone_addr = matches
+        .value_of("rpc_drone_address")
+        .map(|address| address.parse().expect("failed to parse drone address"));
 
     let gossip_addr = {
         let mut addr = solana_netutil::parse_port_or_addr(
@@ -238,9 +248,10 @@ fn main() {
     } else {
         fullnode_config.account_paths = None;
     }
-    let cluster_entrypoint = matches
-        .value_of("network")
-        .map(|network| network.parse().expect("failed to parse network address"));
+    let cluster_entrypoint = matches.value_of("network").map(|network| {
+        let gossip_addr = network.parse().expect("failed to parse network address");
+        NodeInfo::new_entry_point(&gossip_addr)
+    });
     let (_signer_service, signer_addr) = if let Some(signer_addr) = matches.value_of("signer") {
         (
             None,
@@ -296,9 +307,7 @@ fn main() {
         &keypair,
         ledger_path,
         vote_signer,
-        cluster_entrypoint
-            .map(|i| NodeInfo::new_entry_point(&i))
-            .as_ref(),
+        cluster_entrypoint.as_ref(),
         &fullnode_config,
     );
 

@@ -28,12 +28,12 @@ tune_system
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger verify
 
-# shellcheck disable=SC2086 # Don't want to double quote maybe_blockstream or maybe_init_complete_file
 $program \
   --identity "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json \
   --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger \
   --accounts "$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts \
   --rpc-port 8899 \
+  --rpc-drone-address 127.0.0.1:9900 \
   "$@" \
   > >($bootstrap_leader_logger) 2>&1 &
 pid=$!

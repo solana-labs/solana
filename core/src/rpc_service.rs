@@ -24,12 +24,12 @@ impl JsonRpcService {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         rpc_addr: SocketAddr,
-        drone_addr: SocketAddr,
         storage_state: StorageState,
         config: JsonRpcConfig,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
+        info!("rpc configuration: {:?}", config);
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             storage_state,
             config,
@@ -51,7 +51,6 @@ impl JsonRpcService {
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request<hyper::Body>| Meta {
                         request_processor: request_processor_.clone(),
                         cluster_info: info.clone(),
-                        drone_addr,
                     }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
@@ -105,14 +104,9 @@ mod tests {
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
         );
-        let drone_addr = SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-            solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
-        );
         let mut rpc_service = JsonRpcService::new(
             &cluster_info,
             rpc_addr,
-            drone_addr,
             StorageState::default(),
             JsonRpcConfig::default(),
             &exit,

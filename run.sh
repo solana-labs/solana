@@ -55,6 +55,7 @@ args=(
   --identity "$dataDir"/config/leader-keypair.json
   --ledger "$dataDir"/ledger/
   --rpc-port 8899
+  --rpc-drone-address 127.0.0.1:9900
 )
 if [[ -n $blockstreamSocket ]]; then
   args+=(--blockstream "$blockstreamSocket")
