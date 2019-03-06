@@ -1785,7 +1785,6 @@ mod tests {
     fn test_accountsdb_inherit_tx_count() {
         let paths = get_tmp_accounts_path!();
         let accounts = AccountsDB::new(0, &paths.paths);
-        cleanup_paths(&paths.paths);
         assert_eq!(accounts.transaction_count(0), 0);
         accounts.increment_transaction_count(0, 1);
         assert_eq!(accounts.transaction_count(0), 1);
