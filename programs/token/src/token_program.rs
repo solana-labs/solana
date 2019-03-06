@@ -1,5 +1,3 @@
-//! ERC20-like Token
-
 use bincode;
 use log::*;
 use serde_derive::{Deserialize, Serialize};

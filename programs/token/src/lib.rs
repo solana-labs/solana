@@ -1,5 +1,3 @@
-//! The `erc20` library implements a generic erc20-like token
-
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
