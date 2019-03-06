@@ -64,7 +64,7 @@ fn test_redeem_vote_credits_via_bank() {
     let bank = Bank::new(&genesis_block);
     let rewards_bank = RewardsBank::new(&bank);
 
-    // Create a rewards account to hold all rewards pool tokens.
+    // Create a rewards account to hold all rewards pool lamports.
     let rewards_keypair = Keypair::new();
     let rewards_id = rewards_keypair.pubkey();
     rewards_bank
@@ -91,13 +91,13 @@ fn test_redeem_vote_credits_via_bank() {
     // TODO: Add VoteInstruction::RegisterStakerId so that we don't need to point the "to"
     // account to the "from" account.
     let to_id = vote_id;
-    let to_tokens = bank.get_balance(&vote_id);
+    let to_lamports = bank.get_balance(&vote_id);
 
     // Periodically, the staker sumbits its vote account to the rewards pool
     // to exchange its credits for lamports.
     let vote_state = rewards_bank
         .redeem_credits(rewards_id, &vote_keypair)
         .unwrap();
-    assert!(bank.get_balance(&to_id) > to_tokens);
+    assert!(bank.get_balance(&to_id) > to_lamports);
     assert_eq!(vote_state.credits(), 0);
 }

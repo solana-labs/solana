@@ -19,14 +19,14 @@ impl RewardsTransaction {
         from_keypair: &Keypair,
         rewards_id: Pubkey,
         blockhash: Hash,
-        num_tokens: u64,
+        lamports: u64,
         fee: u64,
     ) -> Transaction {
         SystemTransaction::new_program_account(
             from_keypair,
             rewards_id,
             blockhash,
-            num_tokens,
+            lamports,
             RewardsState::max_size() as u64,
             id(),
             fee,

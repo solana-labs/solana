@@ -8,8 +8,8 @@ use solana_sdk::transaction_builder::BuilderInstruction;
 /// A smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Contract {
-    /// The number of tokens allocated to the `BudgetExpr` and any transaction fees.
-    pub tokens: u64,
+    /// The number of lamports allocated to the `BudgetExpr` and any transaction fees.
+    pub lamports: u64,
     pub budget_expr: BudgetExpr,
 }
 

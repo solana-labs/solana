@@ -229,9 +229,9 @@ pub fn clear_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramE
     Ok(())
 }
 
-pub fn create_vote_account(tokens: u64) -> Account {
+pub fn create_vote_account(lamports: u64) -> Account {
     let space = VoteState::max_size();
-    Account::new(tokens, space, id())
+    Account::new(lamports, space, id())
 }
 
 pub fn initialize_and_deserialize(
