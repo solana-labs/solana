@@ -15,13 +15,13 @@ impl SystemTransaction {
         from_keypair: &Keypair,
         to: Pubkey,
         recent_blockhash: Hash,
-        tokens: u64,
+        lamports: u64,
         space: u64,
         program_id: Pubkey,
         fee: u64,
     ) -> Transaction {
         let create = SystemInstruction::CreateAccount {
-            tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
+            lamports, //TODO, the lamports to allocate might need to be higher then 0 in the future
             space,
             program_id,
         };
@@ -39,7 +39,7 @@ impl SystemTransaction {
     pub fn new_account(
         from_keypair: &Keypair,
         to: Pubkey,
-        tokens: u64,
+        lamports: u64,
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
@@ -48,7 +48,7 @@ impl SystemTransaction {
             from_keypair,
             to,
             recent_blockhash,
-            tokens,
+            lamports,
             0,
             program_id,
             fee,
@@ -75,16 +75,16 @@ impl SystemTransaction {
     pub fn new_move(
         from_keypair: &Keypair,
         to: Pubkey,
-        tokens: u64,
+        lamports: u64,
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
-        let move_tokens = SystemInstruction::Move { tokens };
+        let move_lamports = SystemInstruction::Move { lamports };
         Transaction::new(
             from_keypair,
             &[to],
             system_program::id(),
-            &move_tokens,
+            &move_lamports,
             recent_blockhash,
             fee,
         )
@@ -100,7 +100,7 @@ impl SystemTransaction {
             .iter()
             .enumerate()
             .map(|(i, (_, amount))| {
-                let spend = SystemInstruction::Move { tokens: *amount };
+                let spend = SystemInstruction::Move { lamports: *amount };
                 Instruction::new(0, &spend, vec![0, i as u8 + 1])
             })
             .collect();

@@ -493,13 +493,13 @@ mod tests {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
         let keypairs = vec![&keypair0, &keypair1];
-        let tokens = 5;
+        let lamports = 5;
         let fee = 2;
         let blockhash = Hash::default();
 
         let keys = vec![keypair0.pubkey(), keypair1.pubkey()];
 
-        let system_instruction = SystemInstruction::Move { tokens };
+        let system_instruction = SystemInstruction::Move { lamports };
 
         let program_ids = vec![system_program::id(), solana_budget_api::id()];
 

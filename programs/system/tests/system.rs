@@ -40,7 +40,7 @@ fn test_system_unsigned_transaction() {
     let tx = TransactionBuilder::default()
         .push(BuilderInstruction::new(
             system_program::id(),
-            &SystemInstruction::Move { tokens: 10 },
+            &SystemInstruction::Move { lamports: 10 },
             vec![(from_keypair.pubkey(), false), (to_keypair.pubkey(), true)],
         ))
         .sign(&[&to_keypair], blockhash);

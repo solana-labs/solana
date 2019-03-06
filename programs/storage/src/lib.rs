@@ -152,7 +152,7 @@ fn entrypoint(
                 }
                 total_validations += num_validations;
                 if total_validations > 0 {
-                    keyed_accounts[0].account.tokens +=
+                    keyed_accounts[0].account.lamports +=
                         (TOTAL_VALIDATOR_REWARDS * num_validations) / total_validations;
                 }
             }
@@ -360,6 +360,6 @@ mod test {
         let tx = StorageTransaction::new_reward_claim(&keypair, Hash::default(), entry_height);
         test_transaction(&tx, &mut accounts).unwrap();
 
-        assert!(accounts[0].tokens == TOTAL_VALIDATOR_REWARDS);
+        assert!(accounts[0].lamports == TOTAL_VALIDATOR_REWARDS);
     }
 }

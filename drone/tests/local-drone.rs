@@ -10,10 +10,10 @@ use std::sync::mpsc::channel;
 fn test_local_drone() {
     let keypair = Keypair::new();
     let to = Keypair::new().pubkey();
-    let tokens = 50;
+    let lamports = 50;
     let blockhash = Hash::new(&to.as_ref());
     let expected_instruction = SystemInstruction::CreateAccount {
-        tokens,
+        lamports,
         space: 0,
         program_id: system_program::id(),
     };
@@ -31,6 +31,6 @@ fn test_local_drone() {
     run_local_drone(keypair, sender);
     let drone_addr = receiver.recv().unwrap();
 
-    let result = request_airdrop_transaction(&drone_addr, &to, tokens, blockhash);
+    let result = request_airdrop_transaction(&drone_addr, &to, lamports, blockhash);
     assert_eq!(expected_tx, result.unwrap());
 }

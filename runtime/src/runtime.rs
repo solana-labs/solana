@@ -57,7 +57,7 @@ fn process_instruction(
 fn verify_instruction(
     program_id: &Pubkey,
     pre_program_id: &Pubkey,
-    pre_tokens: u64,
+    pre_lamports: u64,
     pre_userdata: &[u8],
     account: &Account,
 ) -> Result<(), ProgramError> {
@@ -68,8 +68,8 @@ fn verify_instruction(
         return Err(ProgramError::ModifiedProgramId);
     }
     // For accounts unassigned to the program, the individual balance of each accounts cannot decrease.
-    if *program_id != account.owner && pre_tokens > account.tokens {
-        return Err(ProgramError::ExternalAccountTokenSpend);
+    if *program_id != account.owner && pre_lamports > account.lamports {
+        return Err(ProgramError::ExternalAccountLamportSpend);
     }
     // For accounts unassigned to the program, the userdata may not change.
     if *program_id != account.owner
@@ -95,10 +95,10 @@ fn execute_instruction(
     let program_id = tx.program_id(instruction_index);
     // TODO: the runtime should be checking read/write access to memory
     // we are trusting the hard-coded programs not to clobber or allocate
-    let pre_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
+    let pre_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
     let pre_data: Vec<_> = program_accounts
         .iter_mut()
-        .map(|a| (a.owner, a.tokens, a.userdata.clone()))
+        .map(|a| (a.owner, a.lamports, a.userdata.clone()))
         .collect();
 
     process_instruction(
@@ -110,19 +110,19 @@ fn execute_instruction(
     )?;
 
     // Verify the instruction
-    for ((pre_program_id, pre_tokens, pre_userdata), post_account) in
+    for ((pre_program_id, pre_lamports, pre_userdata), post_account) in
         pre_data.iter().zip(program_accounts.iter())
     {
         verify_instruction(
             &program_id,
             pre_program_id,
-            *pre_tokens,
+            *pre_lamports,
             pre_userdata,
             post_account,
         )?;
     }
-    // The total sum of all the tokens in all the accounts cannot change.
-    let post_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
+    // The total sum of all the lamports in all the accounts cannot change.
+    let post_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
     if pre_total != post_total {
         return Err(ProgramError::UnbalancedInstruction);
     }

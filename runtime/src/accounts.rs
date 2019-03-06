@@ -396,11 +396,11 @@ impl AccountsDB {
         let start = self.next_id.fetch_add(1, Ordering::Relaxed);
         let mut id = self.get_storage_id(start, std::usize::MAX);
 
-        // Even if no tokens, need to preserve the account owner so
+        // Even if no lamports, need to preserve the account owner so
         // we can update the vote_accounts correctly if this account is purged
         // when squashing.
         let acc = &mut account.clone();
-        if account.tokens == 0 {
+        if account.lamports == 0 {
             acc.userdata.resize(0, 0);
         }
 
@@ -480,7 +480,7 @@ impl AccountsDB {
 
     /// Store the account update.
     fn store_account(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
-        if account.tokens == 0 && self.is_squashed(fork) {
+        if account.lamports == 0 && self.is_squashed(fork) {
             // purge if balance is 0 and no checkpoints
             let account_maps = self.account_index.account_maps.read().unwrap();
             let map = account_maps.get(&pubkey).unwrap();
@@ -576,14 +576,14 @@ impl AccountsDB {
             for key in &tx.account_keys {
                 called_accounts.push(self.load(fork, key, true).unwrap_or_default());
             }
-            if called_accounts.is_empty() || called_accounts[0].tokens == 0 {
+            if called_accounts.is_empty() || called_accounts[0].lamports == 0 {
                 error_counters.account_not_found += 1;
                 Err(BankError::AccountNotFound)
-            } else if called_accounts[0].tokens < tx.fee {
+            } else if called_accounts[0].lamports < tx.fee {
                 error_counters.insufficient_funds += 1;
                 Err(BankError::InsufficientFundsForFee)
             } else {
-                called_accounts[0].tokens -= tx.fee;
+                called_accounts[0].lamports -= tx.fee;
                 Ok(called_accounts)
             }
         }
@@ -735,7 +735,7 @@ impl AccountsDB {
                         self.insert_account_entry(fork, id, offset, &map);
                     } else {
                         let account = self.get_account(id, offset);
-                        if account.tokens == 0 {
+                        if account.lamports == 0 {
                             if self.remove_account_entries(&[fork], &map) {
                                 keys.push(pubkey.clone());
                             }
@@ -803,14 +803,14 @@ impl Accounts {
     pub fn load_slow(&self, fork: Fork, pubkey: &Pubkey) -> Option<Account> {
         self.accounts_db
             .load(fork, pubkey, true)
-            .filter(|acc| acc.tokens != 0)
+            .filter(|acc| acc.lamports != 0)
     }
 
     /// Slow because lock is held for 1 operation insted of many
     pub fn load_slow_no_parent(&self, fork: Fork, pubkey: &Pubkey) -> Option<Account> {
         self.accounts_db
             .load(fork, pubkey, false)
-            .filter(|acc| acc.tokens != 0)
+            .filter(|acc| acc.lamports != 0)
     }
 
     /// Slow because lock is held for 1 operation insted of many
@@ -943,7 +943,7 @@ impl Accounts {
         self.accounts_db
             .get_vote_accounts(fork)
             .into_iter()
-            .filter(|(_, acc)| acc.tokens != 0)
+            .filter(|(_, acc)| acc.lamports != 0)
     }
 }
 
@@ -1402,11 +1402,11 @@ mod tests {
 
         // now we have:
         //
-        //                       root0 -> key.tokens==1
+        //                       root0 -> key.lamports==1
         //                        / \
         //                       /   \
-        //  key.tokens==0 <- fork1    \
-        //                             fork2 -> key.tokens==1
+        //  key.lamports==0 <- fork1    \
+        //                             fork2 -> key.lamports==1
         //                                       (via root0)
 
         // store value 0 in one child
@@ -1426,11 +1426,11 @@ mod tests {
 
         // now we should have:
         //
-        //                          root0 -> key.tokens==1
+        //                          root0 -> key.lamports==1
         //                             \
         //                              \
-        //  key.tokens==ANF <- root1     \
-        //                              fork2 -> key.tokens==1 (from root0)
+        //  key.lamports==ANF <- root1     \
+        //                              fork2 -> key.lamports==1 (from root0)
         //
         assert_eq!(db.load(1, &key, true), None); // purged
         assert_eq!(&db.load(2, &key, true).unwrap(), &account0); // original value
@@ -1447,17 +1447,17 @@ mod tests {
             let idx = thread_rng().gen_range(0, 99);
             let account = db.load(0, &pubkeys[idx], true).unwrap();
             let mut default_account = Account::default();
-            default_account.tokens = (idx + 1) as u64;
+            default_account.lamports = (idx + 1) as u64;
             assert_eq!(compare_account(&default_account, &account), true);
         }
         db.add_fork(1, Some(0));
 
         // now we have:
         //
-        //                        root0 -> key[X].tokens==X
+        //                        root0 -> key[X].lamports==X
         //                         /
         //                        /
-        //  key[X].tokens==X <- fork1
+        //  key[X].lamports==X <- fork1
         //    (via root0)
         //
 
@@ -1468,7 +1468,7 @@ mod tests {
         //                root0 -> purged ??
         //
         //
-        //  key[X].tokens==X <- root1
+        //  key[X].lamports==X <- root1
         //
 
         // check that all the accounts appear in parent after a squash ???
@@ -1477,7 +1477,7 @@ mod tests {
             let account0 = db.load(0, &pubkeys[idx], true).unwrap();
             let account1 = db.load(1, &pubkeys[idx], true).unwrap();
             let mut default_account = Account::default();
-            default_account.tokens = (idx + 1) as u64;
+            default_account.lamports = (idx + 1) as u64;
             assert_eq!(&default_account, &account0);
             assert_eq!(&default_account, &account1);
         }
@@ -1494,7 +1494,7 @@ mod tests {
         db0.store(0, &key, &account0);
 
         db0.add_fork(1, Some(0));
-        // 0 tokens in the child
+        // 0 lamports in the child
         let account1 = Account::new(0, 0, key);
         db0.store(1, &key, &account1);
 
@@ -1518,7 +1518,7 @@ mod tests {
             let pubkey = Keypair::new().pubkey();
             let mut default_account = Account::default();
             pubkeys.push(pubkey.clone());
-            default_account.tokens = (t + 1) as u64;
+            default_account.lamports = (t + 1) as u64;
             assert!(accounts.load(0, &pubkey, true).is_none());
             accounts.store(0, &pubkey, &default_account);
         }
@@ -1527,7 +1527,7 @@ mod tests {
             let mut default_account = Account::default();
             pubkeys.push(pubkey.clone());
             default_account.owner = solana_vote_api::id();
-            default_account.tokens = (num + t + 1) as u64;
+            default_account.lamports = (num + t + 1) as u64;
             assert!(accounts.load(0, &pubkey, true).is_none());
             accounts.store(0, &pubkey, &default_account);
         }
@@ -1537,13 +1537,13 @@ mod tests {
         for _ in 1..1000 {
             let idx = thread_rng().gen_range(0, range);
             if let Some(mut account) = accounts.load(0, &pubkeys[idx], true) {
-                account.tokens = account.tokens + 1;
+                account.lamports = account.lamports + 1;
                 accounts.store(0, &pubkeys[idx], &account);
-                if account.tokens == 0 {
+                if account.lamports == 0 {
                     assert!(accounts.load(0, &pubkeys[idx], true).is_none());
                 } else {
                     let mut default_account = Account::default();
-                    default_account.tokens = account.tokens;
+                    default_account.lamports = account.lamports;
                     assert_eq!(compare_account(&default_account, &account), true);
                 }
             }
@@ -1554,7 +1554,7 @@ mod tests {
         if account1.userdata != account2.userdata
             || account1.owner != account2.owner
             || account1.executable != account2.executable
-            || account1.tokens != account2.tokens
+            || account1.lamports != account2.lamports
         {
             return false;
         }
@@ -1569,7 +1569,7 @@ mod tests {
         create_account(&accounts, &mut pubkeys, 1, 0);
         let account = accounts.load(0, &pubkeys[0], true).unwrap();
         let mut default_account = Account::default();
-        default_account.tokens = 1;
+        default_account.lamports = 1;
         assert_eq!(compare_account(&default_account, &account), true);
     }
 
@@ -1583,7 +1583,7 @@ mod tests {
             let idx = thread_rng().gen_range(0, 99);
             let account = accounts.load(0, &pubkeys[idx], true).unwrap();
             let mut default_account = Account::default();
-            default_account.tokens = (idx + 1) as u64;
+            default_account.lamports = (idx + 1) as u64;
             assert_eq!(compare_account(&default_account, &account), true);
         }
     }
@@ -1669,7 +1669,7 @@ mod tests {
         let mut vote_accounts: Vec<_> = accounts.get_vote_accounts(1).collect();
         assert_eq!(vote_accounts.len(), 1);
 
-        vote_account.tokens = 0;
+        vote_account.lamports = 0;
         accounts.store_slow(1, &key, &vote_account);
 
         vote_accounts = accounts.get_vote_accounts(1).collect();
@@ -1685,7 +1685,7 @@ mod tests {
         vote_accounts = accounts.get_vote_accounts(1).collect();
         assert_eq!(vote_accounts.len(), 1);
 
-        vote_account1.tokens = 0;
+        vote_account1.lamports = 0;
         accounts.store_slow(1, &key1, &vote_account1);
         accounts.store_slow(0, &key, &vote_account);
 
@@ -1716,11 +1716,11 @@ mod tests {
             accounts_db.get_vote_accounts(0)
         );
 
-        info!("storing tokens=0 to fork 1");
-        // should store a tokens=0 account in 1
-        lastaccount.tokens = 0;
+        info!("storing lamports=0 to fork 1");
+        // should store a lamports=0 account in 1
+        lastaccount.lamports = 0;
         accounts_db.store(1, &lastkey, &lastaccount);
-        // len == 2 because tokens=0 accounts are filtered at the Accounts interface.
+        // len == 2 because lamports=0 accounts are filtered at the Accounts interface.
         assert_eq!(accounts_db.get_vote_accounts(1).len(), 2);
 
         accounts_db.squash(1);

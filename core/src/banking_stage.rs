@@ -574,7 +574,7 @@ mod tests {
         // ProgramErrors should still be recorded
         results[0] = Err(BankError::ProgramError(
             1,
-            ProgramError::ResultWithNegativeTokens,
+            ProgramError::ResultWithNegativeLamports,
         ));
         BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let (_, entries) = entry_receiver.recv().unwrap();

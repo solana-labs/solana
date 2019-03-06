@@ -40,7 +40,7 @@ pub fn serialize_account(dst_slice: &mut [u8], account: &Account, len: usize) {
     let mut at = 0;
 
     write_u64(&mut at, dst_slice, len as u64);
-    write_u64(&mut at, dst_slice, account.tokens);
+    write_u64(&mut at, dst_slice, account.lamports);
     write_bytes(&mut at, dst_slice, &account.userdata);
     write_bytes(&mut at, dst_slice, account.owner.as_ref());
     write_bytes(&mut at, dst_slice, &[account.executable as u8]);
@@ -81,7 +81,7 @@ pub fn deserialize_account(
     let len = size as usize;
     assert!(current_offset >= at + len);
 
-    let tokens = read_u64(&mut at, &src_slice);
+    let lamports = read_u64(&mut at, &src_slice);
 
     let userdata_len = len - get_account_size_static();
     let mut userdata = vec![0; userdata_len];
@@ -96,7 +96,7 @@ pub fn deserialize_account(
     let executable: bool = exec[0] != 0;
 
     Ok(Account {
-        tokens,
+        lamports,
         userdata,
         owner,
         executable,
@@ -255,7 +255,7 @@ pub mod tests {
         let av: AppendVec<Account> = AppendVec::new(path, true, START_SIZE, INC_SIZE);
         let v1 = vec![1u8; 32];
         let mut account1 = Account {
-            tokens: 1,
+            lamports: 1,
             userdata: v1,
             owner: Pubkey::default(),
             executable: false,
@@ -266,7 +266,7 @@ pub mod tests {
 
         let v2 = vec![4u8; 32];
         let mut account2 = Account {
-            tokens: 1,
+            lamports: 1,
             userdata: v2,
             owner: Pubkey::default(),
             executable: false,

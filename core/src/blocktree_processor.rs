@@ -476,7 +476,7 @@ mod tests {
             entries.push(entry);
 
             // Add a second Transaction that will produce a
-            // ProgramError<0, ResultWithNegativeTokens> error when processed
+            // ProgramError<0, ResultWithNegativeLamports> error when processed
             let keypair2 = Keypair::new();
             let tx = SystemTransaction::new_account(&keypair, keypair2.pubkey(), 42, blockhash, 0);
             let entry = Entry::new(&last_entry_hash, 1, vec![tx]);

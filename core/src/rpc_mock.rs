@@ -106,6 +106,6 @@ pub fn request_airdrop_transaction(
     let key = Keypair::new();
     let to = Keypair::new().pubkey();
     let blockhash = Hash::default();
-    let tx = SystemTransaction::new_account(&key, to, 50, blockhash, 0);
+    let tx = SystemTransaction::new_account(&key, to, lamports, blockhash, 0);
     Ok(tx)
 }
