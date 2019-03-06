@@ -32,12 +32,12 @@ impl LeaderConfirmationService {
         // Hold an accounts_db read lock as briefly as possible, just long enough to collect all
         // the vote states
         bank.vote_accounts().for_each(|(_, account)| {
-            total_stake += account.tokens;
+            total_stake += account.lamports;
             let vote_state = VoteState::deserialize(&account.userdata).unwrap();
             if let Some(stake_and_state) = vote_state
                 .votes
                 .back()
-                .map(|vote| (vote.slot, account.tokens))
+                .map(|vote| (vote.slot, account.lamports))
             {
                 slots_and_stakes.push(stake_and_state);
             }
@@ -145,7 +145,7 @@ mod tests {
         let blockhash = bank.last_blockhash();
 
         // Create a total of 10 vote accounts, each will have a balance of 1 (after giving 1 to
-        // their vote account), for a total staking pool of 10 tokens.
+        // their vote account), for a total staking pool of 10 lamports.
         let vote_accounts: Vec<_> = (0..10)
             .map(|i| {
                 // Create new validator to vote
@@ -153,7 +153,7 @@ mod tests {
                 let voting_keypair = Keypair::new();
                 let voting_pubkey = voting_keypair.pubkey();
 
-                // Give the validator some tokens
+                // Give the validator some lamports
                 bank.transfer(2, &mint_keypair, validator_keypair.pubkey(), blockhash)
                     .unwrap();
                 new_vote_account(&validator_keypair, &voting_pubkey, &bank, 1);

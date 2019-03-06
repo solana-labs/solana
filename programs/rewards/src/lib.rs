@@ -48,7 +48,7 @@ fn redeem_vote_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Progra
 
     // TODO: This assumes the stake is static. If not, it should use the account value
     // at the time of voting, not at credit redemption.
-    let stake = keyed_accounts[0].account.tokens;
+    let stake = keyed_accounts[0].account.lamports;
     if stake == 0 {
         error!("staking account has no stake");
         Err(ProgramError::InvalidArgument)?;
@@ -57,8 +57,8 @@ fn redeem_vote_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Progra
     let lamports = calc_vote_reward(vote_state.credits(), stake)?;
 
     // Transfer rewards from the rewards pool to the staking account.
-    keyed_accounts[1].account.tokens -= lamports;
-    keyed_accounts[0].account.tokens += lamports;
+    keyed_accounts[1].account.lamports -= lamports;
+    keyed_accounts[0].account.lamports += lamports;
 
     Ok(())
 }
@@ -90,9 +90,9 @@ mod tests {
     use solana_vote_api::vote_instruction::Vote;
     use solana_vote_api::vote_state;
 
-    fn create_rewards_account(tokens: u64) -> Account {
+    fn create_rewards_account(lamports: u64) -> Account {
         let space = RewardsState::max_size();
-        Account::new(tokens, space, solana_rewards_api::id())
+        Account::new(lamports, space, solana_rewards_api::id())
     }
 
     fn redeem_vote_credits_(
@@ -130,7 +130,7 @@ mod tests {
         let rewards_id = Keypair::new().pubkey();
         let mut rewards_account = create_rewards_account(100);
 
-        let tokens_before = vote_account.tokens;
+        let lamports_before = vote_account.lamports;
 
         redeem_vote_credits_(
             &rewards_id,
@@ -139,6 +139,6 @@ mod tests {
             &mut vote_account,
         )
         .unwrap();
-        assert!(vote_account.tokens > tokens_before);
+        assert!(vote_account.lamports > lamports_before);
     }
 }

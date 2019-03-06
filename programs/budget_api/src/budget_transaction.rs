@@ -171,13 +171,13 @@ impl BudgetTransaction {
 
     /// Verify only the payment plan.
     pub fn verify_plan(tx: &Transaction) -> bool {
-        if let Some(SystemInstruction::CreateAccount { tokens, .. }) =
+        if let Some(SystemInstruction::CreateAccount { lamports, .. }) =
             Self::system_instruction(tx, 0)
         {
             if let Some(BudgetInstruction::InitializeAccount(expr)) =
                 BudgetTransaction::instruction(&tx, 1)
             {
-                if !(tx.fee <= tokens && expr.verify(tokens - tx.fee)) {
+                if !(tx.fee <= lamports && expr.verify(lamports - tx.fee)) {
                     return false;
                 }
             }
@@ -236,12 +236,15 @@ mod tests {
         let pubkey = keypair.pubkey();
         let mut tx = BudgetTransaction::new(&keypair, pubkey, 42, zero);
         let mut system_instruction = BudgetTransaction::system_instruction(&tx, 0).unwrap();
-        if let SystemInstruction::CreateAccount { ref mut tokens, .. } = system_instruction {
-            *tokens = 1_000_000; // <-- attack, part 1!
+        if let SystemInstruction::CreateAccount {
+            ref mut lamports, ..
+        } = system_instruction
+        {
+            *lamports = 1_000_000; // <-- attack, part 1!
             let mut instruction = BudgetTransaction::instruction(&tx, 1).unwrap();
             if let BudgetInstruction::InitializeAccount(ref mut expr) = instruction {
                 if let BudgetExpr::Pay(ref mut payment) = expr {
-                    payment.tokens = *tokens; // <-- attack, part 2!
+                    payment.tokens = *lamports; // <-- attack, part 2!
                 }
             }
             tx.instructions[1].userdata = serialize(&instruction).unwrap();

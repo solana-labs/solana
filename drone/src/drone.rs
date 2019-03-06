@@ -1,5 +1,5 @@
 //! The `drone` module provides an object for launching a Solana Drone,
-//! which is the custodian of any remaining tokens in a mint.
+//! which is the custodian of any remaining lamports in a mint.
 //! The Solana Drone builds and send airdrop transactions,
 //! checking requests against a request cap for a given time time_slice
 //! and (to come) an IP rate limit.
@@ -48,7 +48,7 @@ pub const DRONE_PORT: u16 = 9900;
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum DroneRequest {
     GetAirdrop {
-        tokens: u64,
+        lamports: u64,
         to: Pubkey,
         blockhash: Hash,
     },
@@ -108,16 +108,16 @@ impl Drone {
         trace!("build_airdrop_transaction: {:?}", req);
         match req {
             DroneRequest::GetAirdrop {
-                tokens,
+                lamports,
                 to,
                 blockhash,
             } => {
-                if self.check_request_limit(tokens) {
-                    self.request_current += tokens;
+                if self.check_request_limit(lamports) {
+                    self.request_current += lamports;
                     solana_metrics::submit(
                         influxdb::Point::new("drone")
                             .add_tag("op", influxdb::Value::String("airdrop".to_string()))
-                            .add_field("request_amount", influxdb::Value::Integer(tokens as i64))
+                            .add_field("request_amount", influxdb::Value::Integer(lamports as i64))
                             .add_field(
                                 "request_current",
                                 influxdb::Value::Integer(self.request_current as i64),
@@ -125,10 +125,10 @@ impl Drone {
                             .to_owned(),
                     );
 
-                    info!("Requesting airdrop of {} to {:?}", tokens, to);
+                    info!("Requesting airdrop of {} to {:?}", lamports, to);
 
                     let create_instruction = SystemInstruction::CreateAccount {
-                        tokens,
+                        lamports,
                         space: 0,
                         program_id: system_program::id(),
                     };
@@ -193,18 +193,18 @@ impl Drop for Drone {
 pub fn request_airdrop_transaction(
     drone_addr: &SocketAddr,
     id: &Pubkey,
-    tokens: u64,
+    lamports: u64,
     blockhash: Hash,
 ) -> Result<Transaction, Error> {
     info!(
-        "request_airdrop_transaction: drone_addr={} id={} tokens={} blockhash={}",
-        drone_addr, id, tokens, blockhash
+        "request_airdrop_transaction: drone_addr={} id={} lamports={} blockhash={}",
+        drone_addr, id, lamports, blockhash
     );
     // TODO: make this async tokio client
     let mut stream = TcpStream::connect_timeout(drone_addr, Duration::new(3, 0))?;
     stream.set_read_timeout(Some(Duration::new(10, 0)))?;
     let req = DroneRequest::GetAirdrop {
-        tokens,
+        lamports,
         blockhash,
         to: *id,
     };
@@ -355,7 +355,7 @@ mod tests {
         let to = Keypair::new().pubkey();
         let blockhash = Hash::default();
         let request = DroneRequest::GetAirdrop {
-            tokens: 2,
+            lamports: 2,
             to,
             blockhash,
         };
@@ -376,7 +376,7 @@ mod tests {
         assert_eq!(
             instruction,
             SystemInstruction::CreateAccount {
-                tokens: 2,
+                lamports: 2,
                 space: 0,
                 program_id: Pubkey::default()
             }
@@ -392,9 +392,9 @@ mod tests {
     fn test_process_drone_request() {
         let to = Keypair::new().pubkey();
         let blockhash = Hash::new(&to.as_ref());
-        let tokens = 50;
+        let lamports = 50;
         let req = DroneRequest::GetAirdrop {
-            tokens,
+            lamports,
             blockhash,
             to,
         };
@@ -404,7 +404,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let expected_instruction = SystemInstruction::CreateAccount {
-            tokens,
+            lamports,
             space: 0,
             program_id: system_program::id(),
         };

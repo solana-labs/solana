@@ -50,7 +50,10 @@ fn test_wallet_deploy_program() {
         .make_rpc_request(1, RpcRequest::GetAccountInfo, Some(params))
         .unwrap();
     let account_info_obj = account_info.as_object().unwrap();
-    assert_eq!(account_info_obj.get("tokens").unwrap().as_u64().unwrap(), 1);
+    assert_eq!(
+        account_info_obj.get("lamports").unwrap().as_u64().unwrap(),
+        1
+    );
     let owner_array = account_info.get("owner").unwrap();
     assert_eq!(owner_array, &json!(bpf_loader::id()));
     assert_eq!(

@@ -14,16 +14,16 @@ pub enum ProgramError {
     /// An instruction resulted in an account with a negative balance
     /// The difference from InsufficientFundsForFee is that the transaction was executed by the
     /// contract
-    ResultWithNegativeTokens,
+    ResultWithNegativeLamports,
 
-    /// Program's instruction token balance does not equal the balance after the instruction
+    /// Program's instruction lamport balance does not equal the balance after the instruction
     UnbalancedInstruction,
 
     /// Program modified an account's program id
     ModifiedProgramId,
 
-    /// Program spent the tokens of an account that doesn't belong to it
-    ExternalAccountTokenSpend,
+    /// Program spent the lamports of an account that doesn't belong to it
+    ExternalAccountLamportSpend,
 
     /// Program modified the userdata of an account that doesn't belong to it
     ExternalAccountUserdataModified,

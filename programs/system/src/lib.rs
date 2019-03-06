@@ -12,13 +12,13 @@ const TO_ACCOUNT_INDEX: usize = 1;
 #[derive(Debug, Clone, PartialEq)]
 enum SystemError {
     AccountAlreadyInUse,
-    ResultWithNegativeTokens,
+    ResultWithNegativeLamports,
     SourceNotSystemAccount,
 }
 
 fn create_system_account(
     keyed_accounts: &mut [KeyedAccount],
-    tokens: u64,
+    lamports: u64,
     space: u64,
     program_id: Pubkey,
 ) -> Result<(), SystemError> {
@@ -36,15 +36,15 @@ fn create_system_account(
         );
         Err(SystemError::AccountAlreadyInUse)?;
     }
-    if tokens > keyed_accounts[FROM_ACCOUNT_INDEX].account.tokens {
+    if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports {
         info!(
-            "CreateAccount: insufficient tokens ({}, need {})",
-            keyed_accounts[FROM_ACCOUNT_INDEX].account.tokens, tokens
+            "CreateAccount: insufficient lamports ({}, need {})",
+            keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports, lamports
         );
-        Err(SystemError::ResultWithNegativeTokens)?;
+        Err(SystemError::ResultWithNegativeLamports)?;
     }
-    keyed_accounts[FROM_ACCOUNT_INDEX].account.tokens -= tokens;
-    keyed_accounts[TO_ACCOUNT_INDEX].account.tokens += tokens;
+    keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports -= lamports;
+    keyed_accounts[TO_ACCOUNT_INDEX].account.lamports += lamports;
     keyed_accounts[TO_ACCOUNT_INDEX].account.owner = program_id;
     keyed_accounts[TO_ACCOUNT_INDEX].account.userdata = vec![0; space as usize];
     keyed_accounts[TO_ACCOUNT_INDEX].account.executable = false;
@@ -61,16 +61,16 @@ fn assign_account_to_program(
     keyed_accounts[FROM_ACCOUNT_INDEX].account.owner = program_id;
     Ok(())
 }
-fn move_tokens(keyed_accounts: &mut [KeyedAccount], tokens: u64) -> Result<(), ProgramError> {
-    if tokens > keyed_accounts[FROM_ACCOUNT_INDEX].account.tokens {
+fn move_lamports(keyed_accounts: &mut [KeyedAccount], lamports: u64) -> Result<(), ProgramError> {
+    if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports {
         info!(
-            "Move: insufficient tokens ({}, need {})",
-            keyed_accounts[FROM_ACCOUNT_INDEX].account.tokens, tokens
+            "Move: insufficient lamports ({}, need {})",
+            keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports, lamports
         );
-        Err(ProgramError::ResultWithNegativeTokens)?;
+        Err(ProgramError::ResultWithNegativeLamports)?;
     }
-    keyed_accounts[FROM_ACCOUNT_INDEX].account.tokens -= tokens;
-    keyed_accounts[TO_ACCOUNT_INDEX].account.tokens += tokens;
+    keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports -= lamports;
+    keyed_accounts[TO_ACCOUNT_INDEX].account.lamports += lamports;
     Ok(())
 }
 
@@ -93,24 +93,22 @@ pub fn entrypoint(
 
         match syscall {
             SystemInstruction::CreateAccount {
-                tokens,
+                lamports,
                 space,
                 program_id,
-            } => {
-                create_system_account(keyed_accounts, tokens, space, program_id).map_err(
-                    |e| match e {
-                        SystemError::AccountAlreadyInUse => ProgramError::InvalidArgument,
-                        SystemError::ResultWithNegativeTokens => {
-                            ProgramError::ResultWithNegativeTokens
-                        }
-                        SystemError::SourceNotSystemAccount => ProgramError::InvalidArgument,
-                    },
-                )
-            }
+            } => create_system_account(keyed_accounts, lamports, space, program_id).map_err(|e| {
+                match e {
+                    SystemError::AccountAlreadyInUse => ProgramError::InvalidArgument,
+                    SystemError::ResultWithNegativeLamports => {
+                        ProgramError::ResultWithNegativeLamports
+                    }
+                    SystemError::SourceNotSystemAccount => ProgramError::InvalidArgument,
+                }
+            }),
             SystemInstruction::Assign { program_id } => {
                 assign_account_to_program(keyed_accounts, program_id)
             }
-            SystemInstruction::Move { tokens } => move_tokens(keyed_accounts, tokens),
+            SystemInstruction::Move { lamports } => move_lamports(keyed_accounts, lamports),
         }
     } else {
         info!("Invalid transaction instruction userdata: {:?}", data);
@@ -138,19 +136,19 @@ mod tests {
             KeyedAccount::new(&to, false, &mut to_account),
         ];
         create_system_account(&mut keyed_accounts, 50, 2, new_program_owner).unwrap();
-        let from_tokens = from_account.tokens;
-        let to_tokens = to_account.tokens;
+        let from_lamports = from_account.lamports;
+        let to_lamports = to_account.lamports;
         let to_owner = to_account.owner;
         let to_userdata = to_account.userdata.clone();
-        assert_eq!(from_tokens, 50);
-        assert_eq!(to_tokens, 50);
+        assert_eq!(from_lamports, 50);
+        assert_eq!(to_lamports, 50);
         assert_eq!(to_owner, new_program_owner);
         assert_eq!(to_userdata, [0, 0]);
     }
 
     #[test]
-    fn test_create_negative_tokens() {
-        // Attempt to create account with more tokens than remaining in from_account
+    fn test_create_negative_lamports() {
+        // Attempt to create account with more lamports than remaining in from_account
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Keypair::new().pubkey();
         let mut from_account = Account::new(100, 0, system_program::id());
@@ -164,9 +162,9 @@ mod tests {
             KeyedAccount::new(&to, false, &mut to_account),
         ];
         let result = create_system_account(&mut keyed_accounts, 150, 2, new_program_owner);
-        assert_eq!(result, Err(SystemError::ResultWithNegativeTokens));
-        let from_tokens = from_account.tokens;
-        assert_eq!(from_tokens, 100);
+        assert_eq!(result, Err(SystemError::ResultWithNegativeLamports));
+        let from_lamports = from_account.lamports;
+        assert_eq!(from_lamports, 100);
         assert_eq!(to_account, unchanged_account);
     }
 
@@ -188,8 +186,8 @@ mod tests {
         ];
         let result = create_system_account(&mut keyed_accounts, 50, 2, new_program_owner);
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse));
-        let from_tokens = from_account.tokens;
-        assert_eq!(from_tokens, 100);
+        let from_lamports = from_account.lamports;
+        assert_eq!(from_lamports, 100);
         assert_eq!(owned_account, unchanged_account);
     }
 
@@ -202,7 +200,7 @@ mod tests {
 
         let populated_key = Keypair::new().pubkey();
         let mut populated_account = Account {
-            tokens: 0,
+            lamports: 0,
             userdata: vec![0, 1, 2, 3],
             owner: Pubkey::default(),
             executable: false,
@@ -215,7 +213,7 @@ mod tests {
         ];
         let result = create_system_account(&mut keyed_accounts, 50, 2, new_program_owner);
         assert_eq!(result, Err(SystemError::AccountAlreadyInUse));
-        assert_eq!(from_account.tokens, 100);
+        assert_eq!(from_account.lamports, 100);
         assert_eq!(populated_account, unchanged_account);
     }
 
@@ -255,7 +253,7 @@ mod tests {
     }
 
     #[test]
-    fn test_move_tokens() {
+    fn test_move_lamports() {
         let from = Keypair::new().pubkey();
         let mut from_account = Account::new(100, 0, Pubkey::new(&[2; 32])); // account owner should not matter
         let to = Keypair::new().pubkey();
@@ -264,20 +262,20 @@ mod tests {
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&to, false, &mut to_account),
         ];
-        move_tokens(&mut keyed_accounts, 50).unwrap();
-        let from_tokens = from_account.tokens;
-        let to_tokens = to_account.tokens;
-        assert_eq!(from_tokens, 50);
-        assert_eq!(to_tokens, 51);
+        move_lamports(&mut keyed_accounts, 50).unwrap();
+        let from_lamports = from_account.lamports;
+        let to_lamports = to_account.lamports;
+        assert_eq!(from_lamports, 50);
+        assert_eq!(to_lamports, 51);
 
-        // Attempt to move more tokens than remaining in from_account
+        // Attempt to move more lamports than remaining in from_account
         keyed_accounts = [
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&to, false, &mut to_account),
         ];
-        let result = move_tokens(&mut keyed_accounts, 100);
-        assert_eq!(result, Err(ProgramError::ResultWithNegativeTokens));
-        assert_eq!(from_account.tokens, 50);
-        assert_eq!(to_account.tokens, 51);
+        let result = move_lamports(&mut keyed_accounts, 100);
+        assert_eq!(result, Err(ProgramError::ResultWithNegativeLamports));
+        assert_eq!(from_account.lamports, 50);
+        assert_eq!(to_account.lamports, 51);
     }
 }

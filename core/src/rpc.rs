@@ -292,8 +292,8 @@ impl RpcSol for RpcSolImpl {
             .get_transaction_count()
     }
 
-    fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<String> {
-        trace!("request_airdrop id={} tokens={}", id, tokens);
+    fn request_airdrop(&self, meta: Self::Metadata, id: String, lamports: u64) -> Result<String> {
+        trace!("request_airdrop id={} lamports={}", id, lamports);
         let pubkey = verify_pubkey(id)?;
 
         let blockhash = meta
@@ -302,11 +302,13 @@ impl RpcSol for RpcSolImpl {
             .unwrap()
             .bank()?
             .last_blockhash();
-        let transaction = request_airdrop_transaction(&meta.drone_addr, &pubkey, tokens, blockhash)
-            .map_err(|err| {
-                info!("request_airdrop_transaction failed: {:?}", err);
-                Error::internal_error()
-            })?;;
+        let transaction =
+            request_airdrop_transaction(&meta.drone_addr, &pubkey, lamports, blockhash).map_err(
+                |err| {
+                    info!("request_airdrop_transaction failed: {:?}", err);
+                    Error::internal_error()
+                },
+            )?;;
 
         let data = serialize(&transaction).map_err(|err| {
             info!("request_airdrop: serialize error: {:?}", err);
@@ -517,7 +519,7 @@ mod tests {
             "jsonrpc":"2.0",
             "result":{
                 "owner": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-                "tokens": 20,
+                "lamports": 20,
                 "userdata": [],
                 "executable": false
             },

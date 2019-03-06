@@ -5,8 +5,8 @@ use std::{cmp, fmt};
 #[repr(C)]
 #[derive(Serialize, Deserialize, Clone, Default, Eq, PartialEq)]
 pub struct Account {
-    /// tokens in the account
-    pub tokens: u64,
+    /// lamports in the account
+    pub lamports: u64,
     /// data held in this account
     pub userdata: Vec<u8>,
     /// the program that owns this account. If executable, the program that loads this account.
@@ -28,8 +28,8 @@ impl fmt::Debug for Account {
         };
         write!(
             f,
-            "Account {{ tokens: {} userdata.len: {} owner: {} executable: {}{} }}",
-            self.tokens,
+            "Account {{ lamports: {} userdata.len: {} owner: {} executable: {}{} }}",
+            self.lamports,
             self.userdata.len(),
             self.owner,
             self.executable,
@@ -40,9 +40,9 @@ impl fmt::Debug for Account {
 
 impl Account {
     // TODO do we want to add executable and leader_owner even though they should always be false/default?
-    pub fn new(tokens: u64, space: usize, owner: Pubkey) -> Account {
+    pub fn new(lamports: u64, space: usize, owner: Pubkey) -> Account {
         Account {
-            tokens,
+            lamports,
             userdata: vec![0u8; space],
             owner,
             executable: false,

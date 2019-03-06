@@ -121,20 +121,20 @@ impl ThinClient {
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
     pub fn transfer(
         &self,
-        tokens: u64,
+        lamports: u64,
         keypair: &Keypair,
         to: Pubkey,
         blockhash: &Hash,
     ) -> io::Result<Signature> {
         debug!(
-            "transfer: tokens={} from={:?} to={:?} blockhash={:?}",
-            tokens,
+            "transfer: lamports={} from={:?} to={:?} blockhash={:?}",
+            lamports,
             keypair.pubkey(),
             to,
             blockhash
         );
         let now = Instant::now();
-        let transaction = SystemTransaction::new_account(keypair, to, tokens, *blockhash, 0);
+        let transaction = SystemTransaction::new_account(keypair, to, lamports, *blockhash, 0);
         let result = self.transfer_signed(&transaction);
         solana_metrics::submit(
             influxdb::Point::new("thinclient")
@@ -184,8 +184,8 @@ impl ThinClient {
                 let account: Account =
                     serde_json::from_value(account_json).expect("deserialize account");
                 trace!("Response account {:?} {:?}", pubkey, account);
-                trace!("get_balance {:?}", account.tokens);
-                Ok(account.tokens)
+                trace!("get_balance {:?}", account.lamports);
+                Ok(account.lamports)
             })
             .map_err(|error| {
                 debug!("Response account {}: None (error: {:?})", pubkey, error);
@@ -563,8 +563,8 @@ mod tests {
 
         let mut tr2 = SystemTransaction::new_account(&alice, bob_pubkey, 501, blockhash, 0);
         let mut instruction2 = deserialize(tr2.userdata(0)).unwrap();
-        if let SystemInstruction::Move { ref mut tokens } = instruction2 {
-            *tokens = 502;
+        if let SystemInstruction::Move { ref mut lamports } = instruction2 {
+            *lamports = 502;
         }
         tr2.instructions[0].userdata = serialize(&instruction2).unwrap();
         let signature = client.transfer_signed(&tr2).unwrap();
@@ -587,7 +587,7 @@ mod tests {
 
         let mut client = mk_client(&leader_data);
 
-        // Create the validator account, transfer some tokens to that account
+        // Create the validator account, transfer some lamports to that account
         let validator_keypair = Keypair::new();
         let blockhash = client.get_recent_blockhash();
         let signature = client
@@ -660,9 +660,9 @@ mod tests {
         info!("test_thin_client blockhash: {:?}", blockhash);
 
         let starting_alice_balance = client.poll_get_balance(&alice.pubkey()).unwrap();
-        info!("Alice has {} tokens", starting_alice_balance);
+        info!("Alice has {} lamports", starting_alice_balance);
 
-        info!("Give Bob 500 tokens");
+        info!("Give Bob 500 lamports");
         let signature = client
             .transfer(500, &alice, bob_keypair.pubkey(), &blockhash)
             .unwrap();
@@ -671,7 +671,7 @@ mod tests {
         let bob_balance = client.poll_get_balance(&bob_keypair.pubkey());
         assert_eq!(bob_balance.unwrap(), 500);
 
-        info!("Take Bob's 500 tokens away");
+        info!("Take Bob's 500 lamports away");
         let signature = client
             .transfer(500, &bob_keypair, alice.pubkey(), &blockhash)
             .unwrap();

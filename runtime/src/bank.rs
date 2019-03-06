@@ -240,24 +240,27 @@ impl Bank {
         assert!(genesis_block.mint_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
-        assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_tokens);
-        assert!(genesis_block.bootstrap_leader_tokens >= 3);
+        assert!(genesis_block.lamports >= genesis_block.bootstrap_leader_lamports);
+        assert!(genesis_block.bootstrap_leader_lamports >= 3);
 
         // Bootstrap leader collects fees until `new_from_parent` is called.
         self.collector_id = genesis_block.bootstrap_leader_id;
 
-        let mint_tokens = genesis_block.tokens - genesis_block.bootstrap_leader_tokens;
-        self.deposit(&genesis_block.mint_id, mint_tokens);
+        let mint_lamports = genesis_block.lamports - genesis_block.bootstrap_leader_lamports;
+        self.deposit(&genesis_block.mint_id, mint_lamports);
 
-        let bootstrap_leader_tokens = 2;
+        let bootstrap_leader_lamports = 2;
         let bootstrap_leader_stake =
-            genesis_block.bootstrap_leader_tokens - bootstrap_leader_tokens;
-        self.deposit(&genesis_block.bootstrap_leader_id, bootstrap_leader_tokens);
+            genesis_block.bootstrap_leader_lamports - bootstrap_leader_lamports;
+        self.deposit(
+            &genesis_block.bootstrap_leader_id,
+            bootstrap_leader_lamports,
+        );
 
         // Construct a vote account for the bootstrap_leader such that the leader_scheduler
         // will be forced to select it as the leader for height 0
         let mut bootstrap_leader_vote_account = Account {
-            tokens: bootstrap_leader_stake,
+            lamports: bootstrap_leader_stake,
             userdata: vec![0; VoteState::max_size() as usize],
             owner: solana_vote_api::id(),
             executable: false,
@@ -645,7 +648,7 @@ impl Bank {
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
-    /// `n` tokens where `blockhash` is the last Entry ID observed by the client.
+    /// `n` lamports where `blockhash` is the last Entry ID observed by the client.
     pub fn transfer(
         &self,
         n: u64,
@@ -659,7 +662,7 @@ impl Bank {
     }
 
     pub fn read_balance(account: &Account) -> u64 {
-        account.tokens
+        account.lamports
     }
     /// Each program would need to be able to introspect its own state
     /// this is hard-coded to the Budget language
@@ -680,14 +683,14 @@ impl Bank {
         parents
     }
 
-    pub fn withdraw(&self, pubkey: &Pubkey, tokens: u64) -> Result<()> {
+    pub fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
         match self.get_account(pubkey) {
             Some(mut account) => {
-                if tokens > account.tokens {
+                if lamports > account.lamports {
                     return Err(BankError::InsufficientFundsForFee);
                 }
 
-                account.tokens -= tokens;
+                account.lamports -= lamports;
                 self.accounts()
                     .store_slow(self.accounts_id, pubkey, &account);
                 Ok(())
@@ -696,9 +699,9 @@ impl Bank {
         }
     }
 
-    pub fn deposit(&self, pubkey: &Pubkey, tokens: u64) {
+    pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
-        account.tokens += tokens;
+        account.lamports += lamports;
         self.accounts()
             .store_slow(self.accounts_id, pubkey, &account);
     }
@@ -798,7 +801,7 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use hashbrown::HashSet;
-    use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
+    use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
@@ -815,18 +818,21 @@ mod tests {
     #[test]
     fn test_bank_new_with_leader() {
         let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = BOOTSTRAP_LEADER_TOKENS;
+        let dummy_leader_lamports = BOOTSTRAP_LEADER_LAMPORTS;
         let (genesis_block, _) =
-            GenesisBlock::new_with_leader(10_000, dummy_leader_id, dummy_leader_tokens);
-        assert_eq!(genesis_block.bootstrap_leader_tokens, dummy_leader_tokens);
+            GenesisBlock::new_with_leader(10_000, dummy_leader_id, dummy_leader_lamports);
+        assert_eq!(
+            genesis_block.bootstrap_leader_lamports,
+            dummy_leader_lamports
+        );
         let bank = Bank::new(&genesis_block);
         assert_eq!(
             bank.get_balance(&genesis_block.mint_id),
-            10_000 - dummy_leader_tokens
+            10_000 - dummy_leader_lamports
         );
         assert_eq!(
             bank.get_balance(&dummy_leader_id),
-            dummy_leader_tokens - 1 /* 1 token goes to the vote account associated with dummy_leader_tokens */
+            dummy_leader_lamports - 1 /* 1 token goes to the vote account associated with dummy_leader_lamports */
         );
     }
 
@@ -878,7 +884,7 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
-        let spend = SystemInstruction::Move { tokens: 1 };
+        let spend = SystemInstruction::Move { lamports: 1 };
         let instructions = vec![
             Instruction {
                 program_ids_index: 0,
@@ -909,7 +915,7 @@ mod tests {
             bank.get_signature_status(&t1.signatures[0]),
             Some(Err(BankError::ProgramError(
                 1,
-                ProgramError::ResultWithNegativeTokens
+                ProgramError::ResultWithNegativeLamports
             )))
         );
     }
@@ -957,11 +963,11 @@ mod tests {
             bank.process_transaction(&tx),
             Err(BankError::ProgramError(
                 0,
-                ProgramError::ResultWithNegativeTokens
+                ProgramError::ResultWithNegativeLamports
             ))
         );
 
-        // The tokens didn't move, but the from address paid the transaction fee.
+        // The lamports didn't move, but the from address paid the transaction fee.
         assert_eq!(bank.get_balance(&dest.pubkey()), 0);
 
         // This should be the original balance minus the transaction fee.
@@ -993,7 +999,7 @@ mod tests {
             bank.transfer(10_001, &mint_keypair, pubkey, genesis_block.hash()),
             Err(BankError::ProgramError(
                 0,
-                ProgramError::ResultWithNegativeTokens
+                ProgramError::ResultWithNegativeLamports
             ))
         );
         assert_eq!(bank.transaction_count(), 1);
@@ -1094,7 +1100,7 @@ mod tests {
             Ok(()),
             Err(BankError::ProgramError(
                 1,
-                ProgramError::ResultWithNegativeTokens,
+                ProgramError::ResultWithNegativeLamports,
             )),
         ];
 
@@ -1135,9 +1141,9 @@ mod tests {
     #[test]
     fn test_process_genesis() {
         let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 3;
+        let dummy_leader_lamports = 3;
         let (genesis_block, _) =
-            GenesisBlock::new_with_leader(5, dummy_leader_id, dummy_leader_tokens);
+            GenesisBlock::new_with_leader(5, dummy_leader_id, dummy_leader_lamports);
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.get_balance(&genesis_block.mint_id), 2);
         assert_eq!(bank.get_balance(&dummy_leader_id), 2);
@@ -1418,8 +1424,8 @@ mod tests {
     #[test]
     fn test_bank_epoch_vote_accounts() {
         let leader_id = Keypair::new().pubkey();
-        let leader_tokens = 3;
-        let (mut genesis_block, _) = GenesisBlock::new_with_leader(5, leader_id, leader_tokens);
+        let leader_lamports = 3;
+        let (mut genesis_block, _) = GenesisBlock::new_with_leader(5, leader_id, leader_lamports);
 
         // set this up weird, forces:
         //  1. genesis bank to cover epochs 0, 1, *and* 2
@@ -1485,13 +1491,13 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let key = Keypair::new();
 
-        let move_tokens = SystemInstruction::Move { tokens: 1 };
+        let move_lamports = SystemInstruction::Move { lamports: 1 };
 
         let mut tx = Transaction::new_unsigned(
             &mint_keypair.pubkey(),
             &[key.pubkey()],
             system_program::id(),
-            &move_tokens,
+            &move_lamports,
             bank.last_blockhash(),
             2,
         );

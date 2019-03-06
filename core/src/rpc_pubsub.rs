@@ -323,7 +323,7 @@ mod tests {
            "params": {
                "result": {
                    "owner": budget_program_id,
-                   "tokens": 1,
+                   "lamports": 1,
                    "userdata": expected_userdata,
                    "executable": executable,
 
@@ -359,7 +359,7 @@ mod tests {
            "params": {
                "result": {
                    "owner": budget_program_id,
-                   "tokens": 51,
+                   "lamports": 51,
                    "userdata": expected_userdata,
                     "executable": executable,
                },
@@ -393,7 +393,7 @@ mod tests {
            "params": {
                "result": {
                    "owner": budget_program_id,
-                   "tokens": 1,
+                   "lamports": 1,
                    "userdata": expected_userdata,
                     "executable": executable,
                },

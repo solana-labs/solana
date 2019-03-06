@@ -86,7 +86,7 @@ pub struct Transaction {
     pub account_keys: Vec<Pubkey>,
     /// The id of a recent ledger entry.
     pub recent_blockhash: Hash,
-    /// The number of tokens paid for processing and storing of this transaction.
+    /// The number of lamports paid for processing and storing of this transaction.
     pub fee: u64,
     /// All the program id keys used to execute this transaction's instructions
     pub program_ids: Vec<Pubkey>,
@@ -141,7 +141,7 @@ impl Transaction {
     /// Create a signed transaction
     /// * `from_keypair` - The key used to sign the transaction.  This key is stored as keys[0]
     /// * `account_keys` - The keys for the transaction.  These are the program state
-    ///    instances or token recipient keys.
+    ///    instances or lamport recipient keys.
     /// * `recent_blockhash` - The PoH hash.
     /// * `fee` - The transaction fee.
     /// * `program_ids` - The keys that identify programs used in the `instruction` vector.

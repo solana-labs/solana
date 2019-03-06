@@ -27,8 +27,8 @@ fn apply_signature(
         if let Some(key) = keyed_accounts[0].signer_key() {
             if &payment.to == key {
                 budget_state.pending_budget = None;
-                keyed_accounts[1].account.tokens -= payment.tokens;
-                keyed_accounts[0].account.tokens += payment.tokens;
+                keyed_accounts[1].account.lamports -= payment.tokens;
+                keyed_accounts[0].account.lamports += payment.tokens;
                 return Ok(());
             }
         }
@@ -37,8 +37,8 @@ fn apply_signature(
             return Err(BudgetError::DestinationMissing);
         }
         budget_state.pending_budget = None;
-        keyed_accounts[1].account.tokens -= payment.tokens;
-        keyed_accounts[2].account.tokens += payment.tokens;
+        keyed_accounts[1].account.lamports -= payment.tokens;
+        keyed_accounts[2].account.lamports += payment.tokens;
     }
     Ok(())
 }
@@ -68,8 +68,8 @@ fn apply_timestamp(
             return Err(BudgetError::DestinationMissing);
         }
         budget_state.pending_budget = None;
-        keyed_accounts[1].account.tokens -= payment.tokens;
-        keyed_accounts[2].account.tokens += payment.tokens;
+        keyed_accounts[1].account.lamports -= payment.tokens;
+        keyed_accounts[2].account.lamports += payment.tokens;
     }
     Ok(())
 }
@@ -86,8 +86,8 @@ fn apply_debits(
         BudgetInstruction::InitializeAccount(expr) => {
             let expr = expr.clone();
             if let Some(payment) = expr.final_payment() {
-                keyed_accounts[1].account.tokens = 0;
-                keyed_accounts[0].account.tokens += payment.tokens;
+                keyed_accounts[1].account.lamports = 0;
+                keyed_accounts[0].account.lamports += payment.tokens;
                 Ok(())
             } else {
                 let existing = BudgetState::deserialize(&keyed_accounts[1].account.userdata).ok();
@@ -97,8 +97,8 @@ fn apply_debits(
                 } else {
                     let mut budget_state = BudgetState::default();
                     budget_state.pending_budget = Some(expr);
-                    keyed_accounts[1].account.tokens += keyed_accounts[0].account.tokens;
-                    keyed_accounts[0].account.tokens = 0;
+                    keyed_accounts[1].account.lamports += keyed_accounts[0].account.lamports;
+                    keyed_accounts[0].account.lamports = 0;
                     budget_state.initialized = true;
                     budget_state.serialize(&mut keyed_accounts[1].account.userdata)
                 }
@@ -146,8 +146,8 @@ fn apply_debits(
 }
 
 /// Budget DSL contract interface
-/// * accounts[0] - The source of the tokens
-/// * accounts[1] - The contract context.  Once the contract has been completed, the tokens can
+/// * accounts[0] - The source of the lamports
+/// * accounts[1] - The contract context.  Once the contract has been completed, the lamports can
 /// be spent from this account .
 pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
@@ -318,8 +318,8 @@ mod test {
             Hash::default(),
         );
         process_transaction(&tx, &mut accounts).unwrap();
-        assert_eq!(accounts[from_account].tokens, 0);
-        assert_eq!(accounts[contract_account].tokens, 1);
+        assert_eq!(accounts[from_account].lamports, 0);
+        assert_eq!(accounts[contract_account].lamports, 1);
         let budget_state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
         assert!(budget_state.is_pending());
 
@@ -335,9 +335,9 @@ mod test {
             process_transaction(&tx, &mut accounts),
             Err(BudgetError::DestinationMissing)
         );
-        assert_eq!(accounts[from_account].tokens, 0);
-        assert_eq!(accounts[contract_account].tokens, 1);
-        assert_eq!(accounts[to_account].tokens, 0);
+        assert_eq!(accounts[from_account].lamports, 0);
+        assert_eq!(accounts[contract_account].lamports, 1);
+        assert_eq!(accounts[to_account].lamports, 0);
 
         let budget_state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
         assert!(budget_state.is_pending());
@@ -352,9 +352,9 @@ mod test {
             Hash::default(),
         );
         process_transaction(&tx, &mut accounts).unwrap();
-        assert_eq!(accounts[from_account].tokens, 0);
-        assert_eq!(accounts[contract_account].tokens, 0);
-        assert_eq!(accounts[to_account].tokens, 1);
+        assert_eq!(accounts[from_account].lamports, 0);
+        assert_eq!(accounts[contract_account].lamports, 0);
+        assert_eq!(accounts[to_account].lamports, 1);
 
         let budget_state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
         assert!(!budget_state.is_pending());
@@ -364,9 +364,9 @@ mod test {
             process_transaction(&tx, &mut accounts),
             Err(BudgetError::ContractNotPending)
         );
-        assert_eq!(accounts[from_account].tokens, 0);
-        assert_eq!(accounts[contract_account].tokens, 0);
-        assert_eq!(accounts[to_account].tokens, 1);
+        assert_eq!(accounts[from_account].lamports, 0);
+        assert_eq!(accounts[contract_account].lamports, 0);
+        assert_eq!(accounts[to_account].lamports, 1);
     }
     #[test]
     fn test_cancel_transfer() {
@@ -393,22 +393,22 @@ mod test {
             Hash::default(),
         );
         process_transaction(&tx, &mut accounts).unwrap();
-        assert_eq!(accounts[from_account].tokens, 0);
-        assert_eq!(accounts[contract_account].tokens, 1);
+        assert_eq!(accounts[from_account].lamports, 0);
+        assert_eq!(accounts[contract_account].lamports, 1);
         let budget_state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
         assert!(budget_state.is_pending());
 
-        // Attack! try to put the tokens into the wrong account with cancel
+        // Attack! try to put the lamports into the wrong account with cancel
         let tx =
             BudgetTransaction::new_signature(&to, contract.pubkey(), to.pubkey(), Hash::default());
         // unit test hack, the `from account` is passed instead of the `to` account to avoid
         // creating more account vectors
         process_transaction(&tx, &mut accounts).unwrap();
         // nothing should be changed because apply witness didn't finalize a payment
-        assert_eq!(accounts[from_account].tokens, 0);
-        assert_eq!(accounts[contract_account].tokens, 1);
+        assert_eq!(accounts[from_account].lamports, 0);
+        assert_eq!(accounts[contract_account].lamports, 1);
         // this is the `to.pubkey()` account
-        assert_eq!(accounts[pay_account].tokens, 0);
+        assert_eq!(accounts[pay_account].lamports, 0);
 
         // Now, cancel the transaction. from gets her funds back
         let tx = BudgetTransaction::new_signature(
@@ -418,9 +418,9 @@ mod test {
             Hash::default(),
         );
         process_transaction(&tx, &mut accounts).unwrap();
-        assert_eq!(accounts[from_account].tokens, 1);
-        assert_eq!(accounts[contract_account].tokens, 0);
-        assert_eq!(accounts[pay_account].tokens, 0);
+        assert_eq!(accounts[from_account].lamports, 1);
+        assert_eq!(accounts[contract_account].lamports, 0);
+        assert_eq!(accounts[pay_account].lamports, 0);
 
         // try to replay the cancel contract
         let tx = BudgetTransaction::new_signature(
@@ -433,9 +433,9 @@ mod test {
             process_transaction(&tx, &mut accounts),
             Err(BudgetError::ContractNotPending)
         );
-        assert_eq!(accounts[from_account].tokens, 1);
-        assert_eq!(accounts[contract_account].tokens, 0);
-        assert_eq!(accounts[pay_account].tokens, 0);
+        assert_eq!(accounts[from_account].lamports, 1);
+        assert_eq!(accounts[contract_account].lamports, 0);
+        assert_eq!(accounts[pay_account].lamports, 0);
     }
 
     #[test]
