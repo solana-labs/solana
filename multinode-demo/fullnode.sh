@@ -191,15 +191,15 @@ if [[ ! -d "$ledger_config_dir" ]]; then
 
   $solana_wallet --keypair "$fullnode_id_path" address
 
-  # A fullnode requires 3 tokens to function:
+  # A fullnode requires 3 lamports to function:
   # - one token to create an instance of the vote_program with
   # - one token for the transaction fee
   # - one token to keep the node identity public key valid.
   retries=5
   while true; do
     # TODO: Until https://github.com/solana-labs/solana/issues/2355 is resolved
-    # a fullnode needs N tokens as its vote account gets re-created on every
-    # node restart, costing it tokens
+    # a fullnode needs N lamports as its vote account gets re-created on every
+    # node restart, costing it lamports
     if $solana_wallet --keypair "$fullnode_id_path" --host "${leader_address%:*}" airdrop 1000000; then
       break
     fi

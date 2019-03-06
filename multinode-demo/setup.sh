@@ -14,11 +14,11 @@ usage () {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [-n num_tokens] [-l] [-p] [-t node_type]
+usage: $0 [-n lamports] [-l] [-p] [-t node_type]
 
 Creates a fullnode configuration
 
- -n num_tokens  - Number of tokens to create
+ -n lamports    - Number of lamports to create
  -t node_type   - Create configuration files only for this kind of node.  Valid
                   options are bootstrap-leader or fullnode.  Creates configuration files
                   for both by default
@@ -27,7 +27,7 @@ EOF
   exit $exitcode
 }
 
-num_tokens=1000000000
+lamports=1000000000
 bootstrap_leader=true
 fullnode=true
 while getopts "h?n:lpt:" opt; do
@@ -37,7 +37,7 @@ while getopts "h?n:lpt:" opt; do
     exit 0
     ;;
   n)
-    num_tokens="$OPTARG"
+    lamports="$OPTARG"
     ;;
   t)
     node_type="$OPTARG"
@@ -80,7 +80,7 @@ if $bootstrap_leader; then
       --bootstrap-leader-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json \
       --ledger "$SOLANA_RSYNC_CONFIG_DIR"/ledger \
       --mint "$SOLANA_CONFIG_DIR"/mint-id.json \
-      --num_tokens "$num_tokens"
+      --lamports "$lamports"
     cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
   )
 fi

@@ -43,7 +43,7 @@ solana-keygen -o "$dataDir"/config/leader-keypair.json
 solana-keygen -o "$dataDir"/config/drone-keypair.json
 
 solana-genesis \
-  --num_tokens 1000000000 \
+  --lamports 1000000000 \
   --mint "$dataDir"/config/drone-keypair.json \
   --bootstrap-leader-keypair "$dataDir"/config/leader-keypair.json \
   --ledger "$dataDir"/ledger
