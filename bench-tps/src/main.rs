@@ -37,7 +37,7 @@ fn converge(
     //lets spy on the network
     let (node, gossip_socket) = ClusterInfo::spy_node();
     println!("Spy node: {}", node.id);
-    let mut spy_cluster_info = ClusterInfo::new(node);
+    let mut spy_cluster_info = ClusterInfo::new_with_invalid_keypair(node);
     spy_cluster_info.insert_info(leader.clone());
     spy_cluster_info.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_cluster_info));

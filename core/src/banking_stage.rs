@@ -385,7 +385,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
         let (exit, poh_recorder, poh_service, _entry_receiever) = create_test_recorder(&bank);
-        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
         drop(verified_sender);
@@ -403,7 +403,7 @@ mod tests {
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
         let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
-        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         poh_recorder.lock().unwrap().set_bank(&bank);
         let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
@@ -433,7 +433,7 @@ mod tests {
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
         let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
-        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         poh_recorder.lock().unwrap().set_bank(&bank);
         let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
@@ -491,7 +491,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
         let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
-        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         poh_recorder.lock().unwrap().set_bank(&bank);
         let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);

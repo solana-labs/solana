@@ -192,7 +192,7 @@ pub mod tests {
         }];
 
         //start cluster_info1
-        let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
+        let mut cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
         cluster_info1.insert_info(leader.info.clone());
         cluster_info1.set_leader(leader.info.id);
         let cref1 = Arc::new(RwLock::new(cluster_info1));

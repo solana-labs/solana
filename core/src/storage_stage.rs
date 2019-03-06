@@ -492,7 +492,7 @@ mod tests {
 
     fn test_cluster_info(id: Pubkey) -> Arc<RwLock<ClusterInfo>> {
         let node_info = NodeInfo::new_localhost(id, 0);
-        let cluster_info = ClusterInfo::new(node_info);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(node_info);
         Arc::new(RwLock::new(cluster_info))
     }
 

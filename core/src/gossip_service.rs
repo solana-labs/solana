@@ -164,7 +164,7 @@ mod tests {
     fn test_exit() {
         let exit = Arc::new(AtomicBool::new(false));
         let tn = Node::new_localhost();
-        let cluster_info = ClusterInfo::new(tn.info.clone());
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(tn.info.clone());
         let c = Arc::new(RwLock::new(cluster_info));
         let d = GossipService::new(&c, None, None, tn.sockets.gossip, &exit);
         exit.store(true, Ordering::Relaxed);

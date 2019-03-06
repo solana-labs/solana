@@ -99,7 +99,7 @@ mod tests {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Bank::new(&genesis_block);
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(NodeInfo::default())));
         let rpc_addr = SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
