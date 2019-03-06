@@ -22,14 +22,15 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 #[derive(Clone)]
-pub enum JsonRpcConfig {
-    DefaultConfig,
-    TestOnlyAllowRpcFullnodeExit,
+pub struct JsonRpcConfig {
+    pub enable_fullnode_exit: bool, // Enable the 'fullnodeExit' command
 }
 
 impl Default for JsonRpcConfig {
     fn default() -> Self {
-        JsonRpcConfig::DefaultConfig
+        Self {
+            enable_fullnode_exit: false,
+        }
     }
 }
 
@@ -110,16 +111,13 @@ impl JsonRpcRequestProcessor {
     }
 
     pub fn fullnode_exit(&self) -> Result<bool> {
-        match self.config {
-            JsonRpcConfig::DefaultConfig => {
-                debug!("default config, fullnode_exit ignored");
-                Ok(false)
-            }
-            JsonRpcConfig::TestOnlyAllowRpcFullnodeExit => {
-                warn!("TEST_ONLY JsonRPC fullnode_exit request...");
-                self.fullnode_exit.store(true, Ordering::Relaxed);
-                Ok(true)
-            }
+        if self.config.enable_fullnode_exit {
+            warn!("fullnode_exit request...");
+            self.fullnode_exit.store(true, Ordering::Relaxed);
+            Ok(true)
+        } else {
+            debug!("fullnode_exit ignored");
+            Ok(false)
         }
     }
 }
@@ -714,26 +712,14 @@ mod tests {
         assert_eq!(request_processor.fullnode_exit(), Ok(false));
         assert_eq!(exit.load(Ordering::Relaxed), false);
     }
-    #[test]
-    fn test_rpc_request_processor_default_config_fullnode_exit_fails() {
-        let exit = Arc::new(AtomicBool::new(false));
-        let request_processor = JsonRpcRequestProcessor::new(
-            StorageState::default(),
-            JsonRpcConfig::DefaultConfig,
-            &exit,
-        );
-        assert_eq!(request_processor.fullnode_exit(), Ok(false));
-        assert_eq!(exit.load(Ordering::Relaxed), false);
-    }
 
     #[test]
     fn test_rpc_request_processor_allow_fullnode_exit_config() {
         let exit = Arc::new(AtomicBool::new(false));
-        let request_processor = JsonRpcRequestProcessor::new(
-            StorageState::default(),
-            JsonRpcConfig::TestOnlyAllowRpcFullnodeExit,
-            &exit,
-        );
+        let mut config = JsonRpcConfig::default();
+        config.enable_fullnode_exit = true;
+        let request_processor =
+            JsonRpcRequestProcessor::new(StorageState::default(), config, &exit);
         assert_eq!(request_processor.fullnode_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
     }

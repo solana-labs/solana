@@ -3,7 +3,6 @@ extern crate solana;
 use solana::cluster_tests;
 use solana::fullnode::FullnodeConfig;
 use solana::local_cluster::LocalCluster;
-use solana::rpc::JsonRpcConfig;
 
 #[test]
 fn test_spend_and_verify_all_nodes_1() {
@@ -54,18 +53,18 @@ fn test_fullnode_exit_default_config_should_panic() {
 fn test_fullnode_exit_2() {
     solana_logger::setup();
     let num_nodes = 2;
-    let mut fullnode_exit = FullnodeConfig::default();
-    fullnode_exit.rpc_config = JsonRpcConfig::TestOnlyAllowRpcFullnodeExit;
-    let local = LocalCluster::new_with_config(num_nodes, 10_000, 100, &fullnode_exit);
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.rpc_config.enable_fullnode_exit = true;
+    let local = LocalCluster::new_with_config(num_nodes, 10_000, 100, &fullnode_config);
     cluster_tests::fullnode_exit(&local.entry_point_info, num_nodes);
 }
 
 #[test]
 fn test_leader_failure_2() {
     let num_nodes = 2;
-    let mut fullnode_exit = FullnodeConfig::default();
-    fullnode_exit.rpc_config = JsonRpcConfig::TestOnlyAllowRpcFullnodeExit;
-    let local = LocalCluster::new_with_config(num_nodes, 10_000, 100, &fullnode_exit);
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.rpc_config.enable_fullnode_exit = true;
+    let local = LocalCluster::new_with_config(num_nodes, 10_000, 100, &fullnode_config);
     cluster_tests::kill_entry_and_spend_and_verify_rest(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -76,9 +75,9 @@ fn test_leader_failure_2() {
 #[test]
 fn test_leader_failure_3() {
     let num_nodes = 3;
-    let mut fullnode_exit = FullnodeConfig::default();
-    fullnode_exit.rpc_config = JsonRpcConfig::TestOnlyAllowRpcFullnodeExit;
-    let local = LocalCluster::new_with_config(num_nodes, 10_000, 100, &fullnode_exit);
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.rpc_config.enable_fullnode_exit = true;
+    let local = LocalCluster::new_with_config(num_nodes, 10_000, 100, &fullnode_config);
     cluster_tests::kill_entry_and_spend_and_verify_rest(
         &local.entry_point_info,
         &local.funding_keypair,

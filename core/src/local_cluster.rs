@@ -211,7 +211,6 @@ impl Drop for LocalCluster {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::rpc::JsonRpcConfig;
 
     #[test]
     fn test_local_cluster_start_and_exit() {
@@ -224,7 +223,7 @@ mod test {
     fn test_local_cluster_start_and_exit_with_config() {
         solana_logger::setup();
         let mut fullnode_exit = FullnodeConfig::default();
-        fullnode_exit.rpc_config = JsonRpcConfig::TestOnlyAllowRpcFullnodeExit;
+        fullnode_exit.rpc_config.enable_fullnode_exit = true;
         let cluster = LocalCluster::new_with_config(1, 100, 3, &fullnode_exit);
         drop(cluster)
     }

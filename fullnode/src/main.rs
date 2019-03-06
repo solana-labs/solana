@@ -217,7 +217,7 @@ fn main() {
     let use_only_bootstrap_leader = matches.is_present("no_leader_rotation");
 
     if matches.is_present("enable_rpc_exit") {
-        fullnode_config.rpc_config = solana::rpc::JsonRpcConfig::TestOnlyAllowRpcFullnodeExit;
+        fullnode_config.rpc_config.enable_fullnode_exit = true;
     }
 
     let gossip_addr = {
