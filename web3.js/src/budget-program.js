@@ -38,7 +38,7 @@ export type TimestampCondition = {
  * Represents a payment to a given public key
  *
  * @typedef {Object} Payment
- * @property {number} amount Number of tokens
+ * @property {number} amount Number of lamports
  * @property {PublicKey} to Public key of the recipient
  */
 export type Payment = {
@@ -177,7 +177,7 @@ export class BudgetProgram {
   }
 
   /**
-   * Generates a transaction that transfers tokens once any of the conditions are met
+   * Generates a transaction that transfers lamports once any of the conditions are met
    */
   static pay(
     from: PublicKey,
@@ -258,7 +258,7 @@ export class BudgetProgram {
   }
 
   /**
-   * Generates a transaction that transfers tokens once both conditions are met
+   * Generates a transaction that transfers lamports once both conditions are met
    */
   static payOnBoth(
     from: PublicKey,

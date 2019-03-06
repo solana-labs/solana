@@ -85,7 +85,7 @@ function jsonRpcResult(resultDescription: any) {
 const AccountInfoResult = struct({
   executable: 'boolean',
   owner: 'array',
-  tokens: 'number',
+  lamports: 'number',
   userdata: 'array',
 });
 
@@ -144,7 +144,7 @@ const SendTransactionRpcResult = jsonRpcResult('string');
  * Information describing an account
  *
  * @typedef {Object} AccountInfo
- * @property {number} tokens Number of tokens assigned to the account
+ * @property {number} lamports Number of lamports assigned to the account
  * @property {PublicKey} owner Identifier of the program that owns the account
  * @property {?Buffer} userdata Optional userdata assigned to the account
  * @property {boolean} executable `true` if this account's userdata contains a loaded program
@@ -152,7 +152,7 @@ const SendTransactionRpcResult = jsonRpcResult('string');
 type AccountInfo = {
   executable: boolean,
   owner: PublicKey,
-  tokens: number,
+  lamports: number,
   userdata: Buffer,
 };
 
@@ -266,7 +266,7 @@ export class Connection {
     return {
       executable: result.executable,
       owner: new PublicKey(result.owner),
-      tokens: result.tokens,
+      lamports: result.lamports,
       userdata: Buffer.from(result.userdata),
     };
   }
@@ -326,7 +326,7 @@ export class Connection {
   }
 
   /**
-   * Request an allocation of tokens to the specified account
+   * Request an allocation of lamports to the specified account
    */
   async requestAirdrop(
     to: PublicKey,
@@ -478,7 +478,7 @@ export class Connection {
         sub.callback({
           executable: result.executable,
           owner: new PublicKey(result.owner),
-          tokens: result.tokens,
+          lamports: result.lamports,
           userdata: Buffer.from(result.userdata),
         });
         return true;

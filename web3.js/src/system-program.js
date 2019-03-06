@@ -25,13 +25,13 @@ export class SystemProgram {
   static createAccount(
     from: PublicKey,
     newAccount: PublicKey,
-    tokens: number,
+    lamports: number,
     space: number,
     programId: PublicKey,
   ): Transaction {
     const userdataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
-      BufferLayout.ns64('tokens'),
+      BufferLayout.ns64('lamports'),
       BufferLayout.ns64('space'),
       Layout.publicKey('programId'),
     ]);
@@ -40,7 +40,7 @@ export class SystemProgram {
     userdataLayout.encode(
       {
         instruction: 0, // Create Account instruction
-        tokens,
+        lamports,
         space,
         programId: programId.toBuffer(),
       },
@@ -55,7 +55,7 @@ export class SystemProgram {
   }
 
   /**
-   * Generate a Transaction that moves tokens from one account to another
+   * Generate a Transaction that moves lamports from one account to another
    */
   static move(from: PublicKey, to: PublicKey, amount: number): Transaction {
     const userdataLayout = BufferLayout.struct([

@@ -213,7 +213,7 @@ test('request airdrop', async () => {
           0,
           0,
         ],
-        tokens: 42,
+        lamports: 42,
         userdata: [],
         executable: false,
       },
@@ -221,7 +221,7 @@ test('request airdrop', async () => {
   ]);
 
   const accountInfo = await connection.getAccountInfo(account.publicKey);
-  expect(accountInfo.tokens).toBe(42);
+  expect(accountInfo.lamports).toBe(42);
   expect(accountInfo.userdata).toHaveLength(0);
   expect(accountInfo.owner).toEqual(SystemProgram.programId);
 });
@@ -469,7 +469,7 @@ test('account change notification', async () => {
 
   await connection.removeAccountChangeListener(subscriptionId);
 
-  expect(mockCallback.mock.calls[0][0].tokens).toBe(41);
+  expect(mockCallback.mock.calls[0][0].lamports).toBe(41);
   expect(mockCallback.mock.calls[0][0].owner).toEqual(BpfLoader.programId);
   expect(mockCallback.mock.calls[0][0].executable).toBe(false);
   expect(mockCallback.mock.calls[0][0].userdata).toEqual(

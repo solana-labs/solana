@@ -1,6 +1,6 @@
 /*
   Example of using the Budget program to perform a time-lock payment of 50
-  tokens from account1 to account2.
+  lamports from account1 to account2.
 */
 
 //eslint-disable-next-line import/no-commonjs
@@ -72,7 +72,7 @@ showBalance()
     const transaction = solanaWeb3.SystemProgram.createAccount(
       account1.publicKey,
       contractFunds.publicKey,
-      50, // number of tokens to transfer
+      50, // number of lamports to transfer
       0,
       solanaWeb3.BudgetProgram.programId,
     );
@@ -85,7 +85,7 @@ showBalance()
     const transaction = solanaWeb3.SystemProgram.createAccount(
       account1.publicKey,
       contractState.publicKey,
-      1, // account1 pays 1 token to hold the contract state
+      1, // account1 pays 1 lamport to hold the contract state
       solanaWeb3.BudgetProgram.space,
       solanaWeb3.BudgetProgram.programId,
     );
