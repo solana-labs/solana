@@ -23,13 +23,13 @@ Next, follow the steps in the git repository's
 [README](https://github.com/solana-labs/example-tictactoe/blob/master/README.md).
 
 
-## Getting tokens to users
+## Getting lamports to users
 
 You may have noticed you interacted with the Solana cluster without first
-needing to acquire tokens to pay transaction fees. Under the hood, the web
+needing to acquire lamports to pay transaction fees. Under the hood, the web
 app creates a new ephemeral identity and sends a request to an off-chain
 service for a signed transaction authorizing a user to start a new game.
 The service is called a *drone*. When the app sends the signed transaction
-to the Solana cluster, the drone's tokens are spent to pay the transaction
+to the Solana cluster, the drone's lamports are spent to pay the transaction
 fee and start the game. In a real world app, the drone might request the user
-watch an ad or pass a CAPTCHA before signing over its tokens.
+watch an ad or pass a CAPTCHA before signing over its lamports.

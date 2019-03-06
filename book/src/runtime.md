@@ -18,7 +18,7 @@ transaction fails to commit.
 
 ### Account Structure
 
-Accounts maintain a token balance and program-specific memory.
+Accounts maintain a lamport balance and program-specific memory.
 
 # Transaction Engine
 
@@ -33,7 +33,7 @@ memory is committed.
 
 The TVU runtime ensures that PoH verification occurs before the runtime
 processes any transactions.
- 
+
 <img alt="Runtime pipeline" src="img/runtime.svg" class="center"/>
 
 At the *execute* stage, the loaded accounts have no data dependencies, so all the
@@ -67,7 +67,7 @@ userdata array and assign it to a Program.
 
 * `Assign` - Allows the user to assign an existing account to a program.
 
-* `Move`  - Moves tokens between accounts.
+* `Move`  - Moves lamports between accounts.
 
 ## Program State Security
 
@@ -101,7 +101,7 @@ program, the Account's userdata is zero initialized.
 * Runtime guarantees that a program's code is the only code that can modify
 Account userdata that the Account is assigned to.
 
-* Runtime guarantees that the program can only spend tokens that are in
+* Runtime guarantees that the program can only spend lamports that are in
 accounts that are assigned to it.
 
 * Runtime guarantees the balances belonging to accounts are balanced before
