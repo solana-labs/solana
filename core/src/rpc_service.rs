@@ -52,7 +52,6 @@ impl JsonRpcService {
                         request_processor: request_processor_.clone(),
                         cluster_info: info.clone(),
                         drone_addr,
-                        rpc_addr,
                     }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,

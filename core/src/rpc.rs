@@ -170,7 +170,6 @@ fn verify_signature(input: &str) -> Result<Signature> {
 pub struct Meta {
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
     pub cluster_info: Arc<RwLock<ClusterInfo>>,
-    pub rpc_addr: SocketAddr,
     pub drone_addr: SocketAddr,
 }
 impl Metadata for Meta {}
@@ -436,7 +435,6 @@ mod tests {
 
         cluster_info.write().unwrap().insert_info(leader.clone());
         cluster_info.write().unwrap().set_leader(leader.id);
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
 
         let mut io = MetaIoHandler::default();
@@ -446,7 +444,6 @@ mod tests {
             request_processor,
             cluster_info,
             drone_addr,
-            rpc_addr,
         };
         (io, meta, blockhash, alice)
     }
@@ -638,7 +635,6 @@ mod tests {
             },
             cluster_info: Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()))),
             drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-            rpc_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
         };
 
         let req =
