@@ -113,7 +113,7 @@ struct AccountIndex {
 }
 
 /// Persistent storage structure holding the accounts
-struct AccountStorage {
+struct AccountStorageEntry {
     /// storage holding the accounts
     accounts: Arc<RwLock<AppendVec<Account>>>,
 
@@ -129,7 +129,27 @@ struct AccountStorage {
     path: String,
 }
 
-impl AccountStorage {
+impl AccountStorageEntry {
+    pub fn new(path: String, id: usize) -> Self {
+        let p = format!("{}/{}", path, id);
+        let path = Path::new(&p);
+        let _ignored = remove_dir_all(path);
+        create_dir_all(path).expect("Create directory failed");
+        let accounts = Arc::new(RwLock::new(AppendVec::<Account>::new(
+            &path.join(ACCOUNT_DATA_FILE),
+            true,
+            ACCOUNT_DATA_FILE_SIZE,
+            0,
+        )));
+
+        AccountStorageEntry {
+            accounts,
+            count: AtomicUsize::new(0),
+            status: AtomicUsize::new(AccountStorageStatus::StorageAvailable as usize),
+            path: p,
+        }
+    }
+
     pub fn set_status(&self, status: AccountStorageStatus) {
         self.status.store(status as usize, Ordering::Relaxed);
     }
@@ -137,7 +157,20 @@ impl AccountStorage {
     pub fn get_status(&self) -> AccountStorageStatus {
         self.status.load(Ordering::Relaxed).into()
     }
+
+    fn add_account(&self) {
+        self.count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn remove_account(&self) {
+        if self.count.fetch_sub(1, Ordering::Relaxed) == 1 {
+            self.accounts.write().unwrap().reset();
+            self.set_status(AccountStorageStatus::StorageAvailable);
+        }
+    }
 }
+
+type AccountStorage = Vec<AccountStorageEntry>;
 
 #[derive(Default, Debug)]
 struct ForkInfo {
@@ -154,7 +187,7 @@ pub struct AccountsDB {
     account_index: AccountIndex,
 
     /// Account storage
-    storage: RwLock<Vec<AccountStorage>>,
+    storage: RwLock<AccountStorage>,
 
     /// distribute the accounts across storage lists
     next_id: AtomicUsize,
@@ -231,34 +264,18 @@ impl AccountsDB {
         }
     }
 
-    fn add_storage(&self, paths: &str) {
-        let paths = get_paths_vec(&paths);
-        let mut stores: Vec<AccountStorage> = vec![];
-        paths.iter().for_each(|p| {
-            let storage = AccountStorage {
-                accounts: self.new_account_storage(&p),
-                status: AtomicUsize::new(AccountStorageStatus::StorageAvailable as usize),
-                count: AtomicUsize::new(0),
-                path: p.to_string(),
-            };
-            stores.push(storage);
-        });
-        let mut storage = self.storage.write().unwrap();
-        storage.append(&mut stores);
+    fn new_storage_entry(&self, path: String) -> AccountStorageEntry {
+        AccountStorageEntry::new(path, self.next_id.fetch_add(1, Ordering::Relaxed))
     }
 
-    fn new_account_storage(&self, p: &str) -> Arc<RwLock<AppendVec<Account>>> {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        let p = format!("{}/{}", p, id);
-        let path = Path::new(&p);
-        let _ignored = remove_dir_all(path);
-        create_dir_all(path).expect("Create directory failed");
-        Arc::new(RwLock::new(AppendVec::<Account>::new(
-            &path.join(ACCOUNT_DATA_FILE),
-            true,
-            ACCOUNT_DATA_FILE_SIZE,
-            0,
-        )))
+    fn add_storage(&self, paths: &str) {
+        let paths = get_paths_vec(&paths);
+        let mut stores = paths
+            .iter()
+            .map(|p| self.new_storage_entry(p.to_string()))
+            .collect();
+        let mut storage = self.storage.write().unwrap();
+        storage.append(&mut stores);
     }
 
     fn get_vote_accounts(&self, fork: Fork) -> HashMap<Pubkey, Account> {
@@ -378,12 +395,7 @@ impl AccountsDB {
             let mut stores = self.storage.write().unwrap();
             // check if new store was already created
             if stores.len() == len {
-                let storage = AccountStorage {
-                    accounts: self.new_account_storage(&stores[id].path),
-                    count: AtomicUsize::new(0),
-                    status: AtomicUsize::new(AccountStorageStatus::StorageAvailable as usize),
-                    path: stores[id].path.clone(),
-                };
+                let storage = self.new_storage_entry(stores[id].path.clone());
                 stores.push(storage);
             }
             id = stores.len() - 1;
@@ -425,10 +437,7 @@ impl AccountsDB {
         for fork in entries.iter() {
             if let Some((id, _)) = forks.remove(&fork) {
                 let stores = self.storage.read().unwrap();
-                if stores[id].count.fetch_sub(1, Ordering::Relaxed) == 1 {
-                    stores[id].accounts.write().unwrap().reset();
-                    stores[id].set_status(AccountStorageStatus::StorageAvailable);
-                }
+                stores[id].remove_account();
             }
         }
         forks.is_empty()
@@ -469,12 +478,9 @@ impl AccountsDB {
     fn insert_account_entry(&self, fork: Fork, id: AppendVecId, offset: u64, map: &AccountMap) {
         let mut forks = map.write().unwrap();
         let stores = self.storage.read().unwrap();
-        stores[id].count.fetch_add(1, Ordering::Relaxed);
+        stores[id].add_account();
         if let Some((old_id, _)) = forks.insert(fork, (id, offset)) {
-            if stores[old_id].count.fetch_sub(1, Ordering::Relaxed) == 1 {
-                stores[old_id].accounts.write().unwrap().reset();
-                stores[old_id].set_status(AccountStorageStatus::StorageAvailable);
-            }
+            stores[old_id].remove_account();
         }
     }
 
