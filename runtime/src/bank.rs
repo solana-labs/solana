@@ -343,7 +343,7 @@ impl Bank {
         supermajority_stake: u64,
     ) -> Option<u64> {
         // Sort by slot height
-        slots_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
+        slots_and_stakes.sort_by(|a, b| b.0.cmp(&a.0));
 
         let max_slot = self.slot();
         let min_slot = max_slot.saturating_sub(MAX_RECENT_BLOCKHASHES as u64);
