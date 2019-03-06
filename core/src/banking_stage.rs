@@ -98,7 +98,11 @@ impl BankingStage {
                 Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                 Ok(unprocessed_packets) => {
                     if let Some(leader) = cluster_info.read().unwrap().leader_data() {
-                        let _ = Self::forward_unprocessed_packets(&socket, &leader.tpu, unprocessed_packets);
+                        let _ = Self::forward_unprocessed_packets(
+                            &socket,
+                            &leader.tpu,
+                            unprocessed_packets,
+                        );
                     }
                 }
                 Err(err) => {
