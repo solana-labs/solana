@@ -79,9 +79,7 @@ impl ReplayStage {
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_.clone());
-                let mut first_block = false;
                 let mut progress = HashMap::new();
-
                 loop {
                     let now = Instant::now();
                     // Stop getting entries if we get exit signal
@@ -115,16 +113,6 @@ impl ReplayStage {
                             }
                         }
                     }
-                    let frozen = bank_forks.read().unwrap().frozen_banks();
-                    if votable.is_empty()
-                        && frozen.len() == 1
-                        && active_banks.is_empty()
-                        && !first_block
-                    {
-                        first_block = true;
-                        votable.extend(frozen.keys());
-                        info!("voting on first block {:?}", votable);
-                    }
                     // TODO: fork selection
                     // vote on the latest one for now
                     votable.sort();
@@ -136,10 +124,6 @@ impl ReplayStage {
                             .get(*latest_slot_vote)
                             .unwrap()
                             .clone();
-                        let next_slot = *latest_slot_vote + 1;
-                        let next_leader_id =
-                            leader_schedule_utils::slot_leader_at(next_slot, &parent);
-                        cluster_info.write().unwrap().set_leader(next_leader_id);
 
                         subscriptions.notify_subscribers(&parent);
 
@@ -157,31 +141,9 @@ impl ReplayStage {
                             .lock()
                             .unwrap()
                             .reset(parent.tick_height(), parent.last_blockhash());
-
-                        if next_leader_id == my_id {
-                            let frozen = bank_forks.read().unwrap().frozen_banks();
-                            assert!(frozen.get(&next_slot).is_none());
-                            assert!(bank_forks.read().unwrap().get(next_slot).is_none());
-
-                            let tpu_bank = Bank::new_from_parent(&parent, my_id, next_slot);
-                            bank_forks.write().unwrap().insert(next_slot, tpu_bank);
-                            if let Some(tpu_bank) =
-                                bank_forks.read().unwrap().get(next_slot).cloned()
-                            {
-                                assert_eq!(
-                                    bank_forks.read().unwrap().working_bank().slot(),
-                                    tpu_bank.slot()
-                                );
-                                debug!(
-                                    "new working bank: me: {} next_slot: {} next_leader: {}",
-                                    my_id,
-                                    tpu_bank.slot(),
-                                    next_leader_id
-                                );
-                                poh_recorder.lock().unwrap().set_bank(&tpu_bank);
-                            }
-                        }
                     }
+
+                    Self::start_leader(my_id, &bank_forks, &poh_recorder, &cluster_info);
                     inc_new_counter_info!(
                         "replicate_stage-duration",
                         duration_as_ms(&now.elapsed()) as usize
@@ -203,7 +165,52 @@ impl ReplayStage {
             forward_entry_receiver,
         )
     }
+    pub fn start_leader(
+        my_id: Pubkey,
+        bank_forks: &Arc<RwLock<BankForks>>,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+    ) {
+        let frozen = bank_forks.read().unwrap().frozen_banks();
 
+        // TODO: fork selection
+        let mut newest_frozen: Vec<(&u64, &Arc<Bank>)> = frozen.iter().collect();
+        newest_frozen.sort_by_key(|x| *x.0);
+        if let Some((_, parent)) = newest_frozen.last() {
+            let poh_tick_height = poh_recorder.lock().unwrap().tick_height();
+            let poh_slot = leader_schedule_utils::tick_height_to_slot(parent, poh_tick_height + 1);
+            assert!(frozen.get(&poh_slot).is_none());
+            trace!("checking poh slot for leader {}", poh_slot);
+            if bank_forks.read().unwrap().get(poh_slot).is_none() {
+                let next_leader = leader_schedule_utils::slot_leader_at(poh_slot, parent);
+                debug!(
+                    "me: {} leader {} at poh slot {}",
+                    my_id, next_leader, poh_slot
+                );
+                cluster_info.write().unwrap().set_leader(next_leader);
+                if next_leader == my_id {
+                    debug!("starting tpu for slot {}", poh_slot);
+                    let tpu_bank = Bank::new_from_parent(parent, my_id, poh_slot);
+                    bank_forks.write().unwrap().insert(poh_slot, tpu_bank);
+                    if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
+                        assert_eq!(
+                            bank_forks.read().unwrap().working_bank().slot(),
+                            tpu_bank.slot()
+                        );
+                        debug!(
+                            "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
+                            my_id,
+                            tpu_bank.slot(),
+                            next_leader
+                        );
+                        poh_recorder.lock().unwrap().set_bank(&tpu_bank);
+                    }
+                }
+            }
+        } else {
+            error!("No frozen banks available!");
+        }
+    }
     pub fn replay_blocktree_into_bank(
         bank: &Bank,
         blocktree: &Blocktree,

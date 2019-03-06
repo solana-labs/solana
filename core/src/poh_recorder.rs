@@ -61,6 +61,7 @@ impl PohRecorder {
     }
     // synchronize PoH with a bank
     pub fn reset(&mut self, tick_height: u64, blockhash: Hash) {
+        self.clear_bank();
         let existing = self.tick_cache.iter().any(|(entry, entry_tick_height)| {
             if entry.hash == blockhash {
                 assert_eq!(*entry_tick_height, tick_height);
@@ -488,5 +489,20 @@ mod tests {
         assert_eq!(poh_recorder.tick_cache.len(), 0);
         poh_recorder.tick();
         assert_eq!(poh_recorder.poh.tick_height, 2);
+    }
+
+    #[test]
+    fn test_reset_clear_bank() {
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        let working_bank = WorkingBank {
+            bank,
+            min_tick_height: 2,
+            max_tick_height: 3,
+        };
+        poh_recorder.set_working_bank(working_bank);
+        poh_recorder.reset(1, hash(b"hello"));
+        assert!(poh_recorder.working_bank.is_none());
     }
 }

@@ -41,6 +41,8 @@ impl LocalCluster {
         lamports_per_node: u64,
         fullnode_config: &FullnodeConfig,
     ) -> Self {
+        // Must have enough tokens to fund vote account and set delegate
+        assert!(lamports_per_node > 2);
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -83,8 +85,13 @@ impl LocalCluster {
                 validator_pubkey, validator_balance
             );
 
-            Self::create_and_fund_vote_account(&mut client, &voting_keypair, &validator_keypair, 1)
-                .unwrap();
+            Self::create_and_fund_vote_account(
+                &mut client,
+                &voting_keypair,
+                &validator_keypair,
+                lamports_per_node - 1,
+            )
+            .unwrap();
             let validator_server = Fullnode::new(
                 validator_node,
                 &validator_keypair,
