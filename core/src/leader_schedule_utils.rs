@@ -32,8 +32,7 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
 
 /// Return the leader for the given slot.
 pub fn slot_leader_at(slot: u64, bank: &Bank) -> Pubkey {
-    let slot_index = slot % bank.slots_per_epoch();
-    let epoch = slot / bank.slots_per_epoch();
+    let (epoch, slot_index) = bank.get_epoch_and_slot_index(slot);
 
     let leader_schedule = leader_schedule(epoch, bank);
     leader_schedule[slot_index as usize]
