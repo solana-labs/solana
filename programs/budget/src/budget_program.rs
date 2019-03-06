@@ -27,8 +27,8 @@ fn apply_signature(
         if let Some(key) = keyed_accounts[0].signer_key() {
             if &payment.to == key {
                 budget_state.pending_budget = None;
-                keyed_accounts[1].account.lamports -= payment.tokens;
-                keyed_accounts[0].account.lamports += payment.tokens;
+                keyed_accounts[1].account.lamports -= payment.lamports;
+                keyed_accounts[0].account.lamports += payment.lamports;
                 return Ok(());
             }
         }
@@ -37,8 +37,8 @@ fn apply_signature(
             return Err(BudgetError::DestinationMissing);
         }
         budget_state.pending_budget = None;
-        keyed_accounts[1].account.lamports -= payment.tokens;
-        keyed_accounts[2].account.lamports += payment.tokens;
+        keyed_accounts[1].account.lamports -= payment.lamports;
+        keyed_accounts[2].account.lamports += payment.lamports;
     }
     Ok(())
 }
@@ -68,8 +68,8 @@ fn apply_timestamp(
             return Err(BudgetError::DestinationMissing);
         }
         budget_state.pending_budget = None;
-        keyed_accounts[1].account.lamports -= payment.tokens;
-        keyed_accounts[2].account.lamports += payment.tokens;
+        keyed_accounts[1].account.lamports -= payment.lamports;
+        keyed_accounts[2].account.lamports += payment.lamports;
     }
     Ok(())
 }
@@ -87,7 +87,7 @@ fn apply_debits(
             let expr = expr.clone();
             if let Some(payment) = expr.final_payment() {
                 keyed_accounts[1].account.lamports = 0;
-                keyed_accounts[0].account.lamports += payment.tokens;
+                keyed_accounts[0].account.lamports += payment.lamports;
                 Ok(())
             } else {
                 let existing = BudgetState::deserialize(&keyed_accounts[1].account.userdata).ok();

@@ -24,13 +24,13 @@ extern bool entrypoint(const uint8_t *input) {
     return false;
   }
 
-  int64_t tokens = *(int64_t *)params.data;
-  if (*params.ka[0].tokens >= tokens) {
-    *params.ka[0].tokens -= tokens;
-    *params.ka[2].tokens += tokens;
-    // sol_log_64(0, 0, *ka[0].tokens, *ka[2].tokens, tokens);
+  int64_t lamports = *(int64_t *)params.data;
+  if (*params.ka[0].lamports >= lamports) {
+    *params.ka[0].lamports -= lamports;
+    *params.ka[2].lamports += lamports;
+    // sol_log_64(0, 0, *ka[0].lamports, *ka[2].lamports, lamports);
   } else {
-    // sol_log_64(0, 0, 0xFF, *ka[0].tokens, tokens);
+    // sol_log_64(0, 0, 0xFF, *ka[0].lamports, lamports);
   }
   return true;
 }

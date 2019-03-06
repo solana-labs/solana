@@ -26,12 +26,12 @@ impl VoteTransaction {
             .sign(&[voting_keypair], recent_blockhash)
     }
 
-    /// Fund or create the staking account with tokens
+    /// Fund or create the staking account with lamports
     pub fn new_account(
         from_keypair: &Keypair,
         voter_id: Pubkey,
         recent_blockhash: Hash,
-        num_tokens: u64,
+        lamports: u64,
         fee: u64,
     ) -> Transaction {
         let from_id = from_keypair.pubkey();
@@ -40,7 +40,7 @@ impl VoteTransaction {
             .push(SystemInstruction::new_program_account(
                 from_id,
                 voter_id,
-                num_tokens,
+                lamports,
                 space,
                 id(),
             ))
@@ -48,13 +48,13 @@ impl VoteTransaction {
             .sign(&[from_keypair], recent_blockhash)
     }
 
-    /// Fund or create the staking account with tokens
+    /// Fund or create the staking account with lamports
     pub fn new_account_with_delegate(
         from_keypair: &Keypair,
         voter_keypair: &Keypair,
         delegate_id: Pubkey,
         recent_blockhash: Hash,
-        num_tokens: u64,
+        lamports: u64,
         fee: u64,
     ) -> Transaction {
         let from_id = from_keypair.pubkey();
@@ -64,7 +64,7 @@ impl VoteTransaction {
             .push(SystemInstruction::new_program_account(
                 from_id,
                 voter_id,
-                num_tokens,
+                lamports,
                 space,
                 id(),
             ))

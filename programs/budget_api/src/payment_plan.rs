@@ -17,12 +17,12 @@ pub enum Witness {
     Signature,
 }
 
-/// Some amount of tokens that should be sent to the `to` `Pubkey`.
+/// Some amount of lamports that should be sent to the `to` `Pubkey`.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Payment {
     /// Amount to be paid.
-    pub tokens: u64,
+    pub lamports: u64,
 
-    /// The `Pubkey` that `tokens` should be paid to.
+    /// The `Pubkey` that `lamports` should be paid to.
     pub to: Pubkey,
 }

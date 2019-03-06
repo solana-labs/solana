@@ -10,7 +10,6 @@ pub enum BudgetError {
     ContractNotPending,
     SourceIsPendingContract,
     UninitializedContract,
-    NegativeTokens,
     DestinationMissing,
     FailedWitness,
     UserdataTooSmall,

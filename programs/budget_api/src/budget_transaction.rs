@@ -20,19 +20,19 @@ impl BudgetTransaction {
     pub fn new_payment(
         from_keypair: &Keypair,
         to: Pubkey,
-        tokens: u64,
+        lamports: u64,
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
         let contract = Keypair::new().pubkey();
         let from = from_keypair.pubkey();
-        let payment = BudgetExpr::new_payment(tokens - fee, to);
+        let payment = BudgetExpr::new_payment(lamports - fee, to);
         let space = serialized_size(&BudgetState::new(payment.clone())).unwrap();
         TransactionBuilder::new(fee)
             .push(SystemInstruction::new_program_account(
                 from,
                 contract,
-                tokens,
+                lamports,
                 space,
                 id(),
             ))
@@ -45,10 +45,10 @@ impl BudgetTransaction {
     pub fn new(
         from_keypair: &Keypair,
         to: Pubkey,
-        tokens: u64,
+        lamports: u64,
         recent_blockhash: Hash,
     ) -> Transaction {
-        Self::new_payment(from_keypair, to, tokens, recent_blockhash, 0)
+        Self::new_payment(from_keypair, to, lamports, recent_blockhash, 0)
     }
 
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
@@ -93,24 +93,24 @@ impl BudgetTransaction {
         dt: DateTime<Utc>,
         dt_pubkey: Pubkey,
         cancelable: Option<Pubkey>,
-        tokens: u64,
+        lamports: u64,
         recent_blockhash: Hash,
     ) -> Transaction {
         let expr = if let Some(from) = cancelable {
             BudgetExpr::Or(
                 (
                     Condition::Timestamp(dt, dt_pubkey),
-                    Box::new(BudgetExpr::new_payment(tokens, to)),
+                    Box::new(BudgetExpr::new_payment(lamports, to)),
                 ),
                 (
                     Condition::Signature(from),
-                    Box::new(BudgetExpr::new_payment(tokens, from)),
+                    Box::new(BudgetExpr::new_payment(lamports, from)),
                 ),
             )
         } else {
             BudgetExpr::After(
                 Condition::Timestamp(dt, dt_pubkey),
-                Box::new(BudgetExpr::new_payment(tokens, to)),
+                Box::new(BudgetExpr::new_payment(lamports, to)),
             )
         };
         let instruction = BudgetInstruction::InitializeAccount(expr);
@@ -130,24 +130,24 @@ impl BudgetTransaction {
         contract: Pubkey,
         witness: Pubkey,
         cancelable: Option<Pubkey>,
-        tokens: u64,
+        lamports: u64,
         recent_blockhash: Hash,
     ) -> Transaction {
         let expr = if let Some(from) = cancelable {
             BudgetExpr::Or(
                 (
                     Condition::Signature(witness),
-                    Box::new(BudgetExpr::new_payment(tokens, to)),
+                    Box::new(BudgetExpr::new_payment(lamports, to)),
                 ),
                 (
                     Condition::Signature(from),
-                    Box::new(BudgetExpr::new_payment(tokens, from)),
+                    Box::new(BudgetExpr::new_payment(lamports, from)),
                 ),
             )
         } else {
             BudgetExpr::After(
                 Condition::Signature(witness),
-                Box::new(BudgetExpr::new_payment(tokens, to)),
+                Box::new(BudgetExpr::new_payment(lamports, to)),
             )
         };
         let instruction = BudgetInstruction::InitializeAccount(expr);
@@ -230,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn test_token_attack() {
+    fn test_lamport_attack() {
         let zero = Hash::default();
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey();
@@ -244,7 +244,7 @@ mod tests {
             let mut instruction = BudgetTransaction::instruction(&tx, 1).unwrap();
             if let BudgetInstruction::InitializeAccount(ref mut expr) = instruction {
                 if let BudgetExpr::Pay(ref mut payment) = expr {
-                    payment.tokens = *lamports; // <-- attack, part 2!
+                    payment.lamports = *lamports; // <-- attack, part 2!
                 }
             }
             tx.instructions[1].userdata = serialize(&instruction).unwrap();
@@ -282,17 +282,17 @@ mod tests {
         let mut instruction = BudgetTransaction::instruction(&tx, 1).unwrap();
         if let BudgetInstruction::InitializeAccount(ref mut expr) = instruction {
             if let BudgetExpr::Pay(ref mut payment) = expr {
-                payment.tokens = 2; // <-- attack!
+                payment.lamports = 2; // <-- attack!
             }
         }
         tx.instructions[1].userdata = serialize(&instruction).unwrap();
         assert!(!BudgetTransaction::verify_plan(&tx));
 
-        // Also, ensure all branchs of the plan spend all tokens
+        // Also, ensure all branchs of the plan spend all lamports
         let mut instruction = BudgetTransaction::instruction(&tx, 1).unwrap();
         if let BudgetInstruction::InitializeAccount(ref mut expr) = instruction {
             if let BudgetExpr::Pay(ref mut payment) = expr {
-                payment.tokens = 0; // <-- whoops!
+                payment.lamports = 0; // <-- whoops!
             }
         }
         tx.instructions[1].userdata = serialize(&instruction).unwrap();
