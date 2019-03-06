@@ -117,8 +117,7 @@ fn make_spy_node(
 ) -> (GossipService, Arc<RwLock<ClusterInfo>>) {
     let keypair = Arc::new(Keypair::new());
     let (node, gossip_socket) = ClusterInfo::spy_node(&keypair.pubkey());
-
-    let mut cluster_info = ClusterInfo::new(node, keypair);
+    let mut cluster_info = ClusterInfo::new_with_invalid_keypair(node);
     cluster_info.insert_info(entry_point.clone());
 
     let cluster_info = Arc::new(RwLock::new(cluster_info));
