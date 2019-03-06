@@ -112,7 +112,7 @@ where
         blockhash: Hash,
     ) -> Result<()> {
         let payload = format!(
-            r#"{{"dt":"{}","t":"block","s":{},"h":{},"l":"{:?}","id":"{:?}"}}"#,
+            r#"{{"dt":"{}","t":"block","s":{},"h":{},"l":"{:?}","hash":"{:?}"}}"#,
             Utc::now().to_rfc3339_opts(SecondsFormat::Nanos, true),
             slot,
             tick_height,
@@ -209,8 +209,8 @@ mod test {
             let item_type = json["t"].as_str().unwrap();
             match item_type {
                 "block" => {
-                    let id = json["id"].to_string();
-                    matched_blocks.insert(id);
+                    let hash = json["hash"].to_string();
+                    matched_blocks.insert(hash);
                 }
 
                 "entry" => {
