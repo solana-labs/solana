@@ -176,11 +176,7 @@ mod tests {
     fn test_epoch_stakes_and_lockouts() {
         let validator = Keypair::new();
 
-        let (mut genesis_block, mint_keypair) = GenesisBlock::new(500);
-
-        // makes the bank generate epoch_vote_accounts right on epoch boundaries
-        //   handy for tests
-        genesis_block.stakers_slot_offset = 0;
+        let (genesis_block, mint_keypair) = GenesisBlock::new(500);
 
         let bank = Bank::new(&genesis_block);
         let bank_voter = Keypair::new();
@@ -195,11 +191,17 @@ mod tests {
         // should show up in the active set
         voting_keypair_tests::new_vote_account_with_vote(&mint_keypair, &bank_voter, &bank, 499, 0);
 
-        // Build a bank in the next epoch, it will generate an epoch_vote_accounts() for epoch 1
-        let epoch = 1;
-        let epoch_slot = epoch * bank.slots_per_epoch();
+        // soonest slot that could be a new epoch is 1
+        let mut slot = 1;
+        let mut epoch = bank.get_stakers_epoch(0);
+        // find the first slot in the next stakers_epoch
+        while bank.get_stakers_epoch(slot) == epoch {
+            slot += 1;
+        }
 
-        let bank = new_from_parent(&Arc::new(bank), epoch_slot);
+        epoch = bank.get_stakers_epoch(slot);
+
+        let bank = new_from_parent(&Arc::new(bank), slot);
 
         let result: Vec<_> = epoch_stakes_and_lockouts(&bank, 0);
         assert_eq!(result, vec![(1, None)]);
