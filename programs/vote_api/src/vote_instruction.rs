@@ -23,6 +23,8 @@ pub enum VoteInstruction {
     InitializeAccount,
     /// `Delegate` or `Assign` a vote account to a particular node
     DelegateStake(Pubkey),
+    /// Authorize a voter to send signed votes.
+    AuthorizeVoter(Pubkey),
     Vote(Vote),
     /// Clear the credits in the vote account
     /// * Transaction::keys[0] - the "vote account"
@@ -37,6 +39,13 @@ impl VoteInstruction {
         BuilderInstruction::new(
             id(),
             &VoteInstruction::DelegateStake(delegate_id),
+            vec![(vote_id, true)],
+        )
+    }
+    pub fn new_authorize_voter(vote_id: Pubkey, authorized_voter_id: Pubkey) -> BuilderInstruction {
+        BuilderInstruction::new(
+            id(),
+            &VoteInstruction::AuthorizeVoter(authorized_voter_id),
             vec![(vote_id, true)],
         )
     }

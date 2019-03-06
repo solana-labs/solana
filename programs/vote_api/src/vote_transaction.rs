@@ -73,6 +73,21 @@ impl VoteTransaction {
             .sign(&[from_keypair, voter_keypair], recent_blockhash)
     }
 
+    /// Choose a voter id to accept signed votes from
+    pub fn new_authorize_voter(
+        vote_keypair: &Keypair,
+        recent_blockhash: Hash,
+        authorized_voter_id: Pubkey,
+        fee: u64,
+    ) -> Transaction {
+        TransactionBuilder::new(fee)
+            .push(VoteInstruction::new_authorize_voter(
+                vote_keypair.pubkey(),
+                authorized_voter_id,
+            ))
+            .sign(&[vote_keypair], recent_blockhash)
+    }
+
     /// Choose a node id to `delegate` or `assign` this vote account to
     pub fn delegate_vote_account<T: KeypairUtil>(
         vote_keypair: &T,
