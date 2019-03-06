@@ -237,10 +237,7 @@ impl Fullnode {
             }
             let bank = bank_forks_.read().unwrap().working_bank();
             trace!("rpc working bank {} {}", bank.slot(), bank.last_blockhash());
-            rpc_service_rp
-                .write()
-                .unwrap()
-                .set_bank(&bank_forks_.read().unwrap().working_bank());
+            rpc_service_rp.write().unwrap().set_bank(&bank);
             let timer = Duration::from_millis(100);
             sleep(timer);
         });
