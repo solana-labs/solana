@@ -34,6 +34,23 @@ pub trait RpcSolPubSub {
     )]
     fn account_unsubscribe(&self, _: Option<Self::Metadata>, _: SubscriptionId) -> Result<bool>;
 
+    // Get notification every time account userdata owned by a particular program is changed
+    // Accepts pubkey parameter as base-58 encoded string
+    #[pubsub(
+        subscription = "programNotification",
+        subscribe,
+        name = "programSubscribe"
+    )]
+    fn program_subscribe(&self, _: Self::Metadata, _: Subscriber<(String, Account)>, _: String);
+
+    // Unsubscribe from account notification subscription.
+    #[pubsub(
+        subscription = "programNotification",
+        unsubscribe,
+        name = "programUnsubscribe"
+    )]
+    fn program_unsubscribe(&self, _: Option<Self::Metadata>, _: SubscriptionId) -> Result<bool>;
+
     // Get notification when signature is verified
     // Accepts signature parameter as base-58 encoded string
     #[pubsub(
@@ -103,6 +120,51 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     ) -> Result<bool> {
         info!("account_unsubscribe: id={:?}", id);
         if self.subscriptions.remove_account_subscription(&id) {
+            Ok(true)
+        } else {
+            Err(Error {
+                code: ErrorCode::InvalidParams,
+                message: "Invalid Request: Subscription id does not exist".into(),
+                data: None,
+            })
+        }
+    }
+
+    fn program_subscribe(
+        &self,
+        _meta: Self::Metadata,
+        subscriber: Subscriber<(String, Account)>,
+        pubkey_str: String,
+    ) {
+        let pubkey_vec = bs58::decode(pubkey_str).into_vec().unwrap();
+        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+            subscriber
+                .reject(Error {
+                    code: ErrorCode::InvalidParams,
+                    message: "Invalid Request: Invalid pubkey provided".into(),
+                    data: None,
+                })
+                .unwrap();
+            return;
+        }
+        let pubkey = Pubkey::new(&pubkey_vec);
+
+        let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
+        let sub_id = SubscriptionId::Number(id as u64);
+        info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
+        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+
+        self.subscriptions
+            .add_program_subscription(&pubkey, &sub_id, &sink)
+    }
+
+    fn program_unsubscribe(
+        &self,
+        _meta: Option<Self::Metadata>,
+        id: SubscriptionId,
+    ) -> Result<bool> {
+        info!("account_unsubscribe: id={:?}", id);
+        if self.subscriptions.remove_program_subscription(&id) {
             Ok(true)
         } else {
             Err(Error {

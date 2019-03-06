@@ -1,6 +1,7 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
 use crate::rpc_status::RpcSignatureStatus;
+use bs58;
 use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::typed::Sink;
@@ -13,6 +14,8 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 type RpcAccountSubscriptions = RwLock<HashMap<Pubkey, HashMap<SubscriptionId, Sink<Account>>>>;
+type RpcProgramSubscriptions =
+    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, Sink<(String, Account)>>>>;
 type RpcSignatureSubscriptions =
     RwLock<HashMap<Signature, HashMap<SubscriptionId, Sink<RpcSignatureStatus>>>>;
 
@@ -57,6 +60,7 @@ where
 
 pub struct RpcSubscriptions {
     account_subscriptions: RpcAccountSubscriptions,
+    program_subscriptions: RpcProgramSubscriptions,
     signature_subscriptions: RpcSignatureSubscriptions,
 }
 
@@ -64,6 +68,7 @@ impl Default for RpcSubscriptions {
     fn default() -> Self {
         RpcSubscriptions {
             account_subscriptions: RpcAccountSubscriptions::default(),
+            program_subscriptions: RpcProgramSubscriptions::default(),
             signature_subscriptions: RpcSignatureSubscriptions::default(),
         }
     }
@@ -75,6 +80,17 @@ impl RpcSubscriptions {
         if let Some(hashmap) = subscriptions.get(pubkey) {
             for (_bank_sub_id, sink) in hashmap.iter() {
                 sink.notify(Ok(account.clone())).wait().unwrap();
+            }
+        }
+    }
+
+    pub fn check_program(&self, program_id: &Pubkey, pubkey: &Pubkey, account: &Account) {
+        let subscriptions = self.program_subscriptions.write().unwrap();
+        if let Some(hashmap) = subscriptions.get(program_id) {
+            for (_bank_sub_id, sink) in hashmap.iter() {
+                sink.notify(Ok((bs58::encode(pubkey).into_string(), account.clone())))
+                    .wait()
+                    .unwrap();
             }
         }
     }
@@ -111,6 +127,21 @@ impl RpcSubscriptions {
         remove_subscription(&mut subscriptions, id)
     }
 
+    pub fn add_program_subscription(
+        &self,
+        program_id: &Pubkey,
+        sub_id: &SubscriptionId,
+        sink: &Sink<(String, Account)>,
+    ) {
+        let mut subscriptions = self.program_subscriptions.write().unwrap();
+        add_subscription(&mut subscriptions, program_id, sub_id, sink);
+    }
+
+    pub fn remove_program_subscription(&self, id: &SubscriptionId) -> bool {
+        let mut subscriptions = self.program_subscriptions.write().unwrap();
+        remove_subscription(&mut subscriptions, id)
+    }
+
     pub fn add_signature_subscription(
         &self,
         signature: &Signature,
@@ -136,6 +167,19 @@ impl RpcSubscriptions {
         for pubkey in &pubkeys {
             if let Some(account) = &bank.get_account_modified_since_parent(pubkey) {
                 self.check_account(pubkey, account);
+            }
+        }
+
+        let programs: Vec<_> = {
+            let subs = self.program_subscriptions.read().unwrap();
+            subs.keys().cloned().collect()
+        };
+        for program_id in &programs {
+            let accounts = &bank.get_program_accounts_modified_since_parent(program_id);
+            if !accounts.is_empty() {
+                for (pubkey, account) in accounts.iter() {
+                    self.check_program(program_id, pubkey, account);
+                }
             }
         }
 
@@ -204,6 +248,52 @@ mod tests {
             .read()
             .unwrap()
             .contains_key(&alice.pubkey()));
+    }
+
+    #[test]
+    fn test_check_program_subscribe() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(100);
+        let bank = Bank::new(&genesis_block);
+        let alice = Keypair::new();
+        let blockhash = bank.last_blockhash();
+        let tx = SystemTransaction::new_program_account(
+            &mint_keypair,
+            alice.pubkey(),
+            blockhash,
+            1,
+            16,
+            solana_budget_api::id(),
+            0,
+        );
+        bank.process_transaction(&tx).unwrap();
+
+        let (subscriber, _id_receiver, mut transport_receiver) =
+            Subscriber::new_test("programNotification");
+        let sub_id = SubscriptionId::Number(0 as u64);
+        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+        let subscriptions = RpcSubscriptions::default();
+        subscriptions.add_program_subscription(&solana_budget_api::id(), &sub_id, &sink);
+
+        assert!(subscriptions
+            .program_subscriptions
+            .read()
+            .unwrap()
+            .contains_key(&solana_budget_api::id()));
+
+        let account = bank.get_account(&alice.pubkey()).unwrap();
+        subscriptions.check_program(&solana_budget_api::id(), &alice.pubkey(), &account);
+        let string = transport_receiver.poll();
+        if let Async::Ready(Some(response)) = string.unwrap() {
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"programNotification","params":{{"result":["{:?}",{{"executable":false,"lamports":1,"owner":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}}],"subscription":0}}}}"#, alice.pubkey());
+            assert_eq!(expected, response);
+        }
+
+        subscriptions.remove_program_subscription(&sub_id);
+        assert!(!subscriptions
+            .program_subscriptions
+            .read()
+            .unwrap()
+            .contains_key(&solana_budget_api::id()));
     }
     #[test]
     fn test_check_signature_subscribe() {
