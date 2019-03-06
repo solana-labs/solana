@@ -74,10 +74,10 @@ impl BankingStage {
     }
 
     fn forward_unprocessed_packets(
+        socket: &std::net::UdpSocket,
         tpu: &std::net::SocketAddr,
         unprocessed_packets: UnprocessedPackets,
     ) -> std::io::Result<()> {
-        let socket = UdpSocket::bind("0.0.0.0:0")?;
         for (packets, start_index) in unprocessed_packets {
             let packets = packets.read().unwrap();
             for packet in packets.packets.iter().skip(start_index) {
@@ -92,12 +92,13 @@ impl BankingStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) {
+        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         loop {
             match Self::process_packets(&verified_receiver, &poh_recorder) {
                 Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                 Ok(unprocessed_packets) => {
                     if let Some(leader) = cluster_info.read().unwrap().leader_data() {
-                        let _ = Self::forward_unprocessed_packets(&leader.tpu, unprocessed_packets);
+                        let _ = Self::forward_unprocessed_packets(&socket, &leader.tpu, unprocessed_packets);
                     }
                 }
                 Err(err) => {
