@@ -361,7 +361,7 @@ mod test {
         let (my_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
         // Set up the cluster info
-        let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
+        let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(my_node.info.clone())));
 
         // Set up the replay stage
         {

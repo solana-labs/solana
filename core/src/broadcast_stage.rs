@@ -286,7 +286,7 @@ mod test {
         let broadcast_buddy = Node::new_localhost_with_pubkey(buddy_keypair.pubkey());
 
         // Fill the cluster_info with the buddy's info
-        let mut cluster_info = ClusterInfo::new(leader_info.info.clone());
+        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
         cluster_info.insert_info(broadcast_buddy.info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
 

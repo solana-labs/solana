@@ -37,7 +37,7 @@ fn run_simulation(num_nodes: u64, fanout: usize, hood_size: usize) {
 
     // describe the leader
     let leader_info = ContactInfo::new_localhost(Keypair::new().pubkey(), 0);
-    let mut cluster_info = ClusterInfo::new(leader_info.clone());
+    let mut cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.clone());
     cluster_info.set_leader(leader_info.id);
 
     // setup stakes

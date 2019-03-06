@@ -162,8 +162,8 @@ enum Protocol {
 }
 
 impl ClusterInfo {
-    pub fn new(node_info: NodeInfo) -> Self {
-        //Without a keypair, gossip will not function. Only useful for tests.
+    /// Without a valid keypair gossip will not function. Only useful for tests.
+    pub fn new_with_invalid_keypair(node_info: NodeInfo) -> Self {
         ClusterInfo::new_with_keypair(node_info, Arc::new(Keypair::new()))
     }
     pub fn new_with_keypair(node_info: NodeInfo, keypair: Arc<Keypair>) -> Self {
@@ -1461,7 +1461,9 @@ mod tests {
         //check that gossip doesn't try to push to invalid addresses
         let node = Node::new_localhost();
         let (spy, _) = ClusterInfo::spy_node();
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(node.info)));
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+            node.info,
+        )));
         cluster_info.write().unwrap().insert_info(spy);
         cluster_info
             .write()
@@ -1483,14 +1485,14 @@ mod tests {
     #[test]
     fn test_cluster_info_new() {
         let d = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
-        let cluster_info = ClusterInfo::new(d.clone());
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
         assert_eq!(d.id, cluster_info.my_data().id);
     }
 
     #[test]
     fn insert_info_test() {
         let d = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
-        let mut cluster_info = ClusterInfo::new(d);
+        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(d);
         let d = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
         let label = CrdsValueLabel::ContactInfo(d.id);
         cluster_info.insert_info(d);
@@ -1499,7 +1501,7 @@ mod tests {
     #[test]
     fn window_index_request() {
         let me = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
-        let mut cluster_info = ClusterInfo::new(me);
+        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(me);
         let rv = cluster_info.window_index_request(0, 0, false);
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
@@ -1656,7 +1658,7 @@ mod tests {
     fn test_default_leader() {
         solana_logger::setup();
         let node_info = NodeInfo::new_localhost(Keypair::new().pubkey(), 0);
-        let mut cluster_info = ClusterInfo::new(node_info);
+        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(node_info);
         let network_entry_point = NodeInfo::new_entry_point(&socketaddr!("127.0.0.1:1239"));
         cluster_info.insert_info(network_entry_point);
         assert!(cluster_info.leader_data().is_none());
@@ -1910,7 +1912,7 @@ mod tests {
         let keys = Keypair::new();
         let now = timestamp();
         let node_info = NodeInfo::new_localhost(keys.pubkey(), 0);
-        let mut cluster_info = ClusterInfo::new(node_info);
+        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(node_info);
 
         // make sure empty crds is handled correctly
         let (votes, max_ts) = cluster_info.get_votes(now);

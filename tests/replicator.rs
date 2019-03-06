@@ -146,7 +146,7 @@ fn test_replicator_startup_basic() {
         // Create a client which downloads from the replicator and see that it
         // can respond with blobs.
         let tn = Node::new_localhost();
-        let cluster_info = ClusterInfo::new(tn.info.clone());
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(tn.info.clone());
         let repair_index = replicator.entry_height();
         let req = cluster_info
             .window_index_request_bytes(0, repair_index)

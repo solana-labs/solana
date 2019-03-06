@@ -47,14 +47,14 @@ fn test_replay() {
     let exit = Arc::new(AtomicBool::new(false));
 
     // start cluster_info_l
-    let mut cluster_info_l = ClusterInfo::new(leader.info.clone());
+    let mut cluster_info_l = ClusterInfo::new_with_invalid_keypair(leader.info.clone());
     cluster_info_l.set_leader(leader.info.id);
 
     let cref_l = Arc::new(RwLock::new(cluster_info_l));
     let dr_l = new_gossip(cref_l, leader.sockets.gossip, &exit);
 
     // start cluster_info2
-    let mut cluster_info2 = ClusterInfo::new(target2.info.clone());
+    let mut cluster_info2 = ClusterInfo::new_with_invalid_keypair(target2.info.clone());
     cluster_info2.insert_info(leader.info.clone());
     cluster_info2.set_leader(leader.info.id);
     let cref2 = Arc::new(RwLock::new(cluster_info2));
@@ -97,7 +97,7 @@ fn test_replay() {
     assert_eq!(bank.get_balance(&mint_keypair.pubkey()), starting_balance);
 
     // start cluster_info1
-    let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
+    let mut cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
     cluster_info1.insert_info(leader.info.clone());
     cluster_info1.set_leader(leader.info.id);
     let cref1 = Arc::new(RwLock::new(cluster_info1));

@@ -118,7 +118,7 @@ impl Replicator {
 
         info!("Replicator: id: {}", keypair.pubkey());
         info!("Creating cluster info....");
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(node.info.clone())));
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(node.info.clone())));
 
         let leader_pubkey = leader_info.id;
         {

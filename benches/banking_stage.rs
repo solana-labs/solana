@@ -105,7 +105,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         })
         .collect();
     let (exit, poh_recorder, poh_service, signal_receiver) = create_test_recorder(&bank);
-    let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+    let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
     let cluster_info = Arc::new(RwLock::new(cluster_info));
     let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
     poh_recorder.lock().unwrap().set_bank(&bank);
@@ -212,7 +212,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         })
         .collect();
     let (exit, poh_recorder, poh_service, signal_receiver) = create_test_recorder(&bank);
-    let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+    let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
     let cluster_info = Arc::new(RwLock::new(cluster_info));
     let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
     poh_recorder.lock().unwrap().set_bank(&bank);
