@@ -34,7 +34,7 @@ impl LocalVoteSignerService {
         let thread = Builder::new()
             .name("solana-vote-signer".to_string())
             .spawn(move || {
-                let service = VoteSignerRpcService::new(addr, thread_exit);
+                let service = VoteSignerRpcService::new(addr, &thread_exit);
                 service.join().unwrap();
             })
             .unwrap();

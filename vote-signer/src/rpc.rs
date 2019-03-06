@@ -14,13 +14,12 @@ use std::time::Duration;
 
 pub struct VoteSignerRpcService {
     thread_hdl: JoinHandle<()>,
-    exit: Arc<AtomicBool>,
 }
 
 impl VoteSignerRpcService {
-    pub fn new(rpc_addr: SocketAddr, exit: Arc<AtomicBool>) -> Self {
+    pub fn new(rpc_addr: SocketAddr, exit: &Arc<AtomicBool>) -> Self {
         let request_processor = LocalVoteSigner::default();
-        let exit_ = exit.clone();
+        let exit = exit.clone();
         let thread_hdl = Builder::new()
             .name("solana-vote-signer-jsonrpc".to_string())
             .spawn(move || {
@@ -40,22 +39,13 @@ impl VoteSignerRpcService {
                     warn!("JSON RPC service unavailable: unable to bind to RPC port {}. \nMake sure this port is not already in use by another application", rpc_addr.port());
                     return;
                 }
-                while !exit_.load(Ordering::Relaxed) {
+                while !exit.load(Ordering::Relaxed) {
                     sleep(Duration::from_millis(100));
                 }
                 server.unwrap().close();
             })
             .unwrap();
-        Self { thread_hdl, exit }
-    }
-
-    pub fn exit(&self) {
-        self.exit.store(true, Ordering::Relaxed);
-    }
-
-    pub fn close(self) -> thread::Result<()> {
-        self.exit();
-        self.join()
+        Self { thread_hdl }
     }
 
     pub fn join(self) -> thread::Result<()> {
