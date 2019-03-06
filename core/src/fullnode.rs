@@ -329,15 +329,15 @@ impl Service for Fullnode {
 // leader selection, and append `num_ending_ticks` empty tick entries.
 pub fn make_active_set_entries(
     active_keypair: &Arc<Keypair>,
-    token_source: &Keypair,
+    lamport_source: &Keypair,
     stake: u64,
     slot_to_vote_on: u64,
     blockhash: &Hash,
     num_ending_ticks: u64,
 ) -> (Vec<Entry>, Keypair) {
-    // 1) Assume the active_keypair node has no tokens staked
+    // 1) Assume the active_keypair node has no lamports staked
     let transfer_tx = SystemTransaction::new_account(
-        &token_source,
+        &lamport_source,
         active_keypair.pubkey(),
         stake,
         *blockhash,

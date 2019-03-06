@@ -97,10 +97,10 @@ impl RpcRequestHandler for MockRpcClient {
 pub fn request_airdrop_transaction(
     _drone_addr: &SocketAddr,
     _id: &Pubkey,
-    tokens: u64,
+    lamports: u64,
     _blockhash: Hash,
 ) -> Result<Transaction, Error> {
-    if tokens == 0 {
+    if lamports == 0 {
         Err(Error::new(ErrorKind::Other, "Airdrop failed"))?
     }
     let key = Keypair::new();

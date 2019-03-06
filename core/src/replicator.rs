@@ -214,7 +214,7 @@ impl Replicator {
 
         let mut client = mk_client(&leader);
 
-        Self::get_airdrop_tokens(&mut client, keypair, &leader_info);
+        Self::get_airdrop_lamports(&mut client, keypair, &leader_info);
         info!("Done downloading ledger at {}", ledger_path);
 
         let ledger_path = Path::new(ledger_path);
@@ -358,7 +358,7 @@ impl Replicator {
         ))?
     }
 
-    fn get_airdrop_tokens(client: &mut ThinClient, keypair: &Keypair, leader_info: &NodeInfo) {
+    fn get_airdrop_lamports(client: &mut ThinClient, keypair: &Keypair, leader_info: &NodeInfo) {
         if retry_get_balance(client, &keypair.pubkey(), None).is_none() {
             let mut drone_addr = leader_info.tpu;
             drone_addr.set_port(DRONE_PORT);
