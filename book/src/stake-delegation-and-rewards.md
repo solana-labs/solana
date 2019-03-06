@@ -1,63 +1,68 @@
-# Stake Delegation and Reward
+# Stake Delegation and Rewards
 
-This design covers the current architecture to how stakes are delegated to
-validators.  This design focuses on the software architecture for the actual
-on-chain programs.  Incentives for staking is covered in [staking
-rewardsd](staking-rewards.md).
+Stakers are rewarded for helping validate the ledger. They do it by delegating
+their stake to fullnodes. Those fullnodes do the legwork and send votes to the
+stakers' staking accounts. The rest of the cluster uses those stake-weighted
+votes to select a block when forks arise. Both the fullnode and staker need
+some economic incentive to play their part. The fullnode needs to be
+compensated for its hardware and the staker needs to be compensated for risking
+getting its stake slashed.  The economics are covered in [staking
+rewards](staking-rewards.md).  This chapter, on the other hand, describes the
+underlying mechanics of its implementation.
 
-The main problem this proposal is solving is to allow many delegated stakes to
-generate rewards with a single validator vote without permission from the
-validator.
+## Vote and Rewards accounts
 
-## Terminology
+The rewards process is split into two on-chain programs. The Vote program
+solves the problem of making stakes slashable. The Rewards account acts as
+custodian of the rewards pool. It is responsible for paying out each staker
+once the staker proves to the Rewards program that it participated in
+validating the ledger.
 
-* VoteState - Instance of the vote program.  This program keeps track of
-validator votes.
-
-* RewardState - Instance of the reward state program.  This program pays out
-rewards for votes to the staker.
-
-* Staker - The lamport owner that is risking lamports with consensus votes in
-exchange for network rewards.
-
-* Delegate - The validator that is submitting votes on behave of the staker.
-
-## Current Architecture
-
-VoteState contains the following state information:
+The Vote account contains the following state information:
 
 * votes - The submitted votes.
 
-* `delegate_id` - The delegated stake identity.  This identity can submit votes
-as well.
+* `delegate_id` - An identity that may operate with the weight of this
+  account's stake. It is typically the identity of a fullnode, but may be any
+identity involved in stake-weighted computations.
+
+* `authorized_voter_id` - Only this identity is authorized to submit votes.
 
 * `credits` - The amount of unclaimed rewards.
 
-* `root_slot` - The last slot to reach the full lockout commitment necessary for
-rewards.
+* `root_slot` - The last slot to reach the full lockout commitment necessary
+  for rewards.
 
-Reward program is stateless, and pays out the reward when that reward is
-claimed.  Claim the reward requires a transaction that includes the following
-instructions:
+The Rewards program is stateless and pays out reward when a staker submits its
+Vote account to the program. Claiming a reward requires a transaction that
+includes the following instructions:
 
-1. RewardsInstruction::RedeemVoteCredits
+1. `RewardsInstruction::RedeemVoteCredits`
+2. `VoteInstruction::ClearCredits`
 
-2. VoteInstruction::ClearCredits
+The Rewards program transfers lamports from the Rewards account to the Vote
+account's public key. The Rewards program also ensures that the `ClearCredits`
+instruction follows the `RedeemVoteCredits` instruction, such that a staker may
+not claim rewards for the same work more than once.
 
-The payout of the rewards transfers lamports from the rewards program to the
-VoteState address. It ensures that VoteState clears its credits in the next
-instruction.
 
-### VoteInstruction::DelegateStake(Pubkey)
+### Delegating Stake
 
-This instruction assigns the delegate\_id to the supplied Pubkey.  The
-delegation allows the delegate\_id to submit votes on behalf of the vote
-program.
+`VoteInstruction::DelegateStake` allows the staker to choose a fullnode to
+validate the ledger on its behalf. By being a delegate, the fullnode is
+entitled to collect transaction fees when its is leader. The larger the stake,
+the more often the fullnode will be able to collect those fees.
 
-## Validator work flow.
+### Authorizing a Vote Signer
 
-A validator that has been delegated N stakes needs to submit N votes, and the
-validator must submit each vote, for each of the delegated state to earn a
-reward.  We expect each validator to vote once per block, and for there to be
-much more delegated stakes in number then validators.  With the current design,
-each delegated stake requires an independent vote.
+`VoteInstruction::AuthorizeVoter` allows a staker to choose a signing service
+for its votes. That service is responsible for ensuring the vote won't cause
+the staker to be slashed.
+
+## Limitations
+
+Many stakers may delegate their stakes to the same fullnode. The fullnode must
+send a separate vote to each staking account. If there are far more stakers
+than fullnodes, that's a lot of network traffic. An alternative design might
+have fullnodes submit each vote to just one account and then have each staker
+submit that account along with their own to collect its reward.

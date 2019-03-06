@@ -18,6 +18,7 @@
   - [Data Plane Fanout](data-plane-fanout.md)
   - [Ledger Replication](ledger-replication.md)
   - [Secure Vote Signing](vote-signing.md)
+  - [Staking Delegation and Rewards](stake-delegation-and-rewards.md)
 
 - [Anatomy of a Fullnode](fullnode.md)
   - [TPU](tpu.md)
@@ -36,7 +37,6 @@
   - [Ledger Replication](ledger-replication-to-implement.md)
   - [Secure Vote Signing](vote-signing-to-implement.md)
   - [Staking Rewards](staking-rewards.md)
-  - [Staking Delegation and Rewards](stake-delegation-and-rewards.md)
   - [Fork Selection](fork-selection.md)
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
   - [Bank Forks](bank-forks.md)
