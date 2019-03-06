@@ -4,9 +4,9 @@ import {Account, Connection} from '../src';
 import {mockRpc} from './__mocks__/node-fetch';
 import {url} from './url';
 
-export async function newAccountWithTokens(
+export async function newAccountWithLamports(
   connection: Connection,
-  amount: number = 10,
+  lamports: number = 10,
 ): Promise<Account> {
   const account = new Account();
 
@@ -15,7 +15,7 @@ export async function newAccountWithTokens(
       url,
       {
         method: 'requestAirdrop',
-        params: [account.publicKey.toBase58(), amount],
+        params: [account.publicKey.toBase58(), lamports],
       },
       {
         error: null,
@@ -26,6 +26,6 @@ export async function newAccountWithTokens(
     ]);
   }
 
-  await connection.requestAirdrop(account.publicKey, amount);
+  await connection.requestAirdrop(account.publicKey, lamports);
   return account;
 }

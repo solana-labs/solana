@@ -68,7 +68,7 @@ function airDrop() {
 showBalance()
   .then(airDrop)
   .then(() => {
-    console.log(`\n== Move 1 token to approver1`);
+    console.log(`\n== Move 1 lamport to approver1`);
     const transaction = solanaWeb3.SystemProgram.move(
       account1.publicKey,
       approver1.publicKey,
@@ -78,7 +78,7 @@ showBalance()
   })
   .then(confirmTransaction)
   .then(() => {
-    console.log(`\n== Move 1 token to approver2`);
+    console.log(`\n== Move 1 lamport to approver2`);
     const transaction = solanaWeb3.SystemProgram.move(
       account1.publicKey,
       approver2.publicKey,
@@ -93,7 +93,7 @@ showBalance()
     const transaction = solanaWeb3.SystemProgram.createAccount(
       account1.publicKey,
       contractFunds.publicKey,
-      50, // number of tokens to transfer
+      50, // number of lamports to transfer
       0,
       solanaWeb3.BudgetProgram.programId,
     );
@@ -106,7 +106,7 @@ showBalance()
     const transaction = solanaWeb3.SystemProgram.createAccount(
       account1.publicKey,
       contractState.publicKey,
-      1, // account1 pays 1 token to hold the contract state
+      1, // account1 pays 1 lamport to hold the contract state
       solanaWeb3.BudgetProgram.space,
       solanaWeb3.BudgetProgram.programId,
     );
