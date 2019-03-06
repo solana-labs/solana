@@ -112,7 +112,7 @@ SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
 typedef struct {
   SolPubkey *key;        /** Public key of the account */
   bool is_signer;        /** Transaction was signed by this account's key */
-  uint64_t *tokens;      /** Number of tokens owned by this account */
+  uint64_t *lamports;      /** Number of lamports owned by this account */
   uint64_t userdata_len; /** Length of data in bytes */
   uint8_t *userdata;     /** On-chain data within this account */
   SolPubkey *owner;      /** Program that owns this account */
@@ -209,7 +209,7 @@ typedef struct {
  * Use this function to deserialize the buffer passed to the program entrypoint
  * into usable types.  This function does not perform copy deserialization,
  * instead it populates the pointers and lengths in SolKeyedAccount and data so
- * that any modification to tokens or account data take place on the original
+ * that any modification to lamports or account data take place on the original
  * buffer.  Doing so also eliminates the need to serialize back into the buffer
  * at program end.
  *
@@ -238,8 +238,8 @@ SOL_FN_PREFIX bool sol_deserialize(
     params->ka[i].key = (SolPubkey *) input;
     input += sizeof(SolPubkey);
 
-    // tokens
-    params->ka[i].tokens = (uint64_t *) input;
+    // lamports
+    params->ka[i].lamports = (uint64_t *) input;
     input += sizeof(uint64_t);
 
     // account userdata
@@ -311,8 +311,8 @@ SOL_FN_PREFIX void sol_log_params(const SolParameters *params) {
     sol_log_64(0, 0, 0, 0, params->ka[i].is_signer);
     sol_log("  - Key");
     sol_log_key(params->ka[i].key);
-    sol_log("  - Tokens");
-    sol_log_64(0, 0, 0, 0, *params->ka[i].tokens);
+    sol_log("  - Lamports");
+    sol_log_64(0, 0, 0, 0, *params->ka[i].lamports);
     sol_log("  - Userdata");
     sol_log_array(params->ka[i].userdata, params->ka[i].userdata_len);
     sol_log("  - Owner");

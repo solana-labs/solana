@@ -121,8 +121,8 @@ pub fn sol_log_params(ka: &[SolKeyedAccount], data: &[u8]) {
         sol_log_64(0, 0, 0, 0, k.is_signer as u64);
         sol_log("- Key");
         sol_log_key(&k.key);
-        sol_log("- Tokens");
-        sol_log_64(0, 0, 0, 0, k.tokens);
+        sol_log("- Lamports");
+        sol_log_64(0, 0, 0, 0, k.lamports);
         sol_log("- Userdata");
         sol_log_slice(k.userdata);
         sol_log("- Owner");
@@ -145,8 +145,8 @@ pub struct SolKeyedAccount<'a> {
     pub key: SolPubkey<'a>,
     /// Public key of the account
     pub is_signer: u64,
-    /// Number of tokens owned by this account
-    pub tokens: u64,
+    /// Number of lamports owned by this account
+    pub lamports: u64,
     /// On-chain data within this account
     pub userdata: &'a [u8],
     /// Program that owns this account
@@ -193,10 +193,10 @@ pub extern "C" fn entrypoint(input: *mut u8) -> bool {
     let key = SolPubkey { key: &key_slice };
     offset += SIZE_PUBKEY;
 
-    let tokens = unsafe {
+    let lamports = unsafe {
         #[allow(clippy::cast_ptr_alignment)]
-        let tokens_ptr: *const u64 = input.add(offset) as *const u64;
-        *tokens_ptr
+        let lamports_ptr: *const u64 = input.add(offset) as *const u64;
+        *lamports_ptr
     };
     offset += size_of::<u64>();
 
@@ -217,7 +217,7 @@ pub extern "C" fn entrypoint(input: *mut u8) -> bool {
     let mut ka = [SolKeyedAccount {
         key,
         is_signer,
-        tokens,
+        lamports,
         userdata,
         owner,
     }];
@@ -385,7 +385,7 @@ mod tests {
         ];
         assert_eq!(SIZE_PUBKEY, ka[0].key.key.len());
         assert_eq!(key, ka[0].key.key);
-        assert_eq!(48, ka[0].tokens);
+        assert_eq!(48, ka[0].lamports);
         assert_eq!(1, ka[0].userdata.len());
         let owner = [0; 32];
         assert_eq!(SIZE_PUBKEY, ka[0].owner.key.len());
