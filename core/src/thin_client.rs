@@ -390,7 +390,7 @@ impl Drop for ThinClient {
     }
 }
 
-pub fn poll_gossip_for_leader(leader_gossip: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
+pub fn poll_gossip_for_leader(gossip_addr: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
     let exit = Arc::new(AtomicBool::new(false));
     let (node, gossip_socket) = ClusterInfo::spy_node();
     let my_addr = gossip_socket.local_addr().unwrap();
@@ -398,28 +398,23 @@ pub fn poll_gossip_for_leader(leader_gossip: SocketAddr, timeout: Option<u64>) -
     let gossip_service =
         GossipService::new(&cluster_info.clone(), None, None, gossip_socket, &exit);
 
-    let leader_entry_point = NodeInfo::new_entry_point(&leader_gossip);
-    cluster_info
-        .write()
-        .unwrap()
-        .insert_info(leader_entry_point);
-
-    sleep(Duration::from_millis(100));
+    let entry_point = NodeInfo::new_entry_point(&gossip_addr);
+    cluster_info.write().unwrap().insert_info(entry_point);
 
     let deadline = match timeout {
         Some(timeout) => Duration::new(timeout, 0),
         None => Duration::new(std::u64::MAX, 0),
     };
     let now = Instant::now();
-    // Block until leader's correct contact info is received
-    let leader;
+    let result = loop {
+        sleep(Duration::from_millis(100));
+        trace!("polling {:?} for leader from {:?}", gossip_addr, my_addr);
 
-    loop {
-        trace!("polling {:?} for leader from {:?}", leader_gossip, my_addr);
-
-        if let Some(l) = cluster_info.read().unwrap().get_gossip_top_leader() {
-            leader = Some(l.clone());
-            break;
+        if let Some(leader) = cluster_info.read().unwrap().get_gossip_top_leader() {
+            if log_enabled!(log::Level::Trace) {
+                trace!("{}", cluster_info.read().unwrap().node_info_trace());
+            }
+            break Ok(leader.clone());
         }
 
         if log_enabled!(log::Level::Trace) {
@@ -427,20 +422,14 @@ pub fn poll_gossip_for_leader(leader_gossip: SocketAddr, timeout: Option<u64>) -
         }
 
         if now.elapsed() > deadline {
-            return Err(Error::ClusterInfoError(ClusterInfoError::NoLeader));
+            break Err(Error::ClusterInfoError(ClusterInfoError::NoLeader));
         }
-
-        sleep(Duration::from_millis(100));
-    }
+    };
 
     exit.store(true, Ordering::Relaxed);
     gossip_service.join()?;
 
-    if log_enabled!(log::Level::Trace) {
-        trace!("{}", cluster_info.read().unwrap().node_info_trace());
-    }
-
-    Ok(leader.unwrap().clone())
+    result
 }
 
 pub fn retry_get_balance(
