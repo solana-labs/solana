@@ -29,18 +29,18 @@ fn create_and_fund_vote_account(
     if node_balance < 1 {
         return Err(Error::new(
             ErrorKind::Other,
-            "insufficient tokens, one token required",
+            "insufficient lamports, one lamport required",
         ));
     }
 
     // Create the vote account if necessary
     if client.poll_get_balance(&vote_account).unwrap_or(0) == 0 {
-        // Need at least two tokens as one token will be spent on a vote_account_new() transaction
+        // Need at least two lamports as one lamport will be spent on a vote_account_new() transaction
         if node_balance < 2 {
-            error!("insufficient tokens, two tokens required");
+            error!("insufficient lamports, two lamports required");
             return Err(Error::new(
                 ErrorKind::Other,
-                "insufficient tokens, two tokens required",
+                "insufficient lamports, two lamports required",
             ));
         }
         loop {

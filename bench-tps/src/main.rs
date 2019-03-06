@@ -149,25 +149,25 @@ fn main() {
     let barrier_source_keypair = Keypair::new();
     let barrier_dest_id = Keypair::new().pubkey();
 
-    println!("Get tokens...");
-    let num_tokens_per_account = 20;
+    println!("Get lamports...");
+    let num_lamports_per_account = 20;
 
-    // Sample the first keypair, see if it has tokens, if so then resume
-    // to avoid token loss
+    // Sample the first keypair, see if it has lamports, if so then resume
+    // to avoid lamport loss
     let keypair0_balance = client
         .poll_get_balance(&gen_keypairs.last().unwrap().pubkey())
         .unwrap_or(0);
 
-    if num_tokens_per_account > keypair0_balance {
-        let extra = num_tokens_per_account - keypair0_balance;
+    if num_lamports_per_account > keypair0_balance {
+        let extra = num_lamports_per_account - keypair0_balance;
         let total = extra * (gen_keypairs.len() as u64);
-        airdrop_tokens(&mut client, &drone_addr, &id, total);
-        println!("adding more tokens {}", extra);
+        airdrop_lamports(&mut client, &drone_addr, &id, total);
+        println!("adding more lamports {}", extra);
         fund_keys(&mut client, &id, &gen_keypairs, extra);
     }
     let start = gen_keypairs.len() - (tx_count * 2) as usize;
     let keypairs = &gen_keypairs[start..];
-    airdrop_tokens(&mut barrier_client, &drone_addr, &barrier_source_keypair, 1);
+    airdrop_lamports(&mut barrier_client, &drone_addr, &barrier_source_keypair, 1);
 
     println!("Get last ID...");
     let mut blockhash = client.get_recent_blockhash();
@@ -225,11 +225,11 @@ fn main() {
 
     // generate and send transactions for the specified duration
     let start = Instant::now();
-    let mut reclaim_tokens_back_to_source_account = false;
+    let mut reclaim_lamports_back_to_source_account = false;
     let mut i = keypair0_balance;
     while start.elapsed() < duration {
         let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
-        metrics_submit_token_balance(balance);
+        metrics_submit_lamport_balance(balance);
 
         // ping-pong between source and destination accounts for each loop iteration
         // this seems to be faster than trying to determine the balance of individual
@@ -240,7 +240,7 @@ fn main() {
             &keypairs[..len],
             &keypairs[len..],
             threads,
-            reclaim_tokens_back_to_source_account,
+            reclaim_lamports_back_to_source_account,
             &leader,
         );
         // In sustained mode overlap the transfers with generation
@@ -262,8 +262,8 @@ fn main() {
         );
 
         i += 1;
-        if should_switch_directions(num_tokens_per_account, i) {
-            reclaim_tokens_back_to_source_account = !reclaim_tokens_back_to_source_account;
+        if should_switch_directions(num_lamports_per_account, i) {
+            reclaim_lamports_back_to_source_account = !reclaim_lamports_back_to_source_account;
         }
     }
 
@@ -286,7 +286,7 @@ fn main() {
     }
 
     let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
-    metrics_submit_token_balance(balance);
+    metrics_submit_lamport_balance(balance);
 
     compute_and_report_stats(
         &maxes,

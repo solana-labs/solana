@@ -34,12 +34,12 @@ pub const MAX_SPENDS_PER_TX: usize = 4;
 
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
 
-pub fn metrics_submit_token_balance(token_balance: u64) {
-    println!("Token balance: {}", token_balance);
+pub fn metrics_submit_lamport_balance(lamport_balance: u64) {
+    println!("Token balance: {}", lamport_balance);
     solana_metrics::submit(
         influxdb::Point::new("bench-tps")
-            .add_tag("op", influxdb::Value::String("token_balance".to_string()))
-            .add_field("balance", influxdb::Value::Integer(token_balance as i64))
+            .add_tag("op", influxdb::Value::String("lamport_balance".to_string()))
+            .add_field("balance", influxdb::Value::Integer(lamport_balance as i64))
             .to_owned(),
     );
 }
@@ -100,7 +100,7 @@ pub fn sample_tx_count(
     }
 }
 
-/// Send loopback payment of 0 tokens and confirm the network processed it
+/// Send loopback payment of 0 lamports and confirm the network processed it
 pub fn send_barrier_transaction(
     barrier_client: &mut ThinClient,
     blockhash: &mut Hash,
@@ -304,8 +304,8 @@ pub fn verify_funding_transfer(client: &mut ThinClient, tx: &Transaction, amount
 /// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
 /// on every iteration.  This allows us to replay the transfers because the source is either empty,
 /// or full
-pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], tokens: u64) {
-    let total = tokens * dests.len() as u64;
+pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], lamports: u64) {
+    let total = lamports * dests.len() as u64;
     let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
     let mut notfunded: Vec<&Keypair> = dests.iter().collect();
 
@@ -397,20 +397,20 @@ pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], t
     }
 }
 
-pub fn airdrop_tokens(
+pub fn airdrop_lamports(
     client: &mut ThinClient,
     drone_addr: &SocketAddr,
     id: &Keypair,
     tx_count: u64,
 ) {
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
-    metrics_submit_token_balance(starting_balance);
+    metrics_submit_lamport_balance(starting_balance);
     println!("starting balance {}", starting_balance);
 
     if starting_balance < tx_count {
         let airdrop_amount = tx_count - starting_balance;
         println!(
-            "Airdropping {:?} tokens from {} for {}",
+            "Airdropping {:?} lamports from {} for {}",
             airdrop_amount,
             drone_addr,
             id.pubkey(),
@@ -436,7 +436,7 @@ pub fn airdrop_tokens(
         });
         println!("current balance {}...", current_balance);
 
-        metrics_submit_token_balance(current_balance);
+        metrics_submit_lamport_balance(current_balance);
         if current_balance - starting_balance != airdrop_amount {
             println!(
                 "Airdrop failed! {} {} {}",
@@ -513,11 +513,11 @@ pub fn compute_and_report_stats(
     );
 }
 
-// First transfer 3/4 of the tokens to the dest accounts
-// then ping-pong 1/4 of the tokens back to the other account
-// this leaves 1/4 token buffer in each account
-pub fn should_switch_directions(num_tokens_per_account: u64, i: u64) -> bool {
-    i % (num_tokens_per_account / 4) == 0 && (i >= (3 * num_tokens_per_account) / 4)
+// First transfer 3/4 of the lamports to the dest accounts
+// then ping-pong 1/4 of the lamports back to the other account
+// this leaves 1/4 lamport buffer in each account
+pub fn should_switch_directions(num_lamports_per_account: u64, i: u64) -> bool {
+    i % (num_lamports_per_account / 4) == 0 && (i >= (3 * num_lamports_per_account) / 4)
 }
 
 #[cfg(test)]
