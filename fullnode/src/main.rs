@@ -214,17 +214,6 @@ fn main() {
     info!("New vote account ID is {:?}", vote_account_id);
 
     let gossip_addr = node.info.gossip;
-    let fullnode = Fullnode::new(
-        node,
-        &keypair,
-        ledger_path,
-        vote_signer,
-        cluster_entrypoint
-            .map(|i| NodeInfo::new_entry_point(&i))
-            .as_ref(),
-        &fullnode_config,
-    );
-
     if !fullnode_config.voting_disabled {
         let leader_node_info = loop {
             info!("Looking for leader...");
@@ -246,11 +235,22 @@ fn main() {
             panic!("insufficient tokens, one token required");
         }
         if let Err(err) =
-            LocalCluster::create_and_fund_vote_account(&mut client, vote_account_id, &keypair, 1)
+            LocalCluster::create_and_fund_vote_account(&mut client, &vote_signer, &keypair, 1)
         {
             panic!("Failed to create_and_fund_vote_account: {:?}", err);
         }
     }
+
+    let fullnode = Fullnode::new(
+        node,
+        &keypair,
+        ledger_path,
+        vote_signer,
+        cluster_entrypoint
+            .map(|i| NodeInfo::new_entry_point(&i))
+            .as_ref(),
+        &fullnode_config,
+    );
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| panic!("Unable to create: {}", filename));

@@ -93,9 +93,9 @@ impl ThinClient {
     }
 
     /// Retry a sending a signed Transaction to the server for processing.
-    pub fn retry_transfer(
+    pub fn retry_transfer<T: KeypairUtil>(
         &mut self,
-        keypair: &Keypair,
+        keypair: &T,
         transaction: &mut Transaction,
         tries: usize,
     ) -> io::Result<Signature> {

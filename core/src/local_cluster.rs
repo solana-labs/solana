@@ -136,14 +136,14 @@ impl LocalCluster {
             *dest_pubkey
         );
         client
-            .retry_transfer(&source_keypair, &mut tx, 5)
+            .retry_transfer(source_keypair, &mut tx, 5)
             .expect("client transfer");
         retry_get_balance(client, dest_pubkey, Some(lamports)).expect("get balance")
     }
 
-    pub fn create_and_fund_vote_account(
+    pub fn create_and_fund_vote_account<T: KeypairUtil>(
         client: &mut ThinClient,
-        vote_account: &Keypair,
+        vote_account: &T,
         from_account: &Arc<Keypair>,
         amount: u64,
     ) -> Result<()> {
@@ -161,7 +161,7 @@ impl LocalCluster {
             );
 
             client
-                .retry_transfer(&from_account, &mut transaction, 5)
+                .retry_transfer(from_account.as_ref(), &mut transaction, 5)
                 .expect("client transfer");
             retry_get_balance(client, &vote_account_pubkey, Some(amount)).expect("get balance");
 
@@ -174,7 +174,7 @@ impl LocalCluster {
             );
 
             client
-                .retry_transfer(&vote_account, &mut transaction, 5)
+                .retry_transfer(vote_account, &mut transaction, 5)
                 .expect("client transfer 2");
         }
 

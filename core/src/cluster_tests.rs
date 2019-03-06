@@ -33,7 +33,7 @@ pub fn spend_and_verify_all_nodes(
             0,
         );
         let sig = client
-            .retry_transfer(&funding_keypair, &mut transaction, 5)
+            .retry_transfer(funding_keypair, &mut transaction, 5)
             .unwrap();
         for validator in &cluster_nodes {
             let mut client = mk_client(&validator);

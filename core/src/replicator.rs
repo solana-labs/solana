@@ -263,7 +263,7 @@ impl Replicator {
                     Signature::new(signature.as_ref()),
                 );
                 client
-                    .retry_transfer(&keypair, &mut tx, 10)
+                    .retry_transfer(keypair, &mut tx, 10)
                     .expect("transfer didn't work!");
             }
             Err(e) => info!("Error occurred while sampling: {:?}", e),
