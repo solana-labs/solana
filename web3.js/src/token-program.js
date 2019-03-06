@@ -16,7 +16,7 @@ import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import type {Connection} from './connection';
 
 /**
- * Some amount of lamports
+ * Some amount of tokens
  */
 export class TokenAmount extends BN {
   /**
@@ -55,7 +55,7 @@ export class TokenAmount extends BN {
  */
 type TokenInfo = {|
   /**
-   * Total supply of lamports
+   * Total supply of tokens
    */
   supply: TokenAmount,
 
@@ -100,21 +100,21 @@ type TokenAccountInfo = {|
   owner: PublicKey,
 
   /**
-   * Amount of lamports this account holds
+   * Amount of tokens this account holds
    */
   amount: TokenAmount,
 
   /**
-   * The source account for the lamports.
+   * The source account for the tokens.
    *
    * If `source` is null, the source is this account.
-   * If `source` is not null, the `amount` of lamports in this account represent
-   * an allowance of lamports that may be transferred from the source account
+   * If `source` is not null, the `amount` of tokens in this account represent
+   * an allowance of tokens that may be transferred from the source account
    */
   source: null | PublicKey,
 
   /**
-   * Original amount of lamports this delegate account was authorized to spend
+   * Original amount of tokens this delegate account was authorized to spend
    * If `source` is null, originalAmount is zero
    */
   originalAmount: TokenAmount,
@@ -185,7 +185,7 @@ export class Token {
    * @param symbol Symbol for this token
    * @param decimals Location of the decimal place
    * @param programId Optional token programId, uses the system programId by default
-   * @return Token object for the newly minted token, Public key of the Token Account holding the total supply of new lamports
+   * @return Token object for the newly minted token, Public key of the Token Account holding the total supply of new tokens
    */
   static async createNewToken(
     connection: Connection,
@@ -253,7 +253,7 @@ export class Token {
    *
    * @param owner User account that will own the new token account
    * @param source If not null, create a delegate account that when authorized
-   *               may transfer lamports from this `source` account
+   *               may transfer tokens from this `source` account
    * @return Public key of the new empty token account
    */
   async newAccount(
@@ -363,12 +363,12 @@ export class Token {
   }
 
   /**
-   * Transfer lamports to another account
+   * Transfer tokens to another account
    *
    * @param owner Owner of the source token account
    * @param source Source token account
    * @param destination Destination token account
-   * @param amount Number of lamports to transfer
+   * @param amount Number of tokens to transfer
    */
   async transfer(
     owner: Account,
@@ -391,12 +391,12 @@ export class Token {
   }
 
   /**
-   * Grant a third-party permission to transfer up the specified number of lamports from an account
+   * Grant a third-party permission to transfer up the specified number of tokens from an account
    *
    * @param owner Owner of the source token account
    * @param account Public key of the token account
-   * @param delegate Token account authorized to perform a transfer lamports from the source account
-   * @param amount Maximum number of lamports the delegate may transfer
+   * @param delegate Token account authorized to perform a transfer tokens from the source account
+   * @param amount Maximum number of tokens the delegate may transfer
    */
   async approve(
     owner: Account,
@@ -414,7 +414,7 @@ export class Token {
   }
 
   /**
-   * Remove approval for the transfer of any remaining lamports
+   * Remove approval for the transfer of any remaining tokens
    *
    * @param owner Owner of the source token account
    * @param account Public key of the token account
@@ -455,7 +455,7 @@ export class Token {
    * @param owner Owner of the source token account
    * @param source Source token account
    * @param destination Destination token account
-   * @param amount Number of lamports to transfer
+   * @param amount Number of tokens to transfer
    */
   async transferInstruction(
     owner: PublicKey,
@@ -498,8 +498,8 @@ export class Token {
    *
    * @param owner Owner of the source token account
    * @param account Public key of the token account
-   * @param delegate Token account authorized to perform a transfer lamports from the source account
-   * @param amount Maximum number of lamports the delegate may transfer
+   * @param delegate Token account authorized to perform a transfer tokens from the source account
+   * @param amount Maximum number of tokens the delegate may transfer
    */
   approveInstruction(
     owner: PublicKey,
@@ -533,7 +533,7 @@ export class Token {
    *
    * @param owner Owner of the source token account
    * @param account Public key of the token account
-   * @param delegate Token account authorized to perform a transfer lamports from the source account
+   * @param delegate Token account authorized to perform a transfer tokens from the source account
    */
   revokeInstruction(
     owner: PublicKey,
