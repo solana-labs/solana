@@ -1,4 +1,3 @@
-//! An ERC20-like Token
 use solana_sdk::pubkey::Pubkey;
 
 const TOKEN_PROGRAM_ID: [u8; 32] = [
