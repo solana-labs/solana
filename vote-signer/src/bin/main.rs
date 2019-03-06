@@ -31,10 +31,9 @@ fn main() -> Result<(), Box<error::Error>> {
     let exit = Arc::new(AtomicBool::new(false));
     let service = VoteSignerRpcService::new(
         SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port),
-        exit,
+        &exit,
     );
 
     service.join().unwrap();
-
     Ok(())
 }
