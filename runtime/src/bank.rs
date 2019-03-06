@@ -48,20 +48,19 @@ pub struct EpochSchedule {
 
 impl EpochSchedule {
     pub fn new(slots_per_epoch: u64, stakers_slot_offset: u64, warmup: bool) -> Self {
-        let log2_slots_per_epoch = slots_per_epoch.next_power_of_two().trailing_zeros();
+        let (first_normal_epoch, first_normal_slot) = if warmup {
+            let next_power_of_two = slots_per_epoch.next_power_of_two();
+            let log2_slots_per_epoch = next_power_of_two.trailing_zeros();
+
+            (u64::from(log2_slots_per_epoch), next_power_of_two - 1)
+        } else {
+            (0, 0)
+        };
         EpochSchedule {
             slots_per_epoch,
             stakers_slot_offset,
-            first_normal_epoch: if warmup {
-                u64::from(log2_slots_per_epoch)
-            } else {
-                0
-            },
-            first_normal_slot: if warmup {
-                2u64.pow(log2_slots_per_epoch) - 1
-            } else {
-                0
-            },
+            first_normal_epoch,
+            first_normal_slot,
         }
     }
 
