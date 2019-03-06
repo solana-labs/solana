@@ -7,14 +7,14 @@ use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::error;
 
 /**
- * Bootstrap leader gets two tokens:
- * - one token to create an instance of the vote_program with
- * - one token for the transaction fee
- * - one second token to keep the node identity public key valid
+ * Bootstrap leader gets two lamports:
+ * - one lamport to create an instance of the vote_program with
+ * - one lamport for the transaction fee
+ * - one second lamport to keep the node identity public key valid
  */
 //pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 3;
 // TODO: Until https://github.com/solana-labs/solana/issues/2355 is resolved the bootstrap leader
-// needs N tokens as its vote account gets re-created on every node restart, costing it tokens
+// needs N lamports as its vote account gets re-created on every node restart, costing it lamports
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 1_000_000;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -39,13 +39,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Use directory as persistent ledger location"),
         )
         .arg(
-            Arg::with_name("num_tokens")
+            Arg::with_name("lamports")
                 .short("t")
-                .long("num_tokens")
-                .value_name("TOKENS")
+                .long("lamports")
+                .value_name("LAMPORTS")
                 .takes_value(true)
                 .required(true)
-                .help("Number of tokens to create in the mint"),
+                .help("Number of lamports to create in the mint"),
         )
         .arg(
             Arg::with_name("mint_keypair_file")
@@ -61,14 +61,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_leader_keypair_file = matches.value_of("bootstrap_leader_keypair_file").unwrap();
     let ledger_path = matches.value_of("ledger_path").unwrap();
     let mint_keypair_file = matches.value_of("mint_keypair_file").unwrap();
-    let num_tokens = value_t_or_exit!(matches, "num_tokens", u64);
+    let lamports = value_t_or_exit!(matches, "lamports", u64);
 
     let bootstrap_leader_keypair = read_keypair(bootstrap_leader_keypair_file)?;
     let mint_keypair = read_keypair(mint_keypair_file)?;
 
     let bootstrap_leader_vote_account_keypair = Keypair::new();
     let (mut genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(
-        num_tokens,
+        lamports,
         bootstrap_leader_keypair.pubkey(),
         BOOTSTRAP_LEADER_LAMPORTS,
     );
