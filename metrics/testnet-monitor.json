@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 251,
-  "iteration": 1549301870213,
+  "iteration": 1549301870214,
   "links": [
     {
       "asDropdown": true,
@@ -2860,7 +2860,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT time, host,program,thread, message FROM \"$testnet\".\"autogen\".\"panic\"  WHERE $timeFilter ORDER BY time DESC ",
+          "query": "SELECT time, host_id,program,thread, message FROM \"$testnet\".\"autogen\".\"panic\"  WHERE $timeFilter ORDER BY time DESC ",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "table",
@@ -5156,7 +5156,7 @@
           "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"packets_received\") as \"packets_received\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE  host_id =~ /$hostid/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
+          "query": "SELECT mean(\"packets_received\") as \"packets_received\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE  hostname =~ /$hostid/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -5194,7 +5194,7 @@
           "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"receive_errors\") as \"receive_errors\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE  host_id =~ /$hostid/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
+          "query": "SELECT mean(\"receive_errors\") as \"receive_errors\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE  hostname =~ /$hostid/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -5232,7 +5232,7 @@
           "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"rcvbuf_errors\") as \"rcvbuf_errors\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE  host_id =~ /$hostid/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
+          "query": "SELECT mean(\"rcvbuf_errors\") as \"rcvbuf_errors\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE  hostname =~ /$hostid/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -5270,7 +5270,7 @@
           "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"packets_sent\") as \"packets_sent\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE  host_id =~ /$hostid/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
+          "query": "SELECT mean(\"packets_sent\") as \"packets_sent\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE  hostname =~ /$hostid/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
           "rawQuery": true,
           "refId": "D",
           "resultFormat": "time_series",
@@ -5701,5 +5701,5 @@
   "timezone": "",
   "title": "Testnet Monitor (edge)",
   "uid": "testnet-edge",
-  "version": 115
+  "version": 116
 }
