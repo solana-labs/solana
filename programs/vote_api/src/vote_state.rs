@@ -45,18 +45,20 @@ impl Lockout {
 pub struct VoteState {
     pub votes: VecDeque<Lockout>,
     pub delegate_id: Pubkey,
+    pub authorized_voter_id: Pubkey,
     pub root_slot: Option<u64>,
     credits: u64,
 }
 
 impl VoteState {
-    pub fn new(delegate_id: Pubkey) -> Self {
+    pub fn new(staker_id: Pubkey) -> Self {
         let votes = VecDeque::new();
         let credits = 0;
         let root_slot = None;
         Self {
             votes,
-            delegate_id,
+            delegate_id: staker_id,
+            authorized_voter_id: staker_id,
             credits,
             root_slot,
         }
@@ -173,6 +175,35 @@ pub fn delegate_stake(
     Ok(())
 }
 
+/// Authorize the given pubkey to sign votes. This may be called multiple times,
+/// but will implicitly withdraw authorization from the previously authorized
+/// voter. The default voter is the owner of the vote account's pubkey.
+pub fn authorize_voter(
+    keyed_accounts: &mut [KeyedAccount],
+    voter_id: Pubkey,
+) -> Result<(), ProgramError> {
+    if !check_id(&keyed_accounts[0].account.owner) {
+        error!("account[0] is not assigned to the VOTE_PROGRAM");
+        Err(ProgramError::InvalidArgument)?;
+    }
+
+    if keyed_accounts[0].signer_key().is_none() {
+        error!("account[0] should sign the transaction");
+        Err(ProgramError::InvalidArgument)?;
+    }
+
+    let vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata);
+    if let Ok(mut vote_state) = vote_state {
+        vote_state.authorized_voter_id = voter_id;
+        vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
+    } else {
+        error!("account[0] does not valid userdata");
+        Err(ProgramError::InvalidUserdata)?;
+    }
+
+    Ok(())
+}
+
 /// Initialize the vote_state for a vote account
 /// Assumes that the account is being init as part of a account creation or balance transfer and
 /// that the transaction must be signed by the staker's keys
@@ -206,12 +237,24 @@ pub fn process_vote(keyed_accounts: &mut [KeyedAccount], vote: Vote) -> Result<(
         Err(ProgramError::InvalidArgument)?;
     }
 
-    if keyed_accounts[0].signer_key().is_none() {
-        error!("account[0] should sign the transaction");
+    let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata)?;
+
+    // If no voter was authorized, expect account[0] to be the signer, otherwise account[1].
+    let signer_index = if vote_state.authorized_voter_id == *keyed_accounts[0].unsigned_key() {
+        0
+    } else {
+        1
+    };
+
+    if keyed_accounts.get(signer_index).is_none() {
+        error!("account[{}] not provided", signer_index);
+        Err(ProgramError::InvalidArgument)?;
+    }
+    if keyed_accounts[signer_index].signer_key().is_none() {
+        error!("account[{}] should sign the transaction", signer_index);
         Err(ProgramError::InvalidArgument)?;
     }
 
-    let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata)?;
     vote_state.process_vote(vote);
     vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
     Ok(())
@@ -335,9 +378,8 @@ mod tests {
         let mut vote_account = create_vote_account(100);
 
         let vote = Vote::new(1);
-        let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
-        assert_eq!(vote_state.delegate_id, Pubkey::default());
-        assert_eq!(vote_state.votes, vec![Lockout::new(&vote)]);
+        let res = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone());
+        assert_eq!(res, Err(ProgramError::InvalidArgument));
     }
 
     #[test]
