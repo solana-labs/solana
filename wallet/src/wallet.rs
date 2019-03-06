@@ -44,7 +44,7 @@ pub enum WalletCommand {
     Confirm(Signature),
     Deploy(String),
     GetTransactionCount,
-    // Pay(tokens, to, timestamp, timestamp_pubkey, witness(es), cancelable)
+    // Pay(lamports, to, timestamp, timestamp_pubkey, witness(es), cancelable)
     Pay(
         u64,
         Pubkey,
@@ -132,8 +132,8 @@ pub fn parse_command(
     let response = match matches.subcommand() {
         ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
         ("airdrop", Some(airdrop_matches)) => {
-            let tokens = airdrop_matches.value_of("tokens").unwrap().parse()?;
-            Ok(WalletCommand::Airdrop(tokens))
+            let lamports = airdrop_matches.value_of("lamports").unwrap().parse()?;
+            Ok(WalletCommand::Airdrop(lamports))
         }
         ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
         ("cancel", Some(cancel_matches)) => {
@@ -169,7 +169,7 @@ pub fn parse_command(
         )),
         ("get-transaction-count", Some(_matches)) => Ok(WalletCommand::GetTransactionCount),
         ("pay", Some(pay_matches)) => {
-            let tokens = pay_matches.value_of("tokens").unwrap().parse()?;
+            let lamports = pay_matches.value_of("lamports").unwrap().parse()?;
             let to = if pay_matches.is_present("to") {
                 let pubkey_vec = bs58::decode(pay_matches.value_of("to").unwrap())
                     .into_vec()
@@ -238,7 +238,7 @@ pub fn parse_command(
             };
 
             Ok(WalletCommand::Pay(
-                tokens,
+                lamports,
                 to,
                 timestamp,
                 timestamp_pubkey,
@@ -322,20 +322,20 @@ fn process_airdrop(
     rpc_client: &RpcClient,
     config: &WalletConfig,
     drone_addr: SocketAddr,
-    tokens: u64,
+    lamports: u64,
 ) -> ProcessResult {
     println!(
-        "Requesting airdrop of {:?} tokens from {}",
-        tokens, drone_addr
+        "Requesting airdrop of {:?} lamports from {}",
+        lamports, drone_addr
     );
     let previous_balance = match rpc_client.retry_get_balance(1, config.id.pubkey(), 5)? {
-        Some(tokens) => tokens,
+        Some(lamports) => lamports,
         None => Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
         ))?,
     };
 
-    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, tokens)?;
+    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, lamports)?;
 
     let current_balance = rpc_client
         .retry_get_balance(1, config.id.pubkey(), 5)?
@@ -347,11 +347,11 @@ fn process_airdrop(
             current_balance, previous_balance
         ))?;
     }
-    if current_balance - previous_balance < tokens {
+    if current_balance - previous_balance < lamports {
         Err(format!(
             "Airdrop failed: Account balance increased by {} instead of {}",
             current_balance - previous_balance,
-            tokens
+            lamports
         ))?;
     }
     Ok(format!("Your balance is: {:?}", current_balance))
@@ -361,7 +361,7 @@ fn process_balance(config: &WalletConfig, rpc_client: &RpcClient) -> ProcessResu
     let balance = rpc_client.retry_get_balance(1, config.id.pubkey(), 5)?;
     match balance {
         Some(0) => Ok("No account found! Request an airdrop to get started.".to_string()),
-        Some(tokens) => Ok(format!("Your balance is: {:?}", tokens)),
+        Some(lamports) => Ok(format!("Your balance is: {:?}", lamports)),
         None => Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
         ))?,
@@ -393,8 +393,8 @@ fn process_deploy(
     program_location: &str,
 ) -> ProcessResult {
     let balance = rpc_client.retry_get_balance(1, config.id.pubkey(), 5)?;
-    if let Some(tokens) = balance {
-        if tokens < 1 {
+    if let Some(lamports) = balance {
+        if lamports < 1 {
             Err(WalletError::DynamicProgramError(
                 "Insufficient funds".to_string(),
             ))?
@@ -461,7 +461,7 @@ fn process_deploy(
 fn process_pay(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    tokens: u64,
+    lamports: u64,
     to: Pubkey,
     timestamp: Option<DateTime<Utc>>,
     timestamp_pubkey: Option<Pubkey>,
@@ -471,7 +471,7 @@ fn process_pay(
     let blockhash = get_recent_blockhash(&rpc_client)?;
 
     if timestamp == None && *witnesses == None {
-        let mut tx = SystemTransaction::new_move(&config.id, to, tokens, blockhash, 0);
+        let mut tx = SystemTransaction::new_move(&config.id, to, lamports, blockhash, 0);
         let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
         Ok(signature_str.to_string())
     } else if *witnesses == None {
@@ -490,7 +490,7 @@ fn process_pay(
             &config.id,
             contract_funds.pubkey(),
             blockhash,
-            tokens,
+            lamports,
             0,
             budget_program_id,
             0,
@@ -517,7 +517,7 @@ fn process_pay(
             dt,
             dt_pubkey,
             cancelable,
-            tokens,
+            lamports,
             blockhash,
         );
         let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
@@ -547,7 +547,7 @@ fn process_pay(
             &config.id,
             contract_funds.pubkey(),
             blockhash,
-            tokens,
+            lamports,
             0,
             budget_program_id,
             0,
@@ -573,7 +573,7 @@ fn process_pay(
             contract_state.pubkey(),
             witness,
             cancelable,
-            tokens,
+            lamports,
             blockhash,
         );
         let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
@@ -670,7 +670,9 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::Address => unreachable!(),
 
         // Request an airdrop from Solana Drone;
-        WalletCommand::Airdrop(tokens) => process_airdrop(&rpc_client, config, drone_addr, tokens),
+        WalletCommand::Airdrop(lamports) => {
+            process_airdrop(&rpc_client, config, drone_addr, lamports)
+        }
 
         // Check client balance
         WalletCommand::Balance => process_balance(config, &rpc_client),
@@ -688,19 +690,24 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
 
         WalletCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
 
-        // If client has positive balance, pay tokens to another address
-        WalletCommand::Pay(tokens, to, timestamp, timestamp_pubkey, ref witnesses, cancelable) => {
-            process_pay(
-                &rpc_client,
-                config,
-                tokens,
-                to,
-                timestamp,
-                timestamp_pubkey,
-                witnesses,
-                cancelable,
-            )
-        }
+        // If client has positive balance, pay lamports to another address
+        WalletCommand::Pay(
+            lamports,
+            to,
+            timestamp,
+            timestamp_pubkey,
+            ref witnesses,
+            cancelable,
+        ) => process_pay(
+            &rpc_client,
+            config,
+            lamports,
+            to,
+            timestamp,
+            timestamp_pubkey,
+            witnesses,
+            cancelable,
+        ),
 
         // Apply time elapsed to contract
         WalletCommand::TimeElapsed(to, pubkey, dt) => {
@@ -927,10 +934,10 @@ pub fn request_and_confirm_airdrop(
     rpc_client: &RpcClient,
     drone_addr: &SocketAddr,
     signer: &Keypair,
-    tokens: u64,
+    lamports: u64,
 ) -> Result<(), Box<dyn error::Error>> {
     let blockhash = get_recent_blockhash(rpc_client)?;
-    let mut tx = request_airdrop_transaction(drone_addr, &signer.pubkey(), tokens, blockhash)?;
+    let mut tx = request_airdrop_transaction(drone_addr, &signer.pubkey(), lamports, blockhash)?;
     send_and_confirm_transaction(rpc_client, &mut tx, signer)?;
     Ok(())
 }
@@ -981,14 +988,14 @@ mod tests {
             .subcommand(SubCommand::with_name("address").about("Get your public key"))
             .subcommand(
                 SubCommand::with_name("airdrop")
-                    .about("Request a batch of tokens")
+                    .about("Request a batch of lamports")
                     .arg(
-                        Arg::with_name("tokens")
+                        Arg::with_name("lamports")
                             .index(1)
                             .value_name("NUM")
                             .takes_value(true)
                             .required(true)
-                            .help("The number of tokens to request"),
+                            .help("The number of lamports to request"),
                     ),
             )
             .subcommand(SubCommand::with_name("balance").about("Get your balance"))
@@ -1044,12 +1051,12 @@ mod tests {
                             .help("The pubkey of recipient"),
                     )
                     .arg(
-                        Arg::with_name("tokens")
+                        Arg::with_name("lamports")
                             .index(2)
                             .value_name("NUM")
                             .takes_value(true)
                             .required(true)
-                            .help("The number of tokens to send"),
+                            .help("The number of lamports to send"),
                     )
                     .arg(
                         Arg::with_name("timestamp")
@@ -1073,7 +1080,7 @@ mod tests {
                             .takes_value(true)
                             .multiple(true)
                             .use_delimiter(true)
-                            .help("Any third party signatures required to unlock the tokens"),
+                            .help("Any third party signatures required to unlock the lamports"),
                     )
                     .arg(
                         Arg::with_name("cancelable")
@@ -1609,16 +1616,16 @@ mod tests {
         let rpc_client = RpcClient::new("succeeds".to_string());
         let drone_addr = socketaddr!(0, 0);
         let keypair = Keypair::new();
-        let tokens = 50;
+        let lamports = 50;
         assert_eq!(
-            request_and_confirm_airdrop(&rpc_client, &drone_addr, &keypair, tokens).unwrap(),
+            request_and_confirm_airdrop(&rpc_client, &drone_addr, &keypair, lamports).unwrap(),
             ()
         );
 
         let rpc_client = RpcClient::new("account_in_use".to_string());
-        assert!(request_and_confirm_airdrop(&rpc_client, &drone_addr, &keypair, tokens).is_err());
+        assert!(request_and_confirm_airdrop(&rpc_client, &drone_addr, &keypair, lamports).is_err());
 
-        let tokens = 0;
-        assert!(request_and_confirm_airdrop(&rpc_client, &drone_addr, &keypair, tokens).is_err());
+        let lamports = 0;
+        assert!(request_and_confirm_airdrop(&rpc_client, &drone_addr, &keypair, lamports).is_err());
     }
 }

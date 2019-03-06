@@ -145,14 +145,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .subcommand(SubCommand::with_name("address").about("Get your public key"))
         .subcommand(
             SubCommand::with_name("airdrop")
-                .about("Request a batch of tokens")
+                .about("Request a batch of lamports")
                 .arg(
-                    Arg::with_name("tokens")
+                    Arg::with_name("lamports")
                         .index(1)
                         .value_name("NUM")
                         .takes_value(true)
                         .required(true)
-                        .help("The number of tokens to request"),
+                        .help("The number of lamports to request"),
                 ),
         )
         .subcommand(SubCommand::with_name("balance").about("Get your balance"))
@@ -207,12 +207,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("The pubkey of recipient"),
                 )
                 .arg(
-                    Arg::with_name("tokens")
+                    Arg::with_name("lamports")
                         .index(2)
                         .value_name("NUM")
                         .takes_value(true)
                         .required(true)
-                        .help("The number of tokens to send"),
+                        .help("The number of lamports to send"),
                 )
                 .arg(
                     Arg::with_name("timestamp")
@@ -236,7 +236,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .multiple(true)
                         .use_delimiter(true)
-                        .help("Any third party signatures required to unlock the tokens"),
+                        .help("Any third party signatures required to unlock the lamports"),
                 )
                 .arg(
                     Arg::with_name("cancelable")
