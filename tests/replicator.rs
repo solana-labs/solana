@@ -111,10 +111,10 @@ fn test_replicator_startup_basic() {
 
         let replicator_keypair = Keypair::new();
 
-        info!("giving replicator tokens..");
+        info!("giving replicator lamports..");
 
         let blockhash = leader_client.get_recent_blockhash();
-        // Give the replicator some tokens
+        // Give the replicator some lamports
         let mut tx = SystemTransaction::new_account(
             &mint_keypair,
             replicator_keypair.pubkey(),
