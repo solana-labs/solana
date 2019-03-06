@@ -106,11 +106,10 @@ pub mod tests {
         from_keypair: &Keypair,
         voting_pubkey: &Pubkey,
         bank: &Bank,
-        num_tokens: u64,
+        lamports: u64,
     ) {
         let blockhash = bank.last_blockhash();
-        let tx =
-            VoteTransaction::new_account(from_keypair, *voting_pubkey, blockhash, num_tokens, 0);
+        let tx = VoteTransaction::new_account(from_keypair, *voting_pubkey, blockhash, lamports, 0);
         bank.process_transaction(&tx).unwrap();
     }
 
@@ -124,10 +123,10 @@ pub mod tests {
         from_keypair: &Keypair,
         voting_keypair: &T,
         bank: &Bank,
-        num_tokens: u64,
+        lamports: u64,
         slot: u64,
     ) {
-        new_vote_account(from_keypair, &voting_keypair.pubkey(), bank, num_tokens);
+        new_vote_account(from_keypair, &voting_keypair.pubkey(), bank, lamports);
         push_vote(voting_keypair, bank, slot);
     }
 }

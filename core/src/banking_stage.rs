@@ -491,7 +491,7 @@ mod tests {
         poh_recorder.lock().unwrap().set_bank(&bank);
         let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
 
-        // Process a batch that includes a transaction that receives two tokens.
+        // Process a batch that includes a transaction that receives two lamports.
         let alice = Keypair::new();
         let tx = SystemTransaction::new_account(
             &mint_keypair,
@@ -506,7 +506,7 @@ mod tests {
             .send(vec![(packets[0].clone(), vec![1u8])])
             .unwrap();
 
-        // Process a second batch that spends one of those tokens.
+        // Process a second batch that spends one of those lamports.
         let tx = SystemTransaction::new_account(
             &alice,
             mint_keypair.pubkey(),
@@ -532,7 +532,7 @@ mod tests {
         // same assertion as running through the bank, really...
         assert!(entries.len() >= 2);
 
-        // Assert the user holds one token, not two. If the stage only outputs one
+        // Assert the user holds one lamport, not two. If the stage only outputs one
         // entry, then the second transaction will be rejected, because it drives
         // the account balance below zero before the credit is added.
         let bank = Bank::new(&genesis_block);

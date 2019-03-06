@@ -71,7 +71,7 @@ impl LocalCluster {
             let ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
             ledger_paths.push(ledger_path.clone());
 
-            // Send each validator some tokens to vote
+            // Send each validator some lamports to vote
             let validator_balance = Self::transfer(
                 &mut client,
                 &mint_keypair,
