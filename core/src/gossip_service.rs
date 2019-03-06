@@ -78,18 +78,12 @@ pub fn make_listening_node(
 }
 
 pub fn discover(entry_point_info: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
-    converge(entry_point_info, num_nodes)
-}
-
-//TODO: deprecate this in favor of discover
-pub fn converge(node: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     info!("Wait for convergence with {} nodes", num_nodes);
 
     let exit = Arc::new(AtomicBool::new(false));
-    // Let's spy on the network
-    let (gossip_service, spy_ref, id) = make_spy_node(node, &exit);
+    let (gossip_service, spy_ref, id) = make_spy_node(entry_point_info, &exit);
     trace!(
-        "converge spy_node {} looking for at least {} nodes",
+        "discover: spy_node {} looking for at least {} nodes",
         id,
         num_nodes
     );
@@ -97,22 +91,19 @@ pub fn converge(node: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     // Wait for the cluster to converge
     for _ in 0..15 {
         let rpc_peers = spy_ref.read().unwrap().rpc_peers();
+        info!(
+            "discover: spy_node {} found {}/{} nodes",
+            id,
+            rpc_peers.len(),
+            num_nodes,
+        );
         if rpc_peers.len() >= num_nodes {
-            debug!(
-                "converge found {}/{} nodes: {:?}",
-                rpc_peers.len(),
-                num_nodes,
-                rpc_peers
-            );
             exit.store(true, Ordering::Relaxed);
             gossip_service.join().unwrap();
             return rpc_peers;
         }
         debug!(
-            "spy_node: {} converge found {}/{} nodes, need {} more",
-            id,
-            rpc_peers.len(),
-            num_nodes,
+            "discover: expecting an additional {} nodes",
             num_nodes - rpc_peers.len()
         );
         sleep(Duration::new(1, 0));
