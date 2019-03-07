@@ -6,12 +6,12 @@ use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::client::mk_client;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::gossip_service::GossipService;
-use crate::result::{self, Result};
+use crate::result::Result;
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use crate::service::Service;
 use crate::storage_stage::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use crate::streamer::BlobReceiver;
-use crate::thin_client::{retry_get_balance, ThinClient};
+use crate::thin_client::{poll_gossip_for_leader, retry_get_balance, ThinClient};
 use crate::window_service::WindowService;
 use rand::thread_rng;
 use rand::Rng;
@@ -114,7 +114,6 @@ impl Replicator {
         timeout: Option<Duration>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
-        let timeout = timeout.unwrap_or_else(|| Duration::new(30, 0));
 
         info!("Replicator: id: {}", keypair.pubkey());
         info!("Creating cluster info....");
@@ -150,8 +149,11 @@ impl Replicator {
         );
 
         info!("polling for leader");
-        let leader = Self::poll_for_leader(&cluster_info, timeout)?;
 
+        let leader = poll_gossip_for_leader(
+            leader_info.gossip,
+            timeout.unwrap_or_else(|| Duration::new(30, 0)),
+        )?;
         info!("Got leader: {:?}", leader);
 
         let (storage_blockhash, storage_entry_height) =
@@ -296,29 +298,6 @@ impl Replicator {
 
     pub fn entry_height(&self) -> u64 {
         self.entry_height
-    }
-
-    fn poll_for_leader(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-        timeout: Duration,
-    ) -> Result<NodeInfo> {
-        let start = Instant::now();
-        loop {
-            if let Some(l) = cluster_info.read().unwrap().get_gossip_top_leader() {
-                return Ok(l.clone());
-            }
-
-            let elapsed = start.elapsed();
-            if elapsed > timeout {
-                return Err(result::Error::IO(io::Error::new(
-                    ErrorKind::TimedOut,
-                    "Timed out waiting to receive any blocks",
-                )));
-            }
-
-            sleep(Duration::from_millis(900));
-            info!("{}", cluster_info.read().unwrap().node_info_trace());
-        }
     }
 
     fn poll_for_blockhash_and_entry_height(
