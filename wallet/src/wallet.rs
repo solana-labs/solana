@@ -179,7 +179,7 @@ pub fn parse_command(
                 });
             let authorized_voter_id =
                 staking_config_matches
-                    .value_of("authorize-voter")
+                    .value_of("authorize")
                     .map(|pubkey_string| {
                         let pubkey_vec = bs58::decode(pubkey_string)
                             .into_vec()
@@ -193,7 +193,7 @@ pub fn parse_command(
             ))
         }
         ("create-staking-account", Some(staking_matches)) => {
-            let voting_account_string = staking_matches.value_of("voting_account_id").unwrap();
+            let voting_account_string = staking_matches.value_of("voting-account-id").unwrap();
             let voting_account_vec = bs58::decode(voting_account_string)
                 .into_vec()
                 .expect("base58-encoded public key");
@@ -1046,7 +1046,7 @@ pub fn request_and_confirm_airdrop(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::{App, Arg, SubCommand};
+    use clap::{App, Arg, ArgGroup, SubCommand};
     use serde_json::Value;
     use solana::rpc_mock::{PUBKEY, SIGNATURE};
     use solana::socketaddr;
@@ -1122,6 +1122,50 @@ mod tests {
                             .takes_value(true)
                             .required(true)
                             .help("The transaction signature to confirm"),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("configure-staking-account")
+                    .about("Configure staking account for node")
+                    .group(
+                        ArgGroup::with_name("options")
+                            .args(&["delegate", "authorize"])
+                            .multiple(true)
+                            .required(true),
+                    )
+                    .arg(
+                        Arg::with_name("delegate")
+                            .long("delegate-account")
+                            .value_name("PUBKEY")
+                            .takes_value(true)
+                            .help("Address to delegate this vote account to"),
+                    )
+                    .arg(
+                        Arg::with_name("authorize")
+                            .long("authorize-voter")
+                            .value_name("PUBKEY")
+                            .takes_value(true)
+                            .help("Vote signer to authorize"),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("create-staking-account")
+                    .about("Create staking account for node")
+                    .arg(
+                        Arg::with_name("voting-account-id")
+                            .index(1)
+                            .value_name("PUBKEY")
+                            .takes_value(true)
+                            .required(true)
+                            .help("Staking account address to fund"),
+                    )
+                    .arg(
+                        Arg::with_name("lamports")
+                            .index(2)
+                            .value_name("NUM")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The number of lamports to send to staking account"),
                     ),
             )
             .subcommand(
@@ -1283,6 +1327,51 @@ mod tests {
             .get_matches_from(vec!["test", "confirm", "deadbeef"]);
         assert!(parse_command(pubkey, &test_bad_signature).is_err());
 
+        // Test ConfigureStakingAccount Subcommand
+        let second_pubkey = Keypair::new().pubkey();
+        let second_pubkey_string = format!("{}", second_pubkey);
+        let test_configure_staking_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "configure-staking-account",
+            "--delegate-account",
+            &pubkey_string,
+            "--authorize-voter",
+            &second_pubkey_string,
+        ]);
+        assert_eq!(
+            parse_command(pubkey, &test_configure_staking_account).unwrap(),
+            WalletCommand::ConfigureStakingAccount(Some(pubkey), Some(second_pubkey))
+        );
+        let test_configure_staking_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "configure-staking-account",
+            "--delegate-account",
+            &pubkey_string,
+        ]);
+        assert_eq!(
+            parse_command(pubkey, &test_configure_staking_account).unwrap(),
+            WalletCommand::ConfigureStakingAccount(Some(pubkey), None)
+        );
+
+        // Test CreateStakingAccount SubCommand
+        let test_create_staking_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "create-staking-account",
+            &pubkey_string,
+            "50",
+        ]);
+        assert_eq!(
+            parse_command(pubkey, &test_create_staking_account).unwrap(),
+            WalletCommand::CreateStakingAccount(pubkey, 50)
+        );
+        let test_bad_pubkey = test_commands.clone().get_matches_from(vec![
+            "test",
+            "create-staking-account",
+            "deadbeef",
+            "50",
+        ]);
+        assert!(parse_command(pubkey, &test_bad_pubkey).is_err());
+
         // Test Deploy Subcommand
         let test_deploy =
             test_commands
@@ -1438,10 +1527,18 @@ mod tests {
         config.command = WalletCommand::Confirm(missing_signature);
         assert_eq!(process_command(&config).unwrap(), "Not found");
 
+        let bob_pubkey = Keypair::new().pubkey();
+        config.command = WalletCommand::ConfigureStakingAccount(None, Some(bob_pubkey));
+        let signature = process_command(&config);
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+
+        config.command = WalletCommand::CreateStakingAccount(bob_pubkey, 10);
+        let signature = process_command(&config);
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+
         config.command = WalletCommand::GetTransactionCount;
         assert_eq!(process_command(&config).unwrap(), "1234");
 
-        let bob_pubkey = Keypair::new().pubkey();
         config.command = WalletCommand::Pay(10, bob_pubkey, None, None, None, None);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -1524,6 +1621,12 @@ mod tests {
 
         let any_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
         config.command = WalletCommand::Confirm(any_signature);
+        assert!(process_command(&config).is_err());
+
+        config.command = WalletCommand::ConfigureStakingAccount(None, Some(bob_pubkey));
+        assert!(process_command(&config).is_err());
+
+        config.command = WalletCommand::CreateStakingAccount(bob_pubkey, 10);
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::GetTransactionCount;
