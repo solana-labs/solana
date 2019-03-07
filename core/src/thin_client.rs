@@ -390,15 +390,11 @@ impl Drop for ThinClient {
     }
 }
 
-pub fn poll_gossip_for_leader(gossip_addr: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
+pub fn poll_gossip_for_leader(gossip_addr: SocketAddr, timeout: Duration) -> Result<NodeInfo> {
     let exit = Arc::new(AtomicBool::new(false));
     let entry_point = NodeInfo::new_entry_point(&gossip_addr);
     let (gossip_service, cluster_info) = make_spy_node(&entry_point, &exit);
 
-    let deadline = match timeout {
-        Some(timeout) => Duration::new(timeout, 0),
-        None => Duration::new(std::u64::MAX, 0),
-    };
     let now = Instant::now();
     let result = loop {
         sleep(Duration::from_millis(100));
@@ -415,7 +411,7 @@ pub fn poll_gossip_for_leader(gossip_addr: SocketAddr, timeout: Option<u64>) -> 
             trace!("{}", cluster_info.read().unwrap().node_info_trace());
         }
 
-        if now.elapsed() > deadline {
+        if now.elapsed() > timeout {
             break Err(Error::ClusterInfoError(ClusterInfoError::NoLeader));
         }
     };
@@ -497,7 +493,7 @@ mod tests {
 
         info!(
             "found leader: {:?}",
-            poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+            poll_gossip_for_leader(leader_data.gossip, Duration::from_secs(5)).unwrap()
         );
 
         let mut client = mk_client(&leader_data);
@@ -531,7 +527,7 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         info!(
             "found leader: {:?}",
-            poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+            poll_gossip_for_leader(leader_data.gossip, Duration::from_secs(5)).unwrap()
         );
 
         let mut client = mk_client(&leader_data);
@@ -565,7 +561,7 @@ mod tests {
         let (server, leader_data, alice, ledger_path) = new_fullnode();
         info!(
             "found leader: {:?}",
-            poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+            poll_gossip_for_leader(leader_data.gossip, Duration::from_secs(5)).unwrap()
         );
 
         let mut client = mk_client(&leader_data);
@@ -635,7 +631,7 @@ mod tests {
 
         info!(
             "found leader: {:?}",
-            poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+            poll_gossip_for_leader(leader_data.gossip, Duration::from_secs(5)).unwrap()
         );
 
         let mut client = mk_client(&leader_data);
