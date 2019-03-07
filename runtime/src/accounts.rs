@@ -381,6 +381,25 @@ impl AccountsDB {
         None
     }
 
+    fn load_by_program(
+        &self,
+        fork: Fork,
+        program_id: &Pubkey,
+        walk_back: bool,
+    ) -> Vec<(Pubkey, Account)> {
+        self.account_index
+            .account_maps
+            .read()
+            .unwrap()
+            .iter()
+            .filter_map(|(pubkey, _)| {
+                self.load(fork, pubkey, walk_back)
+                    .filter(|account| account.owner == *program_id)
+                    .map(|account| (*pubkey, account))
+            })
+            .collect()
+    }
+
     fn get_storage_id(&self, start: usize, current: usize) -> usize {
         let mut id = current;
         let len: usize;
@@ -835,6 +854,19 @@ impl Accounts {
         self.accounts_db
             .load(fork, pubkey, false)
             .filter(|acc| acc.lamports != 0)
+    }
+
+    /// Slow because lock is held for 1 operation insted of many
+    pub fn load_by_program_slow_no_parent(
+        &self,
+        fork: Fork,
+        program_id: &Pubkey,
+    ) -> Vec<(Pubkey, Account)> {
+        self.accounts_db
+            .load_by_program(fork, program_id, false)
+            .into_iter()
+            .filter(|(_, acc)| acc.lamports != 0)
+            .collect()
     }
 
     /// Slow because lock is held for 1 operation insted of many
@@ -1853,5 +1885,37 @@ mod tests {
         // Squash shouldn't effect tx count
         accounts.squash(1);
         assert_eq!(accounts.transaction_count(1), 2);
+    }
+
+    #[test]
+    fn test_load_by_program() {
+        let paths = get_tmp_accounts_path!();
+        let accounts_db = AccountsDB::new(0, &paths.paths);
+
+        // Load accounts owned by various programs into AccountsDB
+        let pubkey0 = Keypair::new().pubkey();
+        let account0 = Account::new(1, 0, Pubkey::new(&[2; 32]));
+        accounts_db.store(0, &pubkey0, &account0);
+        let pubkey1 = Keypair::new().pubkey();
+        let account1 = Account::new(1, 0, Pubkey::new(&[2; 32]));
+        accounts_db.store(0, &pubkey1, &account1);
+        let pubkey2 = Keypair::new().pubkey();
+        let account2 = Account::new(1, 0, Pubkey::new(&[3; 32]));
+        accounts_db.store(0, &pubkey2, &account2);
+
+        let accounts = accounts_db.load_by_program(0, &Pubkey::new(&[2; 32]), false);
+        assert_eq!(accounts.len(), 2);
+        let accounts = accounts_db.load_by_program(0, &Pubkey::new(&[3; 32]), false);
+        assert_eq!(accounts, vec![(pubkey2, account2)]);
+        let accounts = accounts_db.load_by_program(0, &Pubkey::new(&[4; 32]), false);
+        assert_eq!(accounts, vec![]);
+
+        // Accounts method
+        let mut accounts_proper = Accounts::new(0, None);
+        accounts_proper.accounts_db = accounts_db;
+        let accounts = accounts_proper.load_by_program_slow_no_parent(0, &Pubkey::new(&[2; 32]));
+        assert_eq!(accounts.len(), 2);
+        let accounts = accounts_proper.load_by_program_slow_no_parent(0, &Pubkey::new(&[4; 32]));
+        assert_eq!(accounts, vec![]);
     }
 }
