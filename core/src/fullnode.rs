@@ -120,7 +120,7 @@ impl Fullnode {
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
         node.info.wallclock = timestamp();
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
             node.info.clone(),
             keypair.clone(),
         )));

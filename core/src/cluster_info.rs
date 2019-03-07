@@ -164,9 +164,9 @@ enum Protocol {
 impl ClusterInfo {
     /// Without a valid keypair gossip will not function. Only useful for tests.
     pub fn new_with_invalid_keypair(node_info: NodeInfo) -> Self {
-        ClusterInfo::new_with_keypair(node_info, Arc::new(Keypair::new()))
+        ClusterInfo::new(node_info, Arc::new(Keypair::new()))
     }
-    pub fn new_with_keypair(node_info: NodeInfo, keypair: Arc<Keypair>) -> Self {
+    pub fn new(node_info: NodeInfo, keypair: Arc<Keypair>) -> Self {
         let mut me = ClusterInfo {
             gossip: CrdsGossip::default(),
             keypair,
@@ -1740,7 +1740,7 @@ mod tests {
         let node_info = NodeInfo::new_localhost(keypair.pubkey(), 0);
         let leader = NodeInfo::new_localhost(leader_keypair.pubkey(), 0);
         let peer = NodeInfo::new_localhost(peer_keypair.pubkey(), 0);
-        let mut cluster_info = ClusterInfo::new_with_keypair(node_info.clone(), Arc::new(keypair));
+        let mut cluster_info = ClusterInfo::new(node_info.clone(), Arc::new(keypair));
         cluster_info.set_leader(leader.id);
         cluster_info.insert_info(peer.clone());
         //check that all types of gossip messages are signed correctly

@@ -109,7 +109,7 @@ fn test_replicator_startup_basic() {
             );
         }
 
-        let replicator_keypair = Keypair::new();
+        let replicator_keypair = Arc::new(Keypair::new());
 
         info!("giving replicator lamports..");
 
@@ -238,7 +238,7 @@ fn test_replicator_startup_leader_hang() {
     let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     {
-        let replicator_keypair = Keypair::new();
+        let replicator_keypair = Arc::new(Keypair::new());
 
         info!("starting replicator node");
         let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
@@ -308,7 +308,7 @@ fn test_replicator_startup_ledger_hang() {
         );
 
         info!("starting replicator node");
-        let bad_keys = Keypair::new();
+        let bad_keys = Arc::new(Keypair::new());
         let mut replicator_node = Node::new_localhost_with_pubkey(bad_keys.pubkey());
 
         // Pass bad TVU sockets to prevent successful ledger download
