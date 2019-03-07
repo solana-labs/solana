@@ -121,6 +121,9 @@ pub fn discover(
         ));
         i += 1;
     }
+
+    exit.store(true, Ordering::Relaxed);
+    gossip_service.join().unwrap();
     Err("Failed to converge")
 }
 
