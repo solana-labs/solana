@@ -645,7 +645,7 @@ mod tests {
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
         let tx_small = VoteTransaction::new_vote(&vote_account, 1, next_hash, 2);
-        let tx_large = BudgetTransaction::new(&keypair, keypair.pubkey(), 1, next_hash);
+        let tx_large = BudgetTransaction::new_payment(&keypair, keypair.pubkey(), 1, next_hash, 0);
 
         let tx_small_size = tx_small.serialized_size().unwrap() as usize;
         let tx_large_size = tx_large.serialized_size().unwrap() as usize;
