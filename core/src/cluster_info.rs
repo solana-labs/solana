@@ -164,10 +164,10 @@ enum Protocol {
 impl ClusterInfo {
     /// Without a valid keypair gossip will not function. Only useful for tests.
     pub fn new_with_invalid_keypair(node_info: NodeInfo) -> Self {
-        ClusterInfo::new(node_info, Arc::new(Keypair::new()))
+        Self::new(node_info, Arc::new(Keypair::new()))
     }
     pub fn new(node_info: NodeInfo, keypair: Arc<Keypair>) -> Self {
-        let mut me = ClusterInfo {
+        let mut me = Self {
             gossip: CrdsGossip::default(),
             keypair,
         };
