@@ -81,7 +81,8 @@ fn main() {
 
     let leader_info = NodeInfo::new_entry_point(&network_addr);
 
-    let replicator = Replicator::new(ledger_path, node, &leader_info, &keypair, None).unwrap();
+    let replicator =
+        Replicator::new(ledger_path, node, &leader_info, &Arc::new(keypair), None).unwrap();
 
     replicator.join();
 }

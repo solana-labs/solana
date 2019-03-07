@@ -110,7 +110,7 @@ impl Replicator {
         ledger_path: &str,
         node: Node,
         leader_info: &NodeInfo,
-        keypair: &Keypair,
+        keypair: &Arc<Keypair>,
         timeout: Option<Duration>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
@@ -212,7 +212,7 @@ impl Replicator {
 
         let mut client = mk_client(&leader);
 
-        Self::get_airdrop_lamports(&mut client, keypair, &leader_info);
+        Self::get_airdrop_lamports(&mut client, &keypair, &leader_info);
         info!("Done downloading ledger at {}", ledger_path);
 
         let ledger_path = Path::new(ledger_path);
