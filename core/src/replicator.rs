@@ -118,14 +118,10 @@ impl Replicator {
 
         info!("Replicator: id: {}", keypair.pubkey());
         info!("Creating cluster info....");
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(node.info.clone())));
-
-        let leader_pubkey = leader_info.id;
-        {
-            let mut cluster_info_w = cluster_info.write().unwrap();
-            cluster_info_w.insert_info(leader_info.clone());
-            cluster_info_w.set_leader(leader_pubkey);
-        }
+        let mut cluster_info = ClusterInfo::new(node.info.clone(), keypair.clone());
+        cluster_info.insert_info(leader_info.clone());
+        cluster_info.set_leader(leader_info.id);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
 
         // Create Blocktree, eventually will simply repurpose the input
         // ledger path as the Blocktree path once we replace the ledger with

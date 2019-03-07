@@ -437,7 +437,9 @@ mod tests {
             &exit,
         )));
         request_processor.write().unwrap().set_bank(&bank);
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(NodeInfo::default())));
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+            NodeInfo::default(),
+        )));
         let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
 
         cluster_info.write().unwrap().insert_info(leader.clone());
@@ -638,7 +640,9 @@ mod tests {
                 request_processor.set_bank(&bank);
                 Arc::new(RwLock::new(request_processor))
             },
-            cluster_info: Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(NodeInfo::default()))),
+            cluster_info: Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+                NodeInfo::default(),
+            ))),
         };
 
         let req =
@@ -655,7 +659,9 @@ mod tests {
 
     #[test]
     fn test_rpc_get_leader_addr() {
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(NodeInfo::default())));
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+            NodeInfo::default(),
+        )));
         assert_eq!(
             get_leader_addr(&cluster_info),
             Err(Error {

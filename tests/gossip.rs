@@ -17,13 +17,20 @@ use std::thread::sleep;
 use std::time::Duration;
 
 fn test_node(exit: &Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket) {
-    let keypair = Keypair::new();
-    let mut tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-    let cluster_info = ClusterInfo::new_with_keypair(tn.info.clone(), Arc::new(keypair));
-    let c = Arc::new(RwLock::new(cluster_info));
-    let d = GossipService::new(&c.clone(), None, None, tn.sockets.gossip, exit);
-    let _ = c.read().unwrap().my_data();
-    (c, d, tn.sockets.tvu.pop().unwrap())
+    let keypair = Arc::new(Keypair::new());
+    let mut test_node = Node::new_localhost_with_pubkey(keypair.pubkey());
+    let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
+        test_node.info.clone(),
+        keypair,
+    )));
+    let gossip_service =
+        GossipService::new(&cluster_info, None, None, test_node.sockets.gossip, exit);
+    let _ = cluster_info.read().unwrap().my_data();
+    (
+        cluster_info,
+        gossip_service,
+        test_node.sockets.tvu.pop().unwrap(),
+    )
 }
 
 /// Test that the network converges.

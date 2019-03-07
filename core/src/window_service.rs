@@ -172,7 +172,8 @@ mod test {
         let leader_node = Node::new_localhost();
         let validator_node = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let mut cluster_info_me = ClusterInfo::new_with_invalid_keypair(validator_node.info.clone());
+        let mut cluster_info_me =
+            ClusterInfo::new_with_invalid_keypair(validator_node.info.clone());
         let me_id = leader_node.info.id;
         cluster_info_me.set_leader(me_id);
         let subs = Arc::new(RwLock::new(cluster_info_me));

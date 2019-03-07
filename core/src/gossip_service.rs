@@ -58,7 +58,7 @@ pub fn make_listening_node(
     let new_node = Node::new_localhost_with_pubkey(keypair.pubkey());
     let new_node_info = new_node.info.clone();
     let id = new_node.info.id;
-    let mut new_node_cluster_info = ClusterInfo::new_with_keypair(new_node_info, Arc::new(keypair));
+    let mut new_node_cluster_info = ClusterInfo::new(new_node_info, Arc::new(keypair));
     new_node_cluster_info.insert_info(leader.clone());
     new_node_cluster_info.set_leader(leader.id);
     let new_node_cluster_info_ref = Arc::new(RwLock::new(new_node_cluster_info));
@@ -123,17 +123,14 @@ pub fn converge(node: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
 fn make_spy_node(
     leader: &NodeInfo,
     exit: &Arc<AtomicBool>,
-) -> (GossipService, Arc<RwLock<ClusterInfo>>, Pubkey) {
-    let keypair = Keypair::new();
-    let mut spy = Node::new_localhost_with_pubkey(keypair.pubkey());
-    let id = spy.info.id;
-    let daddr = "0.0.0.0:0".parse().unwrap();
-    spy.info.tvu = daddr;
-    spy.info.rpc = daddr;
-    let mut spy_cluster_info = ClusterInfo::new_with_keypair(spy.info, Arc::new(keypair));
-    spy_cluster_info.insert_info(leader.clone());
-    spy_cluster_info.set_leader(leader.id);
-    let spy_cluster_info_ref = Arc::new(RwLock::new(spy_cluster_info));
+) -> (GossipService, Arc<RwLock<ClusterInfo>>) {
+    let keypair = Arc::new(Keypair::new());
+    let (node, gossip_socket) = ClusterInfo::spy_node(&keypair.pubkey());
+
+    let mut cluster_info = ClusterInfo::new(node, keypair);
+    cluster_info.insert_info(entry_point.clone());
+
+    let cluster_info = Arc::new(RwLock::new(cluster_info));
     let gossip_service =
         GossipService::new(&spy_cluster_info_ref, None, None, spy.sockets.gossip, exit);
 

@@ -5,6 +5,7 @@ use solana::socketaddr;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
+use std::sync::Arc;
 
 fn main() {
     solana_logger::setup();
