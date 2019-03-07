@@ -34,6 +34,8 @@ Methods
 * [Subscription Websocket](#subscription-websocket)
   * [accountSubscribe](#accountsubscribe)
   * [accountUnsubscribe](#accountunsubscribe)
+  * [programSubscribe](#programsubscribe)
+  * [programUnsubscribe](#programunsubscribe)
   * [signatureSubscribe](#signaturesubscribe)
   * [signatureUnsubscribe](#signatureunsubscribe)
 
@@ -289,6 +291,53 @@ Unsubscribe from account userdata change notifications
 ```bash
 // Request
 {"jsonrpc":"2.0", "id":1, "method":"accountUnsubscribe", "params":[0]}
+
+// Result
+{"jsonrpc": "2.0","result": true,"id": 1}
+```
+
+---
+
+### programSubscribe
+Subscribe to a program to receive notifications when the userdata for a given account owned by the program changes
+
+##### Parameters:
+* `string` - program_id Pubkey, as base-58 encoded string
+
+##### Results:
+* `integer` - Subscription id (needed to unsubscribe)
+
+##### Example:
+```bash
+// Request
+{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["9gZbPtbtHrs6hEWgd6MbVY9VPFtS5Z8xKtnYwA2NynHV"]}
+
+// Result
+{"jsonrpc": "2.0","result": 0,"id": 1}
+```
+
+##### Notification Format:
+* `string` - account Pubkey, as base-58 encoded string
+* `object` - account info JSON object (see [getAccountInfo](#getaccountinfo) for field details)
+```bash
+{"jsonrpc":"2.0","method":"programNotification","params":{{"result":["8Rshv2oMkPu5E4opXTRyuyBeZBqQ4S477VG26wUTFxUM",{"executable":false,"lamports":1,"owner":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"userdata":[1,1,1,0,0,0,0,0,0,0,20,0,0,0,0,0,0,0,50,48,49,56,45,49,50,45,50,52,84,50,51,58,53,57,58,48,48,90,235,233,39,152,15,44,117,176,41,89,100,86,45,61,2,44,251,46,212,37,35,118,163,189,247,84,27,235,178,62,55,89,0,0,0,0,50,0,0,0,0,0,0,0,235,233,39,152,15,44,117,176,41,89,100,86,45,61,2,44,251,46,212,37,35,118,163,189,247,84,27,235,178,62,45,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}],"subscription":0}}
+```
+
+---
+
+### programUnsubscribe
+Unsubscribe from program-owned account change notifications
+
+##### Parameters:
+* `integer` - id of account Subscription to cancel
+
+##### Results:
+* `bool` - unsubscribe success message
+
+##### Example:
+```bash
+// Request
+{"jsonrpc":"2.0", "id":1, "method":"programUnsubscribe", "params":[0]}
 
 // Result
 {"jsonrpc": "2.0","result": true,"id": 1}
