@@ -40,7 +40,7 @@ fn main() {
     } = cfg;
 
     println!("Looking for leader at {:?}", network);
-    let leader = poll_gossip_for_leader(network, Some(30)).unwrap_or_else(|err| {
+    let leader = poll_gossip_for_leader(network, Duration::from_secs(30)).unwrap_or_else(|err| {
         eprintln!(
             "Error: unable to find leader on network after 30 seconds: {:?}",
             err

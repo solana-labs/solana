@@ -63,7 +63,8 @@ fn test_replicator_startup_basic() {
 
         debug!(
             "leader: {:?}",
-            solana::thin_client::poll_gossip_for_leader(leader_info.gossip, Some(5)).unwrap()
+            solana::thin_client::poll_gossip_for_leader(leader_info.gossip, Duration::from_secs(5))
+                .unwrap()
         );
 
         let validator_keypair = Arc::new(Keypair::new());
