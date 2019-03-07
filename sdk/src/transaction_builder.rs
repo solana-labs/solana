@@ -12,8 +12,8 @@ fn position(keys: &[Pubkey], key: Pubkey) -> u8 {
     keys.iter().position(|&k| k == key).unwrap() as u8
 }
 
-fn create_indexed_instruction(
-    ix: &Instruction<Pubkey, (Pubkey, bool)>,
+fn compile_instruction(
+    ix: &BuilderInstruction,
     keys: &[Pubkey],
     program_ids: &[Pubkey],
 ) -> Instruction<u8, u8> {
@@ -27,6 +27,16 @@ fn create_indexed_instruction(
         userdata: ix.userdata.clone(),
         accounts,
     }
+}
+
+fn compile_instructions(
+    ixs: &[BuilderInstruction],
+    keys: &[Pubkey],
+    program_ids: &[Pubkey],
+) -> Vec<Instruction<u8, u8>> {
+    ixs.iter()
+        .map(|ix| compile_instruction(ix, keys, program_ids))
+        .collect()
 }
 
 /// A utility for constructing transactions
@@ -82,25 +92,17 @@ impl TransactionBuilder {
             .collect()
     }
 
-    /// Return the instructions, but indexing lists of keys and program ids.
-    fn instructions(&self, keys: &[Pubkey], program_ids: &[Pubkey]) -> Vec<Instruction<u8, u8>> {
-        self.instructions
-            .iter()
-            .map(|ix| create_indexed_instruction(ix, keys, program_ids))
-            .collect()
-    }
-
-    /// Return an unsigned transaction that requires signatures. To more safely return an unsigned
-    /// transaction that *doesn't* require signatures, pass `sign()` zero keypairs.
-    pub fn unsigned(&self, recent_blockhash: Hash) -> Transaction {
+    /// Return an unsigned transaction with space for requires signatures.
+    pub fn compile(&self) -> Transaction {
         let program_ids = self.program_ids();
         let (mut signed_keys, unsigned_keys) = self.keys();
+        let signed_len = signed_keys.len();
         signed_keys.extend(&unsigned_keys);
-        let instructions = self.instructions(&signed_keys, &program_ids);
+        let instructions = compile_instructions(&self.instructions, &signed_keys, &program_ids);
         Transaction {
-            signatures: vec![],
+            signatures: Vec::with_capacity(signed_len),
             account_keys: signed_keys,
-            recent_blockhash,
+            recent_blockhash: Hash::default(),
             fee: self.fee,
             program_ids,
             instructions,
@@ -109,14 +111,8 @@ impl TransactionBuilder {
 
     /// Return a signed transaction.
     pub fn sign<T: KeypairUtil>(&self, keypairs: &[&T], recent_blockhash: Hash) -> Transaction {
-        let signed_keys = self.keys().0;
-        for (i, keypair) in keypairs.iter().enumerate() {
-            assert_eq!(keypair.pubkey(), signed_keys[i], "keypair-pubkey mismatch");
-        }
-        assert_eq!(keypairs.len(), signed_keys.len(), "not enough keypairs");
-
-        let mut tx = self.unsigned(Hash::default());
-        tx.sign(keypairs, recent_blockhash);
+        let mut tx = self.compile();
+        tx.sign_checked(keypairs, recent_blockhash);
         tx
     }
 }
@@ -217,6 +213,22 @@ mod tests {
             .push(Instruction::new(program_id, &0, vec![(id1, true)]))
             .keys();
         assert_eq!(keys, (vec![id1], vec![id0]));
+    }
+
+    #[test]
+    // Ensure there's a way to calculate the number of required signatures.
+    fn test_transaction_builder_signed_keys_len() {
+        let program_id = Pubkey::default();
+        let id0 = Pubkey::default();
+        let tx = TransactionBuilder::default()
+            .push(Instruction::new(program_id, &0, vec![(id0, false)]))
+            .compile();
+        assert_eq!(tx.signatures.capacity(), 0);
+
+        let tx = TransactionBuilder::default()
+            .push(Instruction::new(program_id, &0, vec![(id0, true)]))
+            .compile();
+        assert_eq!(tx.signatures.capacity(), 1);
     }
 
     #[test]
