@@ -41,23 +41,26 @@ fn main() {
 
     println!("Looking for leader at {:?}", network);
     let leader = poll_gossip_for_leader(network, Some(30)).unwrap_or_else(|err| {
-        println!(
+        eprintln!(
             "Error: unable to find leader on network after 30 seconds: {:?}",
             err
         );
         exit(1);
     });
 
-    let nodes = discover(&leader, num_nodes);
+    let nodes = discover(&leader, num_nodes).unwrap_or_else(|err| {
+        eprintln!("{:?}", err);
+        exit(1);
+    });
     if nodes.len() < num_nodes {
-        println!(
+        eprintln!(
             "Error: Insufficient nodes discovered.  Expecting {} or more",
             num_nodes
         );
         exit(1);
     }
     if reject_extra_nodes && nodes.len() > num_nodes {
-        println!(
+        eprintln!(
             "Error: Extra nodes discovered.  Expecting exactly {}",
             num_nodes
         );

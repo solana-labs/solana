@@ -77,11 +77,15 @@ pub fn make_listening_node(
     (gossip_service, new_node_cluster_info_ref, new_node, id)
 }
 
-pub fn discover(entry_point_info: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
+pub fn discover(
+    entry_point_info: &NodeInfo,
+    num_nodes: usize,
+) -> Result<Vec<NodeInfo>, &'static str> {
     info!("Wait for convergence with {} nodes", num_nodes);
 
     let exit = Arc::new(AtomicBool::new(false));
-    let (gossip_service, spy_ref, id) = make_spy_node(entry_point_info, &exit);
+    let (gossip_service, spy_ref) = make_spy_node(entry_point_info, &exit);
+    let id = spy_ref.read().unwrap().keypair.pubkey();
     trace!(
         "discover: spy_node {} looking for at least {} nodes",
         id,
@@ -100,7 +104,7 @@ pub fn discover(entry_point_info: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> 
         if rpc_peers.len() >= num_nodes {
             exit.store(true, Ordering::Relaxed);
             gossip_service.join().unwrap();
-            return rpc_peers;
+            return Ok(rpc_peers);
         }
         debug!(
             "discover: expecting an additional {} nodes",
@@ -108,11 +112,11 @@ pub fn discover(entry_point_info: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> 
         );
         sleep(Duration::new(1, 0));
     }
-    panic!("Failed to converge");
+    Err("Failed to converge")
 }
 
-fn make_spy_node(
-    leader: &NodeInfo,
+pub fn make_spy_node(
+    entry_point: &NodeInfo,
     exit: &Arc<AtomicBool>,
 ) -> (GossipService, Arc<RwLock<ClusterInfo>>) {
     let keypair = Arc::new(Keypair::new());
@@ -122,9 +126,8 @@ fn make_spy_node(
 
     let cluster_info = Arc::new(RwLock::new(cluster_info));
     let gossip_service =
-        GossipService::new(&spy_cluster_info_ref, None, None, spy.sockets.gossip, exit);
-
-    (gossip_service, spy_cluster_info_ref, id)
+        GossipService::new(&cluster_info.clone(), None, None, gossip_socket, &exit);
+    (gossip_service, cluster_info)
 }
 
 impl Service for GossipService {
