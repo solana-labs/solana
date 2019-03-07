@@ -67,9 +67,12 @@ pub fn verify_ledger_ticks(ledger_path: &str, ticks_per_slot: usize) {
     let zeroth_slot = ledger.get_slot_entries(0, 0, None).unwrap();
     let last_id = zeroth_slot.last().unwrap().hash;
     let next_slots = ledger.get_slots_since(&[0]).unwrap().remove(&0).unwrap();
-    let mut pending_slots: Vec<_> = next_slots.into_iter().map(|slot| (slot, last_id)).collect();
+    let mut pending_slots: Vec<_> = next_slots
+        .into_iter()
+        .map(|slot| (slot, 0, last_id))
+        .collect();
     while !pending_slots.is_empty() {
-        let (slot, last_id) = pending_slots.pop().unwrap();
+        let (slot, parent_slot, last_id) = pending_slots.pop().unwrap();
         let next_slots = ledger
             .get_slots_since(&[slot])
             .unwrap()
@@ -78,13 +81,17 @@ pub fn verify_ledger_ticks(ledger_path: &str, ticks_per_slot: usize) {
 
         // If you're not the last slot, you should have a full set of ticks
         let should_verify_ticks = if !next_slots.is_empty() {
-            Some(ticks_per_slot)
+            Some((slot - parent_slot) as usize * ticks_per_slot)
         } else {
             None
         };
 
         let last_id = verify_slot_ticks(&ledger, slot, &last_id, should_verify_ticks);
-        pending_slots.extend(next_slots.into_iter().map(|slot| (slot, last_id)));
+        pending_slots.extend(
+            next_slots
+                .into_iter()
+                .map(|child_slot| (child_slot, slot, last_id)),
+        );
     }
 }
 
