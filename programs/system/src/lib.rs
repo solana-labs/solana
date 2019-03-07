@@ -2,7 +2,6 @@ use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::solana_entrypoint;
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
 
@@ -74,7 +73,6 @@ fn move_lamports(keyed_accounts: &mut [KeyedAccount], lamports: u64) -> Result<(
     Ok(())
 }
 
-solana_entrypoint!(entrypoint);
 pub fn entrypoint(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
