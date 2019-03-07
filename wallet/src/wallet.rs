@@ -25,6 +25,9 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND};
 use solana_sdk::transaction::Transaction;
+use solana_sdk::transaction_builder::TransactionBuilder;
+use solana_vote_api::vote_instruction::VoteInstruction;
+use solana_vote_api::vote_transaction::VoteTransaction;
 use std::fs::File;
 use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -42,6 +45,9 @@ pub enum WalletCommand {
     Balance,
     Cancel(Pubkey),
     Confirm(Signature),
+    // ConfigureStakingAccount(delegate_id, authorized_voter_id)
+    ConfigureStakingAccount(Option<Pubkey>, Option<Pubkey>),
+    CreateStakingAccount(Pubkey, u64),
     Deploy(String),
     GetTransactionCount,
     // Pay(lamports, to, timestamp, timestamp_pubkey, witness(es), cancelable)
@@ -160,6 +166,48 @@ pub fn parse_command(
                 eprintln!("{}", confirm_matches.usage());
                 Err(WalletError::BadParameter("Invalid signature".to_string()))
             }
+        }
+        ("configure-staking-account", Some(staking_config_matches)) => {
+            let delegate_id = staking_config_matches
+                .value_of("delegate")
+                .map(|pubkey_string| {
+                    let pubkey_vec = bs58::decode(pubkey_string)
+                        .into_vec()
+                        .expect("base58-encoded public key");
+                    // TODO: Add valid pubkey check
+                    Pubkey::new(&pubkey_vec)
+                });
+            let authorized_voter_id =
+                staking_config_matches
+                    .value_of("authorize-voter")
+                    .map(|pubkey_string| {
+                        let pubkey_vec = bs58::decode(pubkey_string)
+                            .into_vec()
+                            .expect("base58-encoded public key");
+                        // TODO: Add valid pubkey check
+                        Pubkey::new(&pubkey_vec)
+                    });
+            Ok(WalletCommand::ConfigureStakingAccount(
+                delegate_id,
+                authorized_voter_id,
+            ))
+        }
+        ("create-staking-account", Some(staking_matches)) => {
+            let voting_account_string = staking_matches.value_of("voting_account_id").unwrap();
+            let voting_account_vec = bs58::decode(voting_account_string)
+                .into_vec()
+                .expect("base58-encoded public key");
+
+            if voting_account_vec.len() != mem::size_of::<Pubkey>() {
+                eprintln!("{}", staking_matches.usage());
+                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
+            }
+            let voting_account_id = Pubkey::new(&voting_account_vec);
+            let lamports = staking_matches.value_of("lamports").unwrap().parse()?;
+            Ok(WalletCommand::CreateStakingAccount(
+                voting_account_id,
+                lamports,
+            ))
         }
         ("deploy", Some(deploy_matches)) => Ok(WalletCommand::Deploy(
             deploy_matches
@@ -385,6 +433,44 @@ fn process_confirm(rpc_client: &RpcClient, signature: Signature) -> ProcessResul
             "Received result of an unexpected type".to_string(),
         ))?,
     }
+}
+
+fn process_configure_staking(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    delegate_option: Option<Pubkey>,
+    authorized_voter_option: Option<Pubkey>,
+) -> ProcessResult {
+    let recent_blockhash = get_recent_blockhash(&rpc_client)?;
+    let mut tx = TransactionBuilder::new(0);
+    if let Some(delegate_id) = delegate_option {
+        tx.push(VoteInstruction::new_delegate_stake(
+            config.id.pubkey(),
+            delegate_id,
+        ));
+    }
+    if let Some(authorized_voter_id) = authorized_voter_option {
+        tx.push(VoteInstruction::new_authorize_voter(
+            config.id.pubkey(),
+            authorized_voter_id,
+        ));
+    }
+    let mut tx = tx.sign(&[&config.id], recent_blockhash);
+    let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
+    Ok(signature_str.to_string())
+}
+
+fn process_create_staking(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    voting_account_id: Pubkey,
+    lamports: u64,
+) -> ProcessResult {
+    let recent_blockhash = get_recent_blockhash(&rpc_client)?;
+    let mut tx =
+        VoteTransaction::new_account(&config.id, voting_account_id, recent_blockhash, lamports, 0);
+    let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
+    Ok(signature_str.to_string())
 }
 
 fn process_deploy(
@@ -682,6 +768,21 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
 
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
+
+        // Configure staking account already created
+        WalletCommand::ConfigureStakingAccount(delegate_option, authorized_voter_option) => {
+            process_configure_staking(
+                &rpc_client,
+                config,
+                delegate_option,
+                authorized_voter_option,
+            )
+        }
+
+        // Create staking account
+        WalletCommand::CreateStakingAccount(voting_account_id, lamports) => {
+            process_create_staking(&rpc_client, config, voting_account_id, lamports)
+        }
 
         // Deploy a custom program to the chain
         WalletCommand::Deploy(ref program_location) => {
