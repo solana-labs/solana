@@ -196,9 +196,9 @@ pub fn process_transaction<F, E>(
     process_instruction: F,
 ) -> Result<(), E>
 where
-    F: Fn(&mut [KeyedAccount], &[u8]) -> Result<(), E>,
+    F: Fn(&Pubkey, &mut [KeyedAccount], &[u8]) -> Result<(), E>,
 {
-    for ix in &tx.instructions {
+    for (i, ix) in tx.instructions.iter().enumerate() {
         let mut ix_accounts = get_subset_unchecked_mut(tx_accounts, &ix.accounts);
         let mut keyed_accounts: Vec<_> = ix
             .accounts
@@ -212,7 +212,13 @@ where
             .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
             .collect();
 
-        process_instruction(&mut keyed_accounts, &ix.userdata)?;
+        let program_id = tx.program_id(i);
+        if system_program::check_id(&program_id) {
+            solana_system_program::entrypoint(&program_id, &mut keyed_accounts, &ix.userdata, 0)
+                .unwrap();
+        } else {
+            process_instruction(&program_id, &mut keyed_accounts, &ix.userdata)?;
+        }
     }
     Ok(())
 }

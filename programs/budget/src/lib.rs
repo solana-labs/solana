@@ -9,7 +9,7 @@ use solana_sdk::solana_entrypoint;
 
 solana_entrypoint!(entrypoint);
 fn entrypoint(
-    _program_id: &Pubkey,
+    program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
     _tick_height: u64,
@@ -18,5 +18,5 @@ fn entrypoint(
 
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
-    process_instruction(keyed_accounts, data).map_err(|_| ProgramError::GenericError)
+    process_instruction(program_id, keyed_accounts, data).map_err(|_| ProgramError::GenericError)
 }

@@ -6,6 +6,7 @@ use solana_budget_api::budget_instruction::BudgetInstruction;
 use solana_budget_api::budget_state::{BudgetError, BudgetState};
 use solana_budget_api::payment_plan::Witness;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::pubkey::Pubkey;
 
 /// Process a Witness Signature. Any payment plans waiting on this signature
 /// will progress one step.
@@ -78,10 +79,6 @@ fn apply_debits(
     keyed_accounts: &mut [KeyedAccount],
     instruction: &BudgetInstruction,
 ) -> Result<(), BudgetError> {
-    if !keyed_accounts[0].account.userdata.is_empty() {
-        trace!("source is pending");
-        return Err(BudgetError::SourceIsPendingContract);
-    }
     match instruction {
         BudgetInstruction::InitializeAccount(expr) => {
             let expr = expr.clone();
@@ -143,21 +140,18 @@ fn apply_debits(
     }
 }
 
-/// Budget DSL contract interface
-/// * accounts[0] - The source of the lamports
-/// * accounts[1] - The contract context.  Once the contract has been completed, the lamports can
-/// be spent from this account .
 pub fn process_instruction(
+    _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
 ) -> Result<(), BudgetError> {
-    if let Ok(instruction) = deserialize(data) {
-        trace!("process_instruction: {:?}", instruction);
-        apply_debits(keyed_accounts, &instruction)
-    } else {
-        info!("Invalid transaction userdata: {:?}", data);
-        Err(BudgetError::UserdataDeserializeFailure)
-    }
+    let instruction = deserialize(data).map_err(|err| {
+        info!("Invalid transaction userdata: {:?} {:?}", data, err);
+        BudgetError::UserdataDeserializeFailure
+    })?;
+
+    trace!("process_instruction: {:?}", instruction);
+    apply_debits(keyed_accounts, &instruction)
 }
 
 #[cfg(test)]
@@ -169,9 +163,9 @@ mod test {
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::system_program;
     use solana_sdk::transaction::Transaction;
 
-    // TODO: This is wrong and will only work with single-instruction transactions.
     fn process_transaction(
         tx: &Transaction,
         tx_accounts: &mut [Account],
@@ -199,10 +193,10 @@ mod test {
     #[test]
     fn test_unsigned_witness_key() {
         let mut accounts = vec![
-            Account::new(1, 0, id()),
-            Account::new(0, 512, id()),
-            Account::new(0, 0, id()),
-            Account::new(0, 0, id()),
+            Account::new(1, 0, system_program::id()),
+            Account::new(0, 0, system_program::id()),
+            Account::new(0, 0, system_program::id()),
+            Account::new(0, 0, system_program::id()),
         ];
 
         // Initialize BudgetState
@@ -239,10 +233,10 @@ mod test {
     #[test]
     fn test_unsigned_timestamp() {
         let mut accounts = vec![
-            Account::new(1, 0, id()),
-            Account::new(0, 512, id()),
-            Account::new(0, 0, id()),
-            Account::new(0, 0, id()),
+            Account::new(1, 0, system_program::id()),
+            Account::new(0, 0, system_program::id()),
+            Account::new(0, 0, system_program::id()),
+            Account::new(0, 0, system_program::id()),
         ];
 
         // Initialize BudgetState
@@ -280,9 +274,9 @@ mod test {
     #[test]
     fn test_transfer_on_date() {
         let mut accounts = vec![
-            Account::new(1, 0, id()),
-            Account::new(0, 512, id()),
-            Account::new(0, 0, id()),
+            Account::new(1, 0, system_program::id()),
+            Account::new(0, 0, system_program::id()),
+            Account::new(0, 0, system_program::id()),
         ];
         let from_account = 0;
         let contract_account = 1;
@@ -356,9 +350,9 @@ mod test {
     #[test]
     fn test_cancel_transfer() {
         let mut accounts = vec![
-            Account::new(1, 0, id()),
-            Account::new(0, 512, id()),
-            Account::new(0, 0, id()),
+            Account::new(1, 0, system_program::id()),
+            Account::new(0, 0, system_program::id()),
+            Account::new(0, 0, system_program::id()),
         ];
         let from_account = 0;
         let contract_account = 1;
@@ -421,42 +415,5 @@ mod test {
         assert_eq!(accounts[from_account].lamports, 1);
         assert_eq!(accounts[contract_account].lamports, 0);
         assert_eq!(accounts[pay_account].lamports, 0);
-    }
-
-    #[test]
-    fn test_userdata_too_small() {
-        let mut accounts = vec![
-            Account::new(1, 0, id()),
-            Account::new(1, 0, id()), // <== userdata is 0, which is not enough
-            Account::new(1, 0, id()),
-        ];
-        let from = Keypair::new();
-        let contract = Keypair::new();
-        let to = Keypair::new();
-        let tx = BudgetTransaction::new_on_date(
-            &from,
-            to.pubkey(),
-            contract.pubkey(),
-            Utc::now(),
-            from.pubkey(),
-            None,
-            1,
-            Hash::default(),
-        );
-
-        assert!(process_transaction(&tx, &mut accounts).is_err());
-        assert!(BudgetState::deserialize(&accounts[1].userdata).is_err());
-
-        let tx = BudgetTransaction::new_timestamp(
-            &from,
-            contract.pubkey(),
-            to.pubkey(),
-            Utc::now(),
-            Hash::default(),
-        );
-        assert!(process_transaction(&tx, &mut accounts).is_err());
-        assert!(BudgetState::deserialize(&accounts[1].userdata).is_err());
-
-        // Success if there was no panic...
     }
 }
