@@ -1,4 +1,4 @@
-use clap::{crate_version, App, Arg, ArgMatches, SubCommand};
+use clap::{crate_version, App, Arg, ArgGroup, ArgMatches, SubCommand};
 use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
 use solana_wallet::wallet::{parse_command, process_command, WalletConfig, WalletError};
 use std::error;
@@ -178,6 +178,50 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .required(true)
                         .help("The transaction signature to confirm"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("configure-staking-account")
+                .about("Configure staking account for node")
+                .group(
+                    ArgGroup::with_name("options")
+                        .args(&["delegate", "authorized_voter"])
+                        .multiple(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("delegate")
+                        .long("delegate-account")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .help("Address to delegate this vote account to"),
+                )
+                .arg(
+                    Arg::with_name("authorized_voter")
+                        .long("authorize-voter")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .help("Vote signer to authorize"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("create-staking-account")
+                .about("Create staking account for node")
+                .arg(
+                    Arg::with_name("voting_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Staking account address to fund"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(2)
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The number of lamports to send to staking account"),
                 ),
         )
         .subcommand(
