@@ -463,16 +463,17 @@ impl Blob {
     }
 }
 
-pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, blob_index: &mut u64, slot: u64) {
+pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, mut blob_index: u64, slot: u64, parent: u64) {
     // enumerate all the blobs, those are the indices
     for blob in blobs.iter() {
         let mut blob = blob.write().unwrap();
 
-        blob.set_index(*blob_index);
+        blob.set_index(blob_index);
         blob.set_slot(slot);
+        blob.set_parent(parent);
         blob.set_id(id);
         blob.forward(true);
-        *blob_index += 1;
+        blob_index += 1;
     }
 }
 
