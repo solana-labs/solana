@@ -192,12 +192,15 @@ pub fn execute_transaction(
 /// for easier usage and better stack traces.
 pub fn process_transaction<F, E>(
     tx: &Transaction,
-    tx_accounts: &mut [Account],
+    tx_accounts: &mut Vec<Account>,
     process_instruction: F,
 ) -> Result<(), E>
 where
     F: Fn(&Pubkey, &mut [KeyedAccount], &[u8]) -> Result<(), E>,
 {
+    for _ in tx_accounts.len()..tx.account_keys.len() {
+        tx_accounts.push(Account::new(0, 0, system_program::id()));
+    }
     for (i, ix) in tx.instructions.iter().enumerate() {
         let mut ix_accounts = get_subset_unchecked_mut(tx_accounts, &ix.accounts);
         let mut keyed_accounts: Vec<_> = ix
