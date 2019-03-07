@@ -167,34 +167,33 @@ mod test {
     use super::*;
     use solana_budget_api::budget_transaction::BudgetTransaction;
     use solana_budget_api::id;
+    use solana_runtime::runtime;
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::transaction::{Instruction, Transaction};
+    use solana_sdk::transaction::Transaction;
 
     fn process_transaction(
         tx: &Transaction,
-        program_accounts: &mut [Account],
+        tx_accounts: &mut [Account],
     ) -> Result<(), BudgetError> {
-        assert_eq!(tx.instructions.len(), 1);
-        let Instruction {
-            ref accounts,
-            ref userdata,
-            ..
-        } = tx.instructions[0];
+        for ix in &tx.instructions {
+            let mut ix_accounts = runtime::get_subset_unchecked_mut(tx_accounts, &ix.accounts);
+            let mut keyed_accounts: Vec<_> = ix
+                .accounts
+                .iter()
+                .map(|&index| {
+                    let index = index as usize;
+                    let key = &tx.account_keys[index];
+                    (key, index < tx.signatures.len())
+                })
+                .zip(ix_accounts.iter_mut())
+                .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
+                .collect();
 
-        let mut keyed_accounts: Vec<_> = accounts
-            .iter()
-            .map(|&index| {
-                let index = index as usize;
-                let key = &tx.account_keys[index];
-                (key, index < tx.signatures.len())
-            })
-            .zip(program_accounts.iter_mut())
-            .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
-            .collect();
-
-        super::process_instruction(&mut keyed_accounts, &userdata)
+            process_instruction(&mut keyed_accounts, &ix.userdata)?;
+        }
+        Ok(())
     }
     #[test]
     fn test_invalid_instruction() {
@@ -218,6 +217,7 @@ mod test {
         let mut accounts = vec![
             Account::new(1, 0, id()),
             Account::new(0, 512, id()),
+            Account::new(0, 0, id()),
             Account::new(0, 0, id()),
         ];
 
@@ -257,6 +257,7 @@ mod test {
         let mut accounts = vec![
             Account::new(1, 0, id()),
             Account::new(0, 512, id()),
+            Account::new(0, 0, id()),
             Account::new(0, 0, id()),
         ];
 
