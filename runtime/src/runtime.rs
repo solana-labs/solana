@@ -143,7 +143,7 @@ pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
 }
 
 /// Get mut references to a subset of elements.
-pub fn get_subset_unchecked_mut<'a, T>(xs: &'a mut [T], indexes: &[u8]) -> Vec<&'a mut T> {
+fn get_subset_unchecked_mut<'a, T>(xs: &'a mut [T], indexes: &[u8]) -> Vec<&'a mut T> {
     // Since the compiler doesn't know the indexes are unique, dereferencing
     // multiple mut elements is assumed to be unsafe. If, however, all
     // indexes are unique, it's perfectly safe. The returned elements will share
@@ -184,6 +184,35 @@ pub fn execute_transaction(
             tick_height,
         )
         .map_err(|err| RuntimeError::ProgramError(instruction_index as u8, err))?;
+    }
+    Ok(())
+}
+
+/// A utility function for unit-tests. Same as execute_transaction(), but bypasses the loaders
+/// for easier usage and better stack traces.
+pub fn process_transaction<F, E>(
+    tx: &Transaction,
+    tx_accounts: &mut [Account],
+    process_instruction: F,
+) -> Result<(), E>
+where
+    F: Fn(&mut [KeyedAccount], &[u8]) -> Result<(), E>,
+{
+    for ix in &tx.instructions {
+        let mut ix_accounts = get_subset_unchecked_mut(tx_accounts, &ix.accounts);
+        let mut keyed_accounts: Vec<_> = ix
+            .accounts
+            .iter()
+            .map(|&index| {
+                let index = index as usize;
+                let key = &tx.account_keys[index];
+                (key, index < tx.signatures.len())
+            })
+            .zip(ix_accounts.iter_mut())
+            .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
+            .collect();
+
+        process_instruction(&mut keyed_accounts, &ix.userdata)?;
     }
     Ok(())
 }
