@@ -185,7 +185,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .about("Configure staking account for node")
                 .group(
                     ArgGroup::with_name("options")
-                        .args(&["delegate", "authorized_voter"])
+                        .args(&["delegate", "authorize"])
                         .multiple(true)
                         .required(true),
                 )
@@ -197,7 +197,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Address to delegate this vote account to"),
                 )
                 .arg(
-                    Arg::with_name("authorized_voter")
+                    Arg::with_name("authorize")
                         .long("authorize-voter")
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -208,7 +208,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             SubCommand::with_name("create-staking-account")
                 .about("Create staking account for node")
                 .arg(
-                    Arg::with_name("voting_account_id")
+                    Arg::with_name("voting-account-id")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
