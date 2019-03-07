@@ -168,7 +168,7 @@ mod test {
 
     fn process_transaction(
         tx: &Transaction,
-        tx_accounts: &mut [Account],
+        tx_accounts: &mut Vec<Account>,
     ) -> Result<(), BudgetError> {
         runtime::process_transaction(tx, tx_accounts, process_instruction)
     }
@@ -192,12 +192,7 @@ mod test {
 
     #[test]
     fn test_unsigned_witness_key() {
-        let mut accounts = vec![
-            Account::new(1, 0, system_program::id()),
-            Account::new(0, 0, system_program::id()),
-            Account::new(0, 0, system_program::id()),
-            Account::new(0, 0, system_program::id()),
-        ];
+        let mut accounts = vec![Account::new(1, 0, system_program::id())];
 
         // Initialize BudgetState
         let from = Keypair::new();
@@ -232,12 +227,7 @@ mod test {
 
     #[test]
     fn test_unsigned_timestamp() {
-        let mut accounts = vec![
-            Account::new(1, 0, system_program::id()),
-            Account::new(0, 0, system_program::id()),
-            Account::new(0, 0, system_program::id()),
-            Account::new(0, 0, system_program::id()),
-        ];
+        let mut accounts = vec![Account::new(1, 0, system_program::id())];
 
         // Initialize BudgetState
         let from = Keypair::new();
@@ -273,11 +263,7 @@ mod test {
 
     #[test]
     fn test_transfer_on_date() {
-        let mut accounts = vec![
-            Account::new(1, 0, system_program::id()),
-            Account::new(0, 0, system_program::id()),
-            Account::new(0, 0, system_program::id()),
-        ];
+        let mut accounts = vec![Account::new(1, 0, system_program::id())];
         let from_account = 0;
         let contract_account = 1;
         let to_account = 2;
@@ -349,11 +335,7 @@ mod test {
     }
     #[test]
     fn test_cancel_transfer() {
-        let mut accounts = vec![
-            Account::new(1, 0, system_program::id()),
-            Account::new(0, 0, system_program::id()),
-            Account::new(0, 0, system_program::id()),
-        ];
+        let mut accounts = vec![Account::new(1, 0, system_program::id())];
         let from_account = 0;
         let contract_account = 1;
         let pay_account = 2;
@@ -386,8 +368,7 @@ mod test {
         // nothing should be changed because apply witness didn't finalize a payment
         assert_eq!(accounts[from_account].lamports, 0);
         assert_eq!(accounts[contract_account].lamports, 1);
-        // this is the `to.pubkey()` account
-        assert_eq!(accounts[pay_account].lamports, 0);
+        assert_eq!(accounts.get(pay_account), None);
 
         // Now, cancel the transaction. from gets her funds back
         let tx = BudgetTransaction::new_signature(
@@ -399,7 +380,7 @@ mod test {
         process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].lamports, 1);
         assert_eq!(accounts[contract_account].lamports, 0);
-        assert_eq!(accounts[pay_account].lamports, 0);
+        assert_eq!(accounts.get(pay_account), None);
 
         // try to replay the cancel contract
         let tx = BudgetTransaction::new_signature(
@@ -414,6 +395,6 @@ mod test {
         );
         assert_eq!(accounts[from_account].lamports, 1);
         assert_eq!(accounts[contract_account].lamports, 0);
-        assert_eq!(accounts[pay_account].lamports, 0);
+        assert_eq!(accounts.get(pay_account), None);
     }
 }
