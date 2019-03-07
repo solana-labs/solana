@@ -17,17 +17,17 @@ pub struct BudgetTransaction {}
 
 impl BudgetTransaction {
     /// Create and sign a new Transaction. Used for unit-testing.
-    pub fn new_payment(
+    #[allow(clippy::new_ret_no_self)]
+    fn new(
         from_keypair: &Keypair,
-        to: Pubkey,
+        contract: Pubkey,
+        expr: BudgetExpr,
         lamports: u64,
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
-        let contract = Keypair::new().pubkey();
         let from = from_keypair.pubkey();
-        let payment = BudgetExpr::new_payment(lamports - fee, to);
-        let space = serialized_size(&BudgetState::new(payment.clone())).unwrap();
+        let space = serialized_size(&BudgetState::new(expr.clone())).unwrap();
         TransactionBuilder::new(fee)
             .push(SystemInstruction::new_program_account(
                 from,
@@ -36,8 +36,28 @@ impl BudgetTransaction {
                 space,
                 id(),
             ))
-            .push(BudgetInstruction::new_initialize_account(contract, payment))
+            .push(BudgetInstruction::new_initialize_account(contract, expr))
             .sign(&[from_keypair], recent_blockhash)
+    }
+
+    /// Create and sign a new Transaction. Used for unit-testing.
+    pub fn new_payment(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        lamports: u64,
+        recent_blockhash: Hash,
+        fee: u64,
+    ) -> Transaction {
+        let contract = Keypair::new().pubkey();
+        let expr = BudgetExpr::new_payment(lamports, to);
+        Self::new(
+            from_keypair,
+            contract,
+            expr,
+            lamports,
+            recent_blockhash,
+            fee,
+        )
     }
 
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
@@ -48,15 +68,12 @@ impl BudgetTransaction {
         dt: DateTime<Utc>,
         recent_blockhash: Hash,
     ) -> Transaction {
-        let instruction = BudgetInstruction::ApplyTimestamp(dt);
-        Transaction::new(
-            from_keypair,
-            &[contract, to],
-            id(),
-            &instruction,
-            recent_blockhash,
-            0,
-        )
+        let from = from_keypair.pubkey();
+        TransactionBuilder::default()
+            .push(BudgetInstruction::new_apply_timestamp(
+                from, contract, to, dt,
+            ))
+            .sign(&[from_keypair], recent_blockhash)
     }
 
     /// Create and sign a new Witness Signature. Used for unit-testing.
@@ -66,12 +83,10 @@ impl BudgetTransaction {
         to: Pubkey,
         recent_blockhash: Hash,
     ) -> Transaction {
-        let instruction = BudgetInstruction::ApplySignature;
-        let mut keys = vec![contract];
-        if from_keypair.pubkey() != to {
-            keys.push(to);
-        }
-        Transaction::new(from_keypair, &keys, id(), &instruction, recent_blockhash, 0)
+        let from = from_keypair.pubkey();
+        TransactionBuilder::default()
+            .push(BudgetInstruction::new_apply_signature(from, contract, to))
+            .sign(&[from_keypair], recent_blockhash)
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.
@@ -102,16 +117,9 @@ impl BudgetTransaction {
                 Box::new(BudgetExpr::new_payment(lamports, to)),
             )
         };
-        let instruction = BudgetInstruction::InitializeAccount(expr);
-        Transaction::new(
-            from_keypair,
-            &[contract],
-            id(),
-            &instruction,
-            recent_blockhash,
-            0,
-        )
+        Self::new(from_keypair, contract, expr, lamports, recent_blockhash, 0)
     }
+
     /// Create and sign a multisig Transaction.
     pub fn new_when_signed(
         from_keypair: &Keypair,
@@ -139,15 +147,7 @@ impl BudgetTransaction {
                 Box::new(BudgetExpr::new_payment(lamports, to)),
             )
         };
-        let instruction = BudgetInstruction::InitializeAccount(expr);
-        Transaction::new(
-            from_keypair,
-            &[contract],
-            id(),
-            &instruction,
-            recent_blockhash,
-            0,
-        )
+        Self::new(from_keypair, contract, expr, lamports, recent_blockhash, 0)
     }
 
     pub fn system_instruction(tx: &Transaction, index: usize) -> Option<SystemInstruction> {
