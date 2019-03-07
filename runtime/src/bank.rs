@@ -796,6 +796,14 @@ impl Bank {
         self.accounts().load_slow(self.accounts_id, pubkey)
     }
 
+    pub fn get_program_accounts_modified_since_parent(
+        &self,
+        program_id: &Pubkey,
+    ) -> Vec<(Pubkey, Account)> {
+        self.accounts()
+            .load_by_program_slow_no_parent(self.accounts_id, program_id)
+    }
+
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<Account> {
         self.accounts()
             .load_slow_no_parent(self.accounts_id, pubkey)
