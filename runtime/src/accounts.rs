@@ -4,6 +4,7 @@ use crate::runtime::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
 use log::*;
+use rand::{thread_rng, Rng};
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::hash::{hash, Hash};
@@ -124,13 +125,10 @@ struct AccountStorageEntry {
 
     /// status corresponding to the storage
     status: AtomicUsize,
-
-    /// Path to the persistent store
-    path: String,
 }
 
 impl AccountStorageEntry {
-    pub fn new(path: String, id: usize) -> Self {
+    pub fn new(path: &str, id: usize, file_size: u64, inc_size: u64) -> Self {
         let p = format!("{}/{}", path, id);
         let path = Path::new(&p);
         let _ignored = remove_dir_all(path);
@@ -138,15 +136,14 @@ impl AccountStorageEntry {
         let accounts = Arc::new(RwLock::new(AppendVec::<Account>::new(
             &path.join(ACCOUNT_DATA_FILE),
             true,
-            ACCOUNT_DATA_FILE_SIZE,
-            0,
+            file_size,
+            inc_size,
         )));
 
         AccountStorageEntry {
             accounts,
             count: AtomicUsize::new(0),
             status: AtomicUsize::new(AccountStorageStatus::StorageAvailable as usize),
-            path: p,
         }
     }
 
@@ -194,6 +191,15 @@ pub struct AccountsDB {
 
     /// Information related to the fork
     fork_infos: RwLock<HashMap<Fork, ForkInfo>>,
+
+    /// Set of storage paths to pick from
+    paths: Vec<String>,
+
+    /// Starting file size of appendvecs
+    file_size: u64,
+
+    /// Increment size of appendvecs
+    inc_size: u64,
 }
 
 /// This structure handles synchronization for db
@@ -231,20 +237,28 @@ impl Drop for Accounts {
 }
 
 impl AccountsDB {
-    pub fn new(fork: Fork, paths: &str) -> Self {
+    pub fn new_with_file_size(fork: Fork, paths: &str, file_size: u64, inc_size: u64) -> Self {
         let account_index = AccountIndex {
             account_maps: RwLock::new(HashMap::new()),
             vote_accounts: RwLock::new(HashSet::new()),
         };
+        let paths = get_paths_vec(&paths);
         let accounts_db = AccountsDB {
             account_index,
             storage: RwLock::new(vec![]),
             next_id: AtomicUsize::new(0),
             fork_infos: RwLock::new(HashMap::new()),
+            paths,
+            file_size,
+            inc_size,
         };
-        accounts_db.add_storage(paths);
+        accounts_db.add_storage(&accounts_db.paths);
         accounts_db.add_fork(fork, None);
         accounts_db
+    }
+
+    pub fn new(fork: Fork, paths: &str) -> Self {
+        Self::new_with_file_size(fork, paths, ACCOUNT_DATA_FILE_SIZE, 0)
     }
 
     pub fn add_fork(&self, fork: Fork, parent: Option<Fork>) {
@@ -264,16 +278,17 @@ impl AccountsDB {
         }
     }
 
-    fn new_storage_entry(&self, path: String) -> AccountStorageEntry {
-        AccountStorageEntry::new(path, self.next_id.fetch_add(1, Ordering::Relaxed))
+    fn new_storage_entry(&self, path: &str) -> AccountStorageEntry {
+        AccountStorageEntry::new(
+            path,
+            self.next_id.fetch_add(1, Ordering::Relaxed),
+            self.file_size,
+            self.inc_size,
+        )
     }
 
-    fn add_storage(&self, paths: &str) {
-        let paths = get_paths_vec(&paths);
-        let mut stores = paths
-            .iter()
-            .map(|p| self.new_storage_entry(p.to_string()))
-            .collect();
+    fn add_storage(&self, paths: &[String]) {
+        let mut stores = paths.iter().map(|p| self.new_storage_entry(&p)).collect();
         let mut storage = self.storage.write().unwrap();
         storage.append(&mut stores);
     }
@@ -395,7 +410,8 @@ impl AccountsDB {
             let mut stores = self.storage.write().unwrap();
             // check if new store was already created
             if stores.len() == len {
-                let storage = self.new_storage_entry(stores[id].path.clone());
+                let path_idx = thread_rng().gen_range(0, self.paths.len());
+                let storage = self.new_storage_entry(&self.paths[path_idx]);
                 stores.push(storage);
             }
             id = stores.len() - 1;
@@ -1611,6 +1627,37 @@ mod tests {
                 stores[0].get_status(),
                 AccountStorageStatus::StorageAvailable
             );
+        }
+    }
+
+    #[test]
+    fn test_account_grow_many() {
+        let paths = get_tmp_accounts_path("many2,many3");
+        let size = 4096;
+        let accounts = AccountsDB::new_with_file_size(0, &paths.paths, size, 0);
+        let mut keys = vec![];
+        for i in 0..9 {
+            let key = Keypair::new().pubkey();
+            let account = Account::new(i + 1, size as usize / 4, key);
+            accounts.store(0, &key, &account);
+            keys.push(key);
+        }
+        for (i, key) in keys.iter().enumerate() {
+            assert_eq!(
+                accounts.load(0, &key, false).unwrap().lamports,
+                (i as u64) + 1
+            );
+        }
+
+        let mut append_vec_histogram = HashMap::new();
+        let account_maps = accounts.account_index.account_maps.read().unwrap();
+        for map in account_maps.values() {
+            *append_vec_histogram
+                .entry(map.read().unwrap().get(&0).unwrap().0)
+                .or_insert(0) += 1;
+        }
+        for count in append_vec_histogram.values() {
+            assert!(*count >= 2);
         }
     }
 
