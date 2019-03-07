@@ -90,6 +90,7 @@ impl ReplayStage {
                     let active_banks = bank_forks.read().unwrap().active_banks();
                     trace!("active banks {:?}", active_banks);
                     let mut votable: Vec<u64> = vec![];
+                    let mut is_tpu_bank_active = poh_recorder.lock().unwrap().bank().is_some();
                     for bank_slot in &active_banks {
                         let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
                         if bank.collector_id() != my_id {
@@ -141,9 +142,13 @@ impl ReplayStage {
                             .lock()
                             .unwrap()
                             .reset(parent.tick_height(), parent.last_blockhash());
+                        is_tpu_bank_active = false;
                     }
 
-                    Self::start_leader(my_id, &bank_forks, &poh_recorder, &cluster_info);
+                    if !is_tpu_bank_active {
+                        Self::start_leader(my_id, &bank_forks, &poh_recorder, &cluster_info);
+                    }
+
                     inc_new_counter_info!(
                         "replicate_stage-duration",
                         duration_as_ms(&now.elapsed()) as usize
@@ -182,30 +187,36 @@ impl ReplayStage {
             assert!(frozen.get(&poh_slot).is_none());
             trace!("checking poh slot for leader {}", poh_slot);
             if bank_forks.read().unwrap().get(poh_slot).is_none() {
-                let next_leader = leader_schedule_utils::slot_leader_at(poh_slot, parent);
-                debug!(
-                    "me: {} leader {} at poh slot {}",
-                    my_id, next_leader, poh_slot
-                );
-                cluster_info.write().unwrap().set_leader(next_leader);
-                if next_leader == my_id {
-                    debug!("starting tpu for slot {}", poh_slot);
-                    let tpu_bank = Bank::new_from_parent(parent, my_id, poh_slot);
-                    bank_forks.write().unwrap().insert(poh_slot, tpu_bank);
-                    if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
-                        assert_eq!(
-                            bank_forks.read().unwrap().working_bank().slot(),
-                            tpu_bank.slot()
-                        );
+                leader_schedule_utils::slot_leader_at(poh_slot, parent)
+                    .map(|next_leader| {
                         debug!(
-                            "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
-                            my_id,
-                            tpu_bank.slot(),
-                            next_leader
+                            "me: {} leader {} at poh slot {}",
+                            my_id, next_leader, poh_slot
                         );
-                        poh_recorder.lock().unwrap().set_bank(&tpu_bank);
-                    }
-                }
+                        cluster_info.write().unwrap().set_leader(next_leader);
+                        if next_leader == my_id {
+                            debug!("starting tpu for slot {}", poh_slot);
+                            let tpu_bank = Bank::new_from_parent(parent, my_id, poh_slot);
+                            bank_forks.write().unwrap().insert(poh_slot, tpu_bank);
+                            if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
+                                assert_eq!(
+                                    bank_forks.read().unwrap().working_bank().slot(),
+                                    tpu_bank.slot()
+                                );
+                                debug!(
+                                    "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
+                                    my_id,
+                                    tpu_bank.slot(),
+                                    next_leader
+                                );
+                                poh_recorder.lock().unwrap().set_bank(&tpu_bank);
+                            }
+                        }
+                    })
+                    .or_else(|| {
+                        error!("No next leader found");
+                        None
+                    });
             }
         } else {
             error!("No frozen banks available!");
@@ -308,7 +319,7 @@ impl ReplayStage {
                     trace!("child already active {}", child_id);
                     continue;
                 }
-                let leader = leader_schedule_utils::slot_leader_at(child_id, &parent_bank);
+                let leader = leader_schedule_utils::slot_leader_at(child_id, &parent_bank).unwrap();
                 info!("new fork:{} parent:{}", child_id, parent_id);
                 forks.insert(
                     child_id,

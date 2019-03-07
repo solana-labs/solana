@@ -1,10 +1,13 @@
+use crate::blocktree::Blocktree;
 /// Cluster independant integration tests
 ///
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
 use crate::client::mk_client;
 use crate::contact_info::ContactInfo;
+use crate::entry::{Entry, EntrySlice};
 use crate::gossip_service::discover;
+use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND};
@@ -59,6 +62,39 @@ pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {
     }
 }
 
+pub fn verify_ledger_ticks(ledger_path: &str, ticks_per_slot: usize) {
+    let ledger = Blocktree::open(ledger_path).unwrap();
+    let zeroth_slot = ledger.get_slot_entries(0, 0, None).unwrap();
+    let last_id = zeroth_slot.last().unwrap().hash;
+    let next_slots = ledger.get_slots_since(&[0]).unwrap().remove(&0).unwrap();
+    let mut pending_slots: Vec<_> = next_slots
+        .into_iter()
+        .map(|slot| (slot, 0, last_id))
+        .collect();
+    while !pending_slots.is_empty() {
+        let (slot, parent_slot, last_id) = pending_slots.pop().unwrap();
+        let next_slots = ledger
+            .get_slots_since(&[slot])
+            .unwrap()
+            .remove(&slot)
+            .unwrap();
+
+        // If you're not the last slot, you should have a full set of ticks
+        let should_verify_ticks = if !next_slots.is_empty() {
+            Some((slot - parent_slot) as usize * ticks_per_slot)
+        } else {
+            None
+        };
+
+        let last_id = verify_slot_ticks(&ledger, slot, &last_id, should_verify_ticks);
+        pending_slots.extend(
+            next_slots
+                .into_iter()
+                .map(|child_slot| (child_slot, slot, last_id)),
+        );
+    }
+}
+
 pub fn kill_entry_and_spend_and_verify_rest(
     entry_point_info: &ContactInfo,
     funding_keypair: &Keypair,
@@ -104,4 +140,24 @@ pub fn kill_entry_and_spend_and_verify_rest(
             client.poll_for_signature(&sig).unwrap();
         }
     }
+}
+
+fn get_and_verify_slot_entries(blocktree: &Blocktree, slot: u64, last_entry: &Hash) -> Vec<Entry> {
+    let entries = blocktree.get_slot_entries(slot, 0, None).unwrap();
+    assert!(entries.verify(last_entry));
+    entries
+}
+
+fn verify_slot_ticks(
+    blocktree: &Blocktree,
+    slot: u64,
+    last_entry: &Hash,
+    expected_num_ticks: Option<usize>,
+) -> Hash {
+    let entries = get_and_verify_slot_entries(blocktree, slot, last_entry);
+    let num_ticks: usize = entries.iter().map(|entry| entry.is_tick() as usize).sum();
+    if let Some(expected_num_ticks) = expected_num_ticks {
+        assert_eq!(num_ticks, expected_num_ticks);
+    }
+    entries.last().unwrap().hash
 }

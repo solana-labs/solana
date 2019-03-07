@@ -43,16 +43,8 @@ impl Broadcast {
         blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
-        let (bank, entries) = receiver.recv_timeout(timer)?;
-        let mut broadcast_table = cluster_info
-            .read()
-            .unwrap()
-            .sorted_tvu_peers(&staking_utils::delegated_stakes(&bank));
-        // Layer 1, leader nodes are limited to the fanout size.
-        broadcast_table.truncate(DATA_PLANE_FANOUT);
-        inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
-
-        let max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
+        let (mut bank, entries) = receiver.recv_timeout(timer)?;
+        let mut max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
 
         let now = Instant::now();
         let mut num_entries = entries.len();
@@ -60,17 +52,35 @@ impl Broadcast {
         let mut last_tick = entries.last().map(|v| v.1).unwrap_or(0);
         ventries.push(entries);
 
-        while let Ok((same_bank, entries)) = receiver.try_recv() {
-            num_entries += entries.len();
-            last_tick = entries.last().map(|v| v.1).unwrap_or(0);
-            ventries.push(entries);
-            assert!(last_tick <= max_tick_height);
-            assert!(same_bank.slot() == bank.slot());
-            if last_tick == max_tick_height {
-                break;
+        assert!(last_tick <= max_tick_height,);
+        if last_tick != max_tick_height {
+            while let Ok((same_bank, entries)) = receiver.try_recv() {
+                // If the bank changed, that implies the previous slot was interrupted and we do not have to
+                // broadcast its entries.
+                if same_bank.slot() != bank.slot() {
+                    num_entries = 0;
+                    ventries.clear();
+                    bank = same_bank.clone();
+                    max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
+                }
+                num_entries += entries.len();
+                last_tick = entries.last().map(|v| v.1).unwrap_or(0);
+                ventries.push(entries);
+                assert!(last_tick <= max_tick_height,);
+                if last_tick == max_tick_height {
+                    break;
+                }
             }
         }
 
+        let mut broadcast_table = cluster_info
+            .read()
+            .unwrap()
+            .sorted_tvu_peers(&staking_utils::delegated_stakes(&bank));
+        // Layer 1, leader nodes are limited to the fanout size.
+        broadcast_table.truncate(DATA_PLANE_FANOUT);
+
+        inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
 
         let to_blobs_start = Instant::now();

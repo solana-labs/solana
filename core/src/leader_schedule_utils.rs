@@ -4,14 +4,14 @@ use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 
 /// Return the leader schedule for the given epoch.
-fn leader_schedule(epoch_height: u64, bank: &Bank) -> LeaderSchedule {
-    let stakes = staking_utils::delegated_stakes_at_epoch(bank, epoch_height)
-        .expect("epoch state must exist");
-    let mut seed = [0u8; 32];
-    seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
-    let mut stakes: Vec<_> = stakes.into_iter().collect();
-    sort_stakes(&mut stakes);
-    LeaderSchedule::new(&stakes, seed, bank.get_slots_in_epoch(epoch_height))
+fn leader_schedule(epoch_height: u64, bank: &Bank) -> Option<LeaderSchedule> {
+    staking_utils::delegated_stakes_at_epoch(bank, epoch_height).map(|stakes| {
+        let mut seed = [0u8; 32];
+        seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
+        let mut stakes: Vec<_> = stakes.into_iter().collect();
+        sort_stakes(&mut stakes);
+        LeaderSchedule::new(&stakes, seed, bank.get_slots_in_epoch(epoch_height))
+    })
 }
 
 fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
@@ -31,11 +31,10 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
 }
 
 /// Return the leader for the given slot.
-pub fn slot_leader_at(slot: u64, bank: &Bank) -> Pubkey {
+pub fn slot_leader_at(slot: u64, bank: &Bank) -> Option<Pubkey> {
     let (epoch, slot_index) = bank.get_epoch_and_slot_index(slot);
 
-    let leader_schedule = leader_schedule(epoch, bank);
-    leader_schedule[slot_index as usize]
+    leader_schedule(epoch, bank).map(|leader_schedule| leader_schedule[slot_index as usize])
 }
 
 // Returns the number of ticks remaining from the specified tick_height to the end of the
@@ -85,7 +84,7 @@ mod tests {
         )
         .0;
         let bank = Bank::new(&genesis_block);
-        assert_eq!(slot_leader_at(bank.slot(), &bank), pubkey);
+        assert_eq!(slot_leader_at(bank.slot(), &bank).unwrap(), pubkey);
     }
 
     #[test]
