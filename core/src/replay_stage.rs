@@ -90,6 +90,7 @@ impl ReplayStage {
                     let active_banks = bank_forks.read().unwrap().active_banks();
                     trace!("active banks {:?}", active_banks);
                     let mut votable: Vec<u64> = vec![];
+                    let mut is_tpu_bank_active = poh_recorder.lock().unwrap().bank().is_some();
                     for bank_slot in &active_banks {
                         let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
                         if bank.collector_id() != my_id {
@@ -141,12 +142,13 @@ impl ReplayStage {
                             .lock()
                             .unwrap()
                             .reset(parent.tick_height(), parent.last_blockhash());
+                        is_tpu_bank_active = false;
                     }
 
-                    // If the leader isn't running, check if it should be setup
-                    if poh_recorder.lock().unwrap().bank().is_none() {
+                    if !is_tpu_bank_active {
                         Self::start_leader(my_id, &bank_forks, &poh_recorder, &cluster_info);
                     }
+
                     inc_new_counter_info!(
                         "replicate_stage-duration",
                         duration_as_ms(&now.elapsed()) as usize
