@@ -53,13 +53,6 @@ impl Broadcast {
         inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
 
         let max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
-        // TODO: Fix BankingStage/BroadcastStage to operate on `slot` directly instead of
-        // `max_tick_height`
-        let mut blob_index = blocktree
-            .meta(bank.slot())
-            .expect("Database error")
-            .map(|meta| meta.consumed)
-            .unwrap_or(0);
 
         let now = Instant::now();
         let mut num_entries = entries.len();
@@ -90,19 +83,20 @@ impl Broadcast {
             })
             .collect();
 
-        index_blobs(&blobs, &self.id, &mut blob_index, bank.slot());
-        let parent = bank.parents().first().map(|bank| bank.slot()).unwrap_or(0);
-        for b in blobs.iter() {
-            b.write().unwrap().set_parent(parent);
-        }
+        let blob_index = blocktree
+            .meta(bank.slot())
+            .expect("Database error")
+            .map(|meta| meta.consumed)
+            .unwrap_or(0);
 
-        let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
+        index_blobs(
+            &blobs,
+            &self.id,
+            blob_index,
+            bank.slot(),
+            bank.parent().map_or(0, |parent| parent.slot()),
+        );
 
-        let broadcast_start = Instant::now();
-
-        inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
-
-        assert!(last_tick <= max_tick_height);
         let contains_last_tick = last_tick == max_tick_height;
 
         if contains_last_tick {
@@ -111,8 +105,14 @@ impl Broadcast {
 
         blocktree.write_shared_blobs(&blobs)?;
 
+        let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
+
+        let broadcast_start = Instant::now();
+
         // Send out data
         ClusterInfo::broadcast(&self.id, contains_last_tick, &broadcast_table, sock, &blobs)?;
+
+        inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
 
         // Fill in the coding blob data from the window data blobs
         #[cfg(feature = "erasure")]

@@ -160,7 +160,8 @@ fn test_replay() {
 
         let entries = vec![entry0, entry_tick0, entry_tick1, entry1, entry_tick2];
         let blobs = entries.to_shared_blobs();
-        index_blobs(&blobs, &leader.info.id, &mut blob_idx, 0);
+        index_blobs(&blobs, &leader.info.id, blob_idx, 0, 0);
+        blob_idx += blobs.len() as u64;
         blobs
             .iter()
             .for_each(|b| b.write().unwrap().meta.set_addr(&tvu_addr));

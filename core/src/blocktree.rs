@@ -1535,7 +1535,7 @@ pub mod tests {
     fn test_read_blobs_bytes() {
         let shared_blobs = make_tiny_test_entries(10).to_shared_blobs();
         let slot = 0;
-        index_blobs(&shared_blobs, &Keypair::new().pubkey(), &mut 0, slot);
+        index_blobs(&shared_blobs, &Keypair::new().pubkey(), 0, slot, 0);
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
