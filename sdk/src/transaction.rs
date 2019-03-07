@@ -227,6 +227,18 @@ impl Transaction {
             .collect();
     }
 
+    /// Check keys and keypair lengths, then sign this transaction.
+    /// Note: this presumes signatures.capacity() was set to the number of required signatures.
+    pub fn sign_checked<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
+        let signed_keys = &self.account_keys[0..self.signatures.capacity()];
+        for (i, keypair) in keypairs.iter().enumerate() {
+            assert_eq!(keypair.pubkey(), signed_keys[i], "keypair-pubkey mismatch");
+        }
+        assert_eq!(keypairs.len(), signed_keys.len(), "not enough keypairs");
+
+        self.sign(keypairs, recent_blockhash);
+    }
+
     /// Verify only the transaction signature.
     pub fn verify_signature(&self) -> bool {
         self.signatures
