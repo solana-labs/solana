@@ -143,7 +143,7 @@ pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
 }
 
 /// Get mut references to a subset of elements.
-fn get_subset_unchecked_mut<'a, T>(xs: &'a mut [T], indexes: &[u8]) -> Vec<&'a mut T> {
+pub fn get_subset_unchecked_mut<'a, T>(xs: &'a mut [T], indexes: &[u8]) -> Vec<&'a mut T> {
     // Since the compiler doesn't know the indexes are unique, dereferencing
     // multiple mut elements is assumed to be unsafe. If, however, all
     // indexes are unique, it's perfectly safe. The returned elements will share

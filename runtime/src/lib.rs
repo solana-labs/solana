@@ -5,7 +5,7 @@ pub mod bloom;
 mod hash_queue;
 pub mod loader_utils;
 mod native_loader;
-mod runtime;
+pub mod runtime;
 mod status_cache;
 
 #[macro_use]
