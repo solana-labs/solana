@@ -115,10 +115,10 @@ impl LocalCluster {
         }
     }
 
-    pub fn close(&mut self) {
+    fn close(&mut self) {
         self.close_preserve_ledgers();
         for path in &self.ledger_paths {
-            remove_dir_all(path).unwrap();
+            remove_dir_all(path).unwrap_or_else(|_| panic!("Unable to remove {}", path));
         }
     }
 
