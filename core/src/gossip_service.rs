@@ -13,7 +13,7 @@ use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub struct GossipService {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -93,24 +93,33 @@ pub fn discover(
     );
 
     // Wait for the cluster to converge
-    for _ in 0..15 {
+    let now = Instant::now();
+    let mut i = 0;
+    while now.elapsed() < Duration::from_secs(15) {
         let rpc_peers = spy_ref.read().unwrap().rpc_peers();
-        info!(
-            "discover: spy_node {} found {}/{} nodes",
-            id,
-            rpc_peers.len(),
-            num_nodes,
-        );
+        if i % 20 == 0 {
+            info!(
+                "discover: spy_node {} found {}/{} nodes",
+                id,
+                rpc_peers.len(),
+                num_nodes,
+            );
+        }
         if rpc_peers.len() >= num_nodes {
             exit.store(true, Ordering::Relaxed);
             gossip_service.join().unwrap();
             return Ok(rpc_peers);
         }
-        debug!(
-            "discover: expecting an additional {} nodes",
-            num_nodes - rpc_peers.len()
-        );
-        sleep(Duration::new(1, 0));
+        if i % 20 == 0 {
+            debug!(
+                "discover: expecting an additional {} nodes",
+                num_nodes - rpc_peers.len()
+            );
+        }
+        sleep(Duration::from_millis(
+            crate::cluster_info::GOSSIP_SLEEP_MILLIS,
+        ));
+        i += 1;
     }
     Err("Failed to converge")
 }
