@@ -348,68 +348,22 @@ mod tests {
         let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
         rpc.account_subscribe(session, subscriber, contract_state.pubkey().to_string());
 
-        let tx = SystemTransaction::new_program_account(
-            &alice,
-            contract_funds.pubkey(),
-            blockhash,
-            50,
-            0,
-            budget_program_id,
-            0,
-        );
+        let tx = SystemTransaction::new_account(&alice, contract_funds.pubkey(), 51, blockhash, 0);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
 
-        let tx = SystemTransaction::new_program_account(
-            &alice,
-            contract_state.pubkey(),
-            blockhash,
-            1,
-            196,
-            budget_program_id,
-            0,
-        );
-
-        let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
-
-        // Test signature confirmation notification #1
-        let string = receiver.poll();
-
-        let expected_userdata = arc_bank
-            .get_account(&contract_state.pubkey())
-            .unwrap()
-            .userdata;
-
-        let expected = json!({
-           "jsonrpc": "2.0",
-           "method": "accountNotification",
-           "params": {
-               "result": {
-                   "owner": budget_program_id,
-                   "lamports": 1,
-                   "userdata": expected_userdata,
-                   "executable": executable,
-
-               },
-               "subscription": 0,
-           }
-        });
-
-        if let Async::Ready(Some(response)) = string.unwrap() {
-            assert_eq!(serde_json::to_string(&expected).unwrap(), response);
-        }
         let tx = BudgetTransaction::new_when_signed(
             &contract_funds,
             bob_pubkey,
             contract_state.pubkey(),
             witness.pubkey(),
             None,
-            50,
+            51,
             blockhash,
         );
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
-        // Test signature confirmation notification #2
+        // Test signature confirmation notification #1
         let string = receiver.poll();
         let expected_userdata = arc_bank
             .get_account(&contract_state.pubkey())
@@ -445,27 +399,26 @@ mod tests {
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
-        let expected_userdata = arc_bank
-            .get_account(&contract_state.pubkey())
-            .unwrap()
-            .userdata;
-        let expected = json!({
-           "jsonrpc": "2.0",
-           "method": "accountNotification",
-           "params": {
-               "result": {
-                   "owner": budget_program_id,
-                   "lamports": 1,
-                   "userdata": expected_userdata,
-                    "executable": executable,
-               },
-               "subscription": 0,
-           }
-        });
-        let string = receiver.poll();
-        if let Async::Ready(Some(response)) = string.unwrap() {
-            assert_eq!(serde_json::to_string(&expected).unwrap(), response);
-        }
+        assert_eq!(arc_bank.get_account(&contract_state.pubkey()), None);
+
+        // TODO: Should we get a notification of an empty account?
+        //let expected = json!({
+        //   "jsonrpc": "2.0",
+        //   "method": "accountNotification",
+        //   "params": {
+        //       "result": {
+        //           "owner": budget_program_id,
+        //           "lamports": 1,
+        //           "userdata": expected_userdata,
+        //            "executable": executable,
+        //       },
+        //       "subscription": 0,
+        //   }
+        //});
+        //let string = receiver.poll();
+        //if let Async::Ready(Some(response)) = string.unwrap() {
+        //    assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+        //}
     }
 
     #[test]
