@@ -305,9 +305,7 @@ impl ClusterInfo {
     pub fn purge(&mut self, now: u64) {
         self.gossip.purge(now);
     }
-    pub fn convergence(&self) -> usize {
-        self.gossip_peers().len() + 1
-    }
+
     pub fn rpc_peers(&self) -> Vec<NodeInfo> {
         let me = self.my_data().id;
         self.gossip

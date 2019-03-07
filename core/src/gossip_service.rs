@@ -2,10 +2,9 @@
 
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
-use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
+use crate::cluster_info::{ClusterInfo, NodeInfo};
 use crate::service::Service;
 use crate::streamer;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -48,33 +47,6 @@ impl GossipService {
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
         Self { thread_hdls }
     }
-}
-
-pub fn make_listening_node(
-    leader: &NodeInfo,
-) -> (GossipService, Arc<RwLock<ClusterInfo>>, Node, Pubkey) {
-    let keypair = Keypair::new();
-    let exit = Arc::new(AtomicBool::new(false));
-    let new_node = Node::new_localhost_with_pubkey(keypair.pubkey());
-    let new_node_info = new_node.info.clone();
-    let id = new_node.info.id;
-    let mut new_node_cluster_info = ClusterInfo::new(new_node_info, Arc::new(keypair));
-    new_node_cluster_info.insert_info(leader.clone());
-    new_node_cluster_info.set_leader(leader.id);
-    let new_node_cluster_info_ref = Arc::new(RwLock::new(new_node_cluster_info));
-    let gossip_service = GossipService::new(
-        &new_node_cluster_info_ref,
-        None,
-        None,
-        new_node
-            .sockets
-            .gossip
-            .try_clone()
-            .expect("Failed to clone gossip"),
-        &exit,
-    );
-
-    (gossip_service, new_node_cluster_info_ref, new_node, id)
 }
 
 pub fn discover(
