@@ -842,21 +842,21 @@ impl Accounts {
         self.accounts_db.add_fork(fork, Some(parent));
     }
 
-    /// Slow because lock is held for 1 operation insted of many
+    /// Slow because lock is held for 1 operation instead of many
     pub fn load_slow(&self, fork: Fork, pubkey: &Pubkey) -> Option<Account> {
         self.accounts_db
             .load(fork, pubkey, true)
             .filter(|acc| acc.lamports != 0)
     }
 
-    /// Slow because lock is held for 1 operation insted of many
+    /// Slow because lock is held for 1 operation instead of many
     pub fn load_slow_no_parent(&self, fork: Fork, pubkey: &Pubkey) -> Option<Account> {
         self.accounts_db
             .load(fork, pubkey, false)
             .filter(|acc| acc.lamports != 0)
     }
 
-    /// Slow because lock is held for 1 operation insted of many
+    /// Slow because lock is held for 1 operation instead of many
     pub fn load_by_program_slow_no_parent(
         &self,
         fork: Fork,
@@ -869,7 +869,7 @@ impl Accounts {
             .collect()
     }
 
-    /// Slow because lock is held for 1 operation insted of many
+    /// Slow because lock is held for 1 operation instead of many
     pub fn store_slow(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
         self.accounts_db.store(fork, pubkey, account);
     }

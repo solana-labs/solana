@@ -176,10 +176,8 @@ impl RpcSubscriptions {
         };
         for program_id in &programs {
             let accounts = &bank.get_program_accounts_modified_since_parent(program_id);
-            if !accounts.is_empty() {
-                for (pubkey, account) in accounts.iter() {
-                    self.check_program(program_id, pubkey, account);
-                }
+            for (pubkey, account) in accounts.iter() {
+                self.check_program(program_id, pubkey, account);
             }
         }
 
