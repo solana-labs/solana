@@ -158,8 +158,14 @@ impl AccountStorageEntry {
         self.status.load(Ordering::Relaxed).into()
     }
 
-    fn add_account(&self) {
-        self.count.fetch_add(1, Ordering::Relaxed);
+    fn append_account(&self, account: &Account) -> Option<u64> {
+        let res = self.accounts.read().unwrap().append_account(account);
+        if res.is_some() {
+            self.count.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.set_status(AccountStorageStatus::StorageFull);
+        }
+        res
     }
 
     fn remove_account(&self) {
@@ -377,8 +383,6 @@ impl AccountsDB {
                 if stores[id].get_status() == AccountStorageStatus::StorageAvailable {
                     return id;
                 }
-            } else {
-                stores[id].set_status(AccountStorageStatus::StorageFull);
             }
 
             loop {
@@ -419,8 +423,7 @@ impl AccountsDB {
         loop {
             let result: Option<u64>;
             {
-                let av = &self.storage.read().unwrap()[id].accounts;
-                result = av.read().unwrap().append_account(acc);
+                result = self.storage.read().unwrap()[id].append_account(acc);
             }
             if let Some(val) = result {
                 offset = val;
@@ -478,7 +481,6 @@ impl AccountsDB {
     fn insert_account_entry(&self, fork: Fork, id: AppendVecId, offset: u64, map: &AccountMap) {
         let mut forks = map.write().unwrap();
         let stores = self.storage.read().unwrap();
-        stores[id].add_account();
         if let Some((old_id, _)) = forks.insert(fork, (id, offset)) {
             stores[old_id].remove_account();
         }
