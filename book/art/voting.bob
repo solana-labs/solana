@@ -1,0 +1,16 @@
+                 .------------.        .------------.     .------------.     .------------.
+                 |   Staker   |        |  Network   |     | VoteSigner |     |  Validator |
+                 `------------`        `------------`     `------------`     `------------`
+                       |                     |                  |                  | boot...
+                       |                     |                  |   register(node_id)
+                       |                     |                  |.<----------------|
+               create-staking-account($$)    |           ???    ||  voting_pubkey  |
+                       |-------------------->|                  |`---------------->|
+                       |                     |                  |                  | vote...
+                       |                     |                  |   sign_please(vote)
+                       |                     |                  |.<----------------|
+  config-staking-account(delegate, signer)   |         chugga.. ||  signed_vote    |
+                       |-------------------->|                  |`---------------->|
+                       |                     |                  |                  |
+                       |                     | process < - - -  |  - - - - - - - - | gossip(vote)
+                                               gossip(vote)
