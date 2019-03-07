@@ -254,7 +254,8 @@ After connect to the RPC PubSub websocket at `ws://<ADDRESS>/`:
 ---
 
 ### accountSubscribe
-Subscribe to an account to receive notifications when the userdata for a given account public key changes
+Subscribe to an account to receive notifications when the lamports or userdata
+for a given account public key changes
 
 ##### Parameters:
 * `string` - account Pubkey, as base-58 encoded string
@@ -279,7 +280,7 @@ Subscribe to an account to receive notifications when the userdata for a given a
 ---
 
 ### accountUnsubscribe
-Unsubscribe from account userdata change notifications
+Unsubscribe from account change notifications
 
 ##### Parameters:
 * `integer` - id of account Subscription to cancel
@@ -299,7 +300,8 @@ Unsubscribe from account userdata change notifications
 ---
 
 ### programSubscribe
-Subscribe to a program to receive notifications when the userdata for a given account owned by the program changes
+Subscribe to a program to receive notifications when the lamports or userdata
+for a given account owned by the program changes
 
 ##### Parameters:
 * `string` - program_id Pubkey, as base-58 encoded string
