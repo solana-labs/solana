@@ -95,9 +95,9 @@ mod tests {
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::entry::Entry;
     use ring::signature::Ed25519KeyPair;
-    use solana_budget_api::budget_transaction::BudgetTransaction;
     use solana_sdk::hash::{hash, Hash, Hasher};
     use solana_sdk::signature::KeypairUtil;
+    use solana_sdk::system_transaction::SystemTransaction;
     use std::fs::remove_file;
     use std::fs::File;
     use std::io::Read;
@@ -124,11 +124,12 @@ mod tests {
                 Entry::new_mut(
                     &mut id,
                     &mut num_hashes,
-                    vec![BudgetTransaction::new_signature(
+                    vec![SystemTransaction::new_account(
                         &keypair,
                         keypair.pubkey(),
-                        keypair.pubkey(),
+                        1,
                         one,
+                        0,
                     )],
                 )
             })
@@ -161,7 +162,7 @@ mod tests {
         use bs58;
         //  golden needs to be updated if blob stuff changes....
         let golden = Hash::new(
-            &bs58::decode("BCNVsE19CCpsvGseZTCEEM1qSiX1ridku2w155VveqEu")
+            &bs58::decode("B33zQ8Kc3Wr3vZAbB6GcWaB3sSGeG98nvm4QB9URpJhR")
                 .into_vec()
                 .unwrap(),
         );
