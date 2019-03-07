@@ -513,7 +513,9 @@ impl AccountsDB {
                 .contains_key(&pubkey)
             {
                 let mut waccount_maps = self.account_index.account_maps.write().unwrap();
-                waccount_maps.insert(*pubkey, RwLock::new(HashMap::new()));
+                if !waccount_maps.contains_key(&pubkey) {
+                    waccount_maps.insert(*pubkey, RwLock::new(HashMap::new()));
+                }
             }
         }
         self.store_account(fork, pubkey, account);
