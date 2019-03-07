@@ -40,17 +40,6 @@ impl BudgetTransaction {
             .sign(&[from_keypair], recent_blockhash)
     }
 
-    /// Create and sign a new Transaction. Used for unit-testing.
-    #[allow(clippy::new_ret_no_self)]
-    pub fn new(
-        from_keypair: &Keypair,
-        to: Pubkey,
-        lamports: u64,
-        recent_blockhash: Hash,
-    ) -> Transaction {
-        Self::new_payment(from_keypair, to, lamports, recent_blockhash, 0)
-    }
-
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
     pub fn new_timestamp(
         from_keypair: &Keypair,
@@ -195,7 +184,7 @@ mod tests {
     fn test_claim() {
         let keypair = Keypair::new();
         let zero = Hash::default();
-        let tx0 = BudgetTransaction::new(&keypair, keypair.pubkey(), 42, zero);
+        let tx0 = BudgetTransaction::new_payment(&keypair, keypair.pubkey(), 42, zero, 0);
         assert!(BudgetTransaction::verify_plan(&tx0));
     }
 
@@ -205,7 +194,7 @@ mod tests {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
         let pubkey1 = keypair1.pubkey();
-        let tx0 = BudgetTransaction::new(&keypair0, pubkey1, 42, zero);
+        let tx0 = BudgetTransaction::new_payment(&keypair0, pubkey1, 42, zero, 0);
         assert!(BudgetTransaction::verify_plan(&tx0));
     }
 
@@ -234,7 +223,7 @@ mod tests {
         let zero = Hash::default();
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey();
-        let mut tx = BudgetTransaction::new(&keypair, pubkey, 42, zero);
+        let mut tx = BudgetTransaction::new_payment(&keypair, pubkey, 42, zero, 0);
         let mut system_instruction = BudgetTransaction::system_instruction(&tx, 0).unwrap();
         if let SystemInstruction::CreateAccount {
             ref mut lamports, ..
@@ -261,7 +250,7 @@ mod tests {
         let thief_keypair = Keypair::new();
         let pubkey1 = keypair1.pubkey();
         let zero = Hash::default();
-        let mut tx = BudgetTransaction::new(&keypair0, pubkey1, 42, zero);
+        let mut tx = BudgetTransaction::new_payment(&keypair0, pubkey1, 42, zero, 0);
         let mut instruction = BudgetTransaction::instruction(&tx, 1);
         if let Some(BudgetInstruction::InitializeAccount(ref mut expr)) = instruction {
             if let BudgetExpr::Pay(ref mut payment) = expr {
@@ -278,7 +267,7 @@ mod tests {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
         let zero = Hash::default();
-        let mut tx = BudgetTransaction::new(&keypair0, keypair1.pubkey(), 1, zero);
+        let mut tx = BudgetTransaction::new_payment(&keypair0, keypair1.pubkey(), 1, zero, 0);
         let mut instruction = BudgetTransaction::instruction(&tx, 1).unwrap();
         if let BudgetInstruction::InitializeAccount(ref mut expr) = instruction {
             if let BudgetExpr::Pay(ref mut payment) = expr {
