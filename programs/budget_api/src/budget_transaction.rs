@@ -166,7 +166,7 @@ impl BudgetTransaction {
             if let Some(BudgetInstruction::InitializeAccount(expr)) =
                 BudgetTransaction::instruction(&tx, 1)
             {
-                if !(tx.fee <= lamports && expr.verify(lamports - tx.fee)) {
+                if !expr.verify(lamports) {
                     return false;
                 }
             }
