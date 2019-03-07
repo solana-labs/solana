@@ -177,24 +177,9 @@ mod test {
         tx: &Transaction,
         tx_accounts: &mut [Account],
     ) -> Result<(), BudgetError> {
-        for ix in &tx.instructions {
-            let mut ix_accounts = runtime::get_subset_unchecked_mut(tx_accounts, &ix.accounts);
-            let mut keyed_accounts: Vec<_> = ix
-                .accounts
-                .iter()
-                .map(|&index| {
-                    let index = index as usize;
-                    let key = &tx.account_keys[index];
-                    (key, index < tx.signatures.len())
-                })
-                .zip(ix_accounts.iter_mut())
-                .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
-                .collect();
-
-            process_instruction(&mut keyed_accounts, &ix.userdata)?;
-        }
-        Ok(())
+        runtime::process_transaction(tx, tx_accounts, process_instruction)
     }
+
     #[test]
     fn test_invalid_instruction() {
         let mut accounts = vec![Account::new(1, 0, id()), Account::new(0, 512, id())];
