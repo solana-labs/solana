@@ -11,7 +11,7 @@ fn leader_schedule(epoch_height: u64, bank: &Bank) -> LeaderSchedule {
     seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
     let mut stakes: Vec<_> = stakes.into_iter().collect();
     sort_stakes(&mut stakes);
-    LeaderSchedule::new(&stakes, seed, bank.slots_per_epoch())
+    LeaderSchedule::new(&stakes, seed, bank.get_slots_in_epoch(epoch_height))
 }
 
 fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {

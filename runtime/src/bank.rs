@@ -31,6 +31,83 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 /// Reasons a transaction might be rejected.
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+pub struct EpochSchedule {
+    /// The maximum number of slots in each epoch.
+    pub slots_per_epoch: u64,
+
+    /// A number of slots before slot_index 0. Used to calculate finalized staked nodes.
+    pub stakers_slot_offset: u64,
+
+    /// basically: log2(slots_per_epoch)
+    pub first_normal_epoch: u64,
+
+    /// basically: 2.pow(first_normal_epoch)
+    pub first_normal_slot: u64,
+}
+
+impl EpochSchedule {
+    pub fn new(slots_per_epoch: u64, stakers_slot_offset: u64, warmup: bool) -> Self {
+        let (first_normal_epoch, first_normal_slot) = if warmup {
+            let next_power_of_two = slots_per_epoch.next_power_of_two();
+            let log2_slots_per_epoch = next_power_of_two.trailing_zeros();
+
+            (u64::from(log2_slots_per_epoch), next_power_of_two - 1)
+        } else {
+            (0, 0)
+        };
+        EpochSchedule {
+            slots_per_epoch,
+            stakers_slot_offset,
+            first_normal_epoch,
+            first_normal_slot,
+        }
+    }
+
+    /// get the length of the given epoch (in slots)
+    pub fn get_slots_in_epoch(&self, epoch: u64) -> u64 {
+        if epoch < self.first_normal_epoch {
+            2u64.pow(epoch as u32)
+        } else {
+            self.slots_per_epoch
+        }
+    }
+
+    /// get the epoch for which the given slot should save off
+    ///  information about stakers
+    pub fn get_stakers_epoch(&self, slot: u64) -> u64 {
+        if slot < self.first_normal_slot {
+            // until we get to normal slots, behave as if stakers_slot_offset == slots_per_epoch
+
+            self.get_epoch_and_slot_index(slot).0 + 1
+        } else {
+            self.first_normal_epoch
+                + (slot - self.first_normal_slot + self.stakers_slot_offset) / self.slots_per_epoch
+        }
+    }
+
+    /// get epoch and offset into the epoch for the given slot
+    pub fn get_epoch_and_slot_index(&self, slot: u64) -> (u64, u64) {
+        if slot < self.first_normal_slot {
+            let epoch = if slot < 2 {
+                slot as u32
+            } else {
+                (slot + 2).next_power_of_two().trailing_zeros() - 1
+            };
+
+            let epoch_len = 2u64.pow(epoch);
+
+            (u64::from(epoch), slot - (epoch_len - 1))
+        } else {
+            (
+                self.first_normal_epoch + ((slot - self.first_normal_slot) / self.slots_per_epoch),
+                (slot - self.first_normal_slot) % self.slots_per_epoch,
+            )
+        }
+    }
+}
+
+/// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BankError {
     /// This Pubkey is being processed in another transaction
@@ -78,7 +155,11 @@ type BankStatusCache = StatusCache<BankError>;
 /// Manager for the state of all accounts and programs after processing its entries.
 #[derive(Default)]
 pub struct Bank {
+    /// where all the Accounts are stored
     accounts: Option<Arc<Accounts>>,
+
+    /// Bank accounts fork id
+    accounts_id: u64,
 
     /// A cache of signature statuses
     status_cache: RwLock<BankStatusCache>,
@@ -98,27 +179,21 @@ pub struct Bank {
     /// Bank tick height
     tick_height: AtomicUsize, // TODO: Use AtomicU64 if/when available
 
-    /// Bank fork (i.e. slot, i.e. block)
-    slot: u64,
-
     /// The number of ticks in each slot.
     ticks_per_slot: u64,
 
-    /// The number of slots in each epoch.
-    slots_per_epoch: u64,
-
-    /// A number of slots before slot_index 0. Used to calculate finalized staked nodes.
-    stakers_slot_offset: u64,
+    /// Bank fork (i.e. slot, i.e. block)
+    slot: u64,
 
     /// The pubkey to send transactions fees to.
     collector_id: Pubkey,
 
+    /// initialized from genesis
+    epoch_schedule: EpochSchedule,
+
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule boundary
     epoch_vote_accounts: HashMap<u64, HashMap<Pubkey, Account>>,
-
-    /// Bank accounts fork id
-    accounts_id: u64,
 }
 
 impl Default for HashQueue {
@@ -141,7 +216,7 @@ impl Bank {
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
         let vote_accounts: HashMap<_, _> = bank.vote_accounts().collect();
-        for i in 0..=bank.epoch_from_stakers_slot_offset() {
+        for i in 0..=bank.get_stakers_epoch(bank.slot) {
             bank.epoch_vote_accounts.insert(i, vote_accounts.clone());
         }
 
@@ -159,8 +234,7 @@ impl Bank {
         bank.tick_height
             .store(parent.tick_height.load(Ordering::SeqCst), Ordering::SeqCst);
         bank.ticks_per_slot = parent.ticks_per_slot;
-        bank.slots_per_epoch = parent.slots_per_epoch;
-        bank.stakers_slot_offset = parent.stakers_slot_offset;
+        bank.epoch_schedule = parent.epoch_schedule;
 
         bank.slot = slot;
         bank.parent = RwLock::new(Some(parent.clone()));
@@ -176,7 +250,7 @@ impl Bank {
 
         bank.epoch_vote_accounts = {
             let mut epoch_vote_accounts = parent.epoch_vote_accounts.clone();
-            let epoch = bank.epoch_from_stakers_slot_offset();
+            let epoch = bank.get_stakers_epoch(bank.slot);
             // update epoch_vote_states cache
             //  if my parent didn't populate for this epoch, we've
             //  crossed a boundary
@@ -284,8 +358,12 @@ impl Bank {
             .genesis_hash(&genesis_block.hash());
 
         self.ticks_per_slot = genesis_block.ticks_per_slot;
-        self.slots_per_epoch = genesis_block.slots_per_epoch;
-        self.stakers_slot_offset = genesis_block.stakers_slot_offset;
+
+        self.epoch_schedule = EpochSchedule::new(
+            genesis_block.slots_per_epoch,
+            genesis_block.stakers_slot_offset,
+            genesis_block.epoch_warmup,
+        );
     }
 
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
@@ -754,12 +832,6 @@ impl Bank {
         extend_and_hash(&self.parent_hash, &serialize(&accounts_delta_hash).unwrap())
     }
 
-    /// Return the number of slots in advance of an epoch that a leader scheduler
-    /// should be generated.
-    pub fn stakers_slot_offset(&self) -> u64 {
-        self.stakers_slot_offset
-    }
-
     /// Return the number of ticks per slot
     pub fn ticks_per_slot(&self) -> u64 {
         self.ticks_per_slot
@@ -774,15 +846,15 @@ impl Bank {
         self.tick_height.load(Ordering::SeqCst) as u64
     }
 
-    /// Return the number of slots per epoch for this epoch
-    pub fn slots_per_epoch(&self) -> u64 {
-        self.slots_per_epoch
+    /// Return the number of slots per epoch for the given epoch
+    pub fn get_slots_in_epoch(&self, epoch: u64) -> u64 {
+        self.epoch_schedule.get_slots_in_epoch(epoch)
     }
 
     /// returns the epoch for which this bank's stakers_slot_offset and slot would
     ///  need to cache stakers
-    fn epoch_from_stakers_slot_offset(&self) -> u64 {
-        (self.slot + self.stakers_slot_offset) / self.slots_per_epoch
+    pub fn get_stakers_epoch(&self, slot: u64) -> u64 {
+        self.epoch_schedule.get_stakers_epoch(slot)
     }
 
     /// current vote accounts for this bank
@@ -801,7 +873,7 @@ impl Bank {
     ///  ( slot/slots_per_epoch, slot % slots_per_epoch )
     ///
     pub fn get_epoch_and_slot_index(&self, slot: u64) -> (u64, u64) {
-        (slot / self.slots_per_epoch(), slot % self.slots_per_epoch())
+        self.epoch_schedule.get_epoch_and_slot_index(slot)
     }
 }
 
@@ -1436,14 +1508,13 @@ mod tests {
         let leader_lamports = 3;
         let (mut genesis_block, _) = GenesisBlock::new_with_leader(5, leader_id, leader_lamports);
 
-        // set this up weird, forces:
-        //  1. genesis bank to cover epochs 0, 1, *and* 2
-        //  2. child banks to cover epochs in their future
-        //
+        // set this up weird, forces future generation, odd mod(), etc.
+        //  this says: "stakes for slot X should be generated at slot index 3 in slot X-2...
         const SLOTS_PER_EPOCH: u64 = 8;
         const STAKERS_SLOT_OFFSET: u64 = 21;
         genesis_block.slots_per_epoch = SLOTS_PER_EPOCH;
         genesis_block.stakers_slot_offset = STAKERS_SLOT_OFFSET;
+        genesis_block.epoch_warmup = false; // allows me to do the normal division stuff below
 
         let parent = Arc::new(Bank::new(&genesis_block));
 
@@ -1525,21 +1596,66 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_get_epoch_and_slot_offset() {
-        let (mut genesis_block, _) = GenesisBlock::new(500);
-
-        // set this up weird, forces:
-        //  1. genesis bank to cover epochs 0, 1, *and* 2
-        //  2. child banks to cover epochs in their future
-        //
-        const SLOTS_PER_EPOCH: u64 = 8;
-        genesis_block.slots_per_epoch = SLOTS_PER_EPOCH;
+    fn test_bank_get_slots_in_epoch() {
+        let (genesis_block, _) = GenesisBlock::new(500);
 
         let bank = Bank::new(&genesis_block);
 
-        assert_eq!(bank.get_epoch_and_slot_index(0), (0, 0));
-        assert_eq!(bank.get_epoch_and_slot_index(SLOTS_PER_EPOCH), (1, 0));
-        assert_eq!(bank.get_epoch_and_slot_index(SLOTS_PER_EPOCH + 1), (1, 1));
+        assert_eq!(bank.get_slots_in_epoch(0), 1);
+        assert_eq!(bank.get_slots_in_epoch(2), 4);
+        assert_eq!(bank.get_slots_in_epoch(5000), genesis_block.slots_per_epoch);
+    }
+
+    #[test]
+    fn test_epoch_schedule() {
+        // one week of slots at 8 ticks/slot, 10 ticks/sec is
+        // (1 * 7 * 24 * 4500u64).next_power_of_two();
+
+        // test values between 1 and 16, should cover a good mix
+        for slots_per_epoch in 1..=16 {
+            let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
+
+            let mut last_stakers = 0;
+            let mut last_epoch = 0;
+            let mut last_slots_in_epoch = 1;
+            for slot in 0..(2 * slots_per_epoch) {
+                // verify that stakers_epoch is continuous over the warmup
+                //   and into the first normal epoch
+
+                let stakers = epoch_schedule.get_stakers_epoch(slot);
+                if stakers != last_stakers {
+                    assert_eq!(stakers, last_stakers + 1);
+                    last_stakers = stakers;
+                }
+
+                let (epoch, offset) = epoch_schedule.get_epoch_and_slot_index(slot);
+
+                //  verify that epoch increases continuously
+                if epoch != last_epoch {
+                    assert_eq!(epoch, last_epoch + 1);
+                    last_epoch = epoch;
+
+                    // verify that slots in an epoch double continuously
+                    //   until they reach slots_per_epoch
+
+                    let slots_in_epoch = epoch_schedule.get_slots_in_epoch(epoch);
+                    if slots_in_epoch != last_slots_in_epoch {
+                        if slots_in_epoch != slots_per_epoch {
+                            assert_eq!(slots_in_epoch, last_slots_in_epoch * 2);
+                        }
+                    }
+                    last_slots_in_epoch = slots_in_epoch;
+                }
+                // verify that the slot offset is less than slots_in_epoch
+                assert!(offset < last_slots_in_epoch);
+            }
+
+            // assert that these changed  ;)
+            assert!(last_stakers != 0); // t
+            assert!(last_epoch != 0);
+            // assert that we got to "normal" mode
+            assert!(last_slots_in_epoch == slots_per_epoch);
+        }
     }
 
 }
