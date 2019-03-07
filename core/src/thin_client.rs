@@ -3,9 +3,9 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
+use crate::cluster_info::{ClusterInfoError, NodeInfo};
 use crate::fullnode::{Fullnode, FullnodeConfig};
-use crate::gossip_service::GossipService;
+use crate::gossip_service::make_spy_node;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::result::{Error, Result};
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
@@ -26,7 +26,7 @@ use std;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
@@ -392,14 +392,8 @@ impl Drop for ThinClient {
 
 pub fn poll_gossip_for_leader(gossip_addr: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
     let exit = Arc::new(AtomicBool::new(false));
-    let (node, gossip_socket) = ClusterInfo::spy_node();
-    let my_addr = gossip_socket.local_addr().unwrap();
-    let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(node)));
-    let gossip_service =
-        GossipService::new(&cluster_info.clone(), None, None, gossip_socket, &exit);
-
     let entry_point = NodeInfo::new_entry_point(&gossip_addr);
-    cluster_info.write().unwrap().insert_info(entry_point);
+    let (gossip_service, cluster_info) = make_spy_node(&entry_point, &exit);
 
     let deadline = match timeout {
         Some(timeout) => Duration::new(timeout, 0),
@@ -408,7 +402,7 @@ pub fn poll_gossip_for_leader(gossip_addr: SocketAddr, timeout: Option<u64>) -> 
     let now = Instant::now();
     let result = loop {
         sleep(Duration::from_millis(100));
-        trace!("polling {:?} for leader from {:?}", gossip_addr, my_addr);
+        trace!("polling {:?} for leader", gossip_addr);
 
         if let Some(leader) = cluster_info.read().unwrap().get_gossip_top_leader() {
             if log_enabled!(log::Level::Trace) {

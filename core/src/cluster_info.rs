@@ -1257,21 +1257,11 @@ impl ClusterInfo {
             .unwrap()
     }
 
-    pub fn spy_node() -> (NodeInfo, UdpSocket) {
+    pub fn spy_node(id: &Pubkey) -> (NodeInfo, UdpSocket) {
         let (_, gossip_socket) = bind_in_range(FULLNODE_PORT_RANGE).unwrap();
-        let pubkey = Keypair::new().pubkey();
         let daddr = socketaddr_any!();
 
-        let node = NodeInfo::new(
-            pubkey,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-            timestamp(),
-        );
+        let node = NodeInfo::new(*id, daddr, daddr, daddr, daddr, daddr, daddr, timestamp());
         (node, gossip_socket)
     }
 }
@@ -1460,7 +1450,7 @@ mod tests {
     fn test_cluster_spy_gossip() {
         //check that gossip doesn't try to push to invalid addresses
         let node = Node::new_localhost();
-        let (spy, _) = ClusterInfo::spy_node();
+        let (spy, _) = ClusterInfo::spy_node(&Keypair::new().pubkey());
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             node.info,
         )));
