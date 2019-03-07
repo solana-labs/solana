@@ -222,21 +222,28 @@ impl ClusterInfo {
     }
     pub fn node_info_trace(&self) -> String {
         let leader_id = self.leader_id();
+        let gossip_top_leader = self.get_gossip_top_leader();
         let nodes: Vec<_> = self
             .rpc_peers()
             .into_iter()
             .map(|node| {
+                let mut annotation = String::new();
+                if let Some(top_leader) = gossip_top_leader {
+                    if node.id == top_leader.id {
+                        annotation.push_str(" [gossip top leader]");
+                    }
+                }
+                if node.id == leader_id {
+                    annotation.push_str(" [leader]");
+                }
+
                 format!(
-                    " gossip: {:20} | {}{}\n \
-                     tpu: {:20} |\n \
-                     rpc: {:20} |\n",
+                    "- gossip: {:20} | {}{}\n  \
+                     tpu:    {:20} |\n  \
+                     rpc:    {:20} |\n",
                     node.gossip.to_string(),
                     node.id,
-                    if node.id == leader_id {
-                        " <==== leader"
-                    } else {
-                        ""
-                    },
+                    annotation,
                     node.tpu.to_string(),
                     node.rpc.to_string()
                 )
@@ -244,9 +251,9 @@ impl ClusterInfo {
             .collect();
 
         format!(
-            " NodeInfo.contact_info     | Node identifier\n\
-             ---------------------------+------------------\n\
-             {}\n \
+            " Node contact info             | Node identifier\n\
+             -------------------------------+------------------\n\
+             {}\
              Nodes: {}",
             nodes.join(""),
             nodes.len()

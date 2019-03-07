@@ -3,9 +3,9 @@ mod cli;
 
 use crate::bench::*;
 use solana::client::mk_client;
+use solana::contact_info::ContactInfo;
 use solana::gen_keys::GenKeys;
 use solana::gossip_service::discover;
-use solana::thin_client::poll_gossip_for_leader;
 use solana_metrics;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::collections::VecDeque;
@@ -39,17 +39,9 @@ fn main() {
         converge_only,
     } = cfg;
 
-    println!("Looking for leader at {:?}", network);
-    let leader = poll_gossip_for_leader(network, Duration::from_secs(30)).unwrap_or_else(|err| {
-        eprintln!(
-            "Error: unable to find leader on network after 30 seconds: {:?}",
-            err
-        );
-        exit(1);
-    });
-
-    let nodes = discover(&leader, num_nodes).unwrap_or_else(|err| {
-        eprintln!("{:?}", err);
+    let cluster_entrypoint = ContactInfo::new_entry_point(&network);
+    let (leader, nodes) = discover(&cluster_entrypoint, num_nodes).unwrap_or_else(|err| {
+        eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
         exit(1);
     });
     if nodes.len() < num_nodes {
@@ -67,11 +59,16 @@ fn main() {
         exit(1);
     }
 
+    if leader.is_none() {
+        eprintln!("Error: No leader");
+        exit(1);
+    }
+
     if converge_only {
         return;
     }
 
-    println!("leader RPC is at {} {}", leader.rpc, leader.id);
+    let leader = leader.unwrap();
     let mut client = mk_client(&leader);
     let mut barrier_client = mk_client(&leader);
 
