@@ -4,10 +4,8 @@ use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
-use solana::voting_keypair::{RemoteVoteSigner, VotingKeypair};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
-use solana_vote_signer::rpc::{LocalVoteSigner, VoteSigner};
 use std::fs::File;
 use std::process::exit;
 use std::sync::Arc;
@@ -32,6 +30,13 @@ fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .help("File containing an identity (keypair)"),
+        )
+        .arg(
+            Arg::with_name("staker_keypair")
+                .long("staker-keypair")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("File containing the staker's keypair"),
         )
         .arg(
             Arg::with_name("init_complete_file")
@@ -136,6 +141,14 @@ fn main() {
     } else {
         Keypair::new()
     };
+    let staker_keypair = if let Some(identity) = matches.value_of("staker_keypair") {
+        read_keypair(identity).unwrap_or_else(|err| {
+            eprintln!("{}: Unable to open keypair file: {}", err, identity);
+            exit(1);
+        })
+    } else {
+        Keypair::new()
+    };
     let ledger_path = matches.value_of("ledger").unwrap();
 
     fullnode_config.sigverify_disabled = matches.is_present("no_sigverify");
@@ -172,7 +185,7 @@ fn main() {
         let gossip_addr = network.parse().expect("failed to parse network address");
         NodeInfo::new_entry_point(&gossip_addr)
     });
-    let (_signer_service, signer_addr) = if let Some(signer_addr) = matches.value_of("signer") {
+    let (_signer_service, _signer_addr) = if let Some(signer_addr) = matches.value_of("signer") {
         (
             None,
             signer_addr.to_string().parse().expect("Signer IP Address"),
@@ -210,22 +223,11 @@ fn main() {
         fullnode_config.voting_disabled = true;
     }
 
-    let vote_signer: Box<dyn VoteSigner + Sync + Send> = if !no_signer {
-        info!("Vote signer service address: {:?}", signer_addr);
-        Box::new(RemoteVoteSigner::new(signer_addr))
-    } else {
-        info!("Node will not vote");
-        Box::new(LocalVoteSigner::default())
-    };
-    let vote_signer = VotingKeypair::new_with_signer(&keypair, vote_signer);
-    let vote_account_id = vote_signer.pubkey();
-    info!("New vote account ID is {:?}", vote_account_id);
-
     let fullnode = Fullnode::new(
         node,
         &keypair,
         ledger_path,
-        vote_signer,
+        staker_keypair,
         cluster_entrypoint.as_ref(),
         &fullnode_config,
     );
