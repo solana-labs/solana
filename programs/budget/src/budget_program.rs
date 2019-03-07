@@ -90,17 +90,15 @@ fn apply_debits(
                 keyed_accounts[0].account.lamports += payment.lamports;
                 Ok(())
             } else {
-                let existing = BudgetState::deserialize(&keyed_accounts[1].account.userdata).ok();
+                let existing = BudgetState::deserialize(&keyed_accounts[0].account.userdata).ok();
                 if Some(true) == existing.map(|x| x.initialized) {
                     trace!("contract already exists");
                     Err(BudgetError::ContractAlreadyExists)
                 } else {
                     let mut budget_state = BudgetState::default();
                     budget_state.pending_budget = Some(expr);
-                    keyed_accounts[1].account.lamports += keyed_accounts[0].account.lamports;
-                    keyed_accounts[0].account.lamports = 0;
                     budget_state.initialized = true;
-                    budget_state.serialize(&mut keyed_accounts[1].account.userdata)
+                    budget_state.serialize(&mut keyed_accounts[0].account.userdata)
                 }
             }
         }
@@ -173,6 +171,7 @@ mod test {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
 
+    // TODO: This is wrong and will only work with single-instruction transactions.
     fn process_transaction(
         tx: &Transaction,
         tx_accounts: &mut [Account],

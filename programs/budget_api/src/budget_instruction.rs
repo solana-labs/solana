@@ -32,10 +32,23 @@ impl BudgetInstruction {
         let mut keys = vec![];
         if let BudgetExpr::Pay(payment) = &expr {
             keys.push((payment.to, false));
-        } else {
-            panic!("unsupported Budget instruction");
         }
         keys.push((contract, false));
         BuilderInstruction::new(id(), &BudgetInstruction::InitializeAccount(expr), keys)
+    }
+
+    pub fn new_apply_timestamp(
+        from: Pubkey,
+        contract: Pubkey,
+        to: Pubkey,
+        dt: DateTime<Utc>,
+    ) -> BuilderInstruction {
+        let keys = vec![(from, true), (contract, false), (to, false)];
+        BuilderInstruction::new(id(), &BudgetInstruction::ApplyTimestamp(dt), keys)
+    }
+
+    pub fn new_apply_signature(from: Pubkey, contract: Pubkey, to: Pubkey) -> BuilderInstruction {
+        let keys = vec![(from, true), (contract, false), (to, false)];
+        BuilderInstruction::new(id(), &BudgetInstruction::ApplySignature, keys)
     }
 }
