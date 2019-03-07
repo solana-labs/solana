@@ -80,9 +80,7 @@ pub fn make_listening_node(
 pub fn discover(
     entry_point_info: &NodeInfo,
     num_nodes: usize,
-) -> Result<Vec<NodeInfo>, &'static str> {
-    info!("Wait for convergence with {} nodes", num_nodes);
-
+) -> Result<(Option<NodeInfo>, Vec<NodeInfo>), &'static str> {
     let exit = Arc::new(AtomicBool::new(false));
     let (gossip_service, spy_ref) = make_spy_node(entry_point_info, &exit);
     let id = spy_ref.read().unwrap().keypair.pubkey();
@@ -95,25 +93,24 @@ pub fn discover(
     // Wait for the cluster to converge
     let now = Instant::now();
     let mut i = 0;
-    while now.elapsed() < Duration::from_secs(15) {
+    while now.elapsed() < Duration::from_secs(30) {
         let rpc_peers = spy_ref.read().unwrap().rpc_peers();
-        if i % 20 == 0 {
-            info!(
-                "discover: spy_node {} found {}/{} nodes",
-                id,
-                rpc_peers.len(),
-                num_nodes,
-            );
-        }
         if rpc_peers.len() >= num_nodes {
+            info!(
+                "discover success in {}s...\n{}",
+                now.elapsed().as_secs(),
+                spy_ref.read().unwrap().node_info_trace()
+            );
+
+            let leader = spy_ref.read().unwrap().get_gossip_top_leader().cloned();
             exit.store(true, Ordering::Relaxed);
             gossip_service.join().unwrap();
-            return Ok(rpc_peers);
+            return Ok((leader, rpc_peers));
         }
         if i % 20 == 0 {
-            debug!(
-                "discover: expecting an additional {} nodes",
-                num_nodes - rpc_peers.len()
+            info!(
+                "discovering...\n{}",
+                spy_ref.read().unwrap().node_info_trace()
             );
         }
         sleep(Duration::from_millis(
@@ -124,6 +121,10 @@ pub fn discover(
 
     exit.store(true, Ordering::Relaxed);
     gossip_service.join().unwrap();
+    info!(
+        "discover failed...\n{}",
+        spy_ref.read().unwrap().node_info_trace()
+    );
     Err("Failed to converge")
 }
 
