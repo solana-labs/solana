@@ -124,16 +124,9 @@ impl JsonRpcRequestProcessor {
     }
 }
 
-fn get_leader_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
-    if let Some(leader_data) = cluster_info.read().unwrap().leader_data() {
-        Ok(leader_data.tpu)
-    } else {
-        Err(Error {
-            code: ErrorCode::InternalError,
-            message: "No leader detected".into(),
-            data: None,
-        })
-    }
+fn get_tpu_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
+    let node_info = cluster_info.read().unwrap().my_data();
+    Ok(node_info.tpu)
 }
 
 fn verify_pubkey(input: String) -> Result<Pubkey> {
@@ -320,7 +313,7 @@ impl RpcSol for RpcSolImpl {
         })?;
 
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let transactions_addr = get_leader_addr(&meta.cluster_info)?;
+        let transactions_addr = get_tpu_addr(&meta.cluster_info)?;
         transactions_socket
             .send_to(&data, transactions_addr)
             .map_err(|err| {
@@ -363,7 +356,7 @@ impl RpcSol for RpcSolImpl {
             return Err(Error::invalid_request());
         }
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let transactions_addr = get_leader_addr(&meta.cluster_info)?;
+        let transactions_addr = get_tpu_addr(&meta.cluster_info)?;
         trace!("send_transaction: leader is {:?}", &transactions_addr);
         transactions_socket
             .send_to(&data, transactions_addr)
@@ -658,23 +651,12 @@ mod tests {
     }
 
     #[test]
-    fn test_rpc_get_leader_addr() {
+    fn test_rpc_get_tpu_addr() {
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            NodeInfo::default(),
+            NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
         )));
         assert_eq!(
-            get_leader_addr(&cluster_info),
-            Err(Error {
-                code: ErrorCode::InternalError,
-                message: "No leader detected".into(),
-                data: None,
-            })
-        );
-        let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
-        cluster_info.write().unwrap().insert_info(leader.clone());
-        cluster_info.write().unwrap().set_leader(leader.id);
-        assert_eq!(
-            get_leader_addr(&cluster_info),
+            get_tpu_addr(&cluster_info),
             Ok(socketaddr!("127.0.0.1:1234"))
         );
     }
