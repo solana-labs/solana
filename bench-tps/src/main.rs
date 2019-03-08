@@ -40,7 +40,7 @@ fn main() {
     } = cfg;
 
     let cluster_entrypoint = ContactInfo::new_entry_point(&network);
-    let (_leader, nodes) = discover(&cluster_entrypoint, num_nodes).unwrap_or_else(|err| {
+    let nodes = discover(&cluster_entrypoint, num_nodes).unwrap_or_else(|err| {
         eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
         exit(1);
     });
