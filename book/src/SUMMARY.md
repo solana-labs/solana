@@ -33,7 +33,7 @@
   - [JavaScript API](javascript-api.md)
   - [solana-wallet CLI](wallet.md)
 - [Testing](testing.md)
-  - [Cluster Test Framework](cluter-test-framework.md)
+  - [Cluster Test Framework](cluster-test-framework.md)
 
 - [Proposed Architectural Changes](proposals.md)
   - [Ledger Replication](ledger-replication-to-implement.md)
