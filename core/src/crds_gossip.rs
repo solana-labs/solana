@@ -113,9 +113,9 @@ impl CrdsGossip {
     }
 
     /// time when a request to `from` was initiated
-    /// This is used for weighted random selection durring `new_pull_request`
+    /// This is used for weighted random selection during `new_pull_request`
     /// It's important to use the local nodes request creation time as the weight
-    /// instaad of the response received time otherwise failed nodes will increase their weight.
+    /// instead of the response received time otherwise failed nodes will increase their weight.
     pub fn mark_pull_request_creation_time(&mut self, from: Pubkey, now: u64) {
         self.pull.mark_pull_request_creation_time(from, now)
     }
