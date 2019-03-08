@@ -18,7 +18,7 @@ use crate::contact_info::ContactInfo;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId, Vote};
+use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote};
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::result::Result;
 use crate::rpc_service::RPC_PORT;
@@ -74,6 +74,9 @@ pub struct ClusterInfo {
     pub gossip: CrdsGossip,
     /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
     pub(crate) keypair: Arc<Keypair>,
+    // TODO: remove gossip_leader_id once all usage of `set_leader()` and `leader_data()` is
+    // purged
+    gossip_leader_id: Pubkey,
 }
 
 #[derive(Default, Clone)]
@@ -170,6 +173,7 @@ impl ClusterInfo {
         let mut me = Self {
             gossip: CrdsGossip::default(),
             keypair,
+            gossip_leader_id: Pubkey::default(),
         };
         let id = node_info.id;
         me.gossip.set_self(id);
@@ -205,14 +209,9 @@ impl ClusterInfo {
         self.lookup(self.id()).cloned().unwrap()
     }
     fn leader_id(&self) -> Pubkey {
-        let entry = CrdsValueLabel::LeaderId(self.id());
-        self.gossip
-            .crds
-            .lookup(&entry)
-            .and_then(|v| v.leader_id())
-            .map(|x| x.leader_id)
-            .unwrap_or_default()
+        self.gossip_leader_id
     }
+    // Deprecated: don't use leader_data().
     pub fn leader_data(&self) -> Option<&NodeInfo> {
         let leader_id = self.leader_id();
         if leader_id == Pubkey::default() {
@@ -254,15 +253,14 @@ impl ClusterInfo {
         )
     }
 
-    pub fn set_leader(&mut self, key: Pubkey) {
-        let prev = self.leader_id();
-        let self_id = self.gossip.id;
-        let now = timestamp();
-        let leader = LeaderId::new(self_id, key, now);
-        let mut entry = CrdsValue::LeaderId(leader);
-        warn!("{}: LEADER_UPDATE TO {} from {}", self_id, key, prev);
-        entry.sign(&self.keypair);
-        self.gossip.process_push_message(&[entry], now);
+    pub fn set_leader(&mut self, leader_id: Pubkey) {
+        warn!(
+            "{}: LEADER_UPDATE TO {} from {}",
+            self.gossip.id,
+            leader_id,
+            self.leader_id()
+        );
+        self.gossip_leader_id = leader_id;
     }
 
     pub fn push_vote(&mut self, vote: Transaction) {
