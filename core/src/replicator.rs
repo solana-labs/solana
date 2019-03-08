@@ -11,7 +11,7 @@ use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use crate::service::Service;
 use crate::storage_stage::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use crate::streamer::BlobReceiver;
-use crate::thin_client::{poll_gossip_for_leader, retry_get_balance, ThinClient};
+use crate::thin_client::{retry_get_balance, ThinClient};
 use crate::window_service::WindowService;
 use rand::thread_rng;
 use rand::Rng;
@@ -111,7 +111,7 @@ impl Replicator {
         node: Node,
         leader_info: &NodeInfo,
         keypair: &Arc<Keypair>,
-        timeout: Option<Duration>,
+        _timeout: Option<Duration>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -148,13 +148,8 @@ impl Replicator {
             &exit,
         );
 
-        info!("polling for leader");
-
-        let leader = poll_gossip_for_leader(
-            leader_info.gossip,
-            timeout.unwrap_or_else(|| Duration::new(30, 0)),
-        )?;
-        info!("Got leader: {:?}", leader);
+        info!("Looking for leader at {:?}", leader_info);
+        crate::gossip_service::discover(&leader_info, 1)?;
 
         let (storage_blockhash, storage_entry_height) =
             Self::poll_for_blockhash_and_entry_height(&cluster_info)?;
@@ -210,7 +205,7 @@ impl Replicator {
             cluster_info_w.insert_info(node_info);
         }
 
-        let mut client = mk_client(&leader);
+        let mut client = mk_client(leader_info);
 
         Self::get_airdrop_lamports(&mut client, &keypair, &leader_info);
         info!("Done downloading ledger at {}", ledger_path);

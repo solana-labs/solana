@@ -61,11 +61,8 @@ fn test_replicator_startup_basic() {
             &fullnode_config,
         );
 
-        debug!(
-            "leader: {:?}",
-            solana::thin_client::poll_gossip_for_leader(leader_info.gossip, Duration::from_secs(5))
-                .unwrap()
-        );
+        debug!("Looking for leader on gossip...");
+        solana::gossip_service::discover(&leader_info, 1).unwrap();
 
         let validator_keypair = Arc::new(Keypair::new());
         let voting_keypair = Keypair::new();
