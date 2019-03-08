@@ -32,8 +32,6 @@
   - [JSON RPC API](jsonrpc-api.md)
   - [JavaScript API](javascript-api.md)
   - [solana-wallet CLI](wallet.md)
-- [Testing](testing.md)
-  - [Cluster Test Framework](cluster-test-framework.md)
 
 - [Proposed Architectural Changes](proposals.md)
   - [Ledger Replication](ledger-replication-to-implement.md)
@@ -56,3 +54,4 @@
     - [Attack Vectors](ed_attack_vectors.md)
     - [References](ed_references.md)
   - [Leader-to-Validator Transition](leader-validator-transition.md)
+  - [Cluster Test Framework](cluster-test-framework.md)
