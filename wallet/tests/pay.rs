@@ -167,9 +167,9 @@ fn test_wallet_cancel_tx() {
         Some(vec![config_witness.id.pubkey()]),
         Some(config_payer.id.pubkey()),
     );
-    let sig_response = process_command(&config_payer);
+    let sig_response = process_command(&config_payer).unwrap();
 
-    let object: Value = serde_json::from_str(&sig_response.unwrap()).unwrap();
+    let object: Value = serde_json::from_str(&sig_response).unwrap();
     let process_id_str = object.get("processId").unwrap().as_str().unwrap();
     let process_id_vec = bs58::decode(process_id_str)
         .into_vec()

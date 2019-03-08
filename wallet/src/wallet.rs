@@ -567,37 +567,11 @@ fn process_pay(
             None => config.id.pubkey(),
         };
 
-        let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
-        let budget_program_id = solana_budget_api::id();
-
-        // Create account for contract funds
-        let mut tx = SystemTransaction::new_program_account(
-            &config.id,
-            contract_funds.pubkey(),
-            blockhash,
-            lamports,
-            0,
-            budget_program_id,
-            0,
-        );
-        send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
-
-        // Create account for contract state
-        let mut tx = SystemTransaction::new_program_account(
-            &config.id,
-            contract_state.pubkey(),
-            blockhash,
-            1,
-            196,
-            budget_program_id,
-            0,
-        );
-        send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
         // Initializing contract
         let mut tx = BudgetTransaction::new_on_date(
-            &contract_funds,
+            &config.id,
             to,
             contract_state.pubkey(),
             dt,
@@ -624,37 +598,11 @@ fn process_pay(
             ))?
         };
 
-        let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
-        let budget_program_id = solana_budget_api::id();
-
-        // Create account for contract funds
-        let mut tx = SystemTransaction::new_program_account(
-            &config.id,
-            contract_funds.pubkey(),
-            blockhash,
-            lamports,
-            0,
-            budget_program_id,
-            0,
-        );
-        send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
-
-        // Create account for contract state
-        let mut tx = SystemTransaction::new_program_account(
-            &config.id,
-            contract_state.pubkey(),
-            blockhash,
-            1,
-            196,
-            budget_program_id,
-            0,
-        );
-        send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
         // Initializing contract
         let mut tx = BudgetTransaction::new_when_signed(
-            &contract_funds,
+            &config.id,
             to,
             contract_state.pubkey(),
             witness,
