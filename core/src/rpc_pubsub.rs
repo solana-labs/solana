@@ -400,25 +400,6 @@ mod tests {
         sleep(Duration::from_millis(200));
 
         assert_eq!(arc_bank.get_account(&contract_state.pubkey()), None);
-
-        // TODO: Should we get a notification of an empty account?
-        //let expected = json!({
-        //   "jsonrpc": "2.0",
-        //   "method": "accountNotification",
-        //   "params": {
-        //       "result": {
-        //           "owner": budget_program_id,
-        //           "lamports": 1,
-        //           "userdata": expected_userdata,
-        //            "executable": executable,
-        //       },
-        //       "subscription": 0,
-        //   }
-        //});
-        //let string = receiver.poll();
-        //if let Async::Ready(Some(response)) = string.unwrap() {
-        //    assert_eq!(serde_json::to_string(&expected).unwrap(), response);
-        //}
     }
 
     #[test]
