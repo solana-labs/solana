@@ -151,7 +151,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 
         let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
         let sub_id = SubscriptionId::Number(id as u64);
-        info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
+        info!("program_subscribe: account={:?} id={:?}", pubkey, sub_id);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
 
         self.subscriptions
@@ -163,7 +163,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Option<Self::Metadata>,
         id: SubscriptionId,
     ) -> Result<bool> {
-        info!("account_unsubscribe: id={:?}", id);
+        info!("program_unsubscribe: id={:?}", id);
         if self.subscriptions.remove_program_subscription(&id) {
             Ok(true)
         } else {
