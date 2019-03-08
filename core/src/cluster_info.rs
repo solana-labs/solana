@@ -201,7 +201,6 @@ impl ClusterInfo {
         self.gossip.process_push_message(&[entry], now);
     }
     // TODO kill insert_info, only used by tests
-    #[cfg(test)]
     pub fn insert_info(&mut self, node_info: NodeInfo) {
         let mut value = CrdsValue::ContactInfo(node_info);
         value.sign(&self.keypair);
