@@ -101,7 +101,7 @@ pub fn test_large_invalid_gossip_nodes(
     //poison the network
     let mut client = mk_client(&entry_point_info);
     for _ in 0..(num_nodes * 100) {
-	    client.gossip_push(
+        client.gossip_push(
             cluster_info::invalid_contact_info()
         );
     }
@@ -109,7 +109,7 @@ pub fn test_large_invalid_gossip_nodes(
     //force refresh the active set
     for node in &cluster {
         let mut client = mk_client(&node);
-	    client.gossip_refresh_active_set();
+        client.gossip_refresh_active_set();
     }
     //verify that spends still work
     verify_spends(&cluster);
