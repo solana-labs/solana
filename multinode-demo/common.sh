@@ -115,7 +115,8 @@ airdrop() {
   declare host=$2
   declare amount=$3
 
-  declare address=$($solana_wallet --keypair "$keypair_file" address)
+  declare address
+  address=$($solana_wallet --keypair "$keypair_file" address)
 
   # TODO: Until https://github.com/solana-labs/solana/issues/2355 is resolved
   # a fullnode needs N lamports as its vote account gets re-created on every
@@ -143,8 +144,11 @@ setup_fullnode_staking() {
   declare fullnode_id_path=$2
   declare staker_id_path=$3
 
-  declare fullnode_id=$($solana_wallet --keypair "$fullnode_id_path" address)
-  declare staker_id=$($solana_wallet --keypair "$staker_id_path" address)
+  declare fullnode_id
+  fullnode_id=$($solana_wallet --keypair "$fullnode_id_path" address)
+
+  declare staker_id
+  staker_id=$($solana_wallet --keypair "$staker_id_path" address)
 
   # A fullnode requires 43 lamports to function:
   # - one lamport to keep the node identity public key valid. TODO: really??
