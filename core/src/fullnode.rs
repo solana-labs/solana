@@ -220,6 +220,7 @@ impl Fullnode {
             &poh_recorder,
             entry_receiver,
             node.sockets.tpu,
+            node.sockets.forwarder,
             node.sockets.broadcast,
             config.sigverify_disabled,
             &blocktree,
