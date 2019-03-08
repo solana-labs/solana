@@ -596,7 +596,7 @@ mod tests {
         let one = hash(&zero.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
-        let tx0 = VoteTransaction::new_vote(&vote_account, 1, one, 1);
+        let tx0 = VoteTransaction::new_vote(vote_account.pubkey(), &vote_account, 1, one, 1);
         let tx1 = BudgetTransaction::new_timestamp(
             &keypair,
             keypair.pubkey(),
@@ -644,7 +644,8 @@ mod tests {
         let next_hash = solana_sdk::hash::hash(&hash.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
-        let tx_small = VoteTransaction::new_vote(&vote_account, 1, next_hash, 2);
+        let tx_small =
+            VoteTransaction::new_vote(vote_account.pubkey(), &vote_account, 1, next_hash, 2);
         let tx_large = BudgetTransaction::new_payment(&keypair, keypair.pubkey(), 1, next_hash, 0);
 
         let tx_small_size = tx_small.serialized_size().unwrap() as usize;

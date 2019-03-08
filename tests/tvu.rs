@@ -112,6 +112,7 @@ fn test_replay() {
     let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
         create_test_recorder(&bank);
     let tvu = Tvu::new(
+        voting_keypair.pubkey(),
         Some(Arc::new(voting_keypair)),
         &Arc::new(RwLock::new(bank_forks)),
         &bank_forks_info,

@@ -15,21 +15,22 @@ pub struct VoteTransaction {}
 
 impl VoteTransaction {
     pub fn new_vote<T: KeypairUtil>(
-        voting_keypair: &T,
+        staking_account: Pubkey,
+        authorized_voter_keypair: &T,
         slot: u64,
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
         let vote = Vote { slot };
         TransactionBuilder::new(fee)
-            .push(VoteInstruction::new_vote(voting_keypair.pubkey(), vote))
-            .sign(&[voting_keypair], recent_blockhash)
+            .push(VoteInstruction::new_vote(staking_account, vote))
+            .sign(&[authorized_voter_keypair], recent_blockhash)
     }
 
     /// Fund or create the staking account with lamports
     pub fn new_account(
         from_keypair: &Keypair,
-        voter_id: Pubkey,
+        staker_id: Pubkey,
         recent_blockhash: Hash,
         lamports: u64,
         fee: u64,
@@ -39,12 +40,12 @@ impl VoteTransaction {
         TransactionBuilder::new(fee)
             .push(SystemInstruction::new_program_account(
                 from_id,
-                voter_id,
+                staker_id,
                 lamports,
                 space,
                 id(),
             ))
-            .push(VoteInstruction::new_initialize_account(voter_id))
+            .push(VoteInstruction::new_initialize_account(staker_id))
             .sign(&[from_keypair], recent_blockhash)
     }
 
@@ -131,7 +132,8 @@ mod tests {
         let keypair = Keypair::new();
         let slot = 1;
         let recent_blockhash = Hash::default();
-        let transaction = VoteTransaction::new_vote(&keypair, slot, recent_blockhash, 0);
+        let transaction =
+            VoteTransaction::new_vote(keypair.pubkey(), &keypair, slot, recent_blockhash, 0);
         assert_eq!(
             VoteTransaction::get_votes(&transaction),
             vec![(keypair.pubkey(), Vote::new(slot), recent_blockhash)]

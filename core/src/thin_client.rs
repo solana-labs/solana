@@ -431,6 +431,7 @@ pub fn new_fullnode() -> (Fullnode, NodeInfo, Keypair, String) {
         node,
         &node_keypair,
         &ledger_path,
+        voting_keypair.pubkey(),
         voting_keypair,
         None,
         &FullnodeConfig::default(),

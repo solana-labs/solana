@@ -115,7 +115,8 @@ pub mod tests {
 
     pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot: u64) {
         let blockhash = bank.last_blockhash();
-        let tx = VoteTransaction::new_vote(voting_keypair, slot, blockhash, 0);
+        let tx =
+            VoteTransaction::new_vote(voting_keypair.pubkey(), voting_keypair, slot, blockhash, 0);
         bank.process_transaction(&tx).unwrap();
     }
 

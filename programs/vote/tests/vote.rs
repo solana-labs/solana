@@ -51,9 +51,15 @@ impl<'a> VoteBank<'a> {
         self.bank.process_transaction(&tx)
     }
 
-    fn submit_vote(&self, vote_keypair: &Keypair, tick_height: u64) -> Result<VoteState> {
+    fn submit_vote(
+        &self,
+        staking_account: Pubkey,
+        vote_keypair: &Keypair,
+        tick_height: u64,
+    ) -> Result<VoteState> {
         let blockhash = self.bank.last_blockhash();
-        let tx = VoteTransaction::new_vote(vote_keypair, tick_height, blockhash, 0);
+        let tx =
+            VoteTransaction::new_vote(staking_account, vote_keypair, tick_height, blockhash, 0);
         self.bank.process_transaction(&tx)?;
         self.bank.register_tick(&hash(blockhash.as_ref()));
 
@@ -74,7 +80,7 @@ fn test_vote_bank_basic() {
         .create_vote_account(&from_keypair, vote_id, 100)
         .unwrap();
 
-    let vote_state = vote_bank.submit_vote(&vote_keypair, 0).unwrap();
+    let vote_state = vote_bank.submit_vote(vote_id, &vote_keypair, 0).unwrap();
     assert_eq!(vote_state.votes.len(), 1);
 }
 
