@@ -179,9 +179,9 @@ pub fn generate_txs(
     dest: &[Keypair],
     threads: usize,
     reclaim: bool,
-    leader: &NodeInfo,
+    node_info: &NodeInfo,
 ) {
-    let mut client = mk_client(leader);
+    let mut client = mk_client(node_info);
     let blockhash = client.get_recent_blockhash();
     let tx_count = source.len();
     println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
@@ -236,12 +236,12 @@ pub fn generate_txs(
 pub fn do_tx_transfers(
     exit_signal: &Arc<AtomicBool>,
     shared_txs: &SharedTransactions,
-    leader: &NodeInfo,
+    node_info: &NodeInfo,
     shared_tx_thread_count: &Arc<AtomicIsize>,
     total_tx_sent_count: &Arc<AtomicUsize>,
     thread_batch_sleep_ms: usize,
 ) {
-    let client = mk_client(&leader);
+    let client = mk_client(&node_info);
     loop {
         if thread_batch_sleep_ms > 0 {
             sleep(Duration::from_millis(thread_batch_sleep_ms as u64));
@@ -256,7 +256,7 @@ pub fn do_tx_transfers(
             println!(
                 "Transferring 1 unit {} times... to {}",
                 txs0.len(),
-                leader.tpu
+                node_info.tpu
             );
             let tx_len = txs0.len();
             let transfer_start = Instant::now();
