@@ -143,7 +143,7 @@ pub fn parse_command(
         }
         ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
         ("cancel", Some(cancel_matches)) => {
-            let pubkey_vec = bs58::decode(cancel_matches.value_of("process-id").unwrap())
+            let pubkey_vec = bs58::decode(cancel_matches.value_of("process_id").unwrap())
                 .into_vec()
                 .expect("base58-encoded public key");
 
@@ -193,7 +193,7 @@ pub fn parse_command(
             ))
         }
         ("create-staking-account", Some(staking_matches)) => {
-            let voting_account_string = staking_matches.value_of("voting-account-id").unwrap();
+            let voting_account_string = staking_matches.value_of("voting_account_id").unwrap();
             let voting_account_vec = bs58::decode(voting_account_string)
                 .into_vec()
                 .expect("base58-encoded public key");
@@ -211,7 +211,7 @@ pub fn parse_command(
         }
         ("deploy", Some(deploy_matches)) => Ok(WalletCommand::Deploy(
             deploy_matches
-                .value_of("program-location")
+                .value_of("program_location")
                 .unwrap()
                 .to_string(),
         )),
@@ -244,8 +244,8 @@ pub fn parse_command(
             } else {
                 None
             };
-            let timestamp_pubkey = if pay_matches.is_present("timestamp-pubkey") {
-                let pubkey_vec = bs58::decode(pay_matches.value_of("timestamp-pubkey").unwrap())
+            let timestamp_pubkey = if pay_matches.is_present("timestamp_pubkey") {
+                let pubkey_vec = bs58::decode(pay_matches.value_of("timestamp_pubkey").unwrap())
                     .into_vec()
                     .expect("base58-encoded public key");
 
@@ -305,7 +305,7 @@ pub fn parse_command(
             }
             let to = Pubkey::new(&pubkey_vec);
 
-            let pubkey_vec = bs58::decode(sig_matches.value_of("process-id").unwrap())
+            let pubkey_vec = bs58::decode(sig_matches.value_of("process_id").unwrap())
                 .into_vec()
                 .expect("base58-encoded public key");
 
@@ -327,7 +327,7 @@ pub fn parse_command(
             }
             let to = Pubkey::new(&pubkey_vec);
 
-            let pubkey_vec = bs58::decode(timestamp_matches.value_of("process-id").unwrap())
+            let pubkey_vec = bs58::decode(timestamp_matches.value_of("process_id").unwrap())
                 .into_vec()
                 .expect("base58-encoded public key");
 
@@ -1104,7 +1104,7 @@ mod tests {
                 SubCommand::with_name("cancel")
                     .about("Cancel a transfer")
                     .arg(
-                        Arg::with_name("process-id")
+                        Arg::with_name("process_id")
                             .index(1)
                             .value_name("PROCESS_ID")
                             .takes_value(true)
@@ -1152,7 +1152,7 @@ mod tests {
                 SubCommand::with_name("create-staking-account")
                     .about("Create staking account for node")
                     .arg(
-                        Arg::with_name("voting-account-id")
+                        Arg::with_name("voting_account_id")
                             .index(1)
                             .value_name("PUBKEY")
                             .takes_value(true)
@@ -1172,7 +1172,7 @@ mod tests {
                 SubCommand::with_name("deploy")
                     .about("Deploy a program")
                     .arg(
-                        Arg::with_name("program-location")
+                        Arg::with_name("program_location")
                             .index(1)
                             .value_name("PATH")
                             .takes_value(true)
@@ -1211,7 +1211,7 @@ mod tests {
                             .help("A timestamp after which transaction will execute"),
                     )
                     .arg(
-                        Arg::with_name("timestamp-pubkey")
+                        Arg::with_name("timestamp_pubkey")
                             .long("require-timestamp-from")
                             .value_name("PUBKEY")
                             .takes_value(true)
@@ -1245,7 +1245,7 @@ mod tests {
                             .help("The pubkey of recipient"),
                     )
                     .arg(
-                        Arg::with_name("process-id")
+                        Arg::with_name("process_id")
                             .index(2)
                             .value_name("PROCESS_ID")
                             .takes_value(true)
@@ -1265,7 +1265,7 @@ mod tests {
                             .help("The pubkey of recipient"),
                     )
                     .arg(
-                        Arg::with_name("process-id")
+                        Arg::with_name("process_id")
                             .index(2)
                             .value_name("PROCESS_ID")
                             .takes_value(true)
