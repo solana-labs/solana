@@ -107,7 +107,8 @@ pub fn test_large_invalid_gossip_nodes(
     }
     sleep(Durration::from_millis(1000));
     //force refresh the active set
-    for _ in 0..(num_nodes * 100) {
+    for node in &cluster {
+        let mut client = mk_client(&node);
 	    client.gossip_refresh_active_set();
     }
     //verify that spends still work
