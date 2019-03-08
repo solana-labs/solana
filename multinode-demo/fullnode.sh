@@ -200,7 +200,7 @@ if [[ ! -d "$ledger_config_dir" ]]; then
 
 fi
 
-trap 'kill "$pid" && wait "$pid"' INT TERM
+trap 'kill "$pid" && wait "$pid"' INT TERM ERR
 $program \
   --gossip-port "$gossip_port" \
   --identity "$fullnode_id_path" \

@@ -165,8 +165,11 @@ setup_fullnode_staking() {
   #  the vote-signer
   $solana_wallet --keypair "$staker_id_path" \
                  configure-staking-account \
-                 --delegate-stake "$fullnode_id" \
-                 --authorized-voter "$staker_id"  || return $?
+                 --delegate-account "$fullnode_id" \
+                 --authorize-voter "$staker_id"  || return $?
+
+  return 0
+
 }
 
 

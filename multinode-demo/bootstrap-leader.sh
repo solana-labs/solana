@@ -25,7 +25,6 @@ fi
 
 tune_system
 
-trap 'kill "$pid" && wait "$pid"' INT TERM
 $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger verify
 
 
@@ -34,6 +33,7 @@ bootstrap_leader_staker_id_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-staker-id.
 bootstrap_leader_staker_id=$($solana_wallet --keypair "$bootstrap_leader_staker_id_path" address)
 
 set -x
+trap 'kill "$pid" && wait "$pid"' INT TERM ERR
 $program \
   --identity "$bootstrap_leader_id_path" \
   --voting-keypair "$bootstrap_leader_staker_id_path" \

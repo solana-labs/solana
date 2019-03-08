@@ -28,7 +28,7 @@ usage() {
 
 set -ex
 
-trap 'kill "$pid" && wait "$pid"' INT TERM
+trap 'kill "$pid" && wait "$pid"' INT TERM ERR
 $solana_drone \
   --keypair "$SOLANA_CONFIG_DIR"/mint-id.json \
   > >($drone_logger) 2>&1 &
