@@ -86,16 +86,6 @@ pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
     par_process_entries(bank, entries)
 }
 
-/// Process an ordered list of entries, populating a circular buffer "tail"
-/// as we go.
-fn process_block(bank: &Bank, entries: &[Entry]) -> Result<()> {
-    for entry in entries {
-        process_entry(bank, entry)?;
-    }
-
-    Ok(())
-}
-
 #[derive(Debug, PartialEq)]
 pub struct BankForksInfo {
     pub bank_slot: u64,
@@ -167,7 +157,7 @@ pub fn process_blocktree(
                 return Err(BankError::LedgerVerificationFailed);
             }
 
-            process_block(&bank, &entries).map_err(|err| {
+            process_entries(&bank, &entries).map_err(|err| {
                 warn!("Failed to process entries for slot {}: {:?}", slot, err);
                 BankError::LedgerVerificationFailed
             })?;
