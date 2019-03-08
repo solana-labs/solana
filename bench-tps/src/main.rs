@@ -40,7 +40,7 @@ fn main() {
     } = cfg;
 
     let cluster_entrypoint = ContactInfo::new_entry_point(&network);
-    let (leader, nodes) = discover(&cluster_entrypoint, num_nodes).unwrap_or_else(|err| {
+    let (_leader, nodes) = discover(&cluster_entrypoint, num_nodes).unwrap_or_else(|err| {
         eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
         exit(1);
     });
@@ -59,18 +59,12 @@ fn main() {
         exit(1);
     }
 
-    if leader.is_none() {
-        eprintln!("Error: No leader");
-        exit(1);
-    }
-
     if converge_only {
         return;
     }
 
-    let leader = leader.unwrap();
-    let mut client = mk_client(&leader);
-    let mut barrier_client = mk_client(&leader);
+    let mut client = mk_client(&cluster_entrypoint);
+    let mut barrier_client = mk_client(&cluster_entrypoint);
 
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&id.public_key_bytes()[..32]);
@@ -144,7 +138,7 @@ fn main() {
         .map(|_| {
             let exit_signal = exit_signal.clone();
             let shared_txs = shared_txs.clone();
-            let leader = leader.clone();
+            let cluster_entrypoint = cluster_entrypoint.clone();
             let shared_tx_active_thread_count = shared_tx_active_thread_count.clone();
             let total_tx_sent_count = total_tx_sent_count.clone();
             Builder::new()
@@ -153,7 +147,7 @@ fn main() {
                     do_tx_transfers(
                         &exit_signal,
                         &shared_txs,
-                        &leader,
+                        &cluster_entrypoint,
                         &shared_tx_active_thread_count,
                         &total_tx_sent_count,
                         thread_batch_sleep_ms,
@@ -181,7 +175,7 @@ fn main() {
             &keypairs[len..],
             threads,
             reclaim_lamports_back_to_source_account,
-            &leader,
+            &cluster_entrypoint,
         );
         // In sustained mode overlap the transfers with generation
         // this has higher average performance but lower peak performance
