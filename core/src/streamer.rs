@@ -1,14 +1,15 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::packet::{Blob, SharedBlobs, SharedPackets};
+use crate::packet::{Blob, Packet, Packets, SharedBlobs, SharedPackets};
 use crate::result::{Error, Result};
+use bincode::deserialize;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -135,6 +136,46 @@ pub fn blob_receiver(
                 break;
             }
             let _ = recv_blobs(&sock, &s);
+        })
+        .unwrap()
+}
+
+fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender) -> Result<()> {
+    trace!(
+        "recv_blob_packets: receiving on {}",
+        sock.local_addr().unwrap()
+    );
+    let blobs = Blob::recv_from(sock)?;
+    for blob in blobs {
+        let msgs: Vec<Packet> = {
+            let r_blob = blob.read().unwrap();
+            let msg_size = r_blob.size();
+            deserialize(&r_blob.data()[..msg_size])?
+        };
+        s.send(Arc::new(RwLock::new(Packets::new(msgs))))?;
+    }
+
+    Ok(())
+}
+
+pub fn blob_packet_receiver(
+    sock: Arc<UdpSocket>,
+    exit: &Arc<AtomicBool>,
+    s: PacketSender,
+) -> JoinHandle<()> {
+    //DOCUMENTED SIDE-EFFECT
+    //1 second timeout on socket read
+    let timer = Duration::new(1, 0);
+    sock.set_read_timeout(Some(timer))
+        .expect("set socket timeout");
+    let exit = exit.clone();
+    Builder::new()
+        .name("solana-blob_packet_receiver".to_string())
+        .spawn(move || loop {
+            if exit.load(Ordering::Relaxed) {
+                break;
+            }
+            let _ = recv_blob_packets(&sock, &s);
         })
         .unwrap()
 }
