@@ -160,7 +160,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             SubCommand::with_name("cancel")
                 .about("Cancel a transfer")
                 .arg(
-                    Arg::with_name("process-id")
+                    Arg::with_name("process_id")
                         .index(1)
                         .value_name("PROCESS_ID")
                         .takes_value(true)
@@ -208,7 +208,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             SubCommand::with_name("create-staking-account")
                 .about("Create staking account for node")
                 .arg(
-                    Arg::with_name("voting-account-id")
+                    Arg::with_name("voting_account_id")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -228,7 +228,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             SubCommand::with_name("deploy")
                 .about("Deploy a program")
                 .arg(
-                    Arg::with_name("program-location")
+                    Arg::with_name("program_location")
                         .index(1)
                         .value_name("PATH")
                         .takes_value(true)
@@ -266,7 +266,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("A timestamp after which transaction will execute"),
                 )
                 .arg(
-                    Arg::with_name("timestamp-pubkey")
+                    Arg::with_name("timestamp_pubkey")
                         .long("require-timestamp-from")
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -300,7 +300,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("The pubkey of recipient"),
                 )
                 .arg(
-                    Arg::with_name("process-id")
+                    Arg::with_name("process_id")
                         .index(2)
                         .value_name("PROCESS_ID")
                         .takes_value(true)
@@ -320,7 +320,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("The pubkey of recipient"),
                 )
                 .arg(
-                    Arg::with_name("process-id")
+                    Arg::with_name("process_id")
                         .index(2)
                         .value_name("PROCESS_ID")
                         .takes_value(true)
