@@ -14,12 +14,20 @@ pub struct FetchStage {
 
 impl FetchStage {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(sockets: Vec<UdpSocket>, exit: &Arc<AtomicBool>) -> (Self, PacketReceiver) {
+    pub fn new(
+        sockets: Vec<UdpSocket>,
+        forwarder_sockets: Vec<UdpSocket>,
+        exit: &Arc<AtomicBool>,
+    ) -> (Self, PacketReceiver) {
         let (sender, receiver) = channel();
-        (Self::new_with_sender(sockets, exit, &sender), receiver)
+        (
+            Self::new_with_sender(sockets, forwarder_sockets, exit, &sender),
+            receiver,
+        )
     }
     pub fn new_with_sender(
         sockets: Vec<UdpSocket>,
+        forwarder_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
     ) -> Self {
