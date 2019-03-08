@@ -27,7 +27,6 @@ pub struct LeaderId {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Vote {
     pub transaction: Transaction,
-    pub signature: Signature,
     pub wallclock: u64,
 }
 
@@ -61,30 +60,25 @@ impl Signable for LeaderId {
 }
 
 impl Signable for Vote {
+    fn sign(&mut self, _keypair: &Keypair) {}
+
+    fn verify(&self) -> bool {
+        self.transaction.verify_signature()
+    }
+
     fn pubkey(&self) -> Pubkey {
         self.transaction.account_keys[0]
     }
 
     fn signable_data(&self) -> Vec<u8> {
-        #[derive(Serialize)]
-        struct SignData {
-            transaction: Transaction,
-            wallclock: u64,
-        }
-        let data = SignData {
-            transaction: self.transaction.clone(),
-            wallclock: self.wallclock,
-        };
-        serialize(&data).expect("unable to serialize Vote")
+        vec![]
     }
 
     fn get_signature(&self) -> Signature {
-        self.signature
+        Signature::default()
     }
 
-    fn set_signature(&mut self, signature: Signature) {
-        self.signature = signature
-    }
+    fn set_signature(&mut self, _signature: Signature) {}
 }
 
 /// Type of the replicated value
@@ -132,7 +126,6 @@ impl Vote {
     pub fn new(transaction: Transaction, wallclock: u64) -> Self {
         Vote {
             transaction,
-            signature: Signature::default(),
             wallclock,
         }
     }

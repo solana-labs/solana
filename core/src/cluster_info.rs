@@ -77,6 +77,8 @@ pub struct ClusterInfo {
     // TODO: remove gossip_leader_id once all usage of `set_leader()` and `leader_data()` is
     // purged
     gossip_leader_id: Pubkey,
+    /// The network entrypoint
+    entrypoint: Option<NodeInfo>,
 }
 
 #[derive(Default, Clone)]
@@ -174,12 +176,20 @@ impl ClusterInfo {
             gossip: CrdsGossip::default(),
             keypair,
             gossip_leader_id: Pubkey::default(),
+            entrypoint: None,
         };
         let id = node_info.id;
         me.gossip.set_self(id);
-        me.insert_info(node_info);
+        me.insert_self(node_info);
         me.push_self(&HashMap::new());
         me
+    }
+    pub fn insert_self(&mut self, node_info: NodeInfo) {
+        if self.id() == node_info.id {
+            let mut value = CrdsValue::ContactInfo(node_info);
+            value.sign(&self.keypair);
+            let _ = self.gossip.crds.insert(value, timestamp());
+        }
     }
     pub fn push_self(&mut self, stakes: &HashMap<Pubkey, u64>) {
         let mut my_data = self.my_data();
@@ -190,10 +200,15 @@ impl ClusterInfo {
         self.gossip.refresh_push_active_set(stakes);
         self.gossip.process_push_message(&[entry], now);
     }
+    // TODO kill insert_info, only used by tests
+    #[cfg(test)]
     pub fn insert_info(&mut self, node_info: NodeInfo) {
         let mut value = CrdsValue::ContactInfo(node_info);
         value.sign(&self.keypair);
         let _ = self.gossip.crds.insert(value, timestamp());
+    }
+    pub fn set_entrypoint(&mut self, entrypoint: NodeInfo) {
+        self.entrypoint = Some(entrypoint)
     }
     pub fn id(&self) -> Pubkey {
         self.gossip.id
@@ -763,6 +778,31 @@ impl ClusterInfo {
 
         Ok((addr, out))
     }
+    // if the network entry point hasn't been discovered yet, add it to the crds table
+    fn add_entrypoint(&mut self, pulls: &mut Vec<(Pubkey, Bloom<Hash>, SocketAddr, CrdsValue)>) {
+        match &self.entrypoint {
+            Some(entrypoint) => {
+                let label = CrdsValueLabel::ContactInfo(entrypoint.id);
+                if self.gossip.crds.lookup(&label).is_none() {
+                    let self_info = self
+                        .gossip
+                        .crds
+                        .lookup(&CrdsValueLabel::ContactInfo(self.id()))
+                        .unwrap_or_else(|| panic!("self_id invalid {}", self.id()));
+                    pulls.push((
+                        entrypoint.id,
+                        self.gossip.pull.build_crds_filter(&self.gossip.crds),
+                        entrypoint.gossip,
+                        self_info.clone(),
+                    ));
+                } else {
+                    // the entrypoint is now part of gossip.
+                    self.entrypoint = None
+                }
+            }
+            None => (),
+        }
+    }
 
     fn new_pull_requests(&mut self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
         let now = timestamp();
@@ -773,7 +813,7 @@ impl ClusterInfo {
             .into_iter()
             .collect();
 
-        let pr: Vec<_> = pulls
+        let mut pr: Vec<_> = pulls
             .into_iter()
             .filter_map(|(peer, filter, self_info)| {
                 let peer_label = CrdsValueLabel::ContactInfo(peer);
@@ -784,6 +824,7 @@ impl ClusterInfo {
                     .map(|peer_info| (peer, filter, peer_info.gossip, self_info))
             })
             .collect();
+        self.add_entrypoint(&mut pr);
         pr.into_iter()
             .map(|(peer, filter, gossip, self_info)| {
                 self.gossip.mark_pull_request_creation_time(peer, now);
@@ -1069,7 +1110,11 @@ impl ClusterInfo {
             return vec![];
         }
 
-        me.write().unwrap().insert_info(from.clone());
+        me.write()
+            .unwrap()
+            .gossip
+            .crds
+            .update_record_timestamp(from.id, timestamp());
         let my_info = me.read().unwrap().my_data().clone();
         inc_new_counter_info!("cluster_info-window-request-recv", 1);
         trace!(
@@ -1103,8 +1148,12 @@ impl ClusterInfo {
         match request {
             // TODO verify messages faster
             Protocol::PullRequest(filter, caller) => {
-                //Pulls don't need to be verified
-                Self::handle_pull_request(me, filter, caller, from_addr)
+                if !caller.verify() {
+                    inc_new_counter_info!("cluster_info-gossip_pull_request_verify_fail", 1);
+                    vec![]
+                } else {
+                    Self::handle_pull_request(me, filter, caller, from_addr)
+                }
             }
             Protocol::PullResponse(from, mut data) => {
                 data.retain(|v| {

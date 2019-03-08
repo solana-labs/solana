@@ -21,7 +21,7 @@ pub struct CrdsGossip {
     pub crds: Crds,
     pub id: Pubkey,
     pub push: CrdsGossipPush,
-    pull: CrdsGossipPull,
+    pub pull: CrdsGossipPull,
 }
 
 impl Default for CrdsGossip {

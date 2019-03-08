@@ -118,7 +118,7 @@ impl Replicator {
         info!("Replicator: id: {}", keypair.pubkey());
         info!("Creating cluster info....");
         let mut cluster_info = ClusterInfo::new(node.info.clone(), keypair.clone());
-        cluster_info.insert_info(leader_info.clone());
+        cluster_info.set_entrypoint(leader_info.clone());
         cluster_info.set_leader(leader_info.id);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
 
@@ -202,7 +202,7 @@ impl Replicator {
         node_info.tvu = "0.0.0.0:0".parse().unwrap();
         {
             let mut cluster_info_w = cluster_info.write().unwrap();
-            cluster_info_w.insert_info(node_info);
+            cluster_info_w.insert_self(node_info);
         }
 
         let mut client = mk_client(leader_info);

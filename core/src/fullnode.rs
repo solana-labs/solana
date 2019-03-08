@@ -155,11 +155,12 @@ impl Fullnode {
 
         // Insert the entrypoint info, should only be None if this node
         // is the bootstrap leader
+
         if let Some(entrypoint_info) = entrypoint_info_option {
             cluster_info
                 .write()
                 .unwrap()
-                .insert_info(entrypoint_info.clone());
+                .set_entrypoint(entrypoint_info.clone());
         }
 
         let sockets = Sockets {
