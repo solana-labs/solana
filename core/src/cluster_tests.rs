@@ -22,7 +22,7 @@ pub fn spend_and_verify_all_nodes(
     funding_keypair: &Keypair,
     nodes: usize,
 ) {
-    let (_leader_id, cluster_nodes) = discover(&entry_point_info, nodes).unwrap();
+    let cluster_nodes = discover(&entry_point_info, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     for ingress_node in &cluster_nodes {
         let random_keypair = Keypair::new();
@@ -49,7 +49,7 @@ pub fn spend_and_verify_all_nodes(
 }
 
 pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {
-    let (_leader_id, cluster_nodes) = discover(&entry_point_info, nodes).unwrap();
+    let cluster_nodes = discover(&entry_point_info, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     for node in &cluster_nodes {
         let mut client = mk_client(&node);
@@ -101,7 +101,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     nodes: usize,
 ) {
     solana_logger::setup();
-    let (_leader_id, cluster_nodes) = discover(&entry_point_info, nodes).unwrap();
+    let cluster_nodes = discover(&entry_point_info, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let mut client = mk_client(&entry_point_info);
     info!("sleeping for an epoch");

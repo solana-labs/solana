@@ -49,10 +49,7 @@ impl GossipService {
     }
 }
 
-pub fn discover(
-    entry_point_info: &NodeInfo,
-    num_nodes: usize,
-) -> std::io::Result<(Option<NodeInfo>, Vec<NodeInfo>)> {
+pub fn discover(entry_point_info: &NodeInfo, num_nodes: usize) -> std::io::Result<Vec<NodeInfo>> {
     let exit = Arc::new(AtomicBool::new(false));
     let (gossip_service, spy_ref) = make_spy_node(entry_point_info, &exit);
     let id = spy_ref.read().unwrap().keypair.pubkey();
@@ -74,10 +71,9 @@ pub fn discover(
                 spy_ref.read().unwrap().node_info_trace()
             );
 
-            let leader = spy_ref.read().unwrap().get_gossip_top_leader().cloned();
             exit.store(true, Ordering::Relaxed);
             gossip_service.join().unwrap();
-            return Ok((leader, rpc_peers));
+            return Ok(rpc_peers);
         }
         if i % 20 == 0 {
             info!(

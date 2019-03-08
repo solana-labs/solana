@@ -222,17 +222,11 @@ impl ClusterInfo {
     }
     pub fn node_info_trace(&self) -> String {
         let leader_id = self.leader_id();
-        let gossip_top_leader = self.get_gossip_top_leader();
         let nodes: Vec<_> = self
             .rpc_peers()
             .into_iter()
             .map(|node| {
                 let mut annotation = String::new();
-                if let Some(top_leader) = gossip_top_leader {
-                    if node.id == top_leader.id {
-                        annotation.push_str(" [gossip top leader]");
-                    }
-                }
                 if node.id == leader_id {
                     annotation.push_str(" [leader]");
                 }
@@ -835,36 +829,6 @@ impl ClusterInfo {
             .collect();
         blob_sender.send(blobs)?;
         Ok(())
-    }
-
-    pub fn get_gossip_top_leader(&self) -> Option<&NodeInfo> {
-        let mut table = HashMap::new();
-        let def = Pubkey::default();
-        let cur = self
-            .gossip
-            .crds
-            .table
-            .values()
-            .filter_map(|x| x.value.leader_id())
-            .filter(|x| x.leader_id != def);
-        for v in cur {
-            let cnt = table.entry(&v.leader_id).or_insert(0);
-            *cnt += 1;
-            trace!("leader {} {}", v.leader_id, *cnt);
-        }
-        let mut sorted: Vec<(&Pubkey, usize)> = table.into_iter().collect();
-        for x in &sorted {
-            trace!("{}: sorted leaders {} votes: {}", self.gossip.id, x.0, x.1);
-        }
-        sorted.sort_by_key(|a| a.1);
-        let top_leader = sorted.last().map(|a| *a.0);
-
-        top_leader
-            .and_then(|x| {
-                let leader_label = CrdsValueLabel::ContactInfo(x);
-                self.gossip.crds.lookup(&leader_label)
-            })
-            .and_then(|x| x.contact_info())
     }
 
     /// randomly pick a node and ask them for updates asynchronously
