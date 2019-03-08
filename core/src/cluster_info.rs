@@ -204,7 +204,7 @@ impl ClusterInfo {
     pub fn my_data(&self) -> NodeInfo {
         self.lookup(self.id()).cloned().unwrap()
     }
-    pub fn leader_id(&self) -> Pubkey {
+    fn leader_id(&self) -> Pubkey {
         let entry = CrdsValueLabel::LeaderId(self.id());
         self.gossip
             .crds
