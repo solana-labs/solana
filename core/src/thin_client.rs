@@ -3,13 +3,10 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use crate::cluster_info::{ClusterInfoError, NodeInfo};
+use crate::cluster_info::NodeInfo;
 use crate::fullnode::{Fullnode, FullnodeConfig};
-use crate::gossip_service::make_spy_node;
 use crate::packet::PACKET_DATA_SIZE;
-use crate::result::{Error, Result};
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
-use crate::service::Service;
 use bincode::serialize_into;
 use bs58;
 use serde_json;
@@ -25,7 +22,6 @@ use solana_sdk::transaction::Transaction;
 use std;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
@@ -390,38 +386,6 @@ impl Drop for ThinClient {
     }
 }
 
-pub fn poll_gossip_for_leader(gossip_addr: SocketAddr, timeout: Duration) -> Result<NodeInfo> {
-    let exit = Arc::new(AtomicBool::new(false));
-    let entry_point = NodeInfo::new_entry_point(&gossip_addr);
-    let (gossip_service, cluster_info) = make_spy_node(&entry_point, &exit);
-
-    let now = Instant::now();
-    let result = loop {
-        sleep(Duration::from_millis(100));
-        trace!("polling {:?} for leader", gossip_addr);
-
-        if let Some(leader) = cluster_info.read().unwrap().get_gossip_top_leader() {
-            if log_enabled!(log::Level::Trace) {
-                trace!("{}", cluster_info.read().unwrap().node_info_trace());
-            }
-            break Ok(leader.clone());
-        }
-
-        if log_enabled!(log::Level::Trace) {
-            trace!("{}", cluster_info.read().unwrap().node_info_trace());
-        }
-
-        if now.elapsed() > timeout {
-            break Err(Error::ClusterInfoError(ClusterInfoError::NoLeader));
-        }
-    };
-
-    exit.store(true, Ordering::Relaxed);
-    gossip_service.join()?;
-
-    result
-}
-
 pub fn retry_get_balance(
     client: &mut ThinClient,
     bob_pubkey: &Pubkey,
@@ -479,6 +443,7 @@ pub fn new_fullnode() -> (Fullnode, NodeInfo, Keypair, String) {
 mod tests {
     use super::*;
     use crate::client::mk_client;
+    use crate::gossip_service::discover;
     use bincode::{deserialize, serialize};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_vote_api::vote_state::VoteState;
@@ -490,11 +455,7 @@ mod tests {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode();
         let bob_pubkey = Keypair::new().pubkey();
-
-        info!(
-            "found leader: {:?}",
-            poll_gossip_for_leader(leader_data.gossip, Duration::from_secs(5)).unwrap()
-        );
+        discover(&leader_data, 1).unwrap();
 
         let mut client = mk_client(&leader_data);
 
@@ -525,10 +486,7 @@ mod tests {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode();
         let bob_pubkey = Keypair::new().pubkey();
-        info!(
-            "found leader: {:?}",
-            poll_gossip_for_leader(leader_data.gossip, Duration::from_secs(5)).unwrap()
-        );
+        discover(&leader_data, 1).unwrap();
 
         let mut client = mk_client(&leader_data);
 
@@ -559,10 +517,7 @@ mod tests {
     fn test_register_vote_account() {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode();
-        info!(
-            "found leader: {:?}",
-            poll_gossip_for_leader(leader_data.gossip, Duration::from_secs(5)).unwrap()
-        );
+        discover(&leader_data, 1).unwrap();
 
         let mut client = mk_client(&leader_data);
 
@@ -628,11 +583,7 @@ mod tests {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode();
         let bob_keypair = Keypair::new();
-
-        info!(
-            "found leader: {:?}",
-            poll_gossip_for_leader(leader_data.gossip, Duration::from_secs(5)).unwrap()
-        );
+        discover(&leader_data, 1).unwrap();
 
         let mut client = mk_client(&leader_data);
         let blockhash = client.get_recent_blockhash();

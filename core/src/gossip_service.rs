@@ -52,7 +52,7 @@ impl GossipService {
 pub fn discover(
     entry_point_info: &NodeInfo,
     num_nodes: usize,
-) -> Result<(Option<NodeInfo>, Vec<NodeInfo>), &'static str> {
+) -> std::io::Result<(Option<NodeInfo>, Vec<NodeInfo>)> {
     let exit = Arc::new(AtomicBool::new(false));
     let (gossip_service, spy_ref) = make_spy_node(entry_point_info, &exit);
     let id = spy_ref.read().unwrap().keypair.pubkey();
@@ -97,10 +97,13 @@ pub fn discover(
         "discover failed...\n{}",
         spy_ref.read().unwrap().node_info_trace()
     );
-    Err("Failed to converge")
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "Failed to converge",
+    ))
 }
 
-pub fn make_spy_node(
+fn make_spy_node(
     entry_point: &NodeInfo,
     exit: &Arc<AtomicBool>,
 ) -> (GossipService, Arc<RwLock<ClusterInfo>>) {
