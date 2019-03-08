@@ -32,18 +32,25 @@ impl FetchStage {
         sender: &PacketSender,
     ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
-        Self::new_multi_socket(tx_sockets, exit, &sender)
+        let forwarder_sockets = forwarder_sockets.into_iter().map(Arc::new).collect();
+        Self::new_multi_socket(tx_sockets, forwarder_sockets, exit, &sender)
     }
+
     fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
+        forwarder_sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
     ) -> Self {
-        let thread_hdls: Vec<_> = sockets
+        let tpu_threads = sockets
             .into_iter()
-            .map(|socket| streamer::receiver(socket, &exit, sender.clone(), "fetch-stage"))
-            .collect();
+            .map(|socket| streamer::receiver(socket, &exit, sender.clone(), "fetch-stage"));
 
+        let forwarder_threads = forwarder_sockets
+            .into_iter()
+            .map(|socket| streamer::blob_packet_receiver(socket, &exit, sender.clone()));
+
+        let thread_hdls: Vec<_> = tpu_threads.chain(forwarder_threads).collect();
         Self { thread_hdls }
     }
 }

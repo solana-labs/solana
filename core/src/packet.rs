@@ -115,6 +115,10 @@ impl Default for Packets {
 }
 
 impl Packets {
+    pub fn new(packets: Vec<Packet>) -> Self {
+        Self { packets }
+    }
+
     pub fn set_addr(&mut self, addr: &SocketAddr) {
         for m in self.packets.iter_mut() {
             m.meta.set_addr(&addr);
