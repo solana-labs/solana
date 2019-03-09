@@ -16,14 +16,14 @@ pub mod chacha;
 pub mod chacha_cuda;
 pub mod client;
 pub mod cluster_info_vote_listener;
+#[macro_use]
+pub mod contact_info;
 pub mod crds;
 pub mod crds_gossip;
 pub mod crds_gossip_error;
 pub mod crds_gossip_pull;
 pub mod crds_gossip_push;
 pub mod crds_value;
-#[macro_use]
-pub mod contact_info;
 #[macro_use]
 pub mod blocktree;
 pub mod blockstream;

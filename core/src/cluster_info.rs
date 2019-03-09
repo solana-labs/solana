@@ -1454,7 +1454,7 @@ mod tests {
     use crate::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::net::{IpAddr, Ipv4Addr};
     use std::sync::{Arc, RwLock};
 
     #[test]
