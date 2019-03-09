@@ -3,9 +3,11 @@
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, NodeInfo};
+use crate::contact_info::ContactInfo;
 use crate::service::Service;
 use crate::streamer;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use std::net::SocketAddr;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
@@ -49,9 +51,9 @@ impl GossipService {
     }
 }
 
-pub fn discover(entry_point_info: &NodeInfo, num_nodes: usize) -> std::io::Result<Vec<NodeInfo>> {
+pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<Vec<NodeInfo>> {
     let exit = Arc::new(AtomicBool::new(false));
-    let (gossip_service, spy_ref) = make_spy_node(entry_point_info, &exit);
+    let (gossip_service, spy_ref) = make_spy_node(gossip_addr, &exit);
     let id = spy_ref.read().unwrap().keypair.pubkey();
     trace!(
         "discover: spy_node {} looking for at least {} nodes",
@@ -100,13 +102,13 @@ pub fn discover(entry_point_info: &NodeInfo, num_nodes: usize) -> std::io::Resul
 }
 
 fn make_spy_node(
-    entry_point: &NodeInfo,
+    gossip_addr: &SocketAddr,
     exit: &Arc<AtomicBool>,
 ) -> (GossipService, Arc<RwLock<ClusterInfo>>) {
     let keypair = Arc::new(Keypair::new());
     let (node, gossip_socket) = ClusterInfo::spy_node(&keypair.pubkey());
     let mut cluster_info = ClusterInfo::new(node, keypair);
-    cluster_info.insert_info(entry_point.clone());
+    cluster_info.insert_info(ContactInfo::new_entry_point(gossip_addr));
 
     let cluster_info = Arc::new(RwLock::new(cluster_info));
     let gossip_service =

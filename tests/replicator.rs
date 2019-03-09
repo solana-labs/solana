@@ -62,7 +62,7 @@ fn test_replicator_startup_basic() {
         );
 
         debug!("Looking for leader on gossip...");
-        solana::gossip_service::discover(&leader_info, 1).unwrap();
+        solana::gossip_service::discover(&leader_info.gossip, 1).unwrap();
 
         let validator_keypair = Arc::new(Keypair::new());
         let voting_keypair = Keypair::new();
