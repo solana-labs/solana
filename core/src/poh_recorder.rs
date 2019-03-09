@@ -16,7 +16,7 @@ use crate::result::{Error, Result};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::transaction::Transaction;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -40,11 +40,15 @@ pub struct PohRecorder {
     tick_cache: Vec<(Entry, u64)>,
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntries>,
+    clear_bank_signal: Option<Sender<bool>>,
 }
 
 impl PohRecorder {
     pub fn clear_bank(&mut self) {
         self.working_bank = None;
+        if let Some(signal) = self.clear_bank_signal {
+            let _ = signal.try_send(true);
+        }
     }
 
     pub fn hash(&mut self) {
@@ -147,12 +151,12 @@ impl PohRecorder {
                 "poh_record: max_tick_height reached, setting working bank {} to None",
                 working_bank.bank.slot()
             );
-            self.working_bank = None;
+            self.clear_bank();
         }
         if e.is_err() {
             info!("WorkingBank::sender disconnected {:?}", e);
             //revert the cache, but clear the working bank
-            self.working_bank = None;
+            self.clear_bank();
         } else {
             //commit the flush
             let _ = self.tick_cache.drain(..cnt);
