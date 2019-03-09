@@ -57,3 +57,4 @@
   - [Leader-to-Validator Transition](leader-validator-transition.md)
   - [Cluster Test Framework](cluster-test-framework.md)
   - [Testing Programs](testing-programs.md)
+  - [Staking Accounts](staking-accounts.md)
