@@ -2,7 +2,6 @@ use bincode::serialized_size;
 use hashbrown::HashMap;
 use log::*;
 use rayon::prelude::*;
-use solana::cluster_info::NodeInfo;
 use solana::contact_info::ContactInfo;
 use solana::crds_gossip::*;
 use solana::crds_gossip_error::CrdsGossipError;
@@ -375,7 +374,7 @@ fn test_prune_errors() {
     let mut crds_gossip = CrdsGossip::default();
     crds_gossip.id = Pubkey::new(&[0; 32]);
     let id = crds_gossip.id;
-    let ci = NodeInfo::new_localhost(Pubkey::new(&[1; 32]), 0);
+    let ci = ContactInfo::new_localhost(Pubkey::new(&[1; 32]), 0);
     let prune_pubkey = Pubkey::new(&[2; 32]);
     crds_gossip
         .crds

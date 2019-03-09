@@ -70,7 +70,7 @@ pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<V
             trace!(
                 "discover success in {}s...\n{}",
                 now.elapsed().as_secs(),
-                spy_ref.read().unwrap().node_info_trace()
+                spy_ref.read().unwrap().contact_info_trace()
             );
 
             exit.store(true, Ordering::Relaxed);
@@ -80,7 +80,7 @@ pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<V
         if i % 20 == 0 {
             info!(
                 "discovering...\n{}",
-                spy_ref.read().unwrap().node_info_trace()
+                spy_ref.read().unwrap().contact_info_trace()
             );
         }
         sleep(Duration::from_millis(
@@ -93,7 +93,7 @@ pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<V
     gossip_service.join().unwrap();
     info!(
         "discover failed...\n{}",
-        spy_ref.read().unwrap().node_info_trace()
+        spy_ref.read().unwrap().contact_info_trace()
     );
     Err(std::io::Error::new(
         std::io::ErrorKind::Other,

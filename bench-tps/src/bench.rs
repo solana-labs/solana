@@ -2,7 +2,7 @@ use solana_metrics;
 
 use rayon::prelude::*;
 use solana::client::mk_client;
-use solana::cluster_info::NodeInfo;
+use solana::contact_info::ContactInfo;
 use solana::thin_client::ThinClient;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_metrics::influxdb;
@@ -48,7 +48,7 @@ pub fn sample_tx_count(
     exit_signal: &Arc<AtomicBool>,
     maxes: &Arc<RwLock<Vec<(SocketAddr, NodeStats)>>>,
     first_tx_count: u64,
-    v: &NodeInfo,
+    v: &ContactInfo,
     sample_period: u64,
 ) {
     let mut client = mk_client(&v);
@@ -179,9 +179,9 @@ pub fn generate_txs(
     dest: &[Keypair],
     threads: usize,
     reclaim: bool,
-    node_info: &NodeInfo,
+    contact_info: &ContactInfo,
 ) {
-    let mut client = mk_client(node_info);
+    let mut client = mk_client(contact_info);
     let blockhash = client.get_recent_blockhash();
     let tx_count = source.len();
     println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
@@ -236,12 +236,12 @@ pub fn generate_txs(
 pub fn do_tx_transfers(
     exit_signal: &Arc<AtomicBool>,
     shared_txs: &SharedTransactions,
-    node_info: &NodeInfo,
+    contact_info: &ContactInfo,
     shared_tx_thread_count: &Arc<AtomicIsize>,
     total_tx_sent_count: &Arc<AtomicUsize>,
     thread_batch_sleep_ms: usize,
 ) {
-    let client = mk_client(&node_info);
+    let client = mk_client(&contact_info);
     loop {
         if thread_batch_sleep_ms > 0 {
             sleep(Duration::from_millis(thread_batch_sleep_ms as u64));
@@ -256,7 +256,7 @@ pub fn do_tx_transfers(
             println!(
                 "Transferring 1 unit {} times... to {}",
                 txs0.len(),
-                node_info.tpu
+                contact_info.tpu
             );
             let tx_len = txs0.len();
             let transfer_start = Instant::now();

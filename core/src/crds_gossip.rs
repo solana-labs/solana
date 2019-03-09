@@ -179,7 +179,7 @@ pub fn get_weight(max_weight: f32, time_since_last_selected: u32, stake: f32) ->
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::cluster_info::NodeInfo;
+    use crate::contact_info::ContactInfo;
     use solana_sdk::hash::hash;
     use solana_sdk::timing::timestamp;
 
@@ -188,7 +188,7 @@ mod test {
         let mut crds_gossip = CrdsGossip::default();
         crds_gossip.id = Pubkey::new(&[0; 32]);
         let id = crds_gossip.id;
-        let ci = NodeInfo::new_localhost(Pubkey::new(&[1; 32]), 0);
+        let ci = ContactInfo::new_localhost(Pubkey::new(&[1; 32]), 0);
         let prune_pubkey = Pubkey::new(&[2; 32]);
         crds_gossip
             .crds

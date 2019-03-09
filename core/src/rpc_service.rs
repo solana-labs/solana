@@ -88,7 +88,7 @@ impl Service for JsonRpcService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cluster_info::NodeInfo;
+    use crate::contact_info::ContactInfo;
     use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::KeypairUtil;
@@ -100,7 +100,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Bank::new(&genesis_block);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            NodeInfo::default(),
+            ContactInfo::default(),
         )));
         let rpc_addr = SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
