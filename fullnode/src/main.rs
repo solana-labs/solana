@@ -183,7 +183,7 @@ fn main() {
     }
     let cluster_entrypoint = matches.value_of("network").map(|network| {
         let gossip_addr = network.parse().expect("failed to parse network address");
-        NodeInfo::new_entry_point(&gossip_addr)
+        NodeInfo::new_gossip_entry_point(&gossip_addr)
     });
     let (_signer_service, _signer_addr) = if let Some(signer_addr) = matches.value_of("signer") {
         (

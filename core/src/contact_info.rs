@@ -92,7 +92,7 @@ impl ContactInfo {
         rpc_pubsub: SocketAddr,
         now: u64,
     ) -> Self {
-        ContactInfo {
+        Self {
             id,
             signature: Signature::default(),
             gossip,
@@ -145,7 +145,7 @@ impl ContactInfo {
         let tvu_addr = Self::next_port(&bind_addr, 2);
         let rpc_addr = SocketAddr::new(bind_addr.ip(), RPC_PORT);
         let rpc_pubsub_addr = SocketAddr::new(bind_addr.ip(), RPC_PORT + 1);
-        ContactInfo::new(
+        Self::new(
             pubkey,
             gossip_addr,
             tvu_addr,
@@ -160,10 +160,11 @@ impl ContactInfo {
         let keypair = Keypair::new();
         Self::new_with_pubkey_socketaddr(keypair.pubkey(), bind_addr)
     }
-    //
-    pub fn new_entry_point(gossip_addr: &SocketAddr) -> Self {
+
+    // Construct a ContactInfo that's only usable for gossip
+    pub fn new_gossip_entry_point(gossip_addr: &SocketAddr) -> Self {
         let daddr: SocketAddr = socketaddr!("0.0.0.0:0");
-        ContactInfo::new(
+        Self::new(
             Pubkey::default(),
             *gossip_addr,
             daddr,
@@ -268,7 +269,7 @@ mod tests {
     #[test]
     fn test_entry_point() {
         let addr = socketaddr!("127.0.0.1:10");
-        let ci = ContactInfo::new_entry_point(&addr);
+        let ci = ContactInfo::new_gossip_entry_point(&addr);
         assert_eq!(ci.gossip, addr);
         assert!(ci.tvu.ip().is_unspecified());
         assert!(ci.rpc.ip().is_unspecified());
