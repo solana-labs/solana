@@ -419,17 +419,25 @@ impl Blob {
         self.set_data_size(new_size as u64);
     }
 
-    pub fn store_packets(&mut self, packets: &[Packet]) -> Result<()> {
-        let mut cursor = Cursor::new(&mut self.data[..]);
-        cursor.set_position(BLOB_HEADER_SIZE as u64);
+    pub fn store_packets(&mut self, packets: &[Packet]) -> u64 {
+        let size = self.size();
+        let mut cursor = Cursor::new(&mut self.data_mut()[size..]);
+        let mut written = 0;
+        let mut last_index = 0;
         for packet in packets {
-            serialize_into(&mut cursor, &packet.meta)?;
-            cursor.write(&packet.data[..])?;
-        }
-        let size = cursor.position();
-        self.set_size(size as usize);
+            if serialize_into(&mut cursor, &packet.meta).is_err() {
+                break;
+            }
+            if cursor.write_all(&packet.data[..]).is_err() {
+                break;
+            }
 
-        Ok(())
+            written = cursor.position() as usize;
+            last_index += 1;
+        }
+
+        self.set_size(size + written);
+        last_index
     }
 
     pub fn recv_blob(socket: &UdpSocket, r: &SharedBlob) -> io::Result<()> {
@@ -514,6 +522,8 @@ mod tests {
         to_packets, Blob, Meta, Packet, Packets, SharedBlob, SharedPackets, NUM_PACKETS,
         PACKET_DATA_SIZE,
     };
+    use crate::packet::{BLOB_HEADER_SIZE, BLOB_SIZE};
+    use bincode::serialized_size;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
@@ -629,4 +639,29 @@ mod tests {
         assert!(b.should_forward());
     }
 
+    #[test]
+    fn test_store_blobs_max() {
+        let meta = Meta::default();
+        let serialized_meta_size = serialized_size(&meta).unwrap() as usize;
+        let serialized_packet_size = serialized_meta_size + PACKET_DATA_SIZE;
+        let num_packets = (BLOB_SIZE - BLOB_HEADER_SIZE) / serialized_packet_size + 1;
+        let mut blob = Blob::default();
+        let packets: Vec<_> = (0..num_packets).map(|_| Packet::default()).collect();
+
+        // Everything except the last packet should have been written
+        assert_eq!(blob.store_packets(&packets[..]), (num_packets - 1) as u64);
+
+        blob = Blob::default();
+        // Store packets such that blob only has room for one more
+        assert_eq!(
+            blob.store_packets(&packets[..num_packets - 2]),
+            (num_packets - 2) as u64
+        );
+
+        // Fill the last packet in the blob
+        assert_eq!(blob.store_packets(&packets[..num_packets - 2]), 1);
+
+        // Blob is now full
+        assert_eq!(blob.store_packets(&packets), 0);
+    }
 }

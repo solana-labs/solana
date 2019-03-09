@@ -6,8 +6,8 @@ use crate::cluster_info::ClusterInfo;
 use crate::entry::Entry;
 use crate::leader_confirmation_service::LeaderConfirmationService;
 use crate::leader_schedule_utils;
-use crate::packet::Packets;
 use crate::packet::SharedPackets;
+use crate::packet::{Blob, Packets};
 use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntries};
 use crate::poh_service::{PohService, PohServiceConfig};
 use crate::result::{Error, Result};
@@ -76,15 +76,29 @@ impl BankingStage {
 
     fn forward_unprocessed_packets(
         socket: &std::net::UdpSocket,
-        tpu: &std::net::SocketAddr,
+        forwarder: &std::net::SocketAddr,
         unprocessed_packets: &[(SharedPackets, usize)],
     ) -> std::io::Result<()> {
+        let mut blob = Blob::default();
         for (packets, start_index) in unprocessed_packets {
             let packets = packets.read().unwrap();
-            for packet in packets.packets.iter().skip(*start_index) {
-                socket.send_to(&packet.data[..packet.meta.size], tpu)?;
+            let mut current_index = *start_index;
+            while current_index < packets.packets.len() {
+                current_index += blob.store_packets(&packets.packets[current_index..]) as usize;
+                if current_index < packets.packets.len() {
+                    // Blob is full, send it
+                    socket.send_to(&blob.data[..blob.meta.size], forwarder)?;
+                    blob = Blob::default();
+                } else {
+                    break;
+                }
             }
         }
+
+        if blob.size() > 0 {
+            socket.send_to(&blob.data[..blob.meta.size], forwarder)?;
+        }
+
         Ok(())
     }
 
@@ -110,8 +124,11 @@ impl BankingStage {
         if bank.is_none() {
             if let Some(leader) = leader.clone() {
                 if my_id == leader.id {
-                    let _ =
-                        Self::forward_unprocessed_packets(&socket, &leader.tpu, &buffered_packets);
+                    let _ = Self::forward_unprocessed_packets(
+                        &socket,
+                        &leader.forwarder,
+                        &buffered_packets,
+                    );
                     return true;
                 }
             }
@@ -119,8 +136,11 @@ impl BankingStage {
 
         // If there's a bank, and leader is available, forward the packets
         if bank.is_some() && leader.is_some() {
-            let _ =
-                Self::forward_unprocessed_packets(&socket, &leader.unwrap().tpu, &buffered_packets);
+            let _ = Self::forward_unprocessed_packets(
+                &socket,
+                &leader.unwrap().forwarder,
+                &buffered_packets,
+            );
             return true;
         }
 
@@ -179,7 +199,7 @@ impl BankingStage {
                     if let Some(leader) = cluster_info.read().unwrap().leader_data() {
                         let _ = Self::forward_unprocessed_packets(
                             &socket,
-                            &leader.tpu,
+                            &leader.forwarder,
                             &unprocessed_packets,
                         );
                     }

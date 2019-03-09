@@ -308,7 +308,7 @@ mod test {
             .collect();
 
         let mut blob = Blob::default();
-        blob.store_packets(&packets[..]).unwrap();
+        assert_eq!(blob.store_packets(&packets[..]), num_packets);
         let result = deserialize_packets_in_blob(
             &blob.data()[..blob.size()],
             serialized_packet_size,
