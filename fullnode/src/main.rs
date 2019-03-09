@@ -32,11 +32,18 @@ fn main() {
                 .help("File containing an identity (keypair)"),
         )
         .arg(
-            Arg::with_name("staker_keypair")
-                .long("staker-keypair")
+            Arg::with_name("staking_account")
+                .long("staking-account")
+                .value_name("PUBKEY_BASE58_STR")
+                .takes_value(true)
+                .help("Public key of the staking account, where to send votes"),
+        )
+        .arg(
+            Arg::with_name("voting_keypair")
+                .long("voting-keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("File containing the staker's keypair"),
+                .help("File containing the authorized voting keypair"),
         )
         .arg(
             Arg::with_name("init_complete_file")
@@ -68,11 +75,10 @@ fn main() {
                 .help("Disable leader rotation"),
         )
         .arg(
-            Arg::with_name("no_signer")
-                .long("no-signer")
+            Arg::with_name("no_voting")
+                .long("no-voting")
                 .takes_value(false)
-                .conflicts_with("signer")
-                .help("Launch node without vote signer"),
+                .help("Launch node without voting"),
         )
         .arg(
             Arg::with_name("no_sigverify")
@@ -141,7 +147,7 @@ fn main() {
     } else {
         Keypair::new()
     };
-    let staker_keypair = if let Some(identity) = matches.value_of("staker_keypair") {
+    let voting_keypair = if let Some(identity) = matches.value_of("voting_keypair") {
         read_keypair(identity).unwrap_or_else(|err| {
             eprintln!("{}: Unable to open keypair file: {}", err, identity);
             exit(1);
@@ -149,11 +155,19 @@ fn main() {
     } else {
         Keypair::new()
     };
+
+    let staking_account = matches
+        .value_of("staking_account")
+        .map_or(voting_keypair.pubkey(), |pubkey| {
+            pubkey.parse().expect("failed to parse staking_account")
+        });
+
     let ledger_path = matches.value_of("ledger").unwrap();
 
     fullnode_config.sigverify_disabled = matches.is_present("no_sigverify");
-    let no_signer = matches.is_present("no_signer");
-    fullnode_config.voting_disabled = no_signer;
+
+    fullnode_config.voting_disabled = matches.is_present("no_voting");
+
     let use_only_bootstrap_leader = matches.is_present("no_leader_rotation");
 
     if matches.is_present("enable_rpc_exit") {
@@ -227,7 +241,8 @@ fn main() {
         node,
         &keypair,
         ledger_path,
-        staker_keypair,
+        staking_account,
+        voting_keypair,
         cluster_entrypoint.as_ref(),
         &fullnode_config,
     );

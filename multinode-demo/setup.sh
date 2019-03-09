@@ -76,6 +76,7 @@ if $bootstrap_leader; then
     set -x
     $solana_keygen -o "$SOLANA_CONFIG_DIR"/mint-id.json
     $solana_keygen -o "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json
+    $solana_keygen -o "$SOLANA_CONFIG_DIR"/bootstrap-leader-staker-id.json
     $solana_genesis \
       --bootstrap-leader-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json \
       --ledger "$SOLANA_RSYNC_CONFIG_DIR"/ledger \
@@ -89,5 +90,6 @@ if $fullnode; then
   (
     set -x
     $solana_keygen -o "$SOLANA_CONFIG_DIR"/fullnode-id.json
+    $solana_keygen -o "$SOLANA_CONFIG_DIR"/fullnode-staker-id.json
   )
 fi

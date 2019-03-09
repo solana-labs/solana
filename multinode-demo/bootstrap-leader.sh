@@ -25,11 +25,19 @@ fi
 
 tune_system
 
-trap 'kill "$pid" && wait "$pid"' INT TERM
 $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger verify
 
+
+bootstrap_leader_id_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json
+bootstrap_leader_staker_id_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-staker-id.json
+bootstrap_leader_staker_id=$($solana_wallet --keypair "$bootstrap_leader_staker_id_path" address)
+
+set -x
+trap 'kill "$pid" && wait "$pid"' INT TERM ERR
 $program \
-  --identity "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json \
+  --identity "$bootstrap_leader_id_path" \
+  --voting-keypair "$bootstrap_leader_staker_id_path" \
+  --staking-account  "$bootstrap_leader_staker_id" \
   --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger \
   --accounts "$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts \
   --rpc-port 8899 \
@@ -38,4 +46,7 @@ $program \
   > >($bootstrap_leader_logger) 2>&1 &
 pid=$!
 oom_score_adj "$pid" 1000
+
+setup_fullnode_staking 127.0.0.1 "$bootstrap_leader_id_path" "$bootstrap_leader_staker_id_path"
+
 wait "$pid"

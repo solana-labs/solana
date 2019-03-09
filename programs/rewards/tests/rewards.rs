@@ -39,9 +39,15 @@ impl<'a> RewardsBank<'a> {
         self.bank.process_transaction(&tx)
     }
 
-    fn submit_vote(&self, vote_keypair: &Keypair, tick_height: u64) -> Result<VoteState> {
+    fn submit_vote(
+        &self,
+        staking_account: Pubkey,
+        vote_keypair: &Keypair,
+        tick_height: u64,
+    ) -> Result<VoteState> {
         let blockhash = self.bank.last_blockhash();
-        let tx = VoteTransaction::new_vote(vote_keypair, tick_height, blockhash, 0);
+        let tx =
+            VoteTransaction::new_vote(staking_account, vote_keypair, tick_height, blockhash, 0);
         self.bank.process_transaction(&tx)?;
         self.bank.register_tick(&hash(blockhash.as_ref()));
 
@@ -80,11 +86,17 @@ fn test_redeem_vote_credits_via_bank() {
 
     // The validator submits votes to accumulate credits.
     for i in 0..vote_state::MAX_LOCKOUT_HISTORY {
-        let vote_state = rewards_bank.submit_vote(&vote_keypair, i as u64).unwrap();
+        let vote_state = rewards_bank
+            .submit_vote(vote_id, &vote_keypair, i as u64)
+            .unwrap();
         assert_eq!(vote_state.credits(), 0);
     }
     let vote_state = rewards_bank
-        .submit_vote(&vote_keypair, vote_state::MAX_LOCKOUT_HISTORY as u64 + 1)
+        .submit_vote(
+            vote_id,
+            &vote_keypair,
+            vote_state::MAX_LOCKOUT_HISTORY as u64 + 1,
+        )
         .unwrap();
     assert_eq!(vote_state.credits(), 1);
 

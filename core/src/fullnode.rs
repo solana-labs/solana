@@ -80,6 +80,7 @@ impl Fullnode {
         mut node: Node,
         keypair: &Arc<Keypair>,
         ledger_path: &str,
+        vote_account: Pubkey,
         voting_keypair: T,
         entrypoint_info_option: Option<&NodeInfo>,
         config: &FullnodeConfig,
@@ -182,7 +183,7 @@ impl Fullnode {
                 .collect(),
         };
 
-        let voting_keypair_option = if config.voting_disabled {
+        let voting_keypair = if config.voting_disabled {
             None
         } else {
             Some(Arc::new(voting_keypair))
@@ -190,7 +191,8 @@ impl Fullnode {
 
         // Setup channel for rotation indications
         let tvu = Tvu::new(
-            voting_keypair_option,
+            vote_account,
+            voting_keypair,
             &bank_forks,
             &bank_forks_info,
             &cluster_info,
@@ -344,7 +346,13 @@ pub fn make_active_set_entries(
     let new_vote_account_entry = next_entry_mut(&mut last_entry_hash, 1, vec![new_vote_account_tx]);
 
     // 3) Create vote entry
-    let vote_tx = VoteTransaction::new_vote(&voting_keypair, slot_to_vote_on, *blockhash, 0);
+    let vote_tx = VoteTransaction::new_vote(
+        voting_keypair.pubkey(),
+        &voting_keypair,
+        slot_to_vote_on,
+        *blockhash,
+        0,
+    );
     let vote_entry = next_entry_mut(&mut last_entry_hash, 1, vec![vote_tx]);
 
     // 4) Create `num_ending_ticks` empty ticks
@@ -372,11 +380,13 @@ mod tests {
             GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
         let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
+        let voting_keypair = Keypair::new();
         let validator = Fullnode::new(
             validator_node,
             &Arc::new(validator_keypair),
             &validator_ledger_path,
-            Keypair::new(),
+            voting_keypair.pubkey(),
+            voting_keypair,
             Some(&leader_node.info),
             &FullnodeConfig::default(),
         );
@@ -398,11 +408,13 @@ mod tests {
                     GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
                 let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
                 ledger_paths.push(validator_ledger_path.clone());
+                let voting_keypair = Keypair::new();
                 Fullnode::new(
                     validator_node,
                     &Arc::new(validator_keypair),
                     &validator_ledger_path,
-                    Keypair::new(),
+                    voting_keypair.pubkey(),
+                    voting_keypair,
                     Some(&leader_node.info),
                     &FullnodeConfig::default(),
                 )

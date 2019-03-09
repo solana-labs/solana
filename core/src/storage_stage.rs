@@ -597,7 +597,8 @@ mod tests {
         }
         let mut vote_txs: Vec<_> = Vec::new();
         let keypair = Keypair::new();
-        let vote_tx = VoteTransaction::new_vote(&keypair, 123456, Hash::default(), 1);
+        let vote_tx =
+            VoteTransaction::new_vote(keypair.pubkey(), &keypair, 123456, Hash::default(), 1);
         vote_txs.push(vote_tx);
         let vote_entries = vec![Entry::new(&Hash::default(), 1, vote_txs)];
         storage_entry_sender.send(vote_entries).unwrap();

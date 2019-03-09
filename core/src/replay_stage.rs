@@ -54,6 +54,7 @@ impl ReplayStage {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new<T>(
         my_id: Pubkey,
+        vote_account: Pubkey,
         voting_keypair: Option<Arc<T>>,
         blocktree: Arc<Blocktree>,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -131,6 +132,7 @@ impl ReplayStage {
                         if let Some(ref voting_keypair) = voting_keypair {
                             let keypair = voting_keypair.as_ref();
                             let vote = VoteTransaction::new_vote(
+                                vote_account,
                                 keypair,
                                 *latest_slot_vote,
                                 parent.last_blockhash(),
@@ -387,6 +389,7 @@ mod test {
             let (exit, poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
             let (replay_stage, _slot_full_receiver, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
+                voting_keypair.pubkey(),
                 Some(voting_keypair.clone()),
                 blocktree.clone(),
                 &Arc::new(RwLock::new(bank_forks)),
@@ -398,7 +401,8 @@ mod test {
             );
 
             let keypair = voting_keypair.as_ref();
-            let vote = VoteTransaction::new_vote(keypair, 0, bank.last_blockhash(), 0);
+            let vote =
+                VoteTransaction::new_vote(keypair.pubkey(), keypair, 0, bank.last_blockhash(), 0);
             cluster_info_me.write().unwrap().push_vote(vote);
 
             info!("Send ReplayStage an entry, should see it on the ledger writer receiver");

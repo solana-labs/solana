@@ -130,12 +130,16 @@ if ((!self_setup)); then
     exit 1
   }
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id.json
+  fullnode_staker_id_path=$SOLANA_CONFIG_DIR/fullnode-staker-id.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts
 else
   mkdir -p "$SOLANA_CONFIG_DIR"
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id-x$self_setup_label.json
+  fullnode_staker_id_path=$SOLANA_CONFIG_DIR/fullnode-staker-id-x$self_setup_label.json
+
   [[ -f "$fullnode_id_path" ]] || $solana_keygen -o "$fullnode_id_path"
+  [[ -f "$fullnode_staker_id_path" ]] || $solana_keygen -o "$fullnode_staker_id_path"
 
   echo "Finding a port.."
   # Find an available port in the range 9100-9899
@@ -152,6 +156,10 @@ else
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger-x$self_setup_label
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts-x$self_setup_label
 fi
+
+fullnode_id=$($solana_wallet --keypair "$fullnode_id_path" address)
+fullnode_staker_id=$($solana_wallet --keypair "$fullnode_staker_id_path" address)
+
 
 [[ -r $fullnode_id_path ]] || {
   echo "$fullnode_id_path does not exist"
@@ -179,6 +187,7 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   echo "rsync://$url"
 }
 
+
 rsync_leader_url=$(rsync_url "$leader")
 set -ex
 if [[ ! -d "$ledger_config_dir" ]]; then
@@ -189,36 +198,14 @@ if [[ ! -d "$ledger_config_dir" ]]; then
   }
   $solana_ledger_tool --ledger "$ledger_config_dir" verify
 
-  $solana_wallet --keypair "$fullnode_id_path" address
-
-  # A fullnode requires 3 lamports to function:
-  # - one lamport to create an instance of the vote_program with
-  # - one lamport for the transaction fee
-  # - one lamport to keep the node identity public key valid.
-  retries=5
-  while true; do
-    # TODO: Until https://github.com/solana-labs/solana/issues/2355 is resolved
-    # a fullnode needs N lamports as its vote account gets re-created on every
-    # node restart, costing it lamports
-    if $solana_wallet --keypair "$fullnode_id_path" --host "${leader_address%:*}" airdrop 1000000; then
-      break
-    fi
-
-    # TODO: Consider moving this retry logic into `solana-wallet airdrop` itself,
-    #       currently it does not retry on "Connection refused" errors.
-    retries=$((retries - 1))
-    if [[ $retries -le 0 ]]; then
-      exit 1
-    fi
-    echo "Airdrop failed. Remaining retries: $retries"
-    sleep 1
-  done
 fi
 
-trap 'kill "$pid" && wait "$pid"' INT TERM
+trap 'kill "$pid" && wait "$pid"' INT TERM ERR
 $program \
   --gossip-port "$gossip_port" \
   --identity "$fullnode_id_path" \
+  --voting-keypair "$fullnode_staker_id_path" \
+  --staking-account "$fullnode_staker_id" \
   --network "$leader_address" \
   --ledger "$ledger_config_dir" \
   --accounts "$accounts_config_dir" \
@@ -227,4 +214,7 @@ $program \
   > >($fullnode_logger) 2>&1 &
 pid=$!
 oom_score_adj "$pid" 1000
+
+setup_fullnode_staking "${leader_address%:*}" "$fullnode_id_path" "$fullnode_staker_id_path"
+
 wait "$pid"

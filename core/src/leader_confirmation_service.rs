@@ -172,7 +172,8 @@ mod tests {
 
         // Get another validator to vote, so we now have 2/3 consensus
         let voting_keypair = &vote_accounts[7].0;
-        let vote_tx = VoteTransaction::new_vote(voting_keypair, 7, blockhash, 0);
+        let vote_tx =
+            VoteTransaction::new_vote(voting_keypair.pubkey(), voting_keypair, 7, blockhash, 0);
         bank.process_transaction(&vote_tx).unwrap();
 
         LeaderConfirmationService::compute_confirmation(&bank, &mut last_confirmation_time);
