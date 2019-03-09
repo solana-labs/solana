@@ -124,7 +124,7 @@ impl BankingStage {
             return true;
         }
 
-        return false;
+        false
     }
 
     fn should_buffer_packets(
@@ -148,7 +148,7 @@ impl BankingStage {
             }
         }
 
-        return false;
+        false
     }
 
     pub fn process_loop(
