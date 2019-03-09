@@ -40,7 +40,7 @@ pub struct PohRecorder {
     tick_cache: Vec<(Entry, u64)>,
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntries>,
-    clear_bank_signal: Option<SyncSender<bool>>,
+    pub clear_bank_signal: Option<SyncSender<bool>>,
 }
 
 impl PohRecorder {
