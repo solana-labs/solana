@@ -77,7 +77,7 @@ impl BankingStage {
     fn forward_unprocessed_packets(
         socket: &std::net::UdpSocket,
         tpu: &std::net::SocketAddr,
-        unprocessed_packets: &UnprocessedPackets,
+        unprocessed_packets: &[(SharedPackets, usize)],
     ) -> std::io::Result<()> {
         for (packets, start_index) in unprocessed_packets {
             let packets = packets.read().unwrap();
@@ -92,7 +92,7 @@ impl BankingStage {
         socket: &std::net::UdpSocket,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        buffered_packets: &UnprocessedPackets,
+        buffered_packets: &[(SharedPackets, usize)],
     ) -> bool {
         let (leader, my_id) = {
             let rcluster_info = cluster_info.read().unwrap();
