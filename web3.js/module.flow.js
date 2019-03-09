@@ -76,6 +76,11 @@ declare module '@solana/web3.js' {
       callback: AccountChangeCallback,
     ): number;
     removeAccountChangeListener(id: number): Promise<void>;
+    onProgramAccountChange(
+      programId: PublicKey,
+      callback: ProgramAccountChangeCallback,
+    ): number;
+    removeProgramAccountChangeListener(id: number): Promise<void>;
   }
 
   // === src/system-program.js ===
