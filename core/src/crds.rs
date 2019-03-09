@@ -165,13 +165,12 @@ impl Crds {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use crate::crds_value::LeaderId;
     use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_insert() {
         let mut crds = Crds::default();
-        let val = CrdsValue::LeaderId(LeaderId::default());
+        let val = CrdsValue::ContactInfo(ContactInfo::default());
         assert_eq!(crds.insert(val.clone(), 0).ok(), Some(None));
         assert_eq!(crds.table.len(), 1);
         assert!(crds.table.contains_key(&val.label()));
@@ -180,7 +179,7 @@ mod test {
     #[test]
     fn test_update_old() {
         let mut crds = Crds::default();
-        let val = CrdsValue::LeaderId(LeaderId::default());
+        let val = CrdsValue::ContactInfo(ContactInfo::default());
         assert_eq!(crds.insert(val.clone(), 0), Ok(None));
         assert_eq!(crds.insert(val.clone(), 1), Err(CrdsError::InsertFailed));
         assert_eq!(crds.table[&val.label()].local_timestamp, 0);
@@ -188,9 +187,9 @@ mod test {
     #[test]
     fn test_update_new() {
         let mut crds = Crds::default();
-        let original = CrdsValue::LeaderId(LeaderId::default());
+        let original = CrdsValue::ContactInfo(ContactInfo::new_localhost(Pubkey::default(), 0));
         assert_matches!(crds.insert(original.clone(), 0), Ok(_));
-        let val = CrdsValue::LeaderId(LeaderId::new(Pubkey::default(), Pubkey::default(), 1));
+        let val = CrdsValue::ContactInfo(ContactInfo::new_localhost(Pubkey::default(), 1));
         assert_eq!(
             crds.insert(val.clone(), 1).unwrap().unwrap().value,
             original
@@ -198,9 +197,9 @@ mod test {
         assert_eq!(crds.table[&val.label()].local_timestamp, 1);
     }
     #[test]
-    fn test_update_timestsamp() {
+    fn test_update_timestamp() {
         let mut crds = Crds::default();
-        let val = CrdsValue::LeaderId(LeaderId::default());
+        let val = CrdsValue::ContactInfo(ContactInfo::new_localhost(Pubkey::default(), 0));
         assert_eq!(crds.insert(val.clone(), 0), Ok(None));
 
         crds.update_label_timestamp(&val.label(), 1);
@@ -209,7 +208,7 @@ mod test {
 
         let val2 = CrdsValue::ContactInfo(ContactInfo::default());
         assert_eq!(val2.label().pubkey(), val.label().pubkey());
-        assert_matches!(crds.insert(val2.clone(), 0), Ok(None));
+        assert_matches!(crds.insert(val2.clone(), 0), Ok(Some(_)));
 
         crds.update_record_timestamp(val.label().pubkey(), 2);
         assert_eq!(crds.table[&val.label()].local_timestamp, 2);
@@ -231,7 +230,7 @@ mod test {
     #[test]
     fn test_find_old_records() {
         let mut crds = Crds::default();
-        let val = CrdsValue::LeaderId(LeaderId::default());
+        let val = CrdsValue::ContactInfo(ContactInfo::default());
         assert_eq!(crds.insert(val.clone(), 1), Ok(None));
 
         assert!(crds.find_old_labels(0).is_empty());
@@ -241,7 +240,7 @@ mod test {
     #[test]
     fn test_remove() {
         let mut crds = Crds::default();
-        let val = CrdsValue::LeaderId(LeaderId::default());
+        let val = CrdsValue::ContactInfo(ContactInfo::default());
         assert_matches!(crds.insert(val.clone(), 1), Ok(_));
 
         assert_eq!(crds.find_old_labels(1), vec![val.label()]);
@@ -250,48 +249,50 @@ mod test {
     }
     #[test]
     fn test_equal() {
-        let key = Keypair::new();
-        let v1 = VersionedCrdsValue::new(
-            1,
-            CrdsValue::LeaderId(LeaderId::new(key.pubkey(), Pubkey::default(), 0)),
-        );
-        let v2 = VersionedCrdsValue::new(
-            1,
-            CrdsValue::LeaderId(LeaderId::new(key.pubkey(), Pubkey::default(), 0)),
-        );
+        let val = CrdsValue::ContactInfo(ContactInfo::default());
+        let v1 = VersionedCrdsValue::new(1, val.clone());
+        let v2 = VersionedCrdsValue::new(1, val);
+        assert_eq!(v1, v2);
         assert!(!(v1 != v2));
-        assert!(v1 == v2);
     }
     #[test]
     fn test_hash_order() {
-        let key = Keypair::new();
         let v1 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId::new(key.pubkey(), Pubkey::default(), 0)),
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(Pubkey::default(), 0)),
         );
-        let v2 = VersionedCrdsValue::new(
-            1,
-            CrdsValue::LeaderId(LeaderId::new(key.pubkey(), key.pubkey(), 0)),
-        );
+        let v2 = VersionedCrdsValue::new(1, {
+            let mut contact_info = ContactInfo::new_localhost(Pubkey::default(), 0);
+            contact_info.rpc = socketaddr!("0.0.0.0:0");
+            CrdsValue::ContactInfo(contact_info)
+        });
+
+        assert_eq!(v1.value.label(), v2.value.label());
+        assert_eq!(v1.value.wallclock(), v2.value.wallclock());
+        assert_ne!(v1.value_hash, v2.value_hash);
         assert!(v1 != v2);
         assert!(!(v1 == v2));
         if v1 > v2 {
-            assert!(v2 < v1)
+            assert!(v1 > v2);
+            assert!(v2 < v1);
+        } else if v2 > v1 {
+            assert!(v1 < v2);
+            assert!(v2 > v1);
         } else {
-            assert!(v2 > v1)
+            panic!("bad PartialOrd implementation?");
         }
     }
     #[test]
     fn test_wallclock_order() {
-        let key = Keypair::new();
         let v1 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId::new(key.pubkey(), Pubkey::default(), 1)),
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(Pubkey::default(), 1)),
         );
         let v2 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId::new(key.pubkey(), Pubkey::default(), 0)),
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(Pubkey::default(), 0)),
         );
+        assert_eq!(v1.value.label(), v2.value.label());
         assert!(v1 > v2);
         assert!(!(v1 < v2));
         assert!(v1 != v2);
@@ -301,13 +302,13 @@ mod test {
     fn test_label_order() {
         let v1 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId::new(Keypair::new().pubkey(), Pubkey::default(), 0)),
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0)),
         );
         let v2 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId::new(Keypair::new().pubkey(), Pubkey::default(), 0)),
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0)),
         );
-        assert!(v1 != v2);
+        assert_ne!(v1, v2);
         assert!(!(v1 == v2));
         assert!(!(v1 < v2));
         assert!(!(v1 > v2));

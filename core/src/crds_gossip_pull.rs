@@ -209,7 +209,6 @@ impl CrdsGossipPull {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use crate::crds_value::LeaderId;
     use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
@@ -325,17 +324,20 @@ mod test {
         let node_id = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
         node_crds.insert(entry.clone(), 0).unwrap();
+
         let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
         node_crds.insert(new.clone(), 0).unwrap();
 
         let mut dest = CrdsGossipPull::default();
         let mut dest_crds = Crds::default();
-        let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
+        let new_id = Keypair::new().pubkey();
+        let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(new_id, 1));
         dest_crds.insert(new.clone(), 0).unwrap();
 
         // node contains a key from the dest node, but at an older local timestamp
-        let dest_id = new.label().pubkey();
-        let same_key = CrdsValue::LeaderId(LeaderId::new(dest_id, dest_id, 1));
+        let same_key = CrdsValue::ContactInfo(ContactInfo::new_localhost(new_id, 0));
+        assert_eq!(same_key.label(), new.label());
+        assert!(same_key.wallclock() < new.wallclock());
         node_crds.insert(same_key.clone(), 0).unwrap();
         assert_eq!(
             node_crds

@@ -51,10 +51,10 @@ impl Eq for ContactInfo {}
 #[macro_export]
 macro_rules! socketaddr {
     ($ip:expr, $port:expr) => {
-        SocketAddr::from((Ipv4Addr::from($ip), $port))
+        std::net::SocketAddr::from((Ipv4Addr::from($ip), $port))
     };
     ($str:expr) => {{
-        let a: SocketAddr = $str.parse().unwrap();
+        let a: std::net::SocketAddr = $str.parse().unwrap();
         a
     }};
 }
