@@ -5,9 +5,8 @@ on-chain programs.  Incentives for staking is covered in [staking
 rewardsd](staking-rewards.md).
 
 
-This proposal is solving is to allow many delegated stakes to
-passively earn rewards with a single validator vote without permission from the
-validator.
+This proposal is solving is to allow many delegated stakes to passively earn
+rewards with a single validator vote without permission from the validator.
 
 The current architecture requires an active vote for each delegated stake from
 the validator, and therefore does not scale to allow for replicator clients
@@ -48,7 +47,8 @@ an instance of the VoteState program.
 
 ### VoteState
 
-VoteState contains the following state information:
+VoteState is the current state of all the votes the **delegate** has submitted
+to the bank.  VoteState contains the following state information:
 
 * votes - The submitted votes.
 
@@ -59,15 +59,21 @@ lifetime.
 rewards.
 
 * commission - The commission taken by this VoteState for any rewards claimed by
-delegated accounts.
+staker's RewardState accounts.
+
+* lamports - The accumulated lamports from the commission.  These do not count as
+stakes.
+
+* `authorized_voter_id` - Only this identity is authorized to submit votes.
 
 ### RewardState
 
-RewardState contains the following state information:
+RewardState is the current delegation preference of the **staker**. RewardState
+contains the following state information:
 
 * lamports - The staked lamports.
 
-* `vote_state_id` - The address of the vote state instance the lamports are
+* `vote_state_id` - The pubkey of the VoteState instance the lamports are
 delegated to.
 
 * `claimed_credits` - The total credits claimed over the lifetime of the
