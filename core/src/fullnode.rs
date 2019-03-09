@@ -112,7 +112,7 @@ impl Fullnode {
         let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, &exit);
         poh_recorder.lock().unwrap().clear_bank_signal = blocktree.new_blobs_signals.first();
         assert_eq!(
-            blocktree.new_blob_signals.len(),
+            blocktree.new_blobs_signals.len(),
             1,
             "New blob signal for the TVU should be the same as the clear bank signal."
         );
