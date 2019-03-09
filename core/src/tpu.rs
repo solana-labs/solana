@@ -18,7 +18,6 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
 pub struct Tpu {
-    pub id: Pubkey,
     fetch_stage: FetchStage,
     sigverify_stage: SigVerifyStage,
     banking_stage: BankingStage,
@@ -60,7 +59,6 @@ impl Tpu {
         );
 
         Self {
-            id,
             fetch_stage,
             sigverify_stage,
             banking_stage,
