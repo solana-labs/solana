@@ -13,7 +13,8 @@ use solana::blocktree::{
     create_new_tmp_ledger, get_tmp_ledger_path, tmp_copy_blocktree, Blocktree,
 };
 use solana::client::mk_client;
-use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
+use solana::cluster_info::{ClusterInfo, Node};
+use solana::contact_info::ContactInfo;
 use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::replicator::Replicator;
@@ -78,7 +79,7 @@ fn test_replicator_startup_basic() {
 
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         #[cfg(feature = "chacha")]
-        let validator_node_info = validator_node.info.clone();
+        let validator_contact_info = validator_node.info.clone();
 
         let validator = Fullnode::new(
             validator_node,
@@ -130,7 +131,7 @@ fn test_replicator_startup_basic() {
         let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
         let replicator_info = replicator_node.info.clone();
 
-        let leader_info = NodeInfo::new_gossip_entry_point(&leader_info.gossip);
+        let leader_info = ContactInfo::new_gossip_entry_point(&leader_info.gossip);
 
         let replicator = Replicator::new(
             replicator_ledger_path,
@@ -196,7 +197,7 @@ fn test_replicator_startup_basic() {
                 "looking for pubkeys for entry: {}",
                 replicator.entry_height()
             );
-            let rpc_client = RpcClient::new_from_socket(validator_node_info.rpc);
+            let rpc_client = RpcClient::new_from_socket(validator_contact_info.rpc);
             let mut non_zero_pubkeys = false;
             for _ in 0..60 {
                 let params = json!([replicator.entry_height()]);
@@ -244,7 +245,7 @@ fn test_replicator_startup_leader_hang() {
         let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
 
         let fake_gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let leader_info = NodeInfo::new_gossip_entry_point(&fake_gossip);
+        let leader_info = ContactInfo::new_gossip_entry_point(&fake_gossip);
 
         let replicator_res = Replicator::new(
             &replicator_ledger_path,
@@ -316,7 +317,7 @@ fn test_replicator_startup_ledger_hang() {
         // Pass bad TVU sockets to prevent successful ledger download
         replicator_node.sockets.tvu = vec![std::net::UdpSocket::bind("0.0.0.0:0").unwrap()];
 
-        let leader_info = NodeInfo::new_gossip_entry_point(&leader_info.gossip);
+        let leader_info = ContactInfo::new_gossip_entry_point(&leader_info.gossip);
 
         let replicator_res = Replicator::new(
             &replicator_ledger_path,

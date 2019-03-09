@@ -3,7 +3,7 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use crate::cluster_info::NodeInfo;
+use crate::contact_info::ContactInfo;
 use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::packet::PACKET_DATA_SIZE;
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
@@ -412,7 +412,7 @@ pub fn retry_get_balance(
     None
 }
 
-pub fn new_fullnode() -> (Fullnode, NodeInfo, Keypair, String) {
+pub fn new_fullnode() -> (Fullnode, ContactInfo, Keypair, String) {
     use crate::blocktree::create_new_tmp_ledger;
     use crate::cluster_info::Node;
     use crate::fullnode::Fullnode;
@@ -421,9 +421,9 @@ pub fn new_fullnode() -> (Fullnode, NodeInfo, Keypair, String) {
 
     let node_keypair = Arc::new(Keypair::new());
     let node = Node::new_localhost_with_pubkey(node_keypair.pubkey());
-    let node_info = node.info.clone();
+    let contact_info = node.info.clone();
 
-    let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, node_info.id, 42);
+    let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, contact_info.id, 42);
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     let voting_keypair = Keypair::new();
@@ -437,7 +437,7 @@ pub fn new_fullnode() -> (Fullnode, NodeInfo, Keypair, String) {
         &FullnodeConfig::default(),
     );
 
-    (node, node_info, mint_keypair, ledger_path)
+    (node, contact_info, mint_keypair, ledger_path)
 }
 
 #[cfg(test)]

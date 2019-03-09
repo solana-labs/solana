@@ -125,8 +125,8 @@ impl JsonRpcRequestProcessor {
 }
 
 fn get_tpu_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
-    let node_info = cluster_info.read().unwrap().my_data();
-    Ok(node_info.tpu)
+    let contact_info = cluster_info.read().unwrap().my_data();
+    Ok(contact_info.tpu)
 }
 
 fn verify_pubkey(input: String) -> Result<Pubkey> {
@@ -406,7 +406,7 @@ impl RpcSol for RpcSolImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cluster_info::NodeInfo;
+    use crate::contact_info::ContactInfo;
     use jsonrpc_core::{MetaIoHandler, Response};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::{hash, Hash};
@@ -431,9 +431,9 @@ mod tests {
         )));
         request_processor.write().unwrap().set_bank(&bank);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            NodeInfo::default(),
+            ContactInfo::default(),
         )));
-        let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
+        let leader = ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
 
         cluster_info.write().unwrap().insert_info(leader.clone());
         cluster_info.write().unwrap().set_leader(leader.id);
@@ -634,7 +634,7 @@ mod tests {
                 Arc::new(RwLock::new(request_processor))
             },
             cluster_info: Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-                NodeInfo::default(),
+                ContactInfo::default(),
             ))),
         };
 
@@ -653,7 +653,7 @@ mod tests {
     #[test]
     fn test_rpc_get_tpu_addr() {
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
+            ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234")),
         )));
         assert_eq!(
             get_tpu_addr(&cluster_info),

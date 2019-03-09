@@ -227,8 +227,8 @@ impl StorageStage {
         keypair: &Arc<Keypair>,
         account_to_create: Option<Pubkey>,
     ) -> io::Result<()> {
-        let node_info = cluster_info.read().unwrap().my_data();
-        let mut client = mk_client_with_timeout(&node_info, Duration::from_secs(5));
+        let contact_info = cluster_info.read().unwrap().my_data();
+        let mut client = mk_client_with_timeout(&contact_info, Duration::from_secs(5));
 
         if let Some(account) = account_to_create {
             if client.get_account_userdata(&account).is_ok() {
@@ -445,7 +445,8 @@ impl Service for StorageStage {
 #[cfg(test)]
 mod tests {
     use crate::blocktree::{create_new_tmp_ledger, Blocktree};
-    use crate::cluster_info::{ClusterInfo, NodeInfo};
+    use crate::cluster_info::ClusterInfo;
+    use crate::contact_info::ContactInfo;
     use crate::entry::{make_tiny_test_entries, Entry};
     use crate::service::Service;
     use crate::storage_stage::StorageState;
@@ -492,8 +493,8 @@ mod tests {
     }
 
     fn test_cluster_info(id: Pubkey) -> Arc<RwLock<ClusterInfo>> {
-        let node_info = NodeInfo::new_localhost(id, 0);
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(node_info);
+        let contact_info = ContactInfo::new_localhost(id, 0);
+        let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
         Arc::new(RwLock::new(cluster_info))
     }
 

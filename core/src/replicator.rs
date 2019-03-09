@@ -4,7 +4,8 @@ use crate::blocktree_processor;
 #[cfg(feature = "chacha")]
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::client::mk_client;
-use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
+use crate::cluster_info::{ClusterInfo, Node};
+use crate::contact_info::ContactInfo;
 use crate::gossip_service::GossipService;
 use crate::result::Result;
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
@@ -101,7 +102,7 @@ impl Replicator {
     /// * `ledger_path` - path to where the ledger will be stored.
     /// Causes panic if none
     /// * `node` - The replicator node
-    /// * `leader_info` - NodeInfo representing the leader
+    /// * `leader_info` - ContactInfo representing the leader
     /// * `keypair` - Keypair for this replicator
     /// * `timeout` - (optional) timeout for polling for leader/downloading the ledger. Defaults to
     /// 30 seconds
@@ -109,7 +110,7 @@ impl Replicator {
     pub fn new(
         ledger_path: &str,
         node: Node,
-        leader_info: &NodeInfo,
+        leader_info: &ContactInfo,
         keypair: &Arc<Keypair>,
         _timeout: Option<Duration>,
     ) -> Result<Self> {
@@ -198,11 +199,11 @@ impl Replicator {
 
         info!("Done receiving entries from window_service");
 
-        let mut node_info = node.info.clone();
-        node_info.tvu = "0.0.0.0:0".parse().unwrap();
+        let mut contact_info = node.info.clone();
+        contact_info.tvu = "0.0.0.0:0".parse().unwrap();
         {
             let mut cluster_info_w = cluster_info.write().unwrap();
-            cluster_info_w.insert_self(node_info);
+            cluster_info_w.insert_self(contact_info);
         }
 
         let mut client = mk_client(leader_info);
@@ -328,7 +329,7 @@ impl Replicator {
         ))?
     }
 
-    fn get_airdrop_lamports(client: &mut ThinClient, keypair: &Keypair, leader_info: &NodeInfo) {
+    fn get_airdrop_lamports(client: &mut ThinClient, keypair: &Keypair, leader_info: &ContactInfo) {
         if retry_get_balance(client, &keypair.pubkey(), None).is_none() {
             let mut drone_addr = leader_info.tpu;
             drone_addr.set_port(DRONE_PORT);

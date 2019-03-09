@@ -3,7 +3,8 @@
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::blocktree_processor::{self, BankForksInfo};
-use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
+use crate::cluster_info::{ClusterInfo, Node};
+use crate::contact_info::ContactInfo;
 use crate::entry::create_ticks;
 use crate::entry::next_entry_mut;
 use crate::entry::Entry;
@@ -82,7 +83,7 @@ impl Fullnode {
         ledger_path: &str,
         vote_account: Pubkey,
         voting_keypair: T,
-        entrypoint_info_option: Option<&NodeInfo>,
+        entrypoint_info_option: Option<&ContactInfo>,
         config: &FullnodeConfig,
     ) -> Self
     where

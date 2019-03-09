@@ -1,6 +1,7 @@
 use clap::{crate_version, App, Arg};
 use log::*;
-use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
+use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
+use solana::contact_info::ContactInfo;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
@@ -197,7 +198,7 @@ fn main() {
     }
     let cluster_entrypoint = matches.value_of("network").map(|network| {
         let gossip_addr = network.parse().expect("failed to parse network address");
-        NodeInfo::new_gossip_entry_point(&gossip_addr)
+        ContactInfo::new_gossip_entry_point(&gossip_addr)
     });
     let (_signer_service, _signer_addr) = if let Some(signer_addr) = matches.value_of("signer") {
         (

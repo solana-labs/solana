@@ -1,5 +1,6 @@
 use clap::{crate_version, App, Arg};
-use solana::cluster_info::{Node, NodeInfo};
+use solana::cluster_info::Node;
+use solana::contact_info::ContactInfo;
 use solana::replicator::Replicator;
 use solana::socketaddr;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
@@ -79,7 +80,7 @@ fn main() {
         .map(|network| network.parse().expect("failed to parse network address"))
         .unwrap();
 
-    let leader_info = NodeInfo::new_gossip_entry_point(&network_addr);
+    let leader_info = ContactInfo::new_gossip_entry_point(&network_addr);
 
     let replicator =
         Replicator::new(ledger_path, node, &leader_info, &Arc::new(keypair), None).unwrap();

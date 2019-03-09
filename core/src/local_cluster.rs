@@ -1,6 +1,7 @@
 use crate::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree};
 use crate::client::mk_client;
-use crate::cluster_info::{Node, NodeInfo};
+use crate::cluster_info::Node;
+use crate::contact_info::ContactInfo;
 use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::gossip_service::discover;
 use crate::service::Service;
@@ -20,7 +21,7 @@ pub struct LocalCluster {
     /// Keypair with funding to particpiate in the network
     pub funding_keypair: Keypair,
     /// Entry point from which the rest of the network can be discovered
-    pub entry_point_info: NodeInfo,
+    pub entry_point_info: ContactInfo,
     pub ledger_paths: Vec<String>,
     fullnodes: Vec<Fullnode>,
 }
@@ -47,7 +48,7 @@ impl LocalCluster {
         ledger_paths.push(genesis_ledger_path.clone());
         ledger_paths.push(leader_ledger_path.clone());
         let voting_keypair = Keypair::new();
-        let leader_node_info = leader_node.info.clone();
+        let leader_contact_info = leader_node.info.clone();
         let leader_server = Fullnode::new(
             leader_node,
             &leader_keypair,
@@ -58,7 +59,7 @@ impl LocalCluster {
             fullnode_config,
         );
         let mut fullnodes = vec![leader_server];
-        let mut client = mk_client(&leader_node_info);
+        let mut client = mk_client(&leader_contact_info);
         for stake in &node_stakes[1..] {
             // Must have enough tokens to fund vote account and set delegate
             assert!(*stake > 2);
@@ -90,15 +91,15 @@ impl LocalCluster {
                 &ledger_path,
                 voting_keypair.pubkey(),
                 voting_keypair,
-                Some(&leader_node_info),
+                Some(&leader_contact_info),
                 fullnode_config,
             );
             fullnodes.push(validator_server);
         }
-        discover(&leader_node_info.gossip, node_stakes.len()).unwrap();
+        discover(&leader_contact_info.gossip, node_stakes.len()).unwrap();
         Self {
             funding_keypair: mint_keypair,
-            entry_point_info: leader_node_info,
+            entry_point_info: leader_contact_info,
             fullnodes,
             ledger_paths,
         }
