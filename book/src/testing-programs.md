@@ -31,18 +31,12 @@ trait Transact {
 
 Users send transactions and asynchrounously await their results.
 
-### Transact with Clusters
+#### Transact with Clusters
 
 The highest level implementation targets a Solana cluster, which may be a
 deployed testnet or a local cluster running on a development machine.
 
-### Transact with a Fullnode
-
-Below the cluster level is a Fullnode implementation of Transact. At the
-Fullnode level, the application is still using sockets, but does not need be
-concerned with cluster dynamics such as leader rotation of rollback.
-
-### Transact with the TPU
+#### Transact with the TPU
 
 The next level is the TPU implementation of Transact. At the TPU level, the
 application sends transactions over Rust channels, where there can be no
@@ -51,17 +45,20 @@ surprises from network queues or dropped packets. The TPU implements all
 account-in-use errors, and otherwise results in the ledger, complete with proof
 of history hashes.
 
-### Transact with the Bank
+### Low-level testing
 
-Below the TPU level is the Bank implementation. The Bank doesn't do signature
-verification or generate a ledger. The Bank is a convenient layer at which to
-test new on-chain programs. It allows developers to toggle between native
-program implementations and BPF-compiled variants.
+### Testing with the Bank
 
-### Transact with the Runtime
+Below the TPU level is the Bank. The Bank doesn't do signature verification or
+generate a ledger. The Bank is a convenient layer at which to test new on-chain
+programs. It allows developers to toggle between native program implementations
+and BPF-compiled variants. No need for the Transact trait here. The Bank's API
+is synchronous.
 
-Below the Runtime level is the Runtime implementation. By statically linking
-the Runtime into a native program implementation, the developer gains the
-shortest possible edit-compile-run loop. Without any dynamic linking, stack
-traces include debug symbols and program errors are straightforward to
-troubleshoot.
+### Unit-testing with the Runtime
+
+Below the Bank is the Runtime. The Runtime is the ideal test environment for
+unit-testing. By statically linking the Runtime into a native program
+implementation, the developer gains the shortest possible edit-compile-run
+loop. Without any dynamic linking, stack traces include debug symbols and
+program errors are straightforward to troubleshoot.
