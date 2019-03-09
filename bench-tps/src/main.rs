@@ -3,7 +3,6 @@ mod cli;
 
 use crate::bench::*;
 use solana::client::mk_client;
-use solana::contact_info::ContactInfo;
 use solana::gen_keys::GenKeys;
 use solana::gossip_service::discover;
 use solana_metrics;
@@ -39,8 +38,7 @@ fn main() {
         converge_only,
     } = cfg;
 
-    let cluster_entrypoint = ContactInfo::new_entry_point(&network);
-    let nodes = discover(&cluster_entrypoint, num_nodes).unwrap_or_else(|err| {
+    let nodes = discover(&network, num_nodes).unwrap_or_else(|err| {
         eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
         exit(1);
     });
@@ -62,6 +60,7 @@ fn main() {
     if converge_only {
         return;
     }
+    let cluster_entrypoint = nodes[0].clone(); // Pick the first node, why not?
 
     let mut client = mk_client(&cluster_entrypoint);
     let mut barrier_client = mk_client(&cluster_entrypoint);

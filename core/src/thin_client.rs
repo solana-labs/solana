@@ -455,7 +455,7 @@ mod tests {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode();
         let bob_pubkey = Keypair::new().pubkey();
-        discover(&leader_data, 1).unwrap();
+        discover(&leader_data.gossip, 1).unwrap();
 
         let mut client = mk_client(&leader_data);
 
@@ -486,7 +486,7 @@ mod tests {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode();
         let bob_pubkey = Keypair::new().pubkey();
-        discover(&leader_data, 1).unwrap();
+        discover(&leader_data.gossip, 1).unwrap();
 
         let mut client = mk_client(&leader_data);
 
@@ -517,7 +517,7 @@ mod tests {
     fn test_register_vote_account() {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode();
-        discover(&leader_data, 1).unwrap();
+        discover(&leader_data.gossip, 1).unwrap();
 
         let mut client = mk_client(&leader_data);
 
@@ -583,7 +583,7 @@ mod tests {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode();
         let bob_keypair = Keypair::new();
-        discover(&leader_data, 1).unwrap();
+        discover(&leader_data.gossip, 1).unwrap();
 
         let mut client = mk_client(&leader_data);
         let blockhash = client.get_recent_blockhash();

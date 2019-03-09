@@ -149,7 +149,7 @@ impl Replicator {
         );
 
         info!("Looking for leader at {:?}", leader_info);
-        crate::gossip_service::discover(&leader_info, 1)?;
+        crate::gossip_service::discover(&leader_info.gossip, 1)?;
 
         let (storage_blockhash, storage_entry_height) =
             Self::poll_for_blockhash_and_entry_height(&cluster_info)?;

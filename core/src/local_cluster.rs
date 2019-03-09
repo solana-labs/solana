@@ -93,7 +93,7 @@ impl LocalCluster {
             );
             fullnodes.push(validator_server);
         }
-        discover(&leader_node_info, node_stakes.len()).unwrap();
+        discover(&leader_node_info.gossip, node_stakes.len()).unwrap();
         Self {
             funding_keypair: mint_keypair,
             entry_point_info: leader_node_info,
