@@ -128,7 +128,7 @@ fn test_replicator_startup_basic() {
         let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
         let replicator_info = replicator_node.info.clone();
 
-        let leader_info = NodeInfo::new_entry_point(&leader_info.gossip);
+        let leader_info = NodeInfo::new_gossip_entry_point(&leader_info.gossip);
 
         let replicator = Replicator::new(
             replicator_ledger_path,
@@ -242,7 +242,7 @@ fn test_replicator_startup_leader_hang() {
         let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
 
         let fake_gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let leader_info = NodeInfo::new_entry_point(&fake_gossip);
+        let leader_info = NodeInfo::new_gossip_entry_point(&fake_gossip);
 
         let replicator_res = Replicator::new(
             &replicator_ledger_path,
@@ -312,7 +312,7 @@ fn test_replicator_startup_ledger_hang() {
         // Pass bad TVU sockets to prevent successful ledger download
         replicator_node.sockets.tvu = vec![std::net::UdpSocket::bind("0.0.0.0:0").unwrap()];
 
-        let leader_info = NodeInfo::new_entry_point(&leader_info.gossip);
+        let leader_info = NodeInfo::new_gossip_entry_point(&leader_info.gossip);
 
         let replicator_res = Replicator::new(
             &replicator_ledger_path,

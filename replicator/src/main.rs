@@ -79,7 +79,7 @@ fn main() {
         .map(|network| network.parse().expect("failed to parse network address"))
         .unwrap();
 
-    let leader_info = NodeInfo::new_entry_point(&network_addr);
+    let leader_info = NodeInfo::new_gossip_entry_point(&network_addr);
 
     let replicator =
         Replicator::new(ledger_path, node, &leader_info, &Arc::new(keypair), None).unwrap();

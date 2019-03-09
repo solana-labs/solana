@@ -1616,7 +1616,7 @@ mod tests {
         solana_logger::setup();
         let node_info = NodeInfo::new_localhost(Keypair::new().pubkey(), 0);
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(node_info);
-        let network_entry_point = NodeInfo::new_entry_point(&socketaddr!("127.0.0.1:1239"));
+        let network_entry_point = NodeInfo::new_gossip_entry_point(&socketaddr!("127.0.0.1:1239"));
         cluster_info.insert_info(network_entry_point);
         assert!(cluster_info.leader_data().is_none());
     }
