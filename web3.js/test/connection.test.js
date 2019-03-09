@@ -476,3 +476,65 @@ test('account change notification', async () => {
     Buffer.from([1, 2, 3]),
   );
 });
+
+test('program account change notification', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url);
+  const owner = new Account();
+  const programAccount = new Account();
+
+  const mockCallback = jest.fn();
+
+  const subscriptionId = connection.onProgramAccountChange(
+    BpfLoader.programId,
+    mockCallback,
+  );
+
+  await connection.requestAirdrop(owner.publicKey, 42);
+  const transaction = SystemProgram.createAccount(
+    owner.publicKey,
+    programAccount.publicKey,
+    42,
+    3,
+    BpfLoader.programId,
+  );
+  transaction.fee = 0;
+  await sendAndConfirmTransaction(connection, transaction, owner);
+
+  const loader = new Loader(connection, BpfLoader.programId);
+  await loader.load(programAccount, [1, 2, 3]);
+
+  // Wait for mockCallback to receive a call
+  let i = 0;
+  for (;;) {
+    if (mockCallback.mock.calls.length === 1) {
+      break;
+    }
+
+    if (++i === 5) {
+      console.log(JSON.stringify(mockCallback.mock.calls));
+      throw new Error('mockCallback should be called twice');
+    }
+    // Sleep for a 1/4 of a slot, notifications only occur after a block is
+    // processed
+    await sleep((250 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
+  }
+
+  await connection.removeProgramAccountChangeListener(subscriptionId);
+
+  expect(mockCallback.mock.calls[0][0].accountId).toEqual(
+    programAccount.publicKey.toString(),
+  );
+  expect(mockCallback.mock.calls[0][0].accountInfo.lamports).toBe(41);
+  expect(mockCallback.mock.calls[0][0].accountInfo.owner).toEqual(
+    BpfLoader.programId,
+  );
+  expect(mockCallback.mock.calls[0][0].accountInfo.executable).toBe(false);
+  expect(mockCallback.mock.calls[0][0].accountInfo.userdata).toEqual(
+    Buffer.from([1, 2, 3]),
+  );
+});
