@@ -160,54 +160,6 @@ mod test {
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
     }
-    /*
-        #[test]
-        pub fn test_send_to_retransmit_stage() {
-            let leader = Keypair::new().pubkey();
-            let nonleader = Keypair::new().pubkey();
-            let mut leader_scheduler = LeaderScheduler::default();
-            leader_scheduler.set_leader_schedule(vec![leader]);
-            let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
-            let blob = SharedBlob::default();
-
-            let (blob_sender, blob_receiver) = channel();
-
-            // Expect all blobs to be sent to retransmit_stage
-            blob.write().unwrap().forward(false);
-            retransmit_blobs(
-                &vec![blob.clone()],
-                &leader_scheduler,
-                &blob_sender,
-                &nonleader,
-            )
-            .expect("Expect successful retransmit");
-            let _ = blob_receiver
-                .try_recv()
-                .expect("Expect input blob to be retransmitted");
-
-            blob.write().unwrap().forward(true);
-            retransmit_blobs(
-                &vec![blob.clone()],
-                &leader_scheduler,
-                &blob_sender,
-                &nonleader,
-            )
-            .expect("Expect successful retransmit");
-            let output_blob = blob_receiver
-                .try_recv()
-                .expect("Expect input blob to be retransmitted");
-
-            // retransmit_blobs shouldn't be modifying the blob. That is retransmit stage's job now
-            assert_eq!(*output_blob[0].read().unwrap(), *blob.read().unwrap());
-
-            // Expect blob from leader while currently leader to not be retransmitted
-            // Even when forward is set
-            blob.write().unwrap().forward(true);
-            retransmit_blobs(&vec![blob], &leader_scheduler, &blob_sender, &leader)
-                .expect("Expect successful retransmit");
-            assert!(blob_receiver.try_recv().is_err());
-        }
-    */
     #[test]
     pub fn test_find_missing_data_indexes_sanity() {
         let slot = 0;
