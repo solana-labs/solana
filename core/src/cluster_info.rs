@@ -77,6 +77,8 @@ pub struct ClusterInfo {
     // TODO: remove gossip_leader_id once all usage of `set_leader()` and `leader_data()` is
     // purged
     gossip_leader_id: Pubkey,
+    /// The network entrypoint
+    entrypoint: Option<NodeInfo>,
 }
 
 #[derive(Default, Clone)]
@@ -174,12 +176,20 @@ impl ClusterInfo {
             gossip: CrdsGossip::default(),
             keypair,
             gossip_leader_id: Pubkey::default(),
+            entrypoint: None,
         };
         let id = node_info.id;
         me.gossip.set_self(id);
-        me.insert_info(node_info);
+        me.insert_self(node_info);
         me.push_self(&HashMap::new());
         me
+    }
+    pub fn insert_self(&mut self, node_info: NodeInfo) {
+        if self.id() == node_info.id {
+            let mut value = CrdsValue::ContactInfo(node_info.clone());
+            value.sign(&self.keypair);
+            let _ = self.gossip.crds.insert(value, timestamp());
+        }
     }
     pub fn push_self(&mut self, stakes: &HashMap<Pubkey, u64>) {
         let mut my_data = self.my_data();
@@ -190,10 +200,14 @@ impl ClusterInfo {
         self.gossip.refresh_push_active_set(stakes);
         self.gossip.process_push_message(&[entry], now);
     }
+    // TODO kill insert_info, only used by tests
     pub fn insert_info(&mut self, node_info: NodeInfo) {
         let mut value = CrdsValue::ContactInfo(node_info);
         value.sign(&self.keypair);
         let _ = self.gossip.crds.insert(value, timestamp());
+    }
+    pub fn set_entrypoint(&mut self, entrypoint: NodeInfo) {
+        self.entrypoint = Some(entrypoint)
     }
     pub fn id(&self) -> Pubkey {
         self.gossip.id
@@ -763,6 +777,26 @@ impl ClusterInfo {
 
         Ok((addr, out))
     }
+    // If the network entrypoint hasn't been discovered yet, add it to the crds table
+    fn add_entrypoint(&mut self, pulls: &mut Vec<(Pubkey, Bloom<Hash>, SocketAddr, CrdsValue)>) {
+        match &self.entrypoint {
+            Some(entrypoint) => {
+                let self_info = self
+                    .gossip
+                    .crds
+                    .lookup(&CrdsValueLabel::ContactInfo(self.id()))
+                    .unwrap_or_else(|| panic!("self_id invalid {}", self.id()));
+
+                pulls.push((
+                    entrypoint.id,
+                    self.gossip.pull.build_crds_filter(&self.gossip.crds),
+                    entrypoint.gossip,
+                    self_info.clone(),
+                ))
+            }
+            None => (),
+        }
+    }
 
     fn new_pull_requests(&mut self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
         let now = timestamp();
@@ -773,7 +807,7 @@ impl ClusterInfo {
             .into_iter()
             .collect();
 
-        let pr: Vec<_> = pulls
+        let mut pr: Vec<_> = pulls
             .into_iter()
             .filter_map(|(peer, filter, self_info)| {
                 let peer_label = CrdsValueLabel::ContactInfo(peer);
@@ -784,6 +818,11 @@ impl ClusterInfo {
                     .map(|peer_info| (peer, filter, peer_info.gossip, self_info))
             })
             .collect();
+        if pr.is_empty() {
+            self.add_entrypoint(&mut pr);
+        } else {
+            self.entrypoint = None;
+        }
         pr.into_iter()
             .map(|(peer, filter, gossip, self_info)| {
                 self.gossip.mark_pull_request_creation_time(peer, now);
@@ -1069,7 +1108,11 @@ impl ClusterInfo {
             return vec![];
         }
 
-        me.write().unwrap().insert_info(from.clone());
+        me.write()
+            .unwrap()
+            .gossip
+            .crds
+            .update_record_timestamp(from.id, timestamp());
         let my_info = me.read().unwrap().my_data().clone();
         inc_new_counter_info!("cluster_info-window-request-recv", 1);
         trace!(
@@ -1103,8 +1146,12 @@ impl ClusterInfo {
         match request {
             // TODO verify messages faster
             Protocol::PullRequest(filter, caller) => {
-                //Pulls don't need to be verified
-                Self::handle_pull_request(me, filter, caller, from_addr)
+                if !caller.verify() {
+                    inc_new_counter_info!("cluster_info-gossip_pull_request_verify_fail", 1);
+                    vec![]
+                } else {
+                    Self::handle_pull_request(me, filter, caller, from_addr)
+                }
             }
             Protocol::PullResponse(from, mut data) => {
                 data.retain(|v| {
@@ -1454,6 +1501,19 @@ mod tests {
         let label = CrdsValueLabel::ContactInfo(d.id);
         cluster_info.insert_info(d);
         assert!(cluster_info.gossip.crds.lookup(&label).is_some());
+    }
+    #[test]
+    fn test_insert_self() {
+        let d = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
+        let mut cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
+        let entry_label = CrdsValueLabel::ContactInfo(cluster_info.id());
+        assert!(cluster_info.gossip.crds.lookup(&entry_label).is_some());
+
+        // inserting something else shouldn't work
+        let d = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
+        cluster_info.insert_self(d.clone());
+        let label = CrdsValueLabel::ContactInfo(d.id);
+        assert!(cluster_info.gossip.crds.lookup(&label).is_none());
     }
     #[test]
     fn window_index_request() {
@@ -1890,4 +1950,41 @@ mod tests {
         assert_eq!(votes, vec![]);
         assert_eq!(max_ts, new_max_ts);
     }
+}
+#[test]
+fn test_add_entrypoint() {
+    let node_keypair = Arc::new(Keypair::new());
+    let mut cluster_info = ClusterInfo::new(
+        NodeInfo::new_localhost(node_keypair.pubkey(), timestamp()),
+        node_keypair,
+    );
+    let entrypoint_id = Keypair::new().pubkey();
+    let entrypoint = NodeInfo::new_localhost(entrypoint_id, timestamp());
+    cluster_info.set_entrypoint(entrypoint.clone());
+    let pulls = cluster_info.new_pull_requests(&HashMap::new());
+    assert_eq!(1, pulls.len());
+    match pulls.get(0) {
+        Some((addr, msg)) => {
+            assert_eq!(*addr, entrypoint.gossip);
+            match msg {
+                Protocol::PullRequest(_, value) => {
+                    assert!(value.verify());
+                    assert_eq!(value.pubkey(), cluster_info.id())
+                }
+                _ => panic!("wrong protocol"),
+            }
+        }
+        None => panic!("entrypoint should be a pull destination"),
+    }
+
+    // now add this message back to the table and make sure after the next pull, the entrypoint is unset
+    let entrypoint_crdsvalue = CrdsValue::ContactInfo(entrypoint.clone());
+    let cluster_info = Arc::new(RwLock::new(cluster_info));
+    ClusterInfo::handle_pull_response(&cluster_info, entrypoint_id, vec![entrypoint_crdsvalue]);
+    let pulls = cluster_info
+        .write()
+        .unwrap()
+        .new_pull_requests(&HashMap::new());
+    assert_eq!(1, pulls.len());
+    assert_eq!(cluster_info.read().unwrap().entrypoint, None);
 }

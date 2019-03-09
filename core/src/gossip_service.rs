@@ -2,7 +2,7 @@
 
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
-use crate::cluster_info::{ClusterInfo, NodeInfo};
+use crate::cluster_info::ClusterInfo;
 use crate::contact_info::ContactInfo;
 use crate::service::Service;
 use crate::streamer;
@@ -51,7 +51,7 @@ impl GossipService {
     }
 }
 
-pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<Vec<NodeInfo>> {
+pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<Vec<ContactInfo>> {
     let exit = Arc::new(AtomicBool::new(false));
     let (gossip_service, spy_ref) = make_spy_node(gossip_addr, &exit);
     let id = spy_ref.read().unwrap().keypair.pubkey();
@@ -67,7 +67,7 @@ pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<V
     while now.elapsed() < Duration::from_secs(30) {
         let rpc_peers = spy_ref.read().unwrap().rpc_peers();
         if rpc_peers.len() >= num_nodes {
-            info!(
+            trace!(
                 "discover success in {}s...\n{}",
                 now.elapsed().as_secs(),
                 spy_ref.read().unwrap().node_info_trace()
@@ -108,8 +108,7 @@ fn make_spy_node(
     let keypair = Arc::new(Keypair::new());
     let (node, gossip_socket) = ClusterInfo::spy_node(&keypair.pubkey());
     let mut cluster_info = ClusterInfo::new(node, keypair);
-    cluster_info.insert_info(ContactInfo::new_gossip_entry_point(gossip_addr));
-
+    cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(gossip_addr));
     let cluster_info = Arc::new(RwLock::new(cluster_info));
     let gossip_service =
         GossipService::new(&cluster_info.clone(), None, None, gossip_socket, &exit);

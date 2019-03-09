@@ -148,7 +148,7 @@ impl CrdsGossipPull {
         failed
     }
     /// build a filter of the current crds table
-    fn build_crds_filter(&self, crds: &Crds) -> Bloom<Hash> {
+    pub fn build_crds_filter(&self, crds: &Crds) -> Bloom<Hash> {
         let num = cmp::max(
             CRDS_GOSSIP_BLOOM_SIZE,
             crds.table.values().count() + self.purged_values.len(),
