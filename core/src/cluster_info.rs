@@ -777,27 +777,22 @@ impl ClusterInfo {
 
         Ok((addr, out))
     }
-    // if the network entry point hasn't been discovered yet, add it to the crds table
+    // If the network entrypoint hasn't been discovered yet, add it to the crds table
     fn add_entrypoint(&mut self, pulls: &mut Vec<(Pubkey, Bloom<Hash>, SocketAddr, CrdsValue)>) {
         match &self.entrypoint {
             Some(entrypoint) => {
-                let label = CrdsValueLabel::ContactInfo(entrypoint.id);
-                if self.gossip.crds.lookup(&label).is_none() {
-                    let self_info = self
-                        .gossip
-                        .crds
-                        .lookup(&CrdsValueLabel::ContactInfo(self.id()))
-                        .unwrap_or_else(|| panic!("self_id invalid {}", self.id()));
-                    pulls.push((
-                        entrypoint.id,
-                        self.gossip.pull.build_crds_filter(&self.gossip.crds),
-                        entrypoint.gossip,
-                        self_info.clone(),
-                    ));
-                } else {
-                    // the entrypoint is now part of gossip.
-                    self.entrypoint = None
-                }
+                let self_info = self
+                    .gossip
+                    .crds
+                    .lookup(&CrdsValueLabel::ContactInfo(self.id()))
+                    .unwrap_or_else(|| panic!("self_id invalid {}", self.id()));
+
+                pulls.push((
+                    entrypoint.id,
+                    self.gossip.pull.build_crds_filter(&self.gossip.crds),
+                    entrypoint.gossip,
+                    self_info.clone(),
+                ))
             }
             None => (),
         }
@@ -823,7 +818,11 @@ impl ClusterInfo {
                     .map(|peer_info| (peer, filter, peer_info.gossip, self_info))
             })
             .collect();
-        self.add_entrypoint(&mut pr);
+        if pr.is_empty() {
+            self.add_entrypoint(&mut pr);
+        } else {
+            self.entrypoint = None;
+        }
         pr.into_iter()
             .map(|(peer, filter, gossip, self_info)| {
                 self.gossip.mark_pull_request_creation_time(peer, now);
