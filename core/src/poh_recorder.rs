@@ -189,6 +189,7 @@ impl PohRecorder {
                 tick_cache: vec![],
                 working_bank: None,
                 sender,
+                clear_bank_signal: None,
             },
             receiver,
         )
