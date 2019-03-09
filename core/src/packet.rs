@@ -10,6 +10,8 @@ use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 use std::fmt;
 use std::io;
+use std::io::Cursor;
+use std::io::Write;
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::{Arc, RwLock};
@@ -23,7 +25,7 @@ pub const BLOB_SIZE: usize = (64 * 1024 - 128); // wikipedia says there should b
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - (BLOB_HEADER_SIZE * 2);
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
@@ -38,6 +40,12 @@ pub struct Meta {
 pub struct Packet {
     pub data: [u8; PACKET_DATA_SIZE],
     pub meta: Meta,
+}
+
+impl Packet {
+    pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
+        Packet { data, meta }
+    }
 }
 
 impl fmt::Debug for Packet {
@@ -57,6 +65,12 @@ impl Default for Packet {
             data: [0u8; PACKET_DATA_SIZE],
             meta: Meta::default(),
         }
+    }
+}
+
+impl PartialEq for Packet {
+    fn eq(&self, other: &Packet) -> bool {
+        self.data.iter().zip(other.data.iter()).all(|(a, b)| a == b) && self.meta == other.meta
     }
 }
 
@@ -403,6 +417,19 @@ impl Blob {
         let new_size = size + BLOB_HEADER_SIZE;
         self.meta.size = new_size;
         self.set_data_size(new_size as u64);
+    }
+
+    pub fn store_packets(&mut self, packets: &[Packet]) -> Result<()> {
+        let mut cursor = Cursor::new(&mut self.data[..]);
+        cursor.set_position(BLOB_HEADER_SIZE as u64);
+        for packet in packets {
+            serialize_into(&mut cursor, &packet.meta)?;
+            cursor.write(&packet.data[..])?;
+        }
+        let size = cursor.position();
+        self.set_size(size as usize);
+
+        Ok(())
     }
 
     pub fn recv_blob(socket: &UdpSocket, r: &SharedBlob) -> io::Result<()> {
