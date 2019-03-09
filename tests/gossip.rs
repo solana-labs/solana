@@ -155,13 +155,10 @@ pub fn cluster_info_retransmit() -> result::Result<()> {
     trace!("c3:");
     let (c3, dr3, tn3) = test_node(&exit);
     let c1_data = c1.read().unwrap().my_data().clone();
-    c1.write().unwrap().set_leader(c1_data.id);
 
     c2.write().unwrap().insert_info(c1_data.clone());
     c3.write().unwrap().insert_info(c1_data.clone());
 
-    c2.write().unwrap().set_leader(c1_data.id);
-    c3.write().unwrap().set_leader(c1_data.id);
     let num = 3;
 
     //wait to converge

@@ -120,7 +120,6 @@ impl Replicator {
         info!("Creating cluster info....");
         let mut cluster_info = ClusterInfo::new(node.info.clone(), keypair.clone());
         cluster_info.set_entrypoint(leader_info.clone());
-        cluster_info.set_leader(leader_info.id);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
 
         // Create Blocktree, eventually will simply repurpose the input

@@ -435,7 +435,6 @@ mod tests {
         let leader = ContactInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
 
         cluster_info.write().unwrap().insert_info(leader.clone());
-        cluster_info.write().unwrap().set_leader(leader.id);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
