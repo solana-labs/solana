@@ -17,8 +17,9 @@ automatically delegate their rewards.
 The current design requires a validator to submit a different vote for each
 stake. Therefore the validator can censor stakes delegated to it, and the number
 of votes is equal to the number of stakers, and not the number of validators.
-The network expects the number of stakes to be large compared to the number of
-validators.
+Replicator clients are expected to automatically delegate their rewards, and
+therefore the number of stakes is expected to be large compared to the number of
+validators in a long running cluster.
 
 ## Terminology
 
@@ -29,7 +30,7 @@ validator votes.
 rewards for votes to the staker.
 
 * Staker - The lamport owner that is risking lamports with consensus votes in
-exchange for network rewards.  This is the owner of the RewardState program.
+exchange for cluster rewards.  This is the owner of the RewardState program.
 
 * Delegate - The validator that is submitting votes on behave of the staker.
 This is the owner of the VoteState program.
