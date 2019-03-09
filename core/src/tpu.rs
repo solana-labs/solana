@@ -26,6 +26,7 @@ pub struct Tpu {
 }
 
 impl Tpu {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
