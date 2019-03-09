@@ -46,7 +46,7 @@ pub struct PohRecorder {
 impl PohRecorder {
     pub fn clear_bank(&mut self) {
         self.working_bank = None;
-        if let Some(signal) = self.clear_bank_signal {
+        if let Some(ref signal) = self.clear_bank_signal {
             let _ = signal.try_send(true);
         }
     }
