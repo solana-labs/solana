@@ -379,13 +379,13 @@ mod tests {
             GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
         let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
-        let keypair = Keypair::new();
+        let voting_keypair = Keypair::new();
         let validator = Fullnode::new(
             validator_node,
             &Arc::new(validator_keypair),
             &validator_ledger_path,
-            keypair.pubkey(),
-            keypair,
+            voting_keypair.pubkey(),
+            voting_keypair,
             Some(&leader_node.info),
             &FullnodeConfig::default(),
         );

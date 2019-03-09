@@ -169,7 +169,6 @@ setup_fullnode_staking() {
                  --authorize-voter "$staker_id"  || return $?
 
   return 0
-
 }
 
 
