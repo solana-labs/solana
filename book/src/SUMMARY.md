@@ -40,6 +40,7 @@
   - [Fork Selection](fork-selection.md)
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
   - [Bank Forks](bank-forks.md)
+  - [Persistent Account Storage](persistent-account-storage.md)
   - [Leader to Leader Transition](leader-leader-transition.md)
   - [Cluster Economics](ed_overview.md)
     - [Validation-client Economics](ed_validation_client_economics.md)
