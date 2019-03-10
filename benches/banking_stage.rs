@@ -55,7 +55,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let bank = Arc::new(Bank::new(&genesis_block));
     let dummy = SystemTransaction::new_move(
         &mint_keypair,
-        mint_keypair.pubkey(),
+        &mint_keypair.pubkey(),
         1,
         genesis_block.hash(),
         0,
@@ -77,7 +77,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     transactions.iter().for_each(|tx| {
         let fund = SystemTransaction::new_move(
             &mint_keypair,
-            tx.account_keys[0],
+            &tx.account_keys[0],
             mint_total / txes as u64,
             genesis_block.hash(),
             0,
@@ -147,7 +147,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let bank = Arc::new(Bank::new(&genesis_block));
     let dummy = SystemTransaction::new_move(
         &mint_keypair,
-        mint_keypair.pubkey(),
+        &mint_keypair.pubkey(),
         1,
         genesis_block.hash(),
         0,
@@ -185,7 +185,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     transactions.iter().for_each(|tx| {
         let fund = SystemTransaction::new_move(
             &mint_keypair,
-            tx.account_keys[0],
+            &tx.account_keys[0],
             mint_total / txes as u64,
             genesis_block.hash(),
             0,
