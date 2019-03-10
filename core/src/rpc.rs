@@ -70,13 +70,13 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    pub fn get_account_info(&self, pubkey: Pubkey) -> Result<Account> {
+    pub fn get_account_info(&self, pubkey: &Pubkey) -> Result<Account> {
         self.bank()?
             .get_account(&pubkey)
             .ok_or_else(Error::invalid_request)
     }
 
-    pub fn get_balance(&self, pubkey: Pubkey) -> Result<u64> {
+    pub fn get_balance(&self, pubkey: &Pubkey) -> Result<u64> {
         let val = self.bank()?.get_balance(&pubkey);
         Ok(val)
     }
@@ -229,13 +229,13 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor
             .read()
             .unwrap()
-            .get_account_info(pubkey)
+            .get_account_info(&pubkey)
     }
 
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<u64> {
         info!("get_balance rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
-        meta.request_processor.read().unwrap().get_balance(pubkey)
+        meta.request_processor.read().unwrap().get_balance(&pubkey)
     }
 
     fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<String> {
@@ -414,7 +414,7 @@ mod tests {
     use solana_sdk::system_transaction::SystemTransaction;
     use std::thread;
 
-    fn start_rpc_handler_with_tx(pubkey: Pubkey) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair) {
+    fn start_rpc_handler_with_tx(pubkey: &Pubkey) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair) {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
         let exit = Arc::new(AtomicBool::new(false));
@@ -457,7 +457,7 @@ mod tests {
         request_processor.set_bank(&bank);
         thread::spawn(move || {
             let blockhash = bank.last_blockhash();
-            let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, blockhash, 0);
+            let tx = SystemTransaction::new_move(&alice, &bob_pubkey, 20, blockhash, 0);
             bank.process_transaction(&tx).expect("process transaction");
         })
         .join()
@@ -468,7 +468,7 @@ mod tests {
     #[test]
     fn test_rpc_get_balance() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
@@ -486,7 +486,7 @@ mod tests {
     #[test]
     fn test_rpc_get_tx_count() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -501,7 +501,7 @@ mod tests {
     #[test]
     fn test_rpc_get_account_info() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}"]}}"#,
@@ -528,8 +528,8 @@ mod tests {
     #[test]
     fn test_rpc_confirm_tx() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, blockhash, alice) = start_rpc_handler_with_tx(bob_pubkey);
-        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, blockhash, 0);
+        let (io, meta, blockhash, alice) = start_rpc_handler_with_tx(&bob_pubkey);
+        let tx = SystemTransaction::new_move(&alice, &bob_pubkey, 20, blockhash, 0);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":["{}"]}}"#,
@@ -547,8 +547,8 @@ mod tests {
     #[test]
     fn test_rpc_get_signature_status() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, blockhash, alice) = start_rpc_handler_with_tx(bob_pubkey);
-        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, blockhash, 0);
+        let (io, meta, blockhash, alice) = start_rpc_handler_with_tx(&bob_pubkey);
+        let tx = SystemTransaction::new_move(&alice, &bob_pubkey, 20, blockhash, 0);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
@@ -563,7 +563,7 @@ mod tests {
         assert_eq!(expected, result);
 
         // Test getSignatureStatus request on unprocessed tx
-        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 10, blockhash, 0);
+        let tx = SystemTransaction::new_move(&alice, &bob_pubkey, 10, blockhash, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
             tx.signatures[0]
@@ -580,7 +580,7 @@ mod tests {
     #[test]
     fn test_rpc_get_recent_blockhash() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, blockhash, _alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, blockhash, _alice) = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -595,7 +595,7 @@ mod tests {
     #[test]
     fn test_rpc_fail_request_airdrop() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(&bob_pubkey);
 
         // Expect internal error because no drone is available
         let req = format!(
@@ -674,7 +674,7 @@ mod tests {
     fn test_rpc_verify_signature() {
         let tx = SystemTransaction::new_move(
             &Keypair::new(),
-            Keypair::new().pubkey(),
+            &Keypair::new().pubkey(),
             20,
             hash(&[0]),
             0,

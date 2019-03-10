@@ -27,7 +27,7 @@ pub struct Tpu {
 
 impl Tpu {
     pub fn new(
-        id: Pubkey,
+        id: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntries>,

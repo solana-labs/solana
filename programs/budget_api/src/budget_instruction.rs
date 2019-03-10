@@ -28,32 +28,36 @@ pub enum BudgetInstruction {
 }
 
 impl BudgetInstruction {
-    pub fn new_initialize_account(contract: Pubkey, expr: BudgetExpr) -> BuilderInstruction {
+    pub fn new_initialize_account(contract: &Pubkey, expr: BudgetExpr) -> BuilderInstruction {
         let mut keys = vec![];
         if let BudgetExpr::Pay(payment) = &expr {
             keys.push((payment.to, false));
         }
-        keys.push((contract, false));
+        keys.push((*contract, false));
         BuilderInstruction::new(id(), &BudgetInstruction::InitializeAccount(expr), keys)
     }
 
     pub fn new_apply_timestamp(
-        from: Pubkey,
-        contract: Pubkey,
-        to: Pubkey,
+        from: &Pubkey,
+        contract: &Pubkey,
+        to: &Pubkey,
         dt: DateTime<Utc>,
     ) -> BuilderInstruction {
-        let mut keys = vec![(from, true), (contract, false)];
+        let mut keys = vec![(*from, true), (*contract, false)];
         if from != to {
-            keys.push((to, false));
+            keys.push((*to, false));
         }
         BuilderInstruction::new(id(), &BudgetInstruction::ApplyTimestamp(dt), keys)
     }
 
-    pub fn new_apply_signature(from: Pubkey, contract: Pubkey, to: Pubkey) -> BuilderInstruction {
-        let mut keys = vec![(from, true), (contract, false)];
+    pub fn new_apply_signature(
+        from: &Pubkey,
+        contract: &Pubkey,
+        to: &Pubkey,
+    ) -> BuilderInstruction {
+        let mut keys = vec![(*from, true), (*contract, false)];
         if from != to {
-            keys.push((to, false));
+            keys.push((*to, false));
         }
         BuilderInstruction::new(id(), &BudgetInstruction::ApplySignature, keys)
     }

@@ -11,7 +11,7 @@ pub struct LoaderTransaction {}
 impl LoaderTransaction {
     pub fn new_write(
         from_keypair: &Keypair,
-        loader: Pubkey,
+        loader: &Pubkey,
         offset: u32,
         bytes: Vec<u8>,
         recent_blockhash: Hash,
@@ -30,7 +30,7 @@ impl LoaderTransaction {
 
     pub fn new_finalize(
         from_keypair: &Keypair,
-        loader: Pubkey,
+        loader: &Pubkey,
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {

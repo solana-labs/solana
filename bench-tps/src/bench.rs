@@ -120,7 +120,7 @@ pub fn send_barrier_transaction(
 
         *blockhash = barrier_client.get_recent_blockhash();
         let signature = barrier_client
-            .transfer(0, &source_keypair, *dest_id, blockhash)
+            .transfer(0, &source_keypair, dest_id, blockhash)
             .expect("Unable to send barrier transaction");
 
         let confirmatiom = barrier_client.poll_for_signature(&signature);
@@ -196,7 +196,7 @@ pub fn generate_txs(
         .par_iter()
         .map(|(id, keypair)| {
             (
-                SystemTransaction::new_account(id, keypair.pubkey(), 1, blockhash, 0),
+                SystemTransaction::new_account(id, &keypair.pubkey(), 1, blockhash, 0),
                 timestamp(),
             )
         })

@@ -28,7 +28,7 @@ impl MockRpcClient {
     pub fn retry_get_balance(
         &self,
         id: u64,
-        pubkey: Pubkey,
+        pubkey: &Pubkey,
         retries: usize,
     ) -> Result<Option<u64>, Box<dyn error::Error>> {
         let params = json!([format!("{}", pubkey)]);
@@ -106,6 +106,6 @@ pub fn request_airdrop_transaction(
     let key = Keypair::new();
     let to = Keypair::new().pubkey();
     let blockhash = Hash::default();
-    let tx = SystemTransaction::new_account(&key, to, lamports, blockhash, 0);
+    let tx = SystemTransaction::new_account(&key, &to, lamports, blockhash, 0);
     Ok(tx)
 }

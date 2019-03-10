@@ -90,7 +90,7 @@ impl StorageTransaction {
             entry_height,
             signature,
         };
-        Transaction::new(from_keypair, &[], id(), &program, recent_blockhash, 0)
+        Transaction::new(from_keypair, &[], &id(), &program, recent_blockhash, 0)
     }
 
     pub fn new_advertise_recent_blockhash(
@@ -103,7 +103,7 @@ impl StorageTransaction {
             hash: storage_hash,
             entry_height,
         };
-        Transaction::new(from_keypair, &[], id(), &program, recent_blockhash, 0)
+        Transaction::new(from_keypair, &[], &id(), &program, recent_blockhash, 0)
     }
 
     pub fn new_proof_validation(
@@ -116,7 +116,7 @@ impl StorageTransaction {
             entry_height,
             proof_mask,
         };
-        Transaction::new(from_keypair, &[], id(), &program, recent_blockhash, 0)
+        Transaction::new(from_keypair, &[], &id(), &program, recent_blockhash, 0)
     }
 
     pub fn new_reward_claim(
@@ -125,6 +125,6 @@ impl StorageTransaction {
         entry_height: u64,
     ) -> Transaction {
         let program = StorageProgram::ClaimStorageReward { entry_height };
-        Transaction::new(from_keypair, &[], id(), &program, recent_blockhash, 0)
+        Transaction::new(from_keypair, &[], &id(), &program, recent_blockhash, 0)
     }
 }

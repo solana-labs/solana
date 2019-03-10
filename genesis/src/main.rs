@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_leader_vote_account_keypair = Keypair::new();
     let (mut genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(
         lamports,
-        bootstrap_leader_keypair.pubkey(),
+        &bootstrap_leader_keypair.pubkey(),
         BOOTSTRAP_LEADER_LAMPORTS,
     );
     genesis_block.mint_id = mint_keypair.pubkey();

@@ -229,7 +229,7 @@ fn main() {
     fullnode_config.blockstream = matches.value_of("blockstream").map(|s| s.to_string());
 
     let keypair = Arc::new(keypair);
-    let mut node = Node::new_with_external_ip(keypair.pubkey(), &gossip_addr);
+    let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr);
     node.info.rpc.set_port(rpc_port);
     node.info.rpc_pubsub.set_port(rpc_pubsub_port);
 
@@ -242,7 +242,7 @@ fn main() {
         node,
         &keypair,
         ledger_path,
-        staking_account,
+        &staking_account,
         voting_keypair,
         cluster_entrypoint.as_ref(),
         &fullnode_config,

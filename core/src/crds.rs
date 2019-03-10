@@ -135,7 +135,7 @@ impl Crds {
     }
 
     /// Update the timestamp's of all the labels that are assosciated with Pubkey
-    pub fn update_record_timestamp(&mut self, pubkey: Pubkey, now: u64) {
+    pub fn update_record_timestamp(&mut self, pubkey: &Pubkey, now: u64) {
         for label in &CrdsValue::record_labels(pubkey) {
             self.update_label_timestamp(label, now);
         }
@@ -187,9 +187,9 @@ mod test {
     #[test]
     fn test_update_new() {
         let mut crds = Crds::default();
-        let original = CrdsValue::ContactInfo(ContactInfo::new_localhost(Pubkey::default(), 0));
+        let original = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::default(), 0));
         assert_matches!(crds.insert(original.clone(), 0), Ok(_));
-        let val = CrdsValue::ContactInfo(ContactInfo::new_localhost(Pubkey::default(), 1));
+        let val = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::default(), 1));
         assert_eq!(
             crds.insert(val.clone(), 1).unwrap().unwrap().value,
             original
@@ -199,7 +199,7 @@ mod test {
     #[test]
     fn test_update_timestamp() {
         let mut crds = Crds::default();
-        let val = CrdsValue::ContactInfo(ContactInfo::new_localhost(Pubkey::default(), 0));
+        let val = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::default(), 0));
         assert_eq!(crds.insert(val.clone(), 0), Ok(None));
 
         crds.update_label_timestamp(&val.label(), 1);
@@ -210,13 +210,13 @@ mod test {
         assert_eq!(val2.label().pubkey(), val.label().pubkey());
         assert_matches!(crds.insert(val2.clone(), 0), Ok(Some(_)));
 
-        crds.update_record_timestamp(val.label().pubkey(), 2);
+        crds.update_record_timestamp(&val.label().pubkey(), 2);
         assert_eq!(crds.table[&val.label()].local_timestamp, 2);
         assert_eq!(crds.table[&val.label()].insert_timestamp, 0);
         assert_eq!(crds.table[&val2.label()].local_timestamp, 2);
         assert_eq!(crds.table[&val2.label()].insert_timestamp, 0);
 
-        crds.update_record_timestamp(val.label().pubkey(), 1);
+        crds.update_record_timestamp(&val.label().pubkey(), 1);
         assert_eq!(crds.table[&val.label()].local_timestamp, 2);
         assert_eq!(crds.table[&val.label()].insert_timestamp, 0);
 
@@ -259,10 +259,10 @@ mod test {
     fn test_hash_order() {
         let v1 = VersionedCrdsValue::new(
             1,
-            CrdsValue::ContactInfo(ContactInfo::new_localhost(Pubkey::default(), 0)),
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::default(), 0)),
         );
         let v2 = VersionedCrdsValue::new(1, {
-            let mut contact_info = ContactInfo::new_localhost(Pubkey::default(), 0);
+            let mut contact_info = ContactInfo::new_localhost(&Pubkey::default(), 0);
             contact_info.rpc = socketaddr!("0.0.0.0:0");
             CrdsValue::ContactInfo(contact_info)
         });
@@ -286,11 +286,11 @@ mod test {
     fn test_wallclock_order() {
         let v1 = VersionedCrdsValue::new(
             1,
-            CrdsValue::ContactInfo(ContactInfo::new_localhost(Pubkey::default(), 1)),
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::default(), 1)),
         );
         let v2 = VersionedCrdsValue::new(
             1,
-            CrdsValue::ContactInfo(ContactInfo::new_localhost(Pubkey::default(), 0)),
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::default(), 0)),
         );
         assert_eq!(v1.value.label(), v2.value.label());
         assert!(v1 > v2);
@@ -302,11 +302,11 @@ mod test {
     fn test_label_order() {
         let v1 = VersionedCrdsValue::new(
             1,
-            CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0)),
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0)),
         );
         let v2 = VersionedCrdsValue::new(
             1,
-            CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0)),
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0)),
         );
         assert_ne!(v1, v2);
         assert!(!(v1 == v2));

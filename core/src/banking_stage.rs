@@ -440,15 +440,15 @@ mod tests {
 
         // good tx
         let keypair = mint_keypair;
-        let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
+        let tx = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 1, start_hash, 0);
 
         // good tx, but no verify
         let tx_no_ver =
-            SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
+            SystemTransaction::new_account(&keypair, &keypair.pubkey(), 1, start_hash, 0);
 
         // bad tx, AccountNotFound
         let keypair = Keypair::new();
-        let tx_anf = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
+        let tx_anf = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 1, start_hash, 0);
 
         // send 'em over
         let packets = to_packets(&[tx, tx_no_ver, tx_anf]);
@@ -500,7 +500,7 @@ mod tests {
         let alice = Keypair::new();
         let tx = SystemTransaction::new_account(
             &mint_keypair,
-            alice.pubkey(),
+            &alice.pubkey(),
             2,
             genesis_block.hash(),
             0,
@@ -514,7 +514,7 @@ mod tests {
         // Process a second batch that spends one of those lamports.
         let tx = SystemTransaction::new_account(
             &alice,
-            mint_keypair.pubkey(),
+            &mint_keypair.pubkey(),
             1,
             genesis_block.hash(),
             0,
@@ -567,8 +567,8 @@ mod tests {
         let pubkey = Keypair::new().pubkey();
 
         let transactions = vec![
-            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.hash(), 0),
-            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.hash(), 0),
+            SystemTransaction::new_move(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
+            SystemTransaction::new_move(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
         ];
 
         let mut results = vec![Ok(()), Ok(())];
@@ -601,7 +601,7 @@ mod tests {
 
         let transactions = vec![SystemTransaction::new_move(
             &mint_keypair,
-            pubkey,
+            &pubkey,
             1,
             genesis_block.hash(),
             0,
@@ -642,7 +642,7 @@ mod tests {
 
         let transactions = vec![SystemTransaction::new_move(
             &mint_keypair,
-            pubkey,
+            &pubkey,
             2,
             genesis_block.hash(),
             0,

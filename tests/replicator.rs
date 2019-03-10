@@ -39,11 +39,11 @@ fn test_replicator_startup_basic() {
 
     info!("starting leader node");
     let leader_keypair = Arc::new(Keypair::new());
-    let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+    let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
     let (genesis_block, mint_keypair) =
-        GenesisBlock::new_with_leader(1_000_000_000, leader_info.id, 42);
+        GenesisBlock::new_with_leader(1_000_000_000, &leader_info.id, 42);
     let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
@@ -57,7 +57,7 @@ fn test_replicator_startup_basic() {
             leader_node,
             &leader_keypair,
             &leader_ledger_path,
-            voting_keypair.pubkey(),
+            &voting_keypair.pubkey(),
             voting_keypair,
             None,
             &fullnode_config,
@@ -74,10 +74,10 @@ fn test_replicator_startup_basic() {
         debug!("blockhash: {:?}", blockhash);
 
         leader_client
-            .transfer(10, &mint_keypair, validator_keypair.pubkey(), &blockhash)
+            .transfer(10, &mint_keypair, &validator_keypair.pubkey(), &blockhash)
             .unwrap();
 
-        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+        let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         #[cfg(feature = "chacha")]
         let validator_contact_info = validator_node.info.clone();
 
@@ -85,7 +85,7 @@ fn test_replicator_startup_basic() {
             validator_node,
             &validator_keypair,
             &validator_ledger_path,
-            voting_keypair.pubkey(),
+            &voting_keypair.pubkey(),
             voting_keypair,
             Some(&leader_info),
             &fullnode_config,
@@ -98,7 +98,7 @@ fn test_replicator_startup_basic() {
             debug!("transfer {}", i);
             let blockhash = leader_client.get_recent_blockhash();
             let mut transaction =
-                SystemTransaction::new_account(&mint_keypair, bob.pubkey(), 1, blockhash, 0);
+                SystemTransaction::new_account(&mint_keypair, &bob.pubkey(), 1, blockhash, 0);
             leader_client
                 .retry_transfer(&mint_keypair, &mut transaction, 5)
                 .unwrap();
@@ -118,7 +118,7 @@ fn test_replicator_startup_basic() {
         // Give the replicator some lamports
         let mut tx = SystemTransaction::new_account(
             &mint_keypair,
-            replicator_keypair.pubkey(),
+            &replicator_keypair.pubkey(),
             1,
             blockhash,
             0,
@@ -128,7 +128,7 @@ fn test_replicator_startup_basic() {
             .unwrap();
 
         info!("starting replicator node");
-        let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
+        let replicator_node = Node::new_localhost_with_pubkey(&replicator_keypair.pubkey());
         let replicator_info = replicator_node.info.clone();
 
         let leader_info = ContactInfo::new_gossip_entry_point(&leader_info.gossip);
@@ -242,7 +242,7 @@ fn test_replicator_startup_leader_hang() {
         let replicator_keypair = Arc::new(Keypair::new());
 
         info!("starting replicator node");
-        let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
+        let replicator_node = Node::new_localhost_with_pubkey(&replicator_keypair.pubkey());
 
         let fake_gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let leader_info = ContactInfo::new_gossip_entry_point(&fake_gossip);
@@ -272,11 +272,11 @@ fn test_replicator_startup_ledger_hang() {
     let leader_keypair = Arc::new(Keypair::new());
 
     let (genesis_block, _mint_keypair) =
-        GenesisBlock::new_with_leader(100, leader_keypair.pubkey(), 42);
+        GenesisBlock::new_with_leader(100, &leader_keypair.pubkey(), 42);
     let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     info!("starting leader node");
-    let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+    let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
     let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
@@ -290,7 +290,7 @@ fn test_replicator_startup_ledger_hang() {
             leader_node,
             &leader_keypair,
             &leader_ledger_path,
-            voting_keypair.pubkey(),
+            &voting_keypair.pubkey(),
             voting_keypair,
             None,
             &fullnode_config,
@@ -298,13 +298,13 @@ fn test_replicator_startup_ledger_hang() {
 
         let validator_keypair = Arc::new(Keypair::new());
         let voting_keypair = Keypair::new();
-        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+        let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
 
         let _ = Fullnode::new(
             validator_node,
             &validator_keypair,
             &validator_ledger_path,
-            voting_keypair.pubkey(),
+            &voting_keypair.pubkey(),
             voting_keypair,
             Some(&leader_info),
             &FullnodeConfig::default(),
@@ -312,7 +312,7 @@ fn test_replicator_startup_ledger_hang() {
 
         info!("starting replicator node");
         let bad_keys = Arc::new(Keypair::new());
-        let mut replicator_node = Node::new_localhost_with_pubkey(bad_keys.pubkey());
+        let mut replicator_node = Node::new_localhost_with_pubkey(&bad_keys.pubkey());
 
         // Pass bad TVU sockets to prevent successful ledger download
         replicator_node.sockets.tvu = vec![std::net::UdpSocket::bind("0.0.0.0:0").unwrap()];

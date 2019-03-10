@@ -635,11 +635,12 @@ impl AccountsDB {
     fn load_executable_accounts(
         &self,
         fork: Fork,
-        mut program_id: Pubkey,
+        program_id: &Pubkey,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<(Pubkey, Account)>> {
         let mut accounts = Vec::new();
         let mut depth = 0;
+        let mut program_id = *program_id;
         loop {
             if native_loader::check_id(&program_id) {
                 // at the root of the chain, ready to dispatch
@@ -687,7 +688,7 @@ impl AccountsDB {
                     return Err(BankError::AccountNotFound);
                 }
                 let program_id = tx.program_ids[ix.program_ids_index as usize];
-                self.load_executable_accounts(fork, program_id, error_counters)
+                self.load_executable_accounts(fork, &program_id, error_counters)
             })
             .collect()
     }
@@ -1092,10 +1093,10 @@ mod tests {
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let account = Account::new(1, 1, Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let account = Account::new(2, 1, Pubkey::default());
+        let account = Account::new(2, 1, &Pubkey::default());
         accounts.push((key1, account));
 
         let instructions = vec![Instruction::new(1, &(), vec![0])];
@@ -1123,7 +1124,7 @@ mod tests {
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
 
-        let account = Account::new(1, 1, Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
         let instructions = vec![Instruction::new(1, &(), vec![0])];
@@ -1152,10 +1153,10 @@ mod tests {
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let account = Account::new(1, 1, Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let account = Account::new(2, 1, Pubkey::default());
+        let account = Account::new(2, 1, &Pubkey::default());
         accounts.push((key1, account));
 
         let instructions = vec![Instruction::new(0, &(), vec![0, 1])];
@@ -1197,35 +1198,35 @@ mod tests {
         let key5 = Pubkey::new(&[9u8; 32]);
         let key6 = Pubkey::new(&[10u8; 32]);
 
-        let account = Account::new(1, 1, Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let mut account = Account::new(40, 1, Pubkey::default());
+        let mut account = Account::new(40, 1, &Pubkey::default());
         account.executable = true;
         account.owner = native_loader::id();
         accounts.push((key1, account));
 
-        let mut account = Account::new(41, 1, Pubkey::default());
+        let mut account = Account::new(41, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key1;
         accounts.push((key2, account));
 
-        let mut account = Account::new(42, 1, Pubkey::default());
+        let mut account = Account::new(42, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key2;
         accounts.push((key3, account));
 
-        let mut account = Account::new(43, 1, Pubkey::default());
+        let mut account = Account::new(43, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key3;
         accounts.push((key4, account));
 
-        let mut account = Account::new(44, 1, Pubkey::default());
+        let mut account = Account::new(44, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key4;
         accounts.push((key5, account));
 
-        let mut account = Account::new(45, 1, Pubkey::default());
+        let mut account = Account::new(45, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key5;
         accounts.push((key6, account));
@@ -1256,10 +1257,10 @@ mod tests {
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let account = Account::new(1, 1, Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let mut account = Account::new(40, 1, Pubkey::default());
+        let mut account = Account::new(40, 1, &Pubkey::default());
         account.executable = true;
         account.owner = Pubkey::default();
         accounts.push((key1, account));
@@ -1290,10 +1291,10 @@ mod tests {
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let account = Account::new(1, 1, Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let mut account = Account::new(40, 1, Pubkey::default());
+        let mut account = Account::new(40, 1, &Pubkey::default());
         account.owner = native_loader::id();
         accounts.push((key1, account));
 
@@ -1325,20 +1326,20 @@ mod tests {
         let key2 = Pubkey::new(&[6u8; 32]);
         let key3 = Pubkey::new(&[7u8; 32]);
 
-        let account = Account::new(1, 1, Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let mut account = Account::new(40, 1, Pubkey::default());
+        let mut account = Account::new(40, 1, &Pubkey::default());
         account.executable = true;
         account.owner = native_loader::id();
         accounts.push((key1, account));
 
-        let mut account = Account::new(41, 1, Pubkey::default());
+        let mut account = Account::new(41, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key1;
         accounts.push((key2, account));
 
-        let mut account = Account::new(42, 1, Pubkey::default());
+        let mut account = Account::new(42, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key2;
         accounts.push((key3, account));
@@ -1386,7 +1387,7 @@ mod tests {
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey();
 
-        let account = Account::new(10, 1, Pubkey::default());
+        let account = Account::new(10, 1, &Pubkey::default());
         accounts.push((pubkey, account));
 
         let instructions = vec![Instruction::new(0, &(), vec![0, 1])];
@@ -1448,7 +1449,7 @@ mod tests {
         let paths = get_tmp_accounts_path!();
         let db = AccountsDB::new(0, &paths.paths);
         let key = Pubkey::default();
-        let account0 = Account::new(1, 0, key);
+        let account0 = Account::new(1, 0, &key);
 
         // store value 1 in the "root", i.e. db zero
         db.store(0, &key, &account0);
@@ -1466,7 +1467,7 @@ mod tests {
         //                                       (via root0)
 
         // store value 0 in one child
-        let account1 = Account::new(0, 0, key);
+        let account1 = Account::new(0, 0, &key);
         db.store(1, &key, &account1);
 
         // masking accounts is done at the Accounts level, at accountsDB we see
@@ -1546,12 +1547,12 @@ mod tests {
         // 1 token in the "root", i.e. db zero
         let paths = get_tmp_accounts_path!();
         let db0 = AccountsDB::new(0, &paths.paths);
-        let account0 = Account::new(1, 0, key);
+        let account0 = Account::new(1, 0, &key);
         db0.store(0, &key, &account0);
 
         db0.add_fork(1, Some(0));
         // 0 lamports in the child
-        let account1 = Account::new(0, 0, key);
+        let account1 = Account::new(0, 0, &key);
         db0.store(1, &key, &account1);
 
         // masking accounts is done at the Accounts level, at accountsDB we see
@@ -1670,7 +1671,7 @@ mod tests {
         let mut keys = vec![];
         for i in 0..9 {
             let key = Keypair::new().pubkey();
-            let account = Account::new(i + 1, size as usize / 4, key);
+            let account = Account::new(i + 1, size as usize / 4, &key);
             accounts.store(0, &key, &account);
             keys.push(key);
         }
@@ -1703,7 +1704,7 @@ mod tests {
             AccountStorageStatus::StorageFull,
         ];
         let pubkey1 = Keypair::new().pubkey();
-        let account1 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, pubkey1);
+        let account1 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, &pubkey1);
         accounts.store(0, &pubkey1, &account1);
         {
             let stores = accounts.storage.read().unwrap();
@@ -1713,7 +1714,7 @@ mod tests {
         }
 
         let pubkey2 = Keypair::new().pubkey();
-        let account2 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, pubkey2);
+        let account2 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, &pubkey2);
         accounts.store(0, &pubkey2, &account2);
         {
             let stores = accounts.storage.read().unwrap();
@@ -1747,7 +1748,7 @@ mod tests {
     #[test]
     fn test_accounts_vote_filter() {
         let accounts = Accounts::new(0, None);
-        let mut vote_account = Account::new(1, 0, solana_vote_api::id());
+        let mut vote_account = Account::new(1, 0, &solana_vote_api::id());
         let key = Keypair::new().pubkey();
         accounts.store_slow(0, &key, &vote_account);
 
@@ -1762,7 +1763,7 @@ mod tests {
         vote_accounts = accounts.get_vote_accounts(1).collect();
         assert_eq!(vote_accounts.len(), 0);
 
-        let mut vote_account1 = Account::new(2, 0, solana_vote_api::id());
+        let mut vote_account1 = Account::new(2, 0, &solana_vote_api::id());
         let key1 = Keypair::new().pubkey();
         accounts.store_slow(1, &key1, &vote_account1);
 
@@ -1792,7 +1793,7 @@ mod tests {
             assert_eq!(account.owner, solana_vote_api::id());
         });
         let lastkey = Keypair::new().pubkey();
-        let mut lastaccount = Account::new(1, 0, solana_vote_api::id());
+        let mut lastaccount = Account::new(1, 0, &solana_vote_api::id());
         accounts_db.store(0, &lastkey, &lastaccount);
         assert_eq!(accounts_db.get_vote_accounts(0).len(), 2);
 
@@ -1862,7 +1863,7 @@ mod tests {
         let accounts = AccountsDB::new(0, &paths.paths);
         let mut error_counters = ErrorCounters::default();
         assert_eq!(
-            accounts.load_executable_accounts(0, Keypair::new().pubkey(), &mut error_counters),
+            accounts.load_executable_accounts(0, &Keypair::new().pubkey(), &mut error_counters),
             Err(BankError::AccountNotFound)
         );
         assert_eq!(error_counters.account_not_found, 1);
@@ -1894,13 +1895,13 @@ mod tests {
 
         // Load accounts owned by various programs into AccountsDB
         let pubkey0 = Keypair::new().pubkey();
-        let account0 = Account::new(1, 0, Pubkey::new(&[2; 32]));
+        let account0 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts_db.store(0, &pubkey0, &account0);
         let pubkey1 = Keypair::new().pubkey();
-        let account1 = Account::new(1, 0, Pubkey::new(&[2; 32]));
+        let account1 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts_db.store(0, &pubkey1, &account1);
         let pubkey2 = Keypair::new().pubkey();
-        let account2 = Account::new(1, 0, Pubkey::new(&[3; 32]));
+        let account2 = Account::new(1, 0, &Pubkey::new(&[3; 32]));
         accounts_db.store(0, &pubkey2, &account2);
 
         let accounts = accounts_db.load_by_program(0, &Pubkey::new(&[2; 32]), false);

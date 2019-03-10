@@ -13,7 +13,7 @@ use std::sync::mpsc::channel;
 #[cfg(test)]
 use solana::thin_client::new_fullnode;
 
-fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: Pubkey) {
+fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     let balance = client.retry_get_balance(1, pubkey, 1).unwrap().unwrap();
     assert_eq!(balance, expected_balance);
 }
@@ -40,7 +40,7 @@ fn test_wallet_timestamp_tx() {
     assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
     request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.id, 50).unwrap();
-    check_balance(50, &rpc_client, config_payer.id.pubkey());
+    check_balance(50, &rpc_client, &config_payer.id.pubkey());
 
     // Make transaction (from config_payer to bob_pubkey) requiring timestamp from config_witness
     let date_string = "\"2018-09-19T17:30:59Z\"";
@@ -62,17 +62,17 @@ fn test_wallet_timestamp_tx() {
         .expect("base58-encoded public key");
     let process_id = Pubkey::new(&process_id_vec);
 
-    check_balance(40, &rpc_client, config_payer.id.pubkey()); // config_payer balance
-    check_balance(10, &rpc_client, process_id); // contract balance
-    check_balance(0, &rpc_client, bob_pubkey); // recipient balance
+    check_balance(40, &rpc_client, &config_payer.id.pubkey()); // config_payer balance
+    check_balance(10, &rpc_client, &process_id); // contract balance
+    check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
     // Sign transaction by config_witness
     config_witness.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
     process_command(&config_witness).unwrap();
 
-    check_balance(40, &rpc_client, config_payer.id.pubkey()); // config_payer balance
-    check_balance(0, &rpc_client, process_id); // contract balance
-    check_balance(10, &rpc_client, bob_pubkey); // recipient balance
+    check_balance(40, &rpc_client, &config_payer.id.pubkey()); // config_payer balance
+    check_balance(0, &rpc_client, &process_id); // contract balance
+    check_balance(10, &rpc_client, &bob_pubkey); // recipient balance
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -119,17 +119,17 @@ fn test_wallet_witness_tx() {
         .expect("base58-encoded public key");
     let process_id = Pubkey::new(&process_id_vec);
 
-    check_balance(40, &rpc_client, config_payer.id.pubkey()); // config_payer balance
-    check_balance(10, &rpc_client, process_id); // contract balance
-    check_balance(0, &rpc_client, bob_pubkey); // recipient balance
+    check_balance(40, &rpc_client, &config_payer.id.pubkey()); // config_payer balance
+    check_balance(10, &rpc_client, &process_id); // contract balance
+    check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
     // Sign transaction by config_witness
     config_witness.command = WalletCommand::Witness(bob_pubkey, process_id);
     process_command(&config_witness).unwrap();
 
-    check_balance(40, &rpc_client, config_payer.id.pubkey()); // config_payer balance
-    check_balance(0, &rpc_client, process_id); // contract balance
-    check_balance(10, &rpc_client, bob_pubkey); // recipient balance
+    check_balance(40, &rpc_client, &config_payer.id.pubkey()); // config_payer balance
+    check_balance(0, &rpc_client, &process_id); // contract balance
+    check_balance(10, &rpc_client, &bob_pubkey); // recipient balance
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -176,17 +176,17 @@ fn test_wallet_cancel_tx() {
         .expect("base58-encoded public key");
     let process_id = Pubkey::new(&process_id_vec);
 
-    check_balance(40, &rpc_client, config_payer.id.pubkey()); // config_payer balance
-    check_balance(10, &rpc_client, process_id); // contract balance
-    check_balance(0, &rpc_client, bob_pubkey); // recipient balance
+    check_balance(40, &rpc_client, &config_payer.id.pubkey()); // config_payer balance
+    check_balance(10, &rpc_client, &process_id); // contract balance
+    check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
     // Sign transaction by config_witness
     config_payer.command = WalletCommand::Cancel(process_id);
     process_command(&config_payer).unwrap();
 
-    check_balance(50, &rpc_client, config_payer.id.pubkey()); // config_payer balance
-    check_balance(0, &rpc_client, process_id); // contract balance
-    check_balance(0, &rpc_client, bob_pubkey); // recipient balance
+    check_balance(50, &rpc_client, &config_payer.id.pubkey()); // config_payer balance
+    check_balance(0, &rpc_client, &process_id); // contract balance
+    check_balance(0, &rpc_client, &bob_pubkey); // recipient balance
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();

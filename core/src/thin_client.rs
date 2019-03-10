@@ -119,7 +119,7 @@ impl ThinClient {
         &self,
         lamports: u64,
         keypair: &Keypair,
-        to: Pubkey,
+        to: &Pubkey,
         blockhash: &Hash,
     ) -> io::Result<Signature> {
         debug!(
@@ -420,10 +420,10 @@ pub fn new_fullnode() -> (Fullnode, ContactInfo, Keypair, String) {
     use solana_sdk::signature::KeypairUtil;
 
     let node_keypair = Arc::new(Keypair::new());
-    let node = Node::new_localhost_with_pubkey(node_keypair.pubkey());
+    let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
     let contact_info = node.info.clone();
 
-    let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, contact_info.id, 42);
+    let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, &contact_info.id, 42);
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     let voting_keypair = Keypair::new();
@@ -431,7 +431,7 @@ pub fn new_fullnode() -> (Fullnode, ContactInfo, Keypair, String) {
         node,
         &node_keypair,
         &ledger_path,
-        voting_keypair.pubkey(),
+        &voting_keypair.pubkey(),
         voting_keypair,
         None,
         &FullnodeConfig::default(),
@@ -467,7 +467,7 @@ mod tests {
         info!("test_thin_client blockhash: {:?}", blockhash);
 
         let signature = client
-            .transfer(500, &alice, bob_pubkey, &blockhash)
+            .transfer(500, &alice, &bob_pubkey, &blockhash)
             .unwrap();
         info!("test_thin_client signature: {:?}", signature);
         client.poll_for_signature(&signature).unwrap();
@@ -493,13 +493,13 @@ mod tests {
 
         let blockhash = client.get_recent_blockhash();
 
-        let tx = SystemTransaction::new_account(&alice, bob_pubkey, 500, blockhash, 0);
+        let tx = SystemTransaction::new_account(&alice, &bob_pubkey, 500, blockhash, 0);
 
         let _sig = client.transfer_signed(&tx).unwrap();
 
         let blockhash = client.get_recent_blockhash();
 
-        let mut tr2 = SystemTransaction::new_account(&alice, bob_pubkey, 501, blockhash, 0);
+        let mut tr2 = SystemTransaction::new_account(&alice, &bob_pubkey, 501, blockhash, 0);
         let mut instruction2 = deserialize(tr2.userdata(0)).unwrap();
         if let SystemInstruction::Move { ref mut lamports } = instruction2 {
             *lamports = 502;
@@ -526,7 +526,7 @@ mod tests {
         let validator_keypair = Keypair::new();
         let blockhash = client.get_recent_blockhash();
         let signature = client
-            .transfer(500, &alice, validator_keypair.pubkey(), &blockhash)
+            .transfer(500, &alice, &validator_keypair.pubkey(), &blockhash)
             .unwrap();
 
         client.poll_for_signature(&signature).unwrap();
@@ -537,7 +537,7 @@ mod tests {
         let blockhash = client.get_recent_blockhash();
 
         let transaction =
-            VoteTransaction::new_account(&validator_keypair, vote_account_id, blockhash, 1, 1);
+            VoteTransaction::new_account(&validator_keypair, &vote_account_id, blockhash, 1, 1);
         let signature = client.transfer_signed(&transaction).unwrap();
         client.poll_for_signature(&signature).unwrap();
 
@@ -595,7 +595,7 @@ mod tests {
 
         info!("Give Bob 500 lamports");
         let signature = client
-            .transfer(500, &alice, bob_keypair.pubkey(), &blockhash)
+            .transfer(500, &alice, &bob_keypair.pubkey(), &blockhash)
             .unwrap();
         client.poll_for_signature(&signature).unwrap();
 
@@ -604,7 +604,7 @@ mod tests {
 
         info!("Take Bob's 500 lamports away");
         let signature = client
-            .transfer(500, &bob_keypair, alice.pubkey(), &blockhash)
+            .transfer(500, &bob_keypair, &alice.pubkey(), &blockhash)
             .unwrap();
         client.poll_for_signature(&signature).unwrap();
         let alice_balance = client.poll_get_balance(&alice.pubkey()).unwrap();

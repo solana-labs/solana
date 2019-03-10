@@ -39,9 +39,9 @@ impl LocalCluster {
     ) -> Self {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
-        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
         let (genesis_block, mint_keypair) =
-            GenesisBlock::new_with_leader(cluster_lamports, leader_pubkey, node_stakes[0]);
+            GenesisBlock::new_with_leader(cluster_lamports, &leader_pubkey, node_stakes[0]);
         let (genesis_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
         let mut ledger_paths = vec![];
@@ -53,7 +53,7 @@ impl LocalCluster {
             leader_node,
             &leader_keypair,
             &leader_ledger_path,
-            voting_keypair.pubkey(),
+            &voting_keypair.pubkey(),
             voting_keypair,
             None,
             fullnode_config,
@@ -66,7 +66,7 @@ impl LocalCluster {
             let validator_keypair = Arc::new(Keypair::new());
             let voting_keypair = Keypair::new();
             let validator_pubkey = validator_keypair.pubkey();
-            let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+            let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
             let ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
             ledger_paths.push(ledger_path.clone());
 
@@ -89,7 +89,7 @@ impl LocalCluster {
                 validator_node,
                 &validator_keypair,
                 &ledger_path,
-                voting_keypair.pubkey(),
+                &voting_keypair.pubkey(),
                 voting_keypair,
                 Some(&leader_contact_info),
                 fullnode_config,
@@ -134,7 +134,7 @@ impl LocalCluster {
         trace!("getting leader blockhash");
         let blockhash = client.get_recent_blockhash();
         let mut tx =
-            SystemTransaction::new_account(&source_keypair, *dest_pubkey, lamports, blockhash, 0);
+            SystemTransaction::new_account(&source_keypair, dest_pubkey, lamports, blockhash, 0);
         info!(
             "executing transfer of {} from {} to {}",
             lamports,
@@ -160,7 +160,7 @@ impl LocalCluster {
             // 1) Create vote account
             let mut transaction = VoteTransaction::new_account(
                 from_account,
-                vote_account_pubkey,
+                &vote_account_pubkey,
                 client.get_recent_blockhash(),
                 amount,
                 1,
@@ -175,7 +175,7 @@ impl LocalCluster {
             let mut transaction = VoteTransaction::delegate_vote_account(
                 vote_account,
                 client.get_recent_blockhash(),
-                delegate_id,
+                &delegate_id,
                 0,
             );
 

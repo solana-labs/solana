@@ -61,7 +61,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         )))
     })?;
 
-    let command = parse_command(id.pubkey(), &matches)?;
+    let command = parse_command(&id.pubkey(), &matches)?;
 
     Ok(WalletConfig {
         id,

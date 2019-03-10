@@ -81,7 +81,7 @@ impl Fullnode {
         mut node: Node,
         keypair: &Arc<Keypair>,
         ledger_path: &str,
-        vote_account: Pubkey,
+        vote_account: &Pubkey,
         voting_keypair: T,
         entrypoint_info_option: Option<&ContactInfo>,
         config: &FullnodeConfig,
@@ -208,7 +208,7 @@ impl Fullnode {
             &exit,
         );
         let tpu = Tpu::new(
-            id,
+            &id,
             &cluster_info,
             &poh_recorder,
             entry_receiver,
@@ -325,7 +325,7 @@ pub fn make_active_set_entries(
     // 1) Assume the active_keypair node has no lamports staked
     let transfer_tx = SystemTransaction::new_account(
         &lamport_source,
-        active_keypair.pubkey(),
+        &active_keypair.pubkey(),
         stake,
         *blockhash,
         0,
@@ -339,7 +339,7 @@ pub fn make_active_set_entries(
 
     let new_vote_account_tx = VoteTransaction::new_account(
         active_keypair,
-        vote_account_id,
+        &vote_account_id,
         *blockhash,
         stake.saturating_sub(2),
         1,
@@ -348,7 +348,7 @@ pub fn make_active_set_entries(
 
     // 3) Create vote entry
     let vote_tx = VoteTransaction::new_vote(
-        voting_keypair.pubkey(),
+        &voting_keypair.pubkey(),
         &voting_keypair,
         slot_to_vote_on,
         *blockhash,
@@ -373,12 +373,12 @@ mod tests {
     #[test]
     fn validator_exit() {
         let leader_keypair = Keypair::new();
-        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
         let validator_keypair = Keypair::new();
-        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+        let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let (genesis_block, _mint_keypair) =
-            GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
+            GenesisBlock::new_with_leader(10_000, &leader_keypair.pubkey(), 1000);
         let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
         let voting_keypair = Keypair::new();
@@ -386,7 +386,7 @@ mod tests {
             validator_node,
             &Arc::new(validator_keypair),
             &validator_ledger_path,
-            voting_keypair.pubkey(),
+            &voting_keypair.pubkey(),
             voting_keypair,
             Some(&leader_node.info),
             &FullnodeConfig::default(),
@@ -398,15 +398,15 @@ mod tests {
     #[test]
     fn validator_parallel_exit() {
         let leader_keypair = Keypair::new();
-        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
         let mut ledger_paths = vec![];
         let validators: Vec<Fullnode> = (0..2)
             .map(|_| {
                 let validator_keypair = Keypair::new();
-                let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+                let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
                 let (genesis_block, _mint_keypair) =
-                    GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
+                    GenesisBlock::new_with_leader(10_000, &leader_keypair.pubkey(), 1000);
                 let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
                 ledger_paths.push(validator_ledger_path.clone());
                 let voting_keypair = Keypair::new();
@@ -414,7 +414,7 @@ mod tests {
                     validator_node,
                     &Arc::new(validator_keypair),
                     &validator_ledger_path,
-                    voting_keypair.pubkey(),
+                    &voting_keypair.pubkey(),
                     voting_keypair,
                     Some(&leader_node.info),
                     &FullnodeConfig::default(),

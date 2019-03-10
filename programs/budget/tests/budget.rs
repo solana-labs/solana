@@ -14,7 +14,7 @@ impl<'a> BudgetBank<'a> {
         Self { bank }
     }
 
-    fn pay(&self, from_keypair: &Keypair, to_id: Pubkey, lamports: u64) -> Result<()> {
+    fn pay(&self, from_keypair: &Keypair, to_id: &Pubkey, lamports: u64) -> Result<()> {
         let blockhash = self.bank.last_blockhash();
         let tx = BudgetTransaction::new_payment(from_keypair, to_id, lamports, blockhash, 0);
         self.bank.process_transaction(&tx)
@@ -27,6 +27,6 @@ fn test_budget_payment_via_bank() {
     let bank = Bank::new(&genesis_block);
     let budget_bank = BudgetBank::new(&bank);
     let to_id = Keypair::new().pubkey();
-    budget_bank.pay(&from_keypair, to_id, 100).unwrap();
+    budget_bank.pay(&from_keypair, &to_id, 100).unwrap();
     assert_eq!(bank.get_balance(&to_id), 100);
 }

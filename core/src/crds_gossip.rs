@@ -36,8 +36,8 @@ impl Default for CrdsGossip {
 }
 
 impl CrdsGossip {
-    pub fn set_self(&mut self, id: Pubkey) {
-        self.id = id;
+    pub fn set_self(&mut self, id: &Pubkey) {
+        self.id = *id;
     }
     /// process a push message to the network
     pub fn process_push_message(&mut self, values: &[CrdsValue], now: u64) -> Vec<Pubkey> {
@@ -73,8 +73,8 @@ impl CrdsGossip {
     /// add the `from` to the peer's filter of nodes
     pub fn process_prune_msg(
         &mut self,
-        peer: Pubkey,
-        destination: Pubkey,
+        peer: &Pubkey,
+        destination: &Pubkey,
         origin: &[Pubkey],
         wallclock: u64,
         now: u64,
@@ -83,7 +83,7 @@ impl CrdsGossip {
         if expired {
             return Err(CrdsGossipError::PruneMessageTimeout);
         }
-        if self.id == destination {
+        if self.id == *destination {
             self.push.process_prune_msg(peer, origin);
             Ok(())
         } else {
@@ -97,7 +97,7 @@ impl CrdsGossip {
         self.push.refresh_push_active_set(
             &self.crds,
             stakes,
-            self.id,
+            &self.id,
             self.pull.pull_request_time.len(),
             CRDS_GOSSIP_NUM_ACTIVE,
         )
@@ -109,14 +109,15 @@ impl CrdsGossip {
         now: u64,
         stakes: &HashMap<Pubkey, u64>,
     ) -> Result<(Pubkey, Bloom<Hash>, CrdsValue), CrdsGossipError> {
-        self.pull.new_pull_request(&self.crds, self.id, now, stakes)
+        self.pull
+            .new_pull_request(&self.crds, &self.id, now, stakes)
     }
 
     /// time when a request to `from` was initiated
     /// This is used for weighted random selection during `new_pull_request`
     /// It's important to use the local nodes request creation time as the weight
     /// instead of the response received time otherwise failed nodes will increase their weight.
-    pub fn mark_pull_request_creation_time(&mut self, from: Pubkey, now: u64) {
+    pub fn mark_pull_request_creation_time(&mut self, from: &Pubkey, now: u64) {
         self.pull.mark_pull_request_creation_time(from, now)
     }
     /// process a pull request and create a response
@@ -132,7 +133,7 @@ impl CrdsGossip {
     /// process a pull response
     pub fn process_pull_response(
         &mut self,
-        from: Pubkey,
+        from: &Pubkey,
         response: Vec<CrdsValue>,
         now: u64,
     ) -> usize {
@@ -150,7 +151,7 @@ impl CrdsGossip {
         }
         if now > self.pull.crds_timeout {
             let min = now - self.pull.crds_timeout;
-            self.pull.purge_active(&mut self.crds, self.id, min);
+            self.pull.purge_active(&mut self.crds, &self.id, min);
         }
         if now > 5 * self.pull.crds_timeout {
             let min = now - 5 * self.pull.crds_timeout;
@@ -188,7 +189,7 @@ mod test {
         let mut crds_gossip = CrdsGossip::default();
         crds_gossip.id = Pubkey::new(&[0; 32]);
         let id = crds_gossip.id;
-        let ci = ContactInfo::new_localhost(Pubkey::new(&[1; 32]), 0);
+        let ci = ContactInfo::new_localhost(&Pubkey::new(&[1; 32]), 0);
         let prune_pubkey = Pubkey::new(&[2; 32]);
         crds_gossip
             .crds
@@ -198,19 +199,19 @@ mod test {
         let now = timestamp();
         //incorrect dest
         let mut res = crds_gossip.process_prune_msg(
-            ci.id,
-            Pubkey::new(hash(&[1; 32]).as_ref()),
+            &ci.id,
+            &Pubkey::new(hash(&[1; 32]).as_ref()),
             &[prune_pubkey],
             now,
             now,
         );
         assert_eq!(res.err(), Some(CrdsGossipError::BadPruneDestination));
         //correct dest
-        res = crds_gossip.process_prune_msg(ci.id, id, &[prune_pubkey], now, now);
+        res = crds_gossip.process_prune_msg(&ci.id, &id, &[prune_pubkey], now, now);
         res.unwrap();
         //test timeout
         let timeout = now + crds_gossip.push.prune_timeout * 2;
-        res = crds_gossip.process_prune_msg(ci.id, id, &[prune_pubkey], now, timeout);
+        res = crds_gossip.process_prune_msg(&ci.id, &id, &[prune_pubkey], now, timeout);
         assert_eq!(res.err(), Some(CrdsGossipError::PruneMessageTimeout));
     }
 }

@@ -524,7 +524,7 @@ mod tests {
     fn test_to_packets() {
         let keypair = Keypair::new();
         let hash = Hash::new(&[1; 32]);
-        let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, hash, 0);
+        let tx = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 1, hash, 0);
         let rv = to_packets(&vec![tx.clone(); 1]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].read().unwrap().packets.len(), 1);

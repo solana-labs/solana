@@ -51,14 +51,14 @@ pub struct VoteState {
 }
 
 impl VoteState {
-    pub fn new(staker_id: Pubkey) -> Self {
+    pub fn new(staker_id: &Pubkey) -> Self {
         let votes = VecDeque::new();
         let credits = 0;
         let root_slot = None;
         Self {
             votes,
-            delegate_id: staker_id,
-            authorized_voter_id: staker_id,
+            delegate_id: *staker_id,
+            authorized_voter_id: *staker_id,
             credits,
             root_slot,
         }
@@ -151,7 +151,7 @@ impl VoteState {
 
 pub fn delegate_stake(
     keyed_accounts: &mut [KeyedAccount],
-    node_id: Pubkey,
+    node_id: &Pubkey,
 ) -> Result<(), ProgramError> {
     if !check_id(&keyed_accounts[0].account.owner) {
         error!("account[0] is not assigned to the VOTE_PROGRAM");
@@ -165,7 +165,7 @@ pub fn delegate_stake(
 
     let vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata);
     if let Ok(mut vote_state) = vote_state {
-        vote_state.delegate_id = node_id;
+        vote_state.delegate_id = *node_id;
         vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
     } else {
         error!("account[0] does not valid userdata");
@@ -180,7 +180,7 @@ pub fn delegate_stake(
 /// voter. The default voter is the owner of the vote account's pubkey.
 pub fn authorize_voter(
     keyed_accounts: &mut [KeyedAccount],
-    voter_id: Pubkey,
+    voter_id: &Pubkey,
 ) -> Result<(), ProgramError> {
     if !check_id(&keyed_accounts[0].account.owner) {
         error!("account[0] is not assigned to the VOTE_PROGRAM");
@@ -194,7 +194,7 @@ pub fn authorize_voter(
 
     let vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata);
     if let Ok(mut vote_state) = vote_state {
-        vote_state.authorized_voter_id = voter_id;
+        vote_state.authorized_voter_id = *voter_id;
         vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
     } else {
         error!("account[0] does not valid userdata");
@@ -217,7 +217,7 @@ pub fn initialize_account(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Pro
     let vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata);
     if let Ok(vote_state) = vote_state {
         if vote_state.delegate_id == Pubkey::default() {
-            let vote_state = VoteState::new(*staker_id);
+            let vote_state = VoteState::new(staker_id);
             vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
         } else {
             error!("account[0] userdata already initialized");
@@ -274,7 +274,7 @@ pub fn clear_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramE
 
 pub fn create_vote_account(lamports: u64) -> Account {
     let space = VoteState::max_size();
-    Account::new(lamports, space, id())
+    Account::new(lamports, space, &id())
 }
 
 pub fn initialize_and_deserialize(
@@ -309,7 +309,7 @@ mod tests {
         let mut vote_account = create_vote_account(100);
 
         let bogus_account_id = Keypair::new().pubkey();
-        let mut bogus_account = Account::new(100, 0, id());
+        let mut bogus_account = Account::new(100, 0, &id());
 
         let mut keyed_accounts = [KeyedAccount::new(
             &bogus_account_id,
@@ -385,7 +385,7 @@ mod tests {
     #[test]
     fn test_vote_lockout() {
         let voter_id = Keypair::new().pubkey();
-        let mut vote_state = VoteState::new(voter_id);
+        let mut vote_state = VoteState::new(&voter_id);
 
         for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
             vote_state.process_vote(Vote::new((INITIAL_LOCKOUT as usize * i) as u64));
@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn test_vote_double_lockout_after_expiration() {
         let voter_id = Keypair::new().pubkey();
-        let mut vote_state = VoteState::new(voter_id);
+        let mut vote_state = VoteState::new(&voter_id);
 
         for i in 0..3 {
             let vote = Vote::new(i as u64);
@@ -441,7 +441,7 @@ mod tests {
     #[test]
     fn test_vote_credits() {
         let voter_id = Keypair::new().pubkey();
-        let mut vote_state = VoteState::new(voter_id);
+        let mut vote_state = VoteState::new(&voter_id);
 
         for i in 0..MAX_LOCKOUT_HISTORY {
             vote_state.process_vote(Vote::new(i as u64));

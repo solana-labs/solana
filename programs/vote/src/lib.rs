@@ -25,10 +25,10 @@ fn entrypoint(
     match deserialize(data).map_err(|_| ProgramError::InvalidUserdata)? {
         VoteInstruction::InitializeAccount => vote_state::initialize_account(keyed_accounts),
         VoteInstruction::DelegateStake(delegate_id) => {
-            vote_state::delegate_stake(keyed_accounts, delegate_id)
+            vote_state::delegate_stake(keyed_accounts, &delegate_id)
         }
         VoteInstruction::AuthorizeVoter(voter_id) => {
-            vote_state::authorize_voter(keyed_accounts, voter_id)
+            vote_state::authorize_voter(keyed_accounts, &voter_id)
         }
         VoteInstruction::Vote(vote) => {
             debug!("{:?} by {}", vote, keyed_accounts[0].signer_key().unwrap());

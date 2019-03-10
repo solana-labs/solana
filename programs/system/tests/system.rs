@@ -27,8 +27,8 @@ fn test_system_unsigned_transaction() {
     let blockhash = system_bank.bank.last_blockhash();
     let tx = TransactionBuilder::default()
         .push(SystemInstruction::new_move(
-            from_keypair.pubkey(),
-            to_keypair.pubkey(),
+            &from_keypair.pubkey(),
+            &to_keypair.pubkey(),
             50,
         ))
         .sign(&[&from_keypair], blockhash);

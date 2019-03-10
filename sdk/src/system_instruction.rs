@@ -26,28 +26,28 @@ pub enum SystemInstruction {
 
 impl SystemInstruction {
     pub fn new_program_account(
-        from_id: Pubkey,
-        to_id: Pubkey,
+        from_id: &Pubkey,
+        to_id: &Pubkey,
         lamports: u64,
         space: u64,
-        program_id: Pubkey,
+        program_id: &Pubkey,
     ) -> BuilderInstruction {
         BuilderInstruction::new(
             system_program::id(),
             &SystemInstruction::CreateAccount {
                 lamports,
                 space,
-                program_id,
+                program_id: *program_id,
             },
-            vec![(from_id, true), (to_id, false)],
+            vec![(*from_id, true), (*to_id, false)],
         )
     }
 
-    pub fn new_move(from_id: Pubkey, to_id: Pubkey, lamports: u64) -> BuilderInstruction {
+    pub fn new_move(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> BuilderInstruction {
         BuilderInstruction::new(
             system_program::id(),
             &SystemInstruction::Move { lamports },
-            vec![(from_id, true), (to_id, false)],
+            vec![(*from_id, true), (*to_id, false)],
         )
     }
 }

@@ -80,13 +80,13 @@ impl BlockstreamService {
                 tick_height += 1;
             }
             blockstream
-                .emit_entry_event(slot, tick_height, slot_leader, &entry)
+                .emit_entry_event(slot, tick_height, &slot_leader, &entry)
                 .unwrap_or_else(|e| {
                     debug!("Blockstream error: {:?}, {:?}", e, blockstream.output);
                 });
             if i == entries.len() - 1 {
                 blockstream
-                    .emit_block_event(slot, tick_height, slot_leader, entry.hash)
+                    .emit_block_event(slot, tick_height, &slot_leader, entry.hash)
                     .unwrap_or_else(|e| {
                         debug!("Blockstream error: {:?}, {:?}", e, blockstream.output);
                     });
@@ -140,7 +140,7 @@ mod test {
 
         let keypair = Keypair::new();
         let mut blockhash = entries[3].hash;
-        let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, Hash::default(), 0);
+        let tx = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 1, Hash::default(), 0);
         let entry = Entry::new(&mut blockhash, 1, vec![tx]);
         blockhash = entry.hash;
         entries.push(entry);

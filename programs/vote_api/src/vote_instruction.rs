@@ -32,31 +32,34 @@ pub enum VoteInstruction {
 }
 
 impl VoteInstruction {
-    pub fn new_clear_credits(vote_id: Pubkey) -> BuilderInstruction {
-        BuilderInstruction::new(id(), &VoteInstruction::ClearCredits, vec![(vote_id, true)])
+    pub fn new_clear_credits(vote_id: &Pubkey) -> BuilderInstruction {
+        BuilderInstruction::new(id(), &VoteInstruction::ClearCredits, vec![(*vote_id, true)])
     }
-    pub fn new_delegate_stake(vote_id: Pubkey, delegate_id: Pubkey) -> BuilderInstruction {
+    pub fn new_delegate_stake(vote_id: &Pubkey, delegate_id: &Pubkey) -> BuilderInstruction {
         BuilderInstruction::new(
             id(),
-            &VoteInstruction::DelegateStake(delegate_id),
-            vec![(vote_id, true)],
+            &VoteInstruction::DelegateStake(*delegate_id),
+            vec![(*vote_id, true)],
         )
     }
-    pub fn new_authorize_voter(vote_id: Pubkey, authorized_voter_id: Pubkey) -> BuilderInstruction {
+    pub fn new_authorize_voter(
+        vote_id: &Pubkey,
+        authorized_voter_id: &Pubkey,
+    ) -> BuilderInstruction {
         BuilderInstruction::new(
             id(),
-            &VoteInstruction::AuthorizeVoter(authorized_voter_id),
-            vec![(vote_id, true)],
+            &VoteInstruction::AuthorizeVoter(*authorized_voter_id),
+            vec![(*vote_id, true)],
         )
     }
-    pub fn new_initialize_account(vote_id: Pubkey) -> BuilderInstruction {
+    pub fn new_initialize_account(vote_id: &Pubkey) -> BuilderInstruction {
         BuilderInstruction::new(
             id(),
             &VoteInstruction::InitializeAccount,
-            vec![(vote_id, false)],
+            vec![(*vote_id, false)],
         )
     }
-    pub fn new_vote(vote_id: Pubkey, vote: Vote) -> BuilderInstruction {
-        BuilderInstruction::new(id(), &VoteInstruction::Vote(vote), vec![(vote_id, true)])
+    pub fn new_vote(vote_id: &Pubkey, vote: Vote) -> BuilderInstruction {
+        BuilderInstruction::new(id(), &VoteInstruction::Vote(vote), vec![(*vote_id, true)])
     }
 }

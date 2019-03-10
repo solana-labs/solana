@@ -92,7 +92,7 @@ mod tests {
 
     fn create_rewards_account(lamports: u64) -> Account {
         let space = RewardsState::max_size();
-        Account::new(lamports, space, solana_rewards_api::id())
+        Account::new(lamports, space, &solana_rewards_api::id())
     }
 
     fn redeem_vote_credits_(

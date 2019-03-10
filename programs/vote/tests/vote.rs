@@ -24,7 +24,7 @@ impl<'a> VoteBank<'a> {
     fn create_vote_account(
         &self,
         from_keypair: &Keypair,
-        vote_id: Pubkey,
+        vote_id: &Pubkey,
         lamports: u64,
     ) -> Result<()> {
         let blockhash = self.bank.last_blockhash();
@@ -36,7 +36,7 @@ impl<'a> VoteBank<'a> {
         &self,
         from_keypair: &Keypair,
         vote_keypair: &Keypair,
-        delegate_id: Pubkey,
+        delegate_id: &Pubkey,
         lamports: u64,
     ) -> Result<()> {
         let blockhash = self.bank.last_blockhash();
@@ -53,7 +53,7 @@ impl<'a> VoteBank<'a> {
 
     fn submit_vote(
         &self,
-        staking_account: Pubkey,
+        staking_account: &Pubkey,
         vote_keypair: &Keypair,
         tick_height: u64,
     ) -> Result<VoteState> {
@@ -77,10 +77,10 @@ fn test_vote_bank_basic() {
     let vote_keypair = Keypair::new();
     let vote_id = vote_keypair.pubkey();
     vote_bank
-        .create_vote_account(&from_keypair, vote_id, 100)
+        .create_vote_account(&from_keypair, &vote_id, 100)
         .unwrap();
 
-    let vote_state = vote_bank.submit_vote(vote_id, &vote_keypair, 0).unwrap();
+    let vote_state = vote_bank.submit_vote(&vote_id, &vote_keypair, 0).unwrap();
     assert_eq!(vote_state.votes.len(), 1);
 }
 
@@ -93,7 +93,7 @@ fn test_vote_bank_delegate() {
     let delegate_keypair = Keypair::new();
     let delegate_id = delegate_keypair.pubkey();
     vote_bank
-        .create_vote_account_with_delegate(&from_keypair, &vote_keypair, delegate_id, 100)
+        .create_vote_account_with_delegate(&from_keypair, &vote_keypair, &delegate_id, 100)
         .unwrap();
 }
 
@@ -106,7 +106,7 @@ fn test_vote_via_bank_with_no_signature() {
     let vote_keypair = Keypair::new();
     let vote_id = vote_keypair.pubkey();
     vote_bank
-        .create_vote_account(&mallory_keypair, vote_id, 100)
+        .create_vote_account(&mallory_keypair, &vote_id, 100)
         .unwrap();
 
     let mallory_id = mallory_keypair.pubkey();
@@ -121,7 +121,7 @@ fn test_vote_via_bank_with_no_signature() {
     // the 0th account in the second instruction is not! The program
     // needs to check that it's signed.
     let tx = TransactionBuilder::default()
-        .push(SystemInstruction::new_move(mallory_id, vote_id, 1))
+        .push(SystemInstruction::new_move(&mallory_id, &vote_id, 1))
         .push(vote_ix)
         .sign(&[&mallory_keypair], blockhash);
 

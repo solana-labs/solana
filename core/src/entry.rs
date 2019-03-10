@@ -400,8 +400,8 @@ pub fn make_tiny_test_entries_from_hash(start: &Hash, num: usize) -> Vec<Entry> 
                 &mut num_hashes,
                 vec![BudgetTransaction::new_timestamp(
                     &keypair,
-                    keypair.pubkey(),
-                    keypair.pubkey(),
+                    &keypair.pubkey(),
+                    &keypair.pubkey(),
                     Utc::now(),
                     *start,
                 )],
@@ -423,8 +423,8 @@ pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
 
     let tx = BudgetTransaction::new_timestamp(
         &keypair,
-        keypair.pubkey(),
-        keypair.pubkey(),
+        &keypair.pubkey(),
+        &keypair.pubkey(),
         Utc::now(),
         one,
     );
@@ -496,8 +496,8 @@ mod tests {
 
         // First, verify entries
         let keypair = Keypair::new();
-        let tx0 = SystemTransaction::new_account(&keypair, keypair.pubkey(), 0, zero, 0);
-        let tx1 = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, zero, 0);
+        let tx0 = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 0, zero, 0);
+        let tx1 = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 1, zero, 0);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
@@ -515,13 +515,13 @@ mod tests {
         let keypair = Keypair::new();
         let tx0 = BudgetTransaction::new_timestamp(
             &keypair,
-            keypair.pubkey(),
-            keypair.pubkey(),
+            &keypair.pubkey(),
+            &keypair.pubkey(),
             Utc::now(),
             zero,
         );
         let tx1 =
-            BudgetTransaction::new_signature(&keypair, keypair.pubkey(), keypair.pubkey(), zero);
+            BudgetTransaction::new_signature(&keypair, &keypair.pubkey(), &keypair.pubkey(), zero);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
@@ -545,8 +545,8 @@ mod tests {
         let keypair = Keypair::new();
         let tx0 = BudgetTransaction::new_timestamp(
             &keypair,
-            keypair.pubkey(),
-            keypair.pubkey(),
+            &keypair.pubkey(),
+            &keypair.pubkey(),
             Utc::now(),
             zero,
         );
@@ -560,7 +560,7 @@ mod tests {
     fn test_next_entry_panic() {
         let zero = Hash::default();
         let keypair = Keypair::new();
-        let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 0, zero, 0);
+        let tx = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 0, zero, 0);
         next_entry(&zero, 0, vec![tx]);
     }
 
@@ -568,7 +568,7 @@ mod tests {
     fn test_serialized_size() {
         let zero = Hash::default();
         let keypair = Keypair::new();
-        let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 0, zero, 0);
+        let tx = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 0, zero, 0);
         let entry = next_entry(&zero, 1, vec![tx.clone()]);
         assert_eq!(
             Entry::serialized_size(&[tx]),
@@ -596,11 +596,11 @@ mod tests {
         let one = hash(&zero.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
-        let tx0 = VoteTransaction::new_vote(vote_account.pubkey(), &vote_account, 1, one, 1);
+        let tx0 = VoteTransaction::new_vote(&vote_account.pubkey(), &vote_account, 1, one, 1);
         let tx1 = BudgetTransaction::new_timestamp(
             &keypair,
-            keypair.pubkey(),
-            keypair.pubkey(),
+            &keypair.pubkey(),
+            &keypair.pubkey(),
             Utc::now(),
             one,
         );
@@ -645,8 +645,8 @@ mod tests {
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
         let tx_small =
-            VoteTransaction::new_vote(vote_account.pubkey(), &vote_account, 1, next_hash, 2);
-        let tx_large = BudgetTransaction::new_payment(&keypair, keypair.pubkey(), 1, next_hash, 0);
+            VoteTransaction::new_vote(&vote_account.pubkey(), &vote_account, 1, next_hash, 2);
+        let tx_large = BudgetTransaction::new_payment(&keypair, &keypair.pubkey(), 1, next_hash, 0);
 
         let tx_small_size = tx_small.serialized_size().unwrap() as usize;
         let tx_large_size = tx_large.serialized_size().unwrap() as usize;
