@@ -2,6 +2,7 @@ extern crate solana;
 
 use solana::cluster_tests;
 use solana::fullnode::FullnodeConfig;
+use solana::gossip_service::discover;
 use solana::local_cluster::LocalCluster;
 use solana::poh_service::PohServiceConfig;
 use solana_sdk::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT};
@@ -106,6 +107,24 @@ fn test_two_unbalanced_stakes() {
     cluster.close_preserve_ledgers();
     let leader_ledger = cluster.ledger_paths[1].clone();
     cluster_tests::verify_ledger_ticks(&leader_ledger, DEFAULT_TICKS_PER_SLOT as usize);
+
+    drop(cluster);
+}
+
+#[test]
+fn test_forwarding() {
+    // Set up a cluster where one node is never the leader, so all txs sent to this node
+    // will be have to be forwarded
+    let fullnode_config = FullnodeConfig::default();
+    let cluster = LocalCluster::new_with_config(&[999_990, 3], 2_000_000, &fullnode_config);
+
+    let cluster_nodes = discover(&cluster.entry_point_info.gossip, 2).unwrap();
+    assert!(cluster_nodes.len() >= 2);
+
+    let leader_id = cluster.entry_point_info.id;
+
+    let validator_info = cluster_nodes.iter().find(|c| c.id != leader_id).unwrap();
+    cluster_tests::send_many_transactions(&validator_info, &cluster.funding_keypair, 20);
 
     drop(cluster);
 }

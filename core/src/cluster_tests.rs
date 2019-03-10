@@ -48,6 +48,27 @@ pub fn spend_and_verify_all_nodes(
     }
 }
 
+pub fn send_many_transactions(node: &ContactInfo, funding_keypair: &Keypair, num_txs: u64) {
+    let mut client = mk_client(node);
+    for _ in 0..num_txs {
+        let random_keypair = Keypair::new();
+        let bal = client
+            .poll_get_balance(&funding_keypair.pubkey())
+            .expect("balance in source");
+        assert!(bal > 0);
+        let mut transaction = SystemTransaction::new_move(
+            &funding_keypair,
+            random_keypair.pubkey(),
+            1,
+            client.get_recent_blockhash(),
+            0,
+        );
+        client
+            .retry_transfer(&funding_keypair, &mut transaction, 5)
+            .unwrap();
+    }
+}
+
 pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {
     let cluster_nodes = discover(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
