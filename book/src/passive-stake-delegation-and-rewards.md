@@ -27,17 +27,16 @@ the number of validators in a long running cluster.
 ## Proposed changes to the current design.
 
 The general idea is that instead of the staker, the validator will own the
-VoteState program, In this proposal, the VoteState program is there to track
-validator votes, count validator generated credits, and to provide any
+VoteState program. In this proposal the VoteState program is there to track
+validator votes, count validator generated credits and to provide any
 additional validator specific state.  The VoteState program is not aware of any
 stakes delegated to it, and has no staking weight.
 
-Stakes and rewards are related, Since the rewards generated are proportional to
-the amount of lamports staked.  The proposed change is to keep the stake state
-as part of the RewardsState program. This program is owned by the staker only.
-Lamports stored in this program are the stake.  Unlike the current design, this
-program contains a new field to indicate which VoteState program the stake is
-delegated to.
+The rewards generated are proportional to the amount of lamports staked.  In
+this proposal stake state is stored as part of the RewardsState program. This
+program is owned by the staker only.  Lamports stored in this program are the
+stake.  Unlike the current design, this program contains a new field to indicate
+which VoteState program the stake is delegated to.
 
 ### New VoteState
 
