@@ -42,11 +42,11 @@ mod bpf {
             let bank = Bank::new(&genesis_block);
 
             // Call user program
-            let program_id = load_program(&bank, &mint_keypair, bpf_loader::id(), elf);
+            let program_id = load_program(&bank, &mint_keypair, &bpf_loader::id(), elf);
             let tx = Transaction::new(
                 &mint_keypair,
                 &[],
-                program_id,
+                &program_id,
                 &vec![1u8],
                 bank.last_blockhash(),
                 0,
@@ -80,16 +80,16 @@ mod bpf {
                 let loader_id = load_program(
                     &bank,
                     &mint_keypair,
-                    native_loader::id(),
+                    &native_loader::id(),
                     "solana_bpf_loader".as_bytes().to_vec(),
                 );
 
                 // Call user program
-                let program_id = load_program(&bank, &mint_keypair, loader_id, elf);
+                let program_id = load_program(&bank, &mint_keypair, &loader_id, elf);
                 let tx = Transaction::new(
                     &mint_keypair,
                     &[],
-                    program_id,
+                    &program_id,
                     &vec![1u8],
                     bank.last_blockhash(),
                     0,
@@ -126,16 +126,16 @@ mod bpf {
                 let loader_id = load_program(
                     &bank,
                     &mint_keypair,
-                    native_loader::id(),
+                    &native_loader::id(),
                     "solana_bpf_loader".as_bytes().to_vec(),
                 );
 
                 // Call user program
-                let program_id = load_program(&bank, &mint_keypair, loader_id, elf);
+                let program_id = load_program(&bank, &mint_keypair, &loader_id, elf);
                 let tx = Transaction::new(
                     &mint_keypair,
                     &[],
-                    program_id,
+                    &program_id,
                     &vec![1u8],
                     bank.last_blockhash(),
                     0,

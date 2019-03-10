@@ -53,8 +53,8 @@ pub struct ReplayStage {
 impl ReplayStage {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new<T>(
-        my_id: Pubkey,
-        vote_account: Pubkey,
+        my_id: &Pubkey,
+        vote_account: &Pubkey,
         voting_keypair: Option<Arc<T>>,
         blocktree: Arc<Blocktree>,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -74,6 +74,8 @@ impl ReplayStage {
         let subscriptions = subscriptions.clone();
         let bank_forks = bank_forks.clone();
         let poh_recorder = poh_recorder.clone();
+        let my_id = *my_id;
+        let vote_account = *vote_account;
 
         // Start the replay stage loop
         let t_replay = Builder::new()
@@ -132,7 +134,7 @@ impl ReplayStage {
                         if let Some(ref voting_keypair) = voting_keypair {
                             let keypair = voting_keypair.as_ref();
                             let vote = VoteTransaction::new_vote(
-                                vote_account,
+                                &vote_account,
                                 keypair,
                                 *latest_slot_vote,
                                 parent.last_blockhash(),
@@ -148,7 +150,7 @@ impl ReplayStage {
                     }
 
                     if !is_tpu_bank_active {
-                        Self::start_leader(my_id, &bank_forks, &poh_recorder, &cluster_info);
+                        Self::start_leader(&my_id, &bank_forks, &poh_recorder, &cluster_info);
                     }
 
                     inc_new_counter_info!(
@@ -173,7 +175,7 @@ impl ReplayStage {
         )
     }
     pub fn start_leader(
-        my_id: Pubkey,
+        my_id: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -195,8 +197,8 @@ impl ReplayStage {
                             "me: {} leader {} at poh slot {}",
                             my_id, next_leader, poh_slot
                         );
-                        cluster_info.write().unwrap().set_leader(next_leader);
-                        if next_leader == my_id {
+                        cluster_info.write().unwrap().set_leader(&next_leader);
+                        if next_leader == *my_id {
                             debug!("starting tpu for slot {}", poh_slot);
                             let tpu_bank = Bank::new_from_parent(parent, my_id, poh_slot);
                             bank_forks.write().unwrap().insert(poh_slot, tpu_bank);
@@ -325,7 +327,7 @@ impl ReplayStage {
                 info!("new fork:{} parent:{}", child_id, parent_id);
                 forks.insert(
                     child_id,
-                    Bank::new_from_parent(&parent_bank, leader, child_id),
+                    Bank::new_from_parent(&parent_bank, &leader, child_id),
                 );
             }
         }
@@ -364,12 +366,12 @@ mod test {
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
-        let my_node = Node::new_localhost_with_pubkey(my_id);
+        let my_node = Node::new_localhost_with_pubkey(&my_id);
 
         // Create keypair for the leader
         let leader_id = Keypair::new().pubkey();
 
-        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10_000, leader_id, 500);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10_000, &leader_id, 500);
 
         let (my_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
@@ -388,8 +390,8 @@ mod test {
             let blocktree = Arc::new(blocktree);
             let (exit, poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
             let (replay_stage, _slot_full_receiver, ledger_writer_recv) = ReplayStage::new(
-                my_keypair.pubkey(),
-                voting_keypair.pubkey(),
+                &my_keypair.pubkey(),
+                &voting_keypair.pubkey(),
                 Some(voting_keypair.clone()),
                 blocktree.clone(),
                 &Arc::new(RwLock::new(bank_forks)),
@@ -402,7 +404,7 @@ mod test {
 
             let keypair = voting_keypair.as_ref();
             let vote =
-                VoteTransaction::new_vote(keypair.pubkey(), keypair, 0, bank.last_blockhash(), 0);
+                VoteTransaction::new_vote(&keypair.pubkey(), keypair, 0, bank.last_blockhash(), 0);
             cluster_info_me.write().unwrap().push_vote(vote);
 
             info!("Send ReplayStage an entry, should see it on the ledger writer receiver");

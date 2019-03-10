@@ -59,7 +59,7 @@ mod tests {
         let pubkey = Keypair::new().pubkey();
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
-            pubkey,
+            &pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
         );
         let bank = Bank::new(&genesis_block);
@@ -79,7 +79,7 @@ mod tests {
         let pubkey = Keypair::new().pubkey();
         let genesis_block = GenesisBlock::new_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
-            pubkey,
+            &pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
         )
         .0;

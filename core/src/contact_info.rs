@@ -83,7 +83,7 @@ impl Default for ContactInfo {
 
 impl ContactInfo {
     pub fn new(
-        id: Pubkey,
+        id: &Pubkey,
         gossip: SocketAddr,
         tvu: SocketAddr,
         tpu: SocketAddr,
@@ -93,7 +93,7 @@ impl ContactInfo {
         now: u64,
     ) -> Self {
         Self {
-            id,
+            id: *id,
             signature: Signature::default(),
             gossip,
             tvu,
@@ -105,7 +105,7 @@ impl ContactInfo {
         }
     }
 
-    pub fn new_localhost(id: Pubkey, now: u64) -> Self {
+    pub fn new_localhost(id: &Pubkey, now: u64) -> Self {
         Self::new(
             id,
             socketaddr!("127.0.0.1:1234"),
@@ -124,7 +124,7 @@ impl ContactInfo {
         let addr = socketaddr!("224.0.1.255:1000");
         assert!(addr.ip().is_multicast());
         Self::new(
-            Keypair::new().pubkey(),
+            &Keypair::new().pubkey(),
             addr,
             addr,
             addr,
@@ -139,7 +139,7 @@ impl ContactInfo {
         nxt_addr.set_port(addr.port() + nxt);
         nxt_addr
     }
-    fn new_with_pubkey_socketaddr(pubkey: Pubkey, bind_addr: &SocketAddr) -> Self {
+    fn new_with_pubkey_socketaddr(pubkey: &Pubkey, bind_addr: &SocketAddr) -> Self {
         let tpu_addr = *bind_addr;
         let gossip_addr = Self::next_port(&bind_addr, 1);
         let tvu_addr = Self::next_port(&bind_addr, 2);
@@ -158,14 +158,14 @@ impl ContactInfo {
     }
     pub fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
         let keypair = Keypair::new();
-        Self::new_with_pubkey_socketaddr(keypair.pubkey(), bind_addr)
+        Self::new_with_pubkey_socketaddr(&keypair.pubkey(), bind_addr)
     }
 
     // Construct a ContactInfo that's only usable for gossip
     pub fn new_gossip_entry_point(gossip_addr: &SocketAddr) -> Self {
         let daddr: SocketAddr = socketaddr!("0.0.0.0:0");
         Self::new(
-            Pubkey::default(),
+            &Pubkey::default(),
             *gossip_addr,
             daddr,
             daddr,
@@ -292,7 +292,7 @@ mod tests {
     fn replayed_data_new_with_socketaddr_with_pubkey() {
         let keypair = Keypair::new();
         let d1 = ContactInfo::new_with_pubkey_socketaddr(
-            keypair.pubkey().clone(),
+            &keypair.pubkey(),
             &socketaddr!("127.0.0.1:1234"),
         );
         assert_eq!(d1.id, keypair.pubkey());

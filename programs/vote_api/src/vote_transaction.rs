@@ -15,7 +15,7 @@ pub struct VoteTransaction {}
 
 impl VoteTransaction {
     pub fn new_vote<T: KeypairUtil>(
-        staking_account: Pubkey,
+        staking_account: &Pubkey,
         authorized_voter_keypair: &T,
         slot: u64,
         recent_blockhash: Hash,
@@ -30,7 +30,7 @@ impl VoteTransaction {
     /// Fund or create the staking account with lamports
     pub fn new_account(
         from_keypair: &Keypair,
-        staker_id: Pubkey,
+        staker_id: &Pubkey,
         recent_blockhash: Hash,
         lamports: u64,
         fee: u64,
@@ -39,11 +39,11 @@ impl VoteTransaction {
         let space = VoteState::max_size() as u64;
         TransactionBuilder::new(fee)
             .push(SystemInstruction::new_program_account(
-                from_id,
+                &from_id,
                 staker_id,
                 lamports,
                 space,
-                id(),
+                &id(),
             ))
             .push(VoteInstruction::new_initialize_account(staker_id))
             .sign(&[from_keypair], recent_blockhash)
@@ -53,7 +53,7 @@ impl VoteTransaction {
     pub fn new_account_with_delegate(
         from_keypair: &Keypair,
         voter_keypair: &Keypair,
-        delegate_id: Pubkey,
+        delegate_id: &Pubkey,
         recent_blockhash: Hash,
         lamports: u64,
         fee: u64,
@@ -63,14 +63,14 @@ impl VoteTransaction {
         let space = VoteState::max_size() as u64;
         TransactionBuilder::new(fee)
             .push(SystemInstruction::new_program_account(
-                from_id,
-                voter_id,
+                &from_id,
+                &voter_id,
                 lamports,
                 space,
-                id(),
+                &id(),
             ))
-            .push(VoteInstruction::new_initialize_account(voter_id))
-            .push(VoteInstruction::new_delegate_stake(voter_id, delegate_id))
+            .push(VoteInstruction::new_initialize_account(&voter_id))
+            .push(VoteInstruction::new_delegate_stake(&voter_id, &delegate_id))
             .sign(&[from_keypair, voter_keypair], recent_blockhash)
     }
 
@@ -78,12 +78,12 @@ impl VoteTransaction {
     pub fn new_authorize_voter(
         vote_keypair: &Keypair,
         recent_blockhash: Hash,
-        authorized_voter_id: Pubkey,
+        authorized_voter_id: &Pubkey,
         fee: u64,
     ) -> Transaction {
         TransactionBuilder::new(fee)
             .push(VoteInstruction::new_authorize_voter(
-                vote_keypair.pubkey(),
+                &vote_keypair.pubkey(),
                 authorized_voter_id,
             ))
             .sign(&[vote_keypair], recent_blockhash)
@@ -93,12 +93,12 @@ impl VoteTransaction {
     pub fn delegate_vote_account<T: KeypairUtil>(
         vote_keypair: &T,
         recent_blockhash: Hash,
-        node_id: Pubkey,
+        node_id: &Pubkey,
         fee: u64,
     ) -> Transaction {
         TransactionBuilder::new(fee)
             .push(VoteInstruction::new_delegate_stake(
-                vote_keypair.pubkey(),
+                &vote_keypair.pubkey(),
                 node_id,
             ))
             .sign(&[vote_keypair], recent_blockhash)
@@ -133,7 +133,7 @@ mod tests {
         let slot = 1;
         let recent_blockhash = Hash::default();
         let transaction =
-            VoteTransaction::new_vote(keypair.pubkey(), &keypair, slot, recent_blockhash, 0);
+            VoteTransaction::new_vote(&keypair.pubkey(), &keypair, slot, recent_blockhash, 0);
         assert_eq!(
             VoteTransaction::get_votes(&transaction),
             vec![(keypair.pubkey(), Vote::new(slot), recent_blockhash)]

@@ -36,7 +36,7 @@ fn run_simulation(num_nodes: u64, fanout: usize, hood_size: usize) {
     let timeout = 60 * 5;
 
     // describe the leader
-    let leader_info = ContactInfo::new_localhost(Keypair::new().pubkey(), 0);
+    let leader_info = ContactInfo::new_localhost(&Keypair::new().pubkey(), 0);
     let mut cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.clone());
 
     // setup stakes
@@ -59,7 +59,7 @@ fn run_simulation(num_nodes: u64, fanout: usize, hood_size: usize) {
         chunk.into_iter().for_each(|i| {
             //distribute neighbors across threads to maximize parallel compute
             let batch_ix = *i as usize % batches.len();
-            let node = ContactInfo::new_localhost(Keypair::new().pubkey(), 0);
+            let node = ContactInfo::new_localhost(&Keypair::new().pubkey(), 0);
             stakes.insert(node.id, *i);
             cluster_info.insert_info(node.clone());
             let (s, r) = channel();
@@ -103,7 +103,7 @@ fn run_simulation(num_nodes: u64, fanout: usize, hood_size: usize) {
         while remaining > 0 {
             for (id, (recv, r)) in batch.iter_mut() {
                 assert!(now.elapsed().as_secs() < timeout, "Timed out");
-                cluster.gossip.set_self(*id);
+                cluster.gossip.set_self(&*id);
                 if !mapped_peers.contains_key(id) {
                     let (neighbors, children) = compute_retransmit_peers(
                         &stakes,

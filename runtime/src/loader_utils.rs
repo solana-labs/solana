@@ -4,12 +4,12 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 
-pub fn load_program(bank: &Bank, from: &Keypair, loader_id: Pubkey, program: Vec<u8>) -> Pubkey {
+pub fn load_program(bank: &Bank, from: &Keypair, loader_id: &Pubkey, program: Vec<u8>) -> Pubkey {
     let program_account = Keypair::new();
 
     let tx = SystemTransaction::new_program_account(
         from,
-        program_account.pubkey(),
+        &program_account.pubkey(),
         bank.last_blockhash(),
         1,
         program.len() as u64,

@@ -42,7 +42,7 @@ fn test_replay() {
     solana_logger::setup();
     let leader = Node::new_localhost();
     let target1_keypair = Keypair::new();
-    let target1 = Node::new_localhost_with_pubkey(target1_keypair.pubkey());
+    let target1 = Node::new_localhost_with_pubkey(&target1_keypair.pubkey());
     let target2 = Node::new_localhost();
     let exit = Arc::new(AtomicBool::new(false));
 
@@ -109,7 +109,7 @@ fn test_replay() {
     let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
         create_test_recorder(&bank);
     let tvu = Tvu::new(
-        voting_keypair.pubkey(),
+        &voting_keypair.pubkey(),
         Some(Arc::new(voting_keypair)),
         &Arc::new(RwLock::new(bank_forks)),
         &bank_forks_info,
@@ -144,7 +144,7 @@ fn test_replay() {
 
         let tx0 = SystemTransaction::new_account(
             &mint_keypair,
-            bob_keypair.pubkey(),
+            &bob_keypair.pubkey(),
             transfer_amount,
             blockhash,
             0,

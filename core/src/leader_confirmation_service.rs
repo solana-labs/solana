@@ -139,7 +139,7 @@ mod tests {
                 bank.register_tick(&tick_hash);
             }
 
-            bank = Arc::new(Bank::new_from_parent(&bank, Pubkey::default(), slot));
+            bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
         }
 
         let blockhash = bank.last_blockhash();
@@ -154,7 +154,7 @@ mod tests {
                 let voting_pubkey = voting_keypair.pubkey();
 
                 // Give the validator some lamports
-                bank.transfer(2, &mint_keypair, validator_keypair.pubkey(), blockhash)
+                bank.transfer(2, &mint_keypair, &validator_keypair.pubkey(), blockhash)
                     .unwrap();
                 new_vote_account(&validator_keypair, &voting_pubkey, &bank, 1);
 
@@ -173,7 +173,7 @@ mod tests {
         // Get another validator to vote, so we now have 2/3 consensus
         let voting_keypair = &vote_accounts[7].0;
         let vote_tx =
-            VoteTransaction::new_vote(voting_keypair.pubkey(), voting_keypair, 7, blockhash, 0);
+            VoteTransaction::new_vote(&voting_keypair.pubkey(), voting_keypair, 7, blockhash, 0);
         bank.process_transaction(&vote_tx).unwrap();
 
         LeaderConfirmationService::compute_confirmation(&bank, &mut last_confirmation_time);

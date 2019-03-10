@@ -33,7 +33,7 @@ pub fn spend_and_verify_all_nodes(
         assert!(bal > 0);
         let mut transaction = SystemTransaction::new_move(
             &funding_keypair,
-            random_keypair.pubkey(),
+            &random_keypair.pubkey(),
             1,
             client.get_recent_blockhash(),
             0,
@@ -124,7 +124,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
         assert!(bal > 0);
         let mut transaction = SystemTransaction::new_move(
             &funding_keypair,
-            random_keypair.pubkey(),
+            &random_keypair.pubkey(),
             1,
             client.get_recent_blockhash(),
             0,

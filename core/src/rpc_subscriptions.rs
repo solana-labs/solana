@@ -210,11 +210,11 @@ mod tests {
         let blockhash = bank.last_blockhash();
         let tx = SystemTransaction::new_program_account(
             &mint_keypair,
-            alice.pubkey(),
+            &alice.pubkey(),
             blockhash,
             1,
             16,
-            solana_budget_api::id(),
+            &solana_budget_api::id(),
             0,
         );
         bank.process_transaction(&tx).unwrap();
@@ -256,11 +256,11 @@ mod tests {
         let blockhash = bank.last_blockhash();
         let tx = SystemTransaction::new_program_account(
             &mint_keypair,
-            alice.pubkey(),
+            &alice.pubkey(),
             blockhash,
             1,
             16,
-            solana_budget_api::id(),
+            &solana_budget_api::id(),
             0,
         );
         bank.process_transaction(&tx).unwrap();
@@ -299,7 +299,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let blockhash = bank.last_blockhash();
-        let tx = SystemTransaction::new_move(&mint_keypair, alice.pubkey(), 20, blockhash, 0);
+        let tx = SystemTransaction::new_move(&mint_keypair, &alice.pubkey(), 20, blockhash, 0);
         let signature = tx.signatures[0];
         bank.process_transaction(&tx).unwrap();
 

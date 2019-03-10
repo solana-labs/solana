@@ -20,7 +20,7 @@ impl<'a> RewardsBank<'a> {
     fn create_rewards_account(
         &self,
         from_keypair: &Keypair,
-        rewards_id: Pubkey,
+        rewards_id: &Pubkey,
         lamports: u64,
     ) -> Result<()> {
         let blockhash = self.bank.last_blockhash();
@@ -31,7 +31,7 @@ impl<'a> RewardsBank<'a> {
     fn create_vote_account(
         &self,
         from_keypair: &Keypair,
-        vote_id: Pubkey,
+        vote_id: &Pubkey,
         lamports: u64,
     ) -> Result<()> {
         let blockhash = self.bank.last_blockhash();
@@ -41,7 +41,7 @@ impl<'a> RewardsBank<'a> {
 
     fn submit_vote(
         &self,
-        staking_account: Pubkey,
+        staking_account: &Pubkey,
         vote_keypair: &Keypair,
         tick_height: u64,
     ) -> Result<VoteState> {
@@ -55,7 +55,7 @@ impl<'a> RewardsBank<'a> {
         Ok(VoteState::deserialize(&vote_account.userdata).unwrap())
     }
 
-    fn redeem_credits(&self, rewards_id: Pubkey, vote_keypair: &Keypair) -> Result<VoteState> {
+    fn redeem_credits(&self, rewards_id: &Pubkey, vote_keypair: &Keypair) -> Result<VoteState> {
         let blockhash = self.bank.last_blockhash();
         let tx = RewardsTransaction::new_redeem_credits(&vote_keypair, rewards_id, blockhash, 0);
         self.bank.process_transaction(&tx)?;
@@ -74,26 +74,26 @@ fn test_redeem_vote_credits_via_bank() {
     let rewards_keypair = Keypair::new();
     let rewards_id = rewards_keypair.pubkey();
     rewards_bank
-        .create_rewards_account(&from_keypair, rewards_id, 100)
+        .create_rewards_account(&from_keypair, &rewards_id, 100)
         .unwrap();
 
     // A staker create a vote account account and delegates a validator to vote on its behalf.
     let vote_keypair = Keypair::new();
     let vote_id = vote_keypair.pubkey();
     rewards_bank
-        .create_vote_account(&from_keypair, vote_id, 100)
+        .create_vote_account(&from_keypair, &vote_id, 100)
         .unwrap();
 
     // The validator submits votes to accumulate credits.
     for i in 0..vote_state::MAX_LOCKOUT_HISTORY {
         let vote_state = rewards_bank
-            .submit_vote(vote_id, &vote_keypair, i as u64)
+            .submit_vote(&vote_id, &vote_keypair, i as u64)
             .unwrap();
         assert_eq!(vote_state.credits(), 0);
     }
     let vote_state = rewards_bank
         .submit_vote(
-            vote_id,
+            &vote_id,
             &vote_keypair,
             vote_state::MAX_LOCKOUT_HISTORY as u64 + 1,
         )
@@ -108,7 +108,7 @@ fn test_redeem_vote_credits_via_bank() {
     // Periodically, the staker sumbits its vote account to the rewards pool
     // to exchange its credits for lamports.
     let vote_state = rewards_bank
-        .redeem_credits(rewards_id, &vote_keypair)
+        .redeem_credits(&rewards_id, &vote_keypair)
         .unwrap();
     assert!(bank.get_balance(&to_id) > to_lamports);
     assert_eq!(vote_state.credits(), 0);

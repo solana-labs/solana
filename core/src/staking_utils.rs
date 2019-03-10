@@ -146,7 +146,7 @@ mod tests {
     use std::sync::Arc;
 
     fn new_from_parent(parent: &Arc<Bank>, slot: u64) -> Bank {
-        Bank::new_from_parent(parent, Pubkey::default(), slot)
+        Bank::new_from_parent(parent, &Pubkey::default(), slot)
     }
 
     #[test]
@@ -154,7 +154,7 @@ mod tests {
         let pubkey = Keypair::new().pubkey();
         let bootstrap_lamports = 3;
         let (genesis_block, _) =
-            GenesisBlock::new_with_leader(bootstrap_lamports, pubkey, bootstrap_lamports);
+            GenesisBlock::new_with_leader(bootstrap_lamports, &pubkey, bootstrap_lamports);
         let bank = Bank::new(&genesis_block);
 
         // Epoch doesn't exist
@@ -184,7 +184,7 @@ mod tests {
         // Give the validator some stake but don't setup a staking account
         // Validator has no lamports staked, so they get filtered out. Only the bootstrap leader
         // created by the genesis block will get included
-        bank.transfer(1, &mint_keypair, validator.pubkey(), genesis_block.hash())
+        bank.transfer(1, &mint_keypair, &validator.pubkey(), genesis_block.hash())
             .unwrap();
 
         // Make a mint vote account. Because the mint has nonzero stake, this
@@ -266,11 +266,11 @@ mod tests {
 
         // Delegate 1 has stake of 3
         for i in 0..3 {
-            stakes.push((i, VoteState::new(delegate1)));
+            stakes.push((i, VoteState::new(&delegate1)));
         }
 
         // Delegate 1 has stake of 5
-        stakes.push((5, VoteState::new(delegate2)));
+        stakes.push((5, VoteState::new(&delegate2)));
 
         let result = to_delegated_stakes(stakes.into_iter());
         assert_eq!(result.len(), 2);

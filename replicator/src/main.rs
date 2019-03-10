@@ -67,7 +67,7 @@ fn main() {
         }
         addr
     };
-    let node = Node::new_with_external_ip(keypair.pubkey(), &gossip_addr);
+    let node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr);
 
     println!(
         "replicating the data with keypair={:?} gossip_addr={:?}",

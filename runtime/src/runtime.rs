@@ -8,7 +8,7 @@ use solana_sdk::transaction::Transaction;
 /// Reasons the runtime might have rejected a transaction.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RuntimeError {
-    /// Executing the instruction at the given index produced an error.
+    /// Executing the instruction at the give&n index produced an error.
     ProgramError(u8, ProgramError),
 }
 
@@ -199,7 +199,7 @@ where
     F: Fn(&Pubkey, &mut [KeyedAccount], &[u8]) -> Result<(), E>,
 {
     for _ in tx_accounts.len()..tx.account_keys.len() {
-        tx_accounts.push(Account::new(0, 0, system_program::id()));
+        tx_accounts.push(Account::new(0, 0, &system_program::id()));
     }
     for (i, ix) in tx.instructions.iter().enumerate() {
         let mut ix_accounts = get_subset_unchecked_mut(tx_accounts, &ix.accounts);
@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     fn test_verify_instruction_change_program_id() {
-        fn change_program_id(ix: Pubkey, pre: Pubkey, post: Pubkey) -> Result<(), ProgramError> {
+        fn change_program_id(ix: &Pubkey, pre: &Pubkey, post: &Pubkey) -> Result<(), ProgramError> {
             verify_instruction(&ix, &pre, 0, &[], &Account::new(0, 0, post))
         }
 
@@ -271,12 +271,12 @@ mod tests {
         let mallory_program_id = Keypair::new().pubkey();
 
         assert_eq!(
-            change_program_id(system_program_id, system_program_id, alice_program_id),
+            change_program_id(&system_program_id, &system_program_id, &alice_program_id),
             Ok(()),
             "system program should be able to change the account owner"
         );
         assert_eq!(
-            change_program_id(mallory_program_id, system_program_id, alice_program_id),
+            change_program_id(&mallory_program_id, &system_program_id, &alice_program_id),
             Err(ProgramError::ModifiedProgramId),
             "malicious Mallory should not be able to change the account owner"
         );
@@ -284,9 +284,9 @@ mod tests {
 
     #[test]
     fn test_verify_instruction_change_userdata() {
-        fn change_userdata(program_id: Pubkey) -> Result<(), ProgramError> {
+        fn change_userdata(program_id: &Pubkey) -> Result<(), ProgramError> {
             let alice_program_id = Keypair::new().pubkey();
-            let account = Account::new(0, 0, alice_program_id);
+            let account = Account::new(0, 0, &alice_program_id);
             verify_instruction(&program_id, &alice_program_id, 0, &[42], &account)
         }
 
@@ -294,12 +294,12 @@ mod tests {
         let mallory_program_id = Keypair::new().pubkey();
 
         assert_eq!(
-            change_userdata(system_program_id),
+            change_userdata(&system_program_id),
             Ok(()),
             "system program should be able to change the userdata"
         );
         assert_eq!(
-            change_userdata(mallory_program_id),
+            change_userdata(&mallory_program_id),
             Err(ProgramError::ExternalAccountUserdataModified),
             "malicious Mallory should not be able to change the account userdata"
         );

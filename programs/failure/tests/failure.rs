@@ -12,13 +12,13 @@ fn test_program_native_failure() {
     let bank = Bank::new(&genesis_block);
 
     let program = "failure".as_bytes().to_vec();
-    let program_id = load_program(&bank, &mint_keypair, native_loader::id(), program);
+    let program_id = load_program(&bank, &mint_keypair, &native_loader::id(), program);
 
     // Call user program
     let tx = Transaction::new(
         &mint_keypair,
         &[],
-        program_id,
+        &program_id,
         &1u8,
         bank.last_blockhash(),
         0,

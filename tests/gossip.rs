@@ -18,7 +18,7 @@ use std::time::Duration;
 
 fn test_node(exit: &Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket) {
     let keypair = Arc::new(Keypair::new());
-    let mut test_node = Node::new_localhost_with_pubkey(keypair.pubkey());
+    let mut test_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
     let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(
         test_node.info.clone(),
         keypair,
@@ -76,7 +76,7 @@ fn gossip_ring() -> result::Result<()> {
             let x = (n + 1) % listen.len();
             let mut xv = listen[x].0.write().unwrap();
             let yv = listen[y].0.read().unwrap();
-            let mut d = yv.lookup(yv.id()).unwrap().clone();
+            let mut d = yv.lookup(&yv.id()).unwrap().clone();
             d.wallclock = timestamp();
             xv.insert_info(d);
         }
@@ -97,7 +97,7 @@ fn gossip_ring_large() -> result::Result<()> {
             let x = (n + 1) % listen.len();
             let mut xv = listen[x].0.write().unwrap();
             let yv = listen[y].0.read().unwrap();
-            let mut d = yv.lookup(yv.id()).unwrap().clone();
+            let mut d = yv.lookup(&yv.id()).unwrap().clone();
             d.wallclock = timestamp();
             xv.insert_info(d);
         }
@@ -116,7 +116,7 @@ fn gossip_star() {
             let y = (n + 1) % listen.len();
             let mut xv = listen[x].0.write().unwrap();
             let yv = listen[y].0.read().unwrap();
-            let mut yd = yv.lookup(yv.id()).unwrap().clone();
+            let mut yd = yv.lookup(&yv.id()).unwrap().clone();
             yd.wallclock = timestamp();
             xv.insert_info(yd);
             trace!("star leader {}", &xv.id());
@@ -132,7 +132,7 @@ fn gossip_rstar() {
         let num = listen.len();
         let xd = {
             let xv = listen[0].0.read().unwrap();
-            xv.lookup(xv.id()).unwrap().clone()
+            xv.lookup(&xv.id()).unwrap().clone()
         };
         trace!("rstar leader {}", xd.id);
         for n in 0..(num - 1) {

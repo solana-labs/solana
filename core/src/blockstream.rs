@@ -63,14 +63,14 @@ pub trait BlockstreamEvents {
         &self,
         slot: u64,
         tick_height: u64,
-        leader_id: Pubkey,
+        leader_id: &Pubkey,
         entries: &Entry,
     ) -> Result<()>;
     fn emit_block_event(
         &self,
         slot: u64,
         tick_height: u64,
-        leader_id: Pubkey,
+        leader_id: &Pubkey,
         blockhash: Hash,
     ) -> Result<()>;
 }
@@ -88,7 +88,7 @@ where
         &self,
         slot: u64,
         tick_height: u64,
-        leader_id: Pubkey,
+        leader_id: &Pubkey,
         entry: &Entry,
     ) -> Result<()> {
         let json_entry = serde_json::to_string(&entry)?;
@@ -108,7 +108,7 @@ where
         &self,
         slot: u64,
         tick_height: u64,
-        leader_id: Pubkey,
+        leader_id: &Pubkey,
         blockhash: Hash,
     ) -> Result<()> {
         let payload = format!(
@@ -175,14 +175,14 @@ mod test {
         for tick_height in tick_height_initial..=tick_height_final {
             if tick_height == 5 {
                 blockstream
-                    .emit_block_event(curr_slot, tick_height - 1, leader_id, blockhash)
+                    .emit_block_event(curr_slot, tick_height - 1, &leader_id, blockhash)
                     .unwrap();
                 curr_slot += 1;
             }
             let entry = Entry::new(&mut blockhash, 1, vec![]); // just ticks
             blockhash = entry.hash;
             blockstream
-                .emit_entry_event(curr_slot, tick_height, leader_id, &entry)
+                .emit_entry_event(curr_slot, tick_height, &leader_id, &entry)
                 .unwrap();
             expected_entries.push(entry.clone());
             entries.push(entry);

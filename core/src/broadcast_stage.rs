@@ -281,7 +281,7 @@ mod test {
     }
 
     fn setup_dummy_broadcast_service(
-        leader_pubkey: Pubkey,
+        leader_pubkey: &Pubkey,
         ledger_path: &str,
         entry_receiver: Receiver<WorkingBankEntries>,
     ) -> MockBroadcastStage {
@@ -293,7 +293,7 @@ mod test {
 
         // Make a node to broadcast to
         let buddy_keypair = Keypair::new();
-        let broadcast_buddy = Node::new_localhost_with_pubkey(buddy_keypair.pubkey());
+        let broadcast_buddy = Node::new_localhost_with_pubkey(&buddy_keypair.pubkey());
 
         // Fill the cluster_info with the buddy's info
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(leader_info.info.clone());
@@ -332,7 +332,7 @@ mod test {
 
             let (entry_sender, entry_receiver) = channel();
             let broadcast_service = setup_dummy_broadcast_service(
-                leader_keypair.pubkey(),
+                &leader_keypair.pubkey(),
                 &ledger_path,
                 entry_receiver,
             );

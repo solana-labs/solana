@@ -8,7 +8,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_storage_api::{StorageTransaction, ENTRIES_PER_SEGMENT};
 
-fn get_storage_entry_height(bank: &Bank, account: Pubkey) -> u64 {
+fn get_storage_entry_height(bank: &Bank, account: &Pubkey) -> u64 {
     match bank.get_account(&account) {
         Some(storage_system_account) => {
             let state = deserialize(&storage_system_account.userdata);
@@ -24,7 +24,7 @@ fn get_storage_entry_height(bank: &Bank, account: Pubkey) -> u64 {
     0
 }
 
-fn get_storage_blockhash(bank: &Bank, account: Pubkey) -> Hash {
+fn get_storage_blockhash(bank: &Bank, account: &Pubkey) -> Hash {
     if let Some(storage_system_account) = bank.get_account(&account) {
         let state = deserialize(&storage_system_account.userdata);
         if let Ok(state) = state {
@@ -51,18 +51,20 @@ fn test_bank_storage() {
 
     bank.register_tick(&blockhash);
 
-    bank.transfer(10, &alice, jill.pubkey(), blockhash).unwrap();
+    bank.transfer(10, &alice, &jill.pubkey(), blockhash)
+        .unwrap();
 
-    bank.transfer(10, &alice, bob.pubkey(), blockhash).unwrap();
-    bank.transfer(10, &alice, jack.pubkey(), blockhash).unwrap();
+    bank.transfer(10, &alice, &bob.pubkey(), blockhash).unwrap();
+    bank.transfer(10, &alice, &jack.pubkey(), blockhash)
+        .unwrap();
 
     let tx = SystemTransaction::new_program_account(
         &alice,
-        bob.pubkey(),
+        &bob.pubkey(),
         blockhash,
         1,
         4 * 1024,
-        solana_storage_api::id(),
+        &solana_storage_api::id(),
         0,
     );
 
@@ -90,11 +92,11 @@ fn test_bank_storage() {
     //let _result = bank.process_transaction(&tx).unwrap();
 
     assert_eq!(
-        get_storage_entry_height(&bank, bob.pubkey()),
+        get_storage_entry_height(&bank, &bob.pubkey()),
         ENTRIES_PER_SEGMENT
     );
     assert_eq!(
-        get_storage_blockhash(&bank, bob.pubkey()),
+        get_storage_blockhash(&bank, &bob.pubkey()),
         storage_blockhash
     );
 }

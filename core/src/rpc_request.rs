@@ -39,7 +39,7 @@ impl RpcClient {
     pub fn retry_get_balance(
         &self,
         id: u64,
-        pubkey: Pubkey,
+        pubkey: &Pubkey,
         retries: usize,
     ) -> Result<Option<u64>, Box<dyn error::Error>> {
         let params = json!([format!("{}", pubkey)]);

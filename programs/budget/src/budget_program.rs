@@ -175,14 +175,14 @@ mod test {
 
     #[test]
     fn test_invalid_instruction() {
-        let mut accounts = vec![Account::new(1, 0, id()), Account::new(0, 512, id())];
+        let mut accounts = vec![Account::new(1, 0, &id()), Account::new(0, 512, &id())];
         let from = Keypair::new();
         let contract = Keypair::new();
         let userdata = (1u8, 2u8, 3u8);
         let tx = Transaction::new(
             &from,
             &[contract.pubkey()],
-            id(),
+            &id(),
             &userdata,
             Hash::default(),
             0,
@@ -192,7 +192,7 @@ mod test {
 
     #[test]
     fn test_unsigned_witness_key() {
-        let mut accounts = vec![Account::new(1, 0, system_program::id())];
+        let mut accounts = vec![Account::new(1, 0, &system_program::id())];
 
         // Initialize BudgetState
         let from = Keypair::new();
@@ -201,9 +201,9 @@ mod test {
         let witness = Keypair::new().pubkey();
         let tx = BudgetTransaction::new_when_signed(
             &from,
-            to,
-            contract,
-            witness,
+            &to,
+            &contract,
+            &witness,
             None,
             1,
             Hash::default(),
@@ -212,7 +212,7 @@ mod test {
 
         // Attack! Part 1: Sign a witness transaction with a random key.
         let rando = Keypair::new();
-        let mut tx = BudgetTransaction::new_signature(&rando, contract, to, Hash::default());
+        let mut tx = BudgetTransaction::new_signature(&rando, &contract, &to, Hash::default());
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
         tx.account_keys.push(from.pubkey());
@@ -227,7 +227,7 @@ mod test {
 
     #[test]
     fn test_unsigned_timestamp() {
-        let mut accounts = vec![Account::new(1, 0, system_program::id())];
+        let mut accounts = vec![Account::new(1, 0, &system_program::id())];
 
         // Initialize BudgetState
         let from = Keypair::new();
@@ -236,10 +236,10 @@ mod test {
         let dt = Utc::now();
         let tx = BudgetTransaction::new_on_date(
             &from,
-            to,
-            contract,
+            &to,
+            &contract,
             dt,
-            from.pubkey(),
+            &from.pubkey(),
             None,
             1,
             Hash::default(),
@@ -248,7 +248,7 @@ mod test {
 
         // Attack! Part 1: Sign a timestamp transaction with a random key.
         let rando = Keypair::new();
-        let mut tx = BudgetTransaction::new_timestamp(&rando, contract, to, dt, Hash::default());
+        let mut tx = BudgetTransaction::new_timestamp(&rando, &contract, &to, dt, Hash::default());
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
         tx.account_keys.push(from.pubkey());
@@ -263,7 +263,7 @@ mod test {
 
     #[test]
     fn test_transfer_on_date() {
-        let mut accounts = vec![Account::new(1, 0, system_program::id())];
+        let mut accounts = vec![Account::new(1, 0, &system_program::id())];
         let from_account = 0;
         let contract_account = 1;
         let to_account = 2;
@@ -274,10 +274,10 @@ mod test {
         let dt = Utc::now();
         let tx = BudgetTransaction::new_on_date(
             &from,
-            to.pubkey(),
-            contract.pubkey(),
+            &to.pubkey(),
+            &contract.pubkey(),
             dt,
-            from.pubkey(),
+            &from.pubkey(),
             None,
             1,
             Hash::default(),
@@ -291,8 +291,8 @@ mod test {
         // Attack! Try to payout to a rando key
         let tx = BudgetTransaction::new_timestamp(
             &from,
-            contract.pubkey(),
-            rando.pubkey(),
+            &contract.pubkey(),
+            &rando.pubkey(),
             dt,
             Hash::default(),
         );
@@ -311,8 +311,8 @@ mod test {
         // that pubkey's funds are now available.
         let tx = BudgetTransaction::new_timestamp(
             &from,
-            contract.pubkey(),
-            to.pubkey(),
+            &contract.pubkey(),
+            &to.pubkey(),
             dt,
             Hash::default(),
         );
@@ -335,7 +335,7 @@ mod test {
     }
     #[test]
     fn test_cancel_transfer() {
-        let mut accounts = vec![Account::new(1, 0, system_program::id())];
+        let mut accounts = vec![Account::new(1, 0, &system_program::id())];
         let from_account = 0;
         let contract_account = 1;
         let pay_account = 2;
@@ -345,10 +345,10 @@ mod test {
         let dt = Utc::now();
         let tx = BudgetTransaction::new_on_date(
             &from,
-            to.pubkey(),
-            contract.pubkey(),
+            &to.pubkey(),
+            &contract.pubkey(),
             dt,
-            from.pubkey(),
+            &from.pubkey(),
             Some(from.pubkey()),
             1,
             Hash::default(),
@@ -360,8 +360,12 @@ mod test {
         assert!(budget_state.is_pending());
 
         // Attack! try to put the lamports into the wrong account with cancel
-        let tx =
-            BudgetTransaction::new_signature(&to, contract.pubkey(), to.pubkey(), Hash::default());
+        let tx = BudgetTransaction::new_signature(
+            &to,
+            &contract.pubkey(),
+            &to.pubkey(),
+            Hash::default(),
+        );
         // unit test hack, the `from account` is passed instead of the `to` account to avoid
         // creating more account vectors
         process_transaction(&tx, &mut accounts).unwrap();
@@ -373,8 +377,8 @@ mod test {
         // Now, cancel the transaction. from gets her funds back
         let tx = BudgetTransaction::new_signature(
             &from,
-            contract.pubkey(),
-            from.pubkey(),
+            &contract.pubkey(),
+            &from.pubkey(),
             Hash::default(),
         );
         process_transaction(&tx, &mut accounts).unwrap();
@@ -385,8 +389,8 @@ mod test {
         // try to replay the cancel contract
         let tx = BudgetTransaction::new_signature(
             &from,
-            contract.pubkey(),
-            from.pubkey(),
+            &contract.pubkey(),
+            &from.pubkey(),
             Hash::default(),
         );
         assert_eq!(

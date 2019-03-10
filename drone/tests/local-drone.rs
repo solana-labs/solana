@@ -20,7 +20,7 @@ fn test_local_drone() {
     let mut expected_tx = Transaction::new(
         &keypair,
         &[to],
-        system_program::id(),
+        &system_program::id(),
         &expected_instruction,
         blockhash,
         0,

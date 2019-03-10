@@ -8,8 +8,8 @@ use itertools::Itertools;
 
 pub type BuilderInstruction = Instruction<Pubkey, (Pubkey, bool)>;
 
-fn position(keys: &[Pubkey], key: Pubkey) -> u8 {
-    keys.iter().position(|&k| k == key).unwrap() as u8
+fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
+    keys.iter().position(|k| k == key).unwrap() as u8
 }
 
 fn compile_instruction(
@@ -17,13 +17,9 @@ fn compile_instruction(
     keys: &[Pubkey],
     program_ids: &[Pubkey],
 ) -> Instruction<u8, u8> {
-    let accounts: Vec<_> = ix
-        .accounts
-        .iter()
-        .map(|&(k, _)| position(keys, k))
-        .collect();
+    let accounts: Vec<_> = ix.accounts.iter().map(|(k, _)| position(keys, k)).collect();
     Instruction {
-        program_ids_index: position(program_ids, ix.program_ids_index),
+        program_ids_index: position(program_ids, &ix.program_ids_index),
         userdata: ix.userdata.clone(),
         accounts,
     }

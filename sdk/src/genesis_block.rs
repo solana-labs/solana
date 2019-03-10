@@ -32,19 +32,23 @@ impl GenesisBlock {
         let lamports = lamports
             .checked_add(BOOTSTRAP_LEADER_LAMPORTS)
             .unwrap_or(lamports);
-        Self::new_with_leader(lamports, Keypair::new().pubkey(), BOOTSTRAP_LEADER_LAMPORTS)
+        Self::new_with_leader(
+            lamports,
+            &Keypair::new().pubkey(),
+            BOOTSTRAP_LEADER_LAMPORTS,
+        )
     }
 
     pub fn new_with_leader(
         lamports: u64,
-        bootstrap_leader_id: Pubkey,
+        bootstrap_leader_id: &Pubkey,
         bootstrap_leader_lamports: u64,
     ) -> (Self, Keypair) {
         let mint_keypair = Keypair::new();
         let bootstrap_leader_vote_account_keypair = Keypair::new();
         (
             Self {
-                bootstrap_leader_id,
+                bootstrap_leader_id: *bootstrap_leader_id,
                 bootstrap_leader_lamports,
                 bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
                 mint_id: mint_keypair.pubkey(),
@@ -97,7 +101,7 @@ mod tests {
     fn test_genesis_block_new_with_leader() {
         let leader_keypair = Keypair::new();
         let (genesis_block, mint) =
-            GenesisBlock::new_with_leader(20_000, leader_keypair.pubkey(), 123);
+            GenesisBlock::new_with_leader(20_000, &leader_keypair.pubkey(), 123);
 
         assert_eq!(genesis_block.lamports, 20_000);
         assert_eq!(genesis_block.mint_id, mint.pubkey());

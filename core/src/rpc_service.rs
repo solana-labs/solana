@@ -123,7 +123,7 @@ mod tests {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_balance(alice.pubkey())
+                .get_balance(&alice.pubkey())
                 .unwrap()
         );
         exit.store(true, Ordering::Relaxed);

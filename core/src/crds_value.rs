@@ -108,8 +108,11 @@ impl CrdsValue {
         }
     }
     /// Return all the possible labels for a record identified by Pubkey.
-    pub fn record_labels(key: Pubkey) -> [CrdsValueLabel; 2] {
-        [CrdsValueLabel::ContactInfo(key), CrdsValueLabel::Vote(key)]
+    pub fn record_labels(key: &Pubkey) -> [CrdsValueLabel; 2] {
+        [
+            CrdsValueLabel::ContactInfo(*key),
+            CrdsValueLabel::Vote(*key),
+        ]
     }
 }
 
@@ -159,7 +162,7 @@ mod test {
     fn test_labels() {
         let mut hits = [false; 2];
         // this method should cover all the possible labels
-        for v in &CrdsValue::record_labels(Pubkey::default()) {
+        for v in &CrdsValue::record_labels(&Pubkey::default()) {
             match v {
                 CrdsValueLabel::ContactInfo(_) => hits[0] = true,
                 CrdsValueLabel::Vote(_) => hits[1] = true,
@@ -184,7 +187,7 @@ mod test {
         let keypair = Keypair::new();
         let fake_keypair = Keypair::new();
         let mut v =
-            CrdsValue::ContactInfo(ContactInfo::new_localhost(keypair.pubkey(), timestamp()));
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(&keypair.pubkey(), timestamp()));
         v.sign(&keypair);
         assert!(v.verify());
         v.sign(&fake_keypair);

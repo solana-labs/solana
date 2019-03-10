@@ -101,7 +101,7 @@ mod tests {
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
-        let child_bank = Bank::new_from_parent(&bank_forks[0u64], Pubkey::default(), 1);
+        let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         child_bank.register_tick(&Hash::default());
         bank_forks.insert(1, child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);
@@ -113,7 +113,7 @@ mod tests {
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
-        let child_bank = Bank::new_from_parent(&bank_forks[0u64], Pubkey::default(), 1);
+        let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(1, child_bank);
         assert!(bank_forks.frozen_banks().get(&0).is_some());
         assert!(bank_forks.frozen_banks().get(&1).is_none());
@@ -124,7 +124,7 @@ mod tests {
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
-        let child_bank = Bank::new_from_parent(&bank_forks[0u64], Pubkey::default(), 1);
+        let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(1, child_bank);
         assert_eq!(bank_forks.active_banks(), vec![1]);
     }

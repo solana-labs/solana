@@ -24,7 +24,7 @@ fn test_wallet_request_airdrop() {
     let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
 
     let balance = rpc_client
-        .retry_get_balance(1, bob_config.id.pubkey(), 1)
+        .retry_get_balance(1, &bob_config.id.pubkey(), 1)
         .unwrap()
         .unwrap();
     assert_eq!(balance, 50);

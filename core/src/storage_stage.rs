@@ -474,7 +474,7 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let cluster_info = test_cluster_info(keypair.pubkey());
+        let cluster_info = test_cluster_info(&keypair.pubkey());
 
         let (_storage_entry_sender, storage_entry_receiver) = channel();
         let storage_state = StorageState::new();
@@ -492,7 +492,7 @@ mod tests {
         storage_stage.join().unwrap();
     }
 
-    fn test_cluster_info(id: Pubkey) -> Arc<RwLock<ClusterInfo>> {
+    fn test_cluster_info(id: &Pubkey) -> Arc<RwLock<ClusterInfo>> {
         let contact_info = ContactInfo::new_localhost(id, 0);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
         Arc::new(RwLock::new(cluster_info))
@@ -512,7 +512,7 @@ mod tests {
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
         blocktree.write_entries(1, 0, 0, &entries).unwrap();
 
-        let cluster_info = test_cluster_info(keypair.pubkey());
+        let cluster_info = test_cluster_info(&keypair.pubkey());
 
         let (storage_entry_sender, storage_entry_receiver) = channel();
         let storage_state = StorageState::new();
@@ -574,7 +574,7 @@ mod tests {
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
         blocktree.write_entries(1, 0, 0, &entries).unwrap();
 
-        let cluster_info = test_cluster_info(keypair.pubkey());
+        let cluster_info = test_cluster_info(&keypair.pubkey());
 
         let (storage_entry_sender, storage_entry_receiver) = channel();
         let storage_state = StorageState::new();
@@ -599,7 +599,7 @@ mod tests {
         let mut vote_txs: Vec<_> = Vec::new();
         let keypair = Keypair::new();
         let vote_tx =
-            VoteTransaction::new_vote(keypair.pubkey(), &keypair, 123456, Hash::default(), 1);
+            VoteTransaction::new_vote(&keypair.pubkey(), &keypair, 123456, Hash::default(), 1);
         vote_txs.push(vote_tx);
         let vote_entries = vec![Entry::new(&Hash::default(), 1, vote_txs)];
         storage_entry_sender.send(vote_entries).unwrap();

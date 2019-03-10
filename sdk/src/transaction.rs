@@ -99,12 +99,12 @@ impl Transaction {
     pub fn new<S: Serialize, T: KeypairUtil>(
         from_keypair: &T,
         transaction_keys: &[Pubkey],
-        program_id: Pubkey,
+        program_id: &Pubkey,
         userdata: &S,
         recent_blockhash: Hash,
         fee: u64,
     ) -> Self {
-        let program_ids = vec![program_id];
+        let program_ids = vec![*program_id];
         let accounts = (0..=transaction_keys.len() as u8).collect();
         let instructions = vec![Instruction::new(0, userdata, accounts)];
         Self::new_with_instructions(
@@ -119,12 +119,12 @@ impl Transaction {
     pub fn new_unsigned<T: Serialize>(
         from_pubkey: &Pubkey,
         transaction_keys: &[Pubkey],
-        program_id: Pubkey,
+        program_id: &Pubkey,
         userdata: &T,
         recent_blockhash: Hash,
         fee: u64,
     ) -> Self {
-        let program_ids = vec![program_id];
+        let program_ids = vec![*program_id];
         let accounts = (0..=transaction_keys.len() as u8).collect();
         let instructions = vec![Instruction::new(0, userdata, accounts)];
         let mut keys = vec![*from_pubkey];
@@ -492,7 +492,7 @@ mod tests {
         let tx = Transaction::new(
             &keypair,
             &[keypair.pubkey(), to],
-            program_id,
+            &program_id,
             &(1u8, 2u8, 3u8),
             Hash::default(),
             99,
@@ -511,7 +511,7 @@ mod tests {
         let tx = Transaction::new(
             &keypair,
             &[keypair.pubkey(), to],
-            program_id,
+            &program_id,
             &(1u8, 2u8, 3u8),
             Hash::default(),
             99,
@@ -557,7 +557,7 @@ mod tests {
         let tx = Transaction::new(
             &keypair,
             &[keypair.pubkey(), to],
-            program_id,
+            &program_id,
             &(1u8, 2u8, 3u8),
             Hash::default(),
             99,

@@ -126,7 +126,7 @@ mod tests {
                     &mut num_hashes,
                     vec![SystemTransaction::new_account(
                         &keypair,
-                        keypair.pubkey(),
+                        &keypair.pubkey(),
                         1,
                         one,
                         0,

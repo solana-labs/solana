@@ -249,7 +249,7 @@ mod tests {
         // Simulate a block boundary
         Ok(Arc::new(Bank::new_from_parent(
             &bank,
-            Pubkey::default(),
+            &Pubkey::default(),
             bank.slot() + 1,
         )))
     }
@@ -270,7 +270,7 @@ mod tests {
         let rpc = RpcSolPubSubImpl::default();
 
         // Test signature subscriptions
-        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, blockhash, 0);
+        let tx = SystemTransaction::new_move(&alice, &bob_pubkey, 20, blockhash, 0);
 
         let session = create_session();
         let (subscriber, _id_receiver, mut receiver) =
@@ -302,7 +302,7 @@ mod tests {
         let rpc = RpcSolPubSubImpl::default();
         io.extend_with(rpc.to_delegate());
 
-        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, blockhash, 0);
+        let tx = SystemTransaction::new_move(&alice, &bob_pubkey, 20, blockhash, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
             tx.signatures[0].to_string()
@@ -348,14 +348,14 @@ mod tests {
         let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
         rpc.account_subscribe(session, subscriber, contract_state.pubkey().to_string());
 
-        let tx = SystemTransaction::new_account(&alice, contract_funds.pubkey(), 51, blockhash, 0);
+        let tx = SystemTransaction::new_account(&alice, &contract_funds.pubkey(), 51, blockhash, 0);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
 
         let tx = BudgetTransaction::new_when_signed(
             &contract_funds,
-            bob_pubkey,
-            contract_state.pubkey(),
-            witness.pubkey(),
+            &bob_pubkey,
+            &contract_state.pubkey(),
+            &witness.pubkey(),
             None,
             51,
             blockhash,
@@ -387,13 +387,13 @@ mod tests {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
 
-        let tx = SystemTransaction::new_account(&alice, witness.pubkey(), 1, blockhash, 0);
+        let tx = SystemTransaction::new_account(&alice, &witness.pubkey(), 1, blockhash, 0);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
         let tx = BudgetTransaction::new_signature(
             &witness,
-            contract_state.pubkey(),
-            bob_pubkey,
+            &contract_state.pubkey(),
+            &bob_pubkey,
             blockhash,
         );
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();

@@ -135,7 +135,7 @@ impl Drone {
                     let mut transaction = Transaction::new(
                         &self.mint_keypair,
                         &[to],
-                        system_program::id(),
+                        &system_program::id(),
                         &create_instruction,
                         blockhash,
                         0, /*fee*/
@@ -411,7 +411,7 @@ mod tests {
         let mut expected_tx = Transaction::new(
             &keypair,
             &[to],
-            system_program::id(),
+            &system_program::id(),
             &expected_instruction,
             blockhash,
             0,
