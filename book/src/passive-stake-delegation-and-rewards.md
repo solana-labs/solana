@@ -2,7 +2,7 @@
 
 This design proposal focuses on the software architecture for the on-chain
 voting and staking programs.  Incentives for staking is covered in [staking
-rewardsd](staking-rewards.md).
+rewards](staking-rewards.md).
 
 The current architecture requires an active vote for each delegated stake from
 the validator, and therefore does not scale to allow for replicator clients
