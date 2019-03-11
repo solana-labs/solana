@@ -6,8 +6,9 @@ use crate::cluster_info::ClusterInfo;
 use crate::entry::Entry;
 use crate::leader_confirmation_service::LeaderConfirmationService;
 use crate::leader_schedule_utils;
+use crate::packet;
 use crate::packet::SharedPackets;
-use crate::packet::{Blob, Packets};
+use crate::packet::{Packet, Packets};
 use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntries};
 use crate::poh_service::{PohService, PohServiceConfig};
 use crate::result::{Error, Result};
@@ -79,23 +80,17 @@ impl BankingStage {
         forwarder: &std::net::SocketAddr,
         unprocessed_packets: &[(SharedPackets, usize)],
     ) -> std::io::Result<()> {
-        let mut blob = Blob::default();
-        for (packets, start_index) in unprocessed_packets {
-            let packets = packets.read().unwrap();
-            let mut current_index = *start_index;
-            while current_index < packets.packets.len() {
-                current_index += blob.store_packets(&packets.packets[current_index..]) as usize;
-                if current_index < packets.packets.len() {
-                    // Blob is full, send it
-                    socket.send_to(&blob.data[..blob.meta.size], forwarder)?;
-                    blob = Blob::default();
-                } else {
-                    break;
-                }
-            }
-        }
+        let locked_packets: Vec<_> = unprocessed_packets
+            .iter()
+            .map(|(p, start_index)| (p.read().unwrap(), start_index))
+            .collect();
+        let packets: Vec<&Packet> = locked_packets
+            .iter()
+            .flat_map(|(p, start_index)| &p.packets[**start_index..])
+            .collect();
+        let blobs = packet::packets_to_blobs(&packets[..]);
 
-        if blob.size() > 0 {
+        for blob in blobs {
             socket.send_to(&blob.data[..blob.meta.size], forwarder)?;
         }
 

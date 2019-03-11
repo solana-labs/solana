@@ -58,7 +58,7 @@ pub fn send_many_transactions(node: &ContactInfo, funding_keypair: &Keypair, num
         assert!(bal > 0);
         let mut transaction = SystemTransaction::new_move(
             &funding_keypair,
-            random_keypair.pubkey(),
+            &random_keypair.pubkey(),
             1,
             client.get_recent_blockhash(),
             0,

@@ -1273,7 +1273,7 @@ impl ClusterInfo {
         let daddr = socketaddr_any!();
 
         let node = ContactInfo::new(
-            *id,
+            id,
             daddr,
             daddr,
             daddr,
