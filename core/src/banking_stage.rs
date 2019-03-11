@@ -17,7 +17,6 @@ use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{self, Bank, BankError};
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::Transaction;
 use std::net::UdpSocket;
@@ -106,28 +105,25 @@ impl BankingStage {
     ) -> bool {
         let rcluster_info = cluster_info.read().unwrap();
 
-        // If there's a bank, and leader is available, forward the packets
+        // If there's a bank, and leader is available, forward the buffered packets
         // or, if the current node is not the leader, forward the buffered packets
-        let leader_id = match poh_recorder.lock().unwrap().bank() {
-            None => rcluster_info.leader_data().map(|x| x.id),
-            Some(_) => rcluster_info.leader_data().map(|_| Pubkey::default()), // returning default pubkey on purpose
+        let forward = match poh_recorder.lock().unwrap().bank() {
+            Some(_) => rcluster_info.leader_data().is_some(),
+            None => rcluster_info
+                .leader_data()
+                .map(|x| x.id != rcluster_info.id())
+                .unwrap_or(false),
         };
 
-        match leader_id {
-            Some(leader) => {
-                if leader != rcluster_info.id() {
-                    let _ = Self::forward_unprocessed_packets(
-                        &socket,
-                        &rcluster_info.leader_data().unwrap().forwarder,
-                        &buffered_packets,
-                    );
-                    true
-                } else {
-                    false
-                }
-            }
-            None => false,
+        if forward {
+            let _ = Self::forward_unprocessed_packets(
+                &socket,
+                &rcluster_info.leader_data().unwrap().forwarder,
+                &buffered_packets,
+            );
         }
+
+        forward
     }
 
     fn should_buffer_packets(
@@ -139,11 +135,11 @@ impl BankingStage {
         // Buffer the packets if I am the next leader
         // or, if it was getting sent to me
         let leader_id = match poh_recorder.lock().unwrap().bank() {
+            Some(bank) => leader_schedule_utils::slot_leader_at(bank.slot() + 1, &bank).unwrap(),
             None => rcluster_info
                 .leader_data()
                 .map(|x| x.id)
                 .unwrap_or_default(),
-            Some(bank) => leader_schedule_utils::slot_leader_at(bank.slot() + 1, &bank).unwrap(),
         };
 
         leader_id == rcluster_info.id()
