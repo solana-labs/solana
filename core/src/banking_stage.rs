@@ -77,7 +77,7 @@ impl BankingStage {
 
     fn forward_unprocessed_packets(
         socket: &std::net::UdpSocket,
-        forwarder: &std::net::SocketAddr,
+        tpu_via_blobs: &std::net::SocketAddr,
         unprocessed_packets: &[(SharedPackets, usize)],
     ) -> std::io::Result<()> {
         let locked_packets: Vec<_> = unprocessed_packets
@@ -91,7 +91,7 @@ impl BankingStage {
         let blobs = packet::packets_to_blobs(&packets);
 
         for blob in blobs {
-            socket.send_to(&blob.data[..blob.meta.size], forwarder)?;
+            socket.send_to(&blob.data[..blob.meta.size], tpu_via_blobs)?;
         }
 
         Ok(())
@@ -118,7 +118,7 @@ impl BankingStage {
         if forward {
             let _ = Self::forward_unprocessed_packets(
                 &socket,
-                &rcluster_info.leader_data().unwrap().forwarder,
+                &rcluster_info.leader_data().unwrap().tpu_via_blobs,
                 &buffered_packets,
             );
         }
@@ -173,7 +173,7 @@ impl BankingStage {
                     if let Some(leader) = cluster_info.read().unwrap().leader_data() {
                         let _ = Self::forward_unprocessed_packets(
                             &socket,
-                            &leader.forwarder,
+                            &leader.tpu_via_blobs,
                             &unprocessed_packets,
                         );
                     }

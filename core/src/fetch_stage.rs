@@ -16,29 +16,29 @@ impl FetchStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         sockets: Vec<UdpSocket>,
-        forwarder_sockets: Vec<UdpSocket>,
+        tpu_via_blobs_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
     ) -> (Self, PacketReceiver) {
         let (sender, receiver) = channel();
         (
-            Self::new_with_sender(sockets, forwarder_sockets, exit, &sender),
+            Self::new_with_sender(sockets, tpu_via_blobs_sockets, exit, &sender),
             receiver,
         )
     }
     pub fn new_with_sender(
         sockets: Vec<UdpSocket>,
-        forwarder_sockets: Vec<UdpSocket>,
+        tpu_via_blobs_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
     ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
-        let forwarder_sockets = forwarder_sockets.into_iter().map(Arc::new).collect();
-        Self::new_multi_socket(tx_sockets, forwarder_sockets, exit, &sender)
+        let tpu_via_blobs_sockets = tpu_via_blobs_sockets.into_iter().map(Arc::new).collect();
+        Self::new_multi_socket(tx_sockets, tpu_via_blobs_sockets, exit, &sender)
     }
 
     fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
-        forwarder_sockets: Vec<Arc<UdpSocket>>,
+        tpu_via_blobs_sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
     ) -> Self {
@@ -46,11 +46,11 @@ impl FetchStage {
             .into_iter()
             .map(|socket| streamer::receiver(socket, &exit, sender.clone(), "fetch-stage"));
 
-        let forwarder_threads = forwarder_sockets
+        let tpu_via_blobs_threads = tpu_via_blobs_sockets
             .into_iter()
             .map(|socket| streamer::blob_packet_receiver(socket, &exit, sender.clone()));
 
-        let thread_hdls: Vec<_> = tpu_threads.chain(forwarder_threads).collect();
+        let thread_hdls: Vec<_> = tpu_threads.chain(tpu_via_blobs_threads).collect();
         Self { thread_hdls }
     }
 }
