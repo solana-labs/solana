@@ -44,7 +44,7 @@ pub struct Packet {
 
 impl Packet {
     pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
-        Packet { data, meta }
+        Self { data, meta }
     }
 }
 
