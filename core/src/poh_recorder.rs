@@ -235,6 +235,7 @@ mod tests {
     use crate::test_tx::test_tx;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
+    use std::sync::mpsc::sync_channel;
     use std::sync::Arc;
 
     #[test]
@@ -509,5 +510,17 @@ mod tests {
         poh_recorder.set_working_bank(working_bank);
         poh_recorder.reset(1, hash(b"hello"));
         assert!(poh_recorder.working_bank.is_none());
+    }
+
+    #[test]
+    pub fn test_clear_signal() {
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        let (sender, receiver) = sync_channel(1);
+        poh_recorder.set_bank(&bank);
+        poh_recorder.clear_bank_signal = Some(sender);
+        poh_recorder.clear_bank();
+        assert!(receiver.try_recv().is_ok());
     }
 }
