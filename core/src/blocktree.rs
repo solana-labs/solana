@@ -12,6 +12,7 @@ use bincode::{deserialize, serialize};
 
 use hashbrown::HashMap;
 
+#[cfg(not(feature = "kvstore"))]
 use rocksdb;
 
 use serde::Serialize;
