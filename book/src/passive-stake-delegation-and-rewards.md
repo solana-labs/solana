@@ -71,7 +71,7 @@ contains the following state information:
 * `voter_id` - The pubkey of the VoteState instance the lamports are
 delegated to.
 
-* `claimed_credits` - The total credits claimed over the lifetime of the
+* `credits_observed` - The total credits claimed over the lifetime of the
 program.
 
 ## RewardsState
@@ -95,7 +95,7 @@ program.
 ### StakeInstruction::Initialize
 
 * `account[0]` - RW - The StakeState::Stake instance.  
-  `StakeState::claimed_credits` is initialized to `VoteState::credits`.  
+  `StakeState::credits_observed` is initialized to `VoteState::credits`.  
   `StakeState::voter_id` is initialized to `account[1]`
 
 * `account[1]` - R - The VoteState instance.
@@ -106,24 +106,31 @@ The VoteState program and the StakeState programs maintain a lifetime counter
 of total rewards generated and claimed.  Therefore an explicit `Clear`
 instruction is not necessary.  When claiming rewards, the total lamports
 deposited into the StakeState and as validator commission is proportional to
-`VoteState::credits - StakeState::claimed_credits`.
+`VoteState::credits - StakeState::credits_observed`.
  
 
 * `account[0]` - RW - The StakeState::MiningPool instance that will fulfill the
 reward.
 * `account[1]` - RW - The StakeState::State instance that is redeeming votes
 credits.
-* `account[1]` - In Param - The VoteState instance, must be the same as
+* `account[1]` - R - The VoteState instance, must be the same as
 `StakeState::voter_id`
 
 Reward is payed out for the difference between `VoteState::credits` to
-`StakeState::claimed_credits`, and `claimed_credits` is updated to
+`StakeState::credits_observed`, and `credits_observed` is updated to
 `VoteState::credits`.  The commission is deposited into the `VoteState` token
 balance, and the reward is deposited to the `StakeState` token balance.  The
 reward and the commission is weighted by the `StakeState::lamports`.
 
 The Staker, or the owner of the Stake program sends a transaction with this
 instruction to claim the reward.
+
+Any random MiningPool can be used to redeem the credits.
+
+```rust,ignore
+let credits_to_claim = vote_state.credits - stake_state.credits_observed;
+stake_state.credits_observed = vote_state.credits;
+```
 
 ### Collecting network fees into the MiningPool
 
@@ -166,13 +173,13 @@ nodes since stake is used as weight in the network control and data planes.  One
 way to implement this would be for the StakeState to delegate to a pool of
 validators instead of a single one.
 
-Instead of a single `vote_id` and `claimed_credits` entry in the StakeState
+Instead of a single `vote_id` and `credits_observed` entry in the StakeState
 program, the program can be initialized with a vector of tuples.
 
-```
+```rust,ignore
 Voter {
     voter_id: Pubkey,
-    claimed_credits: u64,
+    credits_observed: u64,
     weight: u8,
 }
 ```
