@@ -1,8 +1,9 @@
+use bincode::serialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::{custom_error, solana_entrypoint};
+use solana_sdk::solana_entrypoint;
 
 mod token_program;
 
@@ -15,8 +16,8 @@ fn entrypoint(
 ) -> Result<(), ProgramError> {
     solana_logger::setup();
 
-    token_program::TokenProgram::process(program_id, info, input).map_err(|err| {
-        error!("error: {:?}", err);
-        ProgramError::CustomError(custom_error!(err))
+    token_program::TokenProgram::process(program_id, info, input).map_err(|e| {
+        error!("error: {:?}", e);
+        ProgramError::CustomError(serialize(&e).unwrap())
     })
 }
