@@ -282,7 +282,7 @@ impl ClusterInfo {
 
     pub fn push_vote(&mut self, vote: Transaction) {
         let now = timestamp();
-        let vote = Vote::new(vote, now);
+        let vote = Vote::new(&self.id(), vote, now);
         let mut entry = CrdsValue::Vote(vote);
         entry.sign(&self.keypair);
         self.gossip.process_push_message(&[entry], now);
