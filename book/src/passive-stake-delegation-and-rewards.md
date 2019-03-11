@@ -113,7 +113,7 @@ deposited into the StakeState and as validator commission is proportional to
 reward.
 * `account[1]` - RW - The StakeState::State instance that is redeeming votes
 credits.
-* `account[1]` - R - The VoteState instance, must be the same as
+* `account[2]` - R - The VoteState instance, must be the same as
 `StakeState::voter_id`
 
 Reward is payed out for the difference between `VoteState::credits` to
