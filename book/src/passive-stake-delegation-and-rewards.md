@@ -20,9 +20,9 @@ actively vote for each stake delegated to it, it can censor stakes by not voting
 for them.
 
 The number of votes is equal to the number of stakers, and not the number of
-validators.  Replicator clients are expected to automatically delegate their
-rewards, and therefore the number of stakes is expected to be large compared to
-the number of validators in a long running cluster.
+validators.  Replicator clients are expected to delegate their replication
+rewards as they are earned, and therefore the number of stakes is expected to be
+large compared to the number of validators in a long running cluster.
 
 ## Proposed changes to the current design.
 
