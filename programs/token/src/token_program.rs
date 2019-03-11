@@ -5,7 +5,7 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::pubkey::Pubkey;
 use std;
 
-#[derive(Debug, PartialEq)]
+#[derive(Serialize, Debug, PartialEq)]
 pub enum Error {
     InvalidArgument,
     InsufficentFunds,
