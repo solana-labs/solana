@@ -63,10 +63,19 @@ fn node_staked_accounts_at_epoch(
     epoch_height: u64,
 ) -> Option<impl Iterator<Item = (&Pubkey, u64, &Account)>> {
     bank.epoch_vote_accounts(epoch_height).map(|epoch_state| {
-        epoch_state.into_iter().filter_map(|(account_id, account)| {
-            filter_zero_balances(account).map(|stake| (account_id, stake, account))
-        })
+        epoch_state
+            .into_iter()
+            .filter_map(|(account_id, account)| {
+                filter_zero_balances(account).map(|stake| (account_id, stake, account))
+            })
+            .filter(|(account_id, _, account)| filter_no_delegate(account_id, account))
     })
+}
+
+fn filter_no_delegate(account_id: &Pubkey, account: &Account) -> bool {
+    VoteState::deserialize(&account.userdata)
+        .map(|vote_state| vote_state.delegate_id != *account_id)
+        .unwrap_or(false)
 }
 
 fn filter_zero_balances(account: &Account) -> Option<u64> {
