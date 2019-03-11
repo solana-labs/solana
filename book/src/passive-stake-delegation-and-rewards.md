@@ -52,10 +52,10 @@ lifetime.
 rewards.
 
 * commission - The commission taken by this VoteState for any rewards claimed by
-staker's RewardsState accounts.
+staker's RewardsState accounts.  This is the percentage ceiling of the reward.
 
-* lamports - The accumulated lamports from the commission.  These do not count as
-stakes.
+* Account::lamports - The accumulated lamports from the commission.  These do not
+count as stakes.
 
 * `authorized_voter_id` - Only this identity is authorized to submit votes.
 
@@ -64,9 +64,9 @@ stakes.
 RewardsState is the current delegation preference of the **staker**. RewardsState
 contains the following state information:
 
-* lamports - The staked lamports.
+* Account::lamports - The staked lamports.
 
-* `delegate` - The pubkey of the VoteState instance the lamports are
+* `voter_id` - The pubkey of the VoteState instance the lamports are
 delegated to.
 
 * `claimed_credits` - The total credits claimed over the lifetime of the
@@ -79,13 +79,13 @@ The VoteState program and the RewardsState programs maintain a lifetime counter
 of total rewards generated and claimed.  Therefore an explicit `Clear`
 instruction is not necessary.  When claiming rewards, the total lamports
 deposited into the RewardsState and as validator commission is proportional to
-`VoteState::credits - RewadsState::claimed_credits`.
+`VoteState::credits - RewardsState::claimed_credits`.
 
 ### RewardsInstruction::Initialize
 
 * `account[0]` - Out Param - The RewardsState instance.  
   `RewardsState::claimed_credits` is initialized to `VoteState::credits`.  
-  `RewardsState::delegate` is initialized to `account[1]`
+  `RewardsState::voter_id` is initialized to `account[1]`
 
 * `account[1]` - In Param - The VoteState instance.
 
@@ -95,7 +95,7 @@ deposited into the RewardsState and as validator commission is proportional to
 * `account[0]` - Out Param - The RewardsState instance.  
 
 * `account[1]` - In Param - The VoteState instance, must be the same as
-`RewardsState::delegate`
+`RewardsState::voter_id`
 
 
 Reward is payed out for the difference between `VoteState::credits` to
@@ -128,8 +128,8 @@ VoteState program without an interactive action from the identity controlling
 the VoteState program or submitting votes to the program.
 
 The total stake allocated to a VoteState program can be calculated by the sum of
-all the RewardsState programs that have the VoteState pubkey as the
-`RewardsState;:delegate`.
+all the Rewar:sState programs that have the VoteState pubkey as the
+`RewardsState::voter_id`.
  
 ## Future work
 
@@ -138,12 +138,19 @@ nodes since stake is used as weight in the network control and data planes.  One
 way to implement this would be for the RewardsState to delegate to a pool of
 validators instead of a single one.
 
-### VoteStatePool
+Instead of a single `vote_id` and `claimed_credits` entry in the RewardsState
+program, the program can be initialized with a vector of tuples.
 
-* voters - Array of VoteState accounts that are generating rewards for this
-pool.
+```
+Voter {
+    voter_id: Pubkey,
+    claimed_credits: u64,
+    weight: u8,
+}
+```
+
+* voters: Vec<Voter> - Array of VoteState accounts that are voting rewards with
+this stake.
 
 A RewardsState program would claim a fraction of the reward from each voter in
-the `voters` array.  To support a VoteStatePool, `RewardsState::claimed_credits`
-would need to be an array of equal size to the `VoteStatePool::voters` array.
-
+the `voters` array, and each voter would be delegated a fraction of the stake.
