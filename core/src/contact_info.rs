@@ -18,7 +18,7 @@ pub struct ContactInfo {
     pub tvu: SocketAddr,
     /// transactions address
     pub tpu: SocketAddr,
-    // forwarer address
+    // forwarder address
     pub forwarder: SocketAddr,
     /// storage data address
     pub storage_addr: SocketAddr,

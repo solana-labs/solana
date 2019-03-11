@@ -246,13 +246,13 @@ mod test {
         }
     }
     #[test]
-    pub fn streamer_debug() {
+    fn streamer_debug() {
         write!(io::sink(), "{:?}", Packet::default()).unwrap();
         write!(io::sink(), "{:?}", Packets::default()).unwrap();
         write!(io::sink(), "{:?}", Blob::default()).unwrap();
     }
     #[test]
-    pub fn streamer_send_test() {
+    fn streamer_send_test() {
         let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
@@ -288,7 +288,7 @@ mod test {
     }
 
     #[test]
-    pub fn streamer_test_deserialize_packets_in_blob() {
+    fn test_streamer_deserialize_packets_in_blob() {
         let meta = Meta::default();
         let serialized_meta_size = serialized_size(&meta).unwrap() as usize;
         let serialized_packet_size = serialized_meta_size + PACKET_DATA_SIZE;

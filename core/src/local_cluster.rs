@@ -214,8 +214,7 @@ mod test {
     #[test]
     fn test_local_cluster_start_and_exit() {
         solana_logger::setup();
-        let cluster = LocalCluster::new(1, 100, 3);
-        drop(cluster)
+        let _cluster = LocalCluster::new(1, 100, 3);
     }
 
     #[test]
@@ -223,7 +222,6 @@ mod test {
         solana_logger::setup();
         let mut fullnode_exit = FullnodeConfig::default();
         fullnode_exit.rpc_config.enable_fullnode_exit = true;
-        let cluster = LocalCluster::new_with_config(&[3], 100, &fullnode_exit);
-        drop(cluster)
+        let _cluster = LocalCluster::new_with_config(&[3], 100, &fullnode_exit);
     }
 }
