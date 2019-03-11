@@ -40,6 +40,10 @@
   - [Secure Vote Signing](vote-signing-to-implement.md)
   - [Staking Rewards](staking-rewards.md)
   - [Passive Stake Delegation and Rewards](passive-stake-delegation-and-rewards.md)
+  - [Fork Selection](fork-selection.md)
+  - [Reliable Vote Transmission](reliable-vote-transmission.md)
+  - [Bank Forks](bank-forks.md)
+  - [Leader to Leader Transition](leader-leader-transition.md)
   - [Cluster Economics](ed_overview.md)
     - [Validation-client Economics](ed_validation_client_economics.md)
       - [State-validation Protocol-based Rewards](ed_vce_state_validation_protocol_based_rewards.md)
@@ -57,6 +61,7 @@
   - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
   - [Deterministic Transaction Fees](transaction-fees.md)
   - [Validator](validator.md)
+  - [Generalized Ownership](generalized-ownership.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
   - [Fork Selection](fork-selection.md)
