@@ -89,7 +89,7 @@ impl BankingStage {
             .iter()
             .flat_map(|(p, start_index)| &p.packets[**start_index..])
             .collect();
-        let blobs = packet::packets_to_blobs(&packets[..]);
+        let blobs = packet::packets_to_blobs(&packets);
 
         for blob in blobs {
             socket.send_to(&blob.data[..blob.meta.size], forwarder)?;
