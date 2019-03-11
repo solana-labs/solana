@@ -602,23 +602,31 @@ mod tests {
         poh_service.join().unwrap();
         drop(poh_recorder);
 
-        // Collect the ledger and feed it to a new bank.
-        let entries: Vec<_> = entry_receiver
-            .iter()
-            .flat_map(|x| x.1.into_iter().map(|e| e.0))
-            .collect();
-        // same assertion as running through the bank, really...
-        assert!(entries.len() >= 2);
+        // Poll the entry_receiver, feeding it into a new bank
+        // until the balance is what we expect.
+        let bank = Bank::new(&genesis_block);
+        for _ in 0..10 {
+            let entries: Vec<_> = entry_receiver
+                .iter()
+                .flat_map(|x| x.1.into_iter().map(|e| e.0))
+                .collect();
+
+            for entry in &entries {
+                bank.process_transactions(&entry.transactions)
+                    .iter()
+                    .for_each(|x| assert_eq!(*x, Ok(())));
+            }
+
+            if bank.get_balance(&alice.pubkey()) == 1 {
+                break;
+            }
+
+            sleep(Duration::from_millis(100));
+        }
 
         // Assert the user holds one lamport, not two. If the stage only outputs one
         // entry, then the second transaction will be rejected, because it drives
         // the account balance below zero before the credit is added.
-        let bank = Bank::new(&genesis_block);
-        for entry in entries {
-            bank.process_transactions(&entry.transactions)
-                .iter()
-                .for_each(|x| assert_eq!(*x, Ok(())));
-        }
         assert_eq!(bank.get_balance(&alice.pubkey()), 1);
     }
 
