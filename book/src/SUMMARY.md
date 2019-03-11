@@ -38,6 +38,7 @@
   - [Ledger Replication](ledger-replication-to-implement.md)
   - [Secure Vote Signing](vote-signing-to-implement.md)
   - [Staking Rewards](staking-rewards.md)
+  - [Passive Staking Delegation and Rewards](passive-stake-delegation-and-rewards.md)
   - [Fork Selection](fork-selection.md)
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
   - [Persistent Account Storage](persistent-account-storage.md)
