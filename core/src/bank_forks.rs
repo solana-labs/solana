@@ -68,9 +68,7 @@ impl BankForks {
         let prev = self.banks.insert(bank_slot, bank.clone());
         assert!(prev.is_none());
 
-        if bank_slot > self.working_bank.slot() {
-            self.working_bank = bank.clone()
-        }
+        self.working_bank = bank.clone();
 
         // TODO: this really only needs to look at the first
         //  parent if we're always calling insert()

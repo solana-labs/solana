@@ -324,7 +324,7 @@ pub struct Blocktree {
     meta_cf: MetaCf,
     data_cf: DataCf,
     erasure_cf: ErasureCf,
-    new_blobs_signals: Vec<SyncSender<bool>>,
+    pub new_blobs_signals: Vec<SyncSender<bool>>,
     ticks_per_slot: u64,
 }
 

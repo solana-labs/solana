@@ -16,7 +16,7 @@ use crate::result::{Error, Result};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::transaction::Transaction;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -40,11 +40,15 @@ pub struct PohRecorder {
     tick_cache: Vec<(Entry, u64)>,
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntries>,
+    pub clear_bank_signal: Option<SyncSender<bool>>,
 }
 
 impl PohRecorder {
     pub fn clear_bank(&mut self) {
         self.working_bank = None;
+        if let Some(ref signal) = self.clear_bank_signal {
+            let _ = signal.try_send(true);
+        }
     }
 
     pub fn hash(&mut self) {
@@ -147,12 +151,12 @@ impl PohRecorder {
                 "poh_record: max_tick_height reached, setting working bank {} to None",
                 working_bank.bank.slot()
             );
-            self.working_bank = None;
+            self.clear_bank();
         }
         if e.is_err() {
             info!("WorkingBank::sender disconnected {:?}", e);
             //revert the cache, but clear the working bank
-            self.working_bank = None;
+            self.clear_bank();
         } else {
             //commit the flush
             let _ = self.tick_cache.drain(..cnt);
@@ -185,6 +189,7 @@ impl PohRecorder {
                 tick_cache: vec![],
                 working_bank: None,
                 sender,
+                clear_bank_signal: None,
             },
             receiver,
         )
@@ -230,6 +235,7 @@ mod tests {
     use crate::test_tx::test_tx;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
+    use std::sync::mpsc::sync_channel;
     use std::sync::Arc;
 
     #[test]
@@ -504,5 +510,17 @@ mod tests {
         poh_recorder.set_working_bank(working_bank);
         poh_recorder.reset(1, hash(b"hello"));
         assert!(poh_recorder.working_bank.is_none());
+    }
+
+    #[test]
+    pub fn test_clear_signal() {
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        let (sender, receiver) = sync_channel(1);
+        poh_recorder.set_bank(&bank);
+        poh_recorder.clear_bank_signal = Some(sender);
+        poh_recorder.clear_bank();
+        assert!(receiver.try_recv().is_ok());
     }
 }
