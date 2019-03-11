@@ -1,4 +1,5 @@
 use crate::contact_info::ContactInfo;
+use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signable, Signature};
 use solana_sdk::transaction::Transaction;
@@ -15,30 +16,37 @@ pub enum CrdsValue {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Vote {
+    pub from: Pubkey,
     pub transaction: Transaction,
+    pub signature: Signature,
     pub wallclock: u64,
 }
 
 impl Signable for Vote {
-    fn sign(&mut self, _keypair: &Keypair) {}
-
-    fn verify(&self) -> bool {
-        self.transaction.verify_signature()
-    }
-
     fn pubkey(&self) -> Pubkey {
-        self.transaction.account_keys[0]
+        self.from
     }
 
     fn signable_data(&self) -> Vec<u8> {
-        vec![]
+        #[derive(Serialize)]
+        struct SignData {
+            transaction: Transaction,
+            wallclock: u64,
+        }
+        let data = SignData {
+            transaction: self.transaction.clone(),
+            wallclock: self.wallclock,
+        };
+        serialize(&data).expect("unable to serialize Vote")
     }
 
     fn get_signature(&self) -> Signature {
-        Signature::default()
+        self.signature
     }
 
-    fn set_signature(&mut self, _signature: Signature) {}
+    fn set_signature(&mut self, signature: Signature) {
+        self.signature = signature
+    }
 }
 
 /// Type of the replicated value
@@ -68,10 +76,11 @@ impl CrdsValueLabel {
 }
 
 impl Vote {
-    // TODO: it might make sense for the transaction to encode the wallclock in the data
-    pub fn new(transaction: Transaction, wallclock: u64) -> Self {
+    pub fn new(from: &Pubkey, transaction: Transaction, wallclock: u64) -> Self {
         Vote {
+            from: *from,
             transaction,
+            signature: Signature::default(),
             wallclock,
         }
     }
@@ -177,21 +186,31 @@ mod test {
         let key = v.clone().contact_info().unwrap().id;
         assert_eq!(v.label(), CrdsValueLabel::ContactInfo(key));
 
-        let v = CrdsValue::Vote(Vote::new(test_tx(), 0));
+        let v = CrdsValue::Vote(Vote::new(&Pubkey::default(), test_tx(), 0));
         assert_eq!(v.wallclock(), 0);
-        let key = v.clone().vote().unwrap().transaction.account_keys[0];
+        let key = v.clone().vote().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::Vote(key));
     }
     #[test]
     fn test_signature() {
         let keypair = Keypair::new();
-        let fake_keypair = Keypair::new();
+        let wrong_keypair = Keypair::new();
         let mut v =
             CrdsValue::ContactInfo(ContactInfo::new_localhost(&keypair.pubkey(), timestamp()));
-        v.sign(&keypair);
-        assert!(v.verify());
-        v.sign(&fake_keypair);
-        assert!(!v.verify());
+        verify_signatures(&mut v, &keypair, &wrong_keypair);
+        v = CrdsValue::Vote(Vote::new(&keypair.pubkey(), test_tx(), timestamp()));
+        verify_signatures(&mut v, &keypair, &wrong_keypair);
     }
 
+    fn verify_signatures(
+        value: &mut CrdsValue,
+        correct_keypair: &Keypair,
+        wrong_keypair: &Keypair,
+    ) {
+        assert!(!value.verify());
+        value.sign(&correct_keypair);
+        assert!(value.verify());
+        value.sign(&wrong_keypair);
+        assert!(!value.verify());
+    }
 }
