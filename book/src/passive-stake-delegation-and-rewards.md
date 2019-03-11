@@ -9,8 +9,9 @@ validator, and therefore does not scale to allow for replicator clients
 automatically delegate their rewards.
 
 The design proposes a new set of programs for voting and stake delegation, The
-proposed programs allow many stakes to passively earn rewards with a single
-validator vote without permission from the validator.
+proposed programs allow many stake accounts to passively earn rewards with a
+single validator vote without permission or active involvement from the
+validator.
 
 ## Current Design Problems
 
@@ -121,17 +122,17 @@ Reward is payed out for the difference between `VoteState::credits` to
 balance, and the reward is deposited to the `StakeState` token balance.  The
 reward and the commission is weighted by the `StakeState::lamports`.
 
-The Staker, or the owner of the Reward program sends a transaction with this
+The Staker, or the owner of the Stake program sends a transaction with this
 instruction to claim the reward.
 
-### Collecting network fee's into the MiningPool
+### Collecting network fees into the MiningPool
 
 At the end of the block, before the bank is frozen, but after it processed all
 the transactions for the block, a virtual instruction is executed to collect
-the transaction fee's.
+the transaction fees.
 
-* A portion of the fee's are deposited into the leader's account. 
-* A portion of the fee's are deposited into the smallest StakeState::MiningPool
+* A portion of the fees are deposited into the leader's account. 
+* A portion of the fees are deposited into the smallest StakeState::MiningPool
 account.
 
 ### Benefits
@@ -155,7 +156,7 @@ VoteState program without an interactive action from the identity controlling
 the VoteState program or submitting votes to the program.
 
 The total stake allocated to a VoteState program can be calculated by the sum of
-all the Rewar:sState programs that have the VoteState pubkey as the
+all the StakeState programs that have the VoteState pubkey as the
 `StakeState::voter_id`.
  
 ## Future work
