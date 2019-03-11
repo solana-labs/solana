@@ -9,9 +9,9 @@ use std::io::Write;
 use std::path::Path;
 
 // The default (and minimal) amount of lamports given to the bootstrap leader:
-// * 2 lamports for the bootstrap leader ID account to later setup another vote account
+// * 1 lamports for the bootstrap leader ID account
 // * 1 lamport for the bootstrap leader vote account
-pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 3;
+pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 2;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GenesisBlock {

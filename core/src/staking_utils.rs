@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn test_bank_staked_nodes_at_epoch() {
         let pubkey = Keypair::new().pubkey();
-        let bootstrap_lamports = 3;
+        let bootstrap_lamports = 2;
         let (genesis_block, _) =
             GenesisBlock::new_with_leader(bootstrap_lamports, &pubkey, bootstrap_lamports);
         let bank = Bank::new(&genesis_block);

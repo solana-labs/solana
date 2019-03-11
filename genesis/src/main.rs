@@ -8,14 +8,10 @@ use std::error;
 
 /**
  * Bootstrap leader gets two lamports:
- * - one lamport to create an instance of the vote_program with
- * - one lamport for the transaction fee
- * - one second lamport to keep the node identity public key valid
+ * - one lamport to use as stake
+ * - one lamport to keep the node identity public key valid
  */
-//pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 3;
-// TODO: Until https://github.com/solana-labs/solana/issues/2355 is resolved the bootstrap leader
-// needs N lamports as its vote account gets re-created on every node restart, costing it lamports
-pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 1_000_000;
+pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 2;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new("solana-genesis")

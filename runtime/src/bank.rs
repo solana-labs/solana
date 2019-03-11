@@ -315,7 +315,7 @@ impl Bank {
         assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
         assert!(genesis_block.lamports >= genesis_block.bootstrap_leader_lamports);
-        assert!(genesis_block.bootstrap_leader_lamports >= 3);
+        assert!(genesis_block.bootstrap_leader_lamports >= 2);
 
         // Bootstrap leader collects fees until `new_from_parent` is called.
         self.collector_id = genesis_block.bootstrap_leader_id;
@@ -323,7 +323,7 @@ impl Bank {
         let mint_lamports = genesis_block.lamports - genesis_block.bootstrap_leader_lamports;
         self.deposit(&genesis_block.mint_id, mint_lamports);
 
-        let bootstrap_leader_lamports = 2;
+        let bootstrap_leader_lamports = 1;
         let bootstrap_leader_stake =
             genesis_block.bootstrap_leader_lamports - bootstrap_leader_lamports;
         self.deposit(
@@ -1230,12 +1230,12 @@ mod tests {
     #[test]
     fn test_process_genesis() {
         let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_lamports = 3;
+        let dummy_leader_lamports = 2;
         let (genesis_block, _) =
             GenesisBlock::new_with_leader(5, &dummy_leader_id, dummy_leader_lamports);
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.get_balance(&genesis_block.mint_id), 2);
-        assert_eq!(bank.get_balance(&dummy_leader_id), 2);
+        assert_eq!(bank.get_balance(&genesis_block.mint_id), 3);
+        assert_eq!(bank.get_balance(&dummy_leader_id), 1);
     }
 
     #[test]
