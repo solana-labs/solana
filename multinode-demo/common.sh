@@ -158,12 +158,12 @@ setup_fullnode_staking() {
   # A little wrong, fund the staking account from the
   #  to the node.  Maybe next time consider doing this the opposite
   #  way or use an ephemeral account
-  $solana_wallet --keypair "$fullnode_id_path" \
+  $solana_wallet --keypair "$fullnode_id_path" --host "$drone_address" \
                create-staking-account "$staker_id" 42 || return $?
 
   # as the staker, set the node as the delegate and the staker as
   #  the vote-signer
-  $solana_wallet --keypair "$staker_id_path" \
+  $solana_wallet --keypair "$staker_id_path" --host "$drone_address" \
                  configure-staking-account \
                  --delegate-account "$fullnode_id" \
                  --authorize-voter "$staker_id"  || return $?
