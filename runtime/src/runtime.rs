@@ -107,7 +107,14 @@ fn execute_instruction(
         executable_accounts,
         program_accounts,
         tick_height,
-    )?;
+    )
+    .map_err(|err| match err {
+        ProgramError::CustomError(mut error) => {
+            error.truncate(32);
+            ProgramError::CustomError(error)
+        }
+        e => e,
+    })?;
 
     // Verify the instruction
     for ((pre_program_id, pre_lamports, pre_userdata), post_account) in

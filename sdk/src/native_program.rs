@@ -36,6 +36,12 @@ pub enum ProgramError {
 
     /// SystemInstruction::Assign was attempted on an account unowned by the system program
     AssignOfUnownedAccount,
+
+    /// CustomError allows on-chain programs to implement program-specific error types and see
+    /// them returned by the Solana runtime. A CustomError may be any type that is serialized
+    /// to a Vec of bytes, max length 32 bytes. Any CustomError Vec greater than this length will
+    /// be truncated by the runtime.
+    CustomError(Vec<u8>),
 }
 
 impl std::fmt::Display for ProgramError {
