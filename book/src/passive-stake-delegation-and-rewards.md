@@ -132,6 +132,10 @@ let credits_to_claim = vote_state.credits - stake_state.credits_observed;
 stake_state.credits_observed = vote_state.credits;
 ```
 
+`credits_to_claim` is used to compute the reward and commission, and
+`StakeState::Stake.credits_observed` is updated to the latest
+`VoteState.credits` value.
+
 ### Collecting network fees into the MiningPool
 
 At the end of the block, before the bank is frozen, but after it processed all
