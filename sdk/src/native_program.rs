@@ -51,20 +51,6 @@ impl std::fmt::Display for ProgramError {
 }
 impl std::error::Error for ProgramError {}
 
-// Convenience macro to serialize (and potentially truncate) a program-specific error to pass in
-// ProgramError::CustomError
-#[macro_export]
-macro_rules! custom_error(
-    ($program_error:expr) => ({
-        use bincode::serialize;
-        let mut error = serialize(&$program_error).expect("failed to serialize program error");
-        if error.len() > 32 {
-            error.truncate(32);
-        }
-        error
-    });
-);
-
 // All native programs export a symbol named process()
 pub const ENTRYPOINT: &str = "process";
 

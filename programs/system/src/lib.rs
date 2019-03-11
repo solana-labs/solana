@@ -1,7 +1,7 @@
+use bincode::serialize;
 use log::*;
 use serde_derive::Serialize;
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::custom_error;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::SystemInstruction;
@@ -101,7 +101,7 @@ pub fn entrypoint(
                     SystemError::ResultWithNegativeLamports => {
                         ProgramError::ResultWithNegativeLamports
                     }
-                    e => ProgramError::CustomError(custom_error!(e)),
+                    e => ProgramError::CustomError(serialize(&e).unwrap()),
                 }
             }),
             SystemInstruction::Assign { program_id } => {
