@@ -168,6 +168,7 @@ impl ClusterInfo {
     pub fn new_with_invalid_keypair(contact_info: ContactInfo) -> Self {
         Self::new(contact_info, Arc::new(Keypair::new()))
     }
+
     pub fn new(contact_info: ContactInfo, keypair: Arc<Keypair>) -> Self {
         let mut me = Self {
             gossip: CrdsGossip::default(),
@@ -181,6 +182,7 @@ impl ClusterInfo {
         me.push_self(&HashMap::new());
         me
     }
+
     pub fn insert_self(&mut self, contact_info: ContactInfo) {
         if self.id() == contact_info.id {
             let mut value = CrdsValue::ContactInfo(contact_info.clone());
@@ -188,7 +190,8 @@ impl ClusterInfo {
             let _ = self.gossip.crds.insert(value, timestamp());
         }
     }
-    pub fn push_self(&mut self, stakes: &HashMap<Pubkey, u64>) {
+
+    fn push_self(&mut self, stakes: &HashMap<Pubkey, u64>) {
         let mut my_data = self.my_data();
         let now = timestamp();
         my_data.wallclock = now;
@@ -197,18 +200,22 @@ impl ClusterInfo {
         self.gossip.refresh_push_active_set(stakes);
         self.gossip.process_push_message(&[entry], now);
     }
+
     // TODO kill insert_info, only used by tests
     pub fn insert_info(&mut self, contact_info: ContactInfo) {
         let mut value = CrdsValue::ContactInfo(contact_info);
         value.sign(&self.keypair);
         let _ = self.gossip.crds.insert(value, timestamp());
     }
+
     pub fn set_entrypoint(&mut self, entrypoint: ContactInfo) {
         self.entrypoint = Some(entrypoint)
     }
+
     pub fn id(&self) -> Pubkey {
         self.gossip.id
     }
+
     pub fn lookup(&self, id: &Pubkey) -> Option<&ContactInfo> {
         let entry = CrdsValueLabel::ContactInfo(*id);
         self.gossip
@@ -216,22 +223,22 @@ impl ClusterInfo {
             .lookup(&entry)
             .and_then(|x| x.contact_info())
     }
+
     pub fn my_data(&self) -> ContactInfo {
         self.lookup(&self.id()).cloned().unwrap()
     }
-    fn leader_id(&self) -> Pubkey {
-        self.gossip_leader_id
-    }
+
     // Deprecated: don't use leader_data().
     pub fn leader_data(&self) -> Option<&ContactInfo> {
-        let leader_id = self.leader_id();
+        let leader_id = self.gossip_leader_id;
         if leader_id == Pubkey::default() {
             return None;
         }
         self.lookup(&leader_id)
     }
+
     pub fn contact_info_trace(&self) -> String {
-        let leader_id = self.leader_id();
+        let leader_id = self.gossip_leader_id;
         let nodes: Vec<_> = self
             .rpc_peers()
             .into_iter()
@@ -264,12 +271,11 @@ impl ClusterInfo {
         )
     }
 
+    /// Record the id of the current leader for use by `leader_tpu_via_blobs()`
     pub fn set_leader(&mut self, leader_id: &Pubkey) {
         warn!(
             "{}: LEADER_UPDATE TO {} from {}",
-            self.gossip.id,
-            leader_id,
-            self.leader_id()
+            self.gossip.id, leader_id, self.gossip_leader_id,
         );
         self.gossip_leader_id = *leader_id;
     }
@@ -364,7 +370,7 @@ impl ClusterInfo {
     }
 
     /// all tvu peers with valid gossip addrs
-    pub fn repair_peers(&self) -> Vec<ContactInfo> {
+    fn repair_peers(&self) -> Vec<ContactInfo> {
         let me = self.my_data().id;
         ClusterInfo::tvu_peers(self)
             .into_iter()
@@ -392,7 +398,7 @@ impl ClusterInfo {
         peers_with_stakes
     }
 
-    pub fn sorted_retransmit_peers<S: std::hash::BuildHasher>(
+    fn sorted_retransmit_peers<S: std::hash::BuildHasher>(
         &self,
         stakes: &HashMap<Pubkey, u64, S>,
     ) -> Vec<ContactInfo> {
@@ -544,7 +550,7 @@ impl ClusterInfo {
 
     /// Given a array of layer indices and another index, returns (as a `Locality`) the layer,
     /// layer-bounds and neighborhood-bounds in which the index resides
-    pub fn localize(layer_indices: &[usize], hood_size: usize, select_index: usize) -> Locality {
+    fn localize(layer_indices: &[usize], hood_size: usize, select_index: usize) -> Locality {
         (0..layer_indices.len())
             .find_map(|i| ClusterInfo::localize_item(layer_indices, hood_size, select_index, i))
             .or_else(|| Some(Locality::default()))
@@ -734,11 +740,7 @@ impl ClusterInfo {
         Ok(out)
     }
 
-    pub fn window_highest_index_request_bytes(
-        &self,
-        slot: u64,
-        blob_index: u64,
-    ) -> Result<Vec<u8>> {
+    fn window_highest_index_request_bytes(&self, slot: u64, blob_index: u64) -> Result<Vec<u8>> {
         let req = Protocol::RequestHighestWindowIndex(self.my_data().clone(), slot, blob_index);
         let out = serialize(&req)?;
         Ok(out)
