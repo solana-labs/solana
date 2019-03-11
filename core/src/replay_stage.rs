@@ -188,8 +188,11 @@ impl ReplayStage {
         if let Some((_, parent)) = newest_frozen.last() {
             let poh_tick_height = poh_recorder.lock().unwrap().tick_height();
             let poh_slot = leader_schedule_utils::tick_height_to_slot(parent, poh_tick_height + 1);
-            assert!(frozen.get(&poh_slot).is_none());
             trace!("checking poh slot for leader {}", poh_slot);
+            if frozen.get(&poh_slot).is_some() {
+                // Already been a leader for this slot, skip it
+                return;
+            }
             if bank_forks.read().unwrap().get(poh_slot).is_none() {
                 leader_schedule_utils::slot_leader_at(poh_slot, parent)
                     .map(|next_leader| {
