@@ -33,7 +33,7 @@ additional validator specific state.  The VoteState program is not aware of any
 stakes delegated to it, and has no staking weight.
 
 The rewards generated are proportional to the amount of lamports staked.  In
-this proposal stake state is stored as part of the RewardsState program. This
+this proposal stake state is stored as part of the StakeState program. This
 program is owned by the staker only.  Lamports stored in this program are the
 stake.  Unlike the current design, this program contains a new field to indicate
 which VoteState program the stake is delegated to.
@@ -52,16 +52,17 @@ lifetime.
 rewards.
 
 * commission - The commission taken by this VoteState for any rewards claimed by
-staker's RewardsState accounts.  This is the percentage ceiling of the reward.
+staker's StakeState accounts.  This is the percentage ceiling of the reward.
 
 * Account::lamports - The accumulated lamports from the commission.  These do not
 count as stakes.
 
 * `authorized_voter_id` - Only this identity is authorized to submit votes.
 
-### New RewardsState
 
-RewardsState is the current delegation preference of the **staker**. RewardsState
+### New StakeState
+
+StakeState is the current delegation preference of the **staker**. StakeState
 contains the following state information:
 
 * Account::lamports - The staked lamports.
@@ -72,40 +73,66 @@ delegated to.
 * `claimed_credits` - The total credits claimed over the lifetime of the
 program.
 
+## RewardsState
 
-### Claiming Rewards
+This program is removed
+ 
+### StakeState::MiningPool
 
-The VoteState program and the RewardsState programs maintain a lifetime counter
+There are two approaches to the mining pool.  The bank could allow the
+StakeState program to bypass the token balance check.  Or a program representing
+the mining pool could run on the network.  To avoid a single network wide lock,
+the pool can be split into several mining pools.  This design focuses on using a
+StakeState::MiningPool as the cluster wide mining pools.
+
+* 256 StakeState::MiningPool are initialized, each with 1/256 number of mining pool
+tokens stored as `Account::lamports`.
+
+The stakes and the MiningPool are accounts that are owned by the same `Stake`
+program.
+
+### StakeInstruction::Initialize
+
+* `account[0]` - RW - The StakeState::Stake instance.  
+  `StakeState::claimed_credits` is initialized to `VoteState::credits`.  
+  `StakeState::voter_id` is initialized to `account[1]`
+
+* `account[1]` - R - The VoteState instance.
+
+### StakeInstruction::RedeemVoteCredits
+
+The VoteState program and the StakeState programs maintain a lifetime counter
 of total rewards generated and claimed.  Therefore an explicit `Clear`
 instruction is not necessary.  When claiming rewards, the total lamports
-deposited into the RewardsState and as validator commission is proportional to
-`VoteState::credits - RewardsState::claimed_credits`.
+deposited into the StakeState and as validator commission is proportional to
+`VoteState::credits - StakeState::claimed_credits`.
+ 
 
-### RewardsInstruction::Initialize
-
-* `account[0]` - Out Param - The RewardsState instance.  
-  `RewardsState::claimed_credits` is initialized to `VoteState::credits`.  
-  `RewardsState::voter_id` is initialized to `account[1]`
-
-* `account[1]` - In Param - The VoteState instance.
-
-### RewardsInstruction::RedeemVoteCredits
-
-
-* `account[0]` - Out Param - The RewardsState instance.  
-
+* `account[0]` - RW - The StakeState::MiningPool instance that will fulfill the
+reward.
+* `account[1]` - RW - The StakeState::State instance that is redeeming votes
+credits.
 * `account[1]` - In Param - The VoteState instance, must be the same as
-`RewardsState::voter_id`
-
+`StakeState::voter_id`
 
 Reward is payed out for the difference between `VoteState::credits` to
-`RewardsState::claimed_credits`, and `claimed_credits` is updated to
+`StakeState::claimed_credits`, and `claimed_credits` is updated to
 `VoteState::credits`.  The commission is deposited into the `VoteState` token
-balance, and the reward is deposited to the `RewardsState` token balance.  The
-reward and the commission is weighted by the `RewardsState::lamports`.
+balance, and the reward is deposited to the `StakeState` token balance.  The
+reward and the commission is weighted by the `StakeState::lamports`.
 
 The Staker, or the owner of the Reward program sends a transaction with this
 instruction to claim the reward.
+
+### Collecting network fee's into the MiningPool
+
+At the end of the block, before the bank is frozen, but after it processed all
+the transactions for the block, a virtual instruction is executed to collect
+the transaction fee's.
+
+* A portion of the fee's are deposited into the leader's account. 
+* A portion of the fee's are deposited into the smallest StakeState::MiningPool
+account.
 
 ### Benefits
 
@@ -123,22 +150,22 @@ many rewards to be claimed concurrently.
 
 ## Passive Delegation
 
-Any number of instances of RewardsState programs can delegate to a single
+Any number of instances of StakeState programs can delegate to a single
 VoteState program without an interactive action from the identity controlling
 the VoteState program or submitting votes to the program.
 
 The total stake allocated to a VoteState program can be calculated by the sum of
 all the Rewar:sState programs that have the VoteState pubkey as the
-`RewardsState::voter_id`.
+`StakeState::voter_id`.
  
 ## Future work
 
 Validators may want to split the stake delegated to them amongst many validator
 nodes since stake is used as weight in the network control and data planes.  One
-way to implement this would be for the RewardsState to delegate to a pool of
+way to implement this would be for the StakeState to delegate to a pool of
 validators instead of a single one.
 
-Instead of a single `vote_id` and `claimed_credits` entry in the RewardsState
+Instead of a single `vote_id` and `claimed_credits` entry in the StakeState
 program, the program can be initialized with a vector of tuples.
 
 ```
@@ -152,5 +179,5 @@ Voter {
 * voters: Vec<Voter> - Array of VoteState accounts that are voting rewards with
 this stake.
 
-A RewardsState program would claim a fraction of the reward from each voter in
+A StakeState program would claim a fraction of the reward from each voter in
 the `voters` array, and each voter would be delegated a fraction of the stake.
