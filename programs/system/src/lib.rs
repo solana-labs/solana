@@ -1,5 +1,7 @@
 use log::*;
+use serde_derive::Serialize;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::custom_error;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::SystemInstruction;
@@ -8,7 +10,7 @@ use solana_sdk::system_program;
 const FROM_ACCOUNT_INDEX: usize = 0;
 const TO_ACCOUNT_INDEX: usize = 1;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 enum SystemError {
     AccountAlreadyInUse,
     ResultWithNegativeLamports,
@@ -96,11 +98,10 @@ pub fn entrypoint(
                 program_id,
             } => create_system_account(keyed_accounts, lamports, space, &program_id).map_err(|e| {
                 match e {
-                    SystemError::AccountAlreadyInUse => ProgramError::InvalidArgument,
                     SystemError::ResultWithNegativeLamports => {
                         ProgramError::ResultWithNegativeLamports
                     }
-                    SystemError::SourceNotSystemAccount => ProgramError::InvalidArgument,
+                    e => ProgramError::CustomError(custom_error!(e)),
                 }
             }),
             SystemInstruction::Assign { program_id } => {
