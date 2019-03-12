@@ -76,7 +76,7 @@ local|tar)
 
     maybeNoLeaderRotation=
     if ! $leaderRotation; then
-      maybeNoLeaderRotation="--no-leader-rotation"
+      maybeNoLeaderRotation="--only-bootstrap-stake"
     fi
     maybePublicAddress=
     if $publicNetwork; then
@@ -96,7 +96,7 @@ local|tar)
 
     args=()
     if ! $leaderRotation; then
-      args+=("--no-leader-rotation")
+      args+=("--only-bootstrap-stake")
     fi
     if $publicNetwork; then
       args+=("--public-address")
