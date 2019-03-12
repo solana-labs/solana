@@ -1,7 +1,7 @@
 //! The `bank_forks` module implments BankForks a DAG of checkpointed Banks
 
+use hashbrown::{HashMap, HashSet};
 use solana_runtime::bank::Bank;
-use std::collections::HashMap;
 use std::ops::Index;
 use std::sync::Arc;
 
@@ -27,6 +27,47 @@ impl BankForks {
             working_bank,
         }
     }
+
+    //produce a flat map of banks to all of its parents
+    pub fn flat_parents(&self) -> HashMap<u64, HashSet<u64>> {
+        let mut flat_parents = HashMap::new();
+        let mut pending: Vec<Arc<Bank>> = self.banks.values().cloned().collect();
+        while !pending.is_empty() {
+            let bank = pending.pop().unwrap();
+            if flat_parents.get(&bank.slot()).is_some() {
+                continue;
+            }
+            let set = bank.parents().into_iter().map(|b| b.slot()).collect();
+            flat_parents.insert(bank.slot(), set);
+            pending.extend(bank.parents().into_iter());
+        }
+        flat_parents
+    }
+
+    //produce a flat map of banks to all of its children
+    pub fn flat_children(&self) -> HashMap<u64, HashSet<u64>> {
+        let mut flat_children = HashMap::new();
+        let mut pending: Vec<Arc<Bank>> = self.banks.values().cloned().collect();
+        let mut done = HashSet::new();
+        assert!(!pending.is_empty());
+        while !pending.is_empty() {
+            let bank = pending.pop().unwrap();
+            if done.contains(&bank.slot()) {
+                continue;
+            }
+            done.insert(bank.slot());
+            let _ = flat_children.entry(bank.slot()).or_insert(HashSet::new());
+            for parent in bank.parents() {
+                flat_children
+                    .entry(parent.slot())
+                    .or_insert(HashSet::new())
+                    .insert(bank.slot());
+            }
+            pending.extend(bank.parents().into_iter());
+        }
+        flat_children
+    }
+
     pub fn frozen_banks(&self) -> HashMap<u64, Arc<Bank>> {
         let mut frozen_banks: Vec<Arc<Bank>> = vec![];
         frozen_banks.extend(self.banks.values().filter(|v| v.is_frozen()).cloned());
@@ -104,6 +145,45 @@ mod tests {
         bank_forks.insert(1, child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);
         assert_eq!(bank_forks.working_bank().tick_height(), 1);
+    }
+
+    #[test]
+    fn test_bank_forks_flat_children() {
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
+        let mut bank_forks = BankForks::new(0, bank);
+        let bank0 = bank_forks[0].clone();
+        let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.insert(1, bank);
+        let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
+        bank_forks.insert(2, bank);
+        println!("here 4");
+        let flat_children = bank_forks.flat_children();
+        println!("here 5");
+        let children: Vec<u64> = flat_children[&0].iter().cloned().collect();
+        println!("here 6");
+        assert_eq!(children, vec![1, 2]);
+        println!("here 7");
+        assert!(flat_children[&1].is_empty());
+        assert!(flat_children[&2].is_empty());
+    }
+
+    #[test]
+    fn test_bank_forks_flat_parents() {
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
+        let mut bank_forks = BankForks::new(0, bank);
+        let bank0 = bank_forks[0].clone();
+        let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.insert(1, bank);
+        let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
+        bank_forks.insert(2, bank);
+        let flat_parents = bank_forks.flat_parents();
+        assert!(flat_parents[&0].is_empty());
+        let parents: Vec<u64> = flat_parents[&1].iter().cloned().collect();
+        assert_eq!(parents, vec![0]);
+        let parents: Vec<u64> = flat_parents[&2].iter().cloned().collect();
+        assert_eq!(parents, vec![0]);
     }
 
     #[test]
