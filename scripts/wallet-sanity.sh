@@ -48,8 +48,8 @@ $solana_keygen
 node_readiness=false
 timeout=60
 while [[ $timeout -gt 0 ]]; do
-  output="$solana_wallet "${entrypoint[@]}" get-transaction-count"
-  if [[ $output ]]; then
+  output=$($solana_wallet "${entrypoint[@]}" get-transaction-count)
+  if [[ -n $output ]]; then
     node_readiness=true
     break
   fi
