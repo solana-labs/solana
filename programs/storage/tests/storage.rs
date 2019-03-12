@@ -83,8 +83,6 @@ fn test_bank_storage() {
 
     bank.process_transaction(&tx).unwrap();
 
-    // TODO: This triggers a ProgramError(0, InvalidArgument). Why?
-    // Oddly, the assertions below it succeed without running this code.
     let entry_height = 0;
     let tx = StorageTransaction::new_mining_proof(
         &bob,
