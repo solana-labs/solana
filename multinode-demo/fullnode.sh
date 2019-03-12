@@ -9,37 +9,14 @@ source "$here"/common.sh
 # shellcheck source=scripts/oom-score-adj.sh
 source "$here"/../scripts/oom-score-adj.sh
 
-usage() {
-  if [[ -n $1 ]]; then
-    echo "$*"
-    echo
-  fi
-  cat <<EOF
-usage: $0 [-x] [--blockstream PATH] [--init-complete-file FILE] [--no-leader-rotation] [--no-signer] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
-
-Start a full node on the specified network
-
-  -x                    - start a new, dynamically-configured full node
-  -X [label]            - start or restart a dynamically-configured full node with
-                          the specified label
-  --blockstream PATH    - open blockstream at this unix domain socket location
-  --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
-  --no-leader-rotation  - disable leader rotation
-  --public-address      - advertise public machine address in gossip.  By default the local machine address is advertised
-  --no-signer           - start node without vote signer
-  --rpc-port port       - custom RPC port for this node
-
-EOF
-  exit 1
-}
-
 if [[ $1 = -h ]]; then
-  usage
+  fullnode_usage "$@"
 fi
 
 gossip_port=9000
 extra_fullnode_args=()
 self_setup=0
+setup_stakes=true
 
 while [[ ${1:0:1} = - ]]; do
   if [[ $1 = -X ]]; then
@@ -59,8 +36,8 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = --init-complete-file ]]; then
     extra_fullnode_args+=("$1" "$2")
     shift 2
-  elif [[ $1 = --no-leader-rotation ]]; then
-    extra_fullnode_args+=("$1")
+  elif [[ $1 = --only-bootstrap-stake ]]; then
+    setup_stakes=false
     shift
   elif [[ $1 = --public-address ]]; then
     extra_fullnode_args+=("$1")
@@ -78,7 +55,7 @@ while [[ ${1:0:1} = - ]]; do
 done
 
 if [[ -n $3 ]]; then
-  usage
+  fullnode_usage "$@"
 fi
 
 find_leader() {
@@ -215,6 +192,8 @@ $program \
 pid=$!
 oom_score_adj "$pid" 1000
 
-setup_fullnode_staking "${leader_address%:*}" "$fullnode_id_path" "$fullnode_staker_id_path"
+if [[ $setup_stakes = true ]]; then
+  setup_fullnode_staking "${leader_address%:*}" "$fullnode_id_path" "$fullnode_staker_id_path"
+fi
 
 wait "$pid"

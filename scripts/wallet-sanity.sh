@@ -48,10 +48,8 @@ $solana_keygen
 node_readiness=false
 timeout=60
 while [[ $timeout -gt 0 ]]; do
-  expected_output="Leader ready"
-  exec 42>&1
-  output=$($solana_wallet "${entrypoint[@]}" get-transaction-count | tee >(cat - >&42))
-  if [[ $output -gt 0 ]]; then
+  output=$($solana_wallet "${entrypoint[@]}" get-transaction-count)
+  if [[ -n $output ]]; then
     node_readiness=true
     break
   fi
