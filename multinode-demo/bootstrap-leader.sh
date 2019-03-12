@@ -11,7 +11,7 @@ source "$here"/common.sh
 source "$here"/../scripts/oom-score-adj.sh
 
 if [[ $1 = -h ]]; then
-  fullnode_usage
+  fullnode_usage "$@"
 fi
 
 extra_fullnode_args=()
@@ -46,7 +46,7 @@ while [[ ${1:0:1} = - ]]; do
 done
 
 if [[ -n $3 ]]; then
-  fullnode_usage
+  fullnode_usage "$@"
 fi
 
 
