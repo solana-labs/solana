@@ -12,14 +12,12 @@ use hashbrown::HashMap;
 use log::*;
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
-use solana_sdk::bpf_loader;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{extend_and_hash, Hash};
 use solana_sdk::native_loader;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
-use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES, NUM_TICKS_PER_SECOND};
 use solana_sdk::transaction::Transaction;
@@ -211,7 +209,6 @@ impl Bank {
         let mut bank = Self::default();
         bank.accounts = Some(Arc::new(Accounts::new(bank.slot, paths)));
         bank.process_genesis_block(genesis_block);
-        bank.add_builtin_programs();
 
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
@@ -364,21 +361,23 @@ impl Bank {
             genesis_block.stakers_slot_offset,
             genesis_block.epoch_warmup,
         );
+
+        // Add native programs mandatory for the runtime to function
+        self.add_native_program("solana_system_program", &solana_sdk::system_program::id());
+        self.add_native_program("solana_bpf_loader", &solana_sdk::bpf_loader::id());
+        self.add_native_program("solana_vote_program", &solana_vote_api::id());
+
+        // Add additional native programs specified in the genesis block
+        for (name, program_id) in &genesis_block.native_programs {
+            self.add_native_program(name, program_id);
+        }
     }
 
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
+        debug!("Adding native program {} under {:?}", name, program_id);
         let account = native_loader::create_program_account(name);
         self.accounts()
             .store_slow(self.accounts_id, program_id, &account);
-    }
-
-    fn add_builtin_programs(&self) {
-        self.add_native_program("solana_system_program", &system_program::id());
-        self.add_native_program("solana_vote_program", &solana_vote_api::id());
-        self.add_native_program("solana_storage_program", &solana_storage_api::id());
-        self.add_native_program("solana_bpf_loader", &bpf_loader::id());
-        self.add_native_program("solana_budget_program", &solana_budget_api::id());
-        self.add_native_program("solana_token_program", &solana_token_api::id());
     }
 
     /// Return the last block hash registered.
@@ -889,11 +888,11 @@ impl Bank {
 mod tests {
     use super::*;
     use bincode::serialize;
-    use hashbrown::HashSet;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
+    use solana_sdk::system_program;
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
 
@@ -1279,61 +1278,6 @@ mod tests {
         assert!(bank
             .transfer(2, &mint_keypair, &bob.pubkey(), genesis_block.hash())
             .is_ok());
-    }
-
-    #[test]
-    fn test_program_ids() {
-        let system = Pubkey::new(&[
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0,
-        ]);
-        let native = Pubkey::new(&[
-            1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0,
-        ]);
-        let bpf = Pubkey::new(&[
-            128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
-        let budget = Pubkey::new(&[
-            129, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
-        let storage = Pubkey::new(&[
-            130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
-        let token = Pubkey::new(&[
-            131, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
-        let vote = Pubkey::new(&[
-            132, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
-
-        assert_eq!(system_program::id(), system);
-        assert_eq!(native_loader::id(), native);
-        assert_eq!(bpf_loader::id(), bpf);
-        assert_eq!(solana_budget_api::id(), budget);
-        assert_eq!(solana_storage_api::id(), storage);
-        assert_eq!(solana_token_api::id(), token);
-        assert_eq!(solana_vote_api::id(), vote);
-    }
-
-    #[test]
-    fn test_program_id_uniqueness() {
-        let mut unique = HashSet::new();
-        let ids = vec![
-            system_program::id(),
-            native_loader::id(),
-            bpf_loader::id(),
-            solana_budget_api::id(),
-            solana_storage_api::id(),
-            solana_token_api::id(),
-            solana_vote_api::id(),
-        ];
-        assert!(ids.into_iter().all(move |id| unique.insert(id)));
     }
 
     #[test]

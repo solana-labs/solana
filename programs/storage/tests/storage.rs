@@ -37,7 +37,11 @@ fn get_storage_blockhash(bank: &Bank, account: &Pubkey) -> Hash {
 
 #[test]
 fn test_bank_storage() {
-    let (genesis_block, alice) = GenesisBlock::new(1000);
+    let (mut genesis_block, alice) = GenesisBlock::new(1000);
+    genesis_block.native_programs.push((
+        "solana_storage_program".to_string(),
+        solana_storage_api::id(),
+    ));
     let bank = Bank::new(&genesis_block);
 
     let bob = Keypair::new();
