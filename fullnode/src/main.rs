@@ -5,7 +5,6 @@ use solana::contact_info::ContactInfo;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
-use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::fs::File;
 use std::process::exit;
@@ -69,11 +68,6 @@ fn main() {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .help("Rendezvous with the cluster at this gossip entry point"),
-        )
-        .arg(
-            Arg::with_name("no_leader_rotation")
-                .long("no-leader-rotation")
-                .help("Disable leader rotation"),
         )
         .arg(
             Arg::with_name("no_voting")
@@ -169,8 +163,6 @@ fn main() {
 
     fullnode_config.voting_disabled = matches.is_present("no_voting");
 
-    let use_only_bootstrap_leader = matches.is_present("no_leader_rotation");
-
     if matches.is_present("enable_rpc_exit") {
         fullnode_config.rpc_config.enable_fullnode_exit = true;
     }
@@ -232,11 +224,6 @@ fn main() {
     let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr);
     node.info.rpc.set_port(rpc_port);
     node.info.rpc_pubsub.set_port(rpc_pubsub_port);
-
-    let genesis_block = GenesisBlock::load(ledger_path).expect("Unable to load genesis block");
-    if use_only_bootstrap_leader && node.info.id != genesis_block.bootstrap_leader_id {
-        fullnode_config.voting_disabled = true;
-    }
 
     let fullnode = Fullnode::new(
         node,
