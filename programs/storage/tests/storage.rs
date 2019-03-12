@@ -4,7 +4,7 @@ use solana_runtime::bank::Bank;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_storage_api::{StorageTransaction, ENTRIES_PER_SEGMENT};
 
@@ -85,15 +85,15 @@ fn test_bank_storage() {
 
     // TODO: This triggers a ProgramError(0, InvalidArgument). Why?
     // Oddly, the assertions below it succeed without running this code.
-    //let entry_height = 0;
-    //let tx = StorageTransaction::new_mining_proof(
-    //    &jack,
-    //    Hash::default(),
-    //    blockhash,
-    //    entry_height,
-    //    Signature::default(),
-    //);
-    //let _result = bank.process_transaction(&tx).unwrap();
+    let entry_height = 0;
+    let tx = StorageTransaction::new_mining_proof(
+        &bob,
+        Hash::default(),
+        blockhash,
+        entry_height,
+        Signature::default(),
+    );
+    let _result = bank.process_transaction(&tx).unwrap();
 
     assert_eq!(
         get_storage_entry_height(&bank, &bob.pubkey()),
