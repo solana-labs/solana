@@ -71,11 +71,6 @@ fn main() {
                 .help("Rendezvous with the cluster at this gossip entry point"),
         )
         .arg(
-            Arg::with_name("no_leader_rotation")
-                .long("no-leader-rotation")
-                .help("Disable leader rotation"),
-        )
-        .arg(
             Arg::with_name("no_voting")
                 .long("no-voting")
                 .takes_value(false)
@@ -169,8 +164,6 @@ fn main() {
 
     fullnode_config.voting_disabled = matches.is_present("no_voting");
 
-    let use_only_bootstrap_leader = matches.is_present("no_leader_rotation");
-
     if matches.is_present("enable_rpc_exit") {
         fullnode_config.rpc_config.enable_fullnode_exit = true;
     }
@@ -234,9 +227,6 @@ fn main() {
     node.info.rpc_pubsub.set_port(rpc_pubsub_port);
 
     let genesis_block = GenesisBlock::load(ledger_path).expect("Unable to load genesis block");
-    if use_only_bootstrap_leader && node.info.id != genesis_block.bootstrap_leader_id {
-        fullnode_config.voting_disabled = true;
-    }
 
     let fullnode = Fullnode::new(
         node,

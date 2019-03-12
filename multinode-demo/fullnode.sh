@@ -215,6 +215,15 @@ $program \
 pid=$!
 oom_score_adj "$pid" 1000
 
-setup_fullnode_staking "${leader_address%:*}" "$fullnode_id_path" "$fullnode_staker_id_path"
+leader_rotation=true
+for i in ${extra_fullnode_args[@]}; do
+  if [[ ${i} == --no-leader-rotation ]] ; then
+    leader_rotation=false
+    break
+  fi
+done
 
+if [[ ${leader_rotation} = true ]] ; then
+  setup_fullnode_staking "${leader_address%:*}" "$fullnode_id_path" "$fullnode_staker_id_path"
+fi
 wait "$pid"

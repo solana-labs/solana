@@ -47,6 +47,16 @@ $program \
 pid=$!
 oom_score_adj "$pid" 1000
 
-setup_fullnode_staking 127.0.0.1 "$bootstrap_leader_id_path" "$bootstrap_leader_staker_id_path"
+leader_rotation=true
+for i in "$@"; do
+if [[ ${i} == --no-leader-rotation ]] ; then
+    leader_rotation=false
+    break
+fi
+done
+
+if [[ ${leader_rotation} = true ]] ; then
+  setup_fullnode_staking 127.0.0.1 "$bootstrap_leader_id_path" "$bootstrap_leader_staker_id_path" "$@"
+fi
 
 wait "$pid"
