@@ -5,7 +5,6 @@ use solana::contact_info::ContactInfo;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
-use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::fs::File;
 use std::process::exit;

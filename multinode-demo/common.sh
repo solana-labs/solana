@@ -171,6 +171,43 @@ setup_fullnode_staking() {
   return 0
 }
 
+parse_extra_args() {
+    declare leader_rotation=true
+    declare extra_args
+        echo $@
+    for i in "$@"; do
+    if [[ ${i} == --no-leader-rotation ]]; then
+        leader_rotation=false
+    else
+        extra_args+=(${i})
+    fi
+
+    done
+}
+
+fullnode_usage() {
+  if [[ -n $1 ]]; then
+    echo "$*"
+    echo
+  fi
+  cat <<EOF
+usage: $0 [-x] [--blockstream PATH] [--init-complete-file FILE] [--no-leader-rotation] [--no-signer] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
+
+Start a full node on the specified network
+
+  -x                    - start a new, dynamically-configured full node
+  -X [label]            - start or restart a dynamically-configured full node with
+                          the specified label
+  --blockstream PATH    - open blockstream at this unix domain socket location
+  --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
+  --no-leader-rotation  - disable leader rotation
+  --public-address      - advertise public machine address in gossip.  By default the local machine address is advertised
+  --no-signer           - start node without vote signer
+  --rpc-port port       - custom RPC port for this node
+
+EOF
+  exit 1
+}
 
 # The directory on the bootstrap leader that is rsynced by other full nodes as
 # they boot (TODO: Eventually this should go away)
