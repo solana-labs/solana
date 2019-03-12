@@ -17,7 +17,7 @@ CRATES=(
   keygen
   metrics
   drone
-  programs/{budget,bpf_loader,native_loader,noop,system,vote}
+  programs/{budget,bpf_loader,native_loader,noop,vote}
   core
   fullnode
   genesis
