@@ -171,20 +171,6 @@ setup_fullnode_staking() {
   return 0
 }
 
-parse_extra_args() {
-    declare leader_rotation=true
-    declare extra_args
-        echo $@
-    for i in "$@"; do
-    if [[ ${i} == --no-leader-rotation ]]; then
-        leader_rotation=false
-    else
-        extra_args+=(${i})
-    fi
-
-    done
-}
-
 fullnode_usage() {
   if [[ -n $1 ]]; then
     echo "$*"
