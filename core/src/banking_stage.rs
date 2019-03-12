@@ -432,7 +432,7 @@ pub fn create_test_recorder(
 ) {
     let exit = Arc::new(AtomicBool::new(false));
     let (poh_recorder, entry_receiver) =
-        PohRecorder::new(bank.tick_height(), bank.last_blockhash());
+        PohRecorder::new(bank.tick_height(), bank.last_blockhash(), bank.slot());
     let poh_recorder = Arc::new(Mutex::new(poh_recorder));
     let poh_service = PohService::new(poh_recorder.clone(), &PohServiceConfig::default(), &exit);
     (exit, poh_recorder, poh_service, entry_receiver)
@@ -641,7 +641,7 @@ mod tests {
         };
 
         let (poh_recorder, entry_receiver) =
-            PohRecorder::new(bank.tick_height(), bank.last_blockhash());
+            PohRecorder::new(bank.tick_height(), bank.last_blockhash(), bank.slot());
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         poh_recorder.lock().unwrap().set_working_bank(working_bank);
@@ -694,7 +694,7 @@ mod tests {
             max_tick_height: bank.tick_height() + 1,
         };
         let (poh_recorder, entry_receiver) =
-            PohRecorder::new(bank.tick_height(), bank.last_blockhash());
+            PohRecorder::new(bank.tick_height(), bank.last_blockhash(), bank.slot());
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         poh_recorder.lock().unwrap().set_working_bank(working_bank);

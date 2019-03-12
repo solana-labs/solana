@@ -76,6 +76,7 @@ impl ReplayStage {
         let poh_recorder = poh_recorder.clone();
         let my_id = *my_id;
         let vote_account = *vote_account;
+        let mut ticks_per_slot = 0;
 
         // Start the replay stage loop
         let t_replay = Builder::new()
@@ -92,10 +93,11 @@ impl ReplayStage {
                     Self::generate_new_bank_forks(&blocktree, &mut bank_forks.write().unwrap());
                     let active_banks = bank_forks.read().unwrap().active_banks();
                     trace!("active banks {:?}", active_banks);
-                    let mut votable: Vec<u64> = vec![];
+                    let mut votable: Vec<Arc<Bank>> = vec![];
                     let mut is_tpu_bank_active = poh_recorder.lock().unwrap().bank().is_some();
                     for bank_slot in &active_banks {
                         let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
+                        ticks_per_slot = bank.ticks_per_slot();
                         if bank.collector_id() != my_id {
                             Self::replay_blocktree_into_bank(
                                 &bank,
@@ -108,44 +110,45 @@ impl ReplayStage {
                         if bank.tick_height() == max_tick_height {
                             bank.freeze();
                             info!("bank frozen {}", bank.slot());
-                            votable.push(*bank_slot);
                             progress.remove(bank_slot);
                             if let Err(e) =
                                 slot_full_sender.send((bank.slot(), bank.collector_id()))
                             {
                                 info!("{} slot_full alert failed: {:?}", my_id, e);
                             }
+                            votable.push(bank);
                         }
                     }
+
+                    if ticks_per_slot == 0 {
+                        let frozen_banks = bank_forks.read().unwrap().frozen_banks();
+                        let bank = frozen_banks.values().next().unwrap();
+                        ticks_per_slot = bank.ticks_per_slot();
+                    }
+
                     // TODO: fork selection
                     // vote on the latest one for now
-                    votable.sort();
+                    votable.sort_by(|b1, b2| b1.slot().cmp(&b2.slot()));
 
-                    if let Some(latest_slot_vote) = votable.last() {
-                        let parent = bank_forks
-                            .read()
-                            .unwrap()
-                            .get(*latest_slot_vote)
-                            .unwrap()
-                            .clone();
-
-                        subscriptions.notify_subscribers(&parent);
+                    if let Some(bank) = votable.last() {
+                        subscriptions.notify_subscribers(&bank);
 
                         if let Some(ref voting_keypair) = voting_keypair {
                             let keypair = voting_keypair.as_ref();
                             let vote = VoteTransaction::new_vote(
                                 &vote_account,
                                 keypair,
-                                *latest_slot_vote,
-                                parent.last_blockhash(),
+                                bank.slot(),
+                                bank.last_blockhash(),
                                 0,
                             );
                             cluster_info.write().unwrap().push_vote(vote);
                         }
-                        poh_recorder
-                            .lock()
-                            .unwrap()
-                            .reset(parent.tick_height(), parent.last_blockhash());
+                        poh_recorder.lock().unwrap().reset(
+                            bank.tick_height(),
+                            bank.last_blockhash(),
+                            bank.slot(),
+                        );
                         is_tpu_bank_active = false;
                     }
 
@@ -156,6 +159,7 @@ impl ReplayStage {
                             &poh_recorder,
                             &cluster_info,
                             &blocktree,
+                            ticks_per_slot,
                         );
                     }
 
@@ -186,11 +190,10 @@ impl ReplayStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: &Blocktree,
+        ticks_per_slot: u64,
     ) {
-        let (poh_tick_height, ticks_per_slot) = {
-            let poh = poh_recorder.lock().unwrap();
-            (poh.tick_height(), poh.ticks_per_slot())
-        };
+        assert!(ticks_per_slot > 0);
+        let poh_tick_height = poh_recorder.lock().unwrap().tick_height();
         let poh_slot =
             leader_schedule_utils::tick_height_to_slot(ticks_per_slot, poh_tick_height + 1);
 
