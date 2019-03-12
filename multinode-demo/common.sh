@@ -177,19 +177,19 @@ fullnode_usage() {
     echo
   fi
   cat <<EOF
-usage: $0 [-x] [--blockstream PATH] [--init-complete-file FILE] [--no-leader-rotation] [--no-signer] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
+usage: $0 [-x] [--blockstream PATH] [--init-complete-file FILE] [--only-bootstrap-stake] [--no-signer] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
 
 Start a full node on the specified network
 
-  -x                    - start a new, dynamically-configured full node. Does not apply to the bootstrap leader
-  -X [label]            - start or restart a dynamically-configured full node with
-                          the specified label. Does not apply to the bootstrap leader
-  --blockstream PATH    - open blockstream at this unix domain socket location
+  -x                        - start a new, dynamically-configured full node. Does not apply to the bootstrap leader
+  -X [label]                - start or restart a dynamically-configured full node with
+                              the specified label. Does not apply to the bootstrap leader
+  --blockstream PATH        - open blockstream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
-  --no-leader-rotation  - disable leader rotation
-  --public-address      - advertise public machine address in gossip.  By default the local machine address is advertised
-  --no-signer           - start node without vote signer
-  --rpc-port port       - custom RPC port for this node
+  --only-bootstrap-stake    - Only stake the bootstrap leader, effectively disabling leader rotation
+  --public-address          - advertise public machine address in gossip.  By default the local machine address is advertised
+  --no-signer               - start node without vote signer
+  --rpc-port port           - custom RPC port for this node
 
 EOF
   exit 1
