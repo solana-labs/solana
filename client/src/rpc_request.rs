@@ -17,6 +17,8 @@ pub enum RpcRequest {
     GetStorageBlockhash,
     GetStorageEntryHeight,
     GetStoragePubkeysForEntryHeight,
+    GetVoteAccounts,
+    GetEpochVoteAccounts,
     FullnodeExit,
 }
 
@@ -38,6 +40,8 @@ impl RpcRequest {
             RpcRequest::GetStorageBlockhash => "getStorageBlockhash",
             RpcRequest::GetStorageEntryHeight => "getStorageEntryHeight",
             RpcRequest::GetStoragePubkeysForEntryHeight => "getStoragePubkeysForEntryHeight",
+            RpcRequest::GetVoteAccounts => "getVoteAccounts",
+            RpcRequest::GetEpochVoteAccounts => "getEpochVoteAccounts",
             RpcRequest::FullnodeExit => "fullnodeExit",
         };
         let mut request = json!({
