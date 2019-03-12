@@ -115,7 +115,7 @@ local|tar)
 
     if [[ $nodeType = blockstreamer ]]; then
       npm install @solana/blockexplorer@1
-      npx solana-blockexplorer > blockexplorer.log 2>&1 &
+      npx solana-blockexplorer -l 8080 > blockexplorer.log 2>&1 &
     fi
     ./multinode-demo/fullnode.sh "${args[@]}" "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
     ;;
