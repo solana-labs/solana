@@ -217,6 +217,10 @@ impl ReplayStage {
                                     next_leader
                                 );
                                 poh_recorder.lock().unwrap().set_bank(&tpu_bank);
+                                inc_new_counter_info!(
+                                    "replay_stage-new_leader",
+                                    tpu_bank.slot() as usize
+                                );
                             }
                         }
                     })
