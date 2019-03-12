@@ -8,9 +8,10 @@ use crate::contact_info::ContactInfo;
 use crate::entry::{Entry, EntrySlice};
 use crate::gossip_service::discover;
 use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND};
+use std::io;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -137,30 +138,67 @@ pub fn kill_entry_and_spend_and_verify_rest(
         if ingress_node.id == entry_point_info.id {
             continue;
         }
-        let random_keypair = Keypair::new();
+
         let mut client = mk_client(&ingress_node);
         let bal = client
             .poll_get_balance(&funding_keypair.pubkey())
             .expect("balance in source");
         assert!(bal > 0);
-        let mut transaction = SystemTransaction::new_move(
-            &funding_keypair,
-            &random_keypair.pubkey(),
-            1,
-            client.get_recent_blockhash(),
-            0,
-        );
-        let sig = client
-            .retry_transfer(&funding_keypair, &mut transaction, 5)
-            .unwrap();
-        for validator in &cluster_nodes {
-            if validator.id == entry_point_info.id {
-                continue;
+
+        let mut result = Ok(());
+        let mut retries = 0;
+        loop {
+            retries += 1;
+            if retries > 5 {
+                result.unwrap();
             }
-            let mut client = mk_client(&validator);
-            client.poll_for_signature(&sig).unwrap();
+
+            let random_keypair = Keypair::new();
+            let mut transaction = SystemTransaction::new_move(
+                &funding_keypair,
+                &random_keypair.pubkey(),
+                1,
+                client.get_recent_blockhash(),
+                0,
+            );
+
+            let sig = {
+                match client.retry_transfer(&funding_keypair, &mut transaction, 5) {
+                    Err(e) => {
+                        result = Err(e);
+                        continue;
+                    }
+
+                    Ok(sig) => sig,
+                }
+            };
+
+            match poll_all_nodes_for_signature(&entry_point_info, &cluster_nodes, &sig) {
+                Err(e) => {
+                    result = Err(e);
+                }
+                Ok(()) => {
+                    break;
+                }
+            }
         }
     }
+}
+
+fn poll_all_nodes_for_signature(
+    entry_point_info: &ContactInfo,
+    cluster_nodes: &[ContactInfo],
+    sig: &Signature,
+) -> io::Result<()> {
+    for validator in cluster_nodes {
+        if validator.id == entry_point_info.id {
+            continue;
+        }
+        let mut client = mk_client(&validator);
+        client.poll_for_signature(&sig)?;
+    }
+
+    Ok(())
 }
 
 fn get_and_verify_slot_entries(blocktree: &Blocktree, slot: u64, last_entry: &Hash) -> Vec<Entry> {
