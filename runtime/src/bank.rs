@@ -154,7 +154,7 @@ type BankStatusCache = StatusCache<BankError>;
 #[derive(Default)]
 pub struct Bank {
     /// where all the Accounts are stored
-    accounts: Option<Arc<Accounts>>,
+    accounts: Arc<Accounts>,
 
     /// Bank accounts fork id
     accounts_id: u64,
@@ -207,7 +207,7 @@ impl Bank {
 
     pub fn new_with_paths(genesis_block: &GenesisBlock, paths: Option<String>) -> Self {
         let mut bank = Self::default();
-        bank.accounts = Some(Arc::new(Accounts::new(bank.slot, paths)));
+        bank.accounts = Arc::new(Accounts::new(bank.slot, paths));
         bank.process_genesis_block(genesis_block);
 
         // genesis needs stakes for all epochs up to the epoch implied by
@@ -241,8 +241,8 @@ impl Bank {
         // Accounts needs a unique id
         static BANK_ACCOUNTS_ID: AtomicUsize = AtomicUsize::new(1);
         bank.accounts_id = BANK_ACCOUNTS_ID.fetch_add(1, Ordering::Relaxed) as u64;
-        bank.accounts = Some(parent.accounts());
-        bank.accounts()
+        bank.accounts = parent.accounts.clone();
+        bank.accounts
             .new_from_parent(bank.accounts_id, parent.accounts_id);
 
         bank.epoch_vote_accounts = {
@@ -293,7 +293,7 @@ impl Bank {
         let parents = self.parents();
         *self.parent.write().unwrap() = None;
 
-        self.accounts().squash(self.accounts_id);
+        self.accounts.squash(self.accounts_id);
 
         let parent_caches: Vec<_> = parents
             .iter()
@@ -343,7 +343,7 @@ impl Bank {
             .serialize(&mut bootstrap_leader_vote_account.userdata)
             .unwrap();
 
-        self.accounts().store_slow(
+        self.accounts.store_slow(
             self.accounts_id,
             &genesis_block.bootstrap_leader_vote_account_id,
             &bootstrap_leader_vote_account,
@@ -376,7 +376,7 @@ impl Bank {
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
         debug!("Adding native program {} under {:?}", name, program_id);
         let account = native_loader::create_program_account(name);
-        self.accounts()
+        self.accounts
             .store_slow(self.accounts_id, program_id, &account);
     }
 
@@ -486,11 +486,11 @@ impl Bank {
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
-        self.accounts().lock_accounts(self.accounts_id, txs)
+        self.accounts.lock_accounts(self.accounts_id, txs)
     }
 
     pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
-        self.accounts()
+        self.accounts
             .unlock_accounts(self.accounts_id, txs, results)
     }
 
@@ -500,7 +500,7 @@ impl Bank {
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        self.accounts()
+        self.accounts
             .load_accounts(self.accounts_id, txs, results, error_counters)
     }
     fn check_age(
@@ -611,7 +611,7 @@ impl Bank {
             inc_new_counter_info!("bank-process_transactions-error_count", err_count);
         }
 
-        self.accounts()
+        self.accounts
             .increment_transaction_count(self.accounts_id, tx_count);
 
         inc_new_counter_info!("bank-process_transactions-txs", tx_count);
@@ -687,7 +687,7 @@ impl Bank {
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
         let now = Instant::now();
-        self.accounts()
+        self.accounts
             .store_accounts(self.accounts_id, txs, executed, loaded_accounts);
 
         // once committed there is no way to unroll
@@ -768,8 +768,7 @@ impl Bank {
                 }
 
                 account.lamports -= lamports;
-                self.accounts()
-                    .store_slow(self.accounts_id, pubkey, &account);
+                self.accounts.store_slow(self.accounts_id, pubkey, &account);
                 Ok(())
             }
             None => Err(BankError::AccountNotFound),
@@ -779,37 +778,27 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
         account.lamports += lamports;
-        self.accounts()
-            .store_slow(self.accounts_id, pubkey, &account);
-    }
-
-    fn accounts(&self) -> Arc<Accounts> {
-        if let Some(accounts) = &self.accounts {
-            accounts.clone()
-        } else {
-            panic!("no accounts!");
-        }
+        self.accounts.store_slow(self.accounts_id, pubkey, &account);
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts().load_slow(self.accounts_id, pubkey)
+        self.accounts.load_slow(self.accounts_id, pubkey)
     }
 
     pub fn get_program_accounts_modified_since_parent(
         &self,
         program_id: &Pubkey,
     ) -> Vec<(Pubkey, Account)> {
-        self.accounts()
+        self.accounts
             .load_by_program_slow_no_parent(self.accounts_id, program_id)
     }
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts()
-            .load_slow_no_parent(self.accounts_id, pubkey)
+        self.accounts.load_slow_no_parent(self.accounts_id, pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
-        self.accounts().transaction_count(self.accounts_id)
+        self.accounts.transaction_count(self.accounts_id)
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
@@ -831,11 +820,11 @@ impl Bank {
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the same hash as we did before
         // checkpointing.
-        if !self.accounts().has_accounts(self.accounts_id) {
+        if !self.accounts.has_accounts(self.accounts_id) {
             return self.parent_hash;
         }
 
-        let accounts_delta_hash = self.accounts().hash_internal_state(self.accounts_id);
+        let accounts_delta_hash = self.accounts.hash_internal_state(self.accounts_id);
         extend_and_hash(&self.parent_hash, &serialize(&accounts_delta_hash).unwrap())
     }
 
@@ -866,7 +855,7 @@ impl Bank {
 
     /// current vote accounts for this bank
     pub fn vote_accounts(&self) -> impl Iterator<Item = (Pubkey, Account)> {
-        self.accounts().get_vote_accounts(self.accounts_id)
+        self.accounts.get_vote_accounts(self.accounts_id)
     }
 
     ///  vote accounts for the specific epoch

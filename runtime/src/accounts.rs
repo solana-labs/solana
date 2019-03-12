@@ -102,6 +102,7 @@ type AccountMap = RwLock<HashMap<Fork, (AppendVecId, u64)>>;
 ///
 ///    pubkey->fork->append_vec->offset
 ///
+#[derive(Default)]
 struct AccountIndex {
     /// For each Pubkey, the Account for a specific Fork is in a specific
     ///  AppendVec at a specific index.  There may be an Account for Pubkey
@@ -179,6 +180,7 @@ struct ForkInfo {
 }
 
 // This structure handles the load/store of the accounts
+#[derive(Default)]
 pub struct AccountsDB {
     /// Keeps tracks of index into AppendVec on a per fork basis
     account_index: AccountIndex,
@@ -203,6 +205,7 @@ pub struct AccountsDB {
 }
 
 /// This structure handles synchronization for db
+#[derive(Default)]
 pub struct Accounts {
     pub accounts_db: AccountsDB,
 
