@@ -38,7 +38,7 @@ fn process_instruction(
     keyed_accounts.append(&mut keyed_accounts2);
 
     if system_program::check_id(&program_id) {
-        solana_system_program::entrypoint(
+        crate::system_program::entrypoint(
             &program_id,
             &mut keyed_accounts[1..],
             &tx.instructions[instruction_index].userdata,
@@ -218,7 +218,7 @@ where
 
         let program_id = tx.program_id(i);
         if system_program::check_id(&program_id) {
-            solana_system_program::entrypoint(&program_id, &mut keyed_accounts, &ix.userdata, 0)
+            crate::system_program::entrypoint(&program_id, &mut keyed_accounts, &ix.userdata, 0)
                 .unwrap();
         } else {
             process_instruction(&program_id, &mut keyed_accounts, &ix.userdata)?;
