@@ -480,6 +480,7 @@ $(
     install-nodejs.sh \
     install-redis.sh \
     install-rsync.sh \
+    install-socat.sh \
     network-config.sh \
     remove-docker-interface.sh \
 
