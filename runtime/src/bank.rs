@@ -192,6 +192,10 @@ pub struct Bank {
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule boundary
     epoch_vote_accounts: HashMap<u64, HashMap<Pubkey, Account>>,
+
+    /// A boolean reflecting whether any entries were recorded into the PoH
+    /// stream for the slot == self.slot
+    is_delta: bool,
 }
 
 impl Default for HashQueue {
@@ -223,7 +227,6 @@ impl Bank {
     /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: u64) -> Self {
         parent.freeze();
-
         assert_ne!(slot, parent.slot());
 
         let mut bank = Self::default();
@@ -870,6 +873,11 @@ impl Bank {
     ///
     pub fn get_epoch_and_slot_index(&self, slot: u64) -> (u64, u64) {
         self.epoch_schedule.get_epoch_and_slot_index(slot)
+    }
+
+    pub fn is_votable(&self) -> bool {
+        let max_tick_height = self.slot * self.ticks_per_slot;
+        self.is_delta && self.tick_height() == max_tick_height
     }
 }
 
@@ -1598,5 +1606,4 @@ mod tests {
             assert!(last_slots_in_epoch == slots_per_epoch);
         }
     }
-
 }
