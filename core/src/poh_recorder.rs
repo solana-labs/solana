@@ -73,19 +73,6 @@ impl PohRecorder {
     // synchronize PoH with a bank
     pub fn reset(&mut self, tick_height: u64, blockhash: Hash, start_slot: u64) {
         self.clear_bank();
-        let existing = self.tick_cache.iter().any(|(entry, entry_tick_height)| {
-            if entry.hash == blockhash {
-                assert_eq!(*entry_tick_height, tick_height);
-            }
-            entry.hash == blockhash
-        });
-        if existing {
-            info!(
-                "reset skipped for: {},{}",
-                self.poh.hash, self.poh.tick_height
-            );
-            return;
-        }
         let mut cache = vec![];
         info!(
             "reset poh from: {},{} to: {},{}",
@@ -108,6 +95,27 @@ impl PohRecorder {
             max_tick_height,
         };
         self.set_working_bank(working_bank);
+    }
+
+    // Checks to see if the Poh Recorder has already generate this hash, If so,
+    // this implies the hash is the last id in a slot of all ticks (an empty transmission)
+    // from the leader and should not be voted on.
+    pub fn is_votable(&self, tick_height: u64, blockhash: Hash) -> bool {
+        let existing = self.tick_cache.iter().any(|(entry, entry_tick_height)| {
+            if entry.hash == blockhash {
+                assert_eq!(*entry_tick_height, tick_height);
+            }
+            entry.hash == blockhash
+        });
+        if existing {
+            info!(
+                "reset skipped for: {},{}",
+                self.poh.hash, self.poh.tick_height
+            );
+            return false;
+        }
+
+        true
     }
 
     // Flush cache will delay flushing the cache for a bank until it past the WorkingBank::min_tick_height
