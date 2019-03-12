@@ -112,6 +112,30 @@ impl JsonRpcRequestProcessor {
             .get_pubkeys_for_entry_height(entry_height))
     }
 
+    fn get_slot_and_epoch(&self) -> Result<(u64, u64)> {
+        let bank = self.bank()?;
+
+        Ok((bank.slot(), bank.get_epoch_and_slot_index(bank.slot()).0))
+    }
+
+    fn get_vote_accounts(&self) -> Result<Vec<(Pubkey, Account)>> {
+        Ok(self.bank()?.vote_accounts().collect())
+    }
+
+    fn get_epoch_vote_accounts(&self, epoch: u64) -> Result<Vec<(Pubkey, Account)>> {
+        Ok(self
+            .bank()?
+            .epoch_vote_accounts(epoch)
+            .ok_or(Error {
+                code: ErrorCode::InternalError,
+                message: "No vote accounts at that epoch".into(),
+                data: None,
+            })?
+            .iter()
+            .map(|(pubkey, account)| (*pubkey, account.clone()))
+            .collect())
+    }
+
     pub fn fullnode_exit(&self) -> Result<bool> {
         if self.config.enable_fullnode_exit {
             warn!("fullnode_exit request...");
@@ -208,6 +232,15 @@ pub trait RpcSol {
         _: Self::Metadata,
         _: u64,
     ) -> Result<Vec<Pubkey>>;
+
+    #[rpc(meta, name = "getSlotAndEpoch")]
+    fn get_slot_and_epoch(&self, _: Self::Metadata) -> Result<(u64, u64)>;
+
+    #[rpc(meta, name = "getVoteAccounts")]
+    fn get_vote_accounts(&self, _: Self::Metadata) -> Result<Vec<(Pubkey, Account)>>;
+
+    #[rpc(meta, name = "getEpochVoteAccounts")]
+    fn get_epoch_vote_accounts(&self, _: Self::Metadata, _: u64) -> Result<Vec<(Pubkey, Account)>>;
 
     #[rpc(meta, name = "fullnodeExit")]
     fn fullnode_exit(&self, _: Self::Metadata) -> Result<bool>;
@@ -400,6 +433,25 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_storage_pubkeys_for_entry_height(entry_height)
+    }
+
+    fn get_slot_and_epoch(&self, meta: Self::Metadata) -> Result<(u64, u64)> {
+        meta.request_processor.read().unwrap().get_slot_and_epoch()
+    }
+
+    fn get_vote_accounts(&self, meta: Self::Metadata) -> Result<Vec<(Pubkey, Account)>> {
+        meta.request_processor.read().unwrap().get_vote_accounts()
+    }
+
+    fn get_epoch_vote_accounts(
+        &self,
+        meta: Self::Metadata,
+        epoch: u64,
+    ) -> Result<Vec<(Pubkey, Account)>> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_epoch_vote_accounts(epoch)
     }
 
     fn fullnode_exit(&self, meta: Self::Metadata) -> Result<bool> {
@@ -713,4 +765,49 @@ mod tests {
         assert_eq!(request_processor.fullnode_exit(), Ok(true));
         assert_eq!(exit.load(Ordering::Relaxed), true);
     }
+
+    #[test]
+    fn test_rpc_get_slot_and_epoch() {
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Arc::new(Bank::new(&genesis_block));
+
+        let exit = Arc::new(AtomicBool::new(false));
+
+        let mut request_processor =
+            JsonRpcRequestProcessor::new(StorageState::default(), JsonRpcConfig::default(), &exit);
+
+        // get errors with no bank
+        assert!(request_processor.get_slot_and_epoch().is_err());
+
+        request_processor.set_bank(&bank);
+
+        // worky now
+        assert_eq!(request_processor.get_slot_and_epoch(), Ok((0, 0)));
+    }
+
+    #[test]
+    fn test_rpc_get_vote_accounts() {
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Arc::new(Bank::new(&genesis_block));
+
+        let exit = Arc::new(AtomicBool::new(false));
+
+        let mut request_processor =
+            JsonRpcRequestProcessor::new(StorageState::default(), JsonRpcConfig::default(), &exit);
+
+        // get errors with no bank
+        assert!(request_processor.get_vote_accounts().is_err());
+        assert!(request_processor.get_epoch_vote_accounts(0).is_err());
+
+        request_processor.set_bank(&bank);
+
+        // worky now
+        assert!(request_processor.get_vote_accounts().is_ok());
+        assert!(request_processor.get_epoch_vote_accounts(0).is_ok());
+        dbg!(request_processor.get_epoch_vote_accounts(0).unwrap());
+
+        // genesis bank isn't expected to have epoch_vote_accounts for 1000
+        assert!(request_processor.get_epoch_vote_accounts(1_000).is_err());
+    }
+
 }
