@@ -1,37 +1,26 @@
 #[macro_use]
 extern crate log;
 
-#[cfg(feature = "chacha")]
-#[macro_use]
-extern crate serde_json;
-
 #[macro_use]
 extern crate solana;
 
-use bincode::deserialize;
 use solana::blocktree::{
     create_new_tmp_ledger, get_tmp_ledger_path, tmp_copy_blocktree, Blocktree,
 };
-use solana::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
+use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
-use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::replicator::Replicator;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
-use solana::streamer::blob_receiver;
 use solana_client::client::create_client;
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use std::fs::remove_dir_all;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::time::Duration;
 
 #[test]
-#[ignore]
 fn test_replicator_startup_basic() {
     solana_logger::setup();
     info!("starting replicator test");
@@ -79,8 +68,6 @@ fn test_replicator_startup_basic() {
             .unwrap();
 
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
-        #[cfg(feature = "chacha")]
-        let validator_contact_info = validator_node.info.clone();
 
         let validator = Fullnode::new(
             validator_node,
@@ -130,90 +117,20 @@ fn test_replicator_startup_basic() {
 
         info!("starting replicator node");
         let replicator_node = Node::new_localhost_with_pubkey(&replicator_keypair.pubkey());
-        let replicator_info = replicator_node.info.clone();
+        let _replicator_info = replicator_node.info.clone();
 
         let leader_info = ContactInfo::new_gossip_entry_point(&leader_info.gossip);
 
         let replicator = Replicator::new(
             replicator_ledger_path,
             replicator_node,
-            &leader_info,
-            &replicator_keypair,
+            leader_info,
+            replicator_keypair,
             None,
         )
         .unwrap();
 
         info!("started replicator..");
-
-        // Create a client which downloads from the replicator and see that it
-        // can respond with blobs.
-        let tn = Node::new_localhost();
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(tn.info.clone());
-        let repair_index = replicator.entry_height();
-        let req = cluster_info
-            .window_index_request_bytes(0, repair_index)
-            .unwrap();
-
-        let exit = Arc::new(AtomicBool::new(false));
-        let (s_reader, r_reader) = channel();
-        let repair_socket = Arc::new(tn.sockets.repair);
-        let t_receiver = blob_receiver(repair_socket.clone(), &exit, s_reader);
-
-        info!(
-            "Sending repair requests from: {} to: {}",
-            tn.info.id, replicator_info.gossip
-        );
-
-        let mut received_blob = false;
-        for _ in 0..5 {
-            repair_socket.send_to(&req, replicator_info.gossip).unwrap();
-
-            let x = r_reader.recv_timeout(Duration::new(1, 0));
-
-            if let Ok(blobs) = x {
-                for b in blobs {
-                    let br = b.read().unwrap();
-                    assert!(br.index() == repair_index);
-                    let entry: Entry = deserialize(&br.data()[..br.meta.size]).unwrap();
-                    info!("entry: {:?}", entry);
-                    assert_ne!(entry.hash, Hash::default());
-                    received_blob = true;
-                }
-                break;
-            }
-        }
-        exit.store(true, Ordering::Relaxed);
-        t_receiver.join().unwrap();
-
-        assert!(received_blob);
-
-        // The replicator will not submit storage proofs if
-        // chacha is not enabled
-        #[cfg(feature = "chacha")]
-        {
-            use solana_client::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
-            use std::thread::sleep;
-
-            info!(
-                "looking for pubkeys for entry: {}",
-                replicator.entry_height()
-            );
-            let rpc_client = RpcClient::new_from_socket(validator_contact_info.rpc);
-            let mut non_zero_pubkeys = false;
-            for _ in 0..60 {
-                let params = json!([replicator.entry_height()]);
-                let pubkeys = rpc_client
-                    .make_rpc_request(1, RpcRequest::GetStoragePubkeysForEntryHeight, Some(params))
-                    .unwrap();
-                info!("pubkeys: {:?}", pubkeys);
-                if pubkeys.as_array().unwrap().len() != 0 {
-                    non_zero_pubkeys = true;
-                    break;
-                }
-                sleep(Duration::from_secs(1));
-            }
-            assert!(non_zero_pubkeys);
-        }
 
         replicator.close();
         validator.close().unwrap();
@@ -251,8 +168,8 @@ fn test_replicator_startup_leader_hang() {
         let replicator_res = Replicator::new(
             &replicator_ledger_path,
             replicator_node,
-            &leader_info,
-            &replicator_keypair,
+            leader_info,
+            replicator_keypair,
             Some(Duration::from_secs(3)),
         );
 
@@ -323,8 +240,8 @@ fn test_replicator_startup_ledger_hang() {
         let replicator_res = Replicator::new(
             &replicator_ledger_path,
             replicator_node,
-            &leader_info,
-            &bad_keys,
+            leader_info,
+            bad_keys,
             Some(Duration::from_secs(3)),
         );
 
