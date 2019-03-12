@@ -1412,7 +1412,7 @@
         }
       ],
       "thresholds": "",
-      "title": "Last Leader Rotation Tick",
+      "title": "Last Leader Rotation Slot",
       "type": "singlestat",
       "valueFontSize": "70%",
       "valueMaps": [
