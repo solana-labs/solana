@@ -332,7 +332,13 @@ mod tests {
 
     #[test]
     fn test_account_subscribe() {
-        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let (mut genesis_block, alice) = GenesisBlock::new(10_000);
+
+        // This test depends on the budget program
+        genesis_block
+            .native_programs
+            .push(("solana_budget_program".to_string(), solana_budget_api::id()));
+
         let bob_pubkey = Keypair::new().pubkey();
         let witness = Keypair::new();
         let contract_funds = Keypair::new();

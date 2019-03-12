@@ -423,7 +423,12 @@ pub fn new_fullnode() -> (Fullnode, ContactInfo, Keypair, String) {
     let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
     let contact_info = node.info.clone();
 
-    let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, &contact_info.id, 42);
+    let (mut genesis_block, mint_keypair) =
+        GenesisBlock::new_with_leader(10_000, &contact_info.id, 42);
+    genesis_block
+        .native_programs
+        .push(("solana_budget_program".to_string(), solana_budget_api::id()));
+
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     let voting_keypair = Keypair::new();
