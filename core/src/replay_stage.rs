@@ -150,7 +150,13 @@ impl ReplayStage {
                     }
 
                     if !is_tpu_bank_active {
-                        Self::start_leader(&my_id, &bank_forks, &poh_recorder, &cluster_info);
+                        Self::start_leader(
+                            &my_id,
+                            &bank_forks,
+                            &poh_recorder,
+                            &cluster_info,
+                            &blocktree,
+                        );
                     }
 
                     inc_new_counter_info!(
@@ -179,58 +185,56 @@ impl ReplayStage {
         bank_forks: &Arc<RwLock<BankForks>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+        blocktree: &Blocktree,
     ) {
-        let frozen = bank_forks.read().unwrap().frozen_banks();
+        let (poh_tick_height, ticks_per_slot) = {
+            let poh = poh_recorder.lock().unwrap();
+            (poh.tick_height(), poh.ticks_per_slot())
+        };
+        let poh_slot =
+            leader_schedule_utils::tick_height_to_slot(ticks_per_slot, poh_tick_height + 1);
 
-        // TODO: fork selection
-        let mut newest_frozen: Vec<(&u64, &Arc<Bank>)> = frozen.iter().collect();
-        newest_frozen.sort_by_key(|x| *x.0);
-        if let Some((_, parent)) = newest_frozen.last() {
-            let poh_tick_height = poh_recorder.lock().unwrap().tick_height();
-            let poh_slot = leader_schedule_utils::tick_height_to_slot(parent, poh_tick_height + 1);
-            trace!("checking poh slot for leader {}", poh_slot);
-            if frozen.get(&poh_slot).is_some() {
-                // Already been a leader for this slot, skip it
-                return;
-            }
-            if bank_forks.read().unwrap().get(poh_slot).is_none() {
-                leader_schedule_utils::slot_leader_at(poh_slot, parent)
-                    .map(|next_leader| {
-                        debug!(
-                            "me: {} leader {} at poh slot {}",
-                            my_id, next_leader, poh_slot
-                        );
-                        cluster_info.write().unwrap().set_leader(&next_leader);
-                        if next_leader == *my_id {
-                            debug!("starting tpu for slot {}", poh_slot);
-                            let tpu_bank = Bank::new_from_parent(parent, my_id, poh_slot);
-                            bank_forks.write().unwrap().insert(poh_slot, tpu_bank);
-                            if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
-                                assert_eq!(
-                                    bank_forks.read().unwrap().working_bank().slot(),
-                                    tpu_bank.slot()
-                                );
-                                debug!(
-                                    "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
-                                    my_id,
-                                    tpu_bank.slot(),
-                                    next_leader
-                                );
-                                poh_recorder.lock().unwrap().set_bank(&tpu_bank);
-                                inc_new_counter_info!(
-                                    "replay_stage-new_leader",
-                                    tpu_bank.slot() as usize
-                                );
-                            }
+        trace!("{} checking poh slot {}", my_id, poh_slot);
+        if blocktree.meta(poh_slot).unwrap().is_some() {
+            // We've already broadcasted entries for this slot, skip it
+            return;
+        }
+        if bank_forks.read().unwrap().get(poh_slot).is_none() {
+            let frozen = bank_forks.read().unwrap().frozen_banks();
+            let parent_slot = poh_recorder.lock().unwrap().start_slot();
+            assert!(frozen.contains_key(&parent_slot));
+            let parent = &frozen[&parent_slot];
+
+            leader_schedule_utils::slot_leader_at(poh_slot, parent)
+                .map(|next_leader| {
+                    debug!(
+                        "me: {} leader {} at poh slot {}",
+                        my_id, next_leader, poh_slot
+                    );
+                    cluster_info.write().unwrap().set_leader(&next_leader);
+                    if next_leader == *my_id {
+                        debug!("{} starting tpu for slot {}", my_id, poh_slot);
+                        let tpu_bank = Bank::new_from_parent(parent, my_id, poh_slot);
+                        bank_forks.write().unwrap().insert(poh_slot, tpu_bank);
+                        if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
+                            assert_eq!(
+                                bank_forks.read().unwrap().working_bank().slot(),
+                                tpu_bank.slot()
+                            );
+                            debug!(
+                                "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
+                                my_id,
+                                tpu_bank.slot(),
+                                next_leader
+                            );
+                            poh_recorder.lock().unwrap().set_bank(&tpu_bank);
                         }
-                    })
-                    .or_else(|| {
-                        error!("No next leader found");
-                        None
-                    });
-            }
-        } else {
-            error!("No frozen banks available!");
+                    }
+                })
+                .or_else(|| {
+                    error!("{} No next leader found", my_id);
+                    None
+                });
         }
     }
     pub fn replay_blocktree_into_bank(

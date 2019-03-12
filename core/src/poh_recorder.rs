@@ -37,10 +37,12 @@ pub struct WorkingBank {
 
 pub struct PohRecorder {
     pub poh: Poh,
+    pub clear_bank_signal: Option<SyncSender<bool>>,
+    ticks_per_slot: u64,
+    start_slot: u64,
     tick_cache: Vec<(Entry, u64)>,
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntries>,
-    pub clear_bank_signal: Option<SyncSender<bool>>,
 }
 
 impl PohRecorder {
@@ -57,11 +59,18 @@ impl PohRecorder {
         self.poh.hash();
     }
 
+    pub fn start_slot(&self) -> u64 {
+        self.start_slot
+    }
+
     pub fn bank(&self) -> Option<Arc<Bank>> {
         self.working_bank.clone().map(|w| w.bank)
     }
     pub fn tick_height(&self) -> u64 {
         self.poh.tick_height
+    }
+    pub fn ticks_per_slot(&self) -> u64 {
+        self.ticks_per_slot
     }
     // synchronize PoH with a bank
     pub fn reset(&mut self, tick_height: u64, blockhash: Hash) {
@@ -85,6 +94,7 @@ impl PohRecorder {
             self.poh.hash, self.poh.tick_height, blockhash, tick_height,
         );
         std::mem::swap(&mut cache, &mut self.tick_cache);
+        self.start_slot = tick_height / self.ticks_per_slot;
         self.poh = Poh::new(blockhash, tick_height);
     }
 
@@ -180,7 +190,11 @@ impl PohRecorder {
     /// A recorder to synchronize PoH with the following data structures
     /// * bank - the LastId's queue is updated on `tick` and `record` events
     /// * sender - the Entry channel that outputs to the ledger
-    pub fn new(tick_height: u64, last_entry_hash: Hash) -> (Self, Receiver<WorkingBankEntries>) {
+    pub fn new(
+        tick_height: u64,
+        last_entry_hash: Hash,
+        ticks_per_slot: u64,
+    ) -> (Self, Receiver<WorkingBankEntries>) {
         let poh = Poh::new(last_entry_hash, tick_height);
         let (sender, receiver) = channel();
         (
@@ -190,6 +204,8 @@ impl PohRecorder {
                 working_bank: None,
                 sender,
                 clear_bank_signal: None,
+                ticks_per_slot,
+                start_slot: tick_height / ticks_per_slot,
             },
             receiver,
         )
