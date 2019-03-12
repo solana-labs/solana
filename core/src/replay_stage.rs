@@ -116,7 +116,9 @@ impl ReplayStage {
                             {
                                 info!("{} slot_full alert failed: {:?}", my_id, e);
                             }
-                            votable.push(bank);
+                            if bank.is_votable() {
+                                votable.push(bank);
+                            }
                         }
                     }
 

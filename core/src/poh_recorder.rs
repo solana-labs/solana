@@ -97,27 +97,6 @@ impl PohRecorder {
         self.set_working_bank(working_bank);
     }
 
-    // Checks to see if the Poh Recorder has already generate this hash, If so,
-    // this implies the hash is the last id in a slot of all ticks (an empty transmission)
-    // from the leader and should not be voted on.
-    pub fn is_votable(&self, tick_height: u64, blockhash: Hash) -> bool {
-        let existing = self.tick_cache.iter().any(|(entry, entry_tick_height)| {
-            if entry.hash == blockhash {
-                assert_eq!(*entry_tick_height, tick_height);
-            }
-            entry.hash == blockhash
-        });
-        if existing {
-            info!(
-                "reset skipped for: {},{}",
-                self.poh.hash, self.poh.tick_height
-            );
-            return false;
-        }
-
-        true
-    }
-
     // Flush cache will delay flushing the cache for a bank until it past the WorkingBank::min_tick_height
     // On a record flush will flush the cache at the WorkingBank::min_tick_height, since a record
     // occurs after the min_tick_height was generated
