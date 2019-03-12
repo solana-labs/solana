@@ -17,13 +17,15 @@ CRATES=(
   keygen
   metrics
   drone
-  programs/{budget,bpf_loader,native_loader,noop,vote}
+  programs/{budget_api,rewards_api,storage_api,token_api,vote_api}
+  runtime
+  programs/{budget,bpf_loader,vote,rewards,storage,token,vote}
+  vote-signer
   core
   fullnode
   genesis
   ledger-tool
   wallet
-  runtime
 )
 
 
@@ -52,7 +54,7 @@ for crate in "${CRATES[@]}"; do
     set -x
     # TODO: the rocksdb package does not build with the stock rust docker image,
     # so use the solana rust docker image until this is resolved upstream
-    ci/docker-run.sh solanalabs/rust:1.31.0 bash -exc "cd $crate; $cargoCommand"
+    ci/docker-run.sh solanalabs/rust:1.32.0 bash -exc "cd $crate; $cargoCommand"
     #ci/docker-run.sh rust bash -exc "cd $crate; $cargoCommand"
   )
 done
