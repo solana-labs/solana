@@ -15,7 +15,7 @@ gce)
   cpuBootstrapLeaderMachineType=n1-standard-16
   gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80"
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
-  fullNodeMachineType=n1-standard-16
+  fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType=n1-standard-16
   blockstreamerMachineType=n1-standard-8
   ;;
@@ -133,10 +133,12 @@ while getopts "h?p:Pn:c:z:gG:a:d:bu" opt; do
   g)
     enableGpu=true
     bootstrapLeaderMachineType=$gpuBootstrapLeaderMachineType
+    fullNodeMachineType=$bootstrapLeaderMachineType
     ;;
   G)
     enableGpu=true
     bootstrapLeaderMachineType="$OPTARG"
+    fullNodeMachineType=$bootstrapLeaderMachineType
     ;;
   a)
     customAddress=$OPTARG
@@ -224,10 +226,6 @@ ec2)
   echo "Error: Unknown cloud provider: $cloudProvider"
   ;;
 esac
-
-if $leaderRotation; then
-  fullNodeMachineType=$bootstrapLeaderMachineType
-fi
 
 # cloud_ForEachInstance [cmd] [extra args to cmd]
 #
