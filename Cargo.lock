@@ -2271,7 +2271,6 @@ dependencies = [
  "solana-metrics 0.13.0",
  "solana-sdk 0.13.0",
  "solana-storage-api 0.13.0",
- "solana-system-program 0.13.0",
  "solana-token-api 0.13.0",
  "solana-vote-api 0.13.0",
 ]
@@ -2318,18 +2317,6 @@ dependencies = [
  "solana-runtime 0.13.0",
  "solana-sdk 0.13.0",
  "solana-storage-api 0.13.0",
-]
-
-[[package]]
-name = "solana-system-program"
-version = "0.13.0"
-dependencies = [
- "bincode 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-runtime 0.13.0",
- "solana-sdk 0.13.0",
 ]
 
 [[package]]

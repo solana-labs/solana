@@ -78,7 +78,6 @@ members = [
     "programs/rewards_api",
     "programs/storage",
     "programs/storage_api",
-    "programs/system",
     "programs/vote",
     "programs/vote_api",
     "replicator",
