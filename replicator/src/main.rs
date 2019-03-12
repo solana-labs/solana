@@ -82,8 +82,10 @@ fn main() {
 
     let leader_info = ContactInfo::new_gossip_entry_point(&network_addr);
 
-    let replicator =
-        Replicator::new(ledger_path, node, &leader_info, &Arc::new(keypair), None).unwrap();
+    let mut replicator =
+        Replicator::new(ledger_path, node, leader_info, Arc::new(keypair), None).unwrap();
 
-    replicator.join();
+    replicator.run();
+
+    replicator.close();
 }
