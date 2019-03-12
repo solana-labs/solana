@@ -448,7 +448,7 @@ mod tests {
         poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 2);
         poh_recorder.reset(poh_recorder.poh.tick_height, poh_recorder.poh.hash, 0);
-        assert_eq!(poh_recorder.tick_cache.len(), 2);
+        assert_eq!(poh_recorder.tick_cache.len(), 0);
     }
 
     #[test]
@@ -462,28 +462,7 @@ mod tests {
             poh_recorder.tick_cache[0].0.hash,
             0,
         );
-        assert_eq!(poh_recorder.tick_cache.len(), 2);
-        poh_recorder.reset(
-            poh_recorder.tick_cache[1].1,
-            poh_recorder.tick_cache[1].0.hash,
-            0,
-        );
-        assert_eq!(poh_recorder.tick_cache.len(), 2);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_reset_with_cached_bad_height() {
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default(), 0);
-        poh_recorder.tick();
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.tick_cache.len(), 2);
-        //mixed up heights
-        poh_recorder.reset(
-            poh_recorder.tick_cache[0].1,
-            poh_recorder.tick_cache[1].0.hash,
-            0,
-        );
+        assert_eq!(poh_recorder.tick_cache.len(), 0);
     }
 
     #[test]
