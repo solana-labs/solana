@@ -86,7 +86,7 @@ pid=$!
 oom_score_adj "$pid" 1000
 
 if [[ $setup_stakes = true ]] ; then
-  setup_fullnode_staking 127.0.0.1 "$bootstrap_leader_id_path" "$bootstrap_leader_staker_id_path" "${extra_fullnode_args[@]}"
+  setup_fullnode_staking 127.0.0.1 "$bootstrap_leader_id_path" "$bootstrap_leader_staker_id_path"
 fi
 
 wait "$pid"
