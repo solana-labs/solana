@@ -226,8 +226,6 @@ fn main() {
     node.info.rpc.set_port(rpc_port);
     node.info.rpc_pubsub.set_port(rpc_pubsub_port);
 
-    let genesis_block = GenesisBlock::load(ledger_path).expect("Unable to load genesis block");
-
     let fullnode = Fullnode::new(
         node,
         &keypair,
