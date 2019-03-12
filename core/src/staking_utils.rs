@@ -198,7 +198,13 @@ mod tests {
 
         // Make a mint vote account. Because the mint has nonzero stake, this
         // should show up in the active set
-        voting_keypair_tests::new_vote_account_with_vote(&mint_keypair, &bank_voter, &bank, 499, 0);
+        voting_keypair_tests::new_vote_account_with_delegate(
+            &mint_keypair,
+            &bank_voter,
+            &mint_keypair.pubkey(),
+            &bank,
+            499,
+        );
 
         // soonest slot that could be a new epoch is 1
         let mut slot = 1;
