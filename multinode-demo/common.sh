@@ -195,9 +195,9 @@ usage: $0 [-x] [--blockstream PATH] [--init-complete-file FILE] [--no-leader-rot
 
 Start a full node on the specified network
 
-  -x                    - start a new, dynamically-configured full node
+  -x                    - start a new, dynamically-configured full node. Does not apply to the bootstrap leader
   -X [label]            - start or restart a dynamically-configured full node with
-                          the specified label
+                          the specified label. Does not apply to the bootstrap leader
   --blockstream PATH    - open blockstream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --no-leader-rotation  - disable leader rotation
