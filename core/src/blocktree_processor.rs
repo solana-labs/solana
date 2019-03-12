@@ -11,15 +11,6 @@ use solana_sdk::timing::MAX_RECENT_BLOCKHASHES;
 use std::sync::Arc;
 use std::time::Instant;
 
-pub fn process_entry(bank: &Bank, entry: &Entry) -> Result<()> {
-    if !entry.is_tick() {
-        first_err(&bank.process_transactions(&entry.transactions))?;
-    } else {
-        bank.register_tick(&entry.hash);
-    }
-    Ok(())
-}
-
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
         r.clone()?;
@@ -45,12 +36,12 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> Re
     first_err(&results)
 }
 
-/// process entries in parallel
+/// Process an ordered list of entries in parallel
 /// 1. In order lock accounts for each entry while the lock succeeds, up to a Tick entry
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
-fn par_process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
+pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut mt_group = vec![];
     for entry in entries {
@@ -79,11 +70,6 @@ fn par_process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
     }
     par_execute_entries(bank, &mt_group)?;
     Ok(())
-}
-
-/// Process an ordered list of entries.
-pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
-    par_process_entries(bank, entries)
 }
 
 #[derive(Debug, PartialEq)]
@@ -442,7 +428,7 @@ mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        par_process_entries(&bank, &slot_entries).unwrap();
+        process_entries(&bank, &slot_entries).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -522,19 +508,19 @@ mod tests {
     }
 
     #[test]
-    fn test_par_process_entries_tick() {
+    fn test_process_entries_tick() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
         let bank = Bank::new(&genesis_block);
 
         // ensure bank can process a tick
         assert_eq!(bank.tick_height(), 0);
         let tick = next_entry(&genesis_block.hash(), 1, vec![]);
-        assert_eq!(par_process_entries(&bank, &[tick.clone()]), Ok(()));
+        assert_eq!(process_entries(&bank, &[tick.clone()]), Ok(()));
         assert_eq!(bank.tick_height(), 1);
     }
 
     #[test]
-    fn test_par_process_entries_2_entries_collision() {
+    fn test_process_entries_2_entries_collision() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
@@ -559,14 +545,14 @@ mod tests {
             0,
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
-        assert_eq!(par_process_entries(&bank, &[entry_1, entry_2]), Ok(()));
+        assert_eq!(process_entries(&bank, &[entry_1, entry_2]), Ok(()));
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
         assert_eq!(bank.get_balance(&keypair2.pubkey()), 2);
         assert_eq!(bank.last_blockhash(), blockhash);
     }
 
     #[test]
-    fn test_par_process_entries_2_txes_collision() {
+    fn test_process_entries_2_txes_collision() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
@@ -618,7 +604,7 @@ mod tests {
         );
 
         assert_eq!(
-            par_process_entries(&bank, &[entry_1_to_mint, entry_2_to_3_mint_to_1]),
+            process_entries(&bank, &[entry_1_to_mint, entry_2_to_3_mint_to_1]),
             Ok(())
         );
 
@@ -628,7 +614,7 @@ mod tests {
     }
 
     #[test]
-    fn test_par_process_entries_2_entries_par() {
+    fn test_process_entries_2_entries_par() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
@@ -672,14 +658,14 @@ mod tests {
             0,
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
-        assert_eq!(par_process_entries(&bank, &[entry_1, entry_2]), Ok(()));
+        assert_eq!(process_entries(&bank, &[entry_1, entry_2]), Ok(()));
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
         assert_eq!(bank.last_blockhash(), blockhash);
     }
 
     #[test]
-    fn test_par_process_entries_2_entries_tick() {
+    fn test_process_entries_2_entries_tick() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
@@ -723,7 +709,7 @@ mod tests {
         );
         let entry_2 = next_entry(&tick.hash, 1, vec![tx]);
         assert_eq!(
-            par_process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()]),
+            process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()]),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -739,7 +725,7 @@ mod tests {
         );
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
-            par_process_entries(&bank, &[entry_3]),
+            process_entries(&bank, &[entry_3]),
             Err(BankError::AccountNotFound)
         );
     }
