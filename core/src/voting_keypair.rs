@@ -120,6 +120,25 @@ pub mod tests {
         bank.process_transaction(&tx).unwrap();
     }
 
+    pub fn new_vote_account_with_delegate(
+        from_keypair: &Keypair,
+        voting_keypair: &Keypair,
+        delegate: &Pubkey,
+        bank: &Bank,
+        lamports: u64,
+    ) {
+        let blockhash = bank.last_blockhash();
+        let tx = VoteTransaction::new_account_with_delegate(
+            from_keypair,
+            voting_keypair,
+            delegate,
+            blockhash,
+            lamports,
+            0,
+        );
+        bank.process_transaction(&tx).unwrap();
+    }
+
     pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot: u64) {
         let blockhash = bank.last_blockhash();
         let tx =

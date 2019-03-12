@@ -63,10 +63,19 @@ fn node_staked_accounts_at_epoch(
     epoch_height: u64,
 ) -> Option<impl Iterator<Item = (&Pubkey, u64, &Account)>> {
     bank.epoch_vote_accounts(epoch_height).map(|epoch_state| {
-        epoch_state.into_iter().filter_map(|(account_id, account)| {
-            filter_zero_balances(account).map(|stake| (account_id, stake, account))
-        })
+        epoch_state
+            .into_iter()
+            .filter_map(|(account_id, account)| {
+                filter_zero_balances(account).map(|stake| (account_id, stake, account))
+            })
+            .filter(|(account_id, _, account)| filter_no_delegate(account_id, account))
     })
+}
+
+fn filter_no_delegate(account_id: &Pubkey, account: &Account) -> bool {
+    VoteState::deserialize(&account.userdata)
+        .map(|vote_state| vote_state.delegate_id != *account_id)
+        .unwrap_or(false)
 }
 
 fn filter_zero_balances(account: &Account) -> Option<u64> {
@@ -189,7 +198,13 @@ mod tests {
 
         // Make a mint vote account. Because the mint has nonzero stake, this
         // should show up in the active set
-        voting_keypair_tests::new_vote_account_with_vote(&mint_keypair, &bank_voter, &bank, 499, 0);
+        voting_keypair_tests::new_vote_account_with_delegate(
+            &mint_keypair,
+            &bank_voter,
+            &mint_keypair.pubkey(),
+            &bank,
+            499,
+        );
 
         // soonest slot that could be a new epoch is 1
         let mut slot = 1;
