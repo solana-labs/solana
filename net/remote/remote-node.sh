@@ -116,7 +116,17 @@ local|tar)
     if [[ $nodeType = blockstreamer ]]; then
       npm install @solana/blockexplorer@1
       npx solana-blockexplorer > blockexplorer.log 2>&1 &
-      sudo socat -lf socat.log TCP-LISTEN:80,reuseaddr,fork,su=nobody TCP:localhost:5000 &
+
+      # Confirm the blockexplorer is accessible
+      curl --head --retry 3 --retry-connrefused http://localhost:5000/
+
+      # Redirect port 80 to port 5000
+      sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+      sudo iptables -A INPUT -p tcp --dport 5000 -j ACCEPT
+      sudo iptables -A PREROUTING -t nat -p tcp --dport 80 -j REDIRECT --to-port 5000
+
+      # Confirm the blockexplorer is now globally accessible
+      curl --head "$(curl ifconfig.io)"
     fi
     ./multinode-demo/fullnode.sh "${args[@]}" "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
     ;;
