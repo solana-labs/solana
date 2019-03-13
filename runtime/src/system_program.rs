@@ -85,7 +85,7 @@ pub fn entrypoint(
         // All system instructions require that accounts_keys[0] be a signer
         if keyed_accounts[FROM_ACCOUNT_INDEX].signer_key().is_none() {
             info!("account[from] is unsigned");
-            Err(ProgramError::InvalidArgument)?;
+            Err(ProgramError::MissingRequiredSignature)?;
         }
 
         match instruction {
@@ -96,7 +96,7 @@ pub fn entrypoint(
             } => create_system_account(keyed_accounts, lamports, space, &program_id),
             SystemInstruction::Assign { program_id } => {
                 if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].account.owner) {
-                    Err(ProgramError::AssignOfUnownedAccount)?;
+                    Err(ProgramError::IncorrectProgramId)?;
                 }
                 assign_account_to_program(keyed_accounts, &program_id)
             }
@@ -245,7 +245,7 @@ mod tests {
         };
         let data = serialize(&instruction).unwrap();
         let result = entrypoint(&system_program::id(), &mut keyed_accounts, &data, 0);
-        assert_eq!(result, Err(ProgramError::AssignOfUnownedAccount));
+        assert_eq!(result, Err(ProgramError::IncorrectProgramId));
         assert_eq!(from_account.owner, new_program_owner);
     }
 
