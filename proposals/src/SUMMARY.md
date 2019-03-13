@@ -23,6 +23,7 @@
     - [References](ed_references.md)
   - [Cluster Test Framework](cluster-test-framework.md)
   - [Testing Programs](testing-programs.md)
+  - [Cluster Software Installation and Updates](installer.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
   - [Leader-to-Leader Transition](leader-leader-transition.md)
