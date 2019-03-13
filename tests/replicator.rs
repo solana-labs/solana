@@ -12,7 +12,7 @@ use bincode::deserialize;
 use solana::blocktree::{
     create_new_tmp_ledger, get_tmp_ledger_path, tmp_copy_blocktree, Blocktree,
 };
-use solana::client::mk_client;
+use solana::cluster_client::mk_client;
 use solana::cluster_info::{ClusterInfo, Node};
 use solana::contact_info::ContactInfo;
 use solana::entry::Entry;
@@ -190,7 +190,7 @@ fn test_replicator_startup_basic() {
         // chacha is not enabled
         #[cfg(feature = "chacha")]
         {
-            use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
+            use solana_client::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
             use std::thread::sleep;
 
             info!(

@@ -5,15 +5,15 @@ use clap::ArgMatches;
 use log::*;
 use serde_json;
 use serde_json::json;
-#[cfg(test)]
-use solana::rpc_mock::{request_airdrop_transaction, MockRpcClient as RpcClient};
-#[cfg(not(test))]
-use solana::rpc_request::RpcClient;
-use solana::rpc_request::{get_rpc_request_str, RpcRequest};
 use solana::rpc_service::RPC_PORT;
 use solana::rpc_status::RpcSignatureStatus;
 use solana_budget_api;
 use solana_budget_api::budget_transaction::BudgetTransaction;
+#[cfg(test)]
+use solana_client::rpc_mock::{request_airdrop_transaction, MockRpcClient as RpcClient};
+#[cfg(not(test))]
+use solana_client::rpc_request::RpcClient;
+use solana_client::rpc_request::{get_rpc_request_str, RpcRequest};
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone::DRONE_PORT;
@@ -996,8 +996,8 @@ mod tests {
     use super::*;
     use clap::{App, Arg, ArgGroup, SubCommand};
     use serde_json::Value;
-    use solana::rpc_mock::{PUBKEY, SIGNATURE};
     use solana::socketaddr;
+    use solana_client::rpc_mock::{PUBKEY, SIGNATURE};
     use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use std::fs;
     use std::net::{Ipv4Addr, SocketAddr};

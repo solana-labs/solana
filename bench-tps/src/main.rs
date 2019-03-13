@@ -2,7 +2,7 @@ mod bench;
 mod cli;
 
 use crate::bench::*;
-use solana::client::mk_client;
+use solana::cluster_client::mk_client;
 use solana::gen_keys::GenKeys;
 use solana::gossip_service::discover;
 use solana_metrics;
