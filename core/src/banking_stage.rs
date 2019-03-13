@@ -208,8 +208,8 @@ impl BankingStage {
             .zip(txs.iter())
             .filter_map(|(r, x)| match r {
                 Ok(_) => Some(x.clone()),
-                Err(BankError::ProgramError(index, err)) => {
-                    info!("program error {:?}, {:?}", index, err);
+                Err(BankError::InstructionError(index, err)) => {
+                    info!("instruction error {:?}, {:?}", index, err);
                     Some(x.clone())
                 }
                 Err(ref e) => {
@@ -445,6 +445,7 @@ mod tests {
     use crate::entry::EntrySlice;
     use crate::packet::to_packets;
     use crate::poh_recorder::WorkingBank;
+    use solana_runtime::runtime::InstructionError;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -682,9 +683,9 @@ mod tests {
         assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
         // ProgramErrors should still be recorded
-        results[0] = Err(BankError::ProgramError(
+        results[0] = Err(BankError::InstructionError(
             1,
-            ProgramError::ResultWithNegativeLamports,
+            InstructionError::ProgramError(ProgramError::ResultWithNegativeLamports),
         ));
         BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let (_, entries) = entry_receiver.recv().unwrap();

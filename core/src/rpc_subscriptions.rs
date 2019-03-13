@@ -99,7 +99,7 @@ impl RpcSubscriptions {
         let status = match bank_error {
             Ok(_) => RpcSignatureStatus::Confirmed,
             Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-            Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
+            Err(BankError::InstructionError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
             Err(_) => RpcSignatureStatus::GenericFailure,
         };
 

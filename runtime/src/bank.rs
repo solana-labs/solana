@@ -5,7 +5,7 @@
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::hash_queue::HashQueue;
-use crate::runtime::{self, RuntimeError};
+use crate::runtime::{self, InstructionError, TransactionError};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
@@ -15,7 +15,6 @@ use solana_sdk::account::Account;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{extend_and_hash, Hash};
 use solana_sdk::native_loader;
-use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
@@ -134,7 +133,7 @@ pub enum BankError {
     LedgerVerificationFailed,
 
     /// The program returned an error
-    ProgramError(u8, ProgramError),
+    InstructionError(u8, InstructionError),
 
     /// Recoding into PoH failed
     RecordFailure,
@@ -577,8 +576,8 @@ impl Bank {
                 Err(e) => Err(e.clone()),
                 Ok((ref mut accounts, ref mut loaders)) => {
                     runtime::execute_transaction(tx, loaders, accounts, tick_height).map_err(
-                        |RuntimeError::ProgramError(index, err)| {
-                            BankError::ProgramError(index, err)
+                        |TransactionError::InstructionError(index, err)| {
+                            BankError::InstructionError(index, err)
                         },
                     )
                 }
@@ -661,8 +660,8 @@ impl Bank {
             .iter()
             .zip(executed.iter())
             .map(|(tx, res)| match *res {
-                Err(BankError::ProgramError(_, _)) => {
-                    // Charge the transaction fee even in case of ProgramError
+                Err(BankError::InstructionError(_, _)) => {
+                    // Charge the transaction fee even in case of InstructionError
                     self.withdraw(&tx.account_keys[0], tx.fee)?;
                     fees += tx.fee;
                     Ok(())
@@ -1001,9 +1000,9 @@ mod tests {
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
             bank.get_signature_status(&t1.signatures[0]),
-            Some(Err(BankError::ProgramError(
+            Some(Err(BankError::InstructionError(
                 1,
-                ProgramError::ResultWithNegativeLamports
+                InstructionError::ProgramError(ProgramError::ResultWithNegativeLamports)
             )))
         );
     }
@@ -1049,9 +1048,9 @@ mod tests {
 
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(BankError::ProgramError(
+            Err(BankError::InstructionError(
                 0,
-                ProgramError::ResultWithNegativeLamports
+                InstructionError::ProgramError(ProgramError::ResultWithNegativeLamports)
             ))
         );
 
@@ -1085,9 +1084,9 @@ mod tests {
         assert_eq!(bank.get_balance(&pubkey), 1_000);
         assert_eq!(
             bank.transfer(10_001, &mint_keypair, &pubkey, genesis_block.hash()),
-            Err(BankError::ProgramError(
+            Err(BankError::InstructionError(
                 0,
-                ProgramError::ResultWithNegativeLamports
+                InstructionError::ProgramError(ProgramError::ResultWithNegativeLamports)
             ))
         );
         assert_eq!(bank.transaction_count(), 1);
@@ -1186,9 +1185,9 @@ mod tests {
 
         let results = vec![
             Ok(()),
-            Err(BankError::ProgramError(
+            Err(BankError::InstructionError(
                 1,
-                ProgramError::ResultWithNegativeLamports,
+                InstructionError::ProgramError(ProgramError::ResultWithNegativeLamports),
             )),
         ];
 
@@ -1539,7 +1538,7 @@ mod tests {
             Err(BankError::MissingSignatureForFee)
         );
 
-        // Set the fee to 0, this should give a ProgramError
+        // Set the fee to 0, this should give an InstructionError
         // but since no signature we cannot look up the error.
         tx.fee = 0;
 

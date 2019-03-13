@@ -263,7 +263,9 @@ impl RpcSol for RpcSolImpl {
                     Ok(_) => RpcSignatureStatus::Confirmed,
                     Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
                     Err(BankError::AccountLoadedTwice) => RpcSignatureStatus::AccountLoadedTwice,
-                    Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
+                    Err(BankError::InstructionError(_, _)) => {
+                        RpcSignatureStatus::ProgramRuntimeError
+                    }
                     Err(err) => {
                         trace!("mapping {:?} to GenericFailure", err);
                         RpcSignatureStatus::GenericFailure
