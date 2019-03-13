@@ -879,7 +879,7 @@ impl Bank {
     }
 
     pub fn is_votable(&self) -> bool {
-        let max_tick_height = self.slot * self.ticks_per_slot;
+        let max_tick_height = (self.slot + 1) * self.ticks_per_slot - 1;
         self.is_delta.load(Ordering::Relaxed) && self.tick_height() == max_tick_height
     }
 }
