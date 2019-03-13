@@ -107,7 +107,7 @@ impl Fullnode {
             bank.last_blockhash(),
         );
         let (poh_recorder, entry_receiver) =
-            PohRecorder::new(bank.tick_height(), bank.last_blockhash());
+            PohRecorder::new(bank.tick_height(), bank.last_blockhash(), bank.slot());
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, &exit);
         poh_recorder.lock().unwrap().clear_bank_signal =

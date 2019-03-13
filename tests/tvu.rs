@@ -2,13 +2,12 @@
 extern crate solana;
 
 use log::*;
-use solana::bank_forks::BankForks;
 use solana::banking_stage::create_test_recorder;
-use solana::blocktree::{get_tmp_ledger_path, Blocktree};
-use solana::blocktree_processor::BankForksInfo;
+use solana::blocktree::{create_new_tmp_ledger, Blocktree};
 use solana::cluster_info::{ClusterInfo, Node};
 use solana::entry::next_entry_mut;
 use solana::entry::EntrySlice;
+use solana::fullnode;
 use solana::gossip_service::GossipService;
 use solana::packet::index_blobs;
 use solana::rpc_subscriptions::RpcSubscriptions;
@@ -17,7 +16,6 @@ use solana::storage_stage::StorageState;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer;
 use solana::tvu::{Sockets, Tvu};
-use solana_runtime::bank::Bank;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
@@ -74,44 +72,37 @@ fn test_replay() {
         r_responder,
     );
 
-    let starting_balance = 10_000;
-    let (mut genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
+    let total_balance = 10_000;
+    let leader_balance = 100;
+    let starting_mint_balance = total_balance - leader_balance;
+    let (genesis_block, mint_keypair) =
+        GenesisBlock::new_with_leader(total_balance, &leader.info.id, leader_balance);
+    let (blocktree_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
 
-    // TODO: Fix this test so it always works with the default GenesisBlock configuration
-    genesis_block.ticks_per_slot = 64;
-
-    let ticks_per_slot = genesis_block.ticks_per_slot;
     let tvu_addr = target1.info.tvu;
 
-    let bank = Bank::new(&genesis_block);
-    let blockhash = bank.last_blockhash();
-    let bank_forks = BankForks::new(0, bank);
-    let bank_forks_info = vec![BankForksInfo {
-        bank_slot: 0,
-        entry_height: 0,
-    }];
-
+    let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
+        fullnode::new_banks_from_blocktree(&blocktree_path, None);
     let bank = bank_forks.working_bank();
-    assert_eq!(bank.get_balance(&mint_keypair.pubkey()), starting_balance);
+    assert_eq!(
+        bank.get_balance(&mint_keypair.pubkey()),
+        starting_mint_balance
+    );
 
     // start cluster_info1
+    let bank_forks = Arc::new(RwLock::new(bank_forks));
     let mut cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
     cluster_info1.insert_info(leader.info.clone());
     let cref1 = Arc::new(RwLock::new(cluster_info1));
     let dr_1 = new_gossip(cref1.clone(), target1.sockets.gossip, &exit);
 
-    let blocktree_path = get_tmp_ledger_path!();
-
-    let (blocktree, ledger_signal_receiver) =
-        Blocktree::open_with_config_signal(&blocktree_path, ticks_per_slot)
-            .expect("Expected to successfully open ledger");
     let voting_keypair = Keypair::new();
     let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
         create_test_recorder(&bank);
     let tvu = Tvu::new(
         &voting_keypair.pubkey(),
         Some(Arc::new(voting_keypair)),
-        &Arc::new(RwLock::new(bank_forks)),
+        &bank_forks,
         &bank_forks_info,
         &cref1,
         {
@@ -131,7 +122,7 @@ fn test_replay() {
         &exit,
     );
 
-    let mut alice_ref_balance = starting_balance;
+    let mut mint_ref_balance = starting_mint_balance;
     let mut msgs = Vec::new();
     let mut blob_idx = 0;
     let num_transfers = 10;
@@ -153,12 +144,12 @@ fn test_replay() {
         let entry1 = next_entry_mut(&mut cur_hash, i + num_transfers, vec![tx0]);
         let entry_tick2 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
 
-        alice_ref_balance -= transfer_amount;
+        mint_ref_balance -= transfer_amount;
         transfer_amount -= 1; // Sneaky: change transfer_amount slightly to avoid DuplicateSignature errors
 
         let entries = vec![entry0, entry_tick0, entry_tick1, entry1, entry_tick2];
         let blobs = entries.to_shared_blobs();
-        index_blobs(&blobs, &leader.info.id, blob_idx, 0, 0);
+        index_blobs(&blobs, &leader.info.id, blob_idx, 1, 0);
         blob_idx += blobs.len() as u64;
         blobs
             .iter()
@@ -176,11 +167,12 @@ fn test_replay() {
         trace!("got msg");
     }
 
-    let alice_balance = bank.get_balance(&mint_keypair.pubkey());
-    assert_eq!(alice_balance, alice_ref_balance);
+    let working_bank = bank_forks.read().unwrap().working_bank();
+    let final_mint_balance = working_bank.get_balance(&mint_keypair.pubkey());
+    assert_eq!(final_mint_balance, mint_ref_balance);
 
-    let bob_balance = bank.get_balance(&bob_keypair.pubkey());
-    assert_eq!(bob_balance, starting_balance - alice_ref_balance);
+    let bob_balance = working_bank.get_balance(&bob_keypair.pubkey());
+    assert_eq!(bob_balance, starting_mint_balance - mint_ref_balance);
 
     exit.store(true, Ordering::Relaxed);
     poh_service_exit.store(true, Ordering::Relaxed);
