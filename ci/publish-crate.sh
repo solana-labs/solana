@@ -16,6 +16,7 @@ CRATES=(
   sdk
   keygen
   metrics
+  client
   drone
   programs/{budget_api,rewards_api,storage_api,token_api,vote_api}
   runtime
