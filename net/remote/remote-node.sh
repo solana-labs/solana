@@ -110,7 +110,6 @@ local|tar)
 
     args+=(
       --rpc-port 8899
-      --rpc-drone-address "$entrypointIp:9900"
     )
 
     set -x
