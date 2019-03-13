@@ -15,7 +15,7 @@ usage() {
     echo
   fi
   cat <<EOF
-usage: $0 [-x] [--blockstream PATH] [--init-complete-file FILE] [--no-leader-rotation] [--no-signer] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
+usage: $0 [-x] [--blockstream PATH] [--init-complete-file FILE] [--no-leader-rotation] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
 
 Start a full node on the specified network
 
@@ -26,7 +26,7 @@ Start a full node on the specified network
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --no-leader-rotation  - disable leader rotation
   --public-address      - advertise public machine address in gossip.  By default the local machine address is advertised
-  --no-signer           - start node without vote signer
+  --no-voting           - start node without vote signer
   --rpc-port port       - custom RPC port for this node
 
 EOF
@@ -65,7 +65,7 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = --public-address ]]; then
     extra_fullnode_args+=("$1")
     shift
-  elif [[ $1 = --no-signer ]]; then
+  elif [[ $1 = --no-voting ]]; then
     extra_fullnode_args+=("$1")
     shift
   elif [[ $1 = --rpc-port ]]; then
