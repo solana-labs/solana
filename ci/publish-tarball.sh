@@ -30,10 +30,25 @@ echo --- Creating tarball
   set -x
   rm -rf solana-release/
   mkdir solana-release/
+
+  case "$(uname)" in
+  Darwin)
+    TARGET=x86_64-apple-darwin
+    ;;
+  Linux)
+    TARGET=x86_64-unknown-linux-gnu
+    ;;
+  *)
+    TARGET=unknown-unknown-unknown
+    ;;
+  esac
+  COMMIT="$(git rev-parse HEAD)"
+
   (
-    echo "$CHANNEL_OR_TAG"
-    git rev-parse HEAD
-  ) > solana-release/version.txt
+    echo "channel: $CHANNEL"
+    echo "commit: $COMMIT"
+    echo "target: $TARGET"
+  ) > solana-release/version.yml
 
   scripts/cargo-install-all.sh solana-release
 
