@@ -24,7 +24,7 @@ use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState};
 use std::result;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -192,6 +192,10 @@ pub struct Bank {
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule boundary
     epoch_vote_accounts: HashMap<u64, HashMap<Pubkey, Account>>,
+
+    /// A boolean reflecting whether any entries were recorded into the PoH
+    /// stream for the slot == self.slot
+    is_delta: AtomicBool,
 }
 
 impl Default for HashQueue {
@@ -223,7 +227,6 @@ impl Bank {
     /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: u64) -> Self {
         parent.freeze();
-
         assert_ne!(slot, parent.slot());
 
         let mut bank = Self::default();
@@ -684,6 +687,9 @@ impl Bank {
         if self.is_frozen() {
             warn!("=========== FIXME: commit_transactions() working on a frozen bank! ================");
         }
+
+        self.is_delta.store(true, Ordering::Relaxed);
+
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
         let now = Instant::now();
@@ -838,7 +844,6 @@ impl Bank {
         // tick_height is using an AtomicUSize because AtomicU64 is not yet a stable API.
         // Until we can switch to AtomicU64, fail if usize is not the same as u64
         assert_eq!(std::usize::MAX, 0xFFFF_FFFF_FFFF_FFFF);
-
         self.tick_height.load(Ordering::SeqCst) as u64
     }
 
@@ -871,6 +876,11 @@ impl Bank {
     pub fn get_epoch_and_slot_index(&self, slot: u64) -> (u64, u64) {
         self.epoch_schedule.get_epoch_and_slot_index(slot)
     }
+
+    pub fn is_votable(&self) -> bool {
+        let max_tick_height = (self.slot + 1) * self.ticks_per_slot - 1;
+        self.is_delta.load(Ordering::Relaxed) && self.tick_height() == max_tick_height
+    }
 }
 
 #[cfg(test)]
@@ -878,6 +888,7 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
+    use solana_sdk::hash;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
@@ -1599,4 +1610,35 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_is_delta_true() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(500);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let key1 = Keypair::new();
+        let tx_move_mint_to_1 =
+            SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        assert_eq!(bank.process_transaction(&tx_move_mint_to_1), Ok(()));
+        assert_eq!(bank.is_delta.load(Ordering::Relaxed), true);
+    }
+
+    #[test]
+    fn test_is_votable() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(500);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let key1 = Keypair::new();
+        assert_eq!(bank.is_votable(), false);
+
+        // Set is_delta to true
+        let tx_move_mint_to_1 =
+            SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        assert_eq!(bank.process_transaction(&tx_move_mint_to_1), Ok(()));
+        assert_eq!(bank.is_votable(), false);
+
+        // Register enough ticks to hit max tick height
+        for i in 0..genesis_block.ticks_per_slot - 1 {
+            bank.register_tick(&hash::hash(format!("hello world {}", i).as_bytes()));
+        }
+
+        assert_eq!(bank.is_votable(), true);
+    }
 }
