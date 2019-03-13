@@ -501,7 +501,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_entries_only() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        solana_logger::setup();
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10);
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
@@ -511,25 +512,32 @@ mod tests {
         poh_recorder.lock().unwrap().set_bank(&bank);
         let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
 
+        // fund another account so we can send 2 good transactions in a single batch.
+        let keypair = Keypair::new();
+        let fund_tx =
+            SystemTransaction::new_account(&mint_keypair, &keypair.pubkey(), 2, start_hash, 0);
+        bank.process_transaction(&fund_tx).unwrap();
+
         // good tx
-        let keypair = mint_keypair;
-        let tx = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 1, start_hash, 0);
+        let to = Keypair::new().pubkey();
+        let tx = SystemTransaction::new_account(&mint_keypair, &to, 1, start_hash, 0);
 
         // good tx, but no verify
-        let tx_no_ver =
-            SystemTransaction::new_account(&keypair, &keypair.pubkey(), 1, start_hash, 0);
+        let to2 = Keypair::new().pubkey();
+        let tx_no_ver = SystemTransaction::new_account(&keypair, &to2, 2, start_hash, 0);
 
         // bad tx, AccountNotFound
         let keypair = Keypair::new();
-        let tx_anf = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 1, start_hash, 0);
+        let to3 = Keypair::new().pubkey();
+        let tx_anf = SystemTransaction::new_account(&keypair, &to3, 1, start_hash, 0);
 
         // send 'em over
-        let packets = to_packets(&[tx, tx_no_ver, tx_anf]);
+        let packets = to_packets(&[tx_no_ver, tx_anf, tx]);
 
         // glad they all fit
         assert_eq!(packets.len(), 1);
-        verified_sender // tx, no_ver, anf
-            .send(vec![(packets[0].clone(), vec![1u8, 0u8, 1u8])])
+        verified_sender // no_ver, anf, tx
+            .send(vec![(packets[0].clone(), vec![0u8, 1u8, 1u8])])
             .unwrap();
 
         drop(verified_sender);
@@ -537,20 +545,36 @@ mod tests {
         poh_service.join().unwrap();
         drop(poh_recorder);
 
-        //receive entries + ticks
-        let entries: Vec<Vec<Entry>> = entry_receiver
-            .iter()
-            .map(|x| x.1.into_iter().map(|e| e.0).collect())
-            .collect();
-
-        assert!(entries.len() >= 1);
-
         let mut blockhash = start_hash;
-        entries.iter().for_each(|entries| {
-            assert_eq!(entries.len(), 1);
-            assert!(entries.verify(&blockhash));
-            blockhash = entries.last().unwrap().hash;
-        });
+        let bank = Bank::new(&genesis_block);
+        bank.process_transaction(&fund_tx).unwrap();
+        //receive entries + ticks
+        for _ in 0..10 {
+            let ventries: Vec<Vec<Entry>> = entry_receiver
+                .iter()
+                .map(|x| x.1.into_iter().map(|e| e.0).collect())
+                .collect();
+
+            for entries in &ventries {
+                for entry in entries {
+                    bank.process_transactions(&entry.transactions)
+                        .iter()
+                        .for_each(|x| assert_eq!(*x, Ok(())));
+                }
+                assert!(entries.verify(&blockhash));
+                blockhash = entries.last().unwrap().hash;
+            }
+
+            if bank.get_balance(&to) == 1 {
+                break;
+            }
+
+            sleep(Duration::from_millis(200));
+        }
+
+        assert_eq!(bank.get_balance(&to), 1);
+        assert_eq!(bank.get_balance(&to2), 0);
+
         drop(entry_receiver);
         banking_stage.join().unwrap();
     }
