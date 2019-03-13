@@ -24,7 +24,7 @@ use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState};
 use std::result;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -195,7 +195,7 @@ pub struct Bank {
 
     /// A boolean reflecting whether any entries were recorded into the PoH
     /// stream for the slot == self.slot
-    is_delta: bool,
+    is_delta: AtomicBool,
 }
 
 impl Default for HashQueue {
@@ -687,6 +687,9 @@ impl Bank {
         if self.is_frozen() {
             warn!("=========== FIXME: commit_transactions() working on a frozen bank! ================");
         }
+
+        self.is_delta.store(true, Ordering::Relaxed);
+
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
         let now = Instant::now();
@@ -877,7 +880,7 @@ impl Bank {
 
     pub fn is_votable(&self) -> bool {
         let max_tick_height = self.slot * self.ticks_per_slot;
-        self.is_delta && self.tick_height() == max_tick_height
+        self.is_delta.load(Ordering::Relaxed) && self.tick_height() == max_tick_height
     }
 }
 
