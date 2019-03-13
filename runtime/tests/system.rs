@@ -49,7 +49,7 @@ fn test_system_unsigned_transaction() {
         system_bank.bank.process_transaction(&tx),
         Err(BankError::InstructionError(
             0,
-            InstructionError::ProgramError(ProgramError::InvalidArgument)
+            InstructionError::ProgramError(ProgramError::MissingRequiredSignature)
         ))
     );
     assert_eq!(system_bank.bank.get_balance(&from_keypair.pubkey()), 50);

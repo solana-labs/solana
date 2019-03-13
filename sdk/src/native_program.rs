@@ -17,8 +17,11 @@ pub enum ProgramError {
     /// An account's userdata was too small
     UserdataTooSmall,
 
-    /// SystemInstruction::Assign was attempted on an account unowned by the system program
-    AssignOfUnownedAccount,
+    /// The account did not have the expected program id
+    IncorrectProgramId,
+
+    /// A signature was required but not found
+    MissingRequiredSignature,
 
     /// CustomError allows on-chain programs to implement program-specific error types and see
     /// them returned by the Solana runtime. A CustomError may be any type that is serialized
