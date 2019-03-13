@@ -409,7 +409,6 @@ stopNode() {
       for pattern in solana- remote-; do
         pkill -9 \$pattern
       done
-      sudo killall socat
     "
   ) || true
 }
