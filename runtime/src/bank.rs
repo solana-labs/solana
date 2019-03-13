@@ -129,14 +129,8 @@ pub enum BankError {
     /// the `recent_blockhash` has been discarded.
     BlockhashNotFound,
 
-    /// Proof of History verification failed.
-    LedgerVerificationFailed,
-
     /// The program returned an error
     InstructionError(u8, InstructionError),
-
-    /// Recoding into PoH failed
-    RecordFailure,
 
     /// Loader call chain too deep
     CallChainTooDeep,
