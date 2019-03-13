@@ -44,6 +44,7 @@ leader schedule.
   should forward transactions to the next leader.
 * FetchStage from TPU and BroadcastStage boot entirely
 * Blocktree renamed to Blockstore
+* BankForks renamed to Banktree
 * TPU moves to new socket-free crate called solana-tpu.
 * TPU's BankingStage absorbs ReplayStage
 * TVU goes away
