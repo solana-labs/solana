@@ -167,10 +167,10 @@ impl<T: Clone> StatusCache<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bank::BankError;
+    use crate::bank::TransactionError;
     use solana_sdk::hash::hash;
 
-    type BankStatusCache = StatusCache<BankError>;
+    type BankStatusCache = StatusCache<TransactionError>;
 
     #[test]
     fn test_has_signature() {
@@ -293,11 +293,11 @@ mod tests {
         let blockhash = hash(Hash::default().as_ref());
         let mut first = StatusCache::new(&blockhash);
         first.add(&sig);
-        first.save_failure_status(&sig, BankError::DuplicateSignature);
+        first.save_failure_status(&sig, TransactionError::DuplicateSignature);
         assert_eq!(first.has_signature(&sig), true);
         assert_eq!(
             first.get_signature_status(&sig),
-            Some(Err(BankError::DuplicateSignature)),
+            Some(Err(TransactionError::DuplicateSignature)),
         );
     }
 
@@ -308,10 +308,10 @@ mod tests {
         let mut first = StatusCache::new(&blockhash);
         first.add(&sig);
         assert_eq!(first.has_signature(&sig), true);
-        first.save_failure_status(&sig, BankError::DuplicateSignature);
+        first.save_failure_status(&sig, TransactionError::DuplicateSignature);
         assert_eq!(
             first.get_signature_status(&sig),
-            Some(Err(BankError::DuplicateSignature)),
+            Some(Err(TransactionError::DuplicateSignature)),
         );
         first.clear();
         assert_eq!(first.has_signature(&sig), false);

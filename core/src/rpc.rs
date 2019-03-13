@@ -9,7 +9,7 @@ use bs58;
 use jsonrpc_core::{Error, ErrorCode, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_drone::drone::request_airdrop_transaction;
-use solana_runtime::bank::{self, Bank, BankError};
+use solana_runtime::bank::{self, Bank, TransactionError};
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
@@ -261,9 +261,11 @@ impl RpcSol for RpcSolImpl {
             } else {
                 match res.unwrap() {
                     Ok(_) => RpcSignatureStatus::Confirmed,
-                    Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-                    Err(BankError::AccountLoadedTwice) => RpcSignatureStatus::AccountLoadedTwice,
-                    Err(BankError::InstructionError(_, _)) => {
+                    Err(TransactionError::AccountInUse) => RpcSignatureStatus::AccountInUse,
+                    Err(TransactionError::AccountLoadedTwice) => {
+                        RpcSignatureStatus::AccountLoadedTwice
+                    }
+                    Err(TransactionError::InstructionError(_, _)) => {
                         RpcSignatureStatus::ProgramRuntimeError
                     }
                     Err(err) => {

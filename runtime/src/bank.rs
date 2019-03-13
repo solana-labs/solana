@@ -106,7 +106,7 @@ impl EpochSchedule {
 
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum BankError {
+pub enum TransactionError {
     /// This Pubkey is being processed in another transaction
     AccountInUse,
 
@@ -139,9 +139,9 @@ pub enum BankError {
     MissingSignatureForFee,
 }
 
-pub type Result<T> = result::Result<T, BankError>;
+pub type Result<T> = result::Result<T, TransactionError>;
 
-type BankStatusCache = StatusCache<BankError>;
+type BankStatusCache = StatusCache<TransactionError>;
 
 /// Manager for the state of all accounts and programs after processing its entries.
 #[derive(Default)]
@@ -395,9 +395,9 @@ impl Bank {
                         status_cache.add(&tx.signatures[0]);
                     }
                 }
-                Err(BankError::BlockhashNotFound) => (),
-                Err(BankError::DuplicateSignature) => (),
-                Err(BankError::AccountNotFound) => (),
+                Err(TransactionError::BlockhashNotFound) => (),
+                Err(TransactionError::DuplicateSignature) => (),
+                Err(TransactionError::AccountNotFound) => (),
                 Err(e) => {
                     if !tx.signatures.is_empty() {
                         status_cache.add(&tx.signatures[0]);
@@ -512,7 +512,7 @@ impl Bank {
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok() && !hash_queue.check_entry_age(tx.recent_blockhash, max_age) {
                     error_counters.reserve_blockhash += 1;
-                    Err(BankError::BlockhashNotFound)
+                    Err(TransactionError::BlockhashNotFound)
                 } else {
                     lock_res
                 }
@@ -536,7 +536,7 @@ impl Bank {
                 }
                 if lock_res.is_ok() && StatusCache::has_signature_all(&caches, &tx.signatures[0]) {
                     error_counters.duplicate_signature += 1;
-                    Err(BankError::DuplicateSignature)
+                    Err(TransactionError::DuplicateSignature)
                 } else {
                     lock_res
                 }
@@ -650,7 +650,7 @@ impl Bank {
             .iter()
             .zip(executed.iter())
             .map(|(tx, res)| match *res {
-                Err(BankError::InstructionError(_, _)) => {
+                Err(TransactionError::InstructionError(_, _)) => {
                     // Charge the transaction fee even in case of InstructionError
                     self.withdraw(&tx.account_keys[0], tx.fee)?;
                     fees += tx.fee;
@@ -759,14 +759,14 @@ impl Bank {
         match self.get_account(pubkey) {
             Some(mut account) => {
                 if lamports > account.lamports {
-                    return Err(BankError::InsufficientFundsForFee);
+                    return Err(TransactionError::InsufficientFundsForFee);
                 }
 
                 account.lamports -= lamports;
                 self.accounts.store_slow(self.accounts_id, pubkey, &account);
                 Ok(())
             }
-            None => Err(BankError::AccountNotFound),
+            None => Err(TransactionError::AccountNotFound),
         }
     }
 
@@ -942,7 +942,7 @@ mod tests {
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
-        assert_eq!(res[1], Err(BankError::AccountInUse));
+        assert_eq!(res[1], Err(TransactionError::AccountInUse));
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
         assert_eq!(bank.get_balance(&key1), 1);
         assert_eq!(bank.get_balance(&key2), 0);
@@ -950,7 +950,7 @@ mod tests {
         // TODO: Transactions that fail to pay a fee could be dropped silently
         assert_eq!(
             bank.get_signature_status(&t2.signatures[0]),
-            Some(Err(BankError::AccountInUse))
+            Some(Err(TransactionError::AccountInUse))
         );
     }
 
@@ -989,7 +989,7 @@ mod tests {
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
             bank.get_signature_status(&t1.signatures[0]),
-            Some(Err(BankError::InstructionError(
+            Some(Err(TransactionError::InstructionError(
                 1,
                 InstructionError::new_result_with_negative_lamports(),
             )))
@@ -1037,7 +1037,7 @@ mod tests {
 
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(BankError::InstructionError(
+            Err(TransactionError::InstructionError(
                 0,
                 InstructionError::new_result_with_negative_lamports(),
             ))
@@ -1057,7 +1057,7 @@ mod tests {
         let keypair = Keypair::new();
         assert_eq!(
             bank.transfer(1, &keypair, &mint_keypair.pubkey(), genesis_block.hash()),
-            Err(BankError::AccountNotFound)
+            Err(TransactionError::AccountNotFound)
         );
         assert_eq!(bank.transaction_count(), 0);
     }
@@ -1073,7 +1073,7 @@ mod tests {
         assert_eq!(bank.get_balance(&pubkey), 1_000);
         assert_eq!(
             bank.transfer(10_001, &mint_keypair, &pubkey, genesis_block.hash()),
-            Err(BankError::InstructionError(
+            Err(TransactionError::InstructionError(
                 0,
                 InstructionError::new_result_with_negative_lamports(),
             ))
@@ -1119,7 +1119,7 @@ mod tests {
         let key = Keypair::new();
         assert_eq!(
             bank.withdraw(&key.pubkey(), 10),
-            Err(BankError::AccountNotFound)
+            Err(TransactionError::AccountNotFound)
         );
 
         bank.deposit(&key.pubkey(), 3);
@@ -1128,7 +1128,7 @@ mod tests {
         // Low balance
         assert_eq!(
             bank.withdraw(&key.pubkey(), 10),
-            Err(BankError::InsufficientFundsForFee)
+            Err(TransactionError::InsufficientFundsForFee)
         );
 
         // Enough balance
@@ -1174,7 +1174,7 @@ mod tests {
 
         let results = vec![
             Ok(()),
-            Err(BankError::InstructionError(
+            Err(TransactionError::InstructionError(
                 1,
                 InstructionError::new_result_with_negative_lamports(),
             )),
@@ -1252,13 +1252,13 @@ mod tests {
         // try executing an interleaved transfer twice
         assert_eq!(
             bank.transfer(1, &mint_keypair, &bob.pubkey(), genesis_block.hash()),
-            Err(BankError::AccountInUse)
+            Err(TransactionError::AccountInUse)
         );
         // the second time should fail as well
         // this verifies that `unlock_accounts` doesn't unlock `AccountInUse` accounts
         assert_eq!(
             bank.transfer(1, &mint_keypair, &bob.pubkey(), genesis_block.hash()),
-            Err(BankError::AccountInUse)
+            Err(TransactionError::AccountInUse)
         );
 
         bank.unlock_accounts(&pay_alice, &results_alice);
@@ -1311,7 +1311,7 @@ mod tests {
         let bank = new_from_parent(&parent);
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(BankError::DuplicateSignature)
+            Err(TransactionError::DuplicateSignature)
         );
     }
 
@@ -1524,7 +1524,7 @@ mod tests {
 
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(BankError::MissingSignatureForFee)
+            Err(TransactionError::MissingSignatureForFee)
         );
 
         // Set the fee to 0, this should give an InstructionError

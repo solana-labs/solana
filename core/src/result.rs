@@ -22,7 +22,7 @@ pub enum Error {
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     TryRecvError(std::sync::mpsc::TryRecvError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
-    BankError(bank::BankError),
+    TransactionError(bank::TransactionError),
     ClusterInfoError(cluster_info::ClusterInfoError),
     BlobError(packet::BlobError),
     #[cfg(feature = "erasure")]
@@ -57,9 +57,9 @@ impl std::convert::From<std::sync::mpsc::RecvTimeoutError> for Error {
         Error::RecvTimeoutError(e)
     }
 }
-impl std::convert::From<bank::BankError> for Error {
-    fn from(e: bank::BankError) -> Error {
-        Error::BankError(e)
+impl std::convert::From<bank::TransactionError> for Error {
+    fn from(e: bank::TransactionError) -> Error {
+        Error::TransactionError(e)
     }
 }
 impl std::convert::From<cluster_info::ClusterInfoError> for Error {
