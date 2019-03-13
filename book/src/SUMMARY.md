@@ -54,6 +54,7 @@
       - [Replication-client Reward Auto-delegation](ed_rce_replication_client_reward_auto_delegation.md)
     - [Economic Sustainability](ed_economic_sustainability.md)
     - [Attack Vectors](ed_attack_vectors.md)
+	- [Economic Design MVP](ed_mvp.md)
     - [References](ed_references.md)
   - [Leader-to-Validator Transition](leader-validator-transition.md)
   - [Cluster Test Framework](cluster-test-framework.md)
