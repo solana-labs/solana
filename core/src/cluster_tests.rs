@@ -3,7 +3,7 @@ use crate::blocktree::Blocktree;
 ///
 /// All tests must start from an entry point and a funding keypair and
 /// discover the rest of the network.
-use crate::client::mk_client;
+use crate::cluster_client::mk_client;
 use crate::contact_info::ContactInfo;
 use crate::entry::{Entry, EntrySlice};
 use crate::gossip_service::discover;
