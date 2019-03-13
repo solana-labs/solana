@@ -1,6 +1,6 @@
 use crate::cluster_info::FULLNODE_PORT_RANGE;
 use crate::contact_info::ContactInfo;
-use crate::thin_client::ThinClient;
+use solana_client::thin_client::ThinClient;
 use std::time::Duration;
 
 pub fn mk_client(r: &ContactInfo) -> ThinClient {

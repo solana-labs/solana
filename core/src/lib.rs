@@ -3,7 +3,6 @@
 //! [Fullnode](server/struct.Fullnode.html)) as well as hooks to GPU implementations of its most
 //! paralellizable components (i.e. [SigVerify](sigverify/index.html)).  It also includes
 //! command-line tools to spin up fullnodes and a Rust library
-//! (see [ThinClient](thin_client/struct.ThinClient.html)) to interact with them.
 //!
 
 pub mod bank_forks;
@@ -14,7 +13,7 @@ pub mod broadcast_stage;
 pub mod chacha;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 pub mod chacha_cuda;
-pub mod client;
+pub mod cluster_client;
 pub mod cluster_info_vote_listener;
 #[macro_use]
 pub mod contact_info;
@@ -57,10 +56,8 @@ pub mod replicator;
 pub mod result;
 pub mod retransmit_stage;
 pub mod rpc;
-pub mod rpc_mock;
 pub mod rpc_pubsub;
 pub mod rpc_pubsub_service;
-pub mod rpc_request;
 pub mod rpc_service;
 pub mod rpc_status;
 pub mod rpc_subscriptions;
@@ -71,7 +68,6 @@ pub mod staking_utils;
 pub mod storage_stage;
 pub mod streamer;
 pub mod test_tx;
-pub mod thin_client;
 pub mod tpu;
 pub mod tvu;
 pub mod voting_keypair;

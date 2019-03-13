@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
-use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
-use solana::thin_client::new_fullnode;
+use solana::fullnode::new_fullnode_for_tests;
+use solana_client::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use solana_drone::drone::run_local_drone;
 use solana_sdk::bpf_loader;
 use solana_wallet::wallet::{process_command, WalletCommand, WalletConfig};
@@ -19,7 +19,7 @@ fn test_wallet_deploy_program() {
     pathbuf.push("noop");
     pathbuf.set_extension("so");
 
-    let (server, leader_data, alice, ledger_path) = new_fullnode();
+    let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
 
     let (sender, receiver) = channel();
     run_local_drone(alice, sender);

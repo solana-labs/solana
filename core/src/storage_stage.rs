@@ -5,7 +5,7 @@
 use crate::blocktree::Blocktree;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
-use crate::client::mk_client_with_timeout;
+use crate::cluster_client::mk_client_with_timeout;
 use crate::cluster_info::ClusterInfo;
 use crate::entry::{Entry, EntryReceiver};
 use crate::result::{Error, Result};
