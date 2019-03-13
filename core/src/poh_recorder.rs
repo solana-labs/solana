@@ -146,6 +146,7 @@ impl PohRecorder {
                 "poh_record: max_tick_height reached, setting working bank {} to None",
                 working_bank.bank.slot()
             );
+            self.start_slot = working_bank.max_tick_height / working_bank.bank.ticks_per_slot();
             self.clear_bank();
         }
         if e.is_err() {
@@ -504,5 +505,36 @@ mod tests {
         poh_recorder.clear_bank_signal = Some(sender);
         poh_recorder.clear_bank();
         assert!(receiver.try_recv().is_ok());
+    }
+
+    #[test]
+    fn test_poh_recorder_reset_start_slot() {
+        let ticks_per_slot = 5;
+        let (mut genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        genesis_block.ticks_per_slot = ticks_per_slot;
+        let bank = Arc::new(Bank::new(&genesis_block));
+
+        let prev_hash = bank.last_blockhash();
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, prev_hash, 0);
+
+        let end_slot = 3;
+        let max_tick_height = (end_slot + 1) * ticks_per_slot - 1;
+        let working_bank = WorkingBank {
+            bank,
+            min_tick_height: 1,
+            max_tick_height,
+        };
+
+        poh_recorder.set_working_bank(working_bank);
+        for _ in 0..max_tick_height {
+            poh_recorder.tick();
+        }
+
+        let tx = test_tx();
+        let h1 = hash(b"hello world!");
+        assert!(poh_recorder.record(h1, vec![tx.clone()]).is_err());
+        assert!(poh_recorder.working_bank.is_none());
+        // Make sure the starting slot is updated
+        assert_eq!(poh_recorder.start_slot(), end_slot);
     }
 }
