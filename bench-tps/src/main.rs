@@ -2,9 +2,10 @@ mod bench;
 mod cli;
 
 use crate::bench::*;
-use solana::cluster_client::mk_client;
+use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::gen_keys::GenKeys;
 use solana::gossip_service::discover;
+use solana_client::client::create_client;
 use solana_metrics;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::collections::VecDeque;
@@ -62,8 +63,9 @@ fn main() {
     }
     let cluster_entrypoint = nodes[0].clone(); // Pick the first node, why not?
 
-    let mut client = mk_client(&cluster_entrypoint);
-    let mut barrier_client = mk_client(&cluster_entrypoint);
+    let mut client = create_client(cluster_entrypoint.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let mut barrier_client =
+        create_client(cluster_entrypoint.client_facing_addr(), FULLNODE_PORT_RANGE);
 
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&id.public_key_bytes()[..32]);
