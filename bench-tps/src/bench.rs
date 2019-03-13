@@ -1,9 +1,9 @@
 use solana_metrics;
 
 use rayon::prelude::*;
-use solana::client::mk_client;
+use solana::cluster_client::mk_client;
 use solana::contact_info::ContactInfo;
-use solana::thin_client::ThinClient;
+use solana_client::thin_client::ThinClient;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_metrics::influxdb;
 use solana_sdk::hash::Hash;

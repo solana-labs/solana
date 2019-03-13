@@ -1,6 +1,6 @@
 use chrono::prelude::*;
 use serde_json::Value;
-use solana::rpc_request::RpcClient;
+use solana_client::rpc_request::RpcClient;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -11,7 +11,7 @@ use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;
 
 #[cfg(test)]
-use solana::thin_client::new_fullnode;
+use solana::fullnode::new_fullnode_for_tests;
 
 fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
     let balance = client.retry_get_balance(1, pubkey, 1).unwrap().unwrap();
@@ -20,7 +20,7 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
 
 #[test]
 fn test_wallet_timestamp_tx() {
-    let (server, leader_data, alice, ledger_path) = new_fullnode();
+    let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
     let bob_pubkey = Keypair::new().pubkey();
 
     let (sender, receiver) = channel();
@@ -80,7 +80,7 @@ fn test_wallet_timestamp_tx() {
 
 #[test]
 fn test_wallet_witness_tx() {
-    let (server, leader_data, alice, ledger_path) = new_fullnode();
+    let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
     let bob_pubkey = Keypair::new().pubkey();
 
     let (sender, receiver) = channel();
@@ -137,7 +137,7 @@ fn test_wallet_witness_tx() {
 
 #[test]
 fn test_wallet_cancel_tx() {
-    let (server, leader_data, alice, ledger_path) = new_fullnode();
+    let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
     let bob_pubkey = Keypair::new().pubkey();
 
     let (sender, receiver) = channel();

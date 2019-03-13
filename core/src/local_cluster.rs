@@ -1,12 +1,11 @@
 use crate::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree};
-use crate::client::mk_client;
+use crate::cluster_client::mk_client;
 use crate::cluster_info::Node;
 use crate::contact_info::ContactInfo;
 use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::gossip_service::discover;
 use crate::service::Service;
-use crate::thin_client::retry_get_balance;
-use crate::thin_client::ThinClient;
+use solana_client::thin_client::{retry_get_balance, ThinClient};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
