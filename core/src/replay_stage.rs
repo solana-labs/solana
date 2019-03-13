@@ -153,13 +153,19 @@ impl ReplayStage {
                     }
 
                     if !is_tpu_bank_active {
+                        assert!(ticks_per_slot > 0);
+                        let poh_tick_height = poh_recorder.lock().unwrap().tick_height();
+                        let poh_slot = leader_schedule_utils::tick_height_to_slot(
+                            ticks_per_slot,
+                            poh_tick_height + 1,
+                        );
                         Self::start_leader(
                             &my_id,
                             &bank_forks,
                             &poh_recorder,
                             &cluster_info,
                             &blocktree,
-                            ticks_per_slot,
+                            poh_slot,
                         );
                     }
 
@@ -190,13 +196,8 @@ impl ReplayStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: &Blocktree,
-        ticks_per_slot: u64,
+        poh_slot: u64,
     ) {
-        assert!(ticks_per_slot > 0);
-        let poh_tick_height = poh_recorder.lock().unwrap().tick_height();
-        let poh_slot =
-            leader_schedule_utils::tick_height_to_slot(ticks_per_slot, poh_tick_height + 1);
-
         trace!("{} checking poh slot {}", my_id, poh_slot);
         if blocktree.meta(poh_slot).unwrap().is_some() {
             // We've already broadcasted entries for this slot, skip it
