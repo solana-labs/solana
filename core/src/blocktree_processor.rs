@@ -4,10 +4,11 @@ use crate::entry::{Entry, EntrySlice};
 use crate::leader_schedule_utils;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
-use solana_runtime::bank::{Bank, BankError, Result};
+use solana_runtime::bank::{Bank, Result};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::timing::MAX_RECENT_BLOCKHASHES;
+use std::result;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -78,11 +79,16 @@ pub struct BankForksInfo {
     pub entry_height: u64,
 }
 
+#[derive(Debug)]
+pub enum BlocktreeProcessorError {
+    LedgerVerificationFailed,
+}
+
 pub fn process_blocktree(
     genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
     account_paths: Option<String>,
-) -> Result<(BankForks, Vec<BankForksInfo>)> {
+) -> result::Result<(BankForks, Vec<BankForksInfo>), BlocktreeProcessorError> {
     let now = Instant::now();
     info!("processing ledger...");
 
@@ -98,7 +104,7 @@ pub fn process_blocktree(
             .meta(slot)
             .map_err(|err| {
                 warn!("Failed to load meta for slot {}: {:?}", slot, err);
-                BankError::LedgerVerificationFailed
+                BlocktreeProcessorError::LedgerVerificationFailed
             })?
             .unwrap();
 
@@ -113,7 +119,7 @@ pub fn process_blocktree(
         // Fetch all entries for this slot
         let mut entries = blocktree.get_slot_entries(slot, 0, None).map_err(|err| {
             warn!("Failed to load entries for slot {}: {:?}", slot, err);
-            BankError::LedgerVerificationFailed
+            BlocktreeProcessorError::LedgerVerificationFailed
         })?;
 
         if slot == 0 {
@@ -122,12 +128,12 @@ pub fn process_blocktree(
             // processed by the bank, skip over it.
             if entries.is_empty() {
                 warn!("entry0 not present");
-                return Err(BankError::LedgerVerificationFailed);
+                return Err(BlocktreeProcessorError::LedgerVerificationFailed);
             }
             let entry0 = &entries[0];
             if !(entry0.is_tick() && entry0.verify(&last_entry_hash)) {
                 warn!("Ledger proof of history failed at entry0");
-                return Err(BankError::LedgerVerificationFailed);
+                return Err(BlocktreeProcessorError::LedgerVerificationFailed);
             }
             last_entry_hash = entry0.hash;
             entry_height += 1;
@@ -140,12 +146,12 @@ pub fn process_blocktree(
                     "Ledger proof of history failed at slot: {}, entry: {}",
                     slot, entry_height
                 );
-                return Err(BankError::LedgerVerificationFailed);
+                return Err(BlocktreeProcessorError::LedgerVerificationFailed);
             }
 
             process_entries(&bank, &entries).map_err(|err| {
                 warn!("Failed to process entries for slot {}: {:?}", slot, err);
-                BankError::LedgerVerificationFailed
+                BlocktreeProcessorError::LedgerVerificationFailed
             })?;
 
             last_entry_hash = entries.last().unwrap().hash;
@@ -171,7 +177,7 @@ pub fn process_blocktree(
                 .meta(next_slot)
                 .map_err(|err| {
                     warn!("Failed to load meta for slot {}: {:?}", slot, err);
-                    BankError::LedgerVerificationFailed
+                    BlocktreeProcessorError::LedgerVerificationFailed
                 })?
                 .unwrap();
 
@@ -223,6 +229,7 @@ mod tests {
     use crate::blocktree::create_new_tmp_ledger;
     use crate::blocktree::tests::entries_to_blobs;
     use crate::entry::{create_ticks, next_entry, Entry};
+    use solana_runtime::bank::BankError;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
