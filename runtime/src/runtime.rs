@@ -1,3 +1,4 @@
+use crate::bank::BankError;
 use crate::native_loader;
 use crate::system_program::SystemError;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
@@ -31,13 +32,6 @@ impl InstructionError {
             bincode::serialize(&SystemError::ResultWithNegativeLamports).unwrap();
         InstructionError::ProgramError(ProgramError::CustomError(serialized_error))
     }
-}
-
-/// Reasons the runtime might have rejected a transaction.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum TransactionError {
-    /// Executing the instruction at the given index produced an error.
-    InstructionError(u8, InstructionError),
 }
 
 /// Process an instruction
@@ -202,7 +196,7 @@ pub fn execute_transaction(
     loaders: &mut [Vec<(Pubkey, Account)>],
     tx_accounts: &mut [Account],
     tick_height: u64,
-) -> Result<(), TransactionError> {
+) -> Result<(), BankError> {
     for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
         let executable_accounts = &mut (&mut loaders[instruction.program_ids_index as usize]);
         let mut program_accounts = get_subset_unchecked_mut(tx_accounts, &instruction.accounts);
@@ -213,7 +207,7 @@ pub fn execute_transaction(
             &mut program_accounts,
             tick_height,
         )
-        .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+        .map_err(|err| BankError::InstructionError(instruction_index as u8, err))?;
     }
     Ok(())
 }

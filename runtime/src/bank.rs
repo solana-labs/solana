@@ -5,7 +5,7 @@
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::hash_queue::HashQueue;
-use crate::runtime::{self, InstructionError, TransactionError};
+use crate::runtime::{self, InstructionError};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
@@ -569,11 +569,7 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
                 Ok((ref mut accounts, ref mut loaders)) => {
-                    runtime::execute_transaction(tx, loaders, accounts, tick_height).map_err(
-                        |TransactionError::InstructionError(index, err)| {
-                            BankError::InstructionError(index, err)
-                        },
-                    )
+                    runtime::execute_transaction(tx, loaders, accounts, tick_height)
                 }
             })
             .collect();
