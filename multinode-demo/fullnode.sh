@@ -42,7 +42,7 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = --public-address ]]; then
     extra_fullnode_args+=("$1")
     shift
-  elif [[ $1 = --no-signer ]]; then
+  elif [[ $1 = --no-voting ]]; then
     extra_fullnode_args+=("$1")
     shift
   elif [[ $1 = --rpc-port ]]; then

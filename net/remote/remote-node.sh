@@ -104,7 +104,7 @@ local|tar)
     if [[ $nodeType = blockstreamer ]]; then
       args+=(
         --blockstream /tmp/solana-blockstream.sock
-        --no-signer
+        --no-voting
       )
     fi
 
