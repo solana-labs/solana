@@ -28,10 +28,13 @@ rayon = "1.0.0"
 reqwest = "0.9.11"
 serde_json = "1.0.39"
 solana = { path = "core", version = "0.12.1" }
+solana-budget-program = { path = "programs/budget", version = "0.12.1" }
+solana-client = { path = "client", version = "0.12.1" }
 solana-logger = { path = "logger", version = "0.12.1" }
 solana-netutil = { path = "netutil", version = "0.12.1" }
 solana-runtime = { path = "runtime", version = "0.12.1" }
 solana-sdk = { path = "sdk", version = "0.12.1" }
+solana-vote-api = { path = "programs/vote_api", version = "0.12.1" }
 sys-info = "0.5.6"
 
 [[bench]]
