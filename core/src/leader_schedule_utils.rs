@@ -43,8 +43,8 @@ pub fn num_ticks_left_in_slot(bank: &Bank, tick_height: u64) -> u64 {
     bank.ticks_per_slot() - tick_height % bank.ticks_per_slot() - 1
 }
 
-pub fn tick_height_to_slot(bank: &Bank, tick_height: u64) -> u64 {
-    tick_height / bank.ticks_per_slot()
+pub fn tick_height_to_slot(ticks_per_slot: u64, tick_height: u64) -> u64 {
+    tick_height / ticks_per_slot
 }
 
 #[cfg(test)]
