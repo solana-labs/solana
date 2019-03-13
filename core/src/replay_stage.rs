@@ -20,7 +20,7 @@ use solana_sdk::timing::duration_as_ms;
 use solana_vote_api::vote_transaction::VoteTransaction;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
@@ -108,15 +108,13 @@ impl ReplayStage {
                         }
                         let max_tick_height = (*bank_slot + 1) * bank.ticks_per_slot() - 1;
                         if bank.tick_height() == max_tick_height {
-                            bank.freeze();
-                            info!("bank frozen {}", bank.slot());
-                            progress.remove(bank_slot);
-                            if let Err(e) =
-                                slot_full_sender.send((bank.slot(), bank.collector_id()))
-                            {
-                                info!("{} slot_full alert failed: {:?}", my_id, e);
-                            }
-                            votable.push(bank);
+                            Self::process_completed_bank(
+                                &my_id,
+                                bank,
+                                &mut progress,
+                                &mut votable,
+                                &slot_full_sender,
+                            );
                         }
                     }
 
@@ -315,6 +313,24 @@ impl ReplayStage {
         Ok(())
     }
 
+    fn process_completed_bank(
+        my_id: &Pubkey,
+        bank: Arc<Bank>,
+        progress: &mut HashMap<u64, (Hash, usize)>,
+        votable: &mut Vec<Arc<Bank>>,
+        slot_full_sender: &Sender<(u64, Pubkey)>,
+    ) {
+        bank.freeze();
+        info!("bank frozen {}", bank.slot());
+        progress.remove(&bank.slot());
+        if let Err(e) = slot_full_sender.send((bank.slot(), bank.collector_id())) {
+            info!("{} slot_full alert failed: {:?}", my_id, e);
+        }
+        if bank.is_votable() {
+            votable.push(bank);
+        }
+    }
+
     fn generate_new_bank_forks(blocktree: &Blocktree, forks: &mut BankForks) {
         // Find the next slot that chains to the old slot
         let frozen_banks = forks.frozen_banks();
@@ -437,6 +453,42 @@ mod test {
             poh_service.join().unwrap();
         }
         let _ignored = remove_dir_all(&my_ledger_path);
+    }
+
+    #[test]
+    fn test_no_vote_empty_transmission() {
+        let genesis_block = GenesisBlock::new(10_000).0;
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let mut blockhash = bank.last_blockhash();
+        let mut entries = Vec::new();
+        for _ in 0..genesis_block.ticks_per_slot {
+            let entry = next_entry_mut(&mut blockhash, 1, vec![]); //just ticks
+            entries.push(entry);
+        }
+        let (sender, _receiver) = channel();
+
+        let mut progress = HashMap::new();
+        let (forward_entry_sender, _forward_entry_receiver) = channel();
+        ReplayStage::replay_entries_into_bank(
+            &bank,
+            entries.clone(),
+            &mut progress,
+            &forward_entry_sender,
+            0,
+        )
+        .unwrap();
+
+        let mut votable = vec![];
+        ReplayStage::process_completed_bank(
+            &Pubkey::default(),
+            bank,
+            &mut progress,
+            &mut votable,
+            &sender,
+        );
+        assert!(progress.is_empty());
+        // Don't vote on slot that only contained ticks
+        assert!(votable.is_empty());
     }
 
     #[test]
