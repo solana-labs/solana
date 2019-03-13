@@ -11,7 +11,7 @@ const FROM_ACCOUNT_INDEX: usize = 0;
 const TO_ACCOUNT_INDEX: usize = 1;
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
-enum SystemError {
+pub enum SystemError {
     AccountAlreadyInUse,
     ResultWithNegativeLamports,
     SourceNotSystemAccount,
@@ -55,20 +55,17 @@ fn create_system_account(
 fn assign_account_to_program(
     keyed_accounts: &mut [KeyedAccount],
     program_id: &Pubkey,
-) -> Result<(), ProgramError> {
-    if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].account.owner) {
-        Err(ProgramError::AssignOfUnownedAccount)?;
-    }
+) -> Result<(), SystemError> {
     keyed_accounts[FROM_ACCOUNT_INDEX].account.owner = *program_id;
     Ok(())
 }
-fn move_lamports(keyed_accounts: &mut [KeyedAccount], lamports: u64) -> Result<(), ProgramError> {
+fn move_lamports(keyed_accounts: &mut [KeyedAccount], lamports: u64) -> Result<(), SystemError> {
     if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports {
         info!(
             "Move: insufficient lamports ({}, need {})",
             keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports, lamports
         );
-        Err(ProgramError::ResultWithNegativeLamports)?;
+        Err(SystemError::ResultWithNegativeLamports)?;
     }
     keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports -= lamports;
     keyed_accounts[TO_ACCOUNT_INDEX].account.lamports += lamports;
@@ -81,8 +78,8 @@ pub fn entrypoint(
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), ProgramError> {
-    if let Ok(syscall) = bincode::deserialize(data) {
-        trace!("process_instruction: {:?}", syscall);
+    if let Ok(instruction) = bincode::deserialize(data) {
+        trace!("process_instruction: {:?}", instruction);
         trace!("keyed_accounts: {:?}", keyed_accounts);
 
         // All system instructions require that accounts_keys[0] be a signer
@@ -91,24 +88,21 @@ pub fn entrypoint(
             Err(ProgramError::InvalidArgument)?;
         }
 
-        match syscall {
+        match instruction {
             SystemInstruction::CreateAccount {
                 lamports,
                 space,
                 program_id,
-            } => create_system_account(keyed_accounts, lamports, space, &program_id).map_err(|e| {
-                match e {
-                    SystemError::ResultWithNegativeLamports => {
-                        ProgramError::ResultWithNegativeLamports
-                    }
-                    e => ProgramError::CustomError(serialize(&e).unwrap()),
-                }
-            }),
+            } => create_system_account(keyed_accounts, lamports, space, &program_id),
             SystemInstruction::Assign { program_id } => {
+                if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].account.owner) {
+                    Err(ProgramError::AssignOfUnownedAccount)?;
+                }
                 assign_account_to_program(keyed_accounts, &program_id)
             }
             SystemInstruction::Move { lamports } => move_lamports(keyed_accounts, lamports),
         }
+        .map_err(|e| ProgramError::CustomError(serialize(&e).unwrap()))
     } else {
         info!("Invalid transaction instruction userdata: {:?}", data);
         Err(ProgramError::InvalidUserdata)
@@ -246,7 +240,11 @@ mod tests {
         // Attempt to assign account not owned by system program
         let another_program_owner = Pubkey::new(&[8; 32]);
         keyed_accounts = [KeyedAccount::new(&from, true, &mut from_account)];
-        let result = assign_account_to_program(&mut keyed_accounts, &another_program_owner);
+        let instruction = SystemInstruction::Assign {
+            program_id: another_program_owner,
+        };
+        let data = serialize(&instruction).unwrap();
+        let result = entrypoint(&system_program::id(), &mut keyed_accounts, &data, 0);
         assert_eq!(result, Err(ProgramError::AssignOfUnownedAccount));
         assert_eq!(from_account.owner, new_program_owner);
     }
@@ -273,7 +271,7 @@ mod tests {
             KeyedAccount::new(&to, false, &mut to_account),
         ];
         let result = move_lamports(&mut keyed_accounts, 100);
-        assert_eq!(result, Err(ProgramError::ResultWithNegativeLamports));
+        assert_eq!(result, Err(SystemError::ResultWithNegativeLamports));
         assert_eq!(from_account.lamports, 50);
         assert_eq!(to_account.lamports, 51);
     }

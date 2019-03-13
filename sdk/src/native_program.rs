@@ -11,11 +11,6 @@ pub enum ProgramError {
     /// The arguments provided to a program instruction where invalid
     InvalidArgument,
 
-    /// An instruction resulted in an account with a negative balance
-    /// The difference from InsufficientFundsForFee is that the transaction was executed by the
-    /// contract
-    ResultWithNegativeLamports,
-
     /// An account's userdata contents was invalid
     InvalidUserdata,
 
