@@ -285,7 +285,7 @@ start() {
       set -x
       rm -rf "$SOLANA_ROOT"/solana-release
       (cd "$SOLANA_ROOT"; tar jxv) < "$tarballFilename"
-      cat "$SOLANA_ROOT"/solana-release/version.txt
+      cat "$SOLANA_ROOT"/solana-release/version.yml
     )
     ;;
   local)
@@ -370,7 +370,10 @@ start() {
   case $deployMethod in
   tar)
     networkVersion="$(
-      tail -n1 "$SOLANA_ROOT"/solana-release/version.txt || echo "tar-unknown"
+      (
+        set -o pipefail
+        grep "^version: " "$SOLANA_ROOT"/solana-release/version.yml | head -n1 | cut -d\  -f2
+      ) || echo "tar-unknown"
     )"
     ;;
   local)
