@@ -102,7 +102,7 @@ pub fn test_large_invalid_gossip_nodes(
     let cluster = discover(&entry_point_info, num_nodes);
 
     // Poison the cluster.
-    let mut client = mk_client(&entry_point_info);
+    let mut client = create_client(entry_point_info.client_facing_addr(), FULLNODE_PORT_RANGE);
     for _ in 0..(num_nodes * 100) {
         client.gossip_push(
             cluster_info::invalid_contact_info()
@@ -112,7 +112,7 @@ pub fn test_large_invalid_gossip_nodes(
 
     // Force refresh of the active set.
     for node in &cluster {
-        let mut client = mk_client(&node);
+        let mut client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
         client.gossip_refresh_active_set();
     }
 

@@ -1,10 +1,10 @@
 use crate::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree};
-use crate::cluster_client::mk_client;
-use crate::cluster_info::Node;
+use crate::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::gossip_service::discover;
 use crate::service::Service;
+use solana_client::client::create_client;
 use solana_client::thin_client::{retry_get_balance, ThinClient};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
@@ -58,7 +58,10 @@ impl LocalCluster {
             fullnode_config,
         );
         let mut fullnodes = vec![leader_server];
-        let mut client = mk_client(&leader_contact_info);
+        let mut client = create_client(
+            leader_contact_info.client_facing_addr(),
+            FULLNODE_PORT_RANGE,
+        );
         for stake in &node_stakes[1..] {
             // Must have enough tokens to fund vote account and set delegate
             assert!(*stake > 2);
