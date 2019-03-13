@@ -108,6 +108,11 @@ local|tar)
       )
     fi
 
+    args+=(
+      --rpc-port 8899
+      --rpc-drone-address "$entrypointIp:9900"
+    )
+
     set -x
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/setup.sh -t fullnode
