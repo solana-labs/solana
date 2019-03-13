@@ -24,6 +24,12 @@ pub enum InstructionError {
     ExternalAccountUserdataModified,
 }
 
+impl InstructionError {
+    pub fn new_result_with_negative_lamports() -> Self {
+        InstructionError::ProgramError(ProgramError::ResultWithNegativeLamports)
+    }
+}
+
 /// Reasons the runtime might have rejected a transaction.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TransactionError {

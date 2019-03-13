@@ -447,7 +447,6 @@ mod tests {
     use crate::poh_recorder::WorkingBank;
     use solana_runtime::runtime::InstructionError;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use std::sync::mpsc::channel;
@@ -685,7 +684,7 @@ mod tests {
         // ProgramErrors should still be recorded
         results[0] = Err(BankError::InstructionError(
             1,
-            InstructionError::ProgramError(ProgramError::ResultWithNegativeLamports),
+            InstructionError::new_result_with_negative_lamports(),
         ));
         BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let (_, entries) = entry_receiver.recv().unwrap();

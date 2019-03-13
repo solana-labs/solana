@@ -888,7 +888,6 @@ mod tests {
     use bincode::serialize;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::hash;
-    use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
@@ -1002,7 +1001,7 @@ mod tests {
             bank.get_signature_status(&t1.signatures[0]),
             Some(Err(BankError::InstructionError(
                 1,
-                InstructionError::ProgramError(ProgramError::ResultWithNegativeLamports)
+                InstructionError::new_result_with_negative_lamports(),
             )))
         );
     }
@@ -1050,7 +1049,7 @@ mod tests {
             bank.process_transaction(&tx),
             Err(BankError::InstructionError(
                 0,
-                InstructionError::ProgramError(ProgramError::ResultWithNegativeLamports)
+                InstructionError::new_result_with_negative_lamports(),
             ))
         );
 
@@ -1086,7 +1085,7 @@ mod tests {
             bank.transfer(10_001, &mint_keypair, &pubkey, genesis_block.hash()),
             Err(BankError::InstructionError(
                 0,
-                InstructionError::ProgramError(ProgramError::ResultWithNegativeLamports)
+                InstructionError::new_result_with_negative_lamports(),
             ))
         );
         assert_eq!(bank.transaction_count(), 1);
@@ -1187,7 +1186,7 @@ mod tests {
             Ok(()),
             Err(BankError::InstructionError(
                 1,
-                InstructionError::ProgramError(ProgramError::ResultWithNegativeLamports),
+                InstructionError::new_result_with_negative_lamports(),
             )),
         ];
 
