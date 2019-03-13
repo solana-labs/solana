@@ -12,14 +12,14 @@ use bincode::deserialize;
 use solana::blocktree::{
     create_new_tmp_ledger, get_tmp_ledger_path, tmp_copy_blocktree, Blocktree,
 };
-use solana::cluster_client::mk_client;
-use solana::cluster_info::{ClusterInfo, Node};
+use solana::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
 use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::replicator::Replicator;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer::blob_receiver;
+use solana_client::client::create_client;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -69,7 +69,8 @@ fn test_replicator_startup_basic() {
         let validator_keypair = Arc::new(Keypair::new());
         let voting_keypair = Keypair::new();
 
-        let mut leader_client = mk_client(&leader_info);
+        let mut leader_client =
+            create_client(leader_info.client_facing_addr(), FULLNODE_PORT_RANGE);
         let blockhash = leader_client.get_recent_blockhash();
         debug!("blockhash: {:?}", blockhash);
 

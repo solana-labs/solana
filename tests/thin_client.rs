@@ -1,8 +1,9 @@
 use bincode::{deserialize, serialize};
 use log::*;
-use solana::cluster_client::mk_client;
+use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::fullnode::new_fullnode_for_tests;
 use solana::gossip_service::discover;
+use solana_client::client::create_client;
 use solana_client::thin_client::{retry_get_balance, ThinClient};
 use solana_logger;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -22,7 +23,7 @@ fn test_thin_client_basic() {
     let bob_pubkey = Keypair::new().pubkey();
     discover(&leader_data.gossip, 1).unwrap();
 
-    let mut client = mk_client(&leader_data);
+    let mut client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
 
     let transaction_count = client.transaction_count();
     assert_eq!(transaction_count, 0);
@@ -53,7 +54,7 @@ fn test_bad_sig() {
     let bob_pubkey = Keypair::new().pubkey();
     discover(&leader_data.gossip, 1).unwrap();
 
-    let mut client = mk_client(&leader_data);
+    let mut client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
 
     let blockhash = client.get_recent_blockhash();
 
@@ -84,7 +85,7 @@ fn test_register_vote_account() {
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
     discover(&leader_data.gossip, 1).unwrap();
 
-    let mut client = mk_client(&leader_data);
+    let mut client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
 
     // Create the validator account, transfer some lamports to that account
     let validator_keypair = Keypair::new();
@@ -150,7 +151,7 @@ fn test_zero_balance_after_nonzero() {
     let bob_keypair = Keypair::new();
     discover(&leader_data.gossip, 1).unwrap();
 
-    let mut client = mk_client(&leader_data);
+    let mut client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
     let blockhash = client.get_recent_blockhash();
     info!("test_thin_client blockhash: {:?}", blockhash);
 

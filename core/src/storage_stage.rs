@@ -5,14 +5,14 @@
 use crate::blocktree::Blocktree;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
-use crate::cluster_client::mk_client_with_timeout;
-use crate::cluster_info::ClusterInfo;
+use crate::cluster_info::{ClusterInfo, FULLNODE_PORT_RANGE};
 use crate::entry::{Entry, EntryReceiver};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use bincode::deserialize;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
+use solana_client::client::create_client_with_timeout;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
@@ -228,7 +228,11 @@ impl StorageStage {
         account_to_create: Option<Pubkey>,
     ) -> io::Result<()> {
         let contact_info = cluster_info.read().unwrap().my_data();
-        let mut client = mk_client_with_timeout(&contact_info, Duration::from_secs(5));
+        let mut client = create_client_with_timeout(
+            contact_info.client_facing_addr(),
+            FULLNODE_PORT_RANGE,
+            Duration::from_secs(5),
+        );
 
         if let Some(account) = account_to_create {
             if client.get_account_userdata(&account).is_ok() {

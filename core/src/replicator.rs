@@ -3,8 +3,7 @@ use crate::blocktree::Blocktree;
 use crate::blocktree_processor;
 #[cfg(feature = "chacha")]
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
-use crate::cluster_client::mk_client;
-use crate::cluster_info::{ClusterInfo, Node};
+use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::GossipService;
 use crate::result::Result;
@@ -14,6 +13,7 @@ use crate::streamer::BlobReceiver;
 use crate::window_service::WindowService;
 use rand::thread_rng;
 use rand::Rng;
+use solana_client::client::create_client;
 use solana_client::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use solana_client::thin_client::{retry_get_balance, ThinClient};
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
@@ -205,7 +205,7 @@ impl Replicator {
             cluster_info_w.insert_self(contact_info);
         }
 
-        let mut client = mk_client(leader_info);
+        let mut client = create_client(leader_info.client_facing_addr(), FULLNODE_PORT_RANGE);
 
         Self::get_airdrop_lamports(&mut client, &keypair, &leader_info);
         info!("Done downloading ledger at {}", ledger_path);
