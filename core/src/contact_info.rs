@@ -196,6 +196,10 @@ impl ContactInfo {
     pub fn is_valid_address(addr: &SocketAddr) -> bool {
         (addr.port() != 0) && Self::is_valid_ip(addr.ip())
     }
+
+    pub fn client_facing_addr(&self) -> (SocketAddr, SocketAddr) {
+        (self.rpc, self.tpu)
+    }
 }
 
 impl Signable for ContactInfo {

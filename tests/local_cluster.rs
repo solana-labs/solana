@@ -65,6 +65,7 @@ fn test_fullnode_exit_2() {
 }
 
 #[test]
+#[ignore]
 fn test_leader_failure_2() {
     let num_nodes = 2;
     let mut fullnode_config = FullnodeConfig::default();
@@ -78,6 +79,7 @@ fn test_leader_failure_2() {
 }
 
 #[test]
+#[ignore]
 fn test_leader_failure_3() {
     let num_nodes = 3;
     let mut fullnode_config = FullnodeConfig::default();
