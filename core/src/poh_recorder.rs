@@ -37,10 +37,11 @@ pub struct WorkingBank {
 
 pub struct PohRecorder {
     pub poh: Poh,
+    pub clear_bank_signal: Option<SyncSender<bool>>,
+    start_slot: u64,
     tick_cache: Vec<(Entry, u64)>,
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntries>,
-    pub clear_bank_signal: Option<SyncSender<bool>>,
 }
 
 impl PohRecorder {
@@ -57,14 +58,20 @@ impl PohRecorder {
         self.poh.hash();
     }
 
+    pub fn start_slot(&self) -> u64 {
+        self.start_slot
+    }
+
     pub fn bank(&self) -> Option<Arc<Bank>> {
         self.working_bank.clone().map(|w| w.bank)
     }
+
     pub fn tick_height(&self) -> u64 {
         self.poh.tick_height
     }
+
     // synchronize PoH with a bank
-    pub fn reset(&mut self, tick_height: u64, blockhash: Hash) {
+    pub fn reset(&mut self, tick_height: u64, blockhash: Hash, start_slot: u64) {
         self.clear_bank();
         let existing = self.tick_cache.iter().any(|(entry, entry_tick_height)| {
             if entry.hash == blockhash {
@@ -85,6 +92,7 @@ impl PohRecorder {
             self.poh.hash, self.poh.tick_height, blockhash, tick_height,
         );
         std::mem::swap(&mut cache, &mut self.tick_cache);
+        self.start_slot = start_slot;
         self.poh = Poh::new(blockhash, tick_height);
     }
 
@@ -180,7 +188,11 @@ impl PohRecorder {
     /// A recorder to synchronize PoH with the following data structures
     /// * bank - the LastId's queue is updated on `tick` and `record` events
     /// * sender - the Entry channel that outputs to the ledger
-    pub fn new(tick_height: u64, last_entry_hash: Hash) -> (Self, Receiver<WorkingBankEntries>) {
+    pub fn new(
+        tick_height: u64,
+        last_entry_hash: Hash,
+        start_slot: u64,
+    ) -> (Self, Receiver<WorkingBankEntries>) {
         let poh = Poh::new(last_entry_hash, tick_height);
         let (sender, receiver) = channel();
         (
@@ -190,6 +202,7 @@ impl PohRecorder {
                 working_bank: None,
                 sender,
                 clear_bank_signal: None,
+                start_slot,
             },
             receiver,
         )
@@ -241,7 +254,7 @@ mod tests {
     #[test]
     fn test_poh_recorder_no_zero_tick() {
         let prev_hash = Hash::default();
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, prev_hash);
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, prev_hash, 0);
         poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 1);
         assert_eq!(poh_recorder.tick_cache[0].1, 1);
@@ -251,7 +264,7 @@ mod tests {
     #[test]
     fn test_poh_recorder_tick_height_is_last_tick() {
         let prev_hash = Hash::default();
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, prev_hash);
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, prev_hash, 0);
         poh_recorder.tick();
         poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 2);
@@ -261,10 +274,10 @@ mod tests {
 
     #[test]
     fn test_poh_recorder_reset_clears_cache() {
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default(), 0);
         poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 1);
-        poh_recorder.reset(0, Hash::default());
+        poh_recorder.reset(0, Hash::default(), 0);
         assert_eq!(poh_recorder.tick_cache.len(), 0);
     }
 
@@ -273,7 +286,7 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, prev_hash);
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, prev_hash, 0);
 
         let working_bank = WorkingBank {
             bank,
@@ -291,7 +304,7 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new(0, prev_hash);
+        let (mut poh_recorder, entry_receiver) = PohRecorder::new(0, prev_hash, 0);
 
         let working_bank = WorkingBank {
             bank: bank.clone(),
@@ -321,7 +334,7 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new(0, prev_hash);
+        let (mut poh_recorder, entry_receiver) = PohRecorder::new(0, prev_hash, 0);
 
         poh_recorder.tick();
         poh_recorder.tick();
@@ -349,7 +362,7 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new(0, prev_hash);
+        let (mut poh_recorder, entry_receiver) = PohRecorder::new(0, prev_hash, 0);
 
         let working_bank = WorkingBank {
             bank,
@@ -369,7 +382,7 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new(0, prev_hash);
+        let (mut poh_recorder, entry_receiver) = PohRecorder::new(0, prev_hash, 0);
 
         let working_bank = WorkingBank {
             bank,
@@ -398,7 +411,7 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new(0, prev_hash);
+        let (mut poh_recorder, entry_receiver) = PohRecorder::new(0, prev_hash, 0);
 
         let working_bank = WorkingBank {
             bank,
@@ -424,7 +437,7 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new(0, prev_hash);
+        let (mut poh_recorder, entry_receiver) = PohRecorder::new(0, prev_hash, 0);
 
         let working_bank = WorkingBank {
             bank,
@@ -443,28 +456,30 @@ mod tests {
 
     #[test]
     fn test_reset_current() {
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default(), 0);
         poh_recorder.tick();
         poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 2);
-        poh_recorder.reset(poh_recorder.poh.tick_height, poh_recorder.poh.hash);
+        poh_recorder.reset(poh_recorder.poh.tick_height, poh_recorder.poh.hash, 0);
         assert_eq!(poh_recorder.tick_cache.len(), 2);
     }
 
     #[test]
     fn test_reset_with_cached() {
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default(), 0);
         poh_recorder.tick();
         poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 2);
         poh_recorder.reset(
             poh_recorder.tick_cache[0].1,
             poh_recorder.tick_cache[0].0.hash,
+            0,
         );
         assert_eq!(poh_recorder.tick_cache.len(), 2);
         poh_recorder.reset(
             poh_recorder.tick_cache[1].1,
             poh_recorder.tick_cache[1].0.hash,
+            0,
         );
         assert_eq!(poh_recorder.tick_cache.len(), 2);
     }
@@ -472,7 +487,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_reset_with_cached_bad_height() {
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default(), 0);
         poh_recorder.tick();
         poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 2);
@@ -480,18 +495,19 @@ mod tests {
         poh_recorder.reset(
             poh_recorder.tick_cache[0].1,
             poh_recorder.tick_cache[1].0.hash,
+            0,
         );
     }
 
     #[test]
     fn test_reset_to_new_value() {
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default(), 0);
         poh_recorder.tick();
         poh_recorder.tick();
         poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 3);
         assert_eq!(poh_recorder.poh.tick_height, 3);
-        poh_recorder.reset(1, hash(b"hello"));
+        poh_recorder.reset(1, hash(b"hello"), 0);
         assert_eq!(poh_recorder.tick_cache.len(), 0);
         poh_recorder.tick();
         assert_eq!(poh_recorder.poh.tick_height, 2);
@@ -501,14 +517,14 @@ mod tests {
     fn test_reset_clear_bank() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default(), 0);
         let working_bank = WorkingBank {
             bank,
             min_tick_height: 2,
             max_tick_height: 3,
         };
         poh_recorder.set_working_bank(working_bank);
-        poh_recorder.reset(1, hash(b"hello"));
+        poh_recorder.reset(1, hash(b"hello"), 0);
         assert!(poh_recorder.working_bank.is_none());
     }
 
@@ -516,7 +532,7 @@ mod tests {
     pub fn test_clear_signal() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default());
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(0, Hash::default(), 0);
         let (sender, receiver) = sync_channel(1);
         poh_recorder.set_bank(&bank);
         poh_recorder.clear_bank_signal = Some(sender);
