@@ -9,7 +9,6 @@ use crate::repair_service::RepairSlotRange;
 use crate::result::Result;
 use crate::service::Service;
 use crate::storage_stage::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
-use crate::streamer::BlobReceiver;
 use crate::window_service::WindowService;
 use rand::thread_rng;
 use rand::Rng;
@@ -35,13 +34,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
+use std::thread::spawn;
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 pub struct Replicator {
     gossip_service: GossipService,
     fetch_stage: BlobFetchStage,
     window_service: WindowService,
-    pub retransmit_receiver: BlobReceiver,
+    t_retransmit: JoinHandle<()>,
     exit: Arc<AtomicBool>,
     slot: u64,
     ledger_path: String,
@@ -174,7 +175,6 @@ impl Replicator {
         let (blob_fetch_sender, blob_fetch_receiver) = channel();
         let fetch_stage = BlobFetchStage::new_multi_socket(blob_sockets, &blob_fetch_sender, &exit);
 
-        // todo: pull blobs off the retransmit_receiver and recycle them?
         let (retransmit_sender, retransmit_receiver) = channel();
 
         let window_service = WindowService::new(
@@ -187,11 +187,20 @@ impl Replicator {
             repair_slot_range,
         );
 
+        // receive blobs from retransmit and drop them.
+        let exit2 = exit.clone();
+        let t_retransmit = spawn(move || loop {
+            let _ = retransmit_receiver.recv_timeout(Duration::from_secs(1));
+            if exit2.load(Ordering::Relaxed) {
+                break;
+            }
+        });
+
         Ok(Self {
             gossip_service,
             fetch_stage,
             window_service,
-            retransmit_receiver,
+            t_retransmit,
             exit,
             slot,
             ledger_path: ledger_path.to_string(),
@@ -329,14 +338,7 @@ impl Replicator {
         self.gossip_service.join().unwrap();
         self.fetch_stage.join().unwrap();
         self.window_service.join().unwrap();
-
-        // Drain the queue here to prevent self.retransmit_receiver from being dropped
-        // before the window_service thread is joined
-        let mut retransmit_queue_count = 0;
-        while let Ok(_blob) = self.retransmit_receiver.recv_timeout(Duration::new(1, 0)) {
-            retransmit_queue_count += 1;
-        }
-        debug!("retransmit channel count: {}", retransmit_queue_count);
+        self.t_retransmit.join().unwrap();
     }
 
     pub fn entry_height(&self) -> u64 {
