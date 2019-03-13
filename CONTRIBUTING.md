@@ -89,24 +89,23 @@ understood. Avoid introducing new 3-letter terms, which can be confused with 3-l
 [Terms currently in use](book/src/terminology.md)
 
 
-Proposing architectural changes
+Design Proposals
 ---
 
 Solana's architecture is described by a book generated from markdown files in
 the `book/src/` directory, maintained by an *editor* (currently @garious). To
-change the architecture, you'll need to at least propose a change the content
-under the [Proposed
-Changes](https://solana-labs.github.io/book-edge/proposals.html) chapter. Here's
-the full process:
+add a design proposal, you'll need to at least propose a change the content
+under the [Accepted Design
+Proposals](https://solana-labs.github.io/book-edge/proposals.html) chapter.
+Here's the full process:
 
-1. Propose to a change to the architecture by creating a PR that adds a
-   markdown document to the directory `book/src/` and references it from the
-   [table of contents](book/src/SUMMARY.md). Add the editor and any relevant
-   *maintainers* to the PR review.
+1. Propose a design by creating a PR that adds a markdown document to the
+   directory `book/src/` and references it from the [table of
+   contents](book/src/SUMMARY.md). Add any relevant *maintainers* to the PR review.
 2. The PR being merged indicates your proposed change was accepted and that the
-   editor and maintainers support your plan of attack.
+   maintainers support your plan of attack.
 3. Submit PRs that implement the proposal. When the implementation reveals the
-   need for tweaks to the architecture, be sure to update the proposal and have
+   need for tweaks to the proposal, be sure to update the proposal and have
    that change reviewed by the same people as in step 1.
-4. Once the implementation is complete, the editor will then work to integrate
-   the document into the book.
+4. Once the implementation is complete, submit a PR that moves the link from
+   the Accepted Proposals to the Implemented Proposals section.
