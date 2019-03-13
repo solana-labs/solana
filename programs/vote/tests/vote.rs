@@ -1,12 +1,11 @@
-use solana_runtime::bank::TransactionError;
 use solana_runtime::bank::{Bank, Result};
-use solana_runtime::runtime::InstructionError;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::transaction::{InstructionError, TransactionError};
 use solana_sdk::transaction_builder::{BuilderInstruction, TransactionBuilder};
 use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
 use solana_vote_api::vote_state::VoteState;

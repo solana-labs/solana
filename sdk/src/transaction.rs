@@ -1,6 +1,7 @@
 //! The `transaction` module provides functionality for creating log transactions.
 
 use crate::hash::{Hash, Hasher};
+use crate::native_program::ProgramError;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::pubkey::Pubkey;
 use crate::shortvec::{
@@ -8,12 +9,40 @@ use crate::shortvec::{
     serialize_vec_with,
 };
 use crate::signature::{Keypair, KeypairUtil, Signature};
+use crate::system_instruction::SystemError;
 use bincode::{serialize, Error};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use serde::{Deserialize, Serialize, Serializer};
 use std::fmt;
 use std::io::{Cursor, Read, Write};
 use std::mem::size_of;
+
+/// Reasons the runtime might have rejected an instruction.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum InstructionError {
+    /// Executing the instruction produced an error.
+    ProgramError(ProgramError),
+
+    /// Program's instruction lamport balance does not equal the balance after the instruction
+    UnbalancedInstruction,
+
+    /// Program modified an account's program id
+    ModifiedProgramId,
+
+    /// Program spent the lamports of an account that doesn't belong to it
+    ExternalAccountLamportSpend,
+
+    /// Program modified the userdata of an account that doesn't belong to it
+    ExternalAccountUserdataModified,
+}
+
+impl InstructionError {
+    pub fn new_result_with_negative_lamports() -> Self {
+        let serialized_error =
+            bincode::serialize(&SystemError::ResultWithNegativeLamports).unwrap();
+        InstructionError::ProgramError(ProgramError::CustomError(serialized_error))
+    }
+}
 
 /// An instruction to execute a program
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -74,6 +103,41 @@ impl Instruction<u8, u8> {
 
         Ok(size as u64)
     }
+}
+
+/// Reasons a transaction might be rejected.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum TransactionError {
+    /// This Pubkey is being processed in another transaction
+    AccountInUse,
+
+    /// Pubkey appears twice in the same transaction, typically in a pay-to-self
+    /// transaction.
+    AccountLoadedTwice,
+
+    /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
+    AccountNotFound,
+
+    /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
+    InsufficientFundsForFee,
+
+    /// The bank has seen `Signature` before. This can occur under normal operation
+    /// when a UDP packet is duplicated, as a user error from a client not updating
+    /// its `recent_blockhash`, or as a double-spend attack.
+    DuplicateSignature,
+
+    /// The bank has not seen the given `recent_blockhash` or the transaction is too old and
+    /// the `recent_blockhash` has been discarded.
+    BlockhashNotFound,
+
+    /// The program returned an error
+    InstructionError(u8, InstructionError),
+
+    /// Loader call chain too deep
+    CallChainTooDeep,
+
+    /// Transaction has a fee but has no signature present
+    MissingSignatureForFee,
 }
 
 /// An atomic transaction

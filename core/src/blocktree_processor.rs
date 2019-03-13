@@ -229,11 +229,11 @@ mod tests {
     use crate::blocktree::create_new_tmp_ledger;
     use crate::blocktree::tests::entries_to_blobs;
     use crate::entry::{create_ticks, next_entry, Entry};
-    use solana_runtime::bank::TransactionError;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::transaction::TransactionError;
 
     fn fill_blocktree_slot_with_ticks(
         blocktree: &Blocktree,

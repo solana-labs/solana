@@ -16,9 +16,9 @@ use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use solana_metrics::counter::Counter;
-use solana_runtime::bank::{self, Bank, TransactionError};
+use solana_runtime::bank::{self, Bank};
 use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_BLOCKHASHES};
-use solana_sdk::transaction::Transaction;
+use solana_sdk::transaction::{Transaction, TransactionError};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -445,10 +445,10 @@ mod tests {
     use crate::entry::EntrySlice;
     use crate::packet::to_packets;
     use crate::poh_recorder::WorkingBank;
-    use solana_runtime::runtime::InstructionError;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::transaction::InstructionError;
     use std::sync::mpsc::channel;
     use std::thread::sleep;
 

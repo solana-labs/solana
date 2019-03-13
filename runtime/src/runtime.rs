@@ -1,38 +1,9 @@
-use crate::bank::TransactionError;
 use crate::native_loader;
-use crate::system_program::SystemError;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
-use solana_sdk::transaction::Transaction;
-
-/// Reasons the runtime might have rejected an instruction.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum InstructionError {
-    /// Executing the instruction produced an error.
-    ProgramError(ProgramError),
-
-    /// Program's instruction lamport balance does not equal the balance after the instruction
-    UnbalancedInstruction,
-
-    /// Program modified an account's program id
-    ModifiedProgramId,
-
-    /// Program spent the lamports of an account that doesn't belong to it
-    ExternalAccountLamportSpend,
-
-    /// Program modified the userdata of an account that doesn't belong to it
-    ExternalAccountUserdataModified,
-}
-
-impl InstructionError {
-    pub fn new_result_with_negative_lamports() -> Self {
-        let serialized_error =
-            bincode::serialize(&SystemError::ResultWithNegativeLamports).unwrap();
-        InstructionError::ProgramError(ProgramError::CustomError(serialized_error))
-    }
-}
+use solana_sdk::transaction::{InstructionError, Transaction, TransactionError};
 
 /// Process an instruction
 /// This method calls the instruction's program entrypoint method

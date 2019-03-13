@@ -8,7 +8,7 @@ use crate::packet;
 use crate::poh_recorder;
 use bincode;
 use serde_json;
-use solana_runtime::bank;
+use solana_sdk::transaction;
 use std;
 use std::any::Any;
 
@@ -22,7 +22,7 @@ pub enum Error {
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     TryRecvError(std::sync::mpsc::TryRecvError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
-    TransactionError(bank::TransactionError),
+    TransactionError(transaction::TransactionError),
     ClusterInfoError(cluster_info::ClusterInfoError),
     BlobError(packet::BlobError),
     #[cfg(feature = "erasure")]
@@ -57,8 +57,8 @@ impl std::convert::From<std::sync::mpsc::RecvTimeoutError> for Error {
         Error::RecvTimeoutError(e)
     }
 }
-impl std::convert::From<bank::TransactionError> for Error {
-    fn from(e: bank::TransactionError) -> Error {
+impl std::convert::From<transaction::TransactionError> for Error {
+    fn from(e: transaction::TransactionError) -> Error {
         Error::TransactionError(e)
     }
 }
