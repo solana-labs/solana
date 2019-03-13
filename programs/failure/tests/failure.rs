@@ -1,6 +1,7 @@
 use solana_runtime::bank::Bank;
 use solana_runtime::bank::BankError;
 use solana_runtime::loader_utils::load_program;
+use solana_runtime::runtime::InstructionError;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::native_loader;
 use solana_sdk::native_program::ProgramError;
@@ -25,6 +26,9 @@ fn test_program_native_failure() {
     );
     assert_eq!(
         bank.process_transaction(&tx),
-        Err(BankError::ProgramError(0, ProgramError::GenericError))
+        Err(BankError::InstructionError(
+            0,
+            InstructionError::ProgramError(ProgramError::GenericError)
+        ))
     );
 }

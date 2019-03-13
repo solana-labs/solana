@@ -16,18 +16,6 @@ pub enum ProgramError {
     /// contract
     ResultWithNegativeLamports,
 
-    /// Program's instruction lamport balance does not equal the balance after the instruction
-    UnbalancedInstruction,
-
-    /// Program modified an account's program id
-    ModifiedProgramId,
-
-    /// Program spent the lamports of an account that doesn't belong to it
-    ExternalAccountLamportSpend,
-
-    /// Program modified the userdata of an account that doesn't belong to it
-    ExternalAccountUserdataModified,
-
     /// An account's userdata contents was invalid
     InvalidUserdata,
 

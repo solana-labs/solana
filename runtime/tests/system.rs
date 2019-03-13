@@ -1,4 +1,5 @@
 use solana_runtime::bank::{Bank, BankError};
+use solana_runtime::runtime::InstructionError;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -46,7 +47,10 @@ fn test_system_unsigned_transaction() {
         .sign(&[&to_keypair], blockhash);
     assert_eq!(
         system_bank.bank.process_transaction(&tx),
-        Err(BankError::ProgramError(0, ProgramError::InvalidArgument))
+        Err(BankError::InstructionError(
+            0,
+            InstructionError::ProgramError(ProgramError::InvalidArgument)
+        ))
     );
     assert_eq!(system_bank.bank.get_balance(&from_keypair.pubkey()), 50);
     assert_eq!(system_bank.bank.get_balance(&to_keypair.pubkey()), 50);

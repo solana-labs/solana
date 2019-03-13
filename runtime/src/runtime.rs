@@ -5,11 +5,30 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
 
+/// Reasons the runtime might have rejected an instruction.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum InstructionError {
+    /// Executing the instruction produced an error.
+    ProgramError(ProgramError),
+
+    /// Program's instruction lamport balance does not equal the balance after the instruction
+    UnbalancedInstruction,
+
+    /// Program modified an account's program id
+    ModifiedProgramId,
+
+    /// Program spent the lamports of an account that doesn't belong to it
+    ExternalAccountLamportSpend,
+
+    /// Program modified the userdata of an account that doesn't belong to it
+    ExternalAccountUserdataModified,
+}
+
 /// Reasons the runtime might have rejected a transaction.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum RuntimeError {
-    /// Executing the instruction at the give&n index produced an error.
-    ProgramError(u8, ProgramError),
+pub enum TransactionError {
+    /// Executing the instruction at the given index produced an error.
+    InstructionError(u8, InstructionError),
 }
 
 /// Process an instruction
@@ -60,23 +79,23 @@ fn verify_instruction(
     pre_lamports: u64,
     pre_userdata: &[u8],
     account: &Account,
-) -> Result<(), ProgramError> {
+) -> Result<(), InstructionError> {
     // Verify the transaction
 
     // Make sure that program_id is still the same or this was just assigned by the system program
     if *pre_program_id != account.owner && !system_program::check_id(&program_id) {
-        return Err(ProgramError::ModifiedProgramId);
+        return Err(InstructionError::ModifiedProgramId);
     }
     // For accounts unassigned to the program, the individual balance of each accounts cannot decrease.
     if *program_id != account.owner && pre_lamports > account.lamports {
-        return Err(ProgramError::ExternalAccountLamportSpend);
+        return Err(InstructionError::ExternalAccountLamportSpend);
     }
     // For accounts unassigned to the program, the userdata may not change.
     if *program_id != account.owner
         && !system_program::check_id(&program_id)
         && pre_userdata != &account.userdata[..]
     {
-        return Err(ProgramError::ExternalAccountUserdataModified);
+        return Err(InstructionError::ExternalAccountUserdataModified);
     }
     Ok(())
 }
@@ -91,7 +110,7 @@ fn execute_instruction(
     executable_accounts: &mut [(Pubkey, Account)],
     program_accounts: &mut [&mut Account],
     tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<(), InstructionError> {
     let program_id = tx.program_id(instruction_index);
     // TODO: the runtime should be checking read/write access to memory
     // we are trusting the hard-coded programs not to clobber or allocate
@@ -108,7 +127,8 @@ fn execute_instruction(
         program_accounts,
         tick_height,
     )
-    .map_err(verify_error)?;
+    .map_err(verify_error)
+    .map_err(InstructionError::ProgramError)?;
 
     // Verify the instruction
     for ((pre_program_id, pre_lamports, pre_userdata), post_account) in
@@ -125,7 +145,7 @@ fn execute_instruction(
     // The total sum of all the lamports in all the accounts cannot change.
     let post_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
     if pre_total != post_total {
-        return Err(ProgramError::UnbalancedInstruction);
+        return Err(InstructionError::UnbalancedInstruction);
     }
     Ok(())
 }
@@ -173,7 +193,7 @@ pub fn execute_transaction(
     loaders: &mut [Vec<(Pubkey, Account)>],
     tx_accounts: &mut [Account],
     tick_height: u64,
-) -> Result<(), RuntimeError> {
+) -> Result<(), TransactionError> {
     for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
         let executable_accounts = &mut (&mut loaders[instruction.program_ids_index as usize]);
         let mut program_accounts = get_subset_unchecked_mut(tx_accounts, &instruction.accounts);
@@ -184,7 +204,7 @@ pub fn execute_transaction(
             &mut program_accounts,
             tick_height,
         )
-        .map_err(|err| RuntimeError::ProgramError(instruction_index as u8, err))?;
+        .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
     }
     Ok(())
 }
@@ -273,7 +293,11 @@ mod tests {
 
     #[test]
     fn test_verify_instruction_change_program_id() {
-        fn change_program_id(ix: &Pubkey, pre: &Pubkey, post: &Pubkey) -> Result<(), ProgramError> {
+        fn change_program_id(
+            ix: &Pubkey,
+            pre: &Pubkey,
+            post: &Pubkey,
+        ) -> Result<(), InstructionError> {
             verify_instruction(&ix, &pre, 0, &[], &Account::new(0, 0, post))
         }
 
@@ -288,14 +312,14 @@ mod tests {
         );
         assert_eq!(
             change_program_id(&mallory_program_id, &system_program_id, &alice_program_id),
-            Err(ProgramError::ModifiedProgramId),
+            Err(InstructionError::ModifiedProgramId),
             "malicious Mallory should not be able to change the account owner"
         );
     }
 
     #[test]
     fn test_verify_instruction_change_userdata() {
-        fn change_userdata(program_id: &Pubkey) -> Result<(), ProgramError> {
+        fn change_userdata(program_id: &Pubkey) -> Result<(), InstructionError> {
             let alice_program_id = Keypair::new().pubkey();
             let account = Account::new(0, 0, &alice_program_id);
             verify_instruction(&program_id, &alice_program_id, 0, &[42], &account)
@@ -311,7 +335,7 @@ mod tests {
         );
         assert_eq!(
             change_userdata(&mallory_program_id),
-            Err(ProgramError::ExternalAccountUserdataModified),
+            Err(InstructionError::ExternalAccountUserdataModified),
             "malicious Mallory should not be able to change the account userdata"
         );
     }
