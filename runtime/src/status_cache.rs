@@ -167,8 +167,8 @@ impl<T: Clone> StatusCache<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bank::TransactionError;
     use solana_sdk::hash::hash;
+    use solana_sdk::transaction::TransactionError;
 
     type BankStatusCache = StatusCache<TransactionError>;
 

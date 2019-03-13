@@ -6,10 +6,11 @@ use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::typed::Sink;
 use jsonrpc_pubsub::SubscriptionId;
-use solana_runtime::bank::{self, Bank, TransactionError};
+use solana_runtime::bank::{self, Bank};
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
+use solana_sdk::transaction::TransactionError;
 use std::collections::HashMap;
 use std::sync::RwLock;
 

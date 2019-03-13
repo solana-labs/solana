@@ -1,21 +1,13 @@
 use bincode::serialize;
 use log::*;
-use serde_derive::Serialize;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_instruction::{SystemError, SystemInstruction};
 use solana_sdk::system_program;
 
 const FROM_ACCOUNT_INDEX: usize = 0;
 const TO_ACCOUNT_INDEX: usize = 1;
-
-#[derive(Serialize, Debug, Clone, PartialEq)]
-pub enum SystemError {
-    AccountAlreadyInUse,
-    ResultWithNegativeLamports,
-    SourceNotSystemAccount,
-}
 
 fn create_system_account(
     keyed_accounts: &mut [KeyedAccount],

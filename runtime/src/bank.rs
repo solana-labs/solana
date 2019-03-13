@@ -5,7 +5,7 @@
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::hash_queue::HashQueue;
-use crate::runtime::{self, InstructionError};
+use crate::runtime;
 use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
@@ -19,7 +19,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES, NUM_TICKS_PER_SECOND};
-use solana_sdk::transaction::Transaction;
+use solana_sdk::transaction::{Transaction, TransactionError};
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState};
 use std::result;
@@ -102,41 +102,6 @@ impl EpochSchedule {
             )
         }
     }
-}
-
-/// Reasons a transaction might be rejected.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum TransactionError {
-    /// This Pubkey is being processed in another transaction
-    AccountInUse,
-
-    /// Pubkey appears twice in the same transaction, typically in a pay-to-self
-    /// transaction.
-    AccountLoadedTwice,
-
-    /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
-    AccountNotFound,
-
-    /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
-    InsufficientFundsForFee,
-
-    /// The bank has seen `Signature` before. This can occur under normal operation
-    /// when a UDP packet is duplicated, as a user error from a client not updating
-    /// its `recent_blockhash`, or as a double-spend attack.
-    DuplicateSignature,
-
-    /// The bank has not seen the given `recent_blockhash` or the transaction is too old and
-    /// the `recent_blockhash` has been discarded.
-    BlockhashNotFound,
-
-    /// The program returned an error
-    InstructionError(u8, InstructionError),
-
-    /// Loader call chain too deep
-    CallChainTooDeep,
-
-    /// Transaction has a fee but has no signature present
-    MissingSignatureForFee,
 }
 
 pub type Result<T> = result::Result<T, TransactionError>;
@@ -882,7 +847,7 @@ mod tests {
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
     use solana_sdk::system_transaction::SystemTransaction;
-    use solana_sdk::transaction::Instruction;
+    use solana_sdk::transaction::{Instruction, InstructionError};
 
     #[test]
     fn test_bank_new() {
