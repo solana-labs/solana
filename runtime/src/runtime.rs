@@ -1,4 +1,4 @@
-use crate::bank::BankError;
+use crate::bank::TransactionError;
 use crate::native_loader;
 use crate::system_program::SystemError;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
@@ -196,7 +196,7 @@ pub fn execute_transaction(
     loaders: &mut [Vec<(Pubkey, Account)>],
     tx_accounts: &mut [Account],
     tick_height: u64,
-) -> Result<(), BankError> {
+) -> Result<(), TransactionError> {
     for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
         let executable_accounts = &mut (&mut loaders[instruction.program_ids_index as usize]);
         let mut program_accounts = get_subset_unchecked_mut(tx_accounts, &instruction.accounts);
@@ -207,7 +207,7 @@ pub fn execute_transaction(
             &mut program_accounts,
             tick_height,
         )
-        .map_err(|err| BankError::InstructionError(instruction_index as u8, err))?;
+        .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
     }
     Ok(())
 }

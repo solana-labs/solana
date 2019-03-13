@@ -1,4 +1,4 @@
-use solana_runtime::bank::{Bank, BankError};
+use solana_runtime::bank::{Bank, TransactionError};
 use solana_runtime::runtime::InstructionError;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::native_program::ProgramError;
@@ -47,7 +47,7 @@ fn test_system_unsigned_transaction() {
         .sign(&[&to_keypair], blockhash);
     assert_eq!(
         system_bank.bank.process_transaction(&tx),
-        Err(BankError::InstructionError(
+        Err(TransactionError::InstructionError(
             0,
             InstructionError::ProgramError(ProgramError::MissingRequiredSignature)
         ))

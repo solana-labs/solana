@@ -1,4 +1,4 @@
-use solana_runtime::bank::BankError;
+use solana_runtime::bank::TransactionError;
 use solana_runtime::bank::{Bank, Result};
 use solana_runtime::runtime::InstructionError;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -135,7 +135,7 @@ fn test_vote_via_bank_with_no_signature() {
 
     assert_eq!(
         result,
-        Err(BankError::InstructionError(
+        Err(TransactionError::InstructionError(
             1,
             InstructionError::ProgramError(ProgramError::InvalidArgument)
         ))

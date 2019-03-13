@@ -6,7 +6,7 @@ use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::typed::Sink;
 use jsonrpc_pubsub::SubscriptionId;
-use solana_runtime::bank::{self, Bank, BankError};
+use solana_runtime::bank::{self, Bank, TransactionError};
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
@@ -98,8 +98,10 @@ impl RpcSubscriptions {
     pub fn check_signature(&self, signature: &Signature, bank_error: &bank::Result<()>) {
         let status = match bank_error {
             Ok(_) => RpcSignatureStatus::Confirmed,
-            Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-            Err(BankError::InstructionError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
+            Err(TransactionError::AccountInUse) => RpcSignatureStatus::AccountInUse,
+            Err(TransactionError::InstructionError(_, _)) => {
+                RpcSignatureStatus::ProgramRuntimeError
+            }
             Err(_) => RpcSignatureStatus::GenericFailure,
         };
 

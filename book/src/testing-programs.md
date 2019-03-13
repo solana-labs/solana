@@ -25,7 +25,7 @@ When Futures 0.3.0 is released, the Transact trait may look like this:
 
 ```rust,ignore
 trait Transact {
-    async fn send_transactions(txs: &[Transaction]) -> Vec<Result<(), BankError>>;
+    async fn send_transactions(txs: &[Transaction]) -> Vec<Result<(), TransactionError>>;
 }
 ```
 

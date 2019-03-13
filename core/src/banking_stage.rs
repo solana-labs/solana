@@ -16,7 +16,7 @@ use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use solana_metrics::counter::Counter;
-use solana_runtime::bank::{self, Bank, BankError};
+use solana_runtime::bank::{self, Bank, TransactionError};
 use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::Transaction;
 use std::net::UdpSocket;
@@ -208,7 +208,7 @@ impl BankingStage {
             .zip(txs.iter())
             .filter_map(|(r, x)| match r {
                 Ok(_) => Some(x.clone()),
-                Err(BankError::InstructionError(index, err)) => {
+                Err(TransactionError::InstructionError(index, err)) => {
                     info!("instruction error {:?}, {:?}", index, err);
                     Some(x.clone())
                 }
@@ -682,7 +682,7 @@ mod tests {
         assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
         // ProgramErrors should still be recorded
-        results[0] = Err(BankError::InstructionError(
+        results[0] = Err(TransactionError::InstructionError(
             1,
             InstructionError::new_result_with_negative_lamports(),
         ));
@@ -690,8 +690,8 @@ mod tests {
         let (_, entries) = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
-        // Other BankErrors should not be recorded
-        results[0] = Err(BankError::AccountNotFound);
+        // Other TransactionErrors should not be recorded
+        results[0] = Err(TransactionError::AccountNotFound);
         BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let (_, entries) = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);

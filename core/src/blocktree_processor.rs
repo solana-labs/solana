@@ -229,7 +229,7 @@ mod tests {
     use crate::blocktree::create_new_tmp_ledger;
     use crate::blocktree::tests::entries_to_blobs;
     use crate::entry::{create_ticks, next_entry, Entry};
-    use solana_runtime::bank::BankError;
+    use solana_runtime::bank::TransactionError;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -383,32 +383,32 @@ mod tests {
     fn test_first_err() {
         assert_eq!(first_err(&[Ok(())]), Ok(()));
         assert_eq!(
-            first_err(&[Ok(()), Err(BankError::DuplicateSignature)]),
-            Err(BankError::DuplicateSignature)
+            first_err(&[Ok(()), Err(TransactionError::DuplicateSignature)]),
+            Err(TransactionError::DuplicateSignature)
         );
         assert_eq!(
             first_err(&[
                 Ok(()),
-                Err(BankError::DuplicateSignature),
-                Err(BankError::AccountInUse)
+                Err(TransactionError::DuplicateSignature),
+                Err(TransactionError::AccountInUse)
             ]),
-            Err(BankError::DuplicateSignature)
+            Err(TransactionError::DuplicateSignature)
         );
         assert_eq!(
             first_err(&[
                 Ok(()),
-                Err(BankError::AccountInUse),
-                Err(BankError::DuplicateSignature)
+                Err(TransactionError::AccountInUse),
+                Err(TransactionError::DuplicateSignature)
             ]),
-            Err(BankError::AccountInUse)
+            Err(TransactionError::AccountInUse)
         );
         assert_eq!(
             first_err(&[
-                Err(BankError::AccountInUse),
+                Err(TransactionError::AccountInUse),
                 Ok(()),
-                Err(BankError::DuplicateSignature)
+                Err(TransactionError::DuplicateSignature)
             ]),
-            Err(BankError::AccountInUse)
+            Err(TransactionError::AccountInUse)
         );
     }
 
@@ -431,7 +431,7 @@ mod tests {
         // First, ensure the TX is rejected because of the unregistered last ID
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(BankError::BlockhashNotFound)
+            Err(TransactionError::BlockhashNotFound)
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
@@ -733,7 +733,7 @@ mod tests {
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
             process_entries(&bank, &[entry_3]),
-            Err(BankError::AccountNotFound)
+            Err(TransactionError::AccountNotFound)
         );
     }
 }

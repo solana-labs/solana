@@ -1,5 +1,5 @@
 use crate::append_vec::AppendVec;
-use crate::bank::{BankError, Result};
+use crate::bank::{Result, TransactionError};
 use crate::runtime::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
@@ -608,12 +608,12 @@ impl AccountsDB {
     ) -> Result<Vec<Account>> {
         // Copy all the accounts
         if tx.signatures.is_empty() && tx.fee != 0 {
-            Err(BankError::MissingSignatureForFee)
+            Err(TransactionError::MissingSignatureForFee)
         } else {
             // Check for unique account keys
             if has_duplicates(&tx.account_keys) {
                 error_counters.account_loaded_twice += 1;
-                return Err(BankError::AccountLoadedTwice);
+                return Err(TransactionError::AccountLoadedTwice);
             }
 
             // There is no way to predict what program will execute without an error
@@ -624,10 +624,10 @@ impl AccountsDB {
             }
             if called_accounts.is_empty() || called_accounts[0].lamports == 0 {
                 error_counters.account_not_found += 1;
-                Err(BankError::AccountNotFound)
+                Err(TransactionError::AccountNotFound)
             } else if called_accounts[0].lamports < tx.fee {
                 error_counters.insufficient_funds += 1;
-                Err(BankError::InsufficientFundsForFee)
+                Err(TransactionError::InsufficientFundsForFee)
             } else {
                 called_accounts[0].lamports -= tx.fee;
                 Ok(called_accounts)
@@ -652,7 +652,7 @@ impl AccountsDB {
 
             if depth >= 5 {
                 error_counters.call_chain_too_deep += 1;
-                return Err(BankError::CallChainTooDeep);
+                return Err(TransactionError::CallChainTooDeep);
             }
             depth += 1;
 
@@ -660,12 +660,12 @@ impl AccountsDB {
                 Some(program) => program,
                 None => {
                     error_counters.account_not_found += 1;
-                    return Err(BankError::AccountNotFound);
+                    return Err(TransactionError::AccountNotFound);
                 }
             };
             if !program.executable || program.owner == Pubkey::default() {
                 error_counters.account_not_found += 1;
-                return Err(BankError::AccountNotFound);
+                return Err(TransactionError::AccountNotFound);
             }
 
             // add loader to chain
@@ -688,7 +688,7 @@ impl AccountsDB {
             .map(|ix| {
                 if tx.program_ids.len() <= ix.program_ids_index as usize {
                     error_counters.account_not_found += 1;
-                    return Err(BankError::AccountNotFound);
+                    return Err(TransactionError::AccountNotFound);
                 }
                 let program_id = tx.program_ids[ix.program_ids_index as usize];
                 self.load_executable_accounts(fork, &program_id, error_counters)
@@ -889,7 +889,7 @@ impl Accounts {
         for k in keys {
             if locks.contains(k) {
                 error_counters.account_in_use += 1;
-                return Err(BankError::AccountInUse);
+                return Err(TransactionError::AccountInUse);
             }
         }
         for k in keys {
@@ -905,7 +905,7 @@ impl Accounts {
         account_locks: &mut HashMap<Fork, HashSet<Pubkey>>,
     ) {
         match result {
-            Err(BankError::AccountInUse) => (),
+            Err(TransactionError::AccountInUse) => (),
             _ => {
                 if let Some(locks) = account_locks.get_mut(&fork) {
                     for k in &tx.account_keys {
@@ -1060,7 +1060,7 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
+        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
     }
 
     #[test]
@@ -1084,7 +1084,7 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
+        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
     }
 
     #[test]
@@ -1116,7 +1116,7 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
+        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
     }
 
     #[test]
@@ -1144,7 +1144,10 @@ mod tests {
 
         assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(BankError::InsufficientFundsForFee));
+        assert_eq!(
+            loaded_accounts[0],
+            Err(TransactionError::InsufficientFundsForFee)
+        );
     }
 
     #[test]
@@ -1248,7 +1251,7 @@ mod tests {
 
         assert_eq!(error_counters.call_chain_too_deep, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(BankError::CallChainTooDeep));
+        assert_eq!(loaded_accounts[0], Err(TransactionError::CallChainTooDeep));
     }
 
     #[test]
@@ -1282,7 +1285,7 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
+        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
     }
 
     #[test]
@@ -1315,7 +1318,7 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
+        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
     }
 
     #[test]
@@ -1408,7 +1411,10 @@ mod tests {
         assert_eq!(error_counters.account_loaded_twice, 1);
         assert_eq!(loaded_accounts.len(), 1);
         loaded_accounts[0].clone().unwrap_err();
-        assert_eq!(loaded_accounts[0], Err(BankError::AccountLoadedTwice));
+        assert_eq!(
+            loaded_accounts[0],
+            Err(TransactionError::AccountLoadedTwice)
+        );
     }
 
     #[macro_export]
@@ -1867,7 +1873,7 @@ mod tests {
         let mut error_counters = ErrorCounters::default();
         assert_eq!(
             accounts.load_executable_accounts(0, &Keypair::new().pubkey(), &mut error_counters),
-            Err(BankError::AccountNotFound)
+            Err(TransactionError::AccountNotFound)
         );
         assert_eq!(error_counters.account_not_found, 1);
     }
