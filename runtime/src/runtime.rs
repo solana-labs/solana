@@ -1,4 +1,5 @@
 use crate::native_loader;
+use crate::system_program::SystemError;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
@@ -26,7 +27,9 @@ pub enum InstructionError {
 
 impl InstructionError {
     pub fn new_result_with_negative_lamports() -> Self {
-        InstructionError::ProgramError(ProgramError::ResultWithNegativeLamports)
+        let serialized_error =
+            bincode::serialize(&SystemError::ResultWithNegativeLamports).unwrap();
+        InstructionError::ProgramError(ProgramError::CustomError(serialized_error))
     }
 }
 
