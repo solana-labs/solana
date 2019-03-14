@@ -74,6 +74,8 @@ members = [
     "programs/bpf_loader",
     "programs/budget",
     "programs/budget_api",
+    "programs/config",
+    "programs/config_api",
     "programs/token",
     "programs/token_api",
     "programs/failure",
