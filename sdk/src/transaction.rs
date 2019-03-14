@@ -35,6 +35,9 @@ pub enum InstructionError {
 
     /// Program modified the data of an account that doesn't belong to it
     ExternalAccountDataModified,
+
+    /// An account was referenced more than once in a single instruction
+    DuplicateAccountIndex,
 }
 
 impl InstructionError {
@@ -177,7 +180,7 @@ impl Transaction {
             Hash::default(),
             fee,
         );
-        transaction.sign(&[from_keypair], recent_blockhash);
+        transaction.sign_checked(&[from_keypair], recent_blockhash);
         transaction
     }
     pub fn new_unsigned<T: Serialize>(
@@ -219,14 +222,14 @@ impl Transaction {
             .collect();
         account_keys.extend_from_slice(keys);
         let mut tx = Transaction {
-            signatures: vec![],
+            signatures: Vec::with_capacity(from_keypairs.len()),
             account_keys,
             recent_blockhash: Hash::default(),
             fee,
             program_ids,
             instructions,
         };
-        tx.sign(from_keypairs, recent_blockhash);
+        tx.sign_checked(from_keypairs, recent_blockhash);
         tx
     }
     pub fn data(&self, instruction_index: usize) -> &[u8] {

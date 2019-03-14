@@ -497,8 +497,6 @@ mod tests {
         let fee = 2;
         let blockhash = Hash::default();
 
-        let keys = vec![keypair0.pubkey(), keypair1.pubkey()];
-
         let system_instruction = SystemInstruction::Move { lamports };
 
         let program_ids = vec![system_program::id(), solana_budget_api::id()];
@@ -507,7 +505,7 @@ mod tests {
 
         let tx = Transaction::new_with_instructions(
             &keypairs,
-            &keys,
+            &[],
             blockhash,
             fee,
             program_ids,
