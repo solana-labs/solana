@@ -118,6 +118,7 @@ mod tests {
     use solana_sdk::hash::hash;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::timing::MAX_RECENT_BLOCKHASHES;
     use solana_vote_api::vote_transaction::VoteTransaction;
     use std::sync::Arc;
 
@@ -130,8 +131,8 @@ mod tests {
 
         let mut bank = Arc::new(Bank::new(&genesis_block));
 
-        // Move the bank up 10 slots
-        for slot in 1..=10 {
+        // Move the bank up MAX_RECENT_BLOCKHASHES slots
+        for slot in 1..=MAX_RECENT_BLOCKHASHES as u64 {
             let max_tick_height = slot * bank.ticks_per_slot() - 1;
 
             while bank.tick_height() != max_tick_height {
@@ -159,7 +160,11 @@ mod tests {
                 new_vote_account(&validator_keypair, &voting_pubkey, &bank, 1);
 
                 if i < 6 {
-                    push_vote(&voting_keypair, &bank, (i + 1) as u64);
+                    push_vote(
+                        &voting_keypair,
+                        &bank,
+                        MAX_RECENT_BLOCKHASHES.saturating_sub(i) as u64,
+                    );
                 }
                 (voting_keypair, validator_keypair)
             })
@@ -172,8 +177,13 @@ mod tests {
 
         // Get another validator to vote, so we now have 2/3 consensus
         let voting_keypair = &vote_accounts[7].0;
-        let vote_tx =
-            VoteTransaction::new_vote(&voting_keypair.pubkey(), voting_keypair, 7, blockhash, 0);
+        let vote_tx = VoteTransaction::new_vote(
+            &voting_keypair.pubkey(),
+            voting_keypair,
+            MAX_RECENT_BLOCKHASHES as u64,
+            blockhash,
+            0,
+        );
         bank.process_transaction(&vote_tx).unwrap();
 
         LeaderConfirmationService::compute_confirmation(&bank, &mut last_confirmation_time);
