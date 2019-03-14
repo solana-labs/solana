@@ -1,8 +1,8 @@
 mod accounts;
 pub mod append_vec;
 pub mod bank;
+mod blockhash_queue;
 pub mod bloom;
-mod hash_queue;
 pub mod loader_utils;
 mod native_loader;
 pub mod runtime;
