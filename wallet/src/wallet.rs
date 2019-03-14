@@ -455,7 +455,8 @@ fn process_configure_staking(
             &authorized_voter_id,
         ));
     }
-    let mut tx = tx.sign(&[&config.id], recent_blockhash);
+    let mut tx = tx.compile();
+    tx.sign(&[&config.id], recent_blockhash);
     let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
     Ok(signature_str.to_string())
 }

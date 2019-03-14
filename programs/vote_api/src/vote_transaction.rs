@@ -22,9 +22,11 @@ impl VoteTransaction {
         fee: u64,
     ) -> Transaction {
         let vote = Vote { slot };
-        TransactionBuilder::new(fee)
+        let mut tx = TransactionBuilder::new(fee)
             .push(VoteInstruction::new_vote(staking_account, vote))
-            .sign(&[authorized_voter_keypair], recent_blockhash)
+            .compile();
+        tx.sign(&[authorized_voter_keypair], recent_blockhash);
+        tx
     }
 
     /// Fund or create the staking account with lamports
@@ -37,7 +39,7 @@ impl VoteTransaction {
     ) -> Transaction {
         let from_id = from_keypair.pubkey();
         let space = VoteState::max_size() as u64;
-        TransactionBuilder::new(fee)
+        let mut tx = TransactionBuilder::new(fee)
             .push(SystemInstruction::new_program_account(
                 &from_id,
                 staker_id,
@@ -46,7 +48,9 @@ impl VoteTransaction {
                 &id(),
             ))
             .push(VoteInstruction::new_initialize_account(staker_id))
-            .sign(&[from_keypair], recent_blockhash)
+            .compile();
+        tx.sign(&[from_keypair], recent_blockhash);
+        tx
     }
 
     /// Fund or create the staking account with lamports
@@ -61,7 +65,7 @@ impl VoteTransaction {
         let from_id = from_keypair.pubkey();
         let voter_id = voter_keypair.pubkey();
         let space = VoteState::max_size() as u64;
-        TransactionBuilder::new(fee)
+        let mut tx = TransactionBuilder::new(fee)
             .push(SystemInstruction::new_program_account(
                 &from_id,
                 &voter_id,
@@ -71,7 +75,9 @@ impl VoteTransaction {
             ))
             .push(VoteInstruction::new_initialize_account(&voter_id))
             .push(VoteInstruction::new_delegate_stake(&voter_id, &delegate_id))
-            .sign(&[from_keypair, voter_keypair], recent_blockhash)
+            .compile();
+        tx.sign(&[from_keypair, voter_keypair], recent_blockhash);
+        tx
     }
 
     /// Choose a voter id to accept signed votes from
@@ -81,12 +87,14 @@ impl VoteTransaction {
         authorized_voter_id: &Pubkey,
         fee: u64,
     ) -> Transaction {
-        TransactionBuilder::new(fee)
+        let mut tx = TransactionBuilder::new(fee)
             .push(VoteInstruction::new_authorize_voter(
                 &vote_keypair.pubkey(),
                 authorized_voter_id,
             ))
-            .sign(&[vote_keypair], recent_blockhash)
+            .compile();
+        tx.sign(&[vote_keypair], recent_blockhash);
+        tx
     }
 
     /// Choose a node id to `delegate` or `assign` this vote account to
@@ -96,12 +104,14 @@ impl VoteTransaction {
         node_id: &Pubkey,
         fee: u64,
     ) -> Transaction {
-        TransactionBuilder::new(fee)
+        let mut tx = TransactionBuilder::new(fee)
             .push(VoteInstruction::new_delegate_stake(
                 &vote_keypair.pubkey(),
                 node_id,
             ))
-            .sign(&[vote_keypair], recent_blockhash)
+            .compile();
+        tx.sign(&[vote_keypair], recent_blockhash);
+        tx
     }
 
     fn get_vote(tx: &Transaction, ix_index: usize) -> Option<(Pubkey, Vote, Hash)> {
