@@ -13,28 +13,25 @@ dislike about Ethereum's "gas", non-determinism.
 This design is not yet implemented, but is written as though it has been.  Once
 implemented, delete this comment.
 
-### The Fees Program
+### Congestion-driven fees
 
-The Solana cluster has an on-chain program called Fees with just one global
-account called the *fees account*. The account holds a set of fee parameters
-that the cluster will use to calculate transaction fees in the following epoch.
-Any slot leader may submit congestion statistics to the fees account and the
-Fees program uses that data to automatically adjust the fees to maximize
-resource usage.  Each validator checks congestion statistics and rejects blocks
-that include congestion data inconsistent with its own observations.
+Each validator submits network congestion data to its voting account.  The
+cluster then uses a stake-weighted average from all voting accounts to
+calculate fee parameters. In the first implementation of this design, `tps` and
+`tps_capacity` are the only statistics uploaded. They are uploaded once per
+epoch.
+
+### Calculating fees
 
 The client uses the JSON RPC API to query the cluster for the current fee
 parameters.  Those parameters are tagged with a blockhash and remain valid
 until that blockhash is old enough to be rejected by the slot leader.
 
-### Calculating fees
-
-The fees account contains a variety of fee parameters. Before sending a
-transaction to the cluster, a client may submit the transaction and fee account
-data to an SDK module called the *fee calculator*. So long as the client's SDK
-version matches the slot leader's version, the client is assured that its
-account will be changed exactly the same number of lamports as returned by the
-fee calculator.
+Before sending a transaction to the cluster, a client may submit the
+transaction and fee account data to an SDK module called the *fee calculator*.
+So long as the client's SDK version matches the slot leader's version, the
+client is assured that its account will be changed exactly the same number of
+lamports as returned by the fee calculator.
 
 ### Fee Parameters
 
