@@ -17,7 +17,7 @@ use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::KeypairUtil;
-use solana_sdk::timing::duration_as_ms;
+use solana_sdk::timing::{self, duration_as_ms};
 use solana_vote_api::vote_transaction::VoteTransaction;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -124,6 +124,7 @@ impl ReplayStage {
                         ticks_per_slot = bank.ticks_per_slot();
                     }
 
+                    let locktower_start = Instant::now();
                     // Locktower voting
                     let flat_children = bank_forks.read().unwrap().flat_children();
                     let flat_parents = bank_forks.read().unwrap().flat_parents();
@@ -152,6 +153,9 @@ impl ReplayStage {
                         .collect();
 
                     votable.sort_by_key(|b| b.0);
+                    let ms = timing::duration_as_ms(&locktower_start.elapsed());
+                    info!("@{:?} locktower duration: {:?}", timing::timestamp(), ms,);
+                    inc_new_counter_info!("replay_stage-locktower_duration", ms as usize);
 
                     if let Some((_, bank)) = votable.last() {
                         subscriptions.notify_subscribers(&bank);

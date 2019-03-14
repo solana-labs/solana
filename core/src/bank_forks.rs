@@ -157,13 +157,9 @@ mod tests {
         bank_forks.insert(1, bank);
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
         bank_forks.insert(2, bank);
-        println!("here 4");
         let flat_children = bank_forks.flat_children();
-        println!("here 5");
         let children: Vec<u64> = flat_children[&0].iter().cloned().collect();
-        println!("here 6");
         assert_eq!(children, vec![1, 2]);
-        println!("here 7");
         assert!(flat_children[&1].is_empty());
         assert!(flat_children[&2].is_empty());
     }
