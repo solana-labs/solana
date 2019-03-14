@@ -12,7 +12,6 @@ use rocksdb::{
 };
 
 use solana_sdk::hash::Hash;
-use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 
 use std::fs;
 use std::io;
@@ -105,14 +104,12 @@ impl Blocktree {
         // Create the erasure column family
         let erasure_cf = ErasureCf::new(db.clone());
 
-        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
         Ok(Blocktree {
             db,
             meta_cf,
             data_cf,
             erasure_cf,
             new_blobs_signals: vec![],
-            ticks_per_slot,
         })
     }
 

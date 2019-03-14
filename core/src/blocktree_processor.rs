@@ -274,8 +274,8 @@ mod tests {
         let (ledger_path, mut blockhash) = create_new_tmp_ledger!(&genesis_block);
         debug!("ledger_path: {:?}", ledger_path);
 
-        let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot)
-            .expect("Expected to successfully open database ledger");
+        let blocktree =
+            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
 
         // Write slot 1
         // slot 1, points at slot 0.  Missing one tick
@@ -334,8 +334,8 @@ mod tests {
                    slot 4
 
         */
-        let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot)
-            .expect("Expected to successfully open database ledger");
+        let blocktree =
+            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
 
         // Fork 1, ending at slot 3
         let last_slot1_entry_hash =
@@ -472,7 +472,9 @@ mod tests {
 
         let blocktree =
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
-        blocktree.write_entries(1, 0, 0, &entries).unwrap();
+        blocktree
+            .write_entries(1, 0, 0, genesis_block.ticks_per_slot, &entries)
+            .unwrap();
         let entry_height = genesis_block.ticks_per_slot + entries.len() as u64;
         let (bank_forks, bank_forks_info) =
             process_blocktree(&genesis_block, &blocktree, None).unwrap();

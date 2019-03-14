@@ -440,7 +440,9 @@ mod test {
 
             info!("Send ReplayStage an entry, should see it on the ledger writer receiver");
             let next_tick = create_ticks(1, bank.last_blockhash());
-            blocktree.write_entries(1, 0, 0, next_tick.clone()).unwrap();
+            blocktree
+                .write_entries(1, 0, 0, genesis_block.ticks_per_slot, next_tick.clone())
+                .unwrap();
 
             let received_tick = ledger_writer_recv
                 .recv()
