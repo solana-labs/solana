@@ -28,7 +28,7 @@ impl BudgetTransaction {
     ) -> Transaction {
         let from = from_keypair.pubkey();
         let space = serialized_size(&BudgetState::new(expr.clone())).unwrap();
-        TransactionBuilder::new(fee)
+        let mut tx = TransactionBuilder::new(fee)
             .push(SystemInstruction::new_program_account(
                 &from,
                 contract,
@@ -37,7 +37,10 @@ impl BudgetTransaction {
                 &id(),
             ))
             .push(BudgetInstruction::new_initialize_account(contract, expr))
-            .sign(&[from_keypair], recent_blockhash)
+            .compile();
+
+        tx.sign(&[from_keypair], recent_blockhash);
+        tx
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
@@ -69,11 +72,13 @@ impl BudgetTransaction {
         recent_blockhash: Hash,
     ) -> Transaction {
         let from = from_keypair.pubkey();
-        TransactionBuilder::default()
+        let mut tx = TransactionBuilder::default()
             .push(BudgetInstruction::new_apply_timestamp(
                 &from, contract, to, dt,
             ))
-            .sign(&[from_keypair], recent_blockhash)
+            .compile();
+        tx.sign(&[from_keypair], recent_blockhash);
+        tx
     }
 
     /// Create and sign a new Witness Signature. Used for unit-testing.
@@ -84,9 +89,11 @@ impl BudgetTransaction {
         recent_blockhash: Hash,
     ) -> Transaction {
         let from = from_keypair.pubkey();
-        TransactionBuilder::default()
+        let mut tx = TransactionBuilder::default()
             .push(BudgetInstruction::new_apply_signature(&from, contract, to))
-            .sign(&[from_keypair], recent_blockhash)
+            .compile();
+        tx.sign(&[from_keypair], recent_blockhash);
+        tx
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.

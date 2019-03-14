@@ -2,7 +2,6 @@
 
 use crate::hash::Hash;
 use crate::pubkey::Pubkey;
-use crate::signature::KeypairUtil;
 use crate::transaction::{Instruction, Transaction};
 use itertools::Itertools;
 
@@ -103,13 +102,6 @@ impl TransactionBuilder {
             program_ids,
             instructions,
         }
-    }
-
-    /// Return a signed transaction.
-    pub fn sign<T: KeypairUtil>(&self, keypairs: &[&T], recent_blockhash: Hash) -> Transaction {
-        let mut tx = self.compile();
-        tx.sign(keypairs, recent_blockhash);
-        tx
     }
 }
 
@@ -228,49 +220,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn test_transaction_builder_missing_key() {
-        let keypair = Keypair::new();
-        TransactionBuilder::default().sign(&[&keypair], Hash::default());
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_transaction_builder_missing_keypair() {
-        let program_id = Pubkey::default();
-        let keypair0 = Keypair::new();
-        let id0 = keypair0.pubkey();
-        TransactionBuilder::default()
-            .push(Instruction::new(program_id, &0, vec![(id0, true)]))
-            .sign(&Vec::<&Keypair>::new(), Hash::default());
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_transaction_builder_wrong_key() {
-        let program_id = Pubkey::default();
-        let keypair0 = Keypair::new();
-        let wrong_id = Pubkey::default();
-        TransactionBuilder::default()
-            .push(Instruction::new(program_id, &0, vec![(wrong_id, true)]))
-            .sign(&[&keypair0], Hash::default());
-    }
-
-    #[test]
-    fn test_transaction_builder_correct_key() {
-        let program_id = Pubkey::default();
-        let keypair0 = Keypair::new();
-        let id0 = keypair0.pubkey();
-        let tx = TransactionBuilder::default()
-            .push(Instruction::new(program_id, &0, vec![(id0, true)]))
-            .sign(&[&keypair0], Hash::default());
-        assert_eq!(tx.instructions[0], Instruction::new(0, &0, vec![0]));
-    }
-
-    #[test]
     fn test_transaction_builder_fee() {
-        let tx = TransactionBuilder::new(42).sign(&Vec::<&Keypair>::new(), Hash::default());
-        assert_eq!(tx.fee, 42);
+        assert_eq!(TransactionBuilder::new(42).compile().fee, 42);
     }
 
     #[test]
@@ -284,7 +235,7 @@ mod tests {
             .push(Instruction::new(program_id0, &0, vec![(id0, false)]))
             .push(Instruction::new(program_id1, &0, vec![(id1, true)]))
             .push(Instruction::new(program_id0, &0, vec![(id1, false)]))
-            .sign(&[&keypair1], Hash::default());
+            .compile();
         assert_eq!(tx.instructions[0], Instruction::new(0, &0, vec![1]));
         assert_eq!(tx.instructions[1], Instruction::new(1, &0, vec![0]));
         assert_eq!(tx.instructions[2], Instruction::new(0, &0, vec![0]));

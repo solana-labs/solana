@@ -641,4 +641,49 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    #[should_panic]
+    fn test_transaction_missing_key() {
+        let keypair = Keypair::new();
+        TransactionBuilder::default()
+            .compile()
+            .sign(&[&keypair], Hash::default());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_transaction_missing_keypair() {
+        let program_id = Pubkey::default();
+        let keypair0 = Keypair::new();
+        let id0 = keypair0.pubkey();
+        TransactionBuilder::default()
+            .push(Instruction::new(program_id, &0, vec![(id0, true)]))
+            .compile()
+            .sign(&Vec::<&Keypair>::new(), Hash::default());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_transaction_wrong_key() {
+        let program_id = Pubkey::default();
+        let keypair0 = Keypair::new();
+        let wrong_id = Pubkey::default();
+        TransactionBuilder::default()
+            .push(Instruction::new(program_id, &0, vec![(wrong_id, true)]))
+            .compile()
+            .sign(&[&keypair0], Hash::default());
+    }
+
+    #[test]
+    fn test_transaction_correct_key() {
+        let program_id = Pubkey::default();
+        let keypair0 = Keypair::new();
+        let id0 = keypair0.pubkey();
+        let mut tx = TransactionBuilder::default()
+            .push(Instruction::new(program_id, &0, vec![(id0, true)]))
+            .compile();
+        tx.sign(&[&keypair0], Hash::default());
+        assert_eq!(tx.instructions[0], Instruction::new(0, &0, vec![0]));
+    }
 }
