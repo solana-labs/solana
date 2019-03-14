@@ -34,7 +34,30 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
 pub fn slot_leader_at(slot: u64, bank: &Bank) -> Option<Pubkey> {
     let (epoch, slot_index) = bank.get_epoch_and_slot_index(slot);
 
-    leader_schedule(epoch, bank).map(|leader_schedule| leader_schedule[slot_index as usize])
+    leader_schedule(epoch, bank).map(|leader_schedule| leader_schedule[slot_index])
+}
+
+/// Return the next slot after the given current_slot that the given node will be leader
+pub fn next_leader_slot(pubkey: &Pubkey, current_slot: u64, bank: &Bank) -> Option<u64> {
+    let (epoch, slot_index) = bank.get_epoch_and_slot_index(current_slot + 1);
+
+    if let Some(leader_schedule) = leader_schedule(epoch, bank) {
+        // clippy thinks I should do this:
+        //  for (i, <item>) in leader_schedule
+        //                           .iter()
+        //                           .enumerate()
+        //                           .take(bank.get_slots_in_epoch(epoch))
+        //                           .skip(from_slot_index + 1) {
+        //
+        //  but leader_schedule doesn't implement Iter...
+        #[allow(clippy::needless_range_loop)]
+        for i in slot_index..bank.get_slots_in_epoch(epoch) {
+            if *pubkey == leader_schedule[i] {
+                return Some(current_slot + 1 + (i - slot_index) as u64);
+            }
+        }
+    }
+    None
 }
 
 // Returns the number of ticks remaining from the specified tick_height to the end of the
@@ -53,6 +76,40 @@ mod tests {
     use crate::staking_utils;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::signature::{Keypair, KeypairUtil};
+
+    #[test]
+    fn test_next_leader_slot() {
+        let pubkey = Keypair::new().pubkey();
+        let mut genesis_block = GenesisBlock::new_with_leader(
+            BOOTSTRAP_LEADER_LAMPORTS,
+            &pubkey,
+            BOOTSTRAP_LEADER_LAMPORTS,
+        )
+        .0;
+        genesis_block.epoch_warmup = false;
+
+        let bank = Bank::new(&genesis_block);
+        assert_eq!(slot_leader_at(bank.slot(), &bank).unwrap(), pubkey);
+        assert_eq!(next_leader_slot(&pubkey, 0, &bank), Some(1));
+        assert_eq!(next_leader_slot(&pubkey, 1, &bank), Some(2));
+        assert_eq!(
+            next_leader_slot(
+                &pubkey,
+                2 * genesis_block.slots_per_epoch - 1, // no schedule generated for epoch 2
+                &bank
+            ),
+            None
+        );
+
+        assert_eq!(
+            next_leader_slot(
+                &Keypair::new().pubkey(), // not in leader_schedule
+                0,
+                &bank
+            ),
+            None
+        );
+    }
 
     #[test]
     fn test_leader_schedule_via_bank() {

@@ -21,9 +21,10 @@ impl LeaderSchedule {
     }
 }
 
-impl Index<usize> for LeaderSchedule {
+impl Index<u64> for LeaderSchedule {
     type Output = Pubkey;
-    fn index(&self, index: usize) -> &Pubkey {
+    fn index(&self, index: u64) -> &Pubkey {
+        let index = index as usize;
         &self.slot_leaders[index % self.slot_leaders.len()]
     }
 }
