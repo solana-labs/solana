@@ -168,17 +168,16 @@ impl Transaction {
         recent_blockhash: Hash,
         fee: u64,
     ) -> Self {
-        let program_ids = vec![*program_id];
-        let accounts = (0..=transaction_keys.len() as u8).collect();
-        let instructions = vec![Instruction::new(0, data, accounts)];
-        Self::new_with_instructions(
-            &[from_keypair],
+        let mut transaction = Self::new_unsigned(
+            &from_keypair.pubkey(),
             transaction_keys,
-            recent_blockhash,
+            program_id,
+            data,
+            Hash::default(),
             fee,
-            program_ids,
-            instructions,
-        )
+        );
+        transaction.sign(&[from_keypair], recent_blockhash);
+        transaction
     }
     pub fn new_unsigned<T: Serialize>(
         from_pubkey: &Pubkey,
