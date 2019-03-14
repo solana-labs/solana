@@ -180,7 +180,7 @@ impl Transaction {
             Hash::default(),
             fee,
         );
-        transaction.sign_checked(&[from_keypair], recent_blockhash);
+        transaction.sign(&[from_keypair], recent_blockhash);
         transaction
     }
     pub fn new_unsigned<T: Serialize>(
@@ -229,7 +229,7 @@ impl Transaction {
             program_ids,
             instructions,
         };
-        tx.sign_checked(from_keypairs, recent_blockhash);
+        tx.sign(from_keypairs, recent_blockhash);
         tx
     }
     pub fn data(&self, instruction_index: usize) -> &[u8] {
@@ -280,7 +280,7 @@ impl Transaction {
     }
 
     /// Sign this transaction.
-    pub fn sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
+    pub fn sign_unchecked<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
         self.recent_blockhash = recent_blockhash;
         let message = self.message();
         self.signatures = keypairs
@@ -291,14 +291,14 @@ impl Transaction {
 
     /// Check keys and keypair lengths, then sign this transaction.
     /// Note: this presumes signatures.capacity() was set to the number of required signatures.
-    pub fn sign_checked<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
+    pub fn sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
         let signed_keys = &self.account_keys[0..self.signatures.capacity()];
         for (i, keypair) in keypairs.iter().enumerate() {
             assert_eq!(keypair.pubkey(), signed_keys[i], "keypair-pubkey mismatch");
         }
         assert_eq!(keypairs.len(), signed_keys.len(), "not enough keypairs");
 
-        self.sign(keypairs, recent_blockhash);
+        self.sign_unchecked(keypairs, recent_blockhash);
     }
 
     /// Verify only the transaction signature.
