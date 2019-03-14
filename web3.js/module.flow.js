@@ -43,7 +43,13 @@ declare module '@solana/web3.js' {
     data: Buffer,
   };
 
+  declare export type KeyedAccountInfo = {
+    accountId: PublicKey,
+    accountInfo: AccountInfo,
+  };
+
   declare type AccountChangeCallback = (accountInfo: AccountInfo) => void;
+  declare type ProgramAccountChangeCallback = (keyedAccountInfo: KeyedAccountInfo) => void;
 
   declare export type SignatureStatus =
     | 'Confirmed'
