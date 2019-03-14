@@ -395,10 +395,10 @@ mod tests {
     }
 
     #[test]
-    fn test_system_transaction_userdata_layout() {
+    fn test_system_transaction_data_layout() {
         use crate::packet::PACKET_DATA_SIZE;
         let mut tx0 = test_tx();
-        tx0.instructions[0].userdata = vec![1, 2, 3];
+        tx0.instructions[0].data = vec![1, 2, 3];
         let message0a = tx0.message();
         let tx_bytes = serialize(&tx0).unwrap();
         assert!(tx_bytes.len() < PACKET_DATA_SIZE);
@@ -408,9 +408,9 @@ mod tests {
         );
         let tx1 = deserialize(&tx_bytes).unwrap();
         assert_eq!(tx0, tx1);
-        assert_eq!(tx1.instructions[0].userdata, vec![1, 2, 3]);
+        assert_eq!(tx1.instructions[0].data, vec![1, 2, 3]);
 
-        tx0.instructions[0].userdata = vec![1, 2, 4];
+        tx0.instructions[0].data = vec![1, 2, 4];
         let message0b = tx0.message();
         assert_ne!(message0a, message0b);
     }

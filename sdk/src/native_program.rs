@@ -11,11 +11,14 @@ pub enum ProgramError {
     /// The arguments provided to a program instruction where invalid
     InvalidArgument,
 
-    /// An account's userdata contents was invalid
-    InvalidUserdata,
+    /// An instruction's data contents was invalid
+    InvalidInstructionData,
 
-    /// An account's userdata was too small
-    UserdataTooSmall,
+    /// An account's data contents was invalid
+    InvalidAccountData,
+
+    /// An account's data was too small
+    AccountDataTooSmall,
 
     /// The account did not have the expected program id
     IncorrectProgramId,

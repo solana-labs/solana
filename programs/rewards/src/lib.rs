@@ -44,7 +44,7 @@ fn redeem_vote_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Progra
     // VoteInstruction::ClearCredits and that it points to the same vote account
     // as keyed_accounts[0].
 
-    let vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata)?;
+    let vote_state = VoteState::deserialize(&keyed_accounts[0].account.data)?;
 
     // TODO: This assumes the stake is static. If not, it should use the account value
     // at the time of voting, not at credit redemption.
@@ -75,7 +75,7 @@ fn entrypoint(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    match deserialize(data).map_err(|_| ProgramError::InvalidUserdata)? {
+    match deserialize(data).map_err(|_| ProgramError::InvalidInstructionData)? {
         RewardsInstruction::RedeemVoteCredits => redeem_vote_credits(keyed_accounts),
     }
 }

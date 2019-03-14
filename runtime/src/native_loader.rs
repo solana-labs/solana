@@ -49,13 +49,13 @@ fn create_path(name: &str) -> PathBuf {
 pub fn entrypoint(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    ix_userdata: &[u8],
+    ix_data: &[u8],
     tick_height: u64,
 ) -> Result<(), ProgramError> {
     if keyed_accounts[0].account.executable {
         // dispatch it
         let (names, params) = keyed_accounts.split_at_mut(1);
-        let name = &names[0].account.userdata;
+        let name = &names[0].account.data;
         let name = match str::from_utf8(name) {
             Ok(v) => v,
             Err(e) => {
@@ -80,14 +80,14 @@ pub fn entrypoint(
                             return Err(ProgramError::GenericError);
                         }
                     };
-                return entrypoint(program_id, params, ix_userdata, tick_height);
+                return entrypoint(program_id, params, ix_data, tick_height);
             },
             Err(e) => {
                 warn!("Unable to load: {:?}", e);
                 return Err(ProgramError::GenericError);
             }
         }
-    } else if let Ok(instruction) = deserialize(ix_userdata) {
+    } else if let Ok(instruction) = deserialize(ix_data) {
         if keyed_accounts[0].signer_key().is_none() {
             warn!("key[0] did not sign the transaction");
             return Err(ProgramError::GenericError);
@@ -96,16 +96,16 @@ pub fn entrypoint(
             LoaderInstruction::Write { offset, bytes } => {
                 trace!("NativeLoader::Write offset {} bytes {:?}", offset, bytes);
                 let offset = offset as usize;
-                if keyed_accounts[0].account.userdata.len() < offset + bytes.len() {
+                if keyed_accounts[0].account.data.len() < offset + bytes.len() {
                     warn!(
                         "Error: Overflow, {} < {}",
-                        keyed_accounts[0].account.userdata.len(),
+                        keyed_accounts[0].account.data.len(),
                         offset + bytes.len()
                     );
                     return Err(ProgramError::GenericError);
                 }
                 // native loader takes a name and we assume it all comes in at once
-                keyed_accounts[0].account.userdata = bytes;
+                keyed_accounts[0].account.data = bytes;
             }
 
             LoaderInstruction::Finalize => {
@@ -117,7 +117,7 @@ pub fn entrypoint(
             }
         }
     } else {
-        warn!("Invalid userdata in instruction: {:?}", ix_userdata);
+        warn!("Invalid data in instruction: {:?}", ix_data);
         return Err(ProgramError::GenericError);
     }
     Ok(())

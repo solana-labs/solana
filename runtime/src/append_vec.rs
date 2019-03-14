@@ -33,7 +33,7 @@ fn get_account_size_static() -> usize {
 }
 
 pub fn get_serialized_size(account: &Account) -> usize {
-    get_account_size_static() + account.userdata.len()
+    get_account_size_static() + account.data.len()
 }
 
 pub fn serialize_account(dst_slice: &mut [u8], account: &Account, len: usize) {
@@ -41,7 +41,7 @@ pub fn serialize_account(dst_slice: &mut [u8], account: &Account, len: usize) {
 
     write_u64(&mut at, dst_slice, len as u64);
     write_u64(&mut at, dst_slice, account.lamports);
-    write_bytes(&mut at, dst_slice, &account.userdata);
+    write_bytes(&mut at, dst_slice, &account.data);
     write_bytes(&mut at, dst_slice, account.owner.as_ref());
     write_bytes(&mut at, dst_slice, &[account.executable as u8]);
 }
@@ -83,9 +83,9 @@ pub fn deserialize_account(
 
     let lamports = read_u64(&mut at, &src_slice);
 
-    let userdata_len = len - get_account_size_static();
-    let mut userdata = vec![0; userdata_len];
-    read_bytes(&mut at, &mut userdata, &src_slice, userdata_len);
+    let data_len = len - get_account_size_static();
+    let mut data = vec![0; data_len];
+    read_bytes(&mut at, &mut data, &src_slice, data_len);
 
     let mut pubkey = vec![0; mem::size_of::<Pubkey>()];
     read_bytes(&mut at, &mut pubkey, &src_slice, mem::size_of::<Pubkey>());
@@ -97,7 +97,7 @@ pub fn deserialize_account(
 
     Ok(Account {
         lamports,
-        userdata,
+        data,
         owner,
         executable,
     })
@@ -256,7 +256,7 @@ pub mod tests {
         let v1 = vec![1u8; 32];
         let mut account1 = Account {
             lamports: 1,
-            userdata: v1,
+            data: v1,
             owner: Pubkey::default(),
             executable: false,
         };
@@ -267,7 +267,7 @@ pub mod tests {
         let v2 = vec![4u8; 32];
         let mut account2 = Account {
             lamports: 1,
-            userdata: v2,
+            data: v2,
             owner: Pubkey::default(),
             executable: false,
         };
@@ -277,13 +277,13 @@ pub mod tests {
         assert_eq!(av.get_account(index2).unwrap(), account2);
         assert_eq!(av.get_account(index1).unwrap(), account1);
 
-        account2.userdata.iter_mut().for_each(|e| *e *= 2);
+        account2.data.iter_mut().for_each(|e| *e *= 2);
         let index3 = av.append_account(&account2).unwrap();
         len += get_serialized_size(&account2) + SIZEOF_U64 as usize;
         assert_eq!(index3, len as u64);
         assert_eq!(av.get_account(index3).unwrap(), account2);
 
-        account1.userdata.extend([1, 2, 3, 4, 5, 6].iter().cloned());
+        account1.data.extend([1, 2, 3, 4, 5, 6].iter().cloned());
         let index4 = av.append_account(&account1).unwrap();
         len += get_serialized_size(&account2) + SIZEOF_U64 as usize;
         assert_eq!(index4, len as u64);

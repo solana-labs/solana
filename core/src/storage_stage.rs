@@ -235,7 +235,7 @@ impl StorageStage {
         );
 
         if let Some(account) = account_to_create {
-            if client.get_account_userdata(&account).is_ok() {
+            if client.get_account_data(&account).is_ok() {
                 return Ok(());
             }
         }
@@ -383,7 +383,7 @@ impl StorageStage {
                         *current_key_idx += size_of::<Signature>();
                         *current_key_idx %= storage_keys.len();
                     } else if solana_storage_api::check_id(&program_id) {
-                        match deserialize(&tx.instructions[i].userdata) {
+                        match deserialize(&tx.instructions[i].data) {
                             Ok(StorageProgram::SubmitMiningProof {
                                 entry_height: proof_entry_height,
                                 ..

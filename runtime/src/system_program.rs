@@ -20,7 +20,7 @@ fn create_system_account(
         Err(SystemError::SourceNotSystemAccount)?;
     }
 
-    if !keyed_accounts[TO_ACCOUNT_INDEX].account.userdata.is_empty()
+    if !keyed_accounts[TO_ACCOUNT_INDEX].account.data.is_empty()
         || !system_program::check_id(&keyed_accounts[TO_ACCOUNT_INDEX].account.owner)
     {
         info!(
@@ -39,7 +39,7 @@ fn create_system_account(
     keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports -= lamports;
     keyed_accounts[TO_ACCOUNT_INDEX].account.lamports += lamports;
     keyed_accounts[TO_ACCOUNT_INDEX].account.owner = *program_id;
-    keyed_accounts[TO_ACCOUNT_INDEX].account.userdata = vec![0; space as usize];
+    keyed_accounts[TO_ACCOUNT_INDEX].account.data = vec![0; space as usize];
     keyed_accounts[TO_ACCOUNT_INDEX].account.executable = false;
     Ok(())
 }
@@ -96,8 +96,8 @@ pub fn entrypoint(
         }
         .map_err(|e| ProgramError::CustomError(serialize(&e).unwrap()))
     } else {
-        info!("Invalid transaction instruction userdata: {:?}", data);
-        Err(ProgramError::InvalidUserdata)
+        info!("Invalid instruction data: {:?}", data);
+        Err(ProgramError::InvalidInstructionData)
     }
 }
 
@@ -124,11 +124,11 @@ mod tests {
         let from_lamports = from_account.lamports;
         let to_lamports = to_account.lamports;
         let to_owner = to_account.owner;
-        let to_userdata = to_account.userdata.clone();
+        let to_data = to_account.data.clone();
         assert_eq!(from_lamports, 50);
         assert_eq!(to_lamports, 50);
         assert_eq!(to_owner, new_program_owner);
-        assert_eq!(to_userdata, [0, 0]);
+        assert_eq!(to_data, [0, 0]);
     }
 
     #[test]
@@ -177,8 +177,8 @@ mod tests {
     }
 
     #[test]
-    fn test_create_userdata_populated() {
-        // Attempt to create system account in account with populated userdata
+    fn test_create_data_populated() {
+        // Attempt to create system account in account with populated data
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Keypair::new().pubkey();
         let mut from_account = Account::new(100, 0, &system_program::id());
@@ -186,7 +186,7 @@ mod tests {
         let populated_key = Keypair::new().pubkey();
         let mut populated_account = Account {
             lamports: 0,
-            userdata: vec![0, 1, 2, 3],
+            data: vec![0, 1, 2, 3],
             owner: Pubkey::default(),
             executable: false,
         };

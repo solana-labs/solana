@@ -17,7 +17,7 @@ use std::sync::{atomic, Arc};
 pub trait RpcSolPubSub {
     type Metadata;
 
-    // Get notification every time account userdata is changed
+    // Get notification every time account data is changed
     // Accepts pubkey parameter as base-58 encoded string
     #[pubsub(
         subscription = "accountNotification",
@@ -34,7 +34,7 @@ pub trait RpcSolPubSub {
     )]
     fn account_unsubscribe(&self, _: Option<Self::Metadata>, _: SubscriptionId) -> Result<bool>;
 
-    // Get notification every time account userdata owned by a particular program is changed
+    // Get notification every time account data owned by a particular program is changed
     // Accepts pubkey parameter as base-58 encoded string
     #[pubsub(
         subscription = "programNotification",
@@ -371,10 +371,7 @@ mod tests {
 
         // Test signature confirmation notification #1
         let string = receiver.poll();
-        let expected_userdata = arc_bank
-            .get_account(&contract_state.pubkey())
-            .unwrap()
-            .userdata;
+        let expected_data = arc_bank.get_account(&contract_state.pubkey()).unwrap().data;
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",
@@ -382,7 +379,7 @@ mod tests {
                "result": {
                    "owner": budget_program_id,
                    "lamports": 51,
-                   "userdata": expected_userdata,
+                   "data": expected_data,
                     "executable": executable,
                },
                "subscription": 0,

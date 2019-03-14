@@ -20,7 +20,7 @@ fn compile_instruction(
     let accounts: Vec<_> = ix.accounts.iter().map(|(k, _)| position(keys, k)).collect();
     Instruction {
         program_ids_index: position(program_ids, &ix.program_ids_index),
-        userdata: ix.userdata.clone(),
+        data: ix.data.clone(),
         accounts,
     }
 }
