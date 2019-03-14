@@ -94,7 +94,6 @@ impl ReplayStage {
                     let active_banks = bank_forks.read().unwrap().active_banks();
                     trace!("active banks {:?}", active_banks);
                     let mut votable: Vec<Arc<Bank>> = vec![];
-                    let mut is_tpu_bank_active = poh_recorder.lock().unwrap().bank().is_some();
                     for bank_slot in &active_banks {
                         let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
                         ticks_per_slot = bank.ticks_per_slot();
@@ -146,11 +145,12 @@ impl ReplayStage {
                             bank.tick_height(),
                             bank.last_blockhash(),
                             bank.slot(),
+                            leader_schedule_utils::next_leader_slot(&my_id, bank.slot(), &bank),
+                            ticks_per_slot,
                         );
-                        is_tpu_bank_active = false;
                     }
 
-                    if !is_tpu_bank_active {
+                    if poh_recorder.lock().unwrap().reached_leader_tick() {
                         assert!(ticks_per_slot > 0);
                         let poh_tick_height = poh_recorder.lock().unwrap().tick_height();
                         let poh_slot = leader_schedule_utils::tick_height_to_slot(
@@ -216,6 +216,7 @@ impl ReplayStage {
                     cluster_info.write().unwrap().set_leader(&next_leader);
                     if next_leader == *my_id {
                         debug!("{} starting tpu for slot {}", my_id, poh_slot);
+                        inc_new_counter_info!("replay_stage-new_leader", poh_slot as usize);
                         let tpu_bank = Bank::new_from_parent(parent, my_id, poh_slot);
                         bank_forks.write().unwrap().insert(poh_slot, tpu_bank);
                         if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {

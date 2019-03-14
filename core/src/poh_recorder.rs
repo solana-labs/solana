@@ -19,6 +19,8 @@ use solana_sdk::transaction::Transaction;
 use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::Arc;
 
+const MAX_LAST_LEADER_GRACE_TICKS_FACTOR: u64 = 2;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PohRecorderError {
     InvalidCallingObject,
@@ -42,6 +44,8 @@ pub struct PohRecorder {
     tick_cache: Vec<(Entry, u64)>,
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntries>,
+    start_leader_after_ticks: Option<u64>,
+    max_last_leader_grace_ticks: u64,
 }
 
 impl PohRecorder {
@@ -70,8 +74,26 @@ impl PohRecorder {
         self.poh.tick_height
     }
 
+    pub fn reached_leader_tick(&self) -> bool {
+        self.start_leader_after_ticks
+            .map(|target_tick| {
+                // Either grace period has also expired,
+                // or target tick is = grace period (i.e. poh recorder was just reset)
+                self.tick_height() >= target_tick
+                    || MAX_LAST_LEADER_GRACE_TICKS_FACTOR >= target_tick
+            })
+            .unwrap_or(false)
+    }
+
     // synchronize PoH with a bank
-    pub fn reset(&mut self, tick_height: u64, blockhash: Hash, start_slot: u64) {
+    pub fn reset(
+        &mut self,
+        tick_height: u64,
+        blockhash: Hash,
+        start_slot: u64,
+        my_next_leader_slot: Option<u64>,
+        ticks_per_slot: u64,
+    ) {
         self.clear_bank();
         let mut cache = vec![];
         info!(
@@ -81,6 +103,15 @@ impl PohRecorder {
         std::mem::swap(&mut cache, &mut self.tick_cache);
         self.start_slot = start_slot;
         self.poh = Poh::new(blockhash, tick_height);
+        self.max_last_leader_grace_ticks = ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR;
+        self.start_leader_after_ticks = my_next_leader_slot
+            .map(|ticks| {
+                Some(
+                    ticks.saturating_sub(start_slot + 1) * ticks_per_slot
+                        + self.max_last_leader_grace_ticks,
+                )
+            })
+            .unwrap_or(None);
     }
 
     pub fn set_working_bank(&mut self, working_bank: WorkingBank) {
@@ -162,6 +193,10 @@ impl PohRecorder {
     }
 
     pub fn tick(&mut self) {
+        if self.start_leader_after_ticks.is_none() {
+            return;
+        }
+
         let tick = self.generate_tick();
         trace!("tick {}", tick.1);
         self.tick_cache.push(tick);
@@ -180,6 +215,8 @@ impl PohRecorder {
         tick_height: u64,
         last_entry_hash: Hash,
         start_slot: u64,
+        my_leader_slot_index: Option<u64>,
+        ticks_per_slot: u64,
     ) -> (Self, Receiver<WorkingBankEntries>) {
         let poh = Poh::new(last_entry_hash, tick_height);
         let (sender, receiver) = channel();
@@ -191,6 +228,15 @@ impl PohRecorder {
                 sender,
                 clear_bank_signal: None,
                 start_slot,
+                start_leader_after_ticks: my_leader_slot_index
+                    .map(|ticks| {
+                        Some(
+                            ticks.saturating_sub(start_slot + 1) * ticks_per_slot
+                                + ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR,
+                        )
+                    })
+                    .unwrap_or(None),
+                max_last_leader_grace_ticks: ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR,
             },
             receiver,
         )

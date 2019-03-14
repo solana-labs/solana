@@ -431,8 +431,13 @@ pub fn create_test_recorder(
     Receiver<WorkingBankEntries>,
 ) {
     let exit = Arc::new(AtomicBool::new(false));
-    let (poh_recorder, entry_receiver) =
-        PohRecorder::new(bank.tick_height(), bank.last_blockhash(), bank.slot());
+    let (poh_recorder, entry_receiver) = PohRecorder::new(
+        bank.tick_height(),
+        bank.last_blockhash(),
+        bank.slot(),
+        None,
+        bank.ticks_per_slot(),
+    );
     let poh_recorder = Arc::new(Mutex::new(poh_recorder));
     let poh_service = PohService::new(poh_recorder.clone(), &PohServiceConfig::default(), &exit);
     (exit, poh_recorder, poh_service, entry_receiver)
