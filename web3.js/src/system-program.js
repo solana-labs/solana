@@ -29,28 +29,28 @@ export class SystemProgram {
     space: number,
     programId: PublicKey,
   ): Transaction {
-    const userdataLayout = BufferLayout.struct([
+    const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('lamports'),
       BufferLayout.ns64('space'),
       Layout.publicKey('programId'),
     ]);
 
-    const userdata = Buffer.alloc(userdataLayout.span);
-    userdataLayout.encode(
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
       {
         instruction: 0, // Create Account instruction
         lamports,
         space,
         programId: programId.toBuffer(),
       },
-      userdata,
+      data,
     );
 
     return new Transaction().add({
       keys: [from, newAccount],
       programId: SystemProgram.programId,
-      userdata,
+      data,
     });
   }
 
@@ -58,24 +58,24 @@ export class SystemProgram {
    * Generate a Transaction that moves lamports from one account to another
    */
   static move(from: PublicKey, to: PublicKey, amount: number): Transaction {
-    const userdataLayout = BufferLayout.struct([
+    const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('amount'),
     ]);
 
-    const userdata = Buffer.alloc(userdataLayout.span);
-    userdataLayout.encode(
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
       {
         instruction: 2, // Move instruction
         amount,
       },
-      userdata,
+      data,
     );
 
     return new Transaction().add({
       keys: [from, to],
       programId: SystemProgram.programId,
-      userdata,
+      data,
     });
   }
 
@@ -83,24 +83,24 @@ export class SystemProgram {
    * Generate a Transaction that assigns an account to a program
    */
   static assign(from: PublicKey, programId: PublicKey): Transaction {
-    const userdataLayout = BufferLayout.struct([
+    const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
       Layout.publicKey('programId'),
     ]);
 
-    const userdata = Buffer.alloc(userdataLayout.span);
-    userdataLayout.encode(
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
       {
         instruction: 1, // Assign instruction
         programId: programId.toBuffer(),
       },
-      userdata,
+      data,
     );
 
     return new Transaction().add({
       keys: [from],
       programId: SystemProgram.programId,
-      userdata,
+      data,
     });
   }
 }

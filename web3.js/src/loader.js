@@ -46,7 +46,7 @@ export class Loader {
    * @param data Program data
    */
   async load(program: Account, data: Array<number>) {
-    const userdataLayout = BufferLayout.struct([
+    const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
       BufferLayout.u32('offset'),
       BufferLayout.u32('bytesLength'),
@@ -64,20 +64,20 @@ export class Loader {
     let transactions = [];
     while (array.length > 0) {
       const bytes = array.slice(0, chunkSize);
-      const userdata = Buffer.alloc(chunkSize + 16);
-      userdataLayout.encode(
+      const data = Buffer.alloc(chunkSize + 16);
+      dataLayout.encode(
         {
           instruction: 0, // Load instruction
           offset,
           bytes,
         },
-        userdata,
+        data,
       );
 
       const transaction = new Transaction().add({
         keys: [program.publicKey],
         programId: this.programId,
-        userdata,
+        data,
       });
       transactions.push(
         sendAndConfirmTransaction(this.connection, transaction, program),
@@ -108,22 +108,22 @@ export class Loader {
    * @param program `load()`ed Account
    */
   async finalize(program: Account) {
-    const userdataLayout = BufferLayout.struct([
+    const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
     ]);
 
-    const userdata = Buffer.alloc(userdataLayout.span);
-    userdataLayout.encode(
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
       {
         instruction: 1, // Finalize instruction
       },
-      userdata,
+      data,
     );
 
     const transaction = new Transaction().add({
       keys: [program.publicKey],
       programId: this.programId,
-      userdata,
+      data,
     });
     await sendAndConfirmTransaction(this.connection, transaction, program);
   }

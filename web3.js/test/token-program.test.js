@@ -95,7 +95,7 @@ test('create new token', async () => {
         result: {
           owner: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           lamports: 1,
-          userdata: [
+          data: [
             1,
             16,
             39,
@@ -163,7 +163,7 @@ test('create new token', async () => {
         result: {
           owner: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           lamports: 1,
-          userdata: [
+          data: [
             2,
             ...testToken.token.toBuffer(),
             ...initialOwner.publicKey.toBuffer(),
@@ -252,7 +252,7 @@ test('create new token account', async () => {
         result: {
           owner: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           lamports: 1,
-          userdata: [
+          data: [
             2,
             ...testToken.token.toBuffer(),
             ...destOwner.publicKey.toBuffer(),
@@ -310,7 +310,7 @@ test('transfer', async () => {
         result: {
           owner: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           lamports: 1,
-          userdata: [
+          data: [
             2,
             ...testToken.token.toBuffer(),
             ...initialOwner.publicKey.toBuffer(),
@@ -349,7 +349,7 @@ test('transfer', async () => {
         result: {
           owner: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           lamports: 1,
-          userdata: [
+          data: [
             2,
             ...testToken.token.toBuffer(),
             ...dest.toBuffer(),
@@ -420,7 +420,7 @@ test('approve/revoke', async () => {
         result: {
           owner: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           lamports: 1,
-          userdata: [
+          data: [
             2,
             ...testToken.token.toBuffer(),
             ...delegate.toBuffer(),
@@ -482,7 +482,7 @@ test('approve/revoke', async () => {
         result: {
           owner: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           lamports: 1,
-          userdata: [
+          data: [
             2,
             ...testToken.token.toBuffer(),
             ...delegate.toBuffer(),

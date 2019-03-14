@@ -27,12 +27,12 @@ export const PACKET_DATA_SIZE = 512;
  * @typedef {Object} TransactionInstructionCtorFields
  * @property {?Array<PublicKey>} keys
  * @property {?PublicKey} programId
- * @property {?Buffer} userdata
+ * @property {?Buffer} data
  */
 type TransactionInstructionCtorFields = {|
   keys?: Array<PublicKey>,
   programId?: PublicKey,
-  userdata?: Buffer,
+  data?: Buffer,
 |};
 
 /**
@@ -52,7 +52,7 @@ export class TransactionInstruction {
   /**
    * Program input
    */
-  userdata: Buffer = Buffer.alloc(0);
+  data: Buffer = Buffer.alloc(0);
 
   constructor(opts?: TransactionInstructionCtorFields) {
     opts && Object.assign(this, opts);
@@ -182,19 +182,19 @@ export class Transaction {
     shortvec.encodeLength(programIdCount, programIds.length);
 
     const instructions = this.instructions.map(instruction => {
-      const {userdata, programId} = instruction;
+      const {data, programId} = instruction;
       let keyIndicesCount = [];
       shortvec.encodeLength(keyIndicesCount, instruction.keys.length);
-      let userdataCount = [];
-      shortvec.encodeLength(userdataCount, instruction.userdata.length);
+      let dataCount = [];
+      shortvec.encodeLength(dataCount, instruction.data.length);
       return {
         programIdIndex: programIds.indexOf(programId.toString()),
         keyIndicesCount: Buffer.from(keyIndicesCount),
         keyIndices: Buffer.from(
           instruction.keys.map(key => keys.indexOf(key.toString())),
         ),
-        userdataLength: Buffer.from(userdataCount),
-        userdata,
+        dataLength: Buffer.from(dataCount),
+        data,
       };
     });
 
@@ -222,11 +222,11 @@ export class Transaction {
           instruction.keyIndices.length,
           'keyIndices',
         ),
-        BufferLayout.blob(instruction.userdataLength.length, 'userdataLength'),
+        BufferLayout.blob(instruction.dataLength.length, 'dataLength'),
         BufferLayout.seq(
           BufferLayout.u8('userdatum'),
-          instruction.userdata.length,
-          'userdata',
+          instruction.data.length,
+          'data',
         ),
       ]);
       const length = instructionLayout.encode(
@@ -405,9 +405,9 @@ export class Transaction {
    * Deprecated method
    * @private
    */
-  get userdata(): Buffer {
+  get data(): Buffer {
     invariant(this.instructions.length === 1);
-    return this.instructions[0].userdata;
+    return this.instructions[0].data;
   }
 
   /**
@@ -462,9 +462,9 @@ export class Transaction {
       const accountIndexCount = shortvec.decodeLength(byteArray);
       instruction.accountIndex = byteArray.slice(0, accountIndexCount);
       byteArray = byteArray.slice(accountIndexCount);
-      const userdataLength = shortvec.decodeLength(byteArray);
-      instruction.userdata = byteArray.slice(0, userdataLength);
-      byteArray = byteArray.slice(userdataLength);
+      const dataLength = shortvec.decodeLength(byteArray);
+      instruction.data = byteArray.slice(0, dataLength);
+      byteArray = byteArray.slice(dataLength);
       instructions.push(instruction);
     }
 
@@ -482,7 +482,7 @@ export class Transaction {
       let instructionData = {
         keys: [],
         programId: new PublicKey(programs[instructions[i].programIndex]),
-        userdata: Buffer.from(instructions[i].userdata),
+        data: Buffer.from(instructions[i].data),
       };
       for (let j = 0; j < instructions[i].accountIndex.length; j++) {
         instructionData.keys.push(

@@ -86,7 +86,7 @@ const AccountInfoResult = struct({
   executable: 'boolean',
   owner: 'array',
   lamports: 'number',
-  userdata: 'array',
+  data: 'array',
 });
 
 /**
@@ -159,14 +159,14 @@ const SendTransactionRpcResult = jsonRpcResult('string');
  * @typedef {Object} AccountInfo
  * @property {number} lamports Number of lamports assigned to the account
  * @property {PublicKey} owner Identifier of the program that owns the account
- * @property {?Buffer} userdata Optional userdata assigned to the account
- * @property {boolean} executable `true` if this account's userdata contains a loaded program
+ * @property {?Buffer} data Optional data assigned to the account
+ * @property {boolean} executable `true` if this account's data contains a loaded program
  */
 type AccountInfo = {
   executable: boolean,
   owner: PublicKey,
   lamports: number,
-  userdata: Buffer,
+  data: Buffer,
 };
 
 /**
@@ -316,7 +316,7 @@ export class Connection {
       executable: result.executable,
       owner: new PublicKey(result.owner),
       lamports: result.lamports,
-      userdata: Buffer.from(result.userdata),
+      data: Buffer.from(result.data),
     };
   }
 
@@ -593,7 +593,7 @@ export class Connection {
           executable: result.executable,
           owner: new PublicKey(result.owner),
           lamports: result.lamports,
-          userdata: Buffer.from(result.userdata),
+          data: Buffer.from(result.data),
         });
         return true;
       }
@@ -667,7 +667,7 @@ export class Connection {
             executable: result[1].executable,
             owner: new PublicKey(result[1].owner),
             lamports: result[1].lamports,
-            userdata: Buffer.from(result[1].userdata),
+            data: Buffer.from(result[1].data),
           },
         });
         return true;

@@ -202,7 +202,7 @@ export class Token {
 
     let transaction;
 
-    const userdataLayout = BufferLayout.struct([
+    const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
       Layout.uint64('supply'),
       BufferLayout.u8('decimals'),
@@ -210,9 +210,9 @@ export class Token {
       Layout.rustString('symbol'),
     ]);
 
-    let userdata = Buffer.alloc(1024);
+    let data = Buffer.alloc(1024);
     {
-      const encodeLength = userdataLayout.encode(
+      const encodeLength = dataLayout.encode(
         {
           instruction: 0, // NewToken instruction
           supply: supply.toBuffer(),
@@ -220,9 +220,9 @@ export class Token {
           name,
           symbol,
         },
-        userdata,
+        data,
       );
-      userdata = userdata.slice(0, encodeLength);
+      data = data.slice(0, encodeLength);
     }
 
     // Allocate memory for the tokenAccount account
@@ -230,7 +230,7 @@ export class Token {
       owner.publicKey,
       tokenAccount.publicKey,
       1,
-      1 + userdata.length,
+      1 + data.length,
       programId,
     );
     await sendAndConfirmTransaction(connection, transaction, owner);
@@ -238,7 +238,7 @@ export class Token {
     transaction = new Transaction().add({
       keys: [tokenAccount.publicKey, initialAccountPublicKey],
       programId,
-      userdata,
+      data,
     });
     transaction.fee = 0; // TODO: Batch with the `SystemProgram.createAccount` and remove this line
     await sendAndConfirmTransaction(connection, transaction, tokenAccount);
@@ -263,16 +263,16 @@ export class Token {
     const tokenAccount = new Account();
     let transaction;
 
-    const userdataLayout = BufferLayout.struct([
+    const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
     ]);
 
-    const userdata = Buffer.alloc(userdataLayout.span);
-    userdataLayout.encode(
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
       {
         instruction: 1, // NewTokenAccount instruction
       },
-      userdata,
+      data,
     );
 
     // Allocate memory for the token
@@ -293,7 +293,7 @@ export class Token {
     transaction = new Transaction().add({
       keys,
       programId: this.programId,
-      userdata,
+      data,
     });
     transaction.fee = 0; // TODO: Batch with the `SystemProgram.createAccount` and remove this line
     await sendAndConfirmTransaction(this.connection, transaction, tokenAccount);
@@ -312,12 +312,12 @@ export class Token {
       );
     }
 
-    const userdata = Buffer.from(accountInfo.userdata);
+    const data = Buffer.from(accountInfo.data);
 
-    if (userdata.readUInt8(0) !== 1) {
-      throw new Error(`Invalid token userdata`);
+    if (data.readUInt8(0) !== 1) {
+      throw new Error(`Invalid token data`);
     }
-    const tokenInfo = TokenInfoLayout.decode(userdata, 1);
+    const tokenInfo = TokenInfoLayout.decode(data, 1);
     tokenInfo.supply = TokenAmount.fromBuffer(tokenInfo.supply);
     return tokenInfo;
   }
@@ -333,11 +333,11 @@ export class Token {
       throw new Error(`Invalid token account owner`);
     }
 
-    const userdata = Buffer.from(accountInfo.userdata);
-    if (userdata.readUInt8(0) !== 2) {
-      throw new Error(`Invalid token account userdata`);
+    const data = Buffer.from(accountInfo.data);
+    if (data.readUInt8(0) !== 2) {
+      throw new Error(`Invalid token account data`);
     }
-    const tokenAccountInfo = TokenAccountInfoLayout.decode(userdata, 1);
+    const tokenAccountInfo = TokenAccountInfoLayout.decode(data, 1);
 
     tokenAccountInfo.token = new PublicKey(tokenAccountInfo.token);
     tokenAccountInfo.owner = new PublicKey(tokenAccountInfo.owner);
@@ -468,18 +468,18 @@ export class Token {
       throw new Error('Account owner mismatch');
     }
 
-    const userdataLayout = BufferLayout.struct([
+    const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
       Layout.uint64('amount'),
     ]);
 
-    const userdata = Buffer.alloc(userdataLayout.span);
-    userdataLayout.encode(
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
       {
         instruction: 2, // Transfer instruction
         amount: new TokenAmount(amount).toBuffer(),
       },
-      userdata,
+      data,
     );
 
     const keys = [owner, source, destination];
@@ -489,7 +489,7 @@ export class Token {
     return new TransactionInstruction({
       keys,
       programId: this.programId,
-      userdata,
+      data,
     });
   }
 
@@ -507,24 +507,24 @@ export class Token {
     delegate: PublicKey,
     amount: number | TokenAmount,
   ): TransactionInstruction {
-    const userdataLayout = BufferLayout.struct([
+    const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
       Layout.uint64('amount'),
     ]);
 
-    const userdata = Buffer.alloc(userdataLayout.span);
-    userdataLayout.encode(
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
       {
         instruction: 3, // Approve instruction
         amount: new TokenAmount(amount).toBuffer(),
       },
-      userdata,
+      data,
     );
 
     return new TransactionInstruction({
       keys: [owner, account, delegate],
       programId: this.programId,
-      userdata,
+      data,
     });
   }
 
@@ -555,22 +555,22 @@ export class Token {
     account: PublicKey,
     newOwner: PublicKey,
   ): TransactionInstruction {
-    const userdataLayout = BufferLayout.struct([
+    const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
     ]);
 
-    const userdata = Buffer.alloc(userdataLayout.span);
-    userdataLayout.encode(
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
       {
         instruction: 4, // SetOwner instruction
       },
-      userdata,
+      data,
     );
 
     return new TransactionInstruction({
       keys: [owner, account, newOwner],
       programId: this.programId,
-      userdata,
+      data,
     });
   }
 }
