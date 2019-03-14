@@ -1,4 +1,4 @@
-use clap::{crate_version, App, Arg};
+use clap::{crate_description, crate_name, crate_version, App, Arg};
 use log::*;
 use solana_drone::drone::{Drone, DRONE_PORT};
 use solana_drone::socketaddr;
@@ -15,7 +15,8 @@ use tokio_codec::{BytesCodec, Decoder};
 fn main() -> Result<(), Box<error::Error>> {
     solana_logger::setup();
     solana_metrics::set_panic_hook("drone");
-    let matches = App::new("drone")
+    let matches = App::new(crate_name!())
+        .about(crate_description!())
         .version(crate_version!())
         .arg(
             Arg::with_name("keypair")

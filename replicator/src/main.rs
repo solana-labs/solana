@@ -1,4 +1,4 @@
-use clap::{crate_version, App, Arg};
+use clap::{crate_description, crate_name, crate_version, App, Arg};
 use solana::cluster_info::Node;
 use solana::contact_info::ContactInfo;
 use solana::replicator::Replicator;
@@ -11,7 +11,7 @@ use std::sync::Arc;
 fn main() {
     solana_logger::setup();
 
-    let matches = App::new("replicator")
+    let matches = App::new(crate_name!()).about(crate_description!())
         .version(crate_version!())
         .arg(
             Arg::with_name("identity")

@@ -1,4 +1,4 @@
-use clap::{crate_version, App, Arg, SubCommand};
+use clap::{crate_description, crate_name, crate_version, App, Arg, SubCommand};
 use solana::blocktree::Blocktree;
 use solana::blocktree_processor::process_blocktree;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -7,7 +7,7 @@ use std::process::exit;
 
 fn main() {
     solana_logger::setup();
-    let matches = App::new("ledger-tool")
+    let matches = App::new(crate_name!()).about(crate_description!())
         .version(crate_version!())
         .arg(
             Arg::with_name("ledger")

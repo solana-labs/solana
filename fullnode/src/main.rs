@@ -1,4 +1,4 @@
-use clap::{crate_version, App, Arg};
+use clap::{crate_description, crate_name, crate_version, App, Arg};
 use log::*;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
@@ -14,7 +14,7 @@ fn main() {
     solana_logger::setup();
     solana_metrics::set_panic_hook("fullnode");
 
-    let matches = App::new("solana-fullnode")
+    let matches = App::new(crate_name!()).about(crate_description!())
         .version(crate_version!())
         .arg(
             Arg::with_name("blockstream")
