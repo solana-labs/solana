@@ -413,7 +413,7 @@ impl TokenProgram {
             .map(|keyed_account| {
                 let account = &keyed_account.account;
                 if account.owner == *program_id {
-                    match Self::deserialize(&account.userdata) {
+                    match Self::deserialize(&account.data) {
                         Ok(token_program) => token_program,
                         Err(err) => {
                             error!("deserialize failed: {:?}", err);
@@ -427,7 +427,7 @@ impl TokenProgram {
             .collect();
 
         for program_account in &input_program_accounts {
-            info!("input_program_account: userdata={:?}", program_account);
+            info!("input_program_account: data={:?}", program_account);
         }
 
         let mut output_program_accounts: Vec<(_, _)> = vec![];
@@ -468,10 +468,10 @@ impl TokenProgram {
 
         for (index, program_account) in &output_program_accounts {
             info!(
-                "output_program_account: index={} userdata={:?}",
+                "output_program_account: index={} data={:?}",
                 index, program_account
             );
-            Self::serialize(program_account, &mut info[*index].account.userdata)?;
+            Self::serialize(program_account, &mut info[*index].account.data)?;
         }
         Ok(())
     }
@@ -484,7 +484,7 @@ mod test {
     pub fn serde() {
         assert_eq!(TokenProgram::deserialize(&[0]), Ok(TokenProgram::default()));
 
-        let mut userdata = vec![0; 256];
+        let mut data = vec![0; 256];
 
         let account = TokenProgram::Account(TokenAccountInfo {
             token: Pubkey::new(&[1; 32]),
@@ -492,8 +492,8 @@ mod test {
             amount: 123,
             delegate: None,
         });
-        account.serialize(&mut userdata).unwrap();
-        assert_eq!(TokenProgram::deserialize(&userdata), Ok(account));
+        account.serialize(&mut data).unwrap();
+        assert_eq!(TokenProgram::deserialize(&data), Ok(account));
 
         let account = TokenProgram::Token(TokenInfo {
             supply: 12345,
@@ -501,23 +501,23 @@ mod test {
             name: "A test token".to_string(),
             symbol: "TEST".to_string(),
         });
-        account.serialize(&mut userdata).unwrap();
-        assert_eq!(TokenProgram::deserialize(&userdata), Ok(account));
+        account.serialize(&mut data).unwrap();
+        assert_eq!(TokenProgram::deserialize(&data), Ok(account));
     }
 
     #[test]
     pub fn serde_expect_fail() {
-        let mut userdata = vec![0; 256];
+        let mut data = vec![0; 256];
 
         // Certain TokenProgram's may not be serialized
         let account = TokenProgram::default();
         assert_eq!(account, TokenProgram::Unallocated);
-        assert!(account.serialize(&mut userdata).is_err());
-        assert!(account.serialize(&mut userdata).is_err());
+        assert!(account.serialize(&mut data).is_err());
+        assert!(account.serialize(&mut data).is_err());
         let account = TokenProgram::Invalid;
-        assert!(account.serialize(&mut userdata).is_err());
+        assert!(account.serialize(&mut data).is_err());
 
-        // Bad deserialize userdata
+        // Bad deserialize data
         assert!(TokenProgram::deserialize(&[]).is_err());
         assert!(TokenProgram::deserialize(&[1]).is_err());
         assert!(TokenProgram::deserialize(&[1, 2]).is_err());

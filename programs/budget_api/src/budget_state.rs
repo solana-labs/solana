@@ -12,8 +12,8 @@ pub enum BudgetError {
     UninitializedContract,
     DestinationMissing,
     FailedWitness,
-    UserdataTooSmall,
-    UserdataDeserializeFailure,
+    AccountDataTooSmall,
+    AccountDataDeserializeFailure,
     UnsignedKey,
 }
 
@@ -37,7 +37,7 @@ impl BudgetState {
 
     pub fn serialize(&self, output: &mut [u8]) -> Result<(), BudgetError> {
         serialize_into(output, self).map_err(|err| match *err {
-            _ => BudgetError::UserdataTooSmall,
+            _ => BudgetError::AccountDataTooSmall,
         })
     }
 
@@ -56,18 +56,18 @@ mod test {
     fn test_serializer() {
         let mut a = Account::new(0, 512, &id());
         let b = BudgetState::default();
-        b.serialize(&mut a.userdata).unwrap();
-        let c = BudgetState::deserialize(&a.userdata).unwrap();
+        b.serialize(&mut a.data).unwrap();
+        let c = BudgetState::deserialize(&a.data).unwrap();
         assert_eq!(b, c);
     }
 
     #[test]
-    fn test_serializer_userdata_too_small() {
+    fn test_serializer_data_too_small() {
         let mut a = Account::new(0, 1, &id());
         let b = BudgetState::default();
         assert_eq!(
-            b.serialize(&mut a.userdata),
-            Err(BudgetError::UserdataTooSmall)
+            b.serialize(&mut a.data),
+            Err(BudgetError::AccountDataTooSmall)
         );
     }
 }

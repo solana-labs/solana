@@ -22,7 +22,7 @@ fn entrypoint(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    match deserialize(data).map_err(|_| ProgramError::InvalidUserdata)? {
+    match deserialize(data).map_err(|_| ProgramError::InvalidInstructionData)? {
         VoteInstruction::InitializeAccount => vote_state::initialize_account(keyed_accounts),
         VoteInstruction::DelegateStake(delegate_id) => {
             vote_state::delegate_stake(keyed_accounts, &delegate_id)

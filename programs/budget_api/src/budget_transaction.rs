@@ -151,11 +151,11 @@ impl BudgetTransaction {
     }
 
     pub fn system_instruction(tx: &Transaction, index: usize) -> Option<SystemInstruction> {
-        deserialize(&tx.userdata(index)).ok()
+        deserialize(&tx.data(index)).ok()
     }
 
     pub fn instruction(tx: &Transaction, index: usize) -> Option<BudgetInstruction> {
-        deserialize(&tx.userdata(index)).ok()
+        deserialize(&tx.data(index)).ok()
     }
 
     /// Verify only the payment plan.
@@ -236,9 +236,9 @@ mod tests {
                     payment.lamports = *lamports; // <-- attack, part 2!
                 }
             }
-            tx.instructions[1].userdata = serialize(&instruction).unwrap();
+            tx.instructions[1].data = serialize(&instruction).unwrap();
         }
-        tx.instructions[0].userdata = serialize(&system_instruction).unwrap();
+        tx.instructions[0].data = serialize(&system_instruction).unwrap();
         assert!(BudgetTransaction::verify_plan(&tx));
         assert!(!tx.verify_signature());
     }
@@ -257,7 +257,7 @@ mod tests {
                 payment.to = thief_keypair.pubkey(); // <-- attack!
             }
         }
-        tx.instructions[1].userdata = serialize(&instruction).unwrap();
+        tx.instructions[1].data = serialize(&instruction).unwrap();
         assert!(BudgetTransaction::verify_plan(&tx));
         assert!(!tx.verify_signature());
     }
@@ -274,7 +274,7 @@ mod tests {
                 payment.lamports = 2; // <-- attack!
             }
         }
-        tx.instructions[1].userdata = serialize(&instruction).unwrap();
+        tx.instructions[1].data = serialize(&instruction).unwrap();
         assert!(!BudgetTransaction::verify_plan(&tx));
 
         // Also, ensure all branchs of the plan spend all lamports
@@ -284,7 +284,7 @@ mod tests {
                 payment.lamports = 0; // <-- whoops!
             }
         }
-        tx.instructions[1].userdata = serialize(&instruction).unwrap();
+        tx.instructions[1].data = serialize(&instruction).unwrap();
         assert!(!BudgetTransaction::verify_plan(&tx));
     }
 }

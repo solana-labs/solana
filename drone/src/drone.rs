@@ -372,7 +372,7 @@ mod tests {
         assert_eq!(tx.program_ids, vec![system_program::id()]);
 
         assert_eq!(tx.instructions.len(), 1);
-        let instruction: SystemInstruction = deserialize(&tx.instructions[0].userdata).unwrap();
+        let instruction: SystemInstruction = deserialize(&tx.instructions[0].data).unwrap();
         assert_eq!(
             instruction,
             SystemInstruction::CreateAccount {

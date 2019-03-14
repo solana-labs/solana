@@ -187,7 +187,7 @@ impl LocalCluster {
         }
 
         info!("Checking for vote account registration");
-        let vote_account_user_data = client.get_account_userdata(&vote_account_pubkey);
+        let vote_account_user_data = client.get_account_data(&vote_account_pubkey);
         if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
             if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
                 if vote_state.delegate_id == delegate_id {

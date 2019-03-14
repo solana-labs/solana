@@ -70,11 +70,7 @@ fn test_wallet_deploy_program() {
     file.read_to_end(&mut elf).unwrap();
 
     assert_eq!(
-        account_info_obj
-            .get("userdata")
-            .unwrap()
-            .as_array()
-            .unwrap(),
+        account_info_obj.get("data").unwrap().as_array().unwrap(),
         &elf
     );
 

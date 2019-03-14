@@ -65,11 +65,11 @@ fn test_bad_sig() {
     let blockhash = client.get_recent_blockhash();
 
     let mut tr2 = SystemTransaction::new_account(&alice, &bob_pubkey, 501, blockhash, 0);
-    let mut instruction2 = deserialize(tr2.userdata(0)).unwrap();
+    let mut instruction2 = deserialize(tr2.data(0)).unwrap();
     if let SystemInstruction::Move { ref mut lamports } = instruction2 {
         *lamports = 502;
     }
-    tr2.instructions[0].userdata = serialize(&instruction2).unwrap();
+    tr2.instructions[0].data = serialize(&instruction2).unwrap();
     let signature = client.transfer_signed(&tr2).unwrap();
     client.poll_for_signature(&signature).unwrap();
 
@@ -113,9 +113,9 @@ fn test_register_vote_account() {
     const LAST: usize = 30;
     for run in 0..=LAST {
         let account_user_data = client
-            .get_account_userdata(&vote_account_id)
-            .expect("Expected valid response for account userdata")
-            .expect("Expected valid account userdata to exist after account creation");
+            .get_account_data(&vote_account_id)
+            .expect("Expected valid response for account data")
+            .expect("Expected valid account data to exist after account creation");
 
         let vote_state = VoteState::deserialize(&account_user_data);
 

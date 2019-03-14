@@ -33,7 +33,7 @@ impl LeaderConfirmationService {
         // the vote states
         bank.vote_accounts().for_each(|(_, account)| {
             total_stake += account.lamports;
-            let vote_state = VoteState::deserialize(&account.userdata).unwrap();
+            let vote_state = VoteState::deserialize(&account.data).unwrap();
             if let Some(stake_and_state) = vote_state
                 .votes
                 .back()

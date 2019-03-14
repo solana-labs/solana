@@ -18,7 +18,7 @@ pub fn create_program_account(name: &str) -> Account {
     Account {
         lamports: 1,
         owner: id(),
-        userdata: name.as_bytes().to_vec(),
+        data: name.as_bytes().to_vec(),
         executable: true,
     }
 }

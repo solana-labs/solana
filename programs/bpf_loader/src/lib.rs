@@ -148,9 +148,9 @@ fn serialize_parameters(
             .unwrap();
         v.write_all(info.unsigned_key().as_ref()).unwrap();
         v.write_u64::<LittleEndian>(info.account.lamports).unwrap();
-        v.write_u64::<LittleEndian>(info.account.userdata.len() as u64)
+        v.write_u64::<LittleEndian>(info.account.data.len() as u64)
             .unwrap();
-        v.write_all(&info.account.userdata).unwrap();
+        v.write_all(&info.account.data).unwrap();
         v.write_all(info.account.owner.as_ref()).unwrap();
     }
     v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
@@ -171,10 +171,10 @@ fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
 
         start += mem::size_of::<u64>() // skip lamports
                   + mem::size_of::<u64>(); // skip length tag
-        let end = start + info.account.userdata.len();
-        info.account.userdata.clone_from_slice(&buffer[start..end]);
+        let end = start + info.account.data.len();
+        info.account.data.clone_from_slice(&buffer[start..end]);
 
-        start += info.account.userdata.len() // skip userdata
+        start += info.account.data.len() // skip data
                   + mem::size_of::<Pubkey>(); // skip owner
     }
 }
@@ -190,7 +190,7 @@ fn entrypoint(
 
     if keyed_accounts[0].account.executable {
         let (progs, params) = keyed_accounts.split_at_mut(1);
-        let prog = &progs[0].account.userdata;
+        let prog = &progs[0].account.data;
         info!("Call BPF program");
         //dump_program(keyed_accounts[0].key, prog);
         let mut vm = match create_vm(prog) {
@@ -228,15 +228,15 @@ fn entrypoint(
                 let offset = offset as usize;
                 let len = bytes.len();
                 debug!("Write: offset={} length={}", offset, len);
-                if keyed_accounts[0].account.userdata.len() < offset + len {
+                if keyed_accounts[0].account.data.len() < offset + len {
                     warn!(
                         "Write overflow: {} < {}",
-                        keyed_accounts[0].account.userdata.len(),
+                        keyed_accounts[0].account.data.len(),
                         offset + len
                     );
                     return Err(ProgramError::GenericError);
                 }
-                keyed_accounts[0].account.userdata[offset..offset + len].copy_from_slice(&bytes);
+                keyed_accounts[0].account.data[offset..offset + len].copy_from_slice(&bytes);
             }
             LoaderInstruction::Finalize => {
                 keyed_accounts[0].account.executable = true;
