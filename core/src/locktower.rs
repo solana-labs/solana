@@ -1,14 +1,21 @@
+use crate::bank_forks::BankForks;
+use crate::staking_utils;
 use hashbrown::{HashMap, HashSet};
+use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState, MAX_LOCKOUT_HISTORY};
+
+const VOTE_THRESHOLD_DEPTH: usize = 8;
+const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 
 pub struct StakeLockout {
     lockout: u64,
     stake: u64,
 }
 
+#[derive(Default)]
 pub struct Locktower {
     pub max_stake: u64,
     threshold_depth: usize,
@@ -17,6 +24,40 @@ pub struct Locktower {
 }
 
 impl Locktower {
+    pub fn new_from_forks(bank_forks: &BankForks) -> Locktower {
+        //TODO: which bank to start with?
+        let mut frozen_banks: Vec<_> = bank_forks.frozen_banks().values().cloned().collect();
+        frozen_banks.sort_by_key(|b| (b.parents().len(), b.slot()));
+        if let Some(bank) = frozen_banks.last() {
+            Self::new_from_bank(bank)
+        } else {
+            Self::default()
+        }
+    }
+
+    pub fn new_from_bank(bank: &Bank) -> Locktower {
+        let mut max_stake = 0;
+        let current_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
+        let mut lockouts = VoteState::default();
+        staking_utils::node_staked_accounts_at_epoch(bank, current_epoch).map(|iter| {
+            for (delegate_id, stake, account) in iter {
+                max_stake += stake;
+                if *delegate_id == bank.collector_id() {
+                    let state = VoteState::deserialize(&account.data).expect("votes");
+                    if lockouts.votes.len() < state.votes.len() {
+                        //TODO: which state to init with?
+                        lockouts = state;
+                    }
+                }
+            }
+        });
+        Locktower {
+            max_stake,
+            threshold_depth: VOTE_THRESHOLD_DEPTH,
+            threshold_size: VOTE_THRESHOLD_SIZE,
+            lockouts,
+        }
+    }
     pub fn new(max_stake: u64, threshold_depth: usize, threshold_size: f64) -> Locktower {
         Locktower {
             max_stake,
@@ -36,7 +77,7 @@ impl Locktower {
     {
         let mut stake_lockouts = HashMap::new();
         for (_, account) in vote_accounts {
-            let mut vote_state: VoteState = VoteState::deserialize(&account.userdata)
+            let mut vote_state: VoteState = VoteState::deserialize(&account.data)
                 .expect("bank should always have valid VoteState data");
             let start_root = vote_state.root_slot;
             vote_state.process_vote(Vote { slot: bank_slot });
@@ -79,6 +120,15 @@ impl Locktower {
             sum += stake_lockout.lockout as u128 * stake_lockout.stake as u128
         }
         sum
+    }
+
+    pub fn check_already_voted(&self, slot: u64) -> bool {
+        for vote in &self.lockouts.votes {
+            if vote.slot == slot {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn check_vote_lockout(
@@ -155,14 +205,14 @@ mod test {
         let mut accounts = vec![];
         for (lamports, votes) in stake_votes {
             let mut account = Account::default();
-            account.userdata = vec![0; 1024];
+            account.data = vec![0; 1024];
             account.lamports = *lamports;
             let mut vote_state = VoteState::default();
             for slot in *votes {
                 vote_state.process_vote(Vote { slot: *slot });
             }
             vote_state
-                .serialize(&mut account.userdata)
+                .serialize(&mut account.data)
                 .expect("serialize state");
             accounts.push((Pubkey::default(), account));
         }
@@ -287,6 +337,14 @@ mod test {
             .collect();
         locktower.lockouts.root_slot = Some(0);
         assert!(!locktower.check_vote_lockout(2, &flat_children));
+    }
+
+    #[test]
+    fn test_check_already_voted() {
+        let mut locktower = Locktower::new(2, 0, 0.67);
+        locktower.record_vote(0);
+        assert!(locktower.check_already_voted(0));
+        assert!(!locktower.check_already_voted(1));
     }
 
     #[test]
