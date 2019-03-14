@@ -8,7 +8,7 @@ use crate::leader_confirmation_service::LeaderConfirmationService;
 use crate::leader_schedule_utils;
 use crate::packet;
 use crate::packet::SharedPackets;
-use crate::packet::{Packet, Packets};
+use crate::packet::{Meta, Packet, Packets};
 use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntries};
 use crate::poh_service::{PohService, PohServiceConfig};
 use crate::result::{Error, Result};
@@ -88,7 +88,7 @@ impl BankingStage {
             .iter()
             .flat_map(|(p, start_index)| &p.packets[**start_index..])
             .collect();
-        let blobs = packet::packets_to_blobs(&packets);
+        let blobs = packet::packables_to_blobs::<Meta, _, Packet>(&packets);
 
         for blob in blobs {
             socket.send_to(&blob.data[..blob.meta.size], tpu_via_blobs)?;

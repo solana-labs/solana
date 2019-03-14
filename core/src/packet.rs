@@ -1,4 +1,5 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
+use crate::packable::{Packable, PackableError, PackableMetadata};
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use crate::result::{Error, Result};
 use bincode;
@@ -36,6 +37,12 @@ pub struct Meta {
     pub v6: bool,
 }
 
+impl PackableMetadata for Meta {
+    fn data_size(&self) -> u32 {
+        self.size as u32
+    }
+}
+
 #[derive(Clone)]
 #[repr(C)]
 pub struct Packet {
@@ -44,8 +51,18 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
-        Self { data, meta }
+    pub fn new(meta: Meta, data: &[u8]) -> Result<Self> {
+        let size = meta.size;
+        if data.len() != size {
+            Err(Error::PackableError(PackableError::InvalidData))
+        } else {
+            let mut packet = Packet {
+                data: [0u8; PACKET_DATA_SIZE],
+                meta,
+            };
+            packet.data.copy_from_slice(&data[..size]);
+            Ok(packet)
+        }
     }
 }
 
@@ -72,6 +89,17 @@ impl Default for Packet {
 impl PartialEq for Packet {
     fn eq(&self, other: &Packet) -> bool {
         self.data.iter().zip(other.data.iter()).all(|(a, b)| a == b) && self.meta == other.meta
+    }
+}
+
+impl Packable for Packet {
+    type Metadata = Meta;
+    fn meta(&self) -> &Meta {
+        &self.meta
+    }
+
+    fn data(&self) -> &[u8] {
+        &self.data[..self.meta.size]
     }
 }
 
@@ -289,42 +317,54 @@ pub fn to_shared_blobs<T: Serialize>(rsps: Vec<(T, SocketAddr)>) -> Result<Share
     Ok(blobs)
 }
 
-pub fn packets_to_blobs<T: Borrow<Packet>>(packets: &[T]) -> Vec<Blob> {
+pub fn packables_to_blobs<M: PackableMetadata, T, P>(packables: &[T]) -> Vec<Blob>
+where
+    T: Borrow<P>,
+    P: Packable<Metadata = M>,
+{
     let mut current_index = 0;
     let mut blobs = vec![];
-    while current_index < packets.len() {
+    while current_index < packables.len() {
         let mut blob = Blob::default();
-        current_index += blob.store_packets(&packets[current_index..]) as usize;
+        current_index += blob.store_packables(&packables[current_index..]) as usize;
         blobs.push(blob);
     }
 
     blobs
 }
 
-pub fn deserialize_packets_in_blob(
+pub fn deserialize_packables_in_blob<M: PackableMetadata, T: Packable<Metadata = M>>(
     data: &[u8],
-    serialized_packet_size: usize,
-    serialized_meta_size: usize,
-) -> Result<Vec<Packet>> {
-    let mut packets: Vec<Packet> = Vec::with_capacity(data.len() / serialized_packet_size);
+    unpack: &Fn(M, &[u8]) -> Result<T>,
+) -> Result<Vec<T>> {
+    let mut packables = vec![];
     let mut pos = 0;
-    while pos + serialized_packet_size <= data.len() {
-        let packet = deserialize_single_packet_in_blob(
-            &data[pos..pos + serialized_packet_size],
-            serialized_meta_size,
-        )?;
-        pos += serialized_packet_size;
-        packets.push(packet);
+    let serialized_meta_size = M::serialized_size() as usize;
+    while pos + serialized_meta_size <= data.len() {
+        let (p, len) =
+            deserialize_single_packable_in_blob(&data[pos..], serialized_meta_size, unpack)?;
+        pos += len;
+        packables.push(p);
     }
-    Ok(packets)
+    Ok(packables)
 }
 
-fn deserialize_single_packet_in_blob(data: &[u8], serialized_meta_size: usize) -> Result<Packet> {
-    let meta = bincode::deserialize(&data[..serialized_meta_size])?;
-    let mut packet_data = [0; PACKET_DATA_SIZE];
-    packet_data
-        .copy_from_slice(&data[serialized_meta_size..serialized_meta_size + PACKET_DATA_SIZE]);
-    Ok(Packet::new(packet_data, meta))
+fn deserialize_single_packable_in_blob<T: Packable, M: PackableMetadata>(
+    data: &[u8],
+    serialized_meta_size: usize,
+    unpack: &Fn(M, &[u8]) -> Result<T>,
+) -> Result<(T, usize)> {
+    let meta: M = bincode::deserialize(&data[..serialized_meta_size])?;
+    let data_size = meta.data_size() as usize;
+    if data[serialized_meta_size..].len() < data_size {
+        return Err(Error::PackableError(PackableError::InvalidData));
+    } else {
+        unpack(
+            meta,
+            &data[serialized_meta_size..serialized_meta_size + data_size],
+        )
+        .map(|packet| (packet, serialized_meta_size + data_size))
+    }
 }
 
 macro_rules! range {
@@ -458,16 +498,20 @@ impl Blob {
         self.set_data_size(new_size as u64);
     }
 
-    pub fn store_packets<T: Borrow<Packet>>(&mut self, packets: &[T]) -> u64 {
+    pub fn store_packables<M: PackableMetadata, T, P>(&mut self, packables: &[T]) -> u64
+    where
+        T: Borrow<P>,
+        P: Packable<Metadata = M>,
+    {
         let size = self.size();
         let mut cursor = Cursor::new(&mut self.data_mut()[size..]);
         let mut written = 0;
         let mut last_index = 0;
-        for packet in packets {
-            if bincode::serialize_into(&mut cursor, &packet.borrow().meta).is_err() {
+        for p in packables {
+            if bincode::serialize_into(&mut cursor, p.borrow().meta()).is_err() {
                 break;
             }
-            if cursor.write_all(&packet.borrow().data[..]).is_err() {
+            if cursor.write_all(&p.borrow().data()).is_err() {
                 break;
             }
 
@@ -685,20 +729,20 @@ mod tests {
         let packets: Vec<_> = (0..num_packets).map(|_| Packet::default()).collect();
 
         // Everything except the last packet should have been written
-        assert_eq!(blob.store_packets(&packets[..]), (num_packets - 1) as u64);
+        assert_eq!(blob.store_packables(&packets[..]), (num_packets - 1) as u64);
 
         blob = Blob::default();
         // Store packets such that blob only has room for one more
         assert_eq!(
-            blob.store_packets(&packets[..num_packets - 2]),
+            blob.store_packables(&packets[..num_packets - 2]),
             (num_packets - 2) as u64
         );
 
         // Fill the last packet in the blob
-        assert_eq!(blob.store_packets(&packets[..num_packets - 2]), 1);
+        assert_eq!(blob.store_packables(&packets[..num_packets - 2]), 1);
 
         // Blob is now full
-        assert_eq!(blob.store_packets(&packets), 0);
+        assert_eq!(blob.store_packables(&packets), 0);
     }
 
     #[test]
@@ -764,7 +808,7 @@ mod tests {
             .collect();
 
         let mut blob = Blob::default();
-        assert_eq!(blob.store_packets(&packets[..]), num_packets);
+        assert_eq!(blob.store_packables(&packets[..]), num_packets);
         let result = deserialize_packets_in_blob(
             &blob.data()[..blob.size()],
             serialized_packet_size,

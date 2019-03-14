@@ -4,6 +4,7 @@ use crate::blocktree;
 use crate::cluster_info;
 #[cfg(feature = "erasure")]
 use crate::erasure;
+use crate::packable;
 use crate::packet;
 use crate::poh_recorder;
 use bincode;
@@ -30,6 +31,7 @@ pub enum Error {
     SendError,
     PohRecorderError(poh_recorder::PohRecorderError),
     BlocktreeError(blocktree::BlocktreeError),
+    PackableError(packable::PackableError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -111,6 +113,11 @@ impl std::convert::From<poh_recorder::PohRecorderError> for Error {
 impl std::convert::From<blocktree::BlocktreeError> for Error {
     fn from(e: blocktree::BlocktreeError) -> Error {
         Error::BlocktreeError(e)
+    }
+}
+impl std::convert::From<packable::PackableError> for Error {
+    fn from(e: packable::PackableError) -> Error {
+        Error::PackableError(e)
     }
 }
 
