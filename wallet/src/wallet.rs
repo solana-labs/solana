@@ -494,8 +494,8 @@ fn process_deploy(
             format!("Unable to open program file: {}", err).to_string(),
         )
     })?;
-    let mut program_userdata = Vec::new();
-    file.read_to_end(&mut program_userdata).map_err(|err| {
+    let mut program_data = Vec::new();
+    file.read_to_end(&mut program_data).map_err(|err| {
         WalletError::DynamicProgramError(
             format!("Unable to read program file: {}", err).to_string(),
         )
@@ -506,7 +506,7 @@ fn process_deploy(
         &program_id.pubkey(),
         blockhash,
         1,
-        program_userdata.len() as u64,
+        program_data.len() as u64,
         &bpf_loader::id(),
         0,
     );
@@ -516,7 +516,7 @@ fn process_deploy(
     })?;
 
     trace!("Writing program data");
-    let write_transactions: Vec<_> = program_userdata
+    let write_transactions: Vec<_> = program_data
         .chunks(USERDATA_CHUNK_SIZE)
         .zip(0..)
         .map(|(chunk, i)| {

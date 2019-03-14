@@ -11,7 +11,7 @@ use solana_storage_api::{StorageTransaction, ENTRIES_PER_SEGMENT};
 fn get_storage_entry_height(bank: &Bank, account: &Pubkey) -> u64 {
     match bank.get_account(&account) {
         Some(storage_system_account) => {
-            let state = deserialize(&storage_system_account.userdata);
+            let state = deserialize(&storage_system_account.data);
             if let Ok(state) = state {
                 let state: solana_storage_api::StorageProgramState = state;
                 return state.entry_height;
@@ -26,7 +26,7 @@ fn get_storage_entry_height(bank: &Bank, account: &Pubkey) -> u64 {
 
 fn get_storage_blockhash(bank: &Bank, account: &Pubkey) -> Hash {
     if let Some(storage_system_account) = bank.get_account(&account) {
-        let state = deserialize(&storage_system_account.userdata);
+        let state = deserialize(&storage_system_account.data);
         if let Ok(state) = state {
             let state: solana_storage_api::StorageProgramState = state;
             return state.hash;

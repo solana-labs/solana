@@ -64,7 +64,7 @@ impl<'a> VoteBank<'a> {
         self.bank.register_tick(&hash(blockhash.as_ref()));
 
         let vote_account = self.bank.get_account(&vote_keypair.pubkey()).unwrap();
-        Ok(VoteState::deserialize(&vote_account.userdata).unwrap())
+        Ok(VoteState::deserialize(&vote_account.data).unwrap())
     }
 }
 
@@ -129,7 +129,7 @@ fn test_vote_via_bank_with_no_signature() {
 
     // And ensure there's no vote.
     let vote_account = bank.get_account(&vote_id).unwrap();
-    let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
+    let vote_state = VoteState::deserialize(&vote_account.data).unwrap();
     assert_eq!(vote_state.votes.len(), 0);
 
     assert_eq!(

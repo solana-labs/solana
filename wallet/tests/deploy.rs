@@ -71,7 +71,7 @@ fn test_wallet_deploy_program() {
 
     assert_eq!(
         account_info_obj
-            .get("userdata")
+            .get("data")
             .unwrap()
             .as_array()
             .unwrap(),

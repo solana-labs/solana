@@ -73,7 +73,7 @@ fn node_staked_accounts_at_epoch(
 }
 
 fn filter_no_delegate(account_id: &Pubkey, account: &Account) -> bool {
-    VoteState::deserialize(&account.userdata)
+    VoteState::deserialize(&account.data)
         .map(|vote_state| vote_state.delegate_id != *account_id)
         .unwrap_or(false)
 }
@@ -91,7 +91,7 @@ fn to_vote_state(
     node_staked_accounts: impl Iterator<Item = (impl Borrow<Pubkey>, u64, impl Borrow<Account>)>,
 ) -> impl Iterator<Item = (u64, VoteState)> {
     node_staked_accounts.filter_map(|(_, stake, account)| {
-        VoteState::deserialize(&account.borrow().userdata)
+        VoteState::deserialize(&account.borrow().data)
             .ok()
             .map(|vote_state| (stake, vote_state))
     })

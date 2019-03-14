@@ -52,7 +52,7 @@ impl<'a> RewardsBank<'a> {
         self.bank.register_tick(&hash(blockhash.as_ref()));
 
         let vote_account = self.bank.get_account(&vote_keypair.pubkey()).unwrap();
-        Ok(VoteState::deserialize(&vote_account.userdata).unwrap())
+        Ok(VoteState::deserialize(&vote_account.data).unwrap())
     }
 
     fn redeem_credits(&self, rewards_id: &Pubkey, vote_keypair: &Keypair) -> Result<VoteState> {
@@ -60,7 +60,7 @@ impl<'a> RewardsBank<'a> {
         let tx = RewardsTransaction::new_redeem_credits(&vote_keypair, rewards_id, blockhash, 0);
         self.bank.process_transaction(&tx)?;
         let vote_account = self.bank.get_account(&vote_keypair.pubkey()).unwrap();
-        Ok(VoteState::deserialize(&vote_account.userdata).unwrap())
+        Ok(VoteState::deserialize(&vote_account.data).unwrap())
     }
 }
 

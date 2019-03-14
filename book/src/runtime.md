@@ -6,7 +6,7 @@ separating program code from the state it operates on, the runtime is able to
 choreograph concurrent access. Transactions accessing only credit-only
 accounts are executed in parallel whereas transactions accessing writable
 accounts are serialized.  The runtime interacts with the program through an
-entrypoint with a well-defined interface.  The userdata stored in an account is
+entrypoint with a well-defined interface.  The data stored in an account is
 an opaque type, an array of bytes. The program has full control over its
 contents.
 
@@ -42,7 +42,7 @@ programs can be executed in parallel.
 The runtime enforces the following rules:
 
 1. Only the *owner* program may modify the contents of an account.  This means
-that upon assignment userdata vector is guaranteed to be zero.
+that upon assignment data vector is guaranteed to be zero.
 
 2. Total balances on all the accounts is equal before and after execution of a
 transaction.
@@ -59,11 +59,11 @@ accounts.
 
 ## SystemProgram Interface
 
-The interface is best described by the `Instruction::userdata` that the user
+The interface is best described by the `Instruction::data` that the user
 encodes.
 
 * `CreateAccount` - This allows the user to create an account with an allocated
-userdata array and assign it to a Program.
+data array and assign it to a Program.
 
 * `Assign` - Allows the user to assign an existing account to a program.
 
@@ -73,10 +73,10 @@ userdata array and assign it to a Program.
 
 For blockchain to function correctly, the program code must be resilient to user
 inputs.  That is why in this design the program specific code is the only code
-that can change the state of the userdata byte array in the Accounts that are
+that can change the state of the data byte array in the Accounts that are
 assigned to it.  It is also the reason why `Assign` or `CreateAccount` must zero
-out the userdata.  Otherwise there would be no possible way for the program to
-distinguish the recently assigned account userdata from a natively generated
+out the data.  Otherwise there would be no possible way for the program to
+distinguish the recently assigned account data from a natively generated
 state transition without some additional metadata from the runtime to indicate
 that this memory is assigned instead of natively generated.
 
@@ -94,12 +94,12 @@ instruction can be composed into a single transaction with the call to the
 program itself.
 
 * `CreateAccount` and `Assign` guarantee that when account is assigned to the
-program, the Account's userdata is zero initialized.
+program, the Account's data is zero initialized.
 
 * Once assigned to program an Account cannot be reassigned.
 
 * Runtime guarantees that a program's code is the only code that can modify
-Account userdata that the Account is assigned to.
+Account data that the Account is assigned to.
 
 * Runtime guarantees that the program can only spend lamports that are in
 accounts that are assigned to it.

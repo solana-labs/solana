@@ -451,7 +451,7 @@ impl AccountsDB {
         // when squashing.
         let acc = &mut account.clone();
         if account.lamports == 0 {
-            acc.userdata.resize(0, 0);
+            acc.data.resize(0, 0);
         }
 
         loop {
@@ -1617,7 +1617,7 @@ mod tests {
     }
 
     fn compare_account(account1: &Account, account2: &Account) -> bool {
-        if account1.userdata != account2.userdata
+        if account1.data != account2.data
             || account1.owner != account2.owner
             || account1.executable != account2.executable
             || account1.lamports != account2.lamports

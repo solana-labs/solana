@@ -293,7 +293,7 @@ impl Bank {
         // will be forced to select it as the leader for height 0
         let mut bootstrap_leader_vote_account = Account {
             lamports: bootstrap_leader_stake,
-            userdata: vec![0; VoteState::max_size() as usize],
+            data: vec![0; VoteState::max_size() as usize],
             owner: solana_vote_api::id(),
             executable: false,
         };
@@ -301,7 +301,7 @@ impl Bank {
         let mut vote_state = VoteState::new(&genesis_block.bootstrap_leader_id);
         vote_state.votes.push_back(Lockout::new(&Vote::new(0)));
         vote_state
-            .serialize(&mut bootstrap_leader_vote_account.userdata)
+            .serialize(&mut bootstrap_leader_vote_account.data)
             .unwrap();
 
         self.accounts.store_slow(
@@ -929,12 +929,12 @@ mod tests {
         let instructions = vec![
             Instruction {
                 program_ids_index: 0,
-                userdata: serialize(&spend).unwrap(),
+                data: serialize(&spend).unwrap(),
                 accounts: vec![0, 1],
             },
             Instruction {
                 program_ids_index: 0,
-                userdata: serialize(&spend).unwrap(),
+                data: serialize(&spend).unwrap(),
                 accounts: vec![0, 2],
             },
         ];
@@ -1427,7 +1427,7 @@ mod tests {
             accounts
                 .iter()
                 .filter_map(|(pubkey, account)| {
-                    if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
+                    if let Ok(vote_state) = VoteState::deserialize(&account.data) {
                         if vote_state.delegate_id == leader_id {
                             Some((*pubkey, true))
                         } else {

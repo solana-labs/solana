@@ -40,7 +40,7 @@ retransmitted twice around the network.
 
 4. CrdsValue for vote should look like this ``` Votes(Vec<Transaction>) ```
 
-Each vote transaction should maintain a `wallclock` in its userdata.  The merge
+Each vote transaction should maintain a `wallclock` in its data.  The merge
 strategy for Votes will keep the last N set of votes as configured by the local
 client.  For push/pull the vector is traversed recursively and each Transaction
 is treated as an individual CrdsValue with its own local wallclock and

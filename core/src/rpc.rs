@@ -517,7 +517,7 @@ mod tests {
             "result":{
                 "owner": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
                 "lamports": 20,
-                "userdata": [],
+                "data": [],
                 "executable": false
             },
             "id":1}
