@@ -1246,7 +1246,13 @@ mod tests {
         let res = bank.process_transactions(&vec![tx.clone()]);
         assert_eq!(res.len(), 1);
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
-        res[0].clone().unwrap_err();
+
+        // TODO: Why do we convert errors to Oks?
+        //res[0].clone().unwrap_err();
+
+        bank.get_signature_status(&tx.signatures[0])
+            .unwrap()
+            .unwrap_err();
     }
 
     fn new_from_parent(parent: &Arc<Bank>) -> Bank {
