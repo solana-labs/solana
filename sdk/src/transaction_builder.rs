@@ -108,7 +108,7 @@ impl TransactionBuilder {
     /// Return a signed transaction.
     pub fn sign<T: KeypairUtil>(&self, keypairs: &[&T], recent_blockhash: Hash) -> Transaction {
         let mut tx = self.compile();
-        tx.sign_checked(keypairs, recent_blockhash);
+        tx.sign(keypairs, recent_blockhash);
         tx
     }
 }

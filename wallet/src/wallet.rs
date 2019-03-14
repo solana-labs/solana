@@ -1726,17 +1726,15 @@ mod tests {
         let blockhash = Hash::default();
         let mut tx = SystemTransaction::new_account(&key, &to, 50, blockhash, 0);
 
-        let signer = Keypair::new();
-
-        let result = send_and_confirm_transaction(&rpc_client, &mut tx, &signer);
+        let result = send_and_confirm_transaction(&rpc_client, &mut tx, &key);
         result.unwrap();
 
         let rpc_client = RpcClient::new("account_in_use".to_string());
-        let result = send_and_confirm_transaction(&rpc_client, &mut tx, &signer);
+        let result = send_and_confirm_transaction(&rpc_client, &mut tx, &key);
         assert!(result.is_err());
 
         let rpc_client = RpcClient::new("fails".to_string());
-        let result = send_and_confirm_transaction(&rpc_client, &mut tx, &signer);
+        let result = send_and_confirm_transaction(&rpc_client, &mut tx, &key);
         assert!(result.is_err());
     }
 
