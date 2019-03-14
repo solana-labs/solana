@@ -196,7 +196,7 @@ impl LocalCluster {
             &replicator_keypair.pubkey(),
             1,
         );
-        let replicator_node = Node::new_localhost_with_pubkey(&replicator_keypair.pubkey());
+        let replicator_node = Node::new_localhost_replicator(&replicator_keypair.pubkey());
 
         let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_block);
         let replicator = Replicator::new(
