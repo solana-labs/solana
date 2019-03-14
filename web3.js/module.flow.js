@@ -40,7 +40,7 @@ declare module '@solana/web3.js' {
     executable: boolean,
     owner: PublicKey,
     lamports: number,
-    userdata: Buffer,
+    data: Buffer,
   };
 
   declare type AccountChangeCallback = (accountInfo: AccountInfo) => void;
@@ -104,13 +104,13 @@ declare module '@solana/web3.js' {
   declare type TransactionInstructionCtorFields = {|
     keys: ?Array<PublicKey>,
     programId?: PublicKey,
-    userdata?: Buffer,
+    data?: Buffer,
   |};
 
   declare export class TransactionInstruction {
     keys: Array<PublicKey>;
     programId: PublicKey;
-    userdata: Buffer;
+    data: Buffer;
   }
 
   declare type SignaturePubkeyPair = {|

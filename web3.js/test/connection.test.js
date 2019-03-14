@@ -214,7 +214,7 @@ test('request airdrop', async () => {
           0,
         ],
         lamports: 42,
-        userdata: [],
+        data: [],
         executable: false,
       },
     },
@@ -222,7 +222,7 @@ test('request airdrop', async () => {
 
   const accountInfo = await connection.getAccountInfo(account.publicKey);
   expect(accountInfo.lamports).toBe(42);
-  expect(accountInfo.userdata).toHaveLength(0);
+  expect(accountInfo.data).toHaveLength(0);
   expect(accountInfo.owner).toEqual(SystemProgram.programId);
 });
 
@@ -472,7 +472,7 @@ test('account change notification', async () => {
   expect(mockCallback.mock.calls[0][0].lamports).toBe(41);
   expect(mockCallback.mock.calls[0][0].owner).toEqual(BpfLoader.programId);
   expect(mockCallback.mock.calls[0][0].executable).toBe(false);
-  expect(mockCallback.mock.calls[0][0].userdata).toEqual(
+  expect(mockCallback.mock.calls[0][0].data).toEqual(
     Buffer.from([1, 2, 3]),
   );
 });
@@ -534,7 +534,7 @@ test('program account change notification', async () => {
     BpfLoader.programId,
   );
   expect(mockCallback.mock.calls[0][0].accountInfo.executable).toBe(false);
-  expect(mockCallback.mock.calls[0][0].accountInfo.userdata).toEqual(
+  expect(mockCallback.mock.calls[0][0].accountInfo.data).toEqual(
     Buffer.from([1, 2, 3]),
   );
 });

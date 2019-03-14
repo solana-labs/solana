@@ -58,18 +58,18 @@ export type BudgetCondition = SignatureCondition | TimestampCondition;
  */
 function serializePayment(payment: Payment): Buffer {
   const toData = payment.to.toBuffer();
-  const userdata = Buffer.alloc(8 + toData.length);
-  userdata.writeUInt32LE(payment.amount, 0);
-  toData.copy(userdata, 8);
-  return userdata;
+  const data = Buffer.alloc(8 + toData.length);
+  data.writeUInt32LE(payment.amount, 0);
+  toData.copy(data, 8);
+  return data;
 }
 
 /**
  * @private
  */
 function serializeDate(when: Date): Buffer {
-  const userdata = Buffer.alloc(8 + 20);
-  userdata.writeUInt32LE(20, 0); // size of timestamp as u64
+  const data = Buffer.alloc(8 + 20);
+  data.writeUInt32LE(20, 0); // size of timestamp as u64
 
   function iso(date) {
     function pad(number) {
@@ -94,8 +94,8 @@ function serializeDate(when: Date): Buffer {
       'Z'
     );
   }
-  userdata.write(iso(when), 8);
-  return userdata;
+  data.write(iso(when), 8);
+  return data;
 }
 
 /**
@@ -107,28 +107,28 @@ function serializeCondition(condition: BudgetCondition) {
       const date = serializeDate(condition.when);
       const from = condition.from.toBuffer();
 
-      const userdata = Buffer.alloc(4 + date.length + from.length);
-      userdata.writeUInt32LE(0, 0); // Condition enum = Timestamp
-      date.copy(userdata, 4);
-      from.copy(userdata, 4 + date.length);
-      return userdata;
+      const data = Buffer.alloc(4 + date.length + from.length);
+      data.writeUInt32LE(0, 0); // Condition enum = Timestamp
+      date.copy(data, 4);
+      from.copy(data, 4 + date.length);
+      return data;
     }
     case 'signature': {
-      const userdataLayout = BufferLayout.struct([
+      const dataLayout = BufferLayout.struct([
         BufferLayout.u32('condition'),
         Layout.publicKey('from'),
       ]);
 
       const from = condition.from.toBuffer();
-      const userdata = Buffer.alloc(4 + from.length);
-      userdataLayout.encode(
+      const data = Buffer.alloc(4 + from.length);
+      dataLayout.encode(
         {
           instruction: 1, // Signature
           from,
         },
-        userdata,
+        data,
       );
-      return userdata;
+      return data;
     }
     default:
       throw new Error(`Unknown condition type: ${condition.type}`);
@@ -186,66 +186,66 @@ export class BudgetProgram {
     amount: number,
     ...conditions: Array<BudgetCondition>
   ): Transaction {
-    const userdata = Buffer.alloc(1024);
+    const data = Buffer.alloc(1024);
     let pos = 0;
-    userdata.writeUInt32LE(0, pos); // NewBudget instruction
+    data.writeUInt32LE(0, pos); // NewBudget instruction
     pos += 4;
 
     switch (conditions.length) {
       case 0:
-        userdata.writeUInt32LE(0, pos); // Budget enum = Pay
+        data.writeUInt32LE(0, pos); // Budget enum = Pay
         pos += 4;
 
         {
           const payment = serializePayment({amount, to});
-          payment.copy(userdata, pos);
+          payment.copy(data, pos);
           pos += payment.length;
         }
 
         return new Transaction().add({
           keys: [from, to],
           programId: this.programId,
-          userdata: userdata.slice(0, pos),
+          data: data.slice(0, pos),
         });
       case 1:
-        userdata.writeUInt32LE(1, pos); // Budget enum = After
+        data.writeUInt32LE(1, pos); // Budget enum = After
         pos += 4;
         {
           const condition = conditions[0];
 
           const conditionData = serializeCondition(condition);
-          conditionData.copy(userdata, pos);
+          conditionData.copy(data, pos);
           pos += conditionData.length;
 
           const paymentData = serializePayment({amount, to});
-          paymentData.copy(userdata, pos);
+          paymentData.copy(data, pos);
           pos += paymentData.length;
         }
 
         return new Transaction().add({
           keys: [from, program, to],
           programId: this.programId,
-          userdata: userdata.slice(0, pos),
+          data: data.slice(0, pos),
         });
 
       case 2:
-        userdata.writeUInt32LE(2, pos); // Budget enum = Or
+        data.writeUInt32LE(2, pos); // Budget enum = Or
         pos += 4;
 
         for (let condition of conditions) {
           const conditionData = serializeCondition(condition);
-          conditionData.copy(userdata, pos);
+          conditionData.copy(data, pos);
           pos += conditionData.length;
 
           const paymentData = serializePayment({amount, to});
-          paymentData.copy(userdata, pos);
+          paymentData.copy(data, pos);
           pos += paymentData.length;
         }
 
         return new Transaction().add({
           keys: [from, program, to],
           programId: this.programId,
-          userdata: userdata.slice(0, pos),
+          data: data.slice(0, pos),
         });
 
       default:
@@ -268,28 +268,28 @@ export class BudgetProgram {
     condition1: BudgetCondition,
     condition2: BudgetCondition,
   ): Transaction {
-    const userdata = Buffer.alloc(1024);
+    const data = Buffer.alloc(1024);
     let pos = 0;
-    userdata.writeUInt32LE(0, pos); // NewBudget instruction
+    data.writeUInt32LE(0, pos); // NewBudget instruction
     pos += 4;
 
-    userdata.writeUInt32LE(3, pos); // Budget enum = And
+    data.writeUInt32LE(3, pos); // Budget enum = And
     pos += 4;
 
     for (let condition of [condition1, condition2]) {
       const conditionData = serializeCondition(condition);
-      conditionData.copy(userdata, pos);
+      conditionData.copy(data, pos);
       pos += conditionData.length;
     }
 
     const paymentData = serializePayment({amount, to});
-    paymentData.copy(userdata, pos);
+    paymentData.copy(data, pos);
     pos += paymentData.length;
 
     return new Transaction().add({
       keys: [from, program, to],
       programId: this.programId,
-      userdata: userdata.slice(0, pos),
+      data: data.slice(0, pos),
     });
   }
 
@@ -304,15 +304,15 @@ export class BudgetProgram {
     when: Date,
   ): Transaction {
     const whenData = serializeDate(when);
-    const userdata = Buffer.alloc(4 + whenData.length);
+    const data = Buffer.alloc(4 + whenData.length);
 
-    userdata.writeUInt32LE(1, 0); // ApplyTimestamp instruction
-    whenData.copy(userdata, 4);
+    data.writeUInt32LE(1, 0); // ApplyTimestamp instruction
+    whenData.copy(data, 4);
 
     return new Transaction().add({
       keys: [from, program, to],
       programId: this.programId,
-      userdata,
+      data,
     });
   }
 
@@ -325,22 +325,22 @@ export class BudgetProgram {
     program: PublicKey,
     to: PublicKey,
   ): Transaction {
-    const userdataLayout = BufferLayout.struct([
+    const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
     ]);
 
-    const userdata = Buffer.alloc(userdataLayout.span);
-    userdataLayout.encode(
+    const data = Buffer.alloc(dataLayout.span);
+    dataLayout.encode(
       {
         instruction: 2, // ApplySignature instruction
       },
-      userdata,
+      data,
     );
 
     return new Transaction().add({
       keys: [from, program, to],
       programId: this.programId,
-      userdata,
+      data,
     });
   }
 }
