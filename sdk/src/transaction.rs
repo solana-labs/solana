@@ -8,8 +8,9 @@ use crate::shortvec::{
     deserialize_vec_bytes, deserialize_vec_with, encode_len, serialize_vec_bytes,
     serialize_vec_with,
 };
-use crate::signature::{Keypair, KeypairUtil, Signature};
+use crate::signature::{KeypairUtil, Signature};
 use crate::system_instruction::SystemError;
+use crate::transaction_builder::{BuilderInstruction, TransactionBuilder};
 use bincode::{serialize, Error};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use serde::{Deserialize, Serialize, Serializer};
@@ -187,19 +188,14 @@ impl Transaction {
         recent_blockhash: Hash,
         fee: u64,
     ) -> Self {
-        let program_ids = vec![*program_id];
-        let accounts = (0..=transaction_keys.len() as u8).collect();
-        let instructions = vec![Instruction::new(0, data, accounts)];
-        let mut keys = vec![*from_pubkey];
-        keys.extend_from_slice(transaction_keys);
-        Self::new_with_instructions::<Keypair>(
-            &[],
-            &keys[..],
-            recent_blockhash,
-            fee,
-            program_ids,
-            instructions,
-        )
+        let mut account_keys = vec![(*from_pubkey, true)];
+        for pubkey in transaction_keys {
+            account_keys.push((*pubkey, false));
+        }
+        let instruction = BuilderInstruction::new(*program_id, data, account_keys);
+        let mut transaction = TransactionBuilder::new(fee).push(instruction).compile();
+        transaction.recent_blockhash = recent_blockhash;
+        transaction
     }
     /// Create a signed transaction
     /// * `from_keypair` - The key used to sign the transaction.  This key is stored as keys[0]
@@ -473,6 +469,7 @@ impl<'de> Deserialize<'de> for Transaction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::signature::Keypair;
     use bincode::deserialize;
 
     #[test]
