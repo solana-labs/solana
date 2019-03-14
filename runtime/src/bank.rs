@@ -4,7 +4,7 @@
 //! already been signed and verified.
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
-use crate::hash_queue::BlockhashQueue;
+use crate::blockhash_queue::BlockhashQueue;
 use crate::runtime;
 use crate::status_cache::StatusCache;
 use bincode::serialize;
