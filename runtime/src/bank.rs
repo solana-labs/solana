@@ -4,7 +4,7 @@
 //! already been signed and verified.
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
-use crate::hash_queue::HashQueue;
+use crate::blockhash_queue::BlockhashQueue;
 use crate::runtime;
 use crate::status_cache::StatusCache;
 use bincode::serialize;
@@ -121,7 +121,7 @@ pub struct Bank {
     status_cache: RwLock<BankStatusCache>,
 
     /// FIFO queue of `recent_blockhash` items
-    blockhash_queue: RwLock<HashQueue>,
+    blockhash_queue: RwLock<BlockhashQueue>,
 
     /// Previous checkpoint of this bank
     parent: RwLock<Option<Arc<Bank>>>,
@@ -156,7 +156,7 @@ pub struct Bank {
     is_delta: AtomicBool,
 }
 
-impl Default for HashQueue {
+impl Default for BlockhashQueue {
     fn default() -> Self {
         Self::new(MAX_RECENT_BLOCKHASHES)
     }
@@ -475,7 +475,7 @@ impl Bank {
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && !hash_queue.check_entry_age(tx.recent_blockhash, max_age) {
+                if lock_res.is_ok() && !hash_queue.check_hash_age(tx.recent_blockhash, max_age) {
                     error_counters.reserve_blockhash += 1;
                     Err(TransactionError::BlockhashNotFound)
                 } else {
