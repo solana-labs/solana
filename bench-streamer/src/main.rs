@@ -1,4 +1,4 @@
-use clap::{App, Arg};
+use clap::{crate_description, crate_name, crate_version, App, Arg};
 use solana::packet::{Packet, SharedPackets, BLOB_SIZE, PACKET_DATA_SIZE};
 use solana::result::Result;
 use solana::streamer::{receiver, PacketReceiver};
@@ -51,7 +51,9 @@ fn sink(exit: Arc<AtomicBool>, rvs: Arc<AtomicUsize>, r: PacketReceiver) -> Join
 fn main() -> Result<()> {
     let mut num_sockets = 1usize;
 
-    let matches = App::new("solana-bench-streamer")
+    let matches = App::new(crate_name!())
+        .about(crate_description!())
+        .version(crate_version!())
         .arg(
             Arg::with_name("num-recv-sockets")
                 .long("num-recv-sockets")

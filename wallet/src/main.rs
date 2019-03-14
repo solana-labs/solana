@@ -1,4 +1,6 @@
-use clap::{crate_version, App, Arg, ArgGroup, ArgMatches, SubCommand};
+use clap::{
+    crate_description, crate_name, crate_version, App, Arg, ArgGroup, ArgMatches, SubCommand,
+};
 use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
 use solana_wallet::wallet::{parse_command, process_command, WalletConfig, WalletError};
 use std::error;
@@ -88,7 +90,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
     };
 
-    let matches = App::new("solana-wallet")
+    let matches = App::new(crate_name!())
+        .about(crate_description!())
         .version(crate_version!())
         .arg(
             Arg::with_name("host")

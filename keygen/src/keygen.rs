@@ -1,9 +1,10 @@
-use clap::{crate_version, App, Arg};
+use clap::{crate_description, crate_name, crate_version, App, Arg};
 use solana_sdk::signature::gen_keypair_file;
 use std::error;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let matches = App::new("solana-keygen")
+    let matches = App::new(crate_name!())
+        .about(crate_description!())
         .version(crate_version!())
         .arg(
             Arg::with_name("outfile")

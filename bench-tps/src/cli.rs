@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::process::exit;
 use std::time::Duration;
 
-use clap::{crate_version, App, Arg, ArgMatches};
+use clap::{crate_description, crate_name, crate_version, App, Arg, ArgMatches};
 use solana_drone::drone::DRONE_PORT;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 
@@ -41,7 +41,7 @@ impl Default for Config {
 
 /// Defines and builds the CLI args for a run of the benchmark
 pub fn build_args<'a, 'b>() -> App<'a, 'b> {
-    App::new("solana-bench-tps")
+    App::new(crate_name!()).about(crate_description!())
         .version(crate_version!())
         .arg(
             Arg::with_name("network")

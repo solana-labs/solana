@@ -1,6 +1,6 @@
 //! A command-line executable for generating the chain's genesis block.
 
-use clap::{crate_version, value_t_or_exit, App, Arg};
+use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana::blocktree::create_new_ledger;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
@@ -14,7 +14,8 @@ use std::error;
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 2;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let matches = App::new("solana-genesis")
+    let matches = App::new(crate_name!())
+        .about(crate_description!())
         .version(crate_version!())
         .arg(
             Arg::with_name("bootstrap_leader_keypair_file")
