@@ -371,10 +371,7 @@ mod tests {
 
         // Test signature confirmation notification #1
         let string = receiver.poll();
-        let expected_data = arc_bank
-            .get_account(&contract_state.pubkey())
-            .unwrap()
-            .data;
+        let expected_data = arc_bank.get_account(&contract_state.pubkey()).unwrap().data;
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",

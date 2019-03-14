@@ -100,8 +100,7 @@ fn apply_debits(
             }
         }
         BudgetInstruction::ApplyTimestamp(dt) => {
-            if let Ok(mut budget_state) =
-                BudgetState::deserialize(&keyed_accounts[1].account.data)
+            if let Ok(mut budget_state) = BudgetState::deserialize(&keyed_accounts[1].account.data)
             {
                 if !budget_state.is_pending() {
                     Err(BudgetError::ContractNotPending)
@@ -119,8 +118,7 @@ fn apply_debits(
             }
         }
         BudgetInstruction::ApplySignature => {
-            if let Ok(mut budget_state) =
-                BudgetState::deserialize(&keyed_accounts[1].account.data)
+            if let Ok(mut budget_state) = BudgetState::deserialize(&keyed_accounts[1].account.data)
             {
                 if !budget_state.is_pending() {
                     Err(BudgetError::ContractNotPending)

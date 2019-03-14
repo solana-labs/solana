@@ -19,10 +19,7 @@ impl fmt::Debug for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let data_len = cmp::min(64, self.data.len());
         let data_str = if data_len > 0 {
-            format!(
-                " data: {}",
-                hex::encode(self.data[..data_len].to_vec())
-            )
+            format!(" data: {}", hex::encode(self.data[..data_len].to_vec()))
         } else {
             "".to_string()
         };
