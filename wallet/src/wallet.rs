@@ -602,7 +602,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         }
         // Apply time elapsed to contract
         WalletCommand::TimeElapsed(to, pubkey, dt) => {
-            let params = json!(format!("{}", config.id.pubkey()));
+            let params = json!([format!("{}", config.id.pubkey())]);
             let balance = RpcRequest::GetBalance
                 .make_rpc_request(&rpc_client, 1, Some(params))?
                 .as_u64();
