@@ -50,6 +50,20 @@ impl TransactionBuilder {
         }
     }
 
+    /// Create a new unsigned transaction from a single instruction
+    pub fn new_singleton(instruction: BuilderInstruction) -> Transaction {
+        Self::default().push(instruction).compile()
+    }
+
+    /// Create a new unsigned transaction from a single instruction
+    pub fn new_with_instructions(instructions: Vec<BuilderInstruction>) -> Transaction {
+        let mut transaction_builder = Self::default();
+        for instruction in instructions {
+            transaction_builder.push(instruction);
+        }
+        transaction_builder.compile()
+    }
+
     /// Add an instruction.
     pub fn push(&mut self, instruction: BuilderInstruction) -> &mut Self {
         self.instructions.push(instruction);
@@ -239,5 +253,26 @@ mod tests {
         assert_eq!(tx.instructions[0], Instruction::new(0, &0, vec![1]));
         assert_eq!(tx.instructions[1], Instruction::new(1, &0, vec![0]));
         assert_eq!(tx.instructions[2], Instruction::new(0, &0, vec![0]));
+    }
+
+    #[test]
+    fn test_transaction_builder_new_singleton() {
+        let ix = Instruction::new(Pubkey::default(), &0, vec![]);
+        assert_eq!(
+            TransactionBuilder::new_singleton(ix.clone()),
+            TransactionBuilder::default().push(ix.clone()).compile()
+        );
+    }
+
+    #[test]
+    fn test_transaction_builder_new_with_instructions() {
+        let ix = Instruction::new(Pubkey::default(), &0, vec![]);
+        assert_eq!(
+            TransactionBuilder::new_with_instructions(vec![ix.clone(), ix.clone()]),
+            TransactionBuilder::default()
+                .push(ix.clone())
+                .push(ix.clone())
+                .compile()
+        );
     }
 }
