@@ -120,10 +120,11 @@ fn test_vote_via_bank_with_no_signature() {
     // Sneak in an instruction so that the transaction is signed but
     // the 0th account in the second instruction is not! The program
     // needs to check that it's signed.
-    let tx = TransactionBuilder::default()
+    let mut tx = TransactionBuilder::default()
         .push(SystemInstruction::new_move(&mallory_id, &vote_id, 1))
         .push(vote_ix)
-        .sign(&[&mallory_keypair], blockhash);
+        .compile();
+    tx.sign(&[&mallory_keypair], blockhash);
 
     let result = bank.process_transaction(&tx);
 
