@@ -5,11 +5,15 @@ use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::GossipService;
+use crate::packet::to_shared_blob;
 use crate::repair_service::RepairSlotRange;
 use crate::result::Result;
 use crate::service::Service;
 use crate::storage_stage::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
+use crate::streamer::receiver;
+use crate::streamer::responder;
 use crate::window_service::WindowService;
+use bincode::deserialize;
 use rand::thread_rng;
 use rand::Rng;
 use solana_client::rpc_client::RpcClient;
@@ -27,9 +31,10 @@ use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::{Error, ErrorKind};
 use std::mem::size_of;
-use std::net::UdpSocket;
+use std::net::{SocketAddr, UdpSocket};
 use std::path::Path;
 use std::path::PathBuf;
+use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
@@ -38,25 +43,29 @@ use std::thread::spawn;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+#[derive(Serialize, Deserialize)]
+pub enum ReplicatorRequest {
+    GetSlotHeight(SocketAddr),
+}
+
 pub struct Replicator {
     gossip_service: GossipService,
     fetch_stage: BlobFetchStage,
     window_service: WindowService,
-    t_retransmit: JoinHandle<()>,
+    thread_handles: Vec<JoinHandle<()>>,
     exit: Arc<AtomicBool>,
     slot: u64,
     ledger_path: String,
     keypair: Arc<Keypair>,
     signature: ring::signature::Signature,
     cluster_entrypoint: ContactInfo,
-    node_info: ContactInfo,
-    cluster_info: Arc<RwLock<ClusterInfo>>,
     ledger_data_file_encrypted: PathBuf,
     sampling_offsets: Vec<u64>,
     hash: Hash,
-    blocktree: Arc<Blocktree>,
     #[cfg(feature = "chacha")]
     num_chacha_blocks: usize,
+    #[cfg(feature = "chacha")]
+    blocktree: Arc<Blocktree>,
 }
 
 pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
@@ -106,6 +115,54 @@ fn get_entry_heights_from_blockhash(
     let max_segment_index = get_segment_from_entry(storage_entry_height);
     segment_index %= max_segment_index as u64;
     segment_index * ENTRIES_PER_SEGMENT
+}
+
+fn create_request_processor(
+    socket: UdpSocket,
+    exit: &Arc<AtomicBool>,
+    slot: u64,
+) -> Vec<JoinHandle<()>> {
+    let mut thread_handles = vec![];
+    let (s_reader, r_reader) = channel();
+    let (s_responder, r_responder) = channel();
+    let storage_socket = Arc::new(socket);
+    let t_receiver = receiver(
+        storage_socket.clone(),
+        exit,
+        s_reader,
+        "replicator-receiver",
+    );
+    thread_handles.push(t_receiver);
+
+    let t_responder = responder("replicator-responder", storage_socket.clone(), r_responder);
+    thread_handles.push(t_responder);
+
+    let exit4 = exit.clone();
+    let t_processor = spawn(move || loop {
+        let packets = r_reader.recv_timeout(Duration::from_secs(1));
+        if let Ok(packets) = packets {
+            for packet in &packets.read().unwrap().packets {
+                let req: result::Result<ReplicatorRequest, Box<bincode::ErrorKind>> =
+                    deserialize(&packet.data[..packet.meta.size]);
+                match req {
+                    Ok(ReplicatorRequest::GetSlotHeight(from)) => {
+                        if let Ok(blob) = to_shared_blob(slot, from) {
+                            let _ = s_responder.send(vec![blob]);
+                        }
+                    }
+                    Err(e) => {
+                        info!("invalid request: {:?}", e);
+                    }
+                }
+            }
+        }
+        if exit4.load(Ordering::Relaxed) {
+            break;
+        }
+    });
+    thread_handles.push(t_processor);
+
+    thread_handles
 }
 
 impl Replicator {
@@ -194,6 +251,9 @@ impl Replicator {
             repair_slot_range,
         );
 
+        let mut thread_handles =
+            create_request_processor(node.sockets.storage.unwrap(), &exit, slot);
+
         // receive blobs from retransmit and drop them.
         let exit2 = exit.clone();
         let t_retransmit = spawn(move || loop {
@@ -202,31 +262,40 @@ impl Replicator {
                 break;
             }
         });
+        thread_handles.push(t_retransmit);
+
+        let exit3 = exit.clone();
+        let blocktree1 = blocktree.clone();
+        let t_replicate = spawn(move || loop {
+            Self::wait_for_ledger_download(slot, &blocktree1, &exit3, &node_info, &cluster_info);
+            if exit3.load(Ordering::Relaxed) {
+                break;
+            }
+        });
+        thread_handles.push(t_replicate);
 
         Ok(Self {
             gossip_service,
             fetch_stage,
             window_service,
-            t_retransmit,
+            thread_handles,
             exit,
             slot,
             ledger_path: ledger_path.to_string(),
             keypair: keypair.clone(),
             signature,
             cluster_entrypoint,
-            node_info,
-            cluster_info,
             ledger_data_file_encrypted: PathBuf::default(),
             sampling_offsets: vec![],
             hash: Hash::default(),
-            blocktree,
             #[cfg(feature = "chacha")]
             num_chacha_blocks: 0,
+            #[cfg(feature = "chacha")]
+            blocktree,
         })
     }
 
     pub fn run(&mut self) {
-        self.wait_for_ledger_download();
         self.encrypt_ledger()
             .expect("ledger encrypt not successful");
         loop {
@@ -239,30 +308,61 @@ impl Replicator {
         }
     }
 
-    fn wait_for_ledger_download(&self) {
+    fn wait_for_ledger_download(
+        start_slot: u64,
+        blocktree: &Arc<Blocktree>,
+        exit: &Arc<AtomicBool>,
+        node_info: &ContactInfo,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+    ) {
         info!("window created, waiting for ledger download done");
         let _start = Instant::now();
         let mut _received_so_far = 0;
 
+        let mut current_slot = start_slot;
+        let mut done = false;
         loop {
-            if let Ok(entries) = self.blocktree.get_slot_entries(self.slot, 0, None) {
-                if !entries.is_empty() {
+            loop {
+                if let Ok(meta) = blocktree.meta(current_slot) {
+                    if let Some(meta) = meta {
+                        if meta.is_rooted {
+                            current_slot += 1;
+                            info!("current slot: {}", current_slot);
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                } else {
                     break;
                 }
+                if current_slot >= start_slot + ENTRIES_PER_SEGMENT {
+                    info!("current slot: {} start: {}", current_slot, start_slot);
+                    done = true;
+                    break;
+                }
+            }
+
+            if done {
+                break;
+            }
+
+            if exit.load(Ordering::Relaxed) {
+                break;
             }
             sleep(Duration::from_secs(1));
         }
 
         info!("Done receiving entries from window_service");
 
-        let mut contact_info = self.node_info.clone();
+        // Remove replicator from the data plane
+        let mut contact_info = node_info.clone();
         contact_info.tvu = "0.0.0.0:0".parse().unwrap();
         {
-            let mut cluster_info_w = self.cluster_info.write().unwrap();
+            let mut cluster_info_w = cluster_info.write().unwrap();
             cluster_info_w.insert_self(contact_info);
         }
-
-        info!("Done downloading ledger at {}", self.ledger_path);
     }
 
     fn encrypt_ledger(&mut self) -> Result<()> {
@@ -345,7 +445,9 @@ impl Replicator {
         self.gossip_service.join().unwrap();
         self.fetch_stage.join().unwrap();
         self.window_service.join().unwrap();
-        self.t_retransmit.join().unwrap();
+        for handle in self.thread_handles {
+            handle.join().unwrap();
+        }
     }
 
     pub fn entry_height(&self) -> u64 {

@@ -65,8 +65,8 @@ pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<V
     let now = Instant::now();
     let mut i = 0;
     while now.elapsed() < Duration::from_secs(30) {
-        let rpc_peers = spy_ref.read().unwrap().rpc_peers();
-        if rpc_peers.len() >= num_nodes {
+        let tvu_peers = spy_ref.read().unwrap().tvu_peers();
+        if tvu_peers.len() >= num_nodes {
             info!(
                 "discover success in {}s...\n{}",
                 now.elapsed().as_secs(),
@@ -75,7 +75,7 @@ pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<V
 
             exit.store(true, Ordering::Relaxed);
             gossip_service.join().unwrap();
-            return Ok(rpc_peers);
+            return Ok(tvu_peers);
         }
         if i % 20 == 0 {
             info!(
