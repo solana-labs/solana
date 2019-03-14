@@ -536,7 +536,6 @@ export class Connection {
 
     for (let id of accountKeys) {
       const {subscriptionId, publicKey} = this._accountChangeSubscriptions[id];
-      console.log('pubkey: ' + publicKey);
       if (subscriptionId === null) {
         try {
           this._accountChangeSubscriptions[
