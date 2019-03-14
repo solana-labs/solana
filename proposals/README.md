@@ -1,4 +1,4 @@
-Building the Solana book
+Building the Solana Design Proposals HTML
 ---
 
 Install the book's dependencies, build, and test the book:

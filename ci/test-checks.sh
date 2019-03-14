@@ -15,5 +15,6 @@ _ cargo clippy --all -- --deny=warnings
 _ ci/audit.sh
 _ ci/nits.sh
 _ book/build.sh
+_ proposals/build.sh
 
 echo --- ok

@@ -1,0 +1,10 @@
+[book]
+title = "Solana Design Proposals"
+authors = ["The Solana Team"]
+
+[build]
+build-dir = "html"
+create-missing = false
+
+[output.html]
+theme = "../book/theme"
