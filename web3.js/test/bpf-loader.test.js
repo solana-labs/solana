@@ -14,7 +14,7 @@ import {newAccountWithLamports} from './new-account-with-lamports';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
-  jest.setTimeout(15000);
+  jest.setTimeout(30000);
 }
 
 test('load BPF program', async () => {

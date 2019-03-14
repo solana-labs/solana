@@ -10,7 +10,7 @@ import {sleep} from '../src/util/sleep';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
-  jest.setTimeout(30000);
+  jest.setTimeout(60000);
 }
 
 function mockGetSignatureStatus(result: string = 'Confirmed') {

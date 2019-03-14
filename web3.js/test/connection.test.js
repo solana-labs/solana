@@ -15,7 +15,7 @@ import {sleep} from '../src/util/sleep';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
-  jest.setTimeout(15000);
+  jest.setTimeout(30000);
 }
 
 const errorMessage = 'Invalid request';
