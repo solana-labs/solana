@@ -142,7 +142,7 @@ impl ThinClient {
         result
     }
 
-    pub fn get_account_userdata(&mut self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
+    pub fn get_account_data(&mut self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
         let params = json!([format!("{}", pubkey)]);
         let response =
             self.rpc_client
@@ -151,13 +151,13 @@ impl ThinClient {
             Ok(account_json) => {
                 let account: Account =
                     serde_json::from_value(account_json).expect("deserialize account");
-                Ok(Some(account.userdata))
+                Ok(Some(account.data))
             }
             Err(error) => {
-                debug!("get_account_userdata failed: {:?}", error);
+                debug!("get_account_data failed: {:?}", error);
                 Err(io::Error::new(
                     io::ErrorKind::Other,
-                    "get_account_userdata failed",
+                    "get_account_data failed",
                 ))
             }
         }

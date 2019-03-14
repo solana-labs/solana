@@ -35,7 +35,7 @@ fn entrypoint(
 
     if keyed_accounts.len() != 1 {
         // keyed_accounts[1] should be the main storage key
-        // to access its userdata
+        // to access its data
         Err(ProgramError::InvalidArgument)?;
     }
 
@@ -47,7 +47,7 @@ fn entrypoint(
 
     if let Ok(syscall) = bincode::deserialize(data) {
         let mut storage_account_state = if let Ok(storage_account_state) =
-            bincode::deserialize(&keyed_accounts[0].account.userdata)
+            bincode::deserialize(&keyed_accounts[0].account.data)
         {
             storage_account_state
         } else {
@@ -159,18 +159,18 @@ fn entrypoint(
         }
 
         if bincode::serialize_into(
-            &mut keyed_accounts[0].account.userdata[..],
+            &mut keyed_accounts[0].account.data[..],
             &storage_account_state,
         )
         .is_err()
         {
-            return Err(ProgramError::UserdataTooSmall);
+            return Err(ProgramError::AccountDataTooSmall);
         }
 
         Ok(())
     } else {
-        info!("Invalid instruction userdata: {:?}", data);
-        Err(ProgramError::InvalidUserdata)
+        info!("Invalid instruction data: {:?}", data);
+        Err(ProgramError::InvalidInstructionData)
     }
 }
 
@@ -190,7 +190,7 @@ mod test {
         assert_eq!(tx.instructions.len(), 1);
         let Instruction {
             ref accounts,
-            ref userdata,
+            ref data,
             ..
         } = tx.instructions[0];
 
@@ -207,7 +207,7 @@ mod test {
             .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
             .collect();
 
-        let ret = entrypoint(&id(), &mut keyed_accounts, &userdata, 42);
+        let ret = entrypoint(&id(), &mut keyed_accounts, &data, 42);
         info!("ret: {:?}", ret);
         ret
     }
@@ -236,8 +236,8 @@ mod test {
         );
 
         assert_eq!(
-            entrypoint(&id(), &mut keyed_accounts, &tx.instructions[0].userdata, 42),
-            Err(ProgramError::UserdataTooSmall)
+            entrypoint(&id(), &mut keyed_accounts, &tx.instructions[0].data, 42),
+            Err(ProgramError::AccountDataTooSmall)
         );
     }
 
@@ -265,7 +265,7 @@ mod test {
         solana_logger::setup();
         let keypair = Keypair::new();
         let mut accounts = [Account::default(), Account::default()];
-        accounts[1].userdata.resize(16 * 1024, 0);
+        accounts[1].data.resize(16 * 1024, 0);
 
         let tx = StorageTransaction::new_mining_proof(
             &keypair,
@@ -284,7 +284,7 @@ mod test {
         solana_logger::setup();
         let keypair = Keypair::new();
         let mut accounts = [Account::default(), Account::default()];
-        accounts[0].userdata.resize(16 * 1024, 0);
+        accounts[0].data.resize(16 * 1024, 0);
 
         let tx = StorageTransaction::new_advertise_recent_blockhash(
             &keypair,
@@ -311,7 +311,7 @@ mod test {
         solana_logger::setup();
         let keypair = Keypair::new();
         let mut accounts = [Account::default(), Account::default()];
-        accounts[0].userdata.resize(16 * 1024, 0);
+        accounts[0].data.resize(16 * 1024, 0);
 
         let entry_height = 0;
 

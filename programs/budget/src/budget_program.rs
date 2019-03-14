@@ -87,7 +87,7 @@ fn apply_debits(
                 keyed_accounts[0].account.lamports += payment.lamports;
                 Ok(())
             } else {
-                let existing = BudgetState::deserialize(&keyed_accounts[0].account.userdata).ok();
+                let existing = BudgetState::deserialize(&keyed_accounts[0].account.data).ok();
                 if Some(true) == existing.map(|x| x.initialized) {
                     trace!("contract already exists");
                     Err(BudgetError::ContractAlreadyExists)
@@ -95,13 +95,12 @@ fn apply_debits(
                     let mut budget_state = BudgetState::default();
                     budget_state.pending_budget = Some(expr);
                     budget_state.initialized = true;
-                    budget_state.serialize(&mut keyed_accounts[0].account.userdata)
+                    budget_state.serialize(&mut keyed_accounts[0].account.data)
                 }
             }
         }
         BudgetInstruction::ApplyTimestamp(dt) => {
-            if let Ok(mut budget_state) =
-                BudgetState::deserialize(&keyed_accounts[1].account.userdata)
+            if let Ok(mut budget_state) = BudgetState::deserialize(&keyed_accounts[1].account.data)
             {
                 if !budget_state.is_pending() {
                     Err(BudgetError::ContractNotPending)
@@ -112,15 +111,14 @@ fn apply_debits(
                     trace!("apply timestamp");
                     apply_timestamp(&mut budget_state, keyed_accounts, *dt)?;
                     trace!("apply timestamp committed");
-                    budget_state.serialize(&mut keyed_accounts[1].account.userdata)
+                    budget_state.serialize(&mut keyed_accounts[1].account.data)
                 }
             } else {
                 Err(BudgetError::UninitializedContract)
             }
         }
         BudgetInstruction::ApplySignature => {
-            if let Ok(mut budget_state) =
-                BudgetState::deserialize(&keyed_accounts[1].account.userdata)
+            if let Ok(mut budget_state) = BudgetState::deserialize(&keyed_accounts[1].account.data)
             {
                 if !budget_state.is_pending() {
                     Err(BudgetError::ContractNotPending)
@@ -131,7 +129,7 @@ fn apply_debits(
                     trace!("apply signature");
                     apply_signature(&mut budget_state, keyed_accounts)?;
                     trace!("apply signature committed");
-                    budget_state.serialize(&mut keyed_accounts[1].account.userdata)
+                    budget_state.serialize(&mut keyed_accounts[1].account.data)
                 }
             } else {
                 Err(BudgetError::UninitializedContract)
@@ -146,8 +144,8 @@ pub fn process_instruction(
     data: &[u8],
 ) -> Result<(), BudgetError> {
     let instruction = deserialize(data).map_err(|err| {
-        info!("Invalid transaction userdata: {:?} {:?}", data, err);
-        BudgetError::UserdataDeserializeFailure
+        info!("Invalid transaction data: {:?} {:?}", data, err);
+        BudgetError::AccountDataDeserializeFailure
     })?;
 
     trace!("process_instruction: {:?}", instruction);
@@ -178,12 +176,12 @@ mod test {
         let mut accounts = vec![Account::new(1, 0, &id()), Account::new(0, 512, &id())];
         let from = Keypair::new();
         let contract = Keypair::new();
-        let userdata = (1u8, 2u8, 3u8);
+        let data = (1u8, 2u8, 3u8);
         let tx = Transaction::new(
             &from,
             &[contract.pubkey()],
             &id(),
-            &userdata,
+            &data,
             Hash::default(),
             0,
         );
@@ -285,7 +283,7 @@ mod test {
         process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].lamports, 0);
         assert_eq!(accounts[contract_account].lamports, 1);
-        let budget_state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        let budget_state = BudgetState::deserialize(&accounts[contract_account].data).unwrap();
         assert!(budget_state.is_pending());
 
         // Attack! Try to payout to a rando key
@@ -304,7 +302,7 @@ mod test {
         assert_eq!(accounts[contract_account].lamports, 1);
         assert_eq!(accounts[to_account].lamports, 0);
 
-        let budget_state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        let budget_state = BudgetState::deserialize(&accounts[contract_account].data).unwrap();
         assert!(budget_state.is_pending());
 
         // Now, acknowledge the time in the condition occurred and
@@ -321,7 +319,7 @@ mod test {
         assert_eq!(accounts[contract_account].lamports, 0);
         assert_eq!(accounts[to_account].lamports, 1);
 
-        let budget_state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        let budget_state = BudgetState::deserialize(&accounts[contract_account].data).unwrap();
         assert!(!budget_state.is_pending());
 
         // try to replay the timestamp contract
@@ -356,7 +354,7 @@ mod test {
         process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].lamports, 0);
         assert_eq!(accounts[contract_account].lamports, 1);
-        let budget_state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        let budget_state = BudgetState::deserialize(&accounts[contract_account].data).unwrap();
         assert!(budget_state.is_pending());
 
         // Attack! try to put the lamports into the wrong account with cancel

@@ -41,14 +41,14 @@ fn process_instruction(
         crate::system_program::entrypoint(
             &program_id,
             &mut keyed_accounts[1..],
-            &tx.instructions[instruction_index].userdata,
+            &tx.instructions[instruction_index].data,
             tick_height,
         )
     } else {
         native_loader::entrypoint(
             &program_id,
             &mut keyed_accounts,
-            &tx.instructions[instruction_index].userdata,
+            &tx.instructions[instruction_index].data,
             tick_height,
         )
     }
@@ -58,7 +58,7 @@ fn verify_instruction(
     program_id: &Pubkey,
     pre_program_id: &Pubkey,
     pre_lamports: u64,
-    pre_userdata: &[u8],
+    pre_data: &[u8],
     account: &Account,
 ) -> Result<(), ProgramError> {
     // Verify the transaction
@@ -71,12 +71,12 @@ fn verify_instruction(
     if *program_id != account.owner && pre_lamports > account.lamports {
         return Err(ProgramError::ExternalAccountLamportSpend);
     }
-    // For accounts unassigned to the program, the userdata may not change.
+    // For accounts unassigned to the program, the data may not change.
     if *program_id != account.owner
         && !system_program::check_id(&program_id)
-        && pre_userdata != &account.userdata[..]
+        && pre_data != &account.data[..]
     {
-        return Err(ProgramError::ExternalAccountUserdataModified);
+        return Err(ProgramError::ExternalAccountDataModified);
     }
     Ok(())
 }
@@ -98,7 +98,7 @@ fn execute_instruction(
     let pre_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
     let pre_data: Vec<_> = program_accounts
         .iter_mut()
-        .map(|a| (a.owner, a.lamports, a.userdata.clone()))
+        .map(|a| (a.owner, a.lamports, a.data.clone()))
         .collect();
 
     process_instruction(
@@ -111,14 +111,14 @@ fn execute_instruction(
     .map_err(verify_error)?;
 
     // Verify the instruction
-    for ((pre_program_id, pre_lamports, pre_userdata), post_account) in
+    for ((pre_program_id, pre_lamports, pre_data), post_account) in
         pre_data.iter().zip(program_accounts.iter())
     {
         verify_instruction(
             &program_id,
             pre_program_id,
             *pre_lamports,
-            pre_userdata,
+            pre_data,
             post_account,
         )?;
     }
@@ -218,10 +218,10 @@ where
 
         let program_id = tx.program_id(i);
         if system_program::check_id(&program_id) {
-            crate::system_program::entrypoint(&program_id, &mut keyed_accounts, &ix.userdata, 0)
+            crate::system_program::entrypoint(&program_id, &mut keyed_accounts, &ix.data, 0)
                 .unwrap();
         } else {
-            process_instruction(&program_id, &mut keyed_accounts, &ix.userdata)?;
+            process_instruction(&program_id, &mut keyed_accounts, &ix.data)?;
         }
     }
     Ok(())
@@ -294,8 +294,8 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_instruction_change_userdata() {
-        fn change_userdata(program_id: &Pubkey) -> Result<(), ProgramError> {
+    fn test_verify_instruction_change_data() {
+        fn change_data(program_id: &Pubkey) -> Result<(), ProgramError> {
             let alice_program_id = Keypair::new().pubkey();
             let account = Account::new(0, 0, &alice_program_id);
             verify_instruction(&program_id, &alice_program_id, 0, &[42], &account)
@@ -305,14 +305,14 @@ mod tests {
         let mallory_program_id = Keypair::new().pubkey();
 
         assert_eq!(
-            change_userdata(&system_program_id),
+            change_data(&system_program_id),
             Ok(()),
-            "system program should be able to change the userdata"
+            "system program should be able to change the data"
         );
         assert_eq!(
-            change_userdata(&mallory_program_id),
-            Err(ProgramError::ExternalAccountUserdataModified),
-            "malicious Mallory should not be able to change the account userdata"
+            change_data(&mallory_program_id),
+            Err(ProgramError::ExternalAccountDataModified),
+            "malicious Mallory should not be able to change the account data"
         );
     }
 

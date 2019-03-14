@@ -68,7 +68,7 @@ impl CrdsValueLabel {
 }
 
 impl Vote {
-    // TODO: it might make sense for the transaction to encode the wallclock in the userdata
+    // TODO: it might make sense for the transaction to encode the wallclock in the data
     pub fn new(transaction: Transaction, wallclock: u64) -> Self {
         Vote {
             transaction,

@@ -26,13 +26,16 @@ pub enum ProgramError {
     ExternalAccountLamportSpend,
 
     /// Program modified the userdata of an account that doesn't belong to it
-    ExternalAccountUserdataModified,
+    ExternalAccountDataModified,
 
-    /// An account's userdata contents was invalid
-    InvalidUserdata,
+    /// An instruction's data contents was invalid
+    InvalidInstructionData,
 
-    /// An account's userdata was too small
-    UserdataTooSmall,
+    /// An account's data contents was invalid
+    InvalidAccountData,
+
+    /// An account's data was too small
+    AccountDataTooSmall,
 
     /// SystemInstruction::Assign was attempted on an account unowned by the system program
     AssignOfUnownedAccount,

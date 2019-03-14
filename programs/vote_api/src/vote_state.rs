@@ -74,12 +74,12 @@ impl VoteState {
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, ProgramError> {
-        deserialize(input).map_err(|_| ProgramError::InvalidUserdata)
+        deserialize(input).map_err(|_| ProgramError::InvalidAccountData)
     }
 
     pub fn serialize(&self, output: &mut [u8]) -> Result<(), ProgramError> {
         serialize_into(output, self).map_err(|err| match *err {
-            ErrorKind::SizeLimit => ProgramError::UserdataTooSmall,
+            ErrorKind::SizeLimit => ProgramError::AccountDataTooSmall,
             _ => ProgramError::GenericError,
         })
     }
@@ -163,13 +163,13 @@ pub fn delegate_stake(
         Err(ProgramError::InvalidArgument)?;
     }
 
-    let vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata);
+    let vote_state = VoteState::deserialize(&keyed_accounts[0].account.data);
     if let Ok(mut vote_state) = vote_state {
         vote_state.delegate_id = *node_id;
-        vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
+        vote_state.serialize(&mut keyed_accounts[0].account.data)?;
     } else {
-        error!("account[0] does not valid userdata");
-        Err(ProgramError::InvalidUserdata)?;
+        error!("account[0] does not valid data");
+        Err(ProgramError::InvalidAccountData)?;
     }
 
     Ok(())
@@ -192,13 +192,13 @@ pub fn authorize_voter(
         Err(ProgramError::InvalidArgument)?;
     }
 
-    let vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata);
+    let vote_state = VoteState::deserialize(&keyed_accounts[0].account.data);
     if let Ok(mut vote_state) = vote_state {
         vote_state.authorized_voter_id = *voter_id;
-        vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
+        vote_state.serialize(&mut keyed_accounts[0].account.data)?;
     } else {
-        error!("account[0] does not valid userdata");
-        Err(ProgramError::InvalidUserdata)?;
+        error!("account[0] does not valid data");
+        Err(ProgramError::InvalidAccountData)?;
     }
 
     Ok(())
@@ -214,18 +214,18 @@ pub fn initialize_account(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Pro
     }
 
     let staker_id = keyed_accounts[0].unsigned_key();
-    let vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata);
+    let vote_state = VoteState::deserialize(&keyed_accounts[0].account.data);
     if let Ok(vote_state) = vote_state {
         if vote_state.delegate_id == Pubkey::default() {
             let vote_state = VoteState::new(staker_id);
-            vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
+            vote_state.serialize(&mut keyed_accounts[0].account.data)?;
         } else {
-            error!("account[0] userdata already initialized");
-            Err(ProgramError::InvalidUserdata)?;
+            error!("account[0] data already initialized");
+            Err(ProgramError::InvalidAccountData)?;
         }
     } else {
-        error!("account[0] does not have valid userdata");
-        Err(ProgramError::InvalidUserdata)?;
+        error!("account[0] does not have valid data");
+        Err(ProgramError::InvalidAccountData)?;
     }
 
     Ok(())
@@ -237,7 +237,7 @@ pub fn process_vote(keyed_accounts: &mut [KeyedAccount], vote: Vote) -> Result<(
         Err(ProgramError::InvalidArgument)?;
     }
 
-    let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata)?;
+    let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.data)?;
 
     // If no voter was authorized, expect account[0] to be the signer, otherwise account[1].
     let signer_index = if vote_state.authorized_voter_id == *keyed_accounts[0].unsigned_key() {
@@ -256,7 +256,7 @@ pub fn process_vote(keyed_accounts: &mut [KeyedAccount], vote: Vote) -> Result<(
     }
 
     vote_state.process_vote(vote);
-    vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
+    vote_state.serialize(&mut keyed_accounts[0].account.data)?;
     Ok(())
 }
 
@@ -266,9 +266,9 @@ pub fn clear_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramE
         Err(ProgramError::InvalidArgument)?;
     }
 
-    let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata)?;
+    let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.data)?;
     vote_state.clear_credits();
-    vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
+    vote_state.serialize(&mut keyed_accounts[0].account.data)?;
     Ok(())
 }
 
@@ -283,7 +283,7 @@ pub fn initialize_and_deserialize(
 ) -> Result<VoteState, ProgramError> {
     let mut keyed_accounts = [KeyedAccount::new(vote_id, false, vote_account)];
     initialize_account(&mut keyed_accounts)?;
-    let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
+    let vote_state = VoteState::deserialize(&vote_account.data).unwrap();
     Ok(vote_state)
 }
 
@@ -294,7 +294,7 @@ pub fn vote_and_deserialize(
 ) -> Result<VoteState, ProgramError> {
     let mut keyed_accounts = [KeyedAccount::new(vote_id, true, vote_account)];
     process_vote(&mut keyed_accounts, vote)?;
-    let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
+    let vote_state = VoteState::deserialize(&vote_account.data).unwrap();
     Ok(vote_state)
 }
 
@@ -324,7 +324,7 @@ mod tests {
 
         // reinit should fail
         let res = initialize_account(&mut keyed_accounts);
-        assert_eq!(res, Err(ProgramError::InvalidUserdata));
+        assert_eq!(res, Err(ProgramError::InvalidAccountData));
     }
 
     #[test]

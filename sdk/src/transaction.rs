@@ -23,15 +23,15 @@ pub struct Instruction<P, Q> {
     /// Ordered indices into the transaction keys array indicating which accounts to pass to the program
     pub accounts: Vec<Q>,
     /// The program input data
-    pub userdata: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl<P, Q> Instruction<P, Q> {
-    pub fn new<T: Serialize>(program_ids_index: P, userdata: &T, accounts: Vec<Q>) -> Self {
-        let userdata = serialize(userdata).unwrap();
+    pub fn new<T: Serialize>(program_ids_index: P, data: &T, accounts: Vec<Q>) -> Self {
+        let data = serialize(data).unwrap();
         Self {
             program_ids_index,
-            userdata,
+            data,
             accounts,
         }
     }
@@ -41,7 +41,7 @@ impl Instruction<u8, u8> {
     pub fn serialize_with(mut writer: &mut Cursor<&mut [u8]>, ix: &Self) -> Result<(), Error> {
         writer.write_all(&[ix.program_ids_index])?;
         serialize_vec_bytes(&mut writer, &ix.accounts[..])?;
-        serialize_vec_bytes(&mut writer, &ix.userdata[..])?;
+        serialize_vec_bytes(&mut writer, &ix.data[..])?;
         Ok(())
     }
 
@@ -50,11 +50,11 @@ impl Instruction<u8, u8> {
         reader.read_exact(&mut buf)?;
         let program_ids_index = buf[0];
         let accounts = deserialize_vec_bytes(&mut reader)?;
-        let userdata = deserialize_vec_bytes(&mut reader)?;
+        let data = deserialize_vec_bytes(&mut reader)?;
         Ok(Instruction {
             program_ids_index,
             accounts,
-            userdata,
+            data,
         })
     }
 
@@ -67,7 +67,7 @@ impl Instruction<u8, u8> {
         encode_len(&mut wr, len)?;
         size += wr.position() as usize + (len * size_of::<u8>());
 
-        let len = self.userdata.len();
+        let len = self.data.len();
         wr.set_position(0);
         encode_len(&mut wr, len)?;
         size += wr.position() as usize + (len * size_of::<u8>());
@@ -100,13 +100,13 @@ impl Transaction {
         from_keypair: &T,
         transaction_keys: &[Pubkey],
         program_id: &Pubkey,
-        userdata: &S,
+        data: &S,
         recent_blockhash: Hash,
         fee: u64,
     ) -> Self {
         let program_ids = vec![*program_id];
         let accounts = (0..=transaction_keys.len() as u8).collect();
-        let instructions = vec![Instruction::new(0, userdata, accounts)];
+        let instructions = vec![Instruction::new(0, data, accounts)];
         Self::new_with_instructions(
             &[from_keypair],
             transaction_keys,
@@ -120,13 +120,13 @@ impl Transaction {
         from_pubkey: &Pubkey,
         transaction_keys: &[Pubkey],
         program_id: &Pubkey,
-        userdata: &T,
+        data: &T,
         recent_blockhash: Hash,
         fee: u64,
     ) -> Self {
         let program_ids = vec![*program_id];
         let accounts = (0..=transaction_keys.len() as u8).collect();
-        let instructions = vec![Instruction::new(0, userdata, accounts)];
+        let instructions = vec![Instruction::new(0, data, accounts)];
         let mut keys = vec![*from_pubkey];
         keys.extend_from_slice(transaction_keys);
         Self::new_with_instructions::<Keypair>(
@@ -170,8 +170,8 @@ impl Transaction {
         tx.sign(from_keypairs, recent_blockhash);
         tx
     }
-    pub fn userdata(&self, instruction_index: usize) -> &[u8] {
-        &self.instructions[instruction_index].userdata
+    pub fn data(&self, instruction_index: usize) -> &[u8] {
+        &self.instructions[instruction_index].data
     }
 
     fn key_index(&self, instruction_index: usize, accounts_index: usize) -> Option<usize> {
@@ -531,7 +531,7 @@ mod tests {
         assert_eq!(req_size, size);
     }
 
-    /// Detect binary changes in the serialized transaction userdata, which could have a downstream
+    /// Detect binary changes in the serialized transaction data, which could have a downstream
     /// affect on SDKs and DApps
     #[test]
     fn test_sdk_serialize() {

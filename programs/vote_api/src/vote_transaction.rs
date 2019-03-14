@@ -108,7 +108,7 @@ impl VoteTransaction {
         if !check_id(&tx.program_id(ix_index)) {
             return None;
         }
-        let instruction = deserialize(&tx.userdata(ix_index)).unwrap();
+        let instruction = deserialize(&tx.data(ix_index)).unwrap();
         if let VoteInstruction::Vote(vote) = instruction {
             Some((tx.account_keys[0], vote, tx.recent_blockhash))
         } else {

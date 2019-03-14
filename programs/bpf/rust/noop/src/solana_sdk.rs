@@ -123,8 +123,8 @@ pub fn sol_log_params(ka: &[SolKeyedAccount], data: &[u8]) {
         sol_log_key(&k.key);
         sol_log("- Lamports");
         sol_log_64(0, 0, 0, 0, k.lamports);
-        sol_log("- Userdata");
-        sol_log_slice(k.userdata);
+        sol_log("- AccountData");
+        sol_log_slice(k.data);
         sol_log("- Owner");
         sol_log_key(&k.owner);
     }
@@ -148,7 +148,7 @@ pub struct SolKeyedAccount<'a> {
     /// Number of lamports owned by this account
     pub lamports: u64,
     /// On-chain data within this account
-    pub userdata: &'a [u8],
+    pub data: &'a [u8],
     /// Program that owns this account
     pub owner: SolPubkey<'a>,
 }
@@ -200,15 +200,15 @@ pub extern "C" fn entrypoint(input: *mut u8) -> bool {
     };
     offset += size_of::<u64>();
 
-    let userdata_length = unsafe {
+    let data_length = unsafe {
         #[allow(clippy::cast_ptr_alignment)]
-        let userdata_length_ptr: *const u64 = input.add(offset) as *const u64;
-        *userdata_length_ptr
+        let data_length_ptr: *const u64 = input.add(offset) as *const u64;
+        *data_length_ptr
     } as usize;
     offset += size_of::<u64>();
 
-    let userdata = unsafe { from_raw_parts(input.add(offset), userdata_length) };
-    offset += userdata_length;
+    let data = unsafe { from_raw_parts(input.add(offset), data_length) };
+    offset += data_length;
 
     let owner_slice = unsafe { from_raw_parts(input.add(offset), SIZE_PUBKEY) };
     let owner = SolPubkey { key: &owner_slice };
@@ -218,7 +218,7 @@ pub extern "C" fn entrypoint(input: *mut u8) -> bool {
         key,
         is_signer,
         lamports,
-        userdata,
+        data,
         owner,
     }];
 
@@ -386,7 +386,7 @@ mod tests {
         assert_eq!(SIZE_PUBKEY, ka[0].key.key.len());
         assert_eq!(key, ka[0].key.key);
         assert_eq!(48, ka[0].lamports);
-        assert_eq!(1, ka[0].userdata.len());
+        assert_eq!(1, ka[0].data.len());
         let owner = [0; 32];
         assert_eq!(SIZE_PUBKEY, ka[0].owner.key.len());
         assert_eq!(owner, ka[0].owner.key);
