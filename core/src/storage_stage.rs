@@ -513,8 +513,10 @@ mod tests {
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
         let entries = make_tiny_test_entries(64);
-        let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
-        blocktree.write_entries(1, 0, 0, &entries).unwrap();
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        blocktree
+            .write_entries(1, 0, 0, ticks_per_slot, &entries)
+            .unwrap();
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
 
@@ -575,8 +577,10 @@ mod tests {
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
         let entries = make_tiny_test_entries(128);
-        let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
-        blocktree.write_entries(1, 0, 0, &entries).unwrap();
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        blocktree
+            .write_entries(1, 0, 0, ticks_per_slot, &entries)
+            .unwrap();
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
 

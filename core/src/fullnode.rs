@@ -282,9 +282,8 @@ pub fn new_banks_from_blocktree(
     let genesis_block =
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
 
-    let (blocktree, ledger_signal_receiver) =
-        Blocktree::open_with_config_signal(blocktree_path, genesis_block.ticks_per_slot)
-            .expect("Expected to successfully open database ledger");
+    let (blocktree, ledger_signal_receiver) = Blocktree::open_with_signal(blocktree_path)
+        .expect("Expected to successfully open database ledger");
 
     let (bank_forks, bank_forks_info) =
         blocktree_processor::process_blocktree(&genesis_block, &blocktree, account_paths)

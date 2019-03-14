@@ -142,7 +142,6 @@ pub struct Blocktree {
     data_cf: DataCf,
     erasure_cf: ErasureCf,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
-    ticks_per_slot: u64,
 }
 
 // Column family for metadata about a leader slot
@@ -157,24 +156,6 @@ impl Blocktree {
         let mut blocktree = Self::open(ledger_path)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
         blocktree.new_blobs_signals = vec![signal_sender];
-
-        Ok((blocktree, signal_receiver))
-    }
-
-    pub fn open_config(ledger_path: &str, ticks_per_slot: u64) -> Result<Self> {
-        let mut blocktree = Self::open(ledger_path)?;
-        blocktree.ticks_per_slot = ticks_per_slot;
-        Ok(blocktree)
-    }
-
-    pub fn open_with_config_signal(
-        ledger_path: &str,
-        ticks_per_slot: u64,
-    ) -> Result<(Self, Receiver<bool>)> {
-        let mut blocktree = Self::open(ledger_path)?;
-        let (signal_sender, signal_receiver) = sync_channel(1);
-        blocktree.new_blobs_signals = vec![signal_sender];
-        blocktree.ticks_per_slot = ticks_per_slot;
 
         Ok((blocktree, signal_receiver))
     }
@@ -239,14 +220,13 @@ impl Blocktree {
         start_slot: u64,
         num_ticks_in_start_slot: u64,
         start_index: u64,
+        ticks_per_slot: u64,
         entries: I,
     ) -> Result<()>
     where
         I: IntoIterator,
         I::Item: Borrow<Entry>,
     {
-        let ticks_per_slot = self.ticks_per_slot;
-
         assert!(num_ticks_in_start_slot < ticks_per_slot);
         let mut remaining_ticks_in_slot = ticks_per_slot - num_ticks_in_start_slot;
 
@@ -958,9 +938,9 @@ pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Res
     genesis_block.write(&ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
-    let blocktree = Blocktree::open_config(ledger_path, ticks_per_slot)?;
+    let blocktree = Blocktree::open(ledger_path)?;
     let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.hash());
-    blocktree.write_entries(0, 0, 0, &entries)?;
+    blocktree.write_entries(0, 0, 0, ticks_per_slot, &entries)?;
 
     Ok(entries.last().unwrap().hash)
 }
@@ -1079,10 +1059,12 @@ pub mod tests {
             let ticks_per_slot = 10;
             let num_slots = 10;
             let num_ticks = ticks_per_slot * num_slots;
-            let ledger = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
+            let ledger = Blocktree::open(&ledger_path).unwrap();
 
             let ticks = create_ticks(num_ticks, Hash::default());
-            ledger.write_entries(0, 0, 0, ticks.clone()).unwrap();
+            ledger
+                .write_entries(0, 0, 0, ticks_per_slot, ticks.clone())
+                .unwrap();
 
             for i in 0..num_slots {
                 let meta = ledger.meta(i).unwrap().unwrap();
@@ -1112,6 +1094,7 @@ pub mod tests {
                     num_slots,
                     ticks_per_slot - 1,
                     ticks_per_slot - 2,
+                    ticks_per_slot,
                     &ticks[0..2],
                 )
                 .unwrap();
@@ -1159,11 +1142,15 @@ pub mod tests {
         let ticks2 = ticks.split_off(num_ticks as usize);
         assert_eq!(ticks.len(), ticks2.len());
         {
-            let ledger = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
+            let ledger = Blocktree::open(&ledger_path).unwrap();
 
-            ledger.write_entries(0, 0, 0, &ticks).unwrap();
+            ledger
+                .write_entries(0, 0, 0, ticks_per_slot, &ticks)
+                .unwrap();
             ledger.reset_slot_consumed(0).unwrap();
-            ledger.write_entries(0, 0, 0, &ticks2).unwrap();
+            ledger
+                .write_entries(0, 0, 0, ticks_per_slot, &ticks2)
+                .unwrap();
 
             let ledger_ticks = ledger.get_slot_entries(0, 0, None).unwrap();
 
@@ -1483,7 +1470,7 @@ pub mod tests {
     pub fn test_insert_data_blobs_consecutive() {
         let blocktree_path = get_tmp_ledger_path("test_insert_data_blobs_consecutive");
         {
-            let blocktree = Blocktree::open_config(&blocktree_path, 32).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let slot = 0;
             let parent_slot = 0;
             // Write entries
@@ -1618,6 +1605,7 @@ pub mod tests {
                     0u64,
                     0,
                     (entries.len() - 1) as u64,
+                    16,
                     &entries[entries.len() - 1..],
                 )
                 .unwrap();

@@ -127,9 +127,11 @@ mod tests {
         let ledger_dir = "test_encrypt_file_many_keys_single";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let ticks_per_slot = 16;
-        let blocktree = Arc::new(Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap());
+        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
 
-        blocktree.write_entries(0, 0, 0, &entries).unwrap();
+        blocktree
+            .write_entries(0, 0, 0, ticks_per_slot, &entries)
+            .unwrap();
 
         let out_path = Path::new("test_chacha_encrypt_file_many_keys_single_output.txt.enc");
 
@@ -161,8 +163,10 @@ mod tests {
         let ledger_dir = "test_encrypt_file_many_keys_multiple";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let ticks_per_slot = 16;
-        let blocktree = Arc::new(Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap());
-        blocktree.write_entries(0, 0, 0, &entries).unwrap();
+        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+        blocktree
+            .write_entries(0, 0, 0, ticks_per_slot, &entries)
+            .unwrap();
 
         let out_path = Path::new("test_chacha_encrypt_file_many_keys_multiple_output.txt.enc");
 

@@ -142,11 +142,13 @@ mod tests {
         let ledger_dir = "chacha_test_encrypt_file";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let ticks_per_slot = 16;
-        let blocktree = Arc::new(Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap());
+        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         let out_path = Path::new("test_chacha_encrypt_file_output.txt.enc");
 
         let entries = make_tiny_deterministic_test_entries(32);
-        blocktree.write_entries(0, 0, 0, &entries).unwrap();
+        blocktree
+            .write_entries(0, 0, 0, ticks_per_slot, &entries)
+            .unwrap();
 
         let mut key = hex!(
             "abcd1234abcd1234abcd1234abcd1234 abcd1234abcd1234abcd1234abcd1234
