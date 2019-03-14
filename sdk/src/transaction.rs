@@ -200,14 +200,15 @@ impl Transaction {
         transaction.recent_blockhash = recent_blockhash;
         transaction
     }
+
     /// Create a signed transaction
-    /// * `from_keypair` - The key used to sign the transaction.  This key is stored as keys[0]
+    /// * `from_keypairs` - The keys used to sign the transaction.
     /// * `account_keys` - The keys for the transaction.  These are the program state
     ///    instances or lamport recipient keys.
     /// * `recent_blockhash` - The PoH hash.
     /// * `fee` - The transaction fee.
     /// * `program_ids` - The keys that identify programs used in the `instruction` vector.
-    /// * `instructions` - The programs and their arguments that the transaction will execute atomically
+    /// * `instructions` - Instructions that will be executed atomically.
     pub fn new_with_instructions<T: KeypairUtil>(
         from_keypairs: &[&T],
         keys: &[Pubkey],
@@ -232,6 +233,7 @@ impl Transaction {
         tx.sign(from_keypairs, recent_blockhash);
         tx
     }
+
     pub fn data(&self, instruction_index: usize) -> &[u8] {
         &self.instructions[instruction_index].data
     }
