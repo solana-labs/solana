@@ -51,7 +51,7 @@ impl TransactionBuilder {
     }
 
     /// Create a new unsigned transaction from a single instruction
-    pub fn new_singleton(instruction: BuilderInstruction) -> Transaction {
+    pub fn new_with_instruction(instruction: BuilderInstruction) -> Transaction {
         Self::default().push(instruction).compile()
     }
 
@@ -256,10 +256,10 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_builder_new_singleton() {
+    fn test_transaction_builder_new_with_instruction() {
         let ix = Instruction::new(Pubkey::default(), &0, vec![]);
         assert_eq!(
-            TransactionBuilder::new_singleton(ix.clone()),
+            TransactionBuilder::new_with_instruction(ix.clone()),
             TransactionBuilder::default().push(ix.clone()).compile()
         );
     }
