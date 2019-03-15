@@ -67,7 +67,7 @@ pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<V
     while now.elapsed() < Duration::from_secs(30) {
         let rpc_peers = spy_ref.read().unwrap().rpc_peers();
         if rpc_peers.len() >= num_nodes {
-            trace!(
+            info!(
                 "discover success in {}s...\n{}",
                 now.elapsed().as_secs(),
                 spy_ref.read().unwrap().contact_info_trace()
