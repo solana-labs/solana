@@ -19,7 +19,7 @@ To update the pinned version:
    to confirm the new nightly image builds.  Fix any issues as needed
 1. Run `docker login` to enable pushing images to Docker Hub, if you're authorized.
 1. Run `CI=true ci/docker-rust-nightly/build.sh YYYY-MM-DD` to push the new nightly image to dockerhub.com.
-1. Modify the `solanalabs/rust-nightly:YYYY-MM-DD` reference in `ci/buildkite.yml` from the previous to
+1. Modify the `solanalabs/rust-nightly:YYYY-MM-DD` reference in `ci/rust-version.sh` from the previous to
    new *YYYY-MM-DD* value, send a PR with this change and any codebase adjustments needed.
 
 ## Troubleshooting

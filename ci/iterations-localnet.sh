@@ -24,9 +24,10 @@ fi
 
 build() {
   $genPipeline && return
-  ci/version-check-with-upgrade.sh stable
+  source ci/rust-version.sh stable
+
   _ scripts/ulimit-n.sh
-  _ cargo build --all
+  _ cargo +$rust_stable build --all
 }
 
 runTest() {

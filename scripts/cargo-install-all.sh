@@ -4,10 +4,17 @@
 # other workspace crates or native program crates.
 set -e
 
+export rust_version=
+if [[ $1 =~ \+ ]]; then
+  export rust_version=$1
+  shift
+fi
+
 if [[ -z $1 ]]; then
   echo Install directory not specified
   exit 1
 fi
+
 installDir="$(mkdir -p "$1"; cd "$1"; pwd)"
 cargoFeatures="$2"
 echo "Install location: $installDir"
@@ -35,7 +42,7 @@ BIN_CRATES=(
 for crate in "${BIN_CRATES[@]}"; do
   (
     set -x
-    cargo install --force --path "$crate" --root "$installDir" --features="$cargoFeatures"
+    cargo "$rust_version" install --force --path "$crate" --root "$installDir" --features="$cargoFeatures"
   )
 done
 
