@@ -1,5 +1,5 @@
 use crate::entry::Entry;
-use crate::kvstore::{self, Key};
+use crate::kvstore::{self, Key, KvStore};
 use crate::packet::Blob;
 use crate::result::{Error, Result};
 
@@ -12,7 +12,7 @@ use super::db::{
 use super::{Blocktree, BlocktreeError};
 
 #[derive(Debug)]
-pub struct Kvs(());
+pub struct Kvs(KvStore);
 
 /// The metadata column family
 #[derive(Debug)]
