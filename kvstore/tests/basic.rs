@@ -1,10 +1,9 @@
-#![cfg(feature = "kvstore")]
 use rand::{thread_rng, Rng};
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use solana::kvstore::{Config, Key, KvStore};
+use solana_kvstore::{Config, Key, KvStore};
 
 const KB: usize = 1024;
 const HALF_KB: usize = 512;

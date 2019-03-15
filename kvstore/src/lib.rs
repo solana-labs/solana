@@ -1,7 +1,7 @@
-use crate::kvstore::mapper::{Disk, Mapper, Memory};
-use crate::kvstore::sstable::SSTable;
-use crate::kvstore::storage::WriteState;
-use crate::kvstore::writelog::WriteLog;
+use crate::mapper::{Disk, Mapper, Memory};
+use crate::sstable::SSTable;
+use crate::storage::WriteState;
+use crate::writelog::WriteLog;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
@@ -20,6 +20,9 @@ mod sstable;
 mod storage;
 mod writelog;
 mod writetx;
+
+#[macro_use]
+extern crate serde_derive;
 
 pub use self::error::{Error, Result};
 pub use self::readtx::ReadTx as Snapshot;

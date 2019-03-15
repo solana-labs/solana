@@ -1,6 +1,6 @@
-use crate::kvstore::error::{Error, Result};
-use crate::kvstore::mapper::{Kind, Mapper};
-use crate::kvstore::sstable::{Key, Merged, SSTable};
+use crate::error::{Error, Result};
+use crate::mapper::{Kind, Mapper};
+use crate::sstable::{Key, Merged, SSTable};
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

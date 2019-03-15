@@ -3,10 +3,10 @@
 //! access read to a persistent file-based ledger.
 
 use crate::entry::Entry;
-#[cfg(feature = "kvstore")]
-use crate::kvstore;
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
+#[cfg(feature = "kvstore")]
+use solana_kvstore as kvstore;
 
 use bincode::{deserialize, serialize};
 

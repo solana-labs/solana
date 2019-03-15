@@ -1,4 +1,3 @@
-#![cfg(feature = "kvstore")]
 #![feature(test)]
 extern crate test;
 
@@ -9,7 +8,7 @@ use rand::{self, thread_rng, Rng};
 
 use test::Bencher;
 
-use solana::kvstore::{Config, Key, KvStore};
+use solana_kvstore::{Config, Key, KvStore};
 
 const SMALL_SIZE: usize = 512;
 const LARGE_SIZE: usize = 32 * 1024;

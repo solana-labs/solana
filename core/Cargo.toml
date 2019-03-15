@@ -17,7 +17,7 @@ codecov = { repository = "solana-labs/solana", branch = "master", service = "git
 chacha = []
 cuda = []
 erasure = []
-kvstore = ["crc", "memmap"]
+kvstore = ["solana-kvstore"]
 
 [dependencies]
 bincode = "1.1.2"
@@ -48,6 +48,7 @@ serde_json = "1.0.39"
 solana-budget-api = { path = "../programs/budget_api", version = "0.13.0" }
 solana-client = { path = "../client", version = "0.13.0" }
 solana-drone = { path = "../drone", version = "0.13.0" }
+solana-kvstore = { path = "../kvstore", version = "0.0.1", optional = true }
 solana-logger = { path = "../logger", version = "0.13.0" }
 solana-metrics = { path = "../metrics", version = "0.13.0" }
 solana-netutil = { path = "../netutil", version = "0.13.0" }
