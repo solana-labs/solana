@@ -1,6 +1,7 @@
 mod accounts;
 pub mod append_vec;
 pub mod bank;
+pub mod bank_client;
 mod blockhash_queue;
 pub mod bloom;
 pub mod loader_utils;
