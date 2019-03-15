@@ -111,7 +111,7 @@ impl PohRecorder {
         );
         std::mem::swap(&mut cache, &mut self.tick_cache);
         self.start_slot = start_slot;
-        self.start_tick = tick_height;
+        self.start_tick = tick_height + 1;
         self.poh = Poh::new(blockhash, tick_height);
         self.max_last_leader_grace_ticks = ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR;
         self.start_leader_at_tick = my_next_leader_slot
@@ -233,7 +233,7 @@ impl PohRecorder {
                 sender,
                 clear_bank_signal: None,
                 start_slot,
-                start_tick: tick_height,
+                start_tick: tick_height + 1,
                 start_leader_at_tick: my_leader_slot_index
                     .map(|slot| {
                         Some(
