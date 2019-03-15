@@ -18,7 +18,7 @@ impl LoaderTransaction {
         fee: u64,
     ) -> Transaction {
         let instruction = LoaderInstruction::Write { offset, bytes };
-        Transaction::new(
+        Transaction::new_signed(
             from_keypair,
             &[],
             loader,
@@ -35,7 +35,7 @@ impl LoaderTransaction {
         fee: u64,
     ) -> Transaction {
         let instruction = LoaderInstruction::Finalize;
-        Transaction::new(
+        Transaction::new_signed(
             from_keypair,
             &[],
             loader,

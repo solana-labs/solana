@@ -1047,7 +1047,7 @@ mod tests {
         let mut error_counters = ErrorCounters::default();
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
-        let tx = Transaction::new_with_instructions::<Keypair>(
+        let tx = Transaction::new_with_compiled_instructions::<Keypair>(
             &[],
             &[],
             Hash::default(),
@@ -1071,7 +1071,7 @@ mod tests {
         let keypair = Keypair::new();
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[],
             Hash::default(),
@@ -1103,7 +1103,7 @@ mod tests {
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[],
             Hash::default(),
@@ -1131,7 +1131,7 @@ mod tests {
         accounts.push((key0, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[],
             Hash::default(),
@@ -1166,7 +1166,7 @@ mod tests {
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(0, &(), vec![0, 1])];
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[key1],
             Hash::default(),
@@ -1238,7 +1238,7 @@ mod tests {
         accounts.push((key6, account));
 
         let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[],
             Hash::default(),
@@ -1272,7 +1272,7 @@ mod tests {
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[],
             Hash::default(),
@@ -1305,7 +1305,7 @@ mod tests {
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[],
             Hash::default(),
@@ -1354,7 +1354,7 @@ mod tests {
             CompiledInstruction::new(0, &(), vec![0]),
             CompiledInstruction::new(1, &(), vec![0]),
         ];
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[],
             Hash::default(),
@@ -1398,7 +1398,7 @@ mod tests {
 
         let instructions = vec![CompiledInstruction::new(0, &(), vec![0, 1])];
         // Simulate pay-to-self transaction, which loads the same account twice
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[pubkey],
             Hash::default(),

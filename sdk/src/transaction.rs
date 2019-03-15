@@ -167,7 +167,7 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn new<S: Serialize, T: KeypairUtil>(
+    pub fn new_signed<S: Serialize, T: KeypairUtil>(
         from_keypair: &T,
         transaction_keys: &[Pubkey],
         program_id: &Pubkey,
@@ -212,7 +212,7 @@ impl Transaction {
     /// * `fee` - The transaction fee.
     /// * `program_ids` - The keys that identify programs used in the `instruction` vector.
     /// * `instructions` - Instructions that will be executed atomically.
-    pub fn new_with_instructions<T: KeypairUtil>(
+    pub fn new_with_compiled_instructions<T: KeypairUtil>(
         from_keypairs: &[&T],
         keys: &[Pubkey],
         recent_blockhash: Hash,
@@ -500,7 +500,7 @@ mod tests {
             CompiledInstruction::new(0, &(), vec![0, 1]),
             CompiledInstruction::new(1, &(), vec![0, 2]),
         ];
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &[&key],
             &[key1, key2],
             Hash::default(),
@@ -535,7 +535,7 @@ mod tests {
     fn test_refs_invalid_program_id() {
         let key = Keypair::new();
         let instructions = vec![CompiledInstruction::new(1, &(), vec![])];
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &[&key],
             &[],
             Hash::default(),
@@ -549,7 +549,7 @@ mod tests {
     fn test_refs_invalid_account() {
         let key = Keypair::new();
         let instructions = vec![CompiledInstruction::new(0, &(), vec![1])];
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &[&key],
             &[],
             Hash::default(),
@@ -566,7 +566,7 @@ mod tests {
         let keypair = Keypair::new();
         let program_id = Pubkey::new(&[4; 32]);
         let to = Pubkey::new(&[5; 32]);
-        let tx = Transaction::new(
+        let tx = Transaction::new_signed(
             &keypair,
             &[keypair.pubkey(), to],
             &program_id,
@@ -585,7 +585,7 @@ mod tests {
         let keypair = Keypair::new();
         let program_id = Pubkey::new(&[4; 32]);
         let to = Pubkey::new(&[5; 32]);
-        let tx = Transaction::new(
+        let tx = Transaction::new_signed(
             &keypair,
             &[keypair.pubkey(), to],
             &program_id,
@@ -631,7 +631,7 @@ mod tests {
             2, 2, 2,
         ]);
 
-        let tx = Transaction::new(
+        let tx = Transaction::new_signed(
             &keypair,
             &[to],
             &program_id,

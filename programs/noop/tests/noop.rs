@@ -15,7 +15,7 @@ fn test_program_native_noop() {
     let program_id = load_program(&bank, &mint_keypair, &native_loader::id(), program);
 
     // Call user program
-    let tx = Transaction::new(
+    let tx = Transaction::new_signed(
         &mint_keypair,
         &[],
         &program_id,
