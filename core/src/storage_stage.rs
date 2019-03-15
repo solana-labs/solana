@@ -328,7 +328,7 @@ impl StorageStage {
         {
             // Lock the keys, since this is the IV memory,
             // it will be updated in-place by the encryption.
-            // Should be overwritten by the vote signatures which replace the
+            // Should be overwritten by the proof signatures which replace the
             // key values by the time it runs again.
 
             let mut statew = state.write().unwrap();
@@ -619,8 +619,8 @@ mod tests {
             keypair.sign_message(b"test"),
         );
         mining_txs.push(mining_proof_tx);
-        let vote_entries = vec![Entry::new(&Hash::default(), 1, mining_txs)];
-        storage_entry_sender.send(vote_entries).unwrap();
+        let proof_entries = vec![Entry::new(&Hash::default(), 1, mining_txs)];
+        storage_entry_sender.send(proof_entries).unwrap();
 
         for _ in 0..5 {
             {
