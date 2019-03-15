@@ -142,13 +142,36 @@ impl ReplayStage {
                             );
                             cluster_info.write().unwrap().push_vote(vote);
                         }
+                        let next_leader_slot =
+                            leader_schedule_utils::next_leader_slot(&my_id, bank.slot(), &bank);
                         poh_recorder.lock().unwrap().reset(
                             bank.tick_height(),
                             bank.last_blockhash(),
                             bank.slot(),
+                            next_leader_slot,
+                            ticks_per_slot,
+                        );
+                        info!(
+                            "{:?} voted and reset poh at {}. next leader slot {:?}",
+                            my_id,
+                            bank.tick_height(),
+                            next_leader_slot
                         );
                         is_tpu_bank_active = false;
                     }
+
+                    let mut reached_leader_tick = false;
+                    if !is_tpu_bank_active {
+                        let poh = poh_recorder.lock().unwrap();
+                        reached_leader_tick = poh.reached_leader_tick();
+
+                        info!(
+                            "{:?} TPU bank inactive. poh tick {}, leader {}",
+                            my_id,
+                            poh.tick_height(),
+                            reached_leader_tick
+                        );
+                    };
 
                     if !is_tpu_bank_active {
                         assert!(ticks_per_slot > 0);
@@ -164,6 +187,7 @@ impl ReplayStage {
                             &cluster_info,
                             &blocktree,
                             poh_slot,
+                            reached_leader_tick,
                         );
                     }
 
@@ -195,6 +219,7 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: &Blocktree,
         poh_slot: u64,
+        reached_leader_tick: bool,
     ) {
         trace!("{} checking poh slot {}", my_id, poh_slot);
         if blocktree.meta(poh_slot).unwrap().is_some() {
@@ -214,8 +239,9 @@ impl ReplayStage {
                         my_id, next_leader, poh_slot
                     );
                     cluster_info.write().unwrap().set_leader(&next_leader);
-                    if next_leader == *my_id {
+                    if next_leader == *my_id && reached_leader_tick {
                         debug!("{} starting tpu for slot {}", my_id, poh_slot);
+                        inc_new_counter_info!("replay_stage-new_leader", poh_slot as usize);
                         let tpu_bank = Bank::new_from_parent(parent, my_id, poh_slot);
                         bank_forks.write().unwrap().insert(poh_slot, tpu_bank);
                         if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
