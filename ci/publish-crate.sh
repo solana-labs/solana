@@ -55,7 +55,8 @@ for crate in "${CRATES[@]}"; do
     set -x
     # TODO: the rocksdb package does not build with the stock rust docker image,
     # so use the solana rust docker image until this is resolved upstream
-    ci/docker-run.sh solanalabs/rust:1.32.0 bash -exc "cd $crate; $cargoCommand"
+    source ci/rust-version.sh
+    ci/docker-run.sh "$rust_stable_docker_image" bash -exc "cd $crate; $cargoCommand"
     #ci/docker-run.sh rust bash -exc "cd $crate; $cargoCommand"
   )
 done

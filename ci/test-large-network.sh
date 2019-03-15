@@ -4,9 +4,7 @@ set -e
 here=$(dirname "$0")
 cd "$here"/..
 
-# This job doesn't run within a container, try once to upgrade tooling on a
-# version check failure
-ci/version-check-with-upgrade.sh stable
+source ci/rust-version.sh stable
 
 export RUST_BACKTRACE=1
 
@@ -39,4 +37,4 @@ fi
 
 set -x
 export SOLANA_DYNAMIC_NODES=120
-exec cargo test --release --features=erasure test_multi_node_dynamic_network -- --ignored
+exec cargo +"$rust_stable" test --release --features=erasure test_multi_node_dynamic_network -- --ignored
