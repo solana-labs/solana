@@ -389,14 +389,6 @@ delete() {
       echo "No instances found matching '$filter'"
     else
       cloud_DeleteInstances true
-      while true; do
-        cloud_FindInstances "$filter"
-        if [[ ${#instances[@]} -eq 0 ]]; then
-          break;
-        fi
-        echo "(waiting for instances to be deleted)"
-        sleep 3
-      done
     fi
   done
   rm -f "$configFile"
