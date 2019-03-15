@@ -162,7 +162,7 @@ impl ReplayStage {
                         .filter(|(b, stake_lockouts)| {
                             let vote_threshold =
                                 locktower.check_vote_stake_threshold(b.slot(), &stake_lockouts);
-                            trace!("bank vote_threshold: {} {}", b.slot(), vote_threshold);
+                            debug!("bank vote_threshold: {} {}", b.slot(), vote_threshold);
                             vote_threshold
                         })
                         .map(|(b, stake_lockouts)| {
