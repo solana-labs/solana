@@ -1,6 +1,6 @@
 use crate::pubkey::Pubkey;
 use crate::system_program;
-use crate::transaction_builder::BuilderInstruction;
+use crate::transaction::Instruction;
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub enum SystemError {
@@ -38,8 +38,8 @@ impl SystemInstruction {
         lamports: u64,
         space: u64,
         program_id: &Pubkey,
-    ) -> BuilderInstruction {
-        BuilderInstruction::new(
+    ) -> Instruction {
+        Instruction::new(
             system_program::id(),
             &SystemInstruction::CreateAccount {
                 lamports,
@@ -50,8 +50,8 @@ impl SystemInstruction {
         )
     }
 
-    pub fn new_move(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> BuilderInstruction {
-        BuilderInstruction::new(
+    pub fn new_move(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction {
+        Instruction::new(
             system_program::id(),
             &SystemInstruction::Move { lamports },
             vec![(*from_id, true), (*to_id, false)],

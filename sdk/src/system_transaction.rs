@@ -5,7 +5,7 @@ use crate::pubkey::Pubkey;
 use crate::signature::Keypair;
 use crate::system_instruction::SystemInstruction;
 use crate::system_program;
-use crate::transaction::{Instruction, Transaction};
+use crate::transaction::{CompiledInstruction, Transaction};
 
 pub struct SystemTransaction {}
 
@@ -103,7 +103,7 @@ impl SystemTransaction {
             .enumerate()
             .map(|(i, (_, amount))| {
                 let spend = SystemInstruction::Move { lamports: *amount };
-                Instruction::new(0, &spend, vec![0, i as u8 + 1])
+                CompiledInstruction::new(0, &spend, vec![0, i as u8 + 1])
             })
             .collect();
         let to_keys: Vec<_> = moves.iter().map(|(to_key, _)| *to_key).collect();

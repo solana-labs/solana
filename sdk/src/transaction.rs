@@ -10,7 +10,7 @@ use crate::shortvec::{
 };
 use crate::signature::{KeypairUtil, Signature};
 use crate::system_instruction::SystemError;
-use crate::transaction_builder::{BuilderInstruction, TransactionBuilder};
+use crate::transaction_builder::TransactionBuilder;
 use bincode::{serialize, Error};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use serde::{Deserialize, Serialize, Serializer};
@@ -50,7 +50,7 @@ impl InstructionError {
 
 /// An instruction to execute a program
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Instruction<P, Q> {
+pub struct GenericInstruction<P, Q> {
     /// Index into the transaction program ids array indicating the program account that executes this instruction
     pub program_ids_index: P,
     /// Ordered indices into the transaction keys array indicating which accounts to pass to the program
@@ -59,7 +59,7 @@ pub struct Instruction<P, Q> {
     pub data: Vec<u8>,
 }
 
-impl<P, Q> Instruction<P, Q> {
+impl<P, Q> GenericInstruction<P, Q> {
     pub fn new<T: Serialize>(program_ids_index: P, data: &T, accounts: Vec<Q>) -> Self {
         let data = serialize(data).unwrap();
         Self {
@@ -70,7 +70,10 @@ impl<P, Q> Instruction<P, Q> {
     }
 }
 
-impl Instruction<u8, u8> {
+pub type Instruction = GenericInstruction<Pubkey, (Pubkey, bool)>;
+pub type CompiledInstruction = GenericInstruction<u8, u8>;
+
+impl CompiledInstruction {
     pub fn serialize_with(mut writer: &mut Cursor<&mut [u8]>, ix: &Self) -> Result<(), Error> {
         writer.write_all(&[ix.program_ids_index])?;
         serialize_vec_bytes(&mut writer, &ix.accounts[..])?;
@@ -84,7 +87,7 @@ impl Instruction<u8, u8> {
         let program_ids_index = buf[0];
         let accounts = deserialize_vec_bytes(&mut reader)?;
         let data = deserialize_vec_bytes(&mut reader)?;
-        Ok(Instruction {
+        Ok(CompiledInstruction {
             program_ids_index,
             accounts,
             data,
@@ -160,7 +163,7 @@ pub struct Transaction {
     pub program_ids: Vec<Pubkey>,
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
-    pub instructions: Vec<Instruction<u8, u8>>,
+    pub instructions: Vec<CompiledInstruction>,
 }
 
 impl Transaction {
@@ -195,7 +198,7 @@ impl Transaction {
         for pubkey in transaction_keys {
             account_keys.push((*pubkey, false));
         }
-        let instruction = BuilderInstruction::new(*program_id, data, account_keys);
+        let instruction = Instruction::new(*program_id, data, account_keys);
         let mut transaction = TransactionBuilder::new(fee).push(instruction).compile();
         transaction.recent_blockhash = recent_blockhash;
         transaction
@@ -215,7 +218,7 @@ impl Transaction {
         recent_blockhash: Hash,
         fee: u64,
         program_ids: Vec<Pubkey>,
-        instructions: Vec<Instruction<u8, u8>>,
+        instructions: Vec<CompiledInstruction>,
     ) -> Self {
         let mut account_keys: Vec<_> = from_keypairs
             .iter()
@@ -275,8 +278,12 @@ impl Transaction {
             .expect("serialize fee");
         serialize_vec_with(&mut wr, &self.program_ids, Transaction::serialize_pubkey)
             .expect("serialize program_ids");
-        serialize_vec_with(&mut wr, &self.instructions, Instruction::serialize_with)
-            .expect("serialize instructions");
+        serialize_vec_with(
+            &mut wr,
+            &self.instructions,
+            CompiledInstruction::serialize_with,
+        )
+        .expect("serialize instructions");
         let len = wr.position() as usize;
         wr.into_inner()[..len].to_vec()
     }
@@ -416,8 +423,12 @@ impl Serialize for Transaction {
             .map_err(Error::custom)?;
         serialize_vec_with(&mut wr, &self.program_ids, Transaction::serialize_pubkey)
             .map_err(Error::custom)?;
-        serialize_vec_with(&mut wr, &self.instructions, Instruction::serialize_with)
-            .map_err(Error::custom)?;
+        serialize_vec_with(
+            &mut wr,
+            &self.instructions,
+            CompiledInstruction::serialize_with,
+        )
+        .map_err(Error::custom)?;
         let size = wr.position() as usize;
         serializer.serialize_bytes(&wr.into_inner()[..size])
     }
@@ -449,8 +460,9 @@ impl<'a> serde::de::Visitor<'a> for TransactionVisitor {
         let program_ids: Vec<Pubkey> =
             deserialize_vec_with(&mut rd, Transaction::deserialize_pubkey)
                 .map_err(Error::custom)?;
-        let instructions: Vec<Instruction<u8, u8>> =
-            deserialize_vec_with(&mut rd, Instruction::deserialize_from).map_err(Error::custom)?;
+        let instructions: Vec<CompiledInstruction> =
+            deserialize_vec_with(&mut rd, CompiledInstruction::deserialize_from)
+                .map_err(Error::custom)?;
         Ok(Transaction {
             signatures,
             account_keys,
@@ -485,8 +497,8 @@ mod tests {
         let prog1 = Keypair::new().pubkey();
         let prog2 = Keypair::new().pubkey();
         let instructions = vec![
-            Instruction::new(0, &(), vec![0, 1]),
-            Instruction::new(1, &(), vec![0, 2]),
+            CompiledInstruction::new(0, &(), vec![0, 1]),
+            CompiledInstruction::new(1, &(), vec![0, 2]),
         ];
         let tx = Transaction::new_with_instructions(
             &[&key],
@@ -522,7 +534,7 @@ mod tests {
     #[test]
     fn test_refs_invalid_program_id() {
         let key = Keypair::new();
-        let instructions = vec![Instruction::new(1, &(), vec![])];
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![])];
         let tx = Transaction::new_with_instructions(
             &[&key],
             &[],
@@ -536,7 +548,7 @@ mod tests {
     #[test]
     fn test_refs_invalid_account() {
         let key = Keypair::new();
-        let instructions = vec![Instruction::new(0, &(), vec![1])];
+        let instructions = vec![CompiledInstruction::new(0, &(), vec![1])];
         let tx = Transaction::new_with_instructions(
             &[&key],
             &[],
@@ -686,6 +698,6 @@ mod tests {
             .push(Instruction::new(program_id, &0, vec![(id0, true)]))
             .compile();
         tx.sign(&[&keypair0], Hash::default());
-        assert_eq!(tx.instructions[0], Instruction::new(0, &0, vec![0]));
+        assert_eq!(tx.instructions[0], CompiledInstruction::new(0, &0, vec![0]));
     }
 }

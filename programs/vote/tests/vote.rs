@@ -5,8 +5,8 @@ use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::transaction::{InstructionError, TransactionError};
-use solana_sdk::transaction_builder::{BuilderInstruction, TransactionBuilder};
+use solana_sdk::transaction::{Instruction, InstructionError, TransactionError};
+use solana_sdk::transaction_builder::TransactionBuilder;
 use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
 use solana_vote_api::vote_state::VoteState;
 use solana_vote_api::vote_transaction::VoteTransaction;
@@ -111,7 +111,7 @@ fn test_vote_via_bank_with_no_signature() {
 
     let mallory_id = mallory_keypair.pubkey();
     let blockhash = bank.last_blockhash();
-    let vote_ix = BuilderInstruction::new(
+    let vote_ix = Instruction::new(
         solana_vote_api::id(),
         &VoteInstruction::Vote(Vote::new(0)),
         vec![(vote_id, false)], // <--- attack!! No signature.

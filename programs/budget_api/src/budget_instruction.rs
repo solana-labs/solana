@@ -3,7 +3,7 @@ use crate::id;
 use chrono::prelude::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::transaction_builder::BuilderInstruction;
+use solana_sdk::transaction::Instruction;
 
 /// A smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -28,13 +28,13 @@ pub enum BudgetInstruction {
 }
 
 impl BudgetInstruction {
-    pub fn new_initialize_account(contract: &Pubkey, expr: BudgetExpr) -> BuilderInstruction {
+    pub fn new_initialize_account(contract: &Pubkey, expr: BudgetExpr) -> Instruction {
         let mut keys = vec![];
         if let BudgetExpr::Pay(payment) = &expr {
             keys.push((payment.to, false));
         }
         keys.push((*contract, false));
-        BuilderInstruction::new(id(), &BudgetInstruction::InitializeAccount(expr), keys)
+        Instruction::new(id(), &BudgetInstruction::InitializeAccount(expr), keys)
     }
 
     pub fn new_apply_timestamp(
@@ -42,23 +42,19 @@ impl BudgetInstruction {
         contract: &Pubkey,
         to: &Pubkey,
         dt: DateTime<Utc>,
-    ) -> BuilderInstruction {
+    ) -> Instruction {
         let mut keys = vec![(*from, true), (*contract, false)];
         if from != to {
             keys.push((*to, false));
         }
-        BuilderInstruction::new(id(), &BudgetInstruction::ApplyTimestamp(dt), keys)
+        Instruction::new(id(), &BudgetInstruction::ApplyTimestamp(dt), keys)
     }
 
-    pub fn new_apply_signature(
-        from: &Pubkey,
-        contract: &Pubkey,
-        to: &Pubkey,
-    ) -> BuilderInstruction {
+    pub fn new_apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
         let mut keys = vec![(*from, true), (*contract, false)];
         if from != to {
             keys.push((*to, false));
         }
-        BuilderInstruction::new(id(), &BudgetInstruction::ApplySignature, keys)
+        Instruction::new(id(), &BudgetInstruction::ApplySignature, keys)
     }
 }

@@ -340,7 +340,7 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
-    use solana_sdk::transaction::{Instruction, Transaction};
+    use solana_sdk::transaction::{CompiledInstruction, Transaction};
 
     const SIG_OFFSET: usize = std::mem::size_of::<u64>() + 1;
 
@@ -501,7 +501,7 @@ mod tests {
 
         let program_ids = vec![system_program::id(), solana_budget_api::id()];
 
-        let instructions = vec![Instruction::new(0, &system_instruction, vec![0, 1])];
+        let instructions = vec![CompiledInstruction::new(0, &system_instruction, vec![0, 1])];
 
         let tx = Transaction::new_with_instructions(
             &keypairs,
