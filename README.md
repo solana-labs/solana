@@ -83,12 +83,6 @@ Run the test suite:
 $ cargo test --all
 ```
 
-To emulate all the tests that will run on a Pull Request, run:
-
-```bash
-$ ./ci/run-local.sh
-```
-
 Local Testnet
 ---
 
