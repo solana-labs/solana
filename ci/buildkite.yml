@@ -11,7 +11,7 @@ steps:
     timeout_in_minutes: 20
     agents:
       - "queue=cuda"
-  - command: "ci/test-bench.sh"
+  - command: "ci/docker-run.sh solanalabs/rust-nightly:2019-01-31 ci/test-bench.sh"
     name: "bench"
     timeout_in_minutes: 20
   - command: "ci/docker-run.sh solanalabs/rust:1.32.0 ci/test-stable.sh"
