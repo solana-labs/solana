@@ -151,7 +151,7 @@ impl ReplayStage {
                             next_leader_slot,
                             ticks_per_slot,
                         );
-                        info!(
+                        debug!(
                             "{:?} voted and reset poh at {}. next leader slot {:?}",
                             my_id,
                             bank.tick_height(),
@@ -165,7 +165,7 @@ impl ReplayStage {
                         let poh = poh_recorder.lock().unwrap();
                         reached_leader_tick = poh.reached_leader_tick();
 
-                        info!(
+                        debug!(
                             "{:?} TPU bank inactive. poh tick {}, leader {}",
                             my_id,
                             poh.tick_height(),
