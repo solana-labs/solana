@@ -9,7 +9,7 @@ use std::io;
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
 
 mod compactor;
@@ -48,8 +48,8 @@ pub struct KvStore {
     config: Config,
     root: PathBuf,
     mapper: Arc<dyn Mapper>,
-    req_tx: RwLock<Sender<compactor::Req>>,
-    resp_rx: RwLock<Receiver<compactor::Resp>>,
+    req_tx: Mutex<Sender<compactor::Req>>,
+    resp_rx: Mutex<Receiver<compactor::Resp>>,
     compactor_handle: JoinHandle<()>,
 }
 
@@ -202,8 +202,8 @@ impl KvStore {
 
     fn query_compactor(&self) -> Result<()> {
         if let (Ok(mut req_tx), Ok(mut resp_rx), Ok(mut tables)) = (
-            self.req_tx.try_write(),
-            self.resp_rx.try_write(),
+            self.req_tx.try_lock(),
+            self.resp_rx.try_lock(),
             self.tables.try_write(),
         ) {
             query_compactor(
@@ -236,10 +236,11 @@ impl KvStore {
         };
 
         dump_tables(&self.root, &*self.mapper).unwrap();
+
         if trigger_compact {
             let tables_path = self.root.join(TABLES_FILE);
             self.req_tx
-                .write()
+                .lock()
                 .unwrap()
                 .send(compactor::Req::Start(tables_path))
                 .expect("compactor thread dead");
@@ -263,12 +264,17 @@ impl Default for Config {
 fn open(root: &Path, mapper: Arc<dyn Mapper>, config: Config) -> Result<KvStore> {
     let root = root.to_path_buf();
     let log_path = root.join(LOG_FILE);
+    let restore_log = log_path.exists();
     if !root.exists() {
         fs::create_dir(&root)?;
     }
 
-    let write_log = WriteLog::open(&log_path, config.max_mem)?;
-    let mem = write_log.materialize()?;
+    let write_log = WriteLog::open(&log_path, writelog::Config::default())?;
+    let mem = if restore_log && !config.in_memory {
+        write_log.materialize()?
+    } else {
+        BTreeMap::new()
+    };
 
     let write = RwLock::new(WriteState::new(write_log, mem));
 
@@ -281,7 +287,7 @@ fn open(root: &Path, mapper: Arc<dyn Mapper>, config: Config) -> Result<KvStore>
     };
     let (req_tx, resp_rx, compactor_handle) = compactor::spawn_compactor(Arc::clone(&mapper), cfg)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    let (req_tx, resp_rx) = (RwLock::new(req_tx), RwLock::new(resp_rx));
+    let (req_tx, resp_rx) = (Mutex::new(req_tx), Mutex::new(resp_rx));
 
     Ok(KvStore {
         write,
