@@ -1017,7 +1017,7 @@ mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
-    use solana_sdk::transaction::Instruction;
+    use solana_sdk::transaction::CompiledInstruction;
     use solana_sdk::transaction::Transaction;
 
     fn cleanup_paths(paths: &str) {
@@ -1046,7 +1046,7 @@ mod tests {
         let accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
-        let instructions = vec![Instruction::new(1, &(), vec![0])];
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
         let tx = Transaction::new_with_instructions::<Keypair>(
             &[],
             &[],
@@ -1070,7 +1070,7 @@ mod tests {
 
         let keypair = Keypair::new();
 
-        let instructions = vec![Instruction::new(1, &(), vec![0])];
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
         let tx = Transaction::new_with_instructions(
             &[&keypair],
             &[],
@@ -1102,7 +1102,7 @@ mod tests {
         let account = Account::new(2, 1, &Pubkey::default());
         accounts.push((key1, account));
 
-        let instructions = vec![Instruction::new(1, &(), vec![0])];
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
         let tx = Transaction::new_with_instructions(
             &[&keypair],
             &[],
@@ -1130,7 +1130,7 @@ mod tests {
         let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let instructions = vec![Instruction::new(1, &(), vec![0])];
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
         let tx = Transaction::new_with_instructions(
             &[&keypair],
             &[],
@@ -1165,7 +1165,7 @@ mod tests {
         let account = Account::new(2, 1, &Pubkey::default());
         accounts.push((key1, account));
 
-        let instructions = vec![Instruction::new(0, &(), vec![0, 1])];
+        let instructions = vec![CompiledInstruction::new(0, &(), vec![0, 1])];
         let tx = Transaction::new_with_instructions(
             &[&keypair],
             &[key1],
@@ -1237,7 +1237,7 @@ mod tests {
         account.owner = key5;
         accounts.push((key6, account));
 
-        let instructions = vec![Instruction::new(0, &(), vec![0])];
+        let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
         let tx = Transaction::new_with_instructions(
             &[&keypair],
             &[],
@@ -1271,7 +1271,7 @@ mod tests {
         account.owner = Pubkey::default();
         accounts.push((key1, account));
 
-        let instructions = vec![Instruction::new(0, &(), vec![0])];
+        let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
         let tx = Transaction::new_with_instructions(
             &[&keypair],
             &[],
@@ -1304,7 +1304,7 @@ mod tests {
         account.owner = native_loader::id();
         accounts.push((key1, account));
 
-        let instructions = vec![Instruction::new(0, &(), vec![0])];
+        let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
         let tx = Transaction::new_with_instructions(
             &[&keypair],
             &[],
@@ -1351,8 +1351,8 @@ mod tests {
         accounts.push((key3, account));
 
         let instructions = vec![
-            Instruction::new(0, &(), vec![0]),
-            Instruction::new(1, &(), vec![0]),
+            CompiledInstruction::new(0, &(), vec![0]),
+            CompiledInstruction::new(1, &(), vec![0]),
         ];
         let tx = Transaction::new_with_instructions(
             &[&keypair],
@@ -1396,7 +1396,7 @@ mod tests {
         let account = Account::new(10, 1, &Pubkey::default());
         accounts.push((pubkey, account));
 
-        let instructions = vec![Instruction::new(0, &(), vec![0, 1])];
+        let instructions = vec![CompiledInstruction::new(0, &(), vec![0, 1])];
         // Simulate pay-to-self transaction, which loads the same account twice
         let tx = Transaction::new_with_instructions(
             &[&keypair],

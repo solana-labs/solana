@@ -2,22 +2,20 @@
 
 use crate::hash::Hash;
 use crate::pubkey::Pubkey;
-use crate::transaction::{Instruction, Transaction};
+use crate::transaction::{CompiledInstruction, Instruction, Transaction};
 use itertools::Itertools;
-
-pub type BuilderInstruction = Instruction<Pubkey, (Pubkey, bool)>;
 
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
     keys.iter().position(|k| k == key).unwrap() as u8
 }
 
 fn compile_instruction(
-    ix: &BuilderInstruction,
+    ix: &Instruction,
     keys: &[Pubkey],
     program_ids: &[Pubkey],
-) -> Instruction<u8, u8> {
+) -> CompiledInstruction {
     let accounts: Vec<_> = ix.accounts.iter().map(|(k, _)| position(keys, k)).collect();
-    Instruction {
+    CompiledInstruction {
         program_ids_index: position(program_ids, &ix.program_ids_index),
         data: ix.data.clone(),
         accounts,
@@ -25,10 +23,10 @@ fn compile_instruction(
 }
 
 fn compile_instructions(
-    ixs: &[BuilderInstruction],
+    ixs: &[Instruction],
     keys: &[Pubkey],
     program_ids: &[Pubkey],
-) -> Vec<Instruction<u8, u8>> {
+) -> Vec<CompiledInstruction> {
     ixs.iter()
         .map(|ix| compile_instruction(ix, keys, program_ids))
         .collect()
@@ -38,7 +36,7 @@ fn compile_instructions(
 #[derive(Default)]
 pub struct TransactionBuilder {
     fee: u64,
-    instructions: Vec<BuilderInstruction>,
+    instructions: Vec<Instruction>,
 }
 
 impl TransactionBuilder {
@@ -51,18 +49,18 @@ impl TransactionBuilder {
     }
 
     /// Create a new unsigned transaction from a single instruction
-    pub fn new_with_instruction(instruction: BuilderInstruction) -> Transaction {
+    pub fn new_with_instruction(instruction: Instruction) -> Transaction {
         Self::new_with_instructions(vec![instruction])
     }
 
     /// Create a new unsigned transaction from a single instruction
-    pub fn new_with_instructions(instructions: Vec<BuilderInstruction>) -> Transaction {
+    pub fn new_with_instructions(instructions: Vec<Instruction>) -> Transaction {
         let fee = 0;
         Self { fee, instructions }.compile()
     }
 
     /// Add an instruction.
-    pub fn push(&mut self, instruction: BuilderInstruction) -> &mut Self {
+    pub fn push(&mut self, instruction: Instruction) -> &mut Self {
         self.instructions.push(instruction);
         self
     }
@@ -247,9 +245,9 @@ mod tests {
             .push(Instruction::new(program_id1, &0, vec![(id1, true)]))
             .push(Instruction::new(program_id0, &0, vec![(id1, false)]))
             .compile();
-        assert_eq!(tx.instructions[0], Instruction::new(0, &0, vec![1]));
-        assert_eq!(tx.instructions[1], Instruction::new(1, &0, vec![0]));
-        assert_eq!(tx.instructions[2], Instruction::new(0, &0, vec![0]));
+        assert_eq!(tx.instructions[0], CompiledInstruction::new(0, &0, vec![1]));
+        assert_eq!(tx.instructions[1], CompiledInstruction::new(1, &0, vec![0]));
+        assert_eq!(tx.instructions[2], CompiledInstruction::new(0, &0, vec![0]));
     }
 
     #[test]

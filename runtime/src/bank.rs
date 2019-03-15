@@ -847,7 +847,7 @@ mod tests {
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
     use solana_sdk::system_transaction::SystemTransaction;
-    use solana_sdk::transaction::{Instruction, InstructionError};
+    use solana_sdk::transaction::{CompiledInstruction, InstructionError};
 
     #[test]
     fn test_bank_new() {
@@ -927,12 +927,12 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let spend = SystemInstruction::Move { lamports: 1 };
         let instructions = vec![
-            Instruction {
+            CompiledInstruction {
                 program_ids_index: 0,
                 data: serialize(&spend).unwrap(),
                 accounts: vec![0, 1],
             },
-            Instruction {
+            CompiledInstruction {
                 program_ids_index: 0,
                 data: serialize(&spend).unwrap(),
                 accounts: vec![0, 2],

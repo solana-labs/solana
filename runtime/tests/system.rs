@@ -5,8 +5,8 @@ use solana_sdk::native_program::ProgramError;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
-use solana_sdk::transaction::{InstructionError, TransactionError};
-use solana_sdk::transaction_builder::{BuilderInstruction, TransactionBuilder};
+use solana_sdk::transaction::{Instruction, InstructionError, TransactionError};
+use solana_sdk::transaction_builder::TransactionBuilder;
 
 #[test]
 fn test_system_unsigned_transaction() {
@@ -26,7 +26,7 @@ fn test_system_unsigned_transaction() {
 
     // Erroneously sign transaction with recipient account key
     // No signature case is tested by bank `test_zero_signatures()`
-    let ix = BuilderInstruction::new(
+    let ix = Instruction::new(
         system_program::id(),
         &SystemInstruction::Move { lamports: 10 },
         vec![(from_pubkey, false), (to_pubkey, true)],

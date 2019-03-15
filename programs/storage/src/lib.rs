@@ -180,7 +180,7 @@ mod test {
     use solana_sdk::account::{create_keyed_accounts, Account};
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-    use solana_sdk::transaction::{Instruction, Transaction};
+    use solana_sdk::transaction::{CompiledInstruction, Transaction};
     use solana_storage_api::{ProofStatus, StorageTransaction};
 
     fn test_transaction(
@@ -188,7 +188,7 @@ mod test {
         program_accounts: &mut [Account],
     ) -> Result<(), ProgramError> {
         assert_eq!(tx.instructions.len(), 1);
-        let Instruction {
+        let CompiledInstruction {
             ref accounts,
             ref data,
             ..
