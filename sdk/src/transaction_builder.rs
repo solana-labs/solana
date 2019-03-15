@@ -52,16 +52,13 @@ impl TransactionBuilder {
 
     /// Create a new unsigned transaction from a single instruction
     pub fn new_with_instruction(instruction: BuilderInstruction) -> Transaction {
-        Self::default().push(instruction).compile()
+        Self::new_with_instructions(vec![instruction])
     }
 
     /// Create a new unsigned transaction from a single instruction
     pub fn new_with_instructions(instructions: Vec<BuilderInstruction>) -> Transaction {
-        let mut transaction_builder = Self::default();
-        for instruction in instructions {
-            transaction_builder.push(instruction);
-        }
-        transaction_builder.compile()
+        let fee = 0;
+        Self { fee, instructions }.compile()
     }
 
     /// Add an instruction.
