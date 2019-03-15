@@ -9,6 +9,7 @@ use crate::entry::create_ticks;
 use crate::entry::next_entry_mut;
 use crate::entry::Entry;
 use crate::gossip_service::GossipService;
+use crate::leader_schedule_utils;
 use crate::poh_recorder::PohRecorder;
 use crate::poh_service::{PohService, PohServiceConfig};
 use crate::rpc::JsonRpcConfig;
@@ -106,8 +107,13 @@ impl Fullnode {
             bank.tick_height(),
             bank.last_blockhash(),
         );
-        let (poh_recorder, entry_receiver) =
-            PohRecorder::new(bank.tick_height(), bank.last_blockhash(), bank.slot());
+        let (poh_recorder, entry_receiver) = PohRecorder::new(
+            bank.tick_height(),
+            bank.last_blockhash(),
+            bank.slot(),
+            leader_schedule_utils::next_leader_slot(&id, bank.slot(), &bank),
+            bank.ticks_per_slot(),
+        );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, &exit);
         poh_recorder.lock().unwrap().clear_bank_signal =

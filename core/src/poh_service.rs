@@ -110,8 +110,13 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_hash = bank.last_blockhash();
-        let (poh_recorder, entry_receiver) =
-            PohRecorder::new(bank.tick_height(), prev_hash, bank.slot());
+        let (poh_recorder, entry_receiver) = PohRecorder::new(
+            bank.tick_height(),
+            prev_hash,
+            bank.slot(),
+            Some(4),
+            bank.ticks_per_slot(),
+        );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let exit = Arc::new(AtomicBool::new(false));
         let working_bank = WorkingBank {
