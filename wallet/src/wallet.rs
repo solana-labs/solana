@@ -852,10 +852,10 @@ fn confirm_transaction(
     }
 }
 
-fn send_and_confirm_transaction(
+fn send_and_confirm_transaction<T: KeypairUtil>(
     rpc_client: &RpcClient,
     transaction: &mut Transaction,
-    signer: &Keypair,
+    signer: &T,
 ) -> Result<String, Box<dyn error::Error>> {
     let mut send_retries = 5;
     loop {
@@ -970,14 +970,52 @@ fn send_and_confirm_transactions(
     }
 }
 
-fn resign_transaction(
+fn resign_transaction<T: KeypairUtil>(
     rpc_client: &RpcClient,
     tx: &mut Transaction,
-    signer_key: &Keypair,
+    signer_key: &T,
 ) -> Result<(), Box<dyn error::Error>> {
     let blockhash = get_next_blockhash(rpc_client, &tx.recent_blockhash)?;
     tx.sign(&[signer_key], blockhash);
     Ok(())
+}
+
+// Quick and dirty Keypair that assumes the client will do retries but not update the
+// blockhash. If the client updates the blockhash, the signature will be invalid.
+// TODO: Parse `msg` and use that data to make a new airdrop request.
+struct DroneKeypair {
+    transaction: Transaction,
+}
+
+impl DroneKeypair {
+    fn new_keypair(
+        drone_addr: &SocketAddr,
+        to_pubkey: &Pubkey,
+        lamports: u64,
+        blockhash: Hash,
+    ) -> Result<Self, Box<dyn error::Error>> {
+        let transaction = request_airdrop_transaction(drone_addr, to_pubkey, lamports, blockhash)?;
+        Ok(Self { transaction })
+    }
+
+    fn airdrop_transaction(&self) -> Transaction {
+        self.transaction.clone()
+    }
+}
+
+impl KeypairUtil for DroneKeypair {
+    fn new() -> Self {
+        unimplemented!();
+    }
+
+    /// Return the public key of the keypair used to sign votes
+    fn pubkey(&self) -> Pubkey {
+        self.transaction.account_keys[0]
+    }
+
+    fn sign_message(&self, _msg: &[u8]) -> Signature {
+        self.transaction.signatures[0]
+    }
 }
 
 pub fn request_and_confirm_airdrop(
@@ -987,9 +1025,9 @@ pub fn request_and_confirm_airdrop(
     lamports: u64,
 ) -> Result<(), Box<dyn error::Error>> {
     let blockhash = get_recent_blockhash(rpc_client)?;
-    let tx = request_airdrop_transaction(drone_addr, &to_pubkey, lamports, blockhash)?;
-    let signature_str = send_transaction(rpc_client, &tx)?;
-    confirm_transaction(rpc_client, &signature_str)?;
+    let keypair = DroneKeypair::new_keypair(drone_addr, to_pubkey, lamports, blockhash)?;
+    let mut tx = keypair.airdrop_transaction();
+    send_and_confirm_transaction(rpc_client, &mut tx, &keypair)?;
     Ok(())
 }
 
