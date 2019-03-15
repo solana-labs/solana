@@ -1,11 +1,12 @@
 //! budget program
-use bincode::deserialize;
+use bincode::{deserialize, serialize};
 use chrono::prelude::{DateTime, Utc};
 use log::*;
 use solana_budget_api::budget_instruction::BudgetInstruction;
 use solana_budget_api::budget_state::{BudgetError, BudgetState};
 use solana_budget_api::payment_plan::Witness;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 
 /// Process a Witness Signature. Any payment plans waiting on this signature
@@ -16,10 +17,7 @@ fn apply_signature(
 ) -> Result<(), BudgetError> {
     let mut final_payment = None;
     if let Some(ref mut expr) = budget_state.pending_budget {
-        let key = match keyed_accounts[0].signer_key() {
-            None => return Err(BudgetError::UnsignedKey),
-            Some(key) => key,
-        };
+        let key = keyed_accounts[0].signer_key().unwrap();
         expr.apply_witness(&Witness::Signature, key);
         final_payment = expr.final_payment();
     }
@@ -55,10 +53,7 @@ fn apply_timestamp(
     let mut final_payment = None;
 
     if let Some(ref mut expr) = budget_state.pending_budget {
-        let key = match keyed_accounts[0].signer_key() {
-            None => return Err(BudgetError::UnsignedKey),
-            Some(key) => key,
-        };
+        let key = keyed_accounts[0].signer_key().unwrap();
         expr.apply_witness(&Witness::Timestamp(dt), key);
         final_payment = expr.final_payment();
     }
@@ -75,81 +70,73 @@ fn apply_timestamp(
     Ok(())
 }
 
-fn apply_debits(
+pub fn process_instruction(
+    _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    instruction: &BudgetInstruction,
-) -> Result<(), BudgetError> {
+    data: &[u8],
+) -> Result<(), ProgramError> {
+    let instruction = deserialize(data).map_err(|err| {
+        info!("Invalid transaction data: {:?} {:?}", data, err);
+        ProgramError::InvalidInstructionData
+    })?;
+
+    trace!("process_instruction: {:?}", instruction);
+
     match instruction {
         BudgetInstruction::InitializeAccount(expr) => {
             let expr = expr.clone();
             if let Some(payment) = expr.final_payment() {
                 keyed_accounts[1].account.lamports = 0;
                 keyed_accounts[0].account.lamports += payment.lamports;
-                Ok(())
-            } else {
-                let existing = BudgetState::deserialize(&keyed_accounts[0].account.data).ok();
-                if Some(true) == existing.map(|x| x.initialized) {
-                    trace!("contract already exists");
-                    Err(BudgetError::ContractAlreadyExists)
-                } else {
-                    let mut budget_state = BudgetState::default();
-                    budget_state.pending_budget = Some(expr);
-                    budget_state.initialized = true;
-                    budget_state.serialize(&mut keyed_accounts[0].account.data)
-                }
+                return Ok(());
             }
+            let existing = BudgetState::deserialize(&keyed_accounts[0].account.data).ok();
+            if Some(true) == existing.map(|x| x.initialized) {
+                trace!("contract already exists");
+                return Err(ProgramError::AccountAlreadyInitialized);
+            }
+            let mut budget_state = BudgetState::default();
+            budget_state.pending_budget = Some(expr);
+            budget_state.initialized = true;
+            budget_state.serialize(&mut keyed_accounts[0].account.data)
         }
         BudgetInstruction::ApplyTimestamp(dt) => {
-            if let Ok(mut budget_state) = BudgetState::deserialize(&keyed_accounts[1].account.data)
-            {
-                if !budget_state.is_pending() {
-                    Err(BudgetError::ContractNotPending)
-                } else if !budget_state.initialized {
-                    trace!("contract is uninitialized");
-                    Err(BudgetError::UninitializedContract)
-                } else {
-                    trace!("apply timestamp");
-                    apply_timestamp(&mut budget_state, keyed_accounts, *dt)?;
-                    trace!("apply timestamp committed");
-                    budget_state.serialize(&mut keyed_accounts[1].account.data)
-                }
-            } else {
-                Err(BudgetError::UninitializedContract)
+            let mut budget_state = BudgetState::deserialize(&keyed_accounts[1].account.data)?;
+            if !budget_state.is_pending() {
+                return Ok(()); // Nothing to do here.
             }
+            if !budget_state.initialized {
+                trace!("contract is uninitialized");
+                return Err(ProgramError::UninitializedAccount);
+            }
+            if keyed_accounts[0].signer_key().is_none() {
+                return Err(ProgramError::MissingRequiredSignature);
+            }
+            trace!("apply timestamp");
+            apply_timestamp(&mut budget_state, keyed_accounts, dt)
+                .map_err(|e| ProgramError::CustomError(serialize(&e).unwrap()))?;
+            trace!("apply timestamp committed");
+            budget_state.serialize(&mut keyed_accounts[1].account.data)
         }
         BudgetInstruction::ApplySignature => {
-            if let Ok(mut budget_state) = BudgetState::deserialize(&keyed_accounts[1].account.data)
-            {
-                if !budget_state.is_pending() {
-                    Err(BudgetError::ContractNotPending)
-                } else if !budget_state.initialized {
-                    trace!("contract is uninitialized");
-                    Err(BudgetError::UninitializedContract)
-                } else {
-                    trace!("apply signature");
-                    apply_signature(&mut budget_state, keyed_accounts)?;
-                    trace!("apply signature committed");
-                    budget_state.serialize(&mut keyed_accounts[1].account.data)
-                }
-            } else {
-                Err(BudgetError::UninitializedContract)
+            let mut budget_state = BudgetState::deserialize(&keyed_accounts[1].account.data)?;
+            if !budget_state.is_pending() {
+                return Ok(()); // Nothing to do here.
             }
+            if !budget_state.initialized {
+                trace!("contract is uninitialized");
+                return Err(ProgramError::UninitializedAccount);
+            }
+            if keyed_accounts[0].signer_key().is_none() {
+                return Err(ProgramError::MissingRequiredSignature);
+            }
+            trace!("apply signature");
+            apply_signature(&mut budget_state, keyed_accounts)
+                .map_err(|e| ProgramError::CustomError(serialize(&e).unwrap()))?;
+            trace!("apply signature committed");
+            budget_state.serialize(&mut keyed_accounts[1].account.data)
         }
     }
-}
-
-pub fn process_instruction(
-    _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
-    data: &[u8],
-) -> Result<(), BudgetError> {
-    let instruction = deserialize(data).map_err(|err| {
-        info!("Invalid transaction data: {:?} {:?}", data, err);
-        BudgetError::AccountDataDeserializeFailure
-    })?;
-
-    trace!("process_instruction: {:?}", instruction);
-    apply_debits(keyed_accounts, &instruction)
 }
 
 #[cfg(test)]
@@ -162,12 +149,12 @@ mod test {
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_program;
-    use solana_sdk::transaction::Transaction;
+    use solana_sdk::transaction::{InstructionError, Transaction, TransactionError};
 
     fn process_transaction(
         tx: &Transaction,
         tx_accounts: &mut Vec<Account>,
-    ) -> Result<(), BudgetError> {
+    ) -> Result<(), TransactionError> {
         runtime::process_transaction(tx, tx_accounts, process_instruction)
     }
 
@@ -219,7 +206,10 @@ mod test {
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
             process_transaction(&tx, &mut accounts),
-            Err(BudgetError::UnsignedKey)
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::ProgramError(ProgramError::MissingRequiredSignature)
+            ))
         );
     }
 
@@ -255,7 +245,10 @@ mod test {
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
             process_transaction(&tx, &mut accounts),
-            Err(BudgetError::UnsignedKey)
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::ProgramError(ProgramError::MissingRequiredSignature)
+            ))
         );
     }
 
@@ -295,8 +288,13 @@ mod test {
             Hash::default(),
         );
         assert_eq!(
-            process_transaction(&tx, &mut accounts),
-            Err(BudgetError::DestinationMissing)
+            process_transaction(&tx, &mut accounts).unwrap_err(),
+            TransactionError::InstructionError(
+                0,
+                InstructionError::ProgramError(ProgramError::CustomError(
+                    serialize(&BudgetError::DestinationMissing).unwrap()
+                ))
+            )
         );
         assert_eq!(accounts[from_account].lamports, 0);
         assert_eq!(accounts[contract_account].lamports, 1);
@@ -323,10 +321,7 @@ mod test {
         assert!(!budget_state.is_pending());
 
         // try to replay the timestamp contract
-        assert_eq!(
-            process_transaction(&tx, &mut accounts),
-            Err(BudgetError::ContractNotPending)
-        );
+        process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].lamports, 0);
         assert_eq!(accounts[contract_account].lamports, 0);
         assert_eq!(accounts[to_account].lamports, 1);
@@ -391,10 +386,7 @@ mod test {
             &from.pubkey(),
             Hash::default(),
         );
-        assert_eq!(
-            process_transaction(&tx, &mut accounts),
-            Err(BudgetError::ContractNotPending)
-        );
+        process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].lamports, 1);
         assert_eq!(accounts[contract_account].lamports, 0);
         assert_eq!(accounts.get(pay_account), None);

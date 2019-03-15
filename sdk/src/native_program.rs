@@ -26,6 +26,12 @@ pub enum ProgramError {
     /// A signature was required but not found
     MissingRequiredSignature,
 
+    /// An initialize instruction was sent to an account that has already been initialized.
+    AccountAlreadyInitialized,
+
+    /// An attempt to operate on an account that hasn't been initialized.
+    UninitializedAccount,
+
     /// CustomError allows on-chain programs to implement program-specific error types and see
     /// them returned by the Solana runtime. A CustomError may be any type that is serialized
     /// to a Vec of bytes, max length 32 bytes. Any CustomError Vec greater than this length will

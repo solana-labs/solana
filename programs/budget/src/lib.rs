@@ -1,7 +1,6 @@
 mod budget_program;
 
 use crate::budget_program::process_instruction;
-use bincode::serialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
@@ -20,5 +19,4 @@ fn entrypoint(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
     process_instruction(program_id, keyed_accounts, data)
-        .map_err(|e| ProgramError::CustomError(serialize(&e).unwrap()))
 }
