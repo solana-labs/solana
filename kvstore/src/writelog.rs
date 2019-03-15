@@ -1,7 +1,7 @@
-use crate::kvstore::error::Result;
-use crate::kvstore::io_utils::{CRCReader, CRCWriter};
-use crate::kvstore::sstable::Value;
-use crate::kvstore::Key;
+use crate::error::Result;
+use crate::io_utils::{CRCReader, CRCWriter};
+use crate::sstable::Value;
+use crate::Key;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use memmap::Mmap;
 use std::collections::BTreeMap;
@@ -138,7 +138,8 @@ impl Logger {
 
 impl LogWriter for CRCWriter<Vec<u8>> {
     fn sync(&mut self, _: bool) -> Result<()> {
-        Ok(self.flush()?)
+        self.flush()?;
+        Ok(())
     }
 
     fn mmap(&self) -> Result<Mmap> {
@@ -310,7 +311,7 @@ mod test {
 
     #[test]
     fn test_reset() {
-        use crate::kvstore::error::Error;
+        use crate::error::Error;
 
         let wal = WriteLog::memory(Config::default());
 

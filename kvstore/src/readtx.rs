@@ -1,6 +1,6 @@
-use crate::kvstore::error::Result;
-use crate::kvstore::sstable::{Key, SSTable, Value};
-use crate::kvstore::storage;
+use crate::error::Result;
+use crate::sstable::{Key, SSTable, Value};
+use crate::storage;
 
 use std::collections::BTreeMap;
 use std::ops::RangeInclusive;

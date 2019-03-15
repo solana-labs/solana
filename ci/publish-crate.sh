@@ -11,6 +11,7 @@ cd "$(dirname "$0")/.."
 # here. (TODO: figure the crate ordering dynamically)
 #
 CRATES=(
+  kvstore
   logger
   netutil
   sdk

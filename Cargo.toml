@@ -67,6 +67,7 @@ members = [
     "genesis",
     "install",
     "keygen",
+    "kvstore",
     "ledger-tool",
     "logger",
     "metrics",

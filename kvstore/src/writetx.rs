@@ -1,5 +1,5 @@
-use crate::kvstore::error::Result;
-use crate::kvstore::sstable::Key;
+use crate::error::Result;
+use crate::sstable::Key;
 
 #[derive(Debug)]
 pub struct WriteTx<'a> {

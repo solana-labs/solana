@@ -1,7 +1,7 @@
-use crate::kvstore::io_utils::{MemMap, SharedWriter, Writer};
-use crate::kvstore::mapper::{Kind, Mapper, RwLockExt};
-use crate::kvstore::sstable::SSTable;
-use crate::kvstore::Result;
+use crate::io_utils::{MemMap, SharedWriter, Writer};
+use crate::mapper::{Kind, Mapper, RwLockExt};
+use crate::sstable::SSTable;
+use crate::Result;
 
 use rand::{rngs::SmallRng, FromEntropy, Rng};
 

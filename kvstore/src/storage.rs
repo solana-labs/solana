@@ -1,7 +1,7 @@
-use crate::kvstore::error::Result;
-use crate::kvstore::mapper::{Kind, Mapper};
-use crate::kvstore::sstable::{Key, Merged, SSTable, Value};
-use crate::kvstore::writelog::WriteLog;
+use crate::error::Result;
+use crate::mapper::{Kind, Mapper};
+use crate::sstable::{Key, Merged, SSTable, Value};
+use crate::writelog::WriteLog;
 
 use chrono::Utc;
 

@@ -1,7 +1,7 @@
 use crate::entry::Entry;
-use crate::kvstore::{self, Key, KvStore};
 use crate::packet::Blob;
 use crate::result::{Error, Result};
+use solana_kvstore::{self as kvstore, Key, KvStore};
 
 use std::sync::Arc;
 

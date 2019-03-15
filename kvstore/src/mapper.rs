@@ -1,6 +1,6 @@
-use crate::kvstore::io_utils::Writer;
-use crate::kvstore::sstable::SSTable;
-use crate::kvstore::Result;
+use crate::io_utils::Writer;
+use crate::sstable::SSTable;
+use crate::Result;
 
 use std::path::Path;
 use std::sync::RwLock;

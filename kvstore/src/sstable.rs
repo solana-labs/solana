@@ -1,5 +1,5 @@
-use crate::kvstore::error::Result;
-use crate::kvstore::io_utils::{MemMap, Writer};
+use crate::error::Result;
+use crate::io_utils::{MemMap, Writer};
 
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 
