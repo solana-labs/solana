@@ -42,7 +42,8 @@ BIN_CRATES=(
 for crate in "${BIN_CRATES[@]}"; do
   (
     set -x
-    cargo "$rust_version" install --force --path "$crate" --root "$installDir" --features="$cargoFeatures"
+    # shellcheck disable=SC2086 # Don't want to double quote $rust_version
+    cargo $rust_version install --force --path "$crate" --root "$installDir" --features="$cargoFeatures"
   )
 done
 
