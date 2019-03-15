@@ -3,6 +3,7 @@
 //! can do its processing in parallel with signature verification on the GPU.
 
 use crate::cluster_info::ClusterInfo;
+use crate::entry;
 use crate::entry::Entry;
 use crate::leader_confirmation_service::LeaderConfirmationService;
 use crate::leader_schedule_utils;
@@ -288,7 +289,12 @@ impl BankingStage {
     ) -> Result<(usize)> {
         let mut chunk_start = 0;
         while chunk_start != transactions.len() {
-            let chunk_end = chunk_start + Entry::num_will_fit(&transactions[chunk_start..]);
+            let chunk_end = chunk_start
+                + entry::num_will_fit(
+                    &transactions[chunk_start..],
+                    packet::BLOB_DATA_SIZE as u64,
+                    &Entry::serialized_size,
+                );
 
             let result = Self::process_and_record_transactions(
                 bank,
