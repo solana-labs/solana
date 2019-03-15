@@ -189,19 +189,20 @@ pub fn execute_transaction(
 
 /// A utility function for unit-tests. Same as execute_transaction(), but bypasses the loaders
 /// for easier usage and better stack traces.
-pub fn process_transaction<F, E>(
+pub fn process_transaction<F>(
     tx: &Transaction,
     tx_accounts: &mut Vec<Account>,
     process_instruction: F,
-) -> Result<(), E>
+) -> Result<(), TransactionError>
 where
-    F: Fn(&Pubkey, &mut [KeyedAccount], &[u8]) -> Result<(), E>,
+    F: Fn(&Pubkey, &mut [KeyedAccount], &[u8]) -> Result<(), ProgramError>,
 {
     for _ in tx_accounts.len()..tx.account_keys.len() {
         tx_accounts.push(Account::new(0, 0, &system_program::id()));
     }
     for (i, ix) in tx.instructions.iter().enumerate() {
-        let mut ix_accounts = get_subset_unchecked_mut(tx_accounts, &ix.accounts).unwrap();
+        let mut ix_accounts = get_subset_unchecked_mut(tx_accounts, &ix.accounts)
+            .map_err(|err| TransactionError::InstructionError(i as u8, err))?;
         let mut keyed_accounts: Vec<_> = ix
             .accounts
             .iter()
@@ -215,12 +216,14 @@ where
             .collect();
 
         let program_id = tx.program_id(i);
-        if system_program::check_id(&program_id) {
+        let result = if system_program::check_id(&program_id) {
             crate::system_program::entrypoint(&program_id, &mut keyed_accounts, &ix.data, 0)
-                .unwrap();
         } else {
-            process_instruction(&program_id, &mut keyed_accounts, &ix.data)?;
-        }
+            process_instruction(&program_id, &mut keyed_accounts, &ix.data)
+        };
+        result.map_err(|err| {
+            TransactionError::InstructionError(i as u8, InstructionError::ProgramError(err))
+        })?;
     }
     Ok(())
 }
