@@ -59,7 +59,7 @@ __cloud_FindInstances() {
                "Name=tag:name,Values=$filter" \
                "Name=instance-state-name,Values=pending,running" \
              --query "Reservations[].Instances[].[InstanceId,PublicIpAddress,PrivateIpAddress]" \
-             --output text
+             --output text \
     )
 }
 
@@ -223,11 +223,32 @@ cloud_DeleteInstances() {
     echo No instances to delete
     return
   fi
+
   declare names=("${instances[@]/:*/}")
+
   (
     set -x
     aws ec2 terminate-instances --region "$region" --instance-ids "${names[@]}"
   )
+
+  # Wait until the instances are terminated
+  for name in "${names[@]}"; do
+    while true; do
+      declare instanceState
+      instanceState=$(\
+        aws ec2 describe-instances \
+          --region "$region" \
+          --instance-ids "$name" \
+          --query "Reservations[].Instances[].State.Name" \
+          --output text \
+      )
+      echo "$name: $instanceState"
+      if [[ $instanceState = terminated ]]; then
+        break;
+      fi
+      sleep 2
+    done
+  done
 }
 
 
