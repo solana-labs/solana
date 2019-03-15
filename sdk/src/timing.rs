@@ -4,9 +4,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const NUM_TICKS_PER_SECOND: u64 = 10;
 
-// At 10 ticks/s, 8 ticks per slot implies that leader rotation and voting will happen
-// every 800 ms. A fast voting cadence ensures faster finality and convergence
-pub const DEFAULT_TICKS_PER_SLOT: u64 = 160;
+// At 10 ticks/s, 16 ticks per slot implies that leader rotation and voting will happen
+// every 1.6s. A fast voting cadence ensures faster finality and convergence
+pub const DEFAULT_TICKS_PER_SLOT: u64 = 16;
 pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 16;
 
 /// The time window of recent block hash values that the bank will track the signatures
