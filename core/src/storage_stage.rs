@@ -328,7 +328,7 @@ impl StorageStage {
         {
             // Lock the keys, since this is the IV memory,
             // it will be updated in-place by the encryption.
-            // Should be overwritten by the vote signatures which replace the
+            // Should be overwritten by the proof signatures which replace the
             // key values by the time it runs again.
 
             let mut statew = state.write().unwrap();
@@ -368,27 +368,32 @@ impl StorageStage {
         let timeout = Duration::new(1, 0);
         let entries: Vec<Entry> = entry_receiver.recv_timeout(timeout)?;
         for entry in entries {
-            // Go through the transactions, find votes, and use them to update
-            // the storage_keys with their signatures.
+            // Go through the transactions, find proofs, and use them to update
+            // the storage_keys with their signatures
             for tx in entry.transactions {
                 for (i, program_id) in tx.program_ids.iter().enumerate() {
-                    if solana_vote_api::check_id(&program_id) {
-                        debug!(
-                            "generating storage_keys from votes current_key_idx: {}",
-                            *current_key_idx
-                        );
-                        let storage_keys = &mut storage_state.write().unwrap().storage_keys;
-                        storage_keys[*current_key_idx..*current_key_idx + size_of::<Signature>()]
-                            .copy_from_slice(tx.signatures[0].as_ref());
-                        *current_key_idx += size_of::<Signature>();
-                        *current_key_idx %= storage_keys.len();
-                    } else if solana_storage_api::check_id(&program_id) {
+                    if solana_storage_api::check_id(&program_id) {
                         match deserialize(&tx.instructions[i].data) {
                             Ok(StorageProgram::SubmitMiningProof {
                                 entry_height: proof_entry_height,
+                                signature,
                                 ..
                             }) => {
                                 if proof_entry_height < *entry_height {
+                                    {
+                                        debug!(
+                                            "generating storage_keys from storage txs current_key_idx: {}",
+                                            *current_key_idx
+                                        );
+                                        let storage_keys =
+                                            &mut storage_state.write().unwrap().storage_keys;
+                                        storage_keys[*current_key_idx
+                                            ..*current_key_idx + size_of::<Signature>()]
+                                            .copy_from_slice(signature.as_ref());
+                                        *current_key_idx += size_of::<Signature>();
+                                        *current_key_idx %= storage_keys.len();
+                                    }
+
                                     let mut statew = storage_state.write().unwrap();
                                     let max_segment_index =
                                         (*entry_height / ENTRIES_PER_SEGMENT) as usize;
@@ -464,7 +469,7 @@ mod tests {
     use solana_sdk::hash::Hasher;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_api::vote_transaction::VoteTransaction;
+    use solana_storage_api::StorageTransaction;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -567,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn test_storage_stage_process_vote_entries() {
+    fn test_storage_stage_process_proof_entries() {
         solana_logger::setup();
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
@@ -604,13 +609,18 @@ mod tests {
             reference_keys = vec![0; keys.len()];
             reference_keys.copy_from_slice(keys);
         }
-        let mut vote_txs: Vec<_> = Vec::new();
+        let mut mining_txs: Vec<_> = Vec::new();
         let keypair = Keypair::new();
-        let vote_tx =
-            VoteTransaction::new_vote(&keypair.pubkey(), &keypair, 123456, Hash::default(), 1);
-        vote_txs.push(vote_tx);
-        let vote_entries = vec![Entry::new(&Hash::default(), 1, vote_txs)];
-        storage_entry_sender.send(vote_entries).unwrap();
+        let mining_proof_tx = StorageTransaction::new_mining_proof(
+            &keypair,
+            Hash::default(),
+            Hash::default(),
+            0,
+            keypair.sign_message(b"test"),
+        );
+        mining_txs.push(mining_proof_tx);
+        let proof_entries = vec![Entry::new(&Hash::default(), 1, mining_txs)];
+        storage_entry_sender.send(proof_entries).unwrap();
 
         for _ in 0..5 {
             {
