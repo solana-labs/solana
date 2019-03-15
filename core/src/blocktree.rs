@@ -1210,7 +1210,7 @@ pub mod tests {
 
     #[test]
     fn test_read_blobs_bytes() {
-        let shared_blobs = make_tiny_test_entries(10).to_shared_blobs();
+        let shared_blobs = make_tiny_test_entries(10).to_single_entry_shared_blobs();
         let slot = 0;
         index_blobs(&shared_blobs, &Keypair::new().pubkey(), 0, slot, 0);
 
@@ -1372,16 +1372,15 @@ pub mod tests {
             // Write entries
             let num_entries = 8;
             let entries = make_tiny_test_entries(num_entries);
-            let shared_blobs = entries.to_shared_blobs();
+            let mut blobs = entries.to_single_entry_blobs();
 
-            for (i, b) in shared_blobs.iter().enumerate() {
-                let mut w_b = b.write().unwrap();
-                w_b.set_index(1 << (i * 8));
-                w_b.set_slot(0);
+            for (i, b) in blobs.iter_mut().enumerate() {
+                b.set_index(1 << (i * 8));
+                b.set_slot(0);
             }
 
             blocktree
-                .write_shared_blobs(&shared_blobs)
+                .write_blobs(&blobs)
                 .expect("Expected successful write of blobs");
 
             let mut db_iterator = blocktree
@@ -1410,7 +1409,7 @@ pub mod tests {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let entries = make_tiny_test_entries(8);
-            let mut blobs = entries.clone().to_blobs();
+            let mut blobs = entries.clone().to_single_entry_blobs();
             for (i, b) in blobs.iter_mut().enumerate() {
                 b.set_slot(1);
                 if i < 4 {
@@ -1448,7 +1447,7 @@ pub mod tests {
             for slot in 0..num_slots {
                 let entries = make_tiny_test_entries(slot as usize + 1);
                 let last_entry = entries.last().unwrap().clone();
-                let mut blobs = entries.clone().to_blobs();
+                let mut blobs = entries.clone().to_single_entry_blobs();
                 for b in blobs.iter_mut() {
                     b.set_index(index);
                     b.set_slot(slot as u64);
@@ -2105,7 +2104,7 @@ pub mod tests {
         parent_slot: u64,
         is_full_slot: bool,
     ) -> Vec<Blob> {
-        let mut blobs = entries.clone().to_blobs();
+        let mut blobs = entries.clone().to_single_entry_blobs();
         for (i, b) in blobs.iter_mut().enumerate() {
             b.set_index(i as u64);
             b.set_slot(slot);
