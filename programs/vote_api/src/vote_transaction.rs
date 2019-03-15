@@ -22,9 +22,9 @@ impl VoteTransaction {
         fee: u64,
     ) -> Transaction {
         let vote = Vote { slot };
-        let mut tx = TransactionBuilder::new(fee)
-            .push(VoteInstruction::new_vote(staking_account, vote))
-            .compile();
+        let ix = VoteInstruction::new_vote(staking_account, vote);
+        let mut tx = TransactionBuilder::new(vec![ix]).compile();
+        tx.fee = fee;
         tx.sign(&[authorized_voter_keypair], recent_blockhash);
         tx
     }
@@ -39,16 +39,11 @@ impl VoteTransaction {
     ) -> Transaction {
         let from_id = from_keypair.pubkey();
         let space = VoteState::max_size() as u64;
-        let mut tx = TransactionBuilder::new(fee)
-            .push(SystemInstruction::new_program_account(
-                &from_id,
-                staker_id,
-                lamports,
-                space,
-                &id(),
-            ))
-            .push(VoteInstruction::new_initialize_account(staker_id))
-            .compile();
+        let create_ix =
+            SystemInstruction::new_program_account(&from_id, staker_id, lamports, space, &id());
+        let init_ix = VoteInstruction::new_initialize_account(staker_id);
+        let mut tx = TransactionBuilder::new(vec![create_ix, init_ix]).compile();
+        tx.fee = fee;
         tx.sign(&[from_keypair], recent_blockhash);
         tx
     }
@@ -65,17 +60,12 @@ impl VoteTransaction {
         let from_id = from_keypair.pubkey();
         let voter_id = voter_keypair.pubkey();
         let space = VoteState::max_size() as u64;
-        let mut tx = TransactionBuilder::new(fee)
-            .push(SystemInstruction::new_program_account(
-                &from_id,
-                &voter_id,
-                lamports,
-                space,
-                &id(),
-            ))
-            .push(VoteInstruction::new_initialize_account(&voter_id))
-            .push(VoteInstruction::new_delegate_stake(&voter_id, &delegate_id))
-            .compile();
+        let create_ix =
+            SystemInstruction::new_program_account(&from_id, &voter_id, lamports, space, &id());
+        let init_ix = VoteInstruction::new_initialize_account(&voter_id);
+        let delegate_ix = VoteInstruction::new_delegate_stake(&voter_id, &delegate_id);
+        let mut tx = TransactionBuilder::new(vec![create_ix, init_ix, delegate_ix]).compile();
+        tx.fee = fee;
         tx.sign(&[from_keypair, voter_keypair], recent_blockhash);
         tx
     }
@@ -87,12 +77,9 @@ impl VoteTransaction {
         authorized_voter_id: &Pubkey,
         fee: u64,
     ) -> Transaction {
-        let mut tx = TransactionBuilder::new(fee)
-            .push(VoteInstruction::new_authorize_voter(
-                &vote_keypair.pubkey(),
-                authorized_voter_id,
-            ))
-            .compile();
+        let ix = VoteInstruction::new_authorize_voter(&vote_keypair.pubkey(), authorized_voter_id);
+        let mut tx = TransactionBuilder::new(vec![ix]).compile();
+        tx.fee = fee;
         tx.sign(&[vote_keypair], recent_blockhash);
         tx
     }
@@ -104,12 +91,9 @@ impl VoteTransaction {
         node_id: &Pubkey,
         fee: u64,
     ) -> Transaction {
-        let mut tx = TransactionBuilder::new(fee)
-            .push(VoteInstruction::new_delegate_stake(
-                &vote_keypair.pubkey(),
-                node_id,
-            ))
-            .compile();
+        let ix = VoteInstruction::new_delegate_stake(&vote_keypair.pubkey(), node_id);
+        let mut tx = TransactionBuilder::new(vec![ix]).compile();
+        tx.fee = fee;
         tx.sign(&[vote_keypair], recent_blockhash);
         tx
     }

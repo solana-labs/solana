@@ -40,12 +40,10 @@ impl RewardsTransaction {
         fee: u64,
     ) -> Transaction {
         let vote_id = vote_keypair.pubkey();
-        let mut tx = TransactionBuilder::new(fee)
-            .push(RewardsInstruction::new_redeem_vote_credits(
-                &vote_id, rewards_id,
-            ))
-            .push(VoteInstruction::new_clear_credits(&vote_id))
-            .compile();
+        let redeem_ix = RewardsInstruction::new_redeem_vote_credits(&vote_id, rewards_id);
+        let clear_ix = VoteInstruction::new_clear_credits(&vote_id);
+        let mut tx = TransactionBuilder::new(vec![redeem_ix, clear_ix]).compile();
+        tx.fee = fee;
         tx.sign(&[vote_keypair], blockhash);
         tx
     }

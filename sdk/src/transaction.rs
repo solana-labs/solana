@@ -199,7 +199,8 @@ impl Transaction {
             account_keys.push((*pubkey, false));
         }
         let instruction = Instruction::new(*program_id, data, account_keys);
-        let mut transaction = TransactionBuilder::new(fee).push(instruction).compile();
+        let mut transaction = TransactionBuilder::new(vec![instruction]).compile();
+        transaction.fee = fee;
         transaction.recent_blockhash = recent_blockhash;
         transaction
     }

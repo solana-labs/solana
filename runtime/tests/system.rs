@@ -21,7 +21,7 @@ fn test_system_unsigned_transaction() {
 
     // Fund to account to bypass AccountNotFound error
     let ix = SystemInstruction::new_move(&from_pubkey, &to_pubkey, 50);
-    let mut tx = TransactionBuilder::new_with_instruction(ix);
+    let mut tx = TransactionBuilder::new(vec![ix]).compile();
     alice_client.process_transaction(&mut tx).unwrap();
 
     // Erroneously sign transaction with recipient account key
@@ -31,7 +31,7 @@ fn test_system_unsigned_transaction() {
         &SystemInstruction::Move { lamports: 10 },
         vec![(from_pubkey, false), (to_pubkey, true)],
     );
-    let mut tx = TransactionBuilder::new_with_instruction(ix);
+    let mut tx = TransactionBuilder::new(vec![ix]).compile();
     assert_eq!(
         mallory_client.process_transaction(&mut tx),
         Err(TransactionError::InstructionError(
