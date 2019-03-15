@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -ex
 
-cd "$(dirname "$0")"
-eval "$(../../ci/channel-info.sh)"
+cd "$(dirname "$0")"/../..
+eval "$(ci/channel-info.sh)"
+source ci/rust-version.sh
 
 if [[ -z $CHANNEL ]]; then
   echo Unable to determine channel to publish into, exiting.
@@ -10,8 +11,9 @@ if [[ -z $CHANNEL ]]; then
   exit 0
 fi
 
+cd "$(dirname "$0")"
 rm -rf usr/
-../../ci/docker-run.sh solanalabs/rust:1.32.0 \
+../../ci/docker-run.sh "$rust_stable_docker_image" \
   scripts/cargo-install-all.sh sdk/docker-solana/usr
 
 cp -f ../../run.sh usr/bin/solana-run.sh

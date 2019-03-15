@@ -117,7 +117,8 @@ loadConfigFile
 build() {
   declare MAYBE_DOCKER=
   if [[ $(uname) != Linux ]]; then
-    MAYBE_DOCKER="ci/docker-run.sh solanalabs/rust"
+    source ci/rust-version.sh
+    MAYBE_DOCKER="ci/docker-run.sh +$rust_stable_docker_image"
   fi
   SECONDS=0
   (

@@ -35,7 +35,8 @@ echo --- Creating tarball
     git rev-parse HEAD
   ) > solana-release/version.txt
 
-  scripts/cargo-install-all.sh solana-release
+  source ci/rust-version.sh stable
+  scripts/cargo-install-all.sh +"$rust_stable" solana-release
 
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
