@@ -34,6 +34,7 @@ BIN_CRATES=(
   drone
   fullnode
   genesis
+  install
   keygen
   ledger-tool
   wallet
