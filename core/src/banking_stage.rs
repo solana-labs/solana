@@ -435,7 +435,7 @@ pub fn create_test_recorder(
         bank.tick_height(),
         bank.last_blockhash(),
         bank.slot(),
-        None,
+        Some(4),
         bank.ticks_per_slot(),
     );
     let poh_recorder = Arc::new(Mutex::new(poh_recorder));
@@ -669,8 +669,13 @@ mod tests {
             max_tick_height: std::u64::MAX,
         };
 
-        let (poh_recorder, entry_receiver) =
-            PohRecorder::new(bank.tick_height(), bank.last_blockhash(), bank.slot());
+        let (poh_recorder, entry_receiver) = PohRecorder::new(
+            bank.tick_height(),
+            bank.last_blockhash(),
+            bank.slot(),
+            None,
+            bank.ticks_per_slot(),
+        );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         poh_recorder.lock().unwrap().set_working_bank(working_bank);
@@ -722,8 +727,13 @@ mod tests {
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.tick_height() + 1,
         };
-        let (poh_recorder, entry_receiver) =
-            PohRecorder::new(bank.tick_height(), bank.last_blockhash(), bank.slot());
+        let (poh_recorder, entry_receiver) = PohRecorder::new(
+            bank.tick_height(),
+            bank.last_blockhash(),
+            bank.slot(),
+            Some(4),
+            bank.ticks_per_slot(),
+        );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         poh_recorder.lock().unwrap().set_working_bank(working_bank);
