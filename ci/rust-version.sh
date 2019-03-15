@@ -16,8 +16,8 @@
 export rust_stable=1.32.0
 export rust_stable_docker_image=solanalabs/rust:1.32.0
 
-export rust_nightly=nightly-2019-01-31
-export rust_nightly_docker_image=solanalabs/rust-nightly:2019-01-31
+export rust_nightly=nightly-2019-03-14
+export rust_nightly_docker_image=solanalabs/rust-nightly:2019-03-14
 
 [[ -z $1 ]] || (
 
