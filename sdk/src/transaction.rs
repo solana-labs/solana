@@ -10,7 +10,7 @@ use crate::shortvec::{
 };
 use crate::signature::{KeypairUtil, Signature};
 use crate::system_instruction::SystemError;
-use crate::transaction_builder::TransactionBuilder;
+use crate::transaction_compiler::TransactionCompiler;
 use bincode::{serialize, Error};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use serde::{Deserialize, Serialize, Serializer};
@@ -168,7 +168,7 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn new(instructions: Vec<Instruction>) -> Self {
-        TransactionBuilder::new(instructions).compile()
+        TransactionCompiler::new(instructions).compile()
     }
 
     pub fn new_with_blockhash_and_fee<T: Serialize>(
