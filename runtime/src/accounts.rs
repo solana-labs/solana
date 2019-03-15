@@ -94,8 +94,21 @@ impl From<usize> for AccountStorageStatus {
     }
 }
 
+#[derive(Default, Clone)]
+struct AccountInfo {
+    /// index identifying the append storage
+    id: AppendVecId,
+
+    /// offset into the storage
+    offset: u64,
+
+    /// lamports in the account used when squashing kept for optimization
+    /// purposes to remove accounts with zero balance.
+    lamports: u64,
+}
+
 // in a given a Fork, which AppendVecId and offset
-type AccountMap = RwLock<HashMap<Fork, (AppendVecId, u64)>>;
+type AccountMap = RwLock<HashMap<Pubkey, AccountInfo>>;
 
 /// information about where Accounts are stored and which vote accounts are present
 /// keying hierarchy is:
@@ -107,7 +120,7 @@ struct AccountIndex {
     /// For each Pubkey, the Account for a specific Fork is in a specific
     ///  AppendVec at a specific index.  There may be an Account for Pubkey
     ///  in any number of Forks.
-    account_maps: RwLock<HashMap<Pubkey, AccountMap>>,
+    account_maps: RwLock<HashMap<Fork, AccountMap>>,
 
     /// Cached index to vote accounts for performance reasons to avoid having
     ///  to iterate through the entire accounts each time
@@ -279,6 +292,8 @@ impl AccountsDB {
         if let Some(old_fork_info) = fork_infos.insert(fork, fork_info) {
             panic!("duplicate forks! {} {:?}", fork, old_fork_info);
         }
+        let mut account_maps = self.account_index.account_maps.write().unwrap();
+        account_maps.insert(fork, RwLock::new(HashMap::new()));
     }
 
     fn new_storage_entry(&self, path: &str) -> AccountStorageEntry {
@@ -314,9 +329,8 @@ impl AccountsDB {
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
         let account_maps = self.account_index.account_maps.read().unwrap();
-
-        for account_map in account_maps.values() {
-            if account_map.read().unwrap().contains_key(&fork) {
+        if let Some(account_map) = account_maps.get(&fork) {
+            if account_map.read().unwrap().len() > 0 {
                 return true;
             }
         }
@@ -324,33 +338,29 @@ impl AccountsDB {
     }
 
     pub fn hash_internal_state(&self, fork: Fork) -> Option<Hash> {
-        let ordered_accounts: BTreeMap<_, _> = self
-            .account_index
-            .account_maps
+        let account_maps = self.account_index.account_maps.read().unwrap();
+        let account_map = account_maps.get(&fork).unwrap();
+        let ordered_accounts: BTreeMap<_, _> = account_map
             .read()
             .unwrap()
             .iter()
-            .filter_map(|(pubkey, account_map)| {
-                let account_map = account_map.read().unwrap();
-                if let Some((vec_id, offset)) = account_map.get(&fork) {
-                    Some((
-                        *pubkey,
-                        self.storage.read().unwrap()[*vec_id]
-                            .accounts
-                            .read()
-                            .unwrap()
-                            .get_account(*offset)
-                            .unwrap(),
-                    ))
-                } else {
-                    None
-                }
+            .map(|(pubkey, account_info)| {
+                (
+                    *pubkey,
+                    self.storage.read().unwrap()[account_info.id]
+                        .accounts
+                        .read()
+                        .unwrap()
+                        .get_account(account_info.offset)
+                        .unwrap(),
+                )
             })
             .collect();
 
         if ordered_accounts.is_empty() {
             return None;
         }
+
         Some(hash(&serialize(&ordered_accounts).unwrap()))
     }
 
@@ -362,26 +372,45 @@ impl AccountsDB {
 
     fn load(&self, fork: Fork, pubkey: &Pubkey, walk_back: bool) -> Option<Account> {
         let account_maps = self.account_index.account_maps.read().unwrap();
-        if let Some(account_map) = account_maps.get(pubkey) {
-            let account_map = account_map.read().unwrap();
-            // find most recent fork that is an ancestor of current_fork
-            if let Some((id, offset)) = account_map.get(&fork) {
-                return Some(self.get_account(*id, *offset));
-            } else {
-                if !walk_back {
-                    return None;
-                }
-                let fork_infos = self.fork_infos.read().unwrap();
-                if let Some(fork_info) = fork_infos.get(&fork) {
-                    for parent_fork in fork_info.parents.iter() {
-                        if let Some((id, offset)) = account_map.get(&parent_fork) {
-                            return Some(self.get_account(*id, *offset));
-                        }
+        let account_map = account_maps.get(&fork).unwrap().read().unwrap();
+        if let Some(account_info) = account_map.get(&pubkey) {
+            return Some(self.get_account(account_info.id, account_info.offset));
+        }
+        if !walk_back {
+            return None;
+        }
+        // find most recent fork that is an ancestor of current_fork
+        let fork_infos = self.fork_infos.read().unwrap();
+        if let Some(fork_info) = fork_infos.get(&fork) {
+            for parent_fork in fork_info.parents.iter() {
+                if let Some(account_map) = account_maps.get(&parent_fork) {
+                    let account_map = account_map.read().unwrap();
+                    if let Some(account_info) = account_map.get(&pubkey) {
+                        return Some(self.get_account(account_info.id, account_info.offset));
                     }
                 }
             }
         }
         None
+    }
+
+    fn load_program_accounts(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
+        self.account_index
+            .account_maps
+            .read()
+            .unwrap()
+            .get(&fork)
+            .unwrap()
+            .read()
+            .unwrap()
+            .iter()
+            .filter_map(|(pubkey, account_info)| {
+                let account = Some(self.get_account(account_info.id, account_info.offset));
+                account
+                    .filter(|account| account.owner == *program_id)
+                    .map(|account| (*pubkey, account))
+            })
+            .collect()
     }
 
     fn load_by_program(
@@ -390,17 +419,18 @@ impl AccountsDB {
         program_id: &Pubkey,
         walk_back: bool,
     ) -> Vec<(Pubkey, Account)> {
-        self.account_index
-            .account_maps
-            .read()
-            .unwrap()
-            .iter()
-            .filter_map(|(pubkey, _)| {
-                self.load(fork, pubkey, walk_back)
-                    .filter(|account| account.owner == *program_id)
-                    .map(|account| (*pubkey, account))
-            })
-            .collect()
+        let mut program_accounts = self.load_program_accounts(fork, &program_id);
+        if !walk_back {
+            return program_accounts;
+        }
+        let fork_infos = self.fork_infos.read().unwrap();
+        if let Some(fork_info) = fork_infos.get(&fork) {
+            for parent_fork in fork_info.parents.iter() {
+                let mut parent_accounts = self.load_program_accounts(*parent_fork, &program_id);
+                program_accounts.append(&mut parent_accounts);
+            }
+        }
+        program_accounts
     }
 
     fn get_storage_id(&self, start: usize, current: usize) -> usize {
@@ -470,93 +500,87 @@ impl AccountsDB {
         (id, offset)
     }
 
-    fn remove_account_entries(&self, entries: &[Fork], map: &AccountMap) -> bool {
-        let mut forks = map.write().unwrap();
-        for fork in entries.iter() {
-            if let Some((id, _)) = forks.remove(&fork) {
-                let stores = self.storage.read().unwrap();
-                stores[id].remove_account();
-            }
+    fn remove_account_entries(&self, fork: Fork, pubkey: &Pubkey) -> bool {
+        let account_maps = self.account_index.account_maps.read().unwrap();
+        let mut account_map = account_maps.get(&fork).unwrap().write().unwrap();
+        if let Some(account_info) = account_map.remove(&pubkey) {
+            let stores = self.storage.read().unwrap();
+            stores[account_info.id].remove_account();
         }
-        forks.is_empty()
+        account_map.is_empty()
     }
 
-    fn account_map_is_empty(pubkey: &Pubkey, account_maps: &HashMap<Pubkey, AccountMap>) -> bool {
-        if let Some(account_map) = account_maps.get(pubkey) {
-            if account_map.read().unwrap().len() == 0 {
-                return true;
+    fn account_map_is_empty(
+        &self,
+        pubkey: &Pubkey,
+        account_maps: &HashMap<Fork, AccountMap>,
+        skip_fork: Fork,
+    ) -> bool {
+        for (fork, account_map) in account_maps.iter() {
+            if *fork != skip_fork && account_map.read().unwrap().get(&pubkey).is_some() {
+                return false;
             }
         }
-        false
+        true
     }
 
     fn update_vote_cache(
         &self,
         account: &Account,
-        account_maps: &HashMap<Pubkey, AccountMap>,
         pubkey: &Pubkey,
+        account_maps: &HashMap<Fork, AccountMap>,
+        fork: Fork,
+        insert_account: bool,
     ) {
         if solana_vote_api::check_id(&account.owner) {
-            if Self::account_map_is_empty(pubkey, account_maps) {
-                self.account_index
-                    .vote_accounts
-                    .write()
-                    .unwrap()
-                    .remove(pubkey);
-            } else {
+            if insert_account {
                 self.account_index
                     .vote_accounts
                     .write()
                     .unwrap()
                     .insert(*pubkey);
+            } else if self.account_map_is_empty(&pubkey, &account_maps, fork) {
+                self.account_index
+                    .vote_accounts
+                    .write()
+                    .unwrap()
+                    .remove(pubkey);
             }
         }
     }
 
-    fn insert_account_entry(&self, fork: Fork, id: AppendVecId, offset: u64, map: &AccountMap) {
-        let mut forks = map.write().unwrap();
+    fn insert_account_entry(
+        &self,
+        pubkey: &Pubkey,
+        account_info: &AccountInfo,
+        account_map: &mut HashMap<Pubkey, AccountInfo>,
+    ) {
         let stores = self.storage.read().unwrap();
-        stores[id].add_account();
-        if let Some((old_id, _)) = forks.insert(fork, (id, offset)) {
-            stores[old_id].remove_account();
+        stores[account_info.id].add_account();
+        if let Some(old_account_info) = account_map.insert(*pubkey, account_info.clone()) {
+            stores[old_account_info.id].remove_account();
         }
     }
 
     /// Store the account update.
-    fn store_account(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
+    pub fn store(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
         if account.lamports == 0 && self.is_squashed(fork) {
             // purge if balance is 0 and no checkpoints
+            self.remove_account_entries(fork, &pubkey);
             let account_maps = self.account_index.account_maps.read().unwrap();
-            let map = account_maps.get(&pubkey).unwrap();
-            self.remove_account_entries(&[fork], &map);
-            self.update_vote_cache(account, &account_maps, pubkey);
+            self.update_vote_cache(&account, &pubkey, &account_maps, fork, false);
         } else {
             let (id, offset) = self.append_account(account);
-
             let account_maps = self.account_index.account_maps.read().unwrap();
-
-            let map = account_maps.get(&pubkey).unwrap();
-            self.insert_account_entry(fork, id, offset, &map);
-            self.update_vote_cache(account, &account_maps, pubkey);
+            let mut account_map = account_maps.get(&fork).unwrap().write().unwrap();
+            let account_info = AccountInfo {
+                id,
+                offset,
+                lamports: account.lamports,
+            };
+            self.insert_account_entry(&pubkey, &account_info, &mut account_map);
+            self.update_vote_cache(&account, &pubkey, &account_maps, fork, true);
         }
-    }
-
-    pub fn store(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
-        {
-            if !self
-                .account_index
-                .account_maps
-                .read()
-                .unwrap()
-                .contains_key(&pubkey)
-            {
-                let mut waccount_maps = self.account_index.account_maps.write().unwrap();
-                if !waccount_maps.contains_key(&pubkey) {
-                    waccount_maps.insert(*pubkey, RwLock::new(HashMap::new()));
-                }
-            }
-        }
-        self.store_account(fork, pubkey, account);
     }
 
     pub fn store_accounts(
@@ -566,27 +590,6 @@ impl AccountsDB {
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
     ) {
-        let mut keys = vec![];
-        {
-            let account_maps = self.account_index.account_maps.read().unwrap();
-            for (i, raccs) in loaded.iter().enumerate() {
-                if res[i].is_err() || raccs.is_err() {
-                    continue;
-                }
-                let tx = &txs[i];
-                for key in tx.account_keys.iter() {
-                    if !account_maps.contains_key(&key) {
-                        keys.push(*key);
-                    }
-                }
-            }
-        }
-        if !keys.is_empty() {
-            let mut account_maps = self.account_index.account_maps.write().unwrap();
-            for key in keys.iter() {
-                account_maps.insert(*key, RwLock::new(HashMap::new()));
-            }
-        }
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {
                 continue;
@@ -746,58 +749,29 @@ impl AccountsDB {
             .is_empty()
     }
 
-    fn get_merged_account_map(
-        &self,
-        fork: Fork,
-        parents: &[Fork],
-        map: &AccountMap,
-    ) -> Option<(Fork, AppendVecId, u64)> {
-        let forks = map.read().unwrap();
-        if let Some((id, offset)) = forks.get(&fork) {
-            return Some((fork, *id, *offset));
-        } else {
-            for parent_fork in parents.iter() {
-                if let Some((id, offset)) = forks.get(parent_fork) {
-                    return Some((*parent_fork, *id, *offset));
-                }
-            }
-        }
-        None
-    }
-
     /// make fork a root, i.e. forget its heritage
     fn squash(&self, fork: Fork) {
         let parents = self.remove_parents(fork);
 
-        // for every account in all the parents, load latest and update self if
-        // absent
-        let mut keys = vec![];
-        {
-            let account_maps = self.account_index.account_maps.read().unwrap();
-            account_maps.iter().for_each(|(pubkey, map)| {
-                if let Some((parent_fork, id, offset)) =
-                    self.get_merged_account_map(fork, &parents, &map)
-                {
-                    if parent_fork != fork {
-                        self.insert_account_entry(fork, id, offset, &map);
-                    } else {
-                        let account = self.get_account(id, offset);
-                        if account.lamports == 0 {
-                            if self.remove_account_entries(&[fork], &map) {
-                                keys.push(pubkey.clone());
-                            }
-                            self.update_vote_cache(&account, &account_maps, pubkey);
-                        }
-                    }
+        let account_maps = self.account_index.account_maps.read().unwrap();
+        let mut account_map = account_maps.get(&fork).unwrap().write().unwrap();
+        for parent_fork in parents.iter() {
+            let parent_map = account_maps.get(&parent_fork).unwrap().read().unwrap();
+            for (pubkey, account_info) in parent_map.iter() {
+                if account_map.get(pubkey).is_none() {
+                    self.insert_account_entry(&pubkey, &account_info, &mut account_map);
                 }
-            });
-        }
-        if !keys.is_empty() {
-            let mut account_maps = self.account_index.account_maps.write().unwrap();
-            for key in keys.iter() {
-                account_maps.remove(&key);
             }
         }
+
+        // toss any zero-balance accounts, since self is root now
+        account_map.retain(|pubkey, account_info| {
+            if account_info.lamports == 0 {
+                let account = self.get_account(account_info.id, account_info.offset);
+                self.update_vote_cache(&account, &pubkey, &account_maps, fork, false);
+            }
+            account_info.lamports != 0
+        });
     }
 }
 
@@ -1693,10 +1667,9 @@ mod tests {
 
         let mut append_vec_histogram = HashMap::new();
         let account_maps = accounts.account_index.account_maps.read().unwrap();
-        for map in account_maps.values() {
-            *append_vec_histogram
-                .entry(map.read().unwrap().get(&0).unwrap().0)
-                .or_insert(0) += 1;
+        let account_map = account_maps.get(&0).unwrap().read().unwrap();
+        for map in account_map.values() {
+            *append_vec_histogram.entry(map.id).or_insert(0) += 1;
         }
         for count in append_vec_histogram.values() {
             assert!(*count >= 2);
