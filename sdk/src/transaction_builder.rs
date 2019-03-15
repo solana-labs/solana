@@ -35,28 +35,13 @@ fn compile_instructions(
 /// A utility for constructing transactions
 #[derive(Default)]
 pub struct TransactionBuilder {
-    fee: u64,
     instructions: Vec<Instruction>,
 }
 
 impl TransactionBuilder {
-    /// Create a new TransactionBuilder.
-    pub fn new(fee: u64) -> Self {
-        Self {
-            fee,
-            instructions: vec![],
-        }
-    }
-
     /// Create a new unsigned transaction from a single instruction
-    pub fn new_with_instruction(instruction: Instruction) -> Transaction {
-        Self::new_with_instructions(vec![instruction])
-    }
-
-    /// Create a new unsigned transaction from a single instruction
-    pub fn new_with_instructions(instructions: Vec<Instruction>) -> Transaction {
-        let fee = 0;
-        Self { fee, instructions }.compile()
+    pub fn new(instructions: Vec<Instruction>) -> Self {
+        Self { instructions }
     }
 
     /// Add an instruction.
@@ -107,7 +92,7 @@ impl TransactionBuilder {
             signatures: Vec::with_capacity(signed_len),
             account_keys: signed_keys,
             recent_blockhash: Hash::default(),
-            fee: self.fee,
+            fee: 0,
             program_ids,
             instructions,
         }
@@ -229,11 +214,6 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_builder_fee() {
-        assert_eq!(TransactionBuilder::new(42).compile().fee, 42);
-    }
-
-    #[test]
     fn test_transaction_builder_kitchen_sink() {
         let program_id0 = Pubkey::default();
         let program_id1 = Keypair::new().pubkey();
@@ -248,26 +228,5 @@ mod tests {
         assert_eq!(tx.instructions[0], CompiledInstruction::new(0, &0, vec![1]));
         assert_eq!(tx.instructions[1], CompiledInstruction::new(1, &0, vec![0]));
         assert_eq!(tx.instructions[2], CompiledInstruction::new(0, &0, vec![0]));
-    }
-
-    #[test]
-    fn test_transaction_builder_new_with_instruction() {
-        let ix = Instruction::new(Pubkey::default(), &0, vec![]);
-        assert_eq!(
-            TransactionBuilder::new_with_instruction(ix.clone()),
-            TransactionBuilder::default().push(ix.clone()).compile()
-        );
-    }
-
-    #[test]
-    fn test_transaction_builder_new_with_instructions() {
-        let ix = Instruction::new(Pubkey::default(), &0, vec![]);
-        assert_eq!(
-            TransactionBuilder::new_with_instructions(vec![ix.clone(), ix.clone()]),
-            TransactionBuilder::default()
-                .push(ix.clone())
-                .push(ix.clone())
-                .compile()
-        );
     }
 }

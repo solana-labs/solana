@@ -442,7 +442,7 @@ fn process_configure_staking(
     authorized_voter_option: Option<Pubkey>,
 ) -> ProcessResult {
     let recent_blockhash = get_recent_blockhash(&rpc_client)?;
-    let mut tx = TransactionBuilder::new(0);
+    let mut tx = TransactionBuilder::default();
     if let Some(delegate_id) = delegate_option {
         tx.push(VoteInstruction::new_delegate_stake(
             &config.id.pubkey(),
