@@ -80,7 +80,7 @@ impl PohRecorder {
             .map(|target_tick| {
                 // Either grace period has expired,
                 // or target tick is = grace period (i.e. poh recorder was just reset)
-                info!(
+                debug!(
                     "Current tick {}, start tick {} target {}, grace {}",
                     self.tick_height(),
                     self.start_tick,
