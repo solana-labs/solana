@@ -39,7 +39,7 @@ fn test_wallet_timestamp_tx() {
 
     assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.id, 50).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.id.pubkey(), 50).unwrap();
     check_balance(50, &rpc_client, &config_payer.id.pubkey());
 
     // Make transaction (from config_payer to bob_pubkey) requiring timestamp from config_witness
@@ -99,7 +99,7 @@ fn test_wallet_witness_tx() {
 
     assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.id, 50).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.id.pubkey(), 50).unwrap();
 
     // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
     config_payer.command = WalletCommand::Pay(
@@ -156,7 +156,7 @@ fn test_wallet_cancel_tx() {
 
     assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.id, 50).unwrap();
+    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.id.pubkey(), 50).unwrap();
 
     // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
     config_payer.command = WalletCommand::Pay(

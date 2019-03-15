@@ -383,7 +383,7 @@ fn process_airdrop(
         ))?,
     };
 
-    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, lamports)?;
+    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id.pubkey(), lamports)?;
 
     let current_balance = rpc_client
         .retry_get_balance(1, &config.id.pubkey(), 5)?
@@ -654,7 +654,7 @@ fn process_time_elapsed(
     let balance = rpc_client.retry_get_balance(1, &config.id.pubkey(), 5)?;
 
     if let Some(0) = balance {
-        request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, 1)?;
+        request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id.pubkey(), 1)?;
     }
 
     let blockhash = get_recent_blockhash(&rpc_client)?;
@@ -675,7 +675,7 @@ fn process_witness(
     let balance = rpc_client.retry_get_balance(1, &config.id.pubkey(), 5)?;
 
     if let Some(0) = balance {
-        request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, 1)?;
+        request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id.pubkey(), 1)?;
     }
 
     let blockhash = get_recent_blockhash(&rpc_client)?;
@@ -983,12 +983,13 @@ fn resign_transaction(
 pub fn request_and_confirm_airdrop(
     rpc_client: &RpcClient,
     drone_addr: &SocketAddr,
-    signer: &Keypair,
+    to_pubkey: &Pubkey,
     lamports: u64,
 ) -> Result<(), Box<dyn error::Error>> {
     let blockhash = get_recent_blockhash(rpc_client)?;
-    let mut tx = request_airdrop_transaction(drone_addr, &signer.pubkey(), lamports, blockhash)?;
-    send_and_confirm_transaction(rpc_client, &mut tx, signer)?;
+    let tx = request_airdrop_transaction(drone_addr, &to_pubkey, lamports, blockhash)?;
+    let signature_str = send_transaction(rpc_client, &tx)?;
+    confirm_transaction(rpc_client, &signature_str)?;
     Ok(())
 }
 
@@ -1766,17 +1767,14 @@ mod tests {
     fn test_request_and_confirm_airdrop() {
         let rpc_client = RpcClient::new("succeeds".to_string());
         let drone_addr = socketaddr!(0, 0);
-        let keypair = Keypair::new();
+        let pubkey = Keypair::new().pubkey();
         let lamports = 50;
         assert_eq!(
-            request_and_confirm_airdrop(&rpc_client, &drone_addr, &keypair, lamports).unwrap(),
+            request_and_confirm_airdrop(&rpc_client, &drone_addr, &pubkey, lamports).unwrap(),
             ()
         );
 
-        let rpc_client = RpcClient::new("account_in_use".to_string());
-        assert!(request_and_confirm_airdrop(&rpc_client, &drone_addr, &keypair, lamports).is_err());
-
         let lamports = 0;
-        assert!(request_and_confirm_airdrop(&rpc_client, &drone_addr, &keypair, lamports).is_err());
+        assert!(request_and_confirm_airdrop(&rpc_client, &drone_addr, &pubkey, lamports).is_err());
     }
 }
