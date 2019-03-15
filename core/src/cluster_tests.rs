@@ -8,6 +8,7 @@ use crate::contact_info::ContactInfo;
 use crate::entry::{Entry, EntrySlice};
 use crate::gossip_service::discover;
 use solana_client::thin_client::create_client;
+use crate::locktower::VOTE_THRESHOLD_DEPTH;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
@@ -40,12 +41,13 @@ pub fn spend_and_verify_all_nodes(
             client.get_recent_blockhash().unwrap(),
             0,
         );
+        let confs = VOTE_THRESHOLD_DEPTH + 1;
         let sig = client
-            .retry_transfer(&funding_keypair, &mut transaction, 5)
+            .retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 5, confs)
             .unwrap();
         for validator in &cluster_nodes {
             let client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
-            client.poll_for_signature(&sig).unwrap();
+            client.poll_for_confirmed_signature(&sig, confs).unwrap();
         }
     }
 }
@@ -163,8 +165,15 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 0,
             );
 
+            let confs = VOTE_THRESHOLD_DEPTH + 1;
             let sig = {
-                match client.retry_transfer(&funding_keypair, &mut transaction, 5) {
+                let sig = client.retry_transfer_until_confirmed(
+                    &funding_keypair,
+                    &mut transaction,
+                    5,
+                    confs,
+                );
+                match sig {
                     Err(e) => {
                         result = Err(e);
                         continue;
@@ -174,7 +183,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 }
             };
 
-            match poll_all_nodes_for_signature(&entry_point_info, &cluster_nodes, &sig) {
+            match poll_all_nodes_for_signature(&entry_point_info, &cluster_nodes, &sig, confs) {
                 Err(e) => {
                     result = Err(e);
                 }
@@ -190,13 +199,14 @@ fn poll_all_nodes_for_signature(
     entry_point_info: &ContactInfo,
     cluster_nodes: &[ContactInfo],
     sig: &Signature,
+    confs: usize,
 ) -> io::Result<()> {
     for validator in cluster_nodes {
         if validator.id == entry_point_info.id {
             continue;
         }
         let client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
-        client.poll_for_signature(&sig)?;
+        client.poll_for_confirmed_signature(&sig, confs)?;
     }
 
     Ok(())

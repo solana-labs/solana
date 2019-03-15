@@ -94,6 +94,20 @@ fn test_leader_failure_3() {
 }
 
 #[test]
+#[ignore]
+fn test_leader_failure_4() {
+    solana_logger::setup();
+    let num_nodes = 4;
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.rpc_config.enable_fullnode_exit = true;
+    let local = LocalCluster::new_with_config(&[100; 4], 10_000, &fullnode_config);
+    cluster_tests::kill_entry_and_spend_and_verify_rest(
+        &local.entry_point_info,
+        &local.funding_keypair,
+        num_nodes,
+    );
+}
+#[test]
 fn test_two_unbalanced_stakes() {
     let mut fullnode_config = FullnodeConfig::default();
     let num_ticks_per_second = 100;

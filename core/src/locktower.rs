@@ -7,8 +7,8 @@ use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState, MAX_LOCKOUT_HISTORY};
 
-const VOTE_THRESHOLD_DEPTH: usize = 8;
-const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
+pub const VOTE_THRESHOLD_DEPTH: usize = 8;
+pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 
 #[derive(Default)]
 pub struct EpochStakes {

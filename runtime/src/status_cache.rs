@@ -131,13 +131,13 @@ impl<T: Clone> StatusCache<T> {
     pub fn get_signature_status_all<U>(
         checkpoints: &[U],
         signature: &Signature,
-    ) -> Option<Result<(), T>>
+    ) -> Option<(usize, Result<(), T>)>
     where
         U: Deref<Target = Self>,
     {
-        for c in checkpoints {
+        for (i, c) in checkpoints.iter().enumerate() {
             if let Some(status) = c.get_signature_status(signature) {
-                return Some(status);
+                return Some((i, status));
             }
         }
         None
@@ -196,7 +196,7 @@ mod tests {
         let checkpoints = [&second, &first];
         assert_eq!(
             BankStatusCache::get_signature_status_all(&checkpoints, &sig),
-            Some(Ok(())),
+            Some((0, Ok(()))),
         );
         assert!(StatusCache::has_signature_all(&checkpoints, &sig));
     }

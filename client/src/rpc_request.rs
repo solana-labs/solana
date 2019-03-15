@@ -18,6 +18,7 @@ pub enum RpcRequest {
     GetStorageEntryHeight,
     GetStoragePubkeysForEntryHeight,
     FullnodeExit,
+    GetSignatureConfirmations,
 }
 
 impl RpcRequest {
@@ -39,6 +40,7 @@ impl RpcRequest {
             RpcRequest::GetStorageEntryHeight => "getStorageEntryHeight",
             RpcRequest::GetStoragePubkeysForEntryHeight => "getStoragePubkeysForEntryHeight",
             RpcRequest::FullnodeExit => "fullnodeExit",
+            RpcRequest::GetSignatureConfirmations => "getSignatureConfirmations",
         };
         let mut request = json!({
            "jsonrpc": jsonrpc,

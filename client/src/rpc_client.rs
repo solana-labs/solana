@@ -438,6 +438,86 @@ impl RpcClient {
             };
         }
     }
+
+    /// Poll the server to confirm a transaction.
+    pub fn poll_for_confirmed_signature(
+        &self,
+        signature: &Signature,
+        confs: usize,
+    ) -> io::Result<()> {
+        let mut now = Instant::now();
+        let mut start = 0;
+        let mut prev = 0;
+        while !self.check_confirmations(signature, confs, &mut prev) {
+            if start != prev {
+                info!(
+                    "signature {} confirmed {} out of {}",
+                    signature, start, confs
+                );
+                now = Instant::now();
+                start = prev;
+            }
+            if now.elapsed().as_secs() > 15 {
+                // TODO: Return a better error.
+                return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
+            }
+            sleep(Duration::from_millis(250));
+        }
+        Ok(())
+    }
+
+    pub fn check_confirmations(
+        &self,
+        signature: &Signature,
+        confs: usize,
+        prev: &mut usize,
+    ) -> bool {
+        trace!("check_confirmations: {:?}", signature);
+        loop {
+            let response = self.get_signature_confirmations(signature);
+            match response {
+                Ok(count) => {
+                    *prev = count;
+                    return count >= confs;
+                }
+                Err(err) => {
+                    debug!("check_confirmations request failed: {:?}", err);
+                }
+            };
+        }
+    }
+
+    pub fn get_signature_confirmations(&self, sig: &Signature) -> io::Result<usize> {
+        let params = json!([format!("{}", sig)]);
+        let response = self
+            .client
+            .send(
+                &RpcRequest::GetSignatureConfirmations,
+                Some(params.clone()),
+                1,
+            )
+            .map_err(|error| {
+                debug!(
+                    "Response get_signature_confirmations: {}",
+                    error
+                );
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    "GetSignatureConfirmations request failure",
+                )
+            })?;
+        serde_json::from_value(response).map_err(|error| {
+            debug!(
+                "ParseError: get_signature_confirmations: {}",
+                error
+            );
+            io::Error::new(
+                io::ErrorKind::Other,
+                "GetSignatureConfirmations parse failure",
+            )
+        })
+    }
+
     pub fn fullnode_exit(&self) -> io::Result<bool> {
         let response = self
             .client
