@@ -24,6 +24,7 @@ mod writetx;
 pub use self::error::{Error, Result};
 pub use self::readtx::ReadTx as Snapshot;
 pub use self::sstable::Key;
+pub use self::writelog::Config as LogConfig;
 pub use self::writetx::WriteTx;
 
 const TABLES_FILE: &str = "tables.meta";
@@ -38,6 +39,7 @@ pub struct Config {
     pub max_tables: usize,
     pub page_size: usize,
     pub in_memory: bool,
+    pub log_config: LogConfig,
 }
 
 #[derive(Debug)]
@@ -255,6 +257,7 @@ impl Default for Config {
             max_tables: DEFAULT_MAX_PAGES,
             page_size: DEFAULT_TABLE_SIZE,
             in_memory: false,
+            log_config: LogConfig::default(),
         }
     }
 }
@@ -262,12 +265,18 @@ impl Default for Config {
 fn open(root: &Path, mapper: Arc<dyn Mapper>, config: Config) -> Result<KvStore> {
     let root = root.to_path_buf();
     let log_path = root.join(LOG_FILE);
+    let restore_log = log_path.exists();
+
     if !root.exists() {
         fs::create_dir(&root)?;
     }
 
-    let write_log = WriteLog::open(&log_path, config.max_mem)?;
-    let mem = write_log.materialize()?;
+    let write_log = WriteLog::open(&log_path, config.log_config)?;
+    let mem = if restore_log && !config.in_memory {
+        write_log.materialize()?
+    } else {
+        BTreeMap::new()
+    };
 
     let write = RwLock::new(WriteState::new(write_log, mem));
 

@@ -204,6 +204,7 @@ fn test_in_memory() {
         max_tables: 5,
         page_size: 64 * KB,
         in_memory: true,
+        ..Config::default()
     };
     let lsm = KvStore::open(&path, cfg).unwrap();
 
