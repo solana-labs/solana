@@ -27,6 +27,7 @@ CRATES=(
   genesis
   ledger-tool
   wallet
+  install
 )
 
 
