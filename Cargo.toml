@@ -90,5 +90,5 @@ members = [
     "upload-perf",
     "vote-signer",
     "wallet",
-    ]
-    exclude = ["programs/bpf/rust/noop"]
+]
+exclude = ["programs/bpf/rust/noop"]
