@@ -11,7 +11,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::transaction::Transaction;
-use solana_sdk::transaction_builder::TransactionBuilder;
 
 pub struct BudgetTransaction {}
 
@@ -31,7 +30,7 @@ impl BudgetTransaction {
         let create_ix =
             SystemInstruction::new_program_account(&from, contract, lamports, space, &id());
         let init_ix = BudgetInstruction::new_initialize_account(contract, expr);
-        let mut tx = TransactionBuilder::new(vec![create_ix, init_ix]).compile();
+        let mut tx = Transaction::new(vec![create_ix, init_ix]);
         tx.fee = fee;
         tx.sign(&[from_keypair], recent_blockhash);
         tx
@@ -67,7 +66,7 @@ impl BudgetTransaction {
     ) -> Transaction {
         let from = from_keypair.pubkey();
         let ix = BudgetInstruction::new_apply_timestamp(&from, contract, to, dt);
-        let mut tx = TransactionBuilder::new(vec![ix]).compile();
+        let mut tx = Transaction::new(vec![ix]);
         tx.sign(&[from_keypair], recent_blockhash);
         tx
     }
@@ -81,7 +80,7 @@ impl BudgetTransaction {
     ) -> Transaction {
         let from = from_keypair.pubkey();
         let ix = BudgetInstruction::new_apply_signature(&from, contract, to);
-        let mut tx = TransactionBuilder::new(vec![ix]).compile();
+        let mut tx = Transaction::new(vec![ix]);
         tx.sign(&[from_keypair], recent_blockhash);
         tx
     }

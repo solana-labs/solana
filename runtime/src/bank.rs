@@ -1484,7 +1484,7 @@ mod tests {
 
         let move_lamports = SystemInstruction::Move { lamports: 1 };
 
-        let mut tx = Transaction::new_unsigned(
+        let mut tx = Transaction::new_with_blockhash_and_fee(
             &mint_keypair.pubkey(),
             &[key.pubkey()],
             &system_program::id(),

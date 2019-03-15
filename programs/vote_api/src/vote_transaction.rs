@@ -9,7 +9,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::transaction::Transaction;
-use solana_sdk::transaction_builder::TransactionBuilder;
 
 pub struct VoteTransaction {}
 
@@ -23,7 +22,7 @@ impl VoteTransaction {
     ) -> Transaction {
         let vote = Vote { slot };
         let ix = VoteInstruction::new_vote(staking_account, vote);
-        let mut tx = TransactionBuilder::new(vec![ix]).compile();
+        let mut tx = Transaction::new(vec![ix]);
         tx.fee = fee;
         tx.sign(&[authorized_voter_keypair], recent_blockhash);
         tx
@@ -42,7 +41,7 @@ impl VoteTransaction {
         let create_ix =
             SystemInstruction::new_program_account(&from_id, staker_id, lamports, space, &id());
         let init_ix = VoteInstruction::new_initialize_account(staker_id);
-        let mut tx = TransactionBuilder::new(vec![create_ix, init_ix]).compile();
+        let mut tx = Transaction::new(vec![create_ix, init_ix]);
         tx.fee = fee;
         tx.sign(&[from_keypair], recent_blockhash);
         tx
@@ -64,7 +63,7 @@ impl VoteTransaction {
             SystemInstruction::new_program_account(&from_id, &voter_id, lamports, space, &id());
         let init_ix = VoteInstruction::new_initialize_account(&voter_id);
         let delegate_ix = VoteInstruction::new_delegate_stake(&voter_id, &delegate_id);
-        let mut tx = TransactionBuilder::new(vec![create_ix, init_ix, delegate_ix]).compile();
+        let mut tx = Transaction::new(vec![create_ix, init_ix, delegate_ix]);
         tx.fee = fee;
         tx.sign(&[from_keypair, voter_keypair], recent_blockhash);
         tx
@@ -78,7 +77,7 @@ impl VoteTransaction {
         fee: u64,
     ) -> Transaction {
         let ix = VoteInstruction::new_authorize_voter(&vote_keypair.pubkey(), authorized_voter_id);
-        let mut tx = TransactionBuilder::new(vec![ix]).compile();
+        let mut tx = Transaction::new(vec![ix]);
         tx.fee = fee;
         tx.sign(&[vote_keypair], recent_blockhash);
         tx
@@ -92,7 +91,7 @@ impl VoteTransaction {
         fee: u64,
     ) -> Transaction {
         let ix = VoteInstruction::new_delegate_stake(&vote_keypair.pubkey(), node_id);
-        let mut tx = TransactionBuilder::new(vec![ix]).compile();
+        let mut tx = Transaction::new(vec![ix]);
         tx.fee = fee;
         tx.sign(&[vote_keypair], recent_blockhash);
         tx

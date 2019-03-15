@@ -25,7 +25,6 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND};
 use solana_sdk::transaction::Transaction;
-use solana_sdk::transaction_builder::TransactionBuilder;
 use solana_vote_api::vote_instruction::VoteInstruction;
 use solana_vote_api::vote_transaction::VoteTransaction;
 use std::fs::File;
@@ -442,20 +441,20 @@ fn process_configure_staking(
     authorized_voter_option: Option<Pubkey>,
 ) -> ProcessResult {
     let recent_blockhash = get_recent_blockhash(&rpc_client)?;
-    let mut tx = TransactionBuilder::default();
+    let mut ixs = vec![];
     if let Some(delegate_id) = delegate_option {
-        tx.push(VoteInstruction::new_delegate_stake(
+        ixs.push(VoteInstruction::new_delegate_stake(
             &config.id.pubkey(),
             &delegate_id,
         ));
     }
     if let Some(authorized_voter_id) = authorized_voter_option {
-        tx.push(VoteInstruction::new_authorize_voter(
+        ixs.push(VoteInstruction::new_authorize_voter(
             &config.id.pubkey(),
             &authorized_voter_id,
         ));
     }
-    let mut tx = tx.compile();
+    let mut tx = Transaction::new(ixs);
     tx.sign(&[&config.id], recent_blockhash);
     let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
     Ok(signature_str.to_string())
