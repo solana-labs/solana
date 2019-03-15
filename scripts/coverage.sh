@@ -28,8 +28,9 @@ if [[ -d target/cov ]]; then
 fi
 rm -rf target/cov/$reportName
 
-_ cargo +nightly build --target-dir target/cov --all
-_ cargo +nightly test --target-dir target/cov --lib --all -- --test-threads=1
+source ci/rust-version.sh nightly
+_ cargo +$rust_nightly build --target-dir target/cov --all
+_ cargo +$rust_nightly test --target-dir target/cov --lib --all -- --test-threads=1
 
 _ scripts/fetch-grcov.sh
 echo "--- grcov"

@@ -10,7 +10,8 @@ annotate() {
   }
 }
 
-ci/version-check-with-upgrade.sh stable
+source ci/rust-version.sh stable
+
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 source scripts/ulimit-n.sh
@@ -24,9 +25,9 @@ case $testName in
 test-stable)
   echo "Executing $testName"
 
-  _ cargo build --all ${V:+--verbose}
-  _ cargo test --all ${V:+--verbose} -- --nocapture --test-threads=1
-  _ cargo test --manifest-path runtime/Cargo.toml
+  _ cargo +"$rust_stable" build --all ${V:+--verbose}
+  _ cargo +"$rust_stable" test --all ${V:+--verbose} -- --nocapture --test-threads=1
+  _ cargo +"$rust_stable" test --manifest-path runtime/Cargo.toml
   ;;
 test-stable-perf)
   echo "Executing $testName"
@@ -48,7 +49,9 @@ test-stable-perf)
   # BPF program tests
   _ make -C programs/bpf/c tests
   _ programs/bpf/rust/noop/build.sh # Must be built out of band
-  _ cargo test --manifest-path programs/bpf/Cargo.toml --no-default-features --features=bpf_c,bpf_rust
+  _ cargo +"$rust_stable" test \
+    --manifest-path programs/bpf/Cargo.toml \
+    --no-default-features --features=bpf_c,bpf_rust
 
   # Run root package tests with these features
   ROOT_FEATURES=erasure,chacha
@@ -67,9 +70,9 @@ test-stable-perf)
   fi
 
   # Run root package library tests
-  _ cargo build --all ${V:+--verbose} --features="$ROOT_FEATURES"
-  _ cargo test --all --lib ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture --test-threads=1
-  _ cargo test --manifest-path runtime/Cargo.toml
+  _ cargo +"$rust_stable" build --all ${V:+--verbose} --features="$ROOT_FEATURES"
+  _ cargo +"$rust_stable" test --all --lib ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture --test-threads=1
+  _ cargo +"$rust_stable" test --manifest-path runtime/Cargo.toml
 
   # Run root package integration tests
   for test in tests/*.rs; do
@@ -77,7 +80,7 @@ test-stable-perf)
     test=${test%.rs} # basename x .rs
     (
       export RUST_LOG="$test"=trace,$RUST_LOG
-      _ cargo test --all ${V:+--verbose} --features="$ROOT_FEATURES" --test="$test" \
+      _ cargo +"$rust_stable" test --all ${V:+--verbose} --features="$ROOT_FEATURES" --test="$test" \
         -- --test-threads=1 --nocapture
     )
   done
