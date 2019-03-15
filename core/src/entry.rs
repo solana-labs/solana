@@ -5,7 +5,7 @@
 use crate::packet::{Blob, SharedBlob, BLOB_DATA_SIZE};
 use crate::poh::Poh;
 use crate::result::Result;
-use bincode::{deserialize, serialize_into, serialized_size};
+use bincode::{deserialize, serialized_size};
 use chrono::prelude::Utc;
 use rayon::prelude::*;
 use solana_budget_api::budget_transaction::BudgetTransaction;
@@ -16,7 +16,6 @@ use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_transaction::VoteTransaction;
 use std::borrow::Borrow;
-use std::io::Cursor;
 use std::mem::size_of;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
@@ -102,14 +101,7 @@ impl Entry {
     }
 
     pub fn to_blob(&self) -> Blob {
-        let mut blob = Blob::default();
-        let pos = {
-            let mut out = Cursor::new(blob.data_mut());
-            serialize_into(&mut out, &self).expect("failed to serialize output");
-            out.position() as usize
-        };
-        blob.set_size(pos);
-        blob
+        Blob::from_serializable(&self)
     }
 
     /// Estimate serialized_size of Entry without creating an Entry.
@@ -242,11 +234,19 @@ impl EntrySlice for [Entry] {
     }
 
     fn to_blobs(&self) -> Vec<Blob> {
-        self.iter().map(|entry| entry.to_blob()).collect()
+        split_serializable_chunks(
+            &self,
+            BLOB_DATA_SIZE as u64,
+            &|s| bincode::serialized_size(&s).unwrap(),
+            &mut |entries: &[Entry]| Blob::from_serializable(entries),
+        )
     }
 
     fn to_shared_blobs(&self) -> Vec<SharedBlob> {
-        self.iter().map(|entry| entry.to_shared_blob()).collect()
+        self.to_blobs()
+            .into_iter()
+            .map(|b| Arc::new(RwLock::new(b)))
+            .collect()
     }
 
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)> {

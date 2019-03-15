@@ -618,11 +618,11 @@ impl Blocktree {
     {
         blob_datas
             .iter()
-            .map(|blob_data| {
-                let serialized_entry_data = &blob_data.borrow()[BLOB_HEADER_SIZE..];
-                let entry: Entry = deserialize(serialized_entry_data)
+            .flat_map(|blob_data| {
+                let serialized_entries_data = &blob_data.borrow()[BLOB_HEADER_SIZE..];
+                let entries: Vec<Entry> = deserialize(serialized_entries_data)
                     .expect("Ledger should only contain well formed data");
-                entry
+                entries
             })
             .collect()
     }
