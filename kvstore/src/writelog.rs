@@ -138,7 +138,8 @@ impl Logger {
 
 impl LogWriter for CRCWriter<Vec<u8>> {
     fn sync(&mut self, _: bool) -> Result<()> {
-        Ok(self.flush()?)
+        self.flush()?;
+        Ok(())
     }
 
     fn mmap(&self) -> Result<Mmap> {
