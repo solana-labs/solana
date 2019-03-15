@@ -105,33 +105,33 @@ impl<R: Read> CRCReader<R> {
         self.buffer.clear();
         self.position = 0;
 
-        let mut blk_buffer = vec![0; self.chunk_size];
-        let mut bposition = 0;
+        let mut block_buffer = vec![0; self.chunk_size];
+        let mut block_position = 0;
 
-        while bposition < self.chunk_size {
-            let bytes_read = self.reader.read(&mut blk_buffer[bposition..])?;
+        while block_position < self.chunk_size {
+            let bytes_read = self.reader.read(&mut block_buffer[block_position..])?;
             if bytes_read == 0 {
                 break;
             }
-            bposition += bytes_read
+            block_position += bytes_read
         }
 
-        if bposition < self.chunk_size {
+        if block_position < self.chunk_size {
             return Err(io::ErrorKind::UnexpectedEof.into());
         }
 
-        assert_eq!(bposition, self.chunk_size);
+        assert_eq!(block_position, self.chunk_size);
 
-        let stored_digest = BigEndian::read_u32(&blk_buffer[0..4]);
-        let payload_len = BigEndian::read_u32(&blk_buffer[4..8]) as usize;
-        if payload_len + 8 > blk_buffer.len() {
+        let stored_digest = BigEndian::read_u32(&block_buffer[0..4]);
+        let payload_len = BigEndian::read_u32(&block_buffer[4..8]) as usize;
+        if payload_len + 8 > block_buffer.len() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "CRCReader: invalid block size",
             ));
         }
-        let payload = &blk_buffer[8..8 + payload_len];
-        let computed_digest = crc32::checksum_ieee(&blk_buffer[4..8 + payload_len]);
+        let payload = &block_buffer[8..8 + payload_len];
+        let computed_digest = crc32::checksum_ieee(&block_buffer[4..8 + payload_len]);
 
         if computed_digest != stored_digest {
             return Err(io::Error::new(
@@ -353,12 +353,12 @@ mod test {
         let mut reader = CRCReader::new(&buffer[..], BLK_SIZE);
 
         let mut retrieved = Vec::with_capacity(512 * 1024);
-        let read_bufferfer = &mut [0; 1024];
-        while let Ok(amt) = reader.read(read_bufferfer) {
+        let read_buffer = &mut [0; 1024];
+        while let Ok(amt) = reader.read(read_buffer) {
             if amt == 0 {
                 break;
             }
-            retrieved.extend_from_slice(&read_bufferfer[..amt]);
+            retrieved.extend_from_slice(&read_buffer[..amt]);
         }
 
         assert_eq!(&retrieved[..8], &[0, 1, 2, 3, 4, 5, 6, 7]);
