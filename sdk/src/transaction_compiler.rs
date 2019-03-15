@@ -33,11 +33,11 @@ fn compile_instructions(
 }
 
 /// A utility for constructing transactions
-pub struct TransactionBuilder {
+pub struct TransactionCompiler {
     instructions: Vec<Instruction>,
 }
 
-impl TransactionBuilder {
+impl TransactionCompiler {
     /// Create a new unsigned transaction from a single instruction
     pub fn new(instructions: Vec<Instruction>) -> Self {
         Self { instructions }
@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn test_transaction_builder_unique_program_ids() {
         let program_id0 = Pubkey::default();
-        let program_ids = TransactionBuilder::new(vec![
+        let program_ids = TransactionCompiler::new(vec![
             Instruction::new(program_id0, &0, vec![]),
             Instruction::new(program_id0, &0, vec![]),
         ])
@@ -112,7 +112,7 @@ mod tests {
     fn test_transaction_builder_unique_program_ids_not_adjacent() {
         let program_id0 = Pubkey::default();
         let program_id1 = Keypair::new().pubkey();
-        let program_ids = TransactionBuilder::new(vec![
+        let program_ids = TransactionCompiler::new(vec![
             Instruction::new(program_id0, &0, vec![]),
             Instruction::new(program_id1, &0, vec![]),
             Instruction::new(program_id0, &0, vec![]),
@@ -125,7 +125,7 @@ mod tests {
     fn test_transaction_builder_unique_program_ids_order_preserved() {
         let program_id0 = Keypair::new().pubkey();
         let program_id1 = Pubkey::default(); // Key less than program_id0
-        let program_ids = TransactionBuilder::new(vec![
+        let program_ids = TransactionCompiler::new(vec![
             Instruction::new(program_id0, &0, vec![]),
             Instruction::new(program_id1, &0, vec![]),
             Instruction::new(program_id0, &0, vec![]),
@@ -138,7 +138,7 @@ mod tests {
     fn test_transaction_builder_unique_keys_both_signed() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
-        let keys = TransactionBuilder::new(vec![
+        let keys = TransactionCompiler::new(vec![
             Instruction::new(program_id, &0, vec![(id0, true)]),
             Instruction::new(program_id, &0, vec![(id0, true)]),
         ])
@@ -150,7 +150,7 @@ mod tests {
     fn test_transaction_builder_unique_keys_one_signed() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
-        let keys = TransactionBuilder::new(vec![
+        let keys = TransactionCompiler::new(vec![
             Instruction::new(program_id, &0, vec![(id0, false)]),
             Instruction::new(program_id, &0, vec![(id0, true)]),
         ])
@@ -163,7 +163,7 @@ mod tests {
         let program_id = Pubkey::default();
         let id0 = Keypair::new().pubkey();
         let id1 = Pubkey::default(); // Key less than id0
-        let keys = TransactionBuilder::new(vec![
+        let keys = TransactionCompiler::new(vec![
             Instruction::new(program_id, &0, vec![(id0, false)]),
             Instruction::new(program_id, &0, vec![(id1, false)]),
         ])
@@ -176,7 +176,7 @@ mod tests {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
         let id1 = Keypair::new().pubkey();
-        let keys = TransactionBuilder::new(vec![
+        let keys = TransactionCompiler::new(vec![
             Instruction::new(program_id, &0, vec![(id0, false)]),
             Instruction::new(program_id, &0, vec![(id1, false)]),
             Instruction::new(program_id, &0, vec![(id0, true)]),
@@ -190,7 +190,7 @@ mod tests {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
         let id1 = Keypair::new().pubkey();
-        let keys = TransactionBuilder::new(vec![
+        let keys = TransactionCompiler::new(vec![
             Instruction::new(program_id, &0, vec![(id0, false)]),
             Instruction::new(program_id, &0, vec![(id1, true)]),
         ])
@@ -204,12 +204,13 @@ mod tests {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
         let tx =
-            TransactionBuilder::new(vec![Instruction::new(program_id, &0, vec![(id0, false)])])
+            TransactionCompiler::new(vec![Instruction::new(program_id, &0, vec![(id0, false)])])
                 .compile();
         assert_eq!(tx.signatures.capacity(), 0);
 
-        let tx = TransactionBuilder::new(vec![Instruction::new(program_id, &0, vec![(id0, true)])])
-            .compile();
+        let tx =
+            TransactionCompiler::new(vec![Instruction::new(program_id, &0, vec![(id0, true)])])
+                .compile();
         assert_eq!(tx.signatures.capacity(), 1);
     }
 
@@ -220,7 +221,7 @@ mod tests {
         let id0 = Pubkey::default();
         let keypair1 = Keypair::new();
         let id1 = keypair1.pubkey();
-        let tx = TransactionBuilder::new(vec![
+        let tx = TransactionCompiler::new(vec![
             Instruction::new(program_id0, &0, vec![(id0, false)]),
             Instruction::new(program_id1, &0, vec![(id1, true)]),
             Instruction::new(program_id0, &0, vec![(id1, false)]),
