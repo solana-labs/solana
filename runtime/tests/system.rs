@@ -5,8 +5,7 @@ use solana_sdk::native_program::ProgramError;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
-use solana_sdk::transaction::{Instruction, InstructionError, TransactionError};
-use solana_sdk::transaction_builder::TransactionBuilder;
+use solana_sdk::transaction::{Instruction, InstructionError, Transaction, TransactionError};
 
 #[test]
 fn test_system_unsigned_transaction() {
@@ -21,7 +20,7 @@ fn test_system_unsigned_transaction() {
 
     // Fund to account to bypass AccountNotFound error
     let ix = SystemInstruction::new_move(&from_pubkey, &to_pubkey, 50);
-    let mut tx = TransactionBuilder::new(vec![ix]).compile();
+    let mut tx = Transaction::new(vec![ix]);
     alice_client.process_transaction(&mut tx).unwrap();
 
     // Erroneously sign transaction with recipient account key
@@ -31,7 +30,7 @@ fn test_system_unsigned_transaction() {
         &SystemInstruction::Move { lamports: 10 },
         vec![(from_pubkey, false), (to_pubkey, true)],
     );
-    let mut tx = TransactionBuilder::new(vec![ix]).compile();
+    let mut tx = Transaction::new(vec![ix]);
     assert_eq!(
         mallory_client.process_transaction(&mut tx),
         Err(TransactionError::InstructionError(

@@ -167,26 +167,11 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn new_signed<S: Serialize, T: KeypairUtil>(
-        from_keypair: &T,
-        transaction_keys: &[Pubkey],
-        program_id: &Pubkey,
-        data: &S,
-        recent_blockhash: Hash,
-        fee: u64,
-    ) -> Self {
-        let mut transaction = Self::new_unsigned(
-            &from_keypair.pubkey(),
-            transaction_keys,
-            program_id,
-            data,
-            Hash::default(),
-            fee,
-        );
-        transaction.sign(&[from_keypair], recent_blockhash);
-        transaction
+    pub fn new(instructions: Vec<Instruction>) -> Self {
+        TransactionBuilder::new(instructions).compile()
     }
-    pub fn new_unsigned<T: Serialize>(
+
+    pub fn new_with_blockhash_and_fee<T: Serialize>(
         from_pubkey: &Pubkey,
         transaction_keys: &[Pubkey],
         program_id: &Pubkey,
@@ -199,9 +184,29 @@ impl Transaction {
             account_keys.push((*pubkey, false));
         }
         let instruction = Instruction::new(*program_id, data, account_keys);
-        let mut transaction = TransactionBuilder::new(vec![instruction]).compile();
+        let mut transaction = Self::new(vec![instruction]);
         transaction.fee = fee;
         transaction.recent_blockhash = recent_blockhash;
+        transaction
+    }
+
+    pub fn new_signed<S: Serialize, T: KeypairUtil>(
+        from_keypair: &T,
+        transaction_keys: &[Pubkey],
+        program_id: &Pubkey,
+        data: &S,
+        recent_blockhash: Hash,
+        fee: u64,
+    ) -> Self {
+        let mut transaction = Self::new_with_blockhash_and_fee(
+            &from_keypair.pubkey(),
+            transaction_keys,
+            program_id,
+            data,
+            Hash::default(),
+            fee,
+        );
+        transaction.sign(&[from_keypair], recent_blockhash);
         transaction
     }
 
@@ -661,9 +666,7 @@ mod tests {
     #[should_panic]
     fn test_transaction_missing_key() {
         let keypair = Keypair::new();
-        TransactionBuilder::default()
-            .compile()
-            .sign(&[&keypair], Hash::default());
+        Transaction::new(vec![]).sign(&[&keypair], Hash::default());
     }
 
     #[test]
@@ -672,9 +675,7 @@ mod tests {
         let program_id = Pubkey::default();
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
-        TransactionBuilder::default()
-            .push(Instruction::new(program_id, &0, vec![(id0, true)]))
-            .compile()
+        Transaction::new(vec![Instruction::new(program_id, &0, vec![(id0, true)])])
             .sign(&Vec::<&Keypair>::new(), Hash::default());
     }
 
@@ -684,10 +685,12 @@ mod tests {
         let program_id = Pubkey::default();
         let keypair0 = Keypair::new();
         let wrong_id = Pubkey::default();
-        TransactionBuilder::default()
-            .push(Instruction::new(program_id, &0, vec![(wrong_id, true)]))
-            .compile()
-            .sign(&[&keypair0], Hash::default());
+        Transaction::new(vec![Instruction::new(
+            program_id,
+            &0,
+            vec![(wrong_id, true)],
+        )])
+        .sign(&[&keypair0], Hash::default());
     }
 
     #[test]
@@ -695,9 +698,7 @@ mod tests {
         let program_id = Pubkey::default();
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
-        let mut tx = TransactionBuilder::default()
-            .push(Instruction::new(program_id, &0, vec![(id0, true)]))
-            .compile();
+        let mut tx = Transaction::new(vec![Instruction::new(program_id, &0, vec![(id0, true)])]);
         tx.sign(&[&keypair0], Hash::default());
         assert_eq!(tx.instructions[0], CompiledInstruction::new(0, &0, vec![0]));
     }

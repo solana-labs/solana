@@ -5,8 +5,7 @@ use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::transaction::{Instruction, InstructionError, TransactionError};
-use solana_sdk::transaction_builder::TransactionBuilder;
+use solana_sdk::transaction::{Instruction, InstructionError, Transaction, TransactionError};
 use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
 use solana_vote_api::vote_state::VoteState;
 use solana_vote_api::vote_transaction::VoteTransaction;
@@ -120,10 +119,8 @@ fn test_vote_via_bank_with_no_signature() {
     // Sneak in an instruction so that the transaction is signed but
     // the 0th account in the second instruction is not! The program
     // needs to check that it's signed.
-    let mut tx = TransactionBuilder::default()
-        .push(SystemInstruction::new_move(&mallory_id, &vote_id, 1))
-        .push(vote_ix)
-        .compile();
+    let move_ix = SystemInstruction::new_move(&mallory_id, &vote_id, 1);
+    let mut tx = Transaction::new(vec![move_ix, vote_ix]);
     tx.sign(&[&mallory_keypair], blockhash);
 
     let result = bank.process_transaction(&tx);

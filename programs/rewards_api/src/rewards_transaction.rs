@@ -9,7 +9,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
-use solana_sdk::transaction_builder::TransactionBuilder;
 use solana_vote_api::vote_instruction::VoteInstruction;
 
 pub struct RewardsTransaction {}
@@ -42,7 +41,7 @@ impl RewardsTransaction {
         let vote_id = vote_keypair.pubkey();
         let redeem_ix = RewardsInstruction::new_redeem_vote_credits(&vote_id, rewards_id);
         let clear_ix = VoteInstruction::new_clear_credits(&vote_id);
-        let mut tx = TransactionBuilder::new(vec![redeem_ix, clear_ix]).compile();
+        let mut tx = Transaction::new(vec![redeem_ix, clear_ix]);
         tx.fee = fee;
         tx.sign(&[vote_keypair], blockhash);
         tx
