@@ -132,7 +132,7 @@ impl Drone {
                         space: 0,
                         program_id: system_program::id(),
                     };
-                    let mut transaction = Transaction::new(
+                    let mut transaction = Transaction::new_signed(
                         &self.mint_keypair,
                         &[to],
                         &system_program::id(),
@@ -408,7 +408,7 @@ mod tests {
             space: 0,
             program_id: system_program::id(),
         };
-        let mut expected_tx = Transaction::new(
+        let mut expected_tx = Transaction::new_signed(
             &keypair,
             &[to],
             &system_program::id(),

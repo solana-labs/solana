@@ -939,7 +939,7 @@ mod tests {
             },
         ];
 
-        let t1 = Transaction::new_with_instructions(
+        let t1 = Transaction::new_with_compiled_instructions(
             &[&mint_keypair],
             &[key1, key2],
             genesis_block.hash(),

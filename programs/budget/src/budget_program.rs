@@ -177,7 +177,7 @@ mod test {
         let from = Keypair::new();
         let contract = Keypair::new();
         let data = (1u8, 2u8, 3u8);
-        let tx = Transaction::new(
+        let tx = Transaction::new_signed(
             &from,
             &[contract.pubkey()],
             &id(),

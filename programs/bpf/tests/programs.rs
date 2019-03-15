@@ -43,7 +43,7 @@ mod bpf {
 
             // Call user program
             let program_id = load_program(&bank, &mint_keypair, &bpf_loader::id(), elf);
-            let tx = Transaction::new(
+            let tx = Transaction::new_signed(
                 &mint_keypair,
                 &[],
                 &program_id,
@@ -86,7 +86,7 @@ mod bpf {
 
                 // Call user program
                 let program_id = load_program(&bank, &mint_keypair, &loader_id, elf);
-                let tx = Transaction::new(
+                let tx = Transaction::new_signed(
                     &mint_keypair,
                     &[],
                     &program_id,
@@ -132,7 +132,7 @@ mod bpf {
 
                 // Call user program
                 let program_id = load_program(&bank, &mint_keypair, &loader_id, elf);
-                let tx = Transaction::new(
+                let tx = Transaction::new_signed(
                     &mint_keypair,
                     &[],
                     &program_id,

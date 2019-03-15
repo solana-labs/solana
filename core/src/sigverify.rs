@@ -503,7 +503,7 @@ mod tests {
 
         let instructions = vec![CompiledInstruction::new(0, &system_instruction, vec![0, 1])];
 
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_compiled_instructions(
             &keypairs,
             &[],
             blockhash,

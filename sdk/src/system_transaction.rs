@@ -25,7 +25,7 @@ impl SystemTransaction {
             space,
             program_id: *program_id,
         };
-        Transaction::new(
+        Transaction::new_signed(
             from_keypair,
             &[*to],
             &system_program::id(),
@@ -64,7 +64,7 @@ impl SystemTransaction {
         let assign = SystemInstruction::Assign {
             program_id: *program_id,
         };
-        Transaction::new(
+        Transaction::new_signed(
             from_keypair,
             &[],
             &system_program::id(),
@@ -82,7 +82,7 @@ impl SystemTransaction {
         fee: u64,
     ) -> Transaction {
         let move_lamports = SystemInstruction::Move { lamports };
-        Transaction::new(
+        Transaction::new_signed(
             from_keypair,
             &[*to],
             &system_program::id(),
@@ -108,7 +108,7 @@ impl SystemTransaction {
             .collect();
         let to_keys: Vec<_> = moves.iter().map(|(to_key, _)| *to_key).collect();
 
-        Transaction::new_with_instructions(
+        Transaction::new_with_compiled_instructions(
             &[from],
             &to_keys,
             recent_blockhash,
