@@ -105,6 +105,10 @@ struct AccountInfo {
     /// lamports in the account used when squashing kept for optimization
     /// purposes to remove accounts with zero balance.
     lamports: u64,
+
+    /// Maintain vote accounts for performance reasons to avoid having
+    /// to iterate through the entire accounts each time
+    is_vote_account: bool,
 }
 
 // in a given a Fork, which AppendVecId and offset
@@ -121,10 +125,6 @@ struct AccountIndex {
     ///  AppendVec at a specific index.  There may be an Account for Pubkey
     ///  in any number of Forks.
     account_maps: RwLock<HashMap<Fork, AccountMap>>,
-
-    /// Cached index to vote accounts for performance reasons to avoid having
-    ///  to iterate through the entire accounts each time
-    vote_accounts: RwLock<HashSet<Pubkey>>,
 }
 
 /// Persistent storage structure holding the accounts
@@ -256,7 +256,6 @@ impl AccountsDB {
     pub fn new_with_file_size(fork: Fork, paths: &str, file_size: u64, inc_size: u64) -> Self {
         let account_index = AccountIndex {
             account_maps: RwLock::new(HashMap::new()),
-            vote_accounts: RwLock::new(HashSet::new()),
         };
         let paths = get_paths_vec(&paths);
         let accounts_db = AccountsDB {
@@ -278,19 +277,21 @@ impl AccountsDB {
     }
 
     pub fn add_fork(&self, fork: Fork, parent: Option<Fork>) {
-        let mut fork_infos = self.fork_infos.write().unwrap();
-        let mut fork_info = ForkInfo::default();
-        if let Some(parent) = parent {
-            fork_info.parents.push(parent);
-            if let Some(parent_fork_info) = fork_infos.get(&parent) {
-                fork_info.transaction_count = parent_fork_info.transaction_count;
-                fork_info
-                    .parents
-                    .extend_from_slice(&parent_fork_info.parents);
+        {
+            let mut fork_infos = self.fork_infos.write().unwrap();
+            let mut fork_info = ForkInfo::default();
+            if let Some(parent) = parent {
+                fork_info.parents.push(parent);
+                if let Some(parent_fork_info) = fork_infos.get(&parent) {
+                    fork_info.transaction_count = parent_fork_info.transaction_count;
+                    fork_info
+                        .parents
+                        .extend_from_slice(&parent_fork_info.parents);
+                }
             }
-        }
-        if let Some(old_fork_info) = fork_infos.insert(fork, fork_info) {
-            panic!("duplicate forks! {} {:?}", fork, old_fork_info);
+            if let Some(old_fork_info) = fork_infos.insert(fork, fork_info) {
+                panic!("duplicate forks! {} {:?}", fork, old_fork_info);
+            }
         }
         let mut account_maps = self.account_index.account_maps.write().unwrap();
         account_maps.insert(fork, RwLock::new(HashMap::new()));
@@ -311,20 +312,46 @@ impl AccountsDB {
         storage.append(&mut stores);
     }
 
-    fn get_vote_accounts(&self, fork: Fork) -> HashMap<Pubkey, Account> {
-        self.account_index
-            .vote_accounts
+    fn get_vote_accounts_by_fork(
+        &self,
+        fork: Fork,
+        account_maps: &HashMap<Fork, AccountMap>,
+        vote_accounts: &HashMap<Pubkey, Account>,
+    ) -> HashMap<Pubkey, Account> {
+        account_maps
+            .get(&fork)
+            .unwrap()
             .read()
             .unwrap()
             .iter()
-            .filter_map(|pubkey| {
-                if let Some(account) = self.load(fork, pubkey, true) {
-                    Some((*pubkey, account))
+            .filter_map(|(pubkey, account_info)| {
+                if account_info.is_vote_account && !vote_accounts.contains_key(pubkey) {
+                    Some((
+                        *pubkey,
+                        self.get_account(account_info.id, account_info.offset),
+                    ))
                 } else {
                     None
                 }
             })
             .collect()
+    }
+
+    fn get_vote_accounts(&self, fork: Fork) -> HashMap<Pubkey, Account> {
+        let account_maps = self.account_index.account_maps.read().unwrap();
+        let mut vote_accounts = HashMap::new();
+        vote_accounts = self.get_vote_accounts_by_fork(fork, &account_maps, &vote_accounts);
+        let fork_infos = self.fork_infos.read().unwrap();
+        if let Some(fork_info) = fork_infos.get(&fork) {
+            for parent_fork in fork_info.parents.iter() {
+                for (pubkey, account_info) in
+                    self.get_vote_accounts_by_fork(*parent_fork, &account_maps, &vote_accounts)
+                {
+                    vote_accounts.insert(pubkey, account_info);
+                }
+            }
+        }
+        vote_accounts
     }
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
@@ -347,12 +374,7 @@ impl AccountsDB {
             .map(|(pubkey, account_info)| {
                 (
                     *pubkey,
-                    self.storage.read().unwrap()[account_info.id]
-                        .accounts
-                        .read()
-                        .unwrap()
-                        .get_account(account_info.offset)
-                        .unwrap(),
+                    self.get_account(account_info.id, account_info.offset),
                 )
             })
             .collect();
@@ -510,45 +532,6 @@ impl AccountsDB {
         account_map.is_empty()
     }
 
-    fn account_map_is_empty(
-        &self,
-        pubkey: &Pubkey,
-        account_maps: &HashMap<Fork, AccountMap>,
-        skip_fork: Fork,
-    ) -> bool {
-        for (fork, account_map) in account_maps.iter() {
-            if *fork != skip_fork && account_map.read().unwrap().get(&pubkey).is_some() {
-                return false;
-            }
-        }
-        true
-    }
-
-    fn update_vote_cache(
-        &self,
-        account: &Account,
-        pubkey: &Pubkey,
-        account_maps: &HashMap<Fork, AccountMap>,
-        fork: Fork,
-        insert_account: bool,
-    ) {
-        if solana_vote_api::check_id(&account.owner) {
-            if insert_account {
-                self.account_index
-                    .vote_accounts
-                    .write()
-                    .unwrap()
-                    .insert(*pubkey);
-            } else if self.account_map_is_empty(&pubkey, &account_maps, fork) {
-                self.account_index
-                    .vote_accounts
-                    .write()
-                    .unwrap()
-                    .remove(pubkey);
-            }
-        }
-    }
-
     fn insert_account_entry(
         &self,
         pubkey: &Pubkey,
@@ -567,8 +550,6 @@ impl AccountsDB {
         if account.lamports == 0 && self.is_squashed(fork) {
             // purge if balance is 0 and no checkpoints
             self.remove_account_entries(fork, &pubkey);
-            let account_maps = self.account_index.account_maps.read().unwrap();
-            self.update_vote_cache(&account, &pubkey, &account_maps, fork, false);
         } else {
             let (id, offset) = self.append_account(account);
             let account_maps = self.account_index.account_maps.read().unwrap();
@@ -577,9 +558,9 @@ impl AccountsDB {
                 id,
                 offset,
                 lamports: account.lamports,
+                is_vote_account: solana_vote_api::check_id(&account.owner),
             };
             self.insert_account_entry(&pubkey, &account_info, &mut account_map);
-            self.update_vote_cache(&account, &pubkey, &account_maps, fork, true);
         }
     }
 
@@ -765,13 +746,7 @@ impl AccountsDB {
         }
 
         // toss any zero-balance accounts, since self is root now
-        account_map.retain(|pubkey, account_info| {
-            if account_info.lamports == 0 {
-                let account = self.get_account(account_info.id, account_info.offset);
-                self.update_vote_cache(&account, &pubkey, &account_maps, fork, false);
-            }
-            account_info.lamports != 0
-        });
+        account_map.retain(|_, account_info| account_info.lamports != 0);
     }
 }
 
@@ -1810,15 +1785,6 @@ mod tests {
         accounts_db.squash(1);
         accounts_db.squash(2);
 
-        assert_eq!(
-            accounts_db
-                .account_index
-                .vote_accounts
-                .read()
-                .unwrap()
-                .len(),
-            1
-        );
         assert_eq!(accounts_db.get_vote_accounts(1).len(), 1);
         assert_eq!(accounts_db.get_vote_accounts(2).len(), 1);
     }
