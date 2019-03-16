@@ -1,6 +1,6 @@
 //! The `budget_transaction` module provides functionality for creating Budget transactions.
 
-use crate::budget_expr::{BudgetExpr, Condition};
+use crate::budget_expr::BudgetExpr;
 use crate::budget_instruction::BudgetInstruction;
 use crate::budget_state::BudgetState;
 use crate::id;
@@ -10,7 +10,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::transaction::Transaction;
+use solana_sdk::transaction::{Script, Transaction};
 
 pub struct BudgetTransaction {}
 
@@ -31,6 +31,18 @@ impl BudgetTransaction {
             SystemInstruction::new_program_account(&from, contract, lamports, space, &id());
         let init_ix = BudgetInstruction::new_initialize_account(contract, expr);
         let mut tx = Transaction::new(vec![create_ix, init_ix]);
+        tx.fee = fee;
+        tx.sign(&[from_keypair], recent_blockhash);
+        tx
+    }
+
+    fn new_signed(
+        from_keypair: &Keypair,
+        script: Script,
+        recent_blockhash: Hash,
+        fee: u64,
+    ) -> Transaction {
+        let mut tx = Transaction::new(script);
         tx.fee = fee;
         tx.sign(&[from_keypair], recent_blockhash);
         tx
@@ -96,24 +108,16 @@ impl BudgetTransaction {
         lamports: u64,
         recent_blockhash: Hash,
     ) -> Transaction {
-        let expr = if let Some(from) = cancelable {
-            BudgetExpr::Or(
-                (
-                    Condition::Timestamp(dt, *dt_pubkey),
-                    Box::new(BudgetExpr::new_payment(lamports, to)),
-                ),
-                (
-                    Condition::Signature(from),
-                    Box::new(BudgetExpr::new_payment(lamports, &from)),
-                ),
-            )
-        } else {
-            BudgetExpr::After(
-                Condition::Timestamp(dt, *dt_pubkey),
-                Box::new(BudgetExpr::new_payment(lamports, to)),
-            )
-        };
-        Self::new(from_keypair, contract, expr, lamports, recent_blockhash, 0)
+        let script = BudgetInstruction::new_on_date_script(
+            &from_keypair.pubkey(),
+            to,
+            contract,
+            dt,
+            dt_pubkey,
+            cancelable,
+            lamports,
+        );
+        Self::new_signed(from_keypair, script, recent_blockhash, 0)
     }
 
     /// Create and sign a multisig Transaction.
@@ -126,24 +130,15 @@ impl BudgetTransaction {
         lamports: u64,
         recent_blockhash: Hash,
     ) -> Transaction {
-        let expr = if let Some(from) = cancelable {
-            BudgetExpr::Or(
-                (
-                    Condition::Signature(*witness),
-                    Box::new(BudgetExpr::new_payment(lamports, to)),
-                ),
-                (
-                    Condition::Signature(from),
-                    Box::new(BudgetExpr::new_payment(lamports, &from)),
-                ),
-            )
-        } else {
-            BudgetExpr::After(
-                Condition::Signature(*witness),
-                Box::new(BudgetExpr::new_payment(lamports, to)),
-            )
-        };
-        Self::new(from_keypair, contract, expr, lamports, recent_blockhash, 0)
+        let script = BudgetInstruction::new_when_signed_script(
+            &from_keypair.pubkey(),
+            to,
+            contract,
+            witness,
+            cancelable,
+            lamports,
+        );
+        Self::new_signed(from_keypair, script, recent_blockhash, 0)
     }
 
     pub fn system_instruction(tx: &Transaction, index: usize) -> Option<SystemInstruction> {

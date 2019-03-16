@@ -71,7 +71,10 @@ impl<P, Q> GenericInstruction<P, Q> {
 }
 
 pub type Instruction = GenericInstruction<Pubkey, (Pubkey, bool)>;
+pub type Script = Vec<Instruction>;
+
 pub type CompiledInstruction = GenericInstruction<u8, u8>;
+pub type CompiledScript = Vec<CompiledInstruction>;
 
 impl CompiledInstruction {
     pub fn serialize_with(mut writer: &mut Cursor<&mut [u8]>, ix: &Self) -> Result<(), Error> {
@@ -163,12 +166,12 @@ pub struct Transaction {
     pub program_ids: Vec<Pubkey>,
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
-    pub instructions: Vec<CompiledInstruction>,
+    pub instructions: CompiledScript,
 }
 
 impl Transaction {
-    pub fn new(instructions: Vec<Instruction>) -> Self {
-        TransactionCompiler::new(instructions).compile()
+    pub fn new(script: Script) -> Self {
+        TransactionCompiler::new(script).compile()
     }
 
     pub fn new_with_blockhash_and_fee<T: Serialize>(
@@ -224,7 +227,7 @@ impl Transaction {
         recent_blockhash: Hash,
         fee: u64,
         program_ids: Vec<Pubkey>,
-        instructions: Vec<CompiledInstruction>,
+        instructions: CompiledScript,
     ) -> Self {
         let mut account_keys: Vec<_> = from_keypairs
             .iter()
@@ -466,7 +469,7 @@ impl<'a> serde::de::Visitor<'a> for TransactionVisitor {
         let program_ids: Vec<Pubkey> =
             deserialize_vec_with(&mut rd, Transaction::deserialize_pubkey)
                 .map_err(Error::custom)?;
-        let instructions: Vec<CompiledInstruction> =
+        let instructions: CompiledScript =
             deserialize_vec_with(&mut rd, CompiledInstruction::deserialize_from)
                 .map_err(Error::custom)?;
         Ok(Transaction {
