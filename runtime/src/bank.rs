@@ -5,7 +5,7 @@
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::blockhash_queue::BlockhashQueue;
-use crate::runtime::Runtime;
+use crate::runtime::{Runtime, StaticEntrypoint};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
@@ -838,6 +838,21 @@ impl Bank {
     pub fn is_votable(&self) -> bool {
         let max_tick_height = (self.slot + 1) * self.ticks_per_slot - 1;
         self.is_delta.load(Ordering::Relaxed) && self.tick_height() == max_tick_height
+    }
+
+    /// Add a static entrypoint to intercept intructions before the dynamic loader.
+    pub fn add_entrypoint(&mut self, program_id: Pubkey, entrypoint: StaticEntrypoint) {
+        self.runtime.add_entrypoint(program_id, entrypoint);
+
+        // Add a bogus executable account to load.
+        let bogus_account = Account {
+            lamports: 1,
+            data: vec![],
+            owner: native_loader::id(),
+            executable: true,
+        };
+        self.accounts
+            .store_slow(self.accounts_id, &program_id, &bogus_account);
     }
 }
 
