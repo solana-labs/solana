@@ -13,27 +13,27 @@ use solana_sdk::pubkey::Pubkey;
 #[derive(Clone)]
 pub struct RpcClient {
     pub client: reqwest::Client,
-    pub addr: String,
+    pub url: String,
 }
 
 impl RpcClient {
-    pub fn new(addr: String) -> Self {
+    pub fn new(url: String) -> Self {
         RpcClient {
             client: reqwest::Client::new(),
-            addr,
+            url,
         }
     }
 
-    pub fn new_with_timeout(addr: SocketAddr, timeout: Duration) -> Self {
-        let addr = get_rpc_request_str(addr, false);
+    pub fn new_socket_with_timeout(addr: SocketAddr, timeout: Duration) -> Self {
+        let url = get_rpc_request_str(addr, false);
         let client = reqwest::Client::builder()
             .timeout(timeout)
             .build()
             .expect("build rpc client");
-        RpcClient { client, addr }
+        RpcClient { client, url }
     }
 
-    pub fn new_from_socket(addr: SocketAddr) -> Self {
+    pub fn new_socket(addr: SocketAddr) -> Self {
         Self::new(get_rpc_request_str(addr, false))
     }
 
@@ -62,7 +62,7 @@ impl RpcClient {
         loop {
             match self
                 .client
-                .post(&self.addr)
+                .post(&self.url)
                 .header(CONTENT_TYPE, "application/json")
                 .body(request_json.to_string())
                 .send()
@@ -269,7 +269,7 @@ mod tests {
         });
 
         let rpc_addr = receiver.recv().unwrap();
-        let rpc_client = RpcClient::new_from_socket(rpc_addr);
+        let rpc_client = RpcClient::new_socket(rpc_addr);
 
         let balance = rpc_client.make_rpc_request(
             1,
@@ -318,7 +318,7 @@ mod tests {
         });
 
         let rpc_addr = receiver.recv().unwrap();
-        let rpc_client = RpcClient::new_from_socket(rpc_addr);
+        let rpc_client = RpcClient::new_socket(rpc_addr);
 
         let balance = rpc_client.retry_make_rpc_request(
             1,

@@ -27,7 +27,7 @@ fn test_wallet_timestamp_tx() {
     run_local_drone(alice, sender);
     let drone_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config_payer = WalletConfig::default();
     config_payer.drone_port = drone_addr.port();
@@ -87,7 +87,7 @@ fn test_wallet_witness_tx() {
     run_local_drone(alice, sender);
     let drone_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config_payer = WalletConfig::default();
     config_payer.drone_port = drone_addr.port();
@@ -144,7 +144,7 @@ fn test_wallet_cancel_tx() {
     run_local_drone(alice, sender);
     let drone_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config_payer = WalletConfig::default();
     config_payer.drone_port = drone_addr.port();

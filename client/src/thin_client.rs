@@ -45,17 +45,17 @@ impl ThinClient {
             rpc_addr,
             transactions_addr,
             transactions_socket,
-            RpcClient::new_from_socket(rpc_addr),
+            RpcClient::new_socket(rpc_addr),
         )
     }
 
-    pub fn new_with_timeout(
+    pub fn new_socket_with_timeout(
         rpc_addr: SocketAddr,
         transactions_addr: SocketAddr,
         transactions_socket: UdpSocket,
         timeout: Duration,
     ) -> Self {
-        let rpc_client = RpcClient::new_with_timeout(rpc_addr, timeout);
+        let rpc_client = RpcClient::new_socket_with_timeout(rpc_addr, timeout);
         Self::new_from_client(rpc_addr, transactions_addr, transactions_socket, rpc_client)
     }
 

@@ -21,7 +21,7 @@ fn test_wallet_request_airdrop() {
     let sig_response = process_command(&bob_config);
     sig_response.unwrap();
 
-    let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let balance = rpc_client
         .retry_get_balance(1, &bob_config.id.pubkey(), 1)
