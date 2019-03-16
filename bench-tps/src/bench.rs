@@ -120,8 +120,11 @@ pub fn send_barrier_transaction(
         }
 
         *blockhash = barrier_client.get_recent_blockhash();
+
+        let transaction =
+            SystemTransaction::new_account(&source_keypair, dest_id, 0, *blockhash, 0);
         let signature = barrier_client
-            .transfer(0, &source_keypair, dest_id, blockhash)
+            .transfer_signed(&transaction)
             .expect("Unable to send barrier transaction");
 
         let confirmatiom = barrier_client.poll_for_signature(&signature);

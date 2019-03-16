@@ -11,8 +11,7 @@ use solana_metrics::influxdb;
 use solana_sdk::hash::Hash;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::error;
@@ -101,36 +100,6 @@ impl ThinClient {
             io::ErrorKind::Other,
             "retry_transfer failed",
         ))
-    }
-
-    /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
-    pub fn transfer(
-        &self,
-        lamports: u64,
-        keypair: &Keypair,
-        to: &Pubkey,
-        blockhash: &Hash,
-    ) -> io::Result<Signature> {
-        debug!(
-            "transfer: lamports={} from={:?} to={:?} blockhash={:?}",
-            lamports,
-            keypair.pubkey(),
-            to,
-            blockhash
-        );
-        let now = Instant::now();
-        let transaction = SystemTransaction::new_account(keypair, to, lamports, *blockhash, 0);
-        let result = self.transfer_signed(&transaction);
-        solana_metrics::submit(
-            influxdb::Point::new("thinclient")
-                .add_tag("op", influxdb::Value::String("transfer".to_string()))
-                .add_field(
-                    "duration_ms",
-                    influxdb::Value::Integer(timing::duration_as_ms(&now.elapsed()) as i64),
-                )
-                .to_owned(),
-        );
-        result
     }
 
     pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
