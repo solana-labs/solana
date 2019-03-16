@@ -53,14 +53,14 @@ impl RpcClient {
         Ok(res)
     }
 
-    pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
+    pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
         let params = json!([format!("{}", pubkey)]);
         let response = self.make_rpc_request(RpcRequest::GetAccountInfo, Some(params));
         match response {
             Ok(account_json) => {
                 let account: Account =
                     serde_json::from_value(account_json).expect("deserialize account");
-                Ok(Some(account.data))
+                Ok(account.data)
             }
             Err(error) => {
                 debug!("get_account_data failed: {:?}", error);
