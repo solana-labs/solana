@@ -80,25 +80,33 @@ fn verify_error(err: ProgramError) -> ProgramError {
     }
 }
 
-pub type StaticEntrypoint =
+pub type ProcessInstruction =
     fn(&Pubkey, &mut [KeyedAccount], &[u8], u64) -> Result<(), ProgramError>;
 
 pub struct Runtime {
-    static_entrypoints: Vec<(Pubkey, StaticEntrypoint)>,
+    instruction_processors: Vec<(Pubkey, ProcessInstruction)>,
 }
 
 impl Default for Runtime {
     fn default() -> Self {
-        let static_entrypoints: Vec<(Pubkey, StaticEntrypoint)> =
+        let instruction_processors: Vec<(Pubkey, ProcessInstruction)> =
             vec![(system_program::id(), crate::system_program::entrypoint)];
-        Self { static_entrypoints }
+
+        Self {
+            instruction_processors,
+        }
     }
 }
 
 impl Runtime {
     /// Add a static entrypoint to intercept intructions before the dynamic loader.
-    pub fn add_entrypoint(&mut self, program_id: Pubkey, entrypoint: StaticEntrypoint) {
-        self.static_entrypoints.push((program_id, entrypoint));
+    pub fn add_instruction_processor(
+        &mut self,
+        program_id: Pubkey,
+        process_instruction: ProcessInstruction,
+    ) {
+        self.instruction_processors
+            .push((program_id, process_instruction));
     }
 
     /// Process an instruction
@@ -127,9 +135,9 @@ impl Runtime {
             .collect();
         keyed_accounts.append(&mut keyed_accounts2);
 
-        for (id, entrypoint) in &self.static_entrypoints {
+        for (id, process_instruction) in &self.instruction_processors {
             if id == program_id {
-                return entrypoint(
+                return process_instruction(
                     &program_id,
                     &mut keyed_accounts[1..],
                     &tx.instructions[instruction_index].data,

@@ -154,7 +154,7 @@ mod test {
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_block, mint_keypair) = GenesisBlock::new(lamports);
         let mut bank = Bank::new(&genesis_block);
-        bank.add_entrypoint(id(), process_instruction);
+        bank.add_instruction_processor(id(), process_instruction);
         (bank, mint_keypair)
     }
 
