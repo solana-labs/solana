@@ -32,10 +32,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, RwLock};
-use std::thread::sleep;
-use std::thread::JoinHandle;
-use std::thread::{spawn, Result};
-use std::time::Duration;
+use std::thread::Result;
 
 pub struct FullnodeConfig {
     pub sigverify_disabled: bool,
@@ -69,7 +66,6 @@ pub struct Fullnode {
     exit: Arc<AtomicBool>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
-    rpc_working_bank_handle: JoinHandle<()>,
     gossip_service: GossipService,
     poh_recorder: Arc<Mutex<PohRecorder>>,
     poh_service: PohService,
@@ -147,6 +143,7 @@ impl Fullnode {
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
             storage_state.clone(),
             config.rpc_config.clone(),
+            bank_forks.clone(),
             &exit,
         );
 
@@ -232,19 +229,6 @@ impl Fullnode {
             &blocktree,
             &exit,
         );
-        let exit_ = exit.clone();
-        let bank_forks_ = bank_forks.clone();
-        let rpc_service_rp = rpc_service.request_processor.clone();
-        let rpc_working_bank_handle = spawn(move || loop {
-            if exit_.load(Ordering::Relaxed) {
-                break;
-            }
-            let bank = bank_forks_.read().unwrap().working_bank();
-            trace!("rpc working bank {} {}", bank.slot(), bank.last_blockhash());
-            rpc_service_rp.write().unwrap().set_bank(&bank);
-            let timer = Duration::from_millis(100);
-            sleep(timer);
-        });
 
         inc_new_counter_info!("fullnode-new", 1);
         Self {
@@ -252,7 +236,6 @@ impl Fullnode {
             gossip_service,
             rpc_service: Some(rpc_service),
             rpc_pubsub_service: Some(rpc_pubsub_service),
-            rpc_working_bank_handle,
             tpu,
             tvu,
             exit,
@@ -316,7 +299,6 @@ impl Service for Fullnode {
             rpc_pubsub_service.join()?;
         }
 
-        self.rpc_working_bank_handle.join()?;
         self.gossip_service.join()?;
         self.tpu.join()?;
         self.tvu.join()?;
