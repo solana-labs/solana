@@ -149,8 +149,14 @@ impl Locktower {
         }
     }
 
-    pub fn check_vote_stake_threshold(&self, stake_lockouts: &HashMap<u64, StakeLockout>) -> bool {
-        let vote = self.lockouts.nth_recent_vote(self.threshold_depth);
+    pub fn check_vote_stake_threshold(
+        &self,
+        slot: u64,
+        stake_lockouts: &HashMap<u64, StakeLockout>,
+    ) -> bool {
+        let mut lockouts = self.lockouts.clone();
+        lockouts.process_vote(Vote { slot });
+        let vote = lockouts.nth_recent_vote(self.threshold_depth);
         if let Some(vote) = vote {
             if let Some(fork_stake) = stake_lockouts.get(&vote.slot) {
                 (fork_stake.stake as f64 / self.max_stake as f64) > self.threshold_size
@@ -299,7 +305,7 @@ mod test {
 
     #[test]
     fn test_check_vote_threshold_without_votes() {
-        let locktower = Locktower::new(2, 0, 0.67);
+        let locktower = Locktower::new(2, 1, 0.67);
         let stakes = vec![(
             0,
             StakeLockout {
@@ -309,7 +315,7 @@ mod test {
         )]
         .into_iter()
         .collect();
-        assert!(locktower.check_vote_stake_threshold(&stakes));
+        assert!(locktower.check_vote_stake_threshold(0, &stakes));
     }
 
     #[test]
@@ -401,7 +407,7 @@ mod test {
 
     #[test]
     fn test_check_vote_threshold_below_threshold() {
-        let mut locktower = Locktower::new(2, 0, 0.67);
+        let mut locktower = Locktower::new(2, 1, 0.67);
         let stakes = vec![(
             0,
             StakeLockout {
@@ -412,11 +418,11 @@ mod test {
         .into_iter()
         .collect();
         locktower.record_vote(0);
-        assert!(!locktower.check_vote_stake_threshold(&stakes));
+        assert!(!locktower.check_vote_stake_threshold(1, &stakes));
     }
     #[test]
     fn test_check_vote_threshold_above_threshold() {
-        let mut locktower = Locktower::new(2, 0, 0.67);
+        let mut locktower = Locktower::new(2, 1, 0.67);
         let stakes = vec![(
             0,
             StakeLockout {
@@ -427,8 +433,35 @@ mod test {
         .into_iter()
         .collect();
         locktower.record_vote(0);
-        assert!(locktower.check_vote_stake_threshold(&stakes));
+        assert!(locktower.check_vote_stake_threshold(1, &stakes));
     }
+
+    #[test]
+    fn test_check_vote_threshold_above_threshold_after_pop() {
+        let mut locktower = Locktower::new(2, 1, 0.67);
+        let stakes = vec![(
+            0,
+            StakeLockout {
+                stake: 2,
+                lockout: 8,
+            },
+        )]
+        .into_iter()
+        .collect();
+        locktower.record_vote(0);
+        locktower.record_vote(1);
+        locktower.record_vote(2);
+        assert!(locktower.check_vote_stake_threshold(6, &stakes));
+    }
+
+    #[test]
+    fn test_check_vote_threshold_above_threshold_no_stake() {
+        let mut locktower = Locktower::new(2, 1, 0.67);
+        let stakes = HashMap::new();
+        locktower.record_vote(0);
+        assert!(!locktower.check_vote_stake_threshold(1, &stakes));
+    }
+
     #[test]
     fn test_lockout_is_updated_for_entire_branch() {
         let mut stake_lockouts = HashMap::new();

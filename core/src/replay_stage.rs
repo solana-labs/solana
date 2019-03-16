@@ -144,8 +144,8 @@ impl ReplayStage {
                                 ),
                             )
                         })
-                        .filter(|(_, stake_lockouts)| {
-                            locktower.check_vote_stake_threshold(&stake_lockouts)
+                        .filter(|(b, stake_lockouts)| {
+                            locktower.check_vote_stake_threshold(b.slot(), &stake_lockouts)
                         })
                         .map(|(b, stake_lockouts)| {
                             (locktower.calculate_weight(&stake_lockouts), b.clone())
