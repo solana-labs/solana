@@ -5,7 +5,7 @@
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::blockhash_queue::BlockhashQueue;
-use crate::runtime::{Runtime, StaticEntrypoint};
+use crate::runtime::{ProcessInstruction, Runtime};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
@@ -840,9 +840,14 @@ impl Bank {
         self.is_delta.load(Ordering::Relaxed) && self.tick_height() == max_tick_height
     }
 
-    /// Add a static entrypoint to intercept intructions before the dynamic loader.
-    pub fn add_entrypoint(&mut self, program_id: Pubkey, entrypoint: StaticEntrypoint) {
-        self.runtime.add_entrypoint(program_id, entrypoint);
+    /// Add an instruction processor to intercept intructions before the dynamic loader.
+    pub fn add_instruction_processor(
+        &mut self,
+        program_id: Pubkey,
+        process_instruction: ProcessInstruction,
+    ) {
+        self.runtime
+            .add_instruction_processor(program_id, process_instruction);
 
         // Add a bogus executable account to load.
         let bogus_account = Account {
