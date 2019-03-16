@@ -17,6 +17,7 @@ RUN set -x \
       lcov \
       libclang-common-7-dev \
       llvm-7 \
+      mscgen \
       rsync \
       sudo \
       \
