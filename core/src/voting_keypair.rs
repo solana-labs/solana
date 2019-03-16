@@ -15,7 +15,7 @@ pub struct RemoteVoteSigner {
 
 impl RemoteVoteSigner {
     pub fn new(signer: SocketAddr) -> Self {
-        let rpc_client = RpcClient::new_from_socket(signer);
+        let rpc_client = RpcClient::new_socket(signer);
         Self { rpc_client }
     }
 }

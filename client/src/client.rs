@@ -13,5 +13,5 @@ pub fn create_client_with_timeout(
     timeout: Duration,
 ) -> ThinClient {
     let (_, transactions_socket) = solana_netutil::bind_in_range(range).unwrap();
-    ThinClient::new_with_timeout(rpc, tpu, transactions_socket, timeout)
+    ThinClient::new_socket_with_timeout(rpc, tpu, transactions_socket, timeout)
 }

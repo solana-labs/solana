@@ -17,12 +17,12 @@ pub const SIGNATURE: &str =
 
 #[derive(Clone)]
 pub struct MockRpcClient {
-    pub addr: String,
+    pub url: String,
 }
 
 impl MockRpcClient {
-    pub fn new(addr: String) -> Self {
-        MockRpcClient { addr }
+    pub fn new(url: String) -> Self {
+        MockRpcClient { url }
     }
 
     pub fn retry_get_balance(
@@ -45,7 +45,7 @@ impl MockRpcClient {
         params: Option<Value>,
         mut _retries: usize,
     ) -> Result<Value, Box<dyn error::Error>> {
-        if self.addr == "fails" {
+        if self.url == "fails" {
             return Ok(Value::Null);
         }
         let val = match request {
@@ -61,14 +61,14 @@ impl MockRpcClient {
                 }
             }
             RpcRequest::GetBalance => {
-                let n = if self.addr == "airdrop" { 0 } else { 50 };
+                let n = if self.url == "airdrop" { 0 } else { 50 };
                 Value::Number(Number::from(n))
             }
             RpcRequest::GetRecentBlockhash => Value::String(PUBKEY.to_string()),
             RpcRequest::GetSignatureStatus => {
-                let str = if self.addr == "account_in_use" {
+                let str = if self.url == "account_in_use" {
                     "AccountInUse"
-                } else if self.addr == "bad_sig_status" {
+                } else if self.url == "bad_sig_status" {
                     "Nonexistent"
                 } else {
                     "Confirmed"

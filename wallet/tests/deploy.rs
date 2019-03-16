@@ -25,7 +25,7 @@ fn test_wallet_deploy_program() {
     run_local_drone(alice, sender);
     let drone_addr = receiver.recv().unwrap();
 
-    let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
+    let rpc_client = RpcClient::new_socket(leader_data.rpc);
 
     let mut config = WalletConfig::default();
     config.drone_port = drone_addr.port();
