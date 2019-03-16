@@ -23,7 +23,7 @@ fn test_thin_client_basic() {
     let bob_pubkey = Keypair::new().pubkey();
     discover(&leader_data.gossip, 1).unwrap();
 
-    let mut client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
 
     let transaction_count = client.transaction_count();
     assert_eq!(transaction_count, 0);
@@ -54,7 +54,7 @@ fn test_bad_sig() {
     let bob_pubkey = Keypair::new().pubkey();
     discover(&leader_data.gossip, 1).unwrap();
 
-    let mut client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
 
     let blockhash = client.get_recent_blockhash();
 
@@ -85,7 +85,7 @@ fn test_register_vote_account() {
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
     discover(&leader_data.gossip, 1).unwrap();
 
-    let mut client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
 
     // Create the validator account, transfer some lamports to that account
     let validator_keypair = Keypair::new();
@@ -106,7 +106,7 @@ fn test_register_vote_account() {
     let signature = client.transfer_signed(&transaction).unwrap();
     client.poll_for_signature(&signature).unwrap();
 
-    let balance = retry_get_balance(&mut client, &vote_account_id, Some(1))
+    let balance = retry_get_balance(&client, &vote_account_id, Some(1))
         .expect("Expected balance for new account to exist");
     assert_eq!(balance, 1);
 
@@ -139,7 +139,7 @@ fn test_transaction_count() {
     solana_logger::setup();
     let addr = "0.0.0.0:1234".parse().unwrap();
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let mut client = ThinClient::new_socket_with_timeout(
+    let client = ThinClient::new_socket_with_timeout(
         addr,
         addr,
         transactions_socket,
@@ -155,7 +155,7 @@ fn test_zero_balance_after_nonzero() {
     let bob_keypair = Keypair::new();
     discover(&leader_data.gossip, 1).unwrap();
 
-    let mut client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
     let blockhash = client.get_recent_blockhash();
     info!("test_thin_client blockhash: {:?}", blockhash);
 

@@ -115,7 +115,7 @@ impl LocalCluster {
     }
 
     fn add_validator(&mut self, fullnode_config: &FullnodeConfig, stake: u64) {
-        let mut client = create_client(
+        let client = create_client(
             self.entry_point_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,
         );
@@ -131,19 +131,14 @@ impl LocalCluster {
 
         // Send each validator some lamports to vote
         let validator_balance =
-            Self::transfer(&mut client, &self.funding_keypair, &validator_pubkey, stake);
+            Self::transfer(&client, &self.funding_keypair, &validator_pubkey, stake);
         info!(
             "validator {} balance {}",
             validator_pubkey, validator_balance
         );
 
-        Self::create_and_fund_vote_account(
-            &mut client,
-            &voting_keypair,
-            &validator_keypair,
-            stake - 1,
-        )
-        .unwrap();
+        Self::create_and_fund_vote_account(&client, &voting_keypair, &validator_keypair, stake - 1)
+            .unwrap();
 
         let validator_server = Fullnode::new(
             validator_node,
@@ -160,13 +155,13 @@ impl LocalCluster {
 
     fn add_replicator(&mut self) {
         let replicator_keypair = Arc::new(Keypair::new());
-        let mut client = create_client(
+        let client = create_client(
             self.entry_point_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,
         );
 
         Self::transfer(
-            &mut client,
+            &client,
             &self.funding_keypair,
             &replicator_keypair.pubkey(),
             1,
@@ -196,7 +191,7 @@ impl LocalCluster {
     }
 
     fn transfer(
-        client: &mut ThinClient,
+        client: &ThinClient,
         source_keypair: &Keypair,
         dest_pubkey: &Pubkey,
         lamports: u64,
@@ -218,7 +213,7 @@ impl LocalCluster {
     }
 
     fn create_and_fund_vote_account(
-        client: &mut ThinClient,
+        client: &ThinClient,
         vote_account: &Keypair,
         from_account: &Arc<Keypair>,
         amount: u64,

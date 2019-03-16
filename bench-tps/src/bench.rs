@@ -52,7 +52,7 @@ pub fn sample_tx_count(
     v: &ContactInfo,
     sample_period: u64,
 ) {
-    let mut client = create_client(v.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(v.client_facing_addr(), FULLNODE_PORT_RANGE);
     let mut now = Instant::now();
     let mut initial_tx_count = client.transaction_count();
     let mut max_tps = 0.0;
@@ -182,7 +182,7 @@ pub fn generate_txs(
     reclaim: bool,
     contact_info: &ContactInfo,
 ) {
-    let mut client = create_client(contact_info.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(contact_info.client_facing_addr(), FULLNODE_PORT_RANGE);
     let blockhash = client.get_recent_blockhash();
     let tx_count = source.len();
     println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
@@ -292,7 +292,7 @@ pub fn do_tx_transfers(
     }
 }
 
-pub fn verify_funding_transfer(client: &mut ThinClient, tx: &Transaction, amount: u64) -> bool {
+pub fn verify_funding_transfer(client: &ThinClient, tx: &Transaction, amount: u64) -> bool {
     for a in &tx.account_keys[1..] {
         if client.get_balance(a).unwrap_or(0) >= amount {
             return true;
@@ -305,7 +305,7 @@ pub fn verify_funding_transfer(client: &mut ThinClient, tx: &Transaction, amount
 /// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
 /// on every iteration.  This allows us to replay the transfers because the source is either empty,
 /// or full
-pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], lamports: u64) {
+pub fn fund_keys(client: &ThinClient, source: &Keypair, dests: &[Keypair], lamports: u64) {
     let total = lamports * dests.len() as u64;
     let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
     let mut notfunded: Vec<&Keypair> = dests.iter().collect();
@@ -398,12 +398,7 @@ pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], l
     }
 }
 
-pub fn airdrop_lamports(
-    client: &mut ThinClient,
-    drone_addr: &SocketAddr,
-    id: &Keypair,
-    tx_count: u64,
-) {
+pub fn airdrop_lamports(client: &ThinClient, drone_addr: &SocketAddr, id: &Keypair, tx_count: u64) {
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_lamport_balance(starting_balance);
     println!("starting balance {}", starting_balance);

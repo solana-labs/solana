@@ -228,7 +228,7 @@ impl StorageStage {
         account_to_create: Option<Pubkey>,
     ) -> io::Result<()> {
         let contact_info = cluster_info.read().unwrap().my_data();
-        let mut client = create_client_with_timeout(
+        let client = create_client_with_timeout(
             contact_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,
             Duration::from_secs(5),
