@@ -5,6 +5,7 @@ use bincode::serialized_size;
 use chrono::prelude::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::transaction::{Instruction, Script};
 
@@ -51,6 +52,13 @@ impl BudgetInstruction {
             SystemInstruction::new_program_account(&from, contract, lamports, space, &id()),
             Self::new_initialize_account(contract, expr),
         ]
+    }
+
+    /// Create a new payment script.
+    pub fn new_payment_script(from: &Pubkey, to: &Pubkey, lamports: u64) -> Script {
+        let contract = Keypair::new().pubkey();
+        let expr = BudgetExpr::new_payment(lamports, to);
+        Self::new_initialize_account_script(from, &contract, lamports, expr)
     }
 
     /// Create a postdated payment script.

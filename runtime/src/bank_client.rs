@@ -20,7 +20,7 @@ impl<'a> BankClient<'a> {
 
     pub fn process_transaction(&self, mut tx: Transaction) -> Result<(), TransactionError> {
         tx.sign(&[&self.keypair], self.bank.last_blockhash());
-        self.bank.process_transaction(&mut tx)
+        self.bank.process_transaction(&tx)
     }
 
     /// Create and process a transaction.

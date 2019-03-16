@@ -1,6 +1,6 @@
-mod budget_program;
+mod budget_processor;
 
-use crate::budget_program::process_instruction;
+use crate::budget_processor::process_instruction;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
