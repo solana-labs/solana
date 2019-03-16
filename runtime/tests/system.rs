@@ -5,39 +5,36 @@ use solana_sdk::native_program::ProgramError;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
-use solana_sdk::transaction::{Instruction, InstructionError, Transaction, TransactionError};
+use solana_sdk::transaction::{Instruction, InstructionError, TransactionError};
 
 #[test]
 fn test_system_unsigned_transaction() {
-    let (genesis_block, from_keypair) = GenesisBlock::new(100);
+    let (genesis_block, mint_keypair) = GenesisBlock::new(100);
     let bank = Bank::new(&genesis_block);
-    let from_pubkey = from_keypair.pubkey();
-    let alice_client = BankClient::new(&bank, from_keypair);
 
-    let to_keypair = Keypair::new();
-    let to_pubkey = to_keypair.pubkey();
-    let mallory_client = BankClient::new(&bank, to_keypair);
+    let alice_client = BankClient::new(&bank, mint_keypair);
+    let alice_pubkey = alice_client.pubkey();
+
+    let mallory_client = BankClient::new(&bank, Keypair::new());
+    let mallory_pubkey = mallory_client.pubkey();
 
     // Fund to account to bypass AccountNotFound error
-    let ix = SystemInstruction::new_move(&from_pubkey, &to_pubkey, 50);
-    let mut tx = Transaction::new(vec![ix]);
-    alice_client.process_transaction(&mut tx).unwrap();
+    alice_client.transfer(50, &mallory_pubkey).unwrap();
 
     // Erroneously sign transaction with recipient account key
     // No signature case is tested by bank `test_zero_signatures()`
-    let ix = Instruction::new(
+    let malicious_script = vec![Instruction::new(
         system_program::id(),
         &SystemInstruction::Move { lamports: 10 },
-        vec![(from_pubkey, false), (to_pubkey, true)],
-    );
-    let mut tx = Transaction::new(vec![ix]);
+        vec![(alice_pubkey, false), (mallory_pubkey, true)],
+    )];
     assert_eq!(
-        mallory_client.process_transaction(&mut tx),
+        mallory_client.process_script(malicious_script),
         Err(TransactionError::InstructionError(
             0,
             InstructionError::ProgramError(ProgramError::MissingRequiredSignature)
         ))
     );
-    assert_eq!(bank.get_balance(&from_pubkey), 50);
-    assert_eq!(bank.get_balance(&to_pubkey), 50);
+    assert_eq!(bank.get_balance(&alice_pubkey), 50);
+    assert_eq!(bank.get_balance(&mallory_pubkey), 50);
 }

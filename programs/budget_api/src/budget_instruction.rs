@@ -1,9 +1,12 @@
-use crate::budget_expr::BudgetExpr;
+use crate::budget_expr::{BudgetExpr, Condition};
+use crate::budget_state::BudgetState;
 use crate::id;
+use bincode::serialized_size;
 use chrono::prelude::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::transaction::Instruction;
+use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::transaction::{Instruction, Script};
 
 /// A smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -35,6 +38,80 @@ impl BudgetInstruction {
         }
         keys.push((*contract, false));
         Instruction::new(id(), &BudgetInstruction::InitializeAccount(expr), keys)
+    }
+
+    pub fn new_initialize_account_script(
+        from: &Pubkey,
+        contract: &Pubkey,
+        lamports: u64,
+        expr: BudgetExpr,
+    ) -> Script {
+        let space = serialized_size(&BudgetState::new(expr.clone())).unwrap();
+        vec![
+            SystemInstruction::new_program_account(&from, contract, lamports, space, &id()),
+            Self::new_initialize_account(contract, expr),
+        ]
+    }
+
+    /// Create a postdated payment script.
+    pub fn new_on_date_script(
+        from: &Pubkey,
+        to: &Pubkey,
+        contract: &Pubkey,
+        dt: DateTime<Utc>,
+        dt_pubkey: &Pubkey,
+        cancelable: Option<Pubkey>,
+        lamports: u64,
+    ) -> Script {
+        let expr = if let Some(from) = cancelable {
+            BudgetExpr::Or(
+                (
+                    Condition::Timestamp(dt, *dt_pubkey),
+                    Box::new(BudgetExpr::new_payment(lamports, to)),
+                ),
+                (
+                    Condition::Signature(from),
+                    Box::new(BudgetExpr::new_payment(lamports, &from)),
+                ),
+            )
+        } else {
+            BudgetExpr::After(
+                Condition::Timestamp(dt, *dt_pubkey),
+                Box::new(BudgetExpr::new_payment(lamports, to)),
+            )
+        };
+
+        Self::new_initialize_account_script(from, contract, lamports, expr)
+    }
+
+    /// Create a multisig payment script.
+    pub fn new_when_signed_script(
+        from: &Pubkey,
+        to: &Pubkey,
+        contract: &Pubkey,
+        witness: &Pubkey,
+        cancelable: Option<Pubkey>,
+        lamports: u64,
+    ) -> Script {
+        let expr = if let Some(from) = cancelable {
+            BudgetExpr::Or(
+                (
+                    Condition::Signature(*witness),
+                    Box::new(BudgetExpr::new_payment(lamports, to)),
+                ),
+                (
+                    Condition::Signature(from),
+                    Box::new(BudgetExpr::new_payment(lamports, &from)),
+                ),
+            )
+        } else {
+            BudgetExpr::After(
+                Condition::Signature(*witness),
+                Box::new(BudgetExpr::new_payment(lamports, to)),
+            )
+        };
+
+        Self::new_initialize_account_script(from, contract, lamports, expr)
     }
 
     pub fn new_apply_timestamp(
