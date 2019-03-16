@@ -357,11 +357,11 @@ impl Replicator {
                 RpcClient::new_socket(rpc_peers[node_idx].rpc)
             };
             let storage_blockhash = rpc_client
-                .make_rpc_request(2, RpcRequest::GetStorageBlockhash, None)
+                .make_rpc_request(RpcRequest::GetStorageBlockhash, None)
                 .expect("rpc request")
                 .to_string();
             let storage_entry_height = rpc_client
-                .make_rpc_request(2, RpcRequest::GetStorageEntryHeight, None)
+                .make_rpc_request(RpcRequest::GetStorageEntryHeight, None)
                 .expect("rpc request")
                 .as_u64()
                 .unwrap();

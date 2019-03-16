@@ -47,7 +47,7 @@ fn test_wallet_deploy_program() {
 
     let params = json!([program_id_str]);
     let account_info = rpc_client
-        .make_rpc_request(1, RpcRequest::GetAccountInfo, Some(params))
+        .make_rpc_request(RpcRequest::GetAccountInfo, Some(params))
         .unwrap();
     let account_info_obj = account_info.as_object().unwrap();
     assert_eq!(

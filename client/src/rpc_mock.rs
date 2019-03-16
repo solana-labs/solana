@@ -27,20 +27,18 @@ impl MockRpcClient {
 
     pub fn retry_get_balance(
         &self,
-        id: u64,
         pubkey: &Pubkey,
         retries: usize,
     ) -> Result<Option<u64>, Box<dyn error::Error>> {
         let params = json!([format!("{}", pubkey)]);
         let res = self
-            .retry_make_rpc_request(id, &RpcRequest::GetBalance, Some(params), retries)?
+            .retry_make_rpc_request(&RpcRequest::GetBalance, Some(params), retries)?
             .as_u64();
         Ok(res)
     }
 
     pub fn retry_make_rpc_request(
         &self,
-        _id: u64,
         request: &RpcRequest,
         params: Option<Value>,
         mut _retries: usize,
@@ -86,11 +84,10 @@ impl MockRpcClient {
 impl RpcRequestHandler for MockRpcClient {
     fn make_rpc_request(
         &self,
-        id: u64,
         request: RpcRequest,
         params: Option<Value>,
     ) -> Result<Value, Box<dyn error::Error>> {
-        self.retry_make_rpc_request(id, &request, params, 0)
+        self.retry_make_rpc_request(&request, params, 0)
     }
 }
 

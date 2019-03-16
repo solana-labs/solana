@@ -375,7 +375,7 @@ fn process_airdrop(
         "Requesting airdrop of {:?} lamports from {}",
         lamports, drone_addr
     );
-    let previous_balance = match rpc_client.retry_get_balance(1, &config.id.pubkey(), 5)? {
+    let previous_balance = match rpc_client.retry_get_balance(&config.id.pubkey(), 5)? {
         Some(lamports) => lamports,
         None => Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
@@ -385,7 +385,7 @@ fn process_airdrop(
     request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id.pubkey(), lamports)?;
 
     let current_balance = rpc_client
-        .retry_get_balance(1, &config.id.pubkey(), 5)?
+        .retry_get_balance(&config.id.pubkey(), 5)?
         .unwrap_or(previous_balance);
 
     if current_balance < previous_balance {
@@ -405,7 +405,7 @@ fn process_airdrop(
 }
 
 fn process_balance(config: &WalletConfig, rpc_client: &RpcClient) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(1, &config.id.pubkey(), 5)?;
+    let balance = rpc_client.retry_get_balance(&config.id.pubkey(), 5)?;
     match balance {
         Some(0) => Ok("No account found! Request an airdrop to get started.".to_string()),
         Some(lamports) => Ok(format!("Your balance is: {:?}", lamports)),
@@ -418,7 +418,7 @@ fn process_balance(config: &WalletConfig, rpc_client: &RpcClient) -> ProcessResu
 fn process_confirm(rpc_client: &RpcClient, signature: Signature) -> ProcessResult {
     let params = json!([format!("{}", signature)]);
     let confirmation = rpc_client
-        .retry_make_rpc_request(1, &RpcRequest::ConfirmTransaction, Some(params), 5)?
+        .retry_make_rpc_request(&RpcRequest::ConfirmTransaction, Some(params), 5)?
         .as_bool();
     match confirmation {
         Some(b) => {
@@ -478,7 +478,7 @@ fn process_deploy(
     config: &WalletConfig,
     program_location: &str,
 ) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(1, &config.id.pubkey(), 5)?;
+    let balance = rpc_client.retry_get_balance(&config.id.pubkey(), 5)?;
     if let Some(lamports) = balance {
         if lamports < 1 {
             Err(WalletError::DynamicProgramError(
@@ -632,7 +632,7 @@ fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey
 
 fn process_get_transaction_count(rpc_client: &RpcClient) -> ProcessResult {
     let transaction_count = rpc_client
-        .retry_make_rpc_request(1, &RpcRequest::GetTransactionCount, None, 5)?
+        .retry_make_rpc_request(&RpcRequest::GetTransactionCount, None, 5)?
         .as_u64();
     match transaction_count {
         Some(count) => Ok(count.to_string()),
@@ -650,7 +650,7 @@ fn process_time_elapsed(
     pubkey: &Pubkey,
     dt: DateTime<Utc>,
 ) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(1, &config.id.pubkey(), 5)?;
+    let balance = rpc_client.retry_get_balance(&config.id.pubkey(), 5)?;
 
     if let Some(0) = balance {
         request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id.pubkey(), 1)?;
@@ -671,7 +671,7 @@ fn process_witness(
     to: &Pubkey,
     pubkey: &Pubkey,
 ) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(1, &config.id.pubkey(), 5)?;
+    let balance = rpc_client.retry_get_balance(&config.id.pubkey(), 5)?;
 
     if let Some(0) = balance {
         request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id.pubkey(), 1)?;
@@ -771,7 +771,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
 }
 
 fn get_recent_blockhash(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
-    let result = rpc_client.retry_make_rpc_request(1, &RpcRequest::GetRecentBlockhash, None, 5)?;
+    let result = rpc_client.retry_make_rpc_request(&RpcRequest::GetRecentBlockhash, None, 5)?;
     if result.as_str().is_none() {
         Err(WalletError::RpcRequestError(
             "Received bad blockhash".to_string(),
@@ -823,7 +823,7 @@ fn send_transaction(
     let serialized = serialize(transaction).unwrap();
     let params = json!([serialized]);
     let signature =
-        rpc_client.retry_make_rpc_request(2, &RpcRequest::SendTransaction, Some(params), 5)?;
+        rpc_client.retry_make_rpc_request(&RpcRequest::SendTransaction, Some(params), 5)?;
     if signature.as_str().is_none() {
         Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
@@ -838,7 +838,7 @@ fn confirm_transaction(
 ) -> Result<RpcSignatureStatus, Box<dyn error::Error>> {
     let params = json!([signature.to_string()]);
     let signature_status =
-        rpc_client.retry_make_rpc_request(1, &RpcRequest::GetSignatureStatus, Some(params), 5)?;
+        rpc_client.retry_make_rpc_request(&RpcRequest::GetSignatureStatus, Some(params), 5)?;
     if let Some(status) = signature_status.as_str() {
         let rpc_status = RpcSignatureStatus::from_str(status).map_err(|_| {
             WalletError::RpcRequestError("Unable to parse signature status".to_string())
