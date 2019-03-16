@@ -74,6 +74,7 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
+    _tick_height: u64,
 ) -> Result<(), ProgramError> {
     let instruction = deserialize(data).map_err(|err| {
         info!("Invalid transaction data: {:?} {:?}", data, err);
@@ -144,7 +145,7 @@ mod test {
     use super::*;
     use solana_budget_api::budget_transaction::BudgetTransaction;
     use solana_budget_api::id;
-    use solana_runtime::runtime;
+    use solana_runtime::runtime::Runtime;
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -155,7 +156,9 @@ mod test {
         tx: &Transaction,
         tx_accounts: &mut Vec<Account>,
     ) -> Result<(), TransactionError> {
-        runtime::process_transaction(tx, tx_accounts, process_instruction)
+        let mut runtime = Runtime::default();
+        runtime.add_entrypoint(id(), process_instruction);
+        runtime.process_transaction(tx, tx_accounts)
     }
 
     #[test]

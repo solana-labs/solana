@@ -5,7 +5,7 @@
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::blockhash_queue::BlockhashQueue;
-use crate::runtime;
+use crate::runtime::Runtime;
 use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
@@ -154,6 +154,9 @@ pub struct Bank {
     /// A boolean reflecting whether any entries were recorded into the PoH
     /// stream for the slot == self.slot
     is_delta: AtomicBool,
+
+    /// The runtime executation environment
+    runtime: Runtime,
 }
 
 impl Default for BlockhashQueue {
@@ -534,7 +537,8 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
                 Ok((ref mut accounts, ref mut loaders)) => {
-                    runtime::execute_transaction(tx, loaders, accounts, tick_height)
+                    self.runtime
+                        .execute_transaction(tx, loaders, accounts, tick_height)
                 }
             })
             .collect();

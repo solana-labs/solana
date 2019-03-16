@@ -5,125 +5,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
 use solana_sdk::transaction::{InstructionError, Transaction, TransactionError};
 
-/// Process an instruction
-/// This method calls the instruction's program entrypoint method
-fn process_instruction(
-    tx: &Transaction,
-    instruction_index: usize,
-    executable_accounts: &mut [(Pubkey, Account)],
-    program_accounts: &mut [&mut Account],
-    tick_height: u64,
-) -> Result<(), ProgramError> {
-    let program_id = tx.program_id(instruction_index);
-
-    let mut keyed_accounts = create_keyed_accounts(executable_accounts);
-    let mut keyed_accounts2: Vec<_> = tx.instructions[instruction_index]
-        .accounts
-        .iter()
-        .map(|&index| {
-            let index = index as usize;
-            let key = &tx.account_keys[index];
-            (key, index < tx.signatures.len())
-        })
-        .zip(program_accounts.iter_mut())
-        .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
-        .collect();
-    keyed_accounts.append(&mut keyed_accounts2);
-
-    if system_program::check_id(&program_id) {
-        crate::system_program::entrypoint(
-            &program_id,
-            &mut keyed_accounts[1..],
-            &tx.instructions[instruction_index].data,
-            tick_height,
-        )
-    } else {
-        native_loader::entrypoint(
-            &program_id,
-            &mut keyed_accounts,
-            &tx.instructions[instruction_index].data,
-            tick_height,
-        )
-    }
-}
-
-fn verify_instruction(
-    program_id: &Pubkey,
-    pre_program_id: &Pubkey,
-    pre_lamports: u64,
-    pre_data: &[u8],
-    account: &Account,
-) -> Result<(), InstructionError> {
-    // Verify the transaction
-
-    // Make sure that program_id is still the same or this was just assigned by the system program
-    if *pre_program_id != account.owner && !system_program::check_id(&program_id) {
-        return Err(InstructionError::ModifiedProgramId);
-    }
-    // For accounts unassigned to the program, the individual balance of each accounts cannot decrease.
-    if *program_id != account.owner && pre_lamports > account.lamports {
-        return Err(InstructionError::ExternalAccountLamportSpend);
-    }
-    // For accounts unassigned to the program, the data may not change.
-    if *program_id != account.owner
-        && !system_program::check_id(&program_id)
-        && pre_data != &account.data[..]
-    {
-        return Err(InstructionError::ExternalAccountDataModified);
-    }
-    Ok(())
-}
-
-/// Execute an instruction
-/// This method calls the instruction's program entrypoint method and verifies that the result of
-/// the call does not violate the bank's accounting rules.
-/// The accounts are committed back to the bank only if this function returns Ok(_).
-fn execute_instruction(
-    tx: &Transaction,
-    instruction_index: usize,
-    executable_accounts: &mut [(Pubkey, Account)],
-    program_accounts: &mut [&mut Account],
-    tick_height: u64,
-) -> Result<(), InstructionError> {
-    let program_id = tx.program_id(instruction_index);
-    // TODO: the runtime should be checking read/write access to memory
-    // we are trusting the hard-coded programs not to clobber or allocate
-    let pre_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
-    let pre_data: Vec<_> = program_accounts
-        .iter_mut()
-        .map(|a| (a.owner, a.lamports, a.data.clone()))
-        .collect();
-
-    process_instruction(
-        tx,
-        instruction_index,
-        executable_accounts,
-        program_accounts,
-        tick_height,
-    )
-    .map_err(verify_error)
-    .map_err(InstructionError::ProgramError)?;
-
-    // Verify the instruction
-    for ((pre_program_id, pre_lamports, pre_data), post_account) in
-        pre_data.iter().zip(program_accounts.iter())
-    {
-        verify_instruction(
-            &program_id,
-            pre_program_id,
-            *pre_lamports,
-            pre_data,
-            post_account,
-        )?;
-    }
-    // The total sum of all the lamports in all the accounts cannot change.
-    let post_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
-    if pre_total != post_total {
-        return Err(InstructionError::UnbalancedInstruction);
-    }
-    Ok(())
-}
-
 /// Return true if the slice has any duplicate elements
 pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
     // Note: This is an O(n^2) algorithm, but requires no heap allocations. The benchmark
@@ -162,68 +43,29 @@ fn get_subset_unchecked_mut<'a, T>(
         .collect())
 }
 
-/// Execute a transaction.
-/// This method calls each instruction in the transaction over the set of loaded Accounts
-/// The accounts are committed back to the bank only if every instruction succeeds
-pub fn execute_transaction(
-    tx: &Transaction,
-    loaders: &mut [Vec<(Pubkey, Account)>],
-    tx_accounts: &mut [Account],
-    tick_height: u64,
-) -> Result<(), TransactionError> {
-    for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
-        let executable_accounts = &mut (&mut loaders[instruction.program_ids_index as usize]);
-        let mut program_accounts = get_subset_unchecked_mut(tx_accounts, &instruction.accounts)
-            .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
-        execute_instruction(
-            tx,
-            instruction_index,
-            executable_accounts,
-            &mut program_accounts,
-            tick_height,
-        )
-        .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
-    }
-    Ok(())
-}
+fn verify_instruction(
+    program_id: &Pubkey,
+    pre_program_id: &Pubkey,
+    pre_lamports: u64,
+    pre_data: &[u8],
+    account: &Account,
+) -> Result<(), InstructionError> {
+    // Verify the transaction
 
-/// A utility function for unit-tests. Same as execute_transaction(), but bypasses the loaders
-/// for easier usage and better stack traces.
-pub fn process_transaction<F>(
-    tx: &Transaction,
-    tx_accounts: &mut Vec<Account>,
-    process_instruction: F,
-) -> Result<(), TransactionError>
-where
-    F: Fn(&Pubkey, &mut [KeyedAccount], &[u8]) -> Result<(), ProgramError>,
-{
-    for _ in tx_accounts.len()..tx.account_keys.len() {
-        tx_accounts.push(Account::new(0, 0, &system_program::id()));
+    // Make sure that program_id is still the same or this was just assigned by the system program
+    if *pre_program_id != account.owner && !system_program::check_id(&program_id) {
+        return Err(InstructionError::ModifiedProgramId);
     }
-    for (i, ix) in tx.instructions.iter().enumerate() {
-        let mut ix_accounts = get_subset_unchecked_mut(tx_accounts, &ix.accounts)
-            .map_err(|err| TransactionError::InstructionError(i as u8, err))?;
-        let mut keyed_accounts: Vec<_> = ix
-            .accounts
-            .iter()
-            .map(|&index| {
-                let index = index as usize;
-                let key = &tx.account_keys[index];
-                (key, index < tx.signatures.len())
-            })
-            .zip(ix_accounts.iter_mut())
-            .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
-            .collect();
-
-        let program_id = tx.program_id(i);
-        let result = if system_program::check_id(&program_id) {
-            crate::system_program::entrypoint(&program_id, &mut keyed_accounts, &ix.data, 0)
-        } else {
-            process_instruction(&program_id, &mut keyed_accounts, &ix.data)
-        };
-        result.map_err(|err| {
-            TransactionError::InstructionError(i as u8, InstructionError::ProgramError(err))
-        })?;
+    // For accounts unassigned to the program, the individual balance of each accounts cannot decrease.
+    if *program_id != account.owner && pre_lamports > account.lamports {
+        return Err(InstructionError::ExternalAccountLamportSpend);
+    }
+    // For accounts unassigned to the program, the data may not change.
+    if *program_id != account.owner
+        && !system_program::check_id(&program_id)
+        && pre_data != &account.data[..]
+    {
+        return Err(InstructionError::ExternalAccountDataModified);
     }
     Ok(())
 }
@@ -235,6 +77,173 @@ fn verify_error(err: ProgramError) -> ProgramError {
             ProgramError::CustomError(error)
         }
         e => e,
+    }
+}
+
+type StaticEntrypoint = fn(&Pubkey, &mut [KeyedAccount], &[u8], u64) -> Result<(), ProgramError>;
+
+pub struct Runtime {
+    static_entrypoints: Vec<(Pubkey, StaticEntrypoint)>,
+}
+
+impl Default for Runtime {
+    fn default() -> Self {
+        let static_entrypoints: Vec<(Pubkey, StaticEntrypoint)> =
+            vec![(system_program::id(), crate::system_program::entrypoint)];
+        Self { static_entrypoints }
+    }
+}
+
+impl Runtime {
+    /// Add a static entrypoint to intercept intructions before the dynamic loader.
+    pub fn add_entrypoint(&mut self, program_id: Pubkey, entrypoint: StaticEntrypoint) {
+        self.static_entrypoints.push((program_id, entrypoint));
+    }
+
+    /// Process an instruction
+    /// This method calls the instruction's program entrypoint method
+    fn process_instruction(
+        &self,
+        tx: &Transaction,
+        instruction_index: usize,
+        executable_accounts: &mut [(Pubkey, Account)],
+        program_accounts: &mut [&mut Account],
+        tick_height: u64,
+    ) -> Result<(), ProgramError> {
+        let program_id = tx.program_id(instruction_index);
+
+        let mut keyed_accounts = create_keyed_accounts(executable_accounts);
+        let mut keyed_accounts2: Vec<_> = tx.instructions[instruction_index]
+            .accounts
+            .iter()
+            .map(|&index| {
+                let index = index as usize;
+                let key = &tx.account_keys[index];
+                (key, index < tx.signatures.len())
+            })
+            .zip(program_accounts.iter_mut())
+            .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
+            .collect();
+        keyed_accounts.append(&mut keyed_accounts2);
+
+        for (id, entrypoint) in &self.static_entrypoints {
+            if id == program_id {
+                return entrypoint(
+                    &program_id,
+                    &mut keyed_accounts[1..],
+                    &tx.instructions[instruction_index].data,
+                    tick_height,
+                );
+            }
+        }
+
+        native_loader::entrypoint(
+            &program_id,
+            &mut keyed_accounts,
+            &tx.instructions[instruction_index].data,
+            tick_height,
+        )
+    }
+
+    /// Execute an instruction
+    /// This method calls the instruction's program entrypoint method and verifies that the result of
+    /// the call does not violate the bank's accounting rules.
+    /// The accounts are committed back to the bank only if this function returns Ok(_).
+    fn execute_instruction(
+        &self,
+        tx: &Transaction,
+        instruction_index: usize,
+        executable_accounts: &mut [(Pubkey, Account)],
+        program_accounts: &mut [&mut Account],
+        tick_height: u64,
+    ) -> Result<(), InstructionError> {
+        let program_id = tx.program_id(instruction_index);
+        // TODO: the runtime should be checking read/write access to memory
+        // we are trusting the hard-coded programs not to clobber or allocate
+        let pre_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
+        let pre_data: Vec<_> = program_accounts
+            .iter_mut()
+            .map(|a| (a.owner, a.lamports, a.data.clone()))
+            .collect();
+
+        self.process_instruction(
+            tx,
+            instruction_index,
+            executable_accounts,
+            program_accounts,
+            tick_height,
+        )
+        .map_err(verify_error)
+        .map_err(InstructionError::ProgramError)?;
+
+        // Verify the instruction
+        for ((pre_program_id, pre_lamports, pre_data), post_account) in
+            pre_data.iter().zip(program_accounts.iter())
+        {
+            verify_instruction(
+                &program_id,
+                pre_program_id,
+                *pre_lamports,
+                pre_data,
+                post_account,
+            )?;
+        }
+        // The total sum of all the lamports in all the accounts cannot change.
+        let post_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
+        if pre_total != post_total {
+            return Err(InstructionError::UnbalancedInstruction);
+        }
+        Ok(())
+    }
+
+    /// Execute a transaction.
+    /// This method calls each instruction in the transaction over the set of loaded Accounts
+    /// The accounts are committed back to the bank only if every instruction succeeds
+    pub fn execute_transaction(
+        &self,
+        tx: &Transaction,
+        loaders: &mut [Vec<(Pubkey, Account)>],
+        tx_accounts: &mut [Account],
+        tick_height: u64,
+    ) -> Result<(), TransactionError> {
+        for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
+            let executable_accounts = &mut loaders[instruction.program_ids_index as usize];
+            let mut program_accounts = get_subset_unchecked_mut(tx_accounts, &instruction.accounts)
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+            self.execute_instruction(
+                tx,
+                instruction_index,
+                executable_accounts,
+                &mut program_accounts,
+                tick_height,
+            )
+            .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+        }
+        Ok(())
+    }
+
+    /// A utility function for unit-tests. Same as execute_transaction(), but bypasses the loaders
+    /// for easier usage and better stack traces.
+    pub fn process_transaction(
+        &self,
+        tx: &Transaction,
+        tx_accounts: &mut Vec<Account>,
+    ) -> Result<(), TransactionError> {
+        // Simulate how the Bank automatically creates empty accounts as needed.
+        for _ in tx_accounts.len()..tx.account_keys.len() {
+            tx_accounts.push(Account::new(0, 0, &system_program::id()));
+        }
+
+        // Add a bogus loader accounts for each program id
+        let mut loaders = vec![];
+        for _ in 0..tx.program_ids.len() {
+            loaders.push(vec![(
+                Pubkey::default(),
+                Account::new(0, 0, &system_program::id()),
+            )]);
+        }
+
+        self.execute_transaction(tx, &mut loaders, tx_accounts, 0)
     }
 }
 
