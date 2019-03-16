@@ -136,13 +136,17 @@ impl Locktower {
         slot: u64,
         flat_children: &HashMap<u64, HashSet<u64>>,
     ) -> bool {
-        for vote in &self.lockouts.votes {
-            assert!(vote.slot != slot, "double vote");
-            if !flat_children[&vote.slot].contains(&slot) && !vote.is_expired(slot) {
+        let mut lockouts = self.lockouts.clone();
+        lockouts.process_vote(Vote { slot });
+        for vote in &lockouts.votes {
+            if vote.slot == slot {
+                continue;
+            }
+            if !flat_children[&vote.slot].contains(&slot) {
                 return false;
             }
         }
-        if let Some(root) = self.lockouts.root_slot {
+        if let Some(root) = lockouts.root_slot {
             flat_children[&root].contains(&slot)
         } else {
             true
@@ -354,14 +358,14 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
     fn test_check_vote_lockout_double_vote() {
         let mut locktower = Locktower::new(2, 0, 0.67);
-        let flat_children = vec![(0, vec![1].into_iter().collect())]
+        let flat_children = vec![(0, vec![1].into_iter().collect()), (1, HashSet::new())]
             .into_iter()
             .collect();
         locktower.record_vote(0);
-        assert!(locktower.check_vote_lockout(0, &flat_children));
+        locktower.record_vote(1);
+        assert!(!locktower.check_vote_lockout(0, &flat_children));
     }
 
     #[test]
