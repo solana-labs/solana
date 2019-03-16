@@ -39,25 +39,26 @@ impl RpcClient {
 
     pub fn retry_get_balance(
         &self,
-        id: u64,
         pubkey: &Pubkey,
         retries: usize,
     ) -> Result<Option<u64>, Box<dyn error::Error>> {
         let params = json!([format!("{}", pubkey)]);
         let res = self
-            .retry_make_rpc_request(id, &RpcRequest::GetBalance, Some(params), retries)?
+            .retry_make_rpc_request(&RpcRequest::GetBalance, Some(params), retries)?
             .as_u64();
         Ok(res)
     }
 
     pub fn retry_make_rpc_request(
         &self,
-        id: u64,
         request: &RpcRequest,
         params: Option<Value>,
         mut retries: usize,
     ) -> Result<Value, Box<dyn error::Error>> {
-        let request_json = request.build_request_json(id, params);
+        // Concurrent requests are not supported so reuse the same request id for all requests
+        let request_id = 1;
+
+        let request_json = request.build_request_json(request_id, params);
 
         loop {
             match self
@@ -108,7 +109,6 @@ pub fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
 pub trait RpcRequestHandler {
     fn make_rpc_request(
         &self,
-        id: u64,
         request: RpcRequest,
         params: Option<Value>,
     ) -> Result<Value, Box<dyn error::Error>>;
@@ -117,11 +117,10 @@ pub trait RpcRequestHandler {
 impl RpcRequestHandler for RpcClient {
     fn make_rpc_request(
         &self,
-        id: u64,
         request: RpcRequest,
         params: Option<Value>,
     ) -> Result<Value, Box<dyn error::Error>> {
-        self.retry_make_rpc_request(id, &request, params, 0)
+        self.retry_make_rpc_request(&request, params, 0)
     }
 }
 
@@ -272,13 +271,12 @@ mod tests {
         let rpc_client = RpcClient::new_socket(rpc_addr);
 
         let balance = rpc_client.make_rpc_request(
-            1,
             RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
         );
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
-        let blockhash = rpc_client.make_rpc_request(2, RpcRequest::GetRecentBlockhash, None);
+        let blockhash = rpc_client.make_rpc_request(RpcRequest::GetRecentBlockhash, None);
         assert_eq!(
             blockhash.unwrap().as_str().unwrap(),
             "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"
@@ -286,7 +284,7 @@ mod tests {
 
         // Send erroneous parameter
         let blockhash =
-            rpc_client.make_rpc_request(3, RpcRequest::GetRecentBlockhash, Some(json!("paramter")));
+            rpc_client.make_rpc_request(RpcRequest::GetRecentBlockhash, Some(json!("paramter")));
         assert_eq!(blockhash.is_err(), true);
     }
 
@@ -321,7 +319,6 @@ mod tests {
         let rpc_client = RpcClient::new_socket(rpc_addr);
 
         let balance = rpc_client.retry_make_rpc_request(
-            1,
             &RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhw"])),
             10,

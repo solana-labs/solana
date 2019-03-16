@@ -14,7 +14,7 @@ use std::sync::mpsc::channel;
 use solana::fullnode::new_fullnode_for_tests;
 
 fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
-    let balance = client.retry_get_balance(1, pubkey, 1).unwrap().unwrap();
+    let balance = client.retry_get_balance(pubkey, 1).unwrap().unwrap();
     assert_eq!(balance, expected_balance);
 }
 

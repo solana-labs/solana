@@ -144,9 +144,9 @@ impl ThinClient {
 
     pub fn get_account_data(&mut self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
         let params = json!([format!("{}", pubkey)]);
-        let response =
-            self.rpc_client
-                .make_rpc_request(1, RpcRequest::GetAccountInfo, Some(params));
+        let response = self
+            .rpc_client
+            .make_rpc_request(RpcRequest::GetAccountInfo, Some(params));
         match response {
             Ok(account_json) => {
                 let account: Account =
@@ -169,9 +169,9 @@ impl ThinClient {
     pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
         trace!("get_balance sending request to {}", self.rpc_addr);
         let params = json!([format!("{}", pubkey)]);
-        let response =
-            self.rpc_client
-                .make_rpc_request(1, RpcRequest::GetAccountInfo, Some(params));
+        let response = self
+            .rpc_client
+            .make_rpc_request(RpcRequest::GetAccountInfo, Some(params));
 
         response
             .and_then(|account_json| {
@@ -192,9 +192,9 @@ impl ThinClient {
     pub fn transaction_count(&mut self) -> u64 {
         debug!("transaction_count");
         for _tries in 0..5 {
-            let response =
-                self.rpc_client
-                    .make_rpc_request(1, RpcRequest::GetTransactionCount, None);
+            let response = self
+                .rpc_client
+                .make_rpc_request(RpcRequest::GetTransactionCount, None);
 
             match response {
                 Ok(value) => {
@@ -215,9 +215,9 @@ impl ThinClient {
     pub fn try_get_recent_blockhash(&mut self, mut num_retries: u64) -> Option<Hash> {
         loop {
             trace!("try_get_recent_blockhash send_to {}", &self.rpc_addr);
-            let response =
-                self.rpc_client
-                    .make_rpc_request(1, RpcRequest::GetRecentBlockhash, None);
+            let response = self
+                .rpc_client
+                .make_rpc_request(RpcRequest::GetRecentBlockhash, None);
 
             match response {
                 Ok(value) => {
@@ -326,11 +326,9 @@ impl ThinClient {
         let now = Instant::now();
 
         loop {
-            let response = self.rpc_client.make_rpc_request(
-                1,
-                RpcRequest::ConfirmTransaction,
-                Some(params.clone()),
-            );
+            let response = self
+                .rpc_client
+                .make_rpc_request(RpcRequest::ConfirmTransaction, Some(params.clone()));
 
             match response {
                 Ok(confirmation) => {
@@ -363,7 +361,7 @@ impl ThinClient {
         trace!("fullnode_exit sending request to {}", self.rpc_addr);
         let response = self
             .rpc_client
-            .make_rpc_request(1, RpcRequest::FullnodeExit, None)
+            .make_rpc_request(RpcRequest::FullnodeExit, None)
             .map_err(|error| {
                 debug!("Response from {} fullndoe_exit: {}", self.rpc_addr, error);
                 io::Error::new(io::ErrorKind::Other, "FullodeExit request failure")

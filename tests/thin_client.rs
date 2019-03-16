@@ -139,8 +139,12 @@ fn test_transaction_count() {
     solana_logger::setup();
     let addr = "0.0.0.0:1234".parse().unwrap();
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let mut client =
-        ThinClient::new_socket_with_timeout(addr, addr, transactions_socket, Duration::from_secs(2));
+    let mut client = ThinClient::new_socket_with_timeout(
+        addr,
+        addr,
+        transactions_socket,
+        Duration::from_secs(2),
+    );
     assert_eq!(client.transaction_count(), 0);
 }
 

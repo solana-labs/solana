@@ -30,7 +30,7 @@ impl VoteSigner for RemoteVoteSigner {
         let params = json!([pubkey, sig, msg]);
         let resp = self
             .rpc_client
-            .retry_make_rpc_request(1, &RpcRequest::RegisterNode, Some(params), 5)
+            .retry_make_rpc_request(&RpcRequest::RegisterNode, Some(params), 5)
             .unwrap();
         let vote_account: Pubkey = serde_json::from_value(resp).unwrap();
         Ok(vote_account)
@@ -44,7 +44,7 @@ impl VoteSigner for RemoteVoteSigner {
         let params = json!([pubkey, sig, msg]);
         let resp = self
             .rpc_client
-            .retry_make_rpc_request(1, &RpcRequest::SignVote, Some(params), 0)
+            .retry_make_rpc_request(&RpcRequest::SignVote, Some(params), 0)
             .unwrap();
         let vote_signature: Signature = serde_json::from_value(resp).unwrap();
         Ok(vote_signature)
@@ -53,7 +53,7 @@ impl VoteSigner for RemoteVoteSigner {
         let params = json!([pubkey, sig, msg]);
         let _resp = self
             .rpc_client
-            .retry_make_rpc_request(1, &RpcRequest::DeregisterNode, Some(params), 5)
+            .retry_make_rpc_request(&RpcRequest::DeregisterNode, Some(params), 5)
             .unwrap();
         Ok(())
     }
