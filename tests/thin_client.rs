@@ -114,8 +114,7 @@ fn test_register_vote_account() {
     for run in 0..=LAST {
         let account_user_data = client
             .get_account_data(&vote_account_id)
-            .expect("Expected valid response for account data")
-            .expect("Expected valid account data to exist after account creation");
+            .expect("Expected valid response for account data");
 
         let vote_state = VoteState::deserialize(&account_user_data);
 

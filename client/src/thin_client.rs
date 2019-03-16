@@ -133,7 +133,7 @@ impl ThinClient {
         result
     }
 
-    pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
+    pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
         self.rpc_client.get_account_data(pubkey)
     }
 
