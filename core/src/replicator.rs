@@ -310,11 +310,11 @@ impl Replicator {
     }
 
     fn submit_mining_proof(&self) {
-        let mut client = create_client(
+        let client = create_client(
             self.cluster_entrypoint.client_facing_addr(),
             FULLNODE_PORT_RANGE,
         );
-        Self::get_airdrop_lamports(&mut client, &self.keypair, &self.cluster_entrypoint);
+        Self::get_airdrop_lamports(&client, &self.keypair, &self.cluster_entrypoint);
 
         let blockhash = client.get_recent_blockhash();
         let mut tx = StorageTransaction::new_mining_proof(
@@ -378,7 +378,7 @@ impl Replicator {
     }
 
     fn get_airdrop_lamports(
-        client: &mut ThinClient,
+        client: &ThinClient,
         keypair: &Keypair,
         cluster_entrypoint: &ContactInfo,
     ) {

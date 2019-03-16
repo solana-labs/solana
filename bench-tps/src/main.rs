@@ -63,7 +63,7 @@ fn main() {
     }
     let cluster_entrypoint = nodes[0].clone(); // Pick the first node, why not?
 
-    let mut client = create_client(cluster_entrypoint.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(cluster_entrypoint.client_facing_addr(), FULLNODE_PORT_RANGE);
     let mut barrier_client =
         create_client(cluster_entrypoint.client_facing_addr(), FULLNODE_PORT_RANGE);
 
@@ -94,13 +94,13 @@ fn main() {
     if num_lamports_per_account > keypair0_balance {
         let extra = num_lamports_per_account - keypair0_balance;
         let total = extra * (gen_keypairs.len() as u64);
-        airdrop_lamports(&mut client, &drone_addr, &id, total);
+        airdrop_lamports(&client, &drone_addr, &id, total);
         println!("adding more lamports {}", extra);
-        fund_keys(&mut client, &id, &gen_keypairs, extra);
+        fund_keys(&client, &id, &gen_keypairs, extra);
     }
     let start = gen_keypairs.len() - (tx_count * 2) as usize;
     let keypairs = &gen_keypairs[start..];
-    airdrop_lamports(&mut barrier_client, &drone_addr, &barrier_source_keypair, 1);
+    airdrop_lamports(&barrier_client, &drone_addr, &barrier_source_keypair, 1);
 
     println!("Get last ID...");
     let mut blockhash = client.get_recent_blockhash();

@@ -3,14 +3,11 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
+use crate::rpc_request::RpcClient;
 use bincode::serialize_into;
-use bs58;
 use log::*;
-use serde_json::json;
 use solana_metrics;
 use solana_metrics::influxdb;
-use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
@@ -21,13 +18,10 @@ use solana_sdk::transaction::Transaction;
 use std;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
-use std::thread::sleep;
-use std::time::Duration;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {
-    rpc_addr: SocketAddr,
     transactions_addr: SocketAddr,
     transactions_socket: UdpSocket,
     rpc_client: RpcClient,
@@ -42,7 +36,6 @@ impl ThinClient {
         transactions_socket: UdpSocket,
     ) -> Self {
         Self::new_from_client(
-            rpc_addr,
             transactions_addr,
             transactions_socket,
             RpcClient::new_socket(rpc_addr),
@@ -56,18 +49,16 @@ impl ThinClient {
         timeout: Duration,
     ) -> Self {
         let rpc_client = RpcClient::new_socket_with_timeout(rpc_addr, timeout);
-        Self::new_from_client(rpc_addr, transactions_addr, transactions_socket, rpc_client)
+        Self::new_from_client(transactions_addr, transactions_socket, rpc_client)
     }
 
     fn new_from_client(
-        rpc_addr: SocketAddr,
         transactions_addr: SocketAddr,
         transactions_socket: UdpSocket,
         rpc_client: RpcClient,
     ) -> Self {
         ThinClient {
             rpc_client,
-            rpc_addr,
             transactions_addr,
             transactions_socket,
         }
@@ -88,7 +79,7 @@ impl ThinClient {
 
     /// Retry a sending a signed Transaction to the server for processing.
     pub fn retry_transfer(
-        &mut self,
+        &self,
         keypair: &Keypair,
         transaction: &mut Transaction,
         tries: usize,
@@ -142,237 +133,66 @@ impl ThinClient {
         result
     }
 
-    pub fn get_account_data(&mut self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
-        let params = json!([format!("{}", pubkey)]);
-        let response = self
-            .rpc_client
-            .make_rpc_request(RpcRequest::GetAccountInfo, Some(params));
-        match response {
-            Ok(account_json) => {
-                let account: Account =
-                    serde_json::from_value(account_json).expect("deserialize account");
-                Ok(Some(account.data))
-            }
-            Err(error) => {
-                debug!("get_account_data failed: {:?}", error);
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "get_account_data failed",
-                ))
-            }
-        }
+    pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
+        self.rpc_client.get_account_data(pubkey)
     }
 
-    /// Request the balance of the user holding `pubkey`. This method blocks
-    /// until the server sends a response. If the response packet is dropped
-    /// by the network, this method will hang indefinitely.
-    pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
-        trace!("get_balance sending request to {}", self.rpc_addr);
-        let params = json!([format!("{}", pubkey)]);
-        let response = self
-            .rpc_client
-            .make_rpc_request(RpcRequest::GetAccountInfo, Some(params));
-
-        response
-            .and_then(|account_json| {
-                let account: Account =
-                    serde_json::from_value(account_json).expect("deserialize account");
-                trace!("Response account {:?} {:?}", pubkey, account);
-                trace!("get_balance {:?}", account.lamports);
-                Ok(account.lamports)
-            })
-            .map_err(|error| {
-                debug!("Response account {}: None (error: {:?})", pubkey, error);
-                io::Error::new(io::ErrorKind::Other, "AccountNotFound")
-            })
+    pub fn get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
+        self.rpc_client.get_balance(pubkey)
     }
 
-    /// Request the transaction count.  If the response packet is dropped by the network,
-    /// this method will try again 5 times.
-    pub fn transaction_count(&mut self) -> u64 {
-        debug!("transaction_count");
-        for _tries in 0..5 {
-            let response = self
-                .rpc_client
-                .make_rpc_request(RpcRequest::GetTransactionCount, None);
-
-            match response {
-                Ok(value) => {
-                    debug!("transaction_count response: {:?}", value);
-                    let transaction_count = value.as_u64().unwrap();
-                    return transaction_count;
-                }
-                Err(error) => {
-                    debug!("transaction_count failed: {:?}", error);
-                }
-            };
-        }
-        0
+    pub fn transaction_count(&self) -> u64 {
+        self.rpc_client.transaction_count()
     }
 
-    /// Request the last Entry ID from the server without blocking.
-    /// Returns the blockhash Hash or None if there was no response from the server.
-    pub fn try_get_recent_blockhash(&mut self, mut num_retries: u64) -> Option<Hash> {
-        loop {
-            trace!("try_get_recent_blockhash send_to {}", &self.rpc_addr);
-            let response = self
-                .rpc_client
-                .make_rpc_request(RpcRequest::GetRecentBlockhash, None);
-
-            match response {
-                Ok(value) => {
-                    let blockhash_str = value.as_str().unwrap();
-                    let blockhash_vec = bs58::decode(blockhash_str).into_vec().unwrap();
-                    return Some(Hash::new(&blockhash_vec));
-                }
-                Err(error) => {
-                    debug!("thin_client get_recent_blockhash error: {:?}", error);
-                    num_retries -= 1;
-                    if num_retries == 0 {
-                        return None;
-                    }
-                }
-            }
-        }
+    pub fn try_get_recent_blockhash(&self, num_retries: u64) -> Option<Hash> {
+        self.rpc_client.try_get_recent_blockhash(num_retries)
     }
 
-    /// Request the last Entry ID from the server. This method blocks
-    /// until the server sends a response.
-    pub fn get_recent_blockhash(&mut self) -> Hash {
-        loop {
-            trace!("get_recent_blockhash send_to {}", &self.rpc_addr);
-            if let Some(hash) = self.try_get_recent_blockhash(10) {
-                return hash;
-            }
-        }
+    pub fn get_recent_blockhash(&self) -> Hash {
+        self.rpc_client.get_recent_blockhash()
     }
 
-    /// Request a new last Entry ID from the server. This method blocks
-    /// until the server sends a response.
-    pub fn get_next_blockhash(&mut self, previous_blockhash: &Hash) -> Hash {
-        self.get_next_blockhash_ext(previous_blockhash, &|| {
-            sleep(Duration::from_millis(100));
-        })
-    }
-    pub fn get_next_blockhash_ext(&mut self, previous_blockhash: &Hash, func: &Fn()) -> Hash {
-        loop {
-            let blockhash = self.get_recent_blockhash();
-            if blockhash != *previous_blockhash {
-                break blockhash;
-            }
-            debug!("Got same blockhash ({:?}), will retry...", blockhash);
-            func()
-        }
-    }
-
-    pub fn submit_poll_balance_metrics(elapsed: &Duration) {
-        solana_metrics::submit(
-            influxdb::Point::new("thinclient")
-                .add_tag("op", influxdb::Value::String("get_balance".to_string()))
-                .add_field(
-                    "duration_ms",
-                    influxdb::Value::Integer(timing::duration_as_ms(elapsed) as i64),
-                )
-                .to_owned(),
-        );
+    pub fn get_next_blockhash(&self, previous_blockhash: &Hash) -> Hash {
+        self.rpc_client.get_next_blockhash(previous_blockhash)
     }
 
     pub fn poll_balance_with_timeout(
-        &mut self,
+        &self,
         pubkey: &Pubkey,
         polling_frequency: &Duration,
         timeout: &Duration,
     ) -> io::Result<u64> {
+        self.rpc_client
+            .poll_balance_with_timeout(pubkey, polling_frequency, timeout)
+    }
+
+    pub fn poll_get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
+        self.rpc_client.poll_get_balance(pubkey)
+    }
+
+    pub fn poll_for_signature(&self, signature: &Signature) -> io::Result<()> {
+        self.rpc_client.poll_for_signature(signature)
+    }
+
+    pub fn check_signature(&self, signature: &Signature) -> bool {
         let now = Instant::now();
-        loop {
-            match self.get_balance(&pubkey) {
-                Ok(bal) => {
-                    ThinClient::submit_poll_balance_metrics(&now.elapsed());
-                    return Ok(bal);
-                }
-                Err(e) => {
-                    sleep(*polling_frequency);
-                    if now.elapsed() > *timeout {
-                        ThinClient::submit_poll_balance_metrics(&now.elapsed());
-                        return Err(e);
-                    }
-                }
-            };
-        }
+        let result = self.rpc_client.check_signature(signature);
+
+        solana_metrics::submit(
+            influxdb::Point::new("thinclient")
+                .add_tag("op", influxdb::Value::String("check_signature".to_string()))
+                .add_field(
+                    "duration_ms",
+                    influxdb::Value::Integer(timing::duration_as_ms(&now.elapsed()) as i64),
+                )
+                .to_owned(),
+        );
+        result
     }
 
-    pub fn poll_get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.poll_balance_with_timeout(pubkey, &Duration::from_millis(100), &Duration::from_secs(1))
-    }
-
-    /// Poll the server to confirm a transaction.
-    pub fn poll_for_signature(&mut self, signature: &Signature) -> io::Result<()> {
-        let now = Instant::now();
-        while !self.check_signature(signature) {
-            if now.elapsed().as_secs() > 15 {
-                // TODO: Return a better error.
-                return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
-            }
-            sleep(Duration::from_millis(250));
-        }
-        Ok(())
-    }
-
-    /// Check a signature in the bank. This method blocks
-    /// until the server sends a response.
-    pub fn check_signature(&mut self, signature: &Signature) -> bool {
-        trace!("check_signature: {:?}", signature);
-        let params = json!([format!("{}", signature)]);
-        let now = Instant::now();
-
-        loop {
-            let response = self
-                .rpc_client
-                .make_rpc_request(RpcRequest::ConfirmTransaction, Some(params.clone()));
-
-            match response {
-                Ok(confirmation) => {
-                    let signature_status = confirmation.as_bool().unwrap();
-                    if signature_status {
-                        trace!("Response found signature");
-                    } else {
-                        trace!("Response signature not found");
-                    }
-                    solana_metrics::submit(
-                        influxdb::Point::new("thinclient")
-                            .add_tag("op", influxdb::Value::String("check_signature".to_string()))
-                            .add_field(
-                                "duration_ms",
-                                influxdb::Value::Integer(
-                                    timing::duration_as_ms(&now.elapsed()) as i64
-                                ),
-                            )
-                            .to_owned(),
-                    );
-                    return signature_status;
-                }
-                Err(err) => {
-                    debug!("check_signature request failed: {:?}", err);
-                }
-            };
-        }
-    }
-    pub fn fullnode_exit(&mut self) -> io::Result<bool> {
-        trace!("fullnode_exit sending request to {}", self.rpc_addr);
-        let response = self
-            .rpc_client
-            .make_rpc_request(RpcRequest::FullnodeExit, None)
-            .map_err(|error| {
-                debug!("Response from {} fullndoe_exit: {}", self.rpc_addr, error);
-                io::Error::new(io::ErrorKind::Other, "FullodeExit request failure")
-            })?;
-        serde_json::from_value(response).map_err(|error| {
-            debug!(
-                "ParseError: from {} fullndoe_exit: {}",
-                self.rpc_addr, error
-            );
-            io::Error::new(io::ErrorKind::Other, "FullodeExit parse failure")
-        })
+    pub fn fullnode_exit(&self) -> io::Result<bool> {
+        self.rpc_client.fullnode_exit()
     }
 }
 
@@ -383,7 +203,7 @@ impl Drop for ThinClient {
 }
 
 pub fn retry_get_balance(
-    client: &mut ThinClient,
+    client: &ThinClient,
     bob_pubkey: &Pubkey,
     expected_balance: Option<u64>,
 ) -> Option<u64> {

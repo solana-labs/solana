@@ -28,7 +28,7 @@ pub fn spend_and_verify_all_nodes(
     assert!(cluster_nodes.len() >= nodes);
     for ingress_node in &cluster_nodes {
         let random_keypair = Keypair::new();
-        let mut client = create_client(ingress_node.client_facing_addr(), FULLNODE_PORT_RANGE);
+        let client = create_client(ingress_node.client_facing_addr(), FULLNODE_PORT_RANGE);
         let bal = client
             .poll_get_balance(&funding_keypair.pubkey())
             .expect("balance in source");
@@ -44,14 +44,14 @@ pub fn spend_and_verify_all_nodes(
             .retry_transfer(&funding_keypair, &mut transaction, 5)
             .unwrap();
         for validator in &cluster_nodes {
-            let mut client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
+            let client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
             client.poll_for_signature(&sig).unwrap();
         }
     }
 }
 
 pub fn send_many_transactions(node: &ContactInfo, funding_keypair: &Keypair, num_txs: u64) {
-    let mut client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
     for _ in 0..num_txs {
         let random_keypair = Keypair::new();
         let bal = client
@@ -75,12 +75,12 @@ pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {
     let cluster_nodes = discover(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     for node in &cluster_nodes {
-        let mut client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
+        let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
         assert!(client.fullnode_exit().unwrap());
     }
     sleep(Duration::from_millis(SLOT_MILLIS));
     for node in &cluster_nodes {
-        let mut client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
+        let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
         assert!(client.fullnode_exit().is_err());
     }
 }
@@ -126,7 +126,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     solana_logger::setup();
     let cluster_nodes = discover(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
-    let mut client = create_client(entry_point_info.client_facing_addr(), FULLNODE_PORT_RANGE);
+    let client = create_client(entry_point_info.client_facing_addr(), FULLNODE_PORT_RANGE);
     info!("sleeping for an epoch");
     sleep(Duration::from_millis(SLOT_MILLIS * DEFAULT_SLOTS_PER_EPOCH));
     info!("done sleeping for an epoch");
@@ -140,7 +140,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
             continue;
         }
 
-        let mut client = create_client(ingress_node.client_facing_addr(), FULLNODE_PORT_RANGE);
+        let client = create_client(ingress_node.client_facing_addr(), FULLNODE_PORT_RANGE);
         let bal = client
             .poll_get_balance(&funding_keypair.pubkey())
             .expect("balance in source");
@@ -195,7 +195,7 @@ fn poll_all_nodes_for_signature(
         if validator.id == entry_point_info.id {
             continue;
         }
-        let mut client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
+        let client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
         client.poll_for_signature(&sig)?;
     }
 
