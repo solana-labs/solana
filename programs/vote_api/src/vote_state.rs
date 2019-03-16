@@ -468,6 +468,18 @@ mod tests {
     }
 
     #[test]
+    fn test_duplicate_vote() {
+        let voter_id = Keypair::new().pubkey();
+        let mut vote_state = VoteState::new(&voter_id);
+        vote_state.process_vote(Vote::new(0));
+        vote_state.process_vote(Vote::new(1));
+        vote_state.process_vote(Vote::new(0));
+        assert_eq!(vote_state.nth_recent_vote(0).unwrap().slot, 1);
+        assert_eq!(vote_state.nth_recent_vote(1).unwrap().slot, 0);
+        assert!(vote_state.nth_recent_vote(2).is_none());
+    }
+
+    #[test]
     fn test_nth_recent_vote() {
         let voter_id = Keypair::new().pubkey();
         let mut vote_state = VoteState::new(&voter_id);
@@ -475,7 +487,6 @@ mod tests {
             vote_state.process_vote(Vote::new(i as u64));
         }
         for i in 0..(MAX_LOCKOUT_HISTORY - 1) {
-            println!("{}", i);
             assert_eq!(
                 vote_state.nth_recent_vote(i).unwrap().slot as usize,
                 MAX_LOCKOUT_HISTORY - i - 1,
