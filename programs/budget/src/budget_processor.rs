@@ -159,6 +159,17 @@ mod test {
     }
 
     #[test]
+    fn test_budget_payment() {
+        let (bank, mint_keypair) = create_bank(10_000);
+        let alice_client = BankClient::new(&bank, mint_keypair);
+        let alice_pubkey = alice_client.pubkey();
+        let bob_pubkey = Keypair::new().pubkey();
+        let script = BudgetInstruction::new_payment_script(&alice_pubkey, &bob_pubkey, 100);
+        alice_client.process_script(script).unwrap();
+        assert_eq!(bank.get_balance(&bob_pubkey), 100);
+    }
+
+    #[test]
     fn test_unsigned_witness_key() {
         let (bank, mint_keypair) = create_bank(10_000);
         let alice_client = BankClient::new(&bank, mint_keypair);

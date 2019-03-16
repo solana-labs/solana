@@ -1,10 +1,7 @@
 //! The `budget_transaction` module provides functionality for creating Budget transactions.
 
-use crate::budget_expr::BudgetExpr;
 use crate::budget_instruction::BudgetInstruction;
-use crate::budget_state::BudgetState;
-use crate::id;
-use bincode::{deserialize, serialized_size};
+use bincode::deserialize;
 use chrono::prelude::*;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -15,27 +12,6 @@ use solana_sdk::transaction::{Script, Transaction};
 pub struct BudgetTransaction {}
 
 impl BudgetTransaction {
-    /// Create and sign a new Transaction. Used for unit-testing.
-    #[allow(clippy::new_ret_no_self)]
-    fn new(
-        from_keypair: &Keypair,
-        contract: &Pubkey,
-        expr: BudgetExpr,
-        lamports: u64,
-        recent_blockhash: Hash,
-        fee: u64,
-    ) -> Transaction {
-        let from = from_keypair.pubkey();
-        let space = serialized_size(&BudgetState::new(expr.clone())).unwrap();
-        let create_ix =
-            SystemInstruction::new_program_account(&from, contract, lamports, space, &id());
-        let init_ix = BudgetInstruction::new_initialize_account(contract, expr);
-        let mut tx = Transaction::new(vec![create_ix, init_ix]);
-        tx.fee = fee;
-        tx.sign(&[from_keypair], recent_blockhash);
-        tx
-    }
-
     fn new_signed(
         from_keypair: &Keypair,
         script: Script,
@@ -56,16 +32,8 @@ impl BudgetTransaction {
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
-        let contract = Keypair::new().pubkey();
-        let expr = BudgetExpr::new_payment(lamports, to);
-        Self::new(
-            from_keypair,
-            &contract,
-            expr,
-            lamports,
-            recent_blockhash,
-            fee,
-        )
+        let script = BudgetInstruction::new_payment_script(&from_keypair.pubkey(), to, lamports);
+        Self::new_signed(from_keypair, script, recent_blockhash, fee)
     }
 
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
