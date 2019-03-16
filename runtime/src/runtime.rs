@@ -80,7 +80,8 @@ fn verify_error(err: ProgramError) -> ProgramError {
     }
 }
 
-type StaticEntrypoint = fn(&Pubkey, &mut [KeyedAccount], &[u8], u64) -> Result<(), ProgramError>;
+pub type StaticEntrypoint =
+    fn(&Pubkey, &mut [KeyedAccount], &[u8], u64) -> Result<(), ProgramError>;
 
 pub struct Runtime {
     static_entrypoints: Vec<(Pubkey, StaticEntrypoint)>,
@@ -220,30 +221,6 @@ impl Runtime {
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
         Ok(())
-    }
-
-    /// A utility function for unit-tests. Same as execute_transaction(), but bypasses the loaders
-    /// for easier usage and better stack traces.
-    pub fn process_transaction(
-        &self,
-        tx: &Transaction,
-        tx_accounts: &mut Vec<Account>,
-    ) -> Result<(), TransactionError> {
-        // Simulate how the Bank automatically creates empty accounts as needed.
-        for _ in tx_accounts.len()..tx.account_keys.len() {
-            tx_accounts.push(Account::new(0, 0, &system_program::id()));
-        }
-
-        // Add a bogus loader accounts for each program id
-        let mut loaders = vec![];
-        for _ in 0..tx.program_ids.len() {
-            loaders.push(vec![(
-                Pubkey::default(),
-                Account::new(0, 0, &system_program::id()),
-            )]);
-        }
-
-        self.execute_transaction(tx, &mut loaders, tx_accounts, 0)
     }
 }
 

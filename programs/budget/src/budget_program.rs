@@ -145,62 +145,45 @@ mod test {
     use super::*;
     use solana_budget_api::budget_transaction::BudgetTransaction;
     use solana_budget_api::id;
-    use solana_runtime::runtime::Runtime;
-    use solana_sdk::account::Account;
-    use solana_sdk::hash::Hash;
+    use solana_runtime::bank::Bank;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_program;
     use solana_sdk::transaction::{InstructionError, Transaction, TransactionError};
 
-    fn process_transaction(
-        tx: &Transaction,
-        tx_accounts: &mut Vec<Account>,
-    ) -> Result<(), TransactionError> {
-        let mut runtime = Runtime::default();
-        runtime.add_entrypoint(id(), process_instruction);
-        runtime.process_transaction(tx, tx_accounts)
+    fn create_bank(lamports: u64) -> (Bank, Keypair) {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(lamports);
+        let mut bank = Bank::new(&genesis_block);
+        bank.add_entrypoint(id(), process_instruction);
+        (bank, mint_keypair)
     }
 
     #[test]
     fn test_invalid_instruction() {
-        let mut accounts = vec![Account::new(1, 0, &id()), Account::new(0, 512, &id())];
-        let from = Keypair::new();
+        let (bank, from) = create_bank(10_000);
+        let blockhash = bank.last_blockhash();
         let contract = Keypair::new();
         let data = (1u8, 2u8, 3u8);
-        let tx = Transaction::new_signed(
-            &from,
-            &[contract.pubkey()],
-            &id(),
-            &data,
-            Hash::default(),
-            0,
-        );
-        assert!(process_transaction(&tx, &mut accounts).is_err());
+        let tx = Transaction::new_signed(&from, &[contract.pubkey()], &id(), &data, blockhash, 0);
+        assert!(bank.process_transaction(&tx).is_err());
     }
 
     #[test]
     fn test_unsigned_witness_key() {
-        let mut accounts = vec![Account::new(1, 0, &system_program::id())];
+        let (bank, from) = create_bank(10_000);
+        let blockhash = bank.last_blockhash();
 
         // Initialize BudgetState
-        let from = Keypair::new();
         let contract = Keypair::new().pubkey();
         let to = Keypair::new().pubkey();
         let witness = Keypair::new().pubkey();
-        let tx = BudgetTransaction::new_when_signed(
-            &from,
-            &to,
-            &contract,
-            &witness,
-            None,
-            1,
-            Hash::default(),
-        );
-        process_transaction(&tx, &mut accounts).unwrap();
+        let tx =
+            BudgetTransaction::new_when_signed(&from, &to, &contract, &witness, None, 1, blockhash);
+        bank.process_transaction(&tx).unwrap();
 
         // Attack! Part 1: Sign a witness transaction with a random key.
         let rando = Keypair::new();
-        let mut tx = BudgetTransaction::new_signature(&rando, &contract, &to, Hash::default());
+        bank.transfer(1, &from, &rando.pubkey(), blockhash).unwrap();
+        let mut tx = BudgetTransaction::new_signature(&rando, &contract, &to, blockhash);
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
         tx.account_keys.push(from.pubkey());
@@ -208,7 +191,7 @@ mod test {
 
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
-            process_transaction(&tx, &mut accounts),
+            bank.process_transaction(&tx),
             Err(TransactionError::InstructionError(
                 0,
                 InstructionError::ProgramError(ProgramError::MissingRequiredSignature)
@@ -218,10 +201,10 @@ mod test {
 
     #[test]
     fn test_unsigned_timestamp() {
-        let mut accounts = vec![Account::new(1, 0, &system_program::id())];
+        let (bank, from) = create_bank(10_000);
+        let blockhash = bank.last_blockhash();
 
         // Initialize BudgetState
-        let from = Keypair::new();
         let contract = Keypair::new().pubkey();
         let to = Keypair::new().pubkey();
         let dt = Utc::now();
@@ -233,13 +216,14 @@ mod test {
             &from.pubkey(),
             None,
             1,
-            Hash::default(),
+            blockhash,
         );
-        process_transaction(&tx, &mut accounts).unwrap();
+        bank.process_transaction(&tx).unwrap();
 
         // Attack! Part 1: Sign a timestamp transaction with a random key.
         let rando = Keypair::new();
-        let mut tx = BudgetTransaction::new_timestamp(&rando, &contract, &to, dt, Hash::default());
+        bank.transfer(1, &from, &rando.pubkey(), blockhash).unwrap();
+        let mut tx = BudgetTransaction::new_timestamp(&rando, &contract, &to, dt, blockhash);
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
         tx.account_keys.push(from.pubkey());
@@ -247,7 +231,7 @@ mod test {
 
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
-            process_transaction(&tx, &mut accounts),
+            bank.process_transaction(&tx),
             Err(TransactionError::InstructionError(
                 0,
                 InstructionError::ProgramError(ProgramError::MissingRequiredSignature)
@@ -257,11 +241,8 @@ mod test {
 
     #[test]
     fn test_transfer_on_date() {
-        let mut accounts = vec![Account::new(1, 0, &system_program::id())];
-        let from_account = 0;
-        let contract_account = 1;
-        let to_account = 2;
-        let from = Keypair::new();
+        let (bank, from) = create_bank(2);
+        let blockhash = bank.last_blockhash();
         let contract = Keypair::new();
         let to = Keypair::new();
         let rando = Keypair::new();
@@ -274,12 +255,14 @@ mod test {
             &from.pubkey(),
             None,
             1,
-            Hash::default(),
+            blockhash,
         );
-        process_transaction(&tx, &mut accounts).unwrap();
-        assert_eq!(accounts[from_account].lamports, 0);
-        assert_eq!(accounts[contract_account].lamports, 1);
-        let budget_state = BudgetState::deserialize(&accounts[contract_account].data).unwrap();
+        bank.process_transaction(&tx).unwrap();
+        assert_eq!(bank.get_balance(&from.pubkey()), 1);
+        assert_eq!(bank.get_balance(&contract.pubkey()), 1);
+
+        let contract_account = bank.get_account(&contract.pubkey()).unwrap();
+        let budget_state = BudgetState::deserialize(&contract_account.data).unwrap();
         assert!(budget_state.is_pending());
 
         // Attack! Try to payout to a rando key
@@ -288,10 +271,10 @@ mod test {
             &contract.pubkey(),
             &rando.pubkey(),
             dt,
-            Hash::default(),
+            blockhash,
         );
         assert_eq!(
-            process_transaction(&tx, &mut accounts).unwrap_err(),
+            bank.process_transaction(&tx).unwrap_err(),
             TransactionError::InstructionError(
                 0,
                 InstructionError::ProgramError(ProgramError::CustomError(
@@ -299,11 +282,12 @@ mod test {
                 ))
             )
         );
-        assert_eq!(accounts[from_account].lamports, 0);
-        assert_eq!(accounts[contract_account].lamports, 1);
-        assert_eq!(accounts[to_account].lamports, 0);
+        assert_eq!(bank.get_balance(&from.pubkey()), 1);
+        assert_eq!(bank.get_balance(&contract.pubkey()), 1);
+        assert_eq!(bank.get_balance(&to.pubkey()), 0);
 
-        let budget_state = BudgetState::deserialize(&accounts[contract_account].data).unwrap();
+        let contract_account = bank.get_account(&contract.pubkey()).unwrap();
+        let budget_state = BudgetState::deserialize(&contract_account.data).unwrap();
         assert!(budget_state.is_pending());
 
         // Now, acknowledge the time in the condition occurred and
@@ -313,32 +297,23 @@ mod test {
             &contract.pubkey(),
             &to.pubkey(),
             dt,
-            Hash::default(),
+            blockhash,
         );
-        process_transaction(&tx, &mut accounts).unwrap();
-        assert_eq!(accounts[from_account].lamports, 0);
-        assert_eq!(accounts[contract_account].lamports, 0);
-        assert_eq!(accounts[to_account].lamports, 1);
-
-        let budget_state = BudgetState::deserialize(&accounts[contract_account].data).unwrap();
-        assert!(!budget_state.is_pending());
-
-        // try to replay the timestamp contract
-        process_transaction(&tx, &mut accounts).unwrap();
-        assert_eq!(accounts[from_account].lamports, 0);
-        assert_eq!(accounts[contract_account].lamports, 0);
-        assert_eq!(accounts[to_account].lamports, 1);
+        bank.process_transaction(&tx).unwrap();
+        assert_eq!(bank.get_balance(&from.pubkey()), 1);
+        assert_eq!(bank.get_balance(&contract.pubkey()), 0);
+        assert_eq!(bank.get_balance(&to.pubkey()), 1);
+        assert_eq!(bank.get_account(&contract.pubkey()), None);
     }
+
     #[test]
     fn test_cancel_transfer() {
-        let mut accounts = vec![Account::new(1, 0, &system_program::id())];
-        let from_account = 0;
-        let contract_account = 1;
-        let pay_account = 2;
-        let from = Keypair::new();
+        let (bank, from) = create_bank(3);
+        let blockhash = bank.last_blockhash();
         let contract = Keypair::new();
         let to = Keypair::new();
         let dt = Utc::now();
+
         let tx = BudgetTransaction::new_on_date(
             &from,
             &to.pubkey(),
@@ -347,51 +322,37 @@ mod test {
             &from.pubkey(),
             Some(from.pubkey()),
             1,
-            Hash::default(),
+            blockhash,
         );
-        process_transaction(&tx, &mut accounts).unwrap();
-        assert_eq!(accounts[from_account].lamports, 0);
-        assert_eq!(accounts[contract_account].lamports, 1);
-        let budget_state = BudgetState::deserialize(&accounts[contract_account].data).unwrap();
+        bank.process_transaction(&tx).unwrap();
+        assert_eq!(bank.get_balance(&from.pubkey()), 2);
+        assert_eq!(bank.get_balance(&contract.pubkey()), 1);
+
+        let contract_account = bank.get_account(&contract.pubkey()).unwrap();
+        let budget_state = BudgetState::deserialize(&contract_account.data).unwrap();
         assert!(budget_state.is_pending());
 
         // Attack! try to put the lamports into the wrong account with cancel
-        let tx = BudgetTransaction::new_signature(
-            &to,
-            &contract.pubkey(),
-            &to.pubkey(),
-            Hash::default(),
-        );
+        let rando = Keypair::new();
+        bank.transfer(1, &from, &rando.pubkey(), blockhash).unwrap();
+        assert_eq!(bank.get_balance(&from.pubkey()), 1);
+
+        let tx =
+            BudgetTransaction::new_signature(&rando, &contract.pubkey(), &to.pubkey(), blockhash);
         // unit test hack, the `from account` is passed instead of the `to` account to avoid
         // creating more account vectors
-        process_transaction(&tx, &mut accounts).unwrap();
+        bank.process_transaction(&tx).unwrap();
         // nothing should be changed because apply witness didn't finalize a payment
-        assert_eq!(accounts[from_account].lamports, 0);
-        assert_eq!(accounts[contract_account].lamports, 1);
-        assert_eq!(accounts.get(pay_account), None);
+        assert_eq!(bank.get_balance(&from.pubkey()), 1);
+        assert_eq!(bank.get_balance(&contract.pubkey()), 1);
+        assert_eq!(bank.get_account(&to.pubkey()), None);
 
         // Now, cancel the transaction. from gets her funds back
-        let tx = BudgetTransaction::new_signature(
-            &from,
-            &contract.pubkey(),
-            &from.pubkey(),
-            Hash::default(),
-        );
-        process_transaction(&tx, &mut accounts).unwrap();
-        assert_eq!(accounts[from_account].lamports, 1);
-        assert_eq!(accounts[contract_account].lamports, 0);
-        assert_eq!(accounts.get(pay_account), None);
-
-        // try to replay the cancel contract
-        let tx = BudgetTransaction::new_signature(
-            &from,
-            &contract.pubkey(),
-            &from.pubkey(),
-            Hash::default(),
-        );
-        process_transaction(&tx, &mut accounts).unwrap();
-        assert_eq!(accounts[from_account].lamports, 1);
-        assert_eq!(accounts[contract_account].lamports, 0);
-        assert_eq!(accounts.get(pay_account), None);
+        let tx =
+            BudgetTransaction::new_signature(&from, &contract.pubkey(), &from.pubkey(), blockhash);
+        bank.process_transaction(&tx).unwrap();
+        assert_eq!(bank.get_balance(&from.pubkey()), 2);
+        assert_eq!(bank.get_account(&contract.pubkey()), None);
+        assert_eq!(bank.get_account(&to.pubkey()), None);
     }
 }
