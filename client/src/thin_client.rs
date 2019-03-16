@@ -6,18 +6,15 @@
 use crate::rpc_client::RpcClient;
 use bincode::serialize_into;
 use log::*;
-use solana_metrics;
-use solana_metrics::influxdb;
 use solana_sdk::hash::Hash;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
-use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::error;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {
@@ -145,29 +142,11 @@ impl ThinClient {
     }
 
     pub fn check_signature(&self, signature: &Signature) -> bool {
-        let now = Instant::now();
-        let result = self.rpc_client.check_signature(signature);
-
-        solana_metrics::submit(
-            influxdb::Point::new("thinclient")
-                .add_tag("op", influxdb::Value::String("check_signature".to_string()))
-                .add_field(
-                    "duration_ms",
-                    influxdb::Value::Integer(timing::duration_as_ms(&now.elapsed()) as i64),
-                )
-                .to_owned(),
-        );
-        result
+        self.rpc_client.check_signature(signature)
     }
 
     pub fn fullnode_exit(&self) -> io::Result<bool> {
         self.rpc_client.fullnode_exit()
-    }
-}
-
-impl Drop for ThinClient {
-    fn drop(&mut self) {
-        solana_metrics::flush();
     }
 }
 
