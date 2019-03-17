@@ -1,44 +1,45 @@
+use crate::generic_rpc_client_request::GenericRpcClientRequest;
+use crate::mock_rpc_client_request::MockRpcClientRequest;
+use crate::rpc_client_request::RpcClientRequest;
 use bs58;
 use log::*;
-use reqwest;
-use reqwest::header::CONTENT_TYPE;
 use serde_json::{json, Value};
 use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND};
 use std::io;
 use std::net::SocketAddr;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use std::{error, fmt};
 
-#[derive(Clone)]
 pub struct RpcClient {
-    pub client: reqwest::Client,
-    pub url: String,
+    client: Box<GenericRpcClientRequest>,
 }
 
 impl RpcClient {
     pub fn new(url: String) -> Self {
-        RpcClient {
-            client: reqwest::Client::new(),
-            url,
+        Self {
+            client: Box::new(RpcClientRequest::new(url)),
         }
     }
 
-    pub fn new_socket_with_timeout(addr: SocketAddr, timeout: Duration) -> Self {
-        let url = get_rpc_request_str(addr, false);
-        let client = reqwest::Client::builder()
-            .timeout(timeout)
-            .build()
-            .expect("build rpc client");
-        RpcClient { client, url }
+    pub fn new_mock(url: String) -> Self {
+        Self {
+            client: Box::new(MockRpcClientRequest::new(url)),
+        }
     }
 
     pub fn new_socket(addr: SocketAddr) -> Self {
         Self::new(get_rpc_request_str(addr, false))
+    }
+
+    pub fn new_socket_with_timeout(addr: SocketAddr, timeout: Duration) -> Self {
+        let url = get_rpc_request_str(addr, false);
+        Self {
+            client: Box::new(RpcClientRequest::new_with_timeout(url, timeout)),
+        }
     }
 
     pub fn retry_get_balance(
@@ -48,14 +49,17 @@ impl RpcClient {
     ) -> Result<Option<u64>, Box<dyn error::Error>> {
         let params = json!([format!("{}", pubkey)]);
         let res = self
-            .retry_make_rpc_request(&RpcRequest::GetBalance, Some(params), retries)?
+            .client
+            .send(&RpcRequest::GetBalance, Some(params), retries)?
             .as_u64();
         Ok(res)
     }
 
     pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
         let params = json!([format!("{}", pubkey)]);
-        let response = self.make_rpc_request(RpcRequest::GetAccountInfo, Some(params));
+        let response = self
+            .client
+            .send(&RpcRequest::GetAccountInfo, Some(params), 0);
         match response {
             Ok(account_json) => {
                 let account: Account =
@@ -77,7 +81,9 @@ impl RpcClient {
     /// by the network, this method will hang indefinitely.
     pub fn get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
         let params = json!([format!("{}", pubkey)]);
-        let response = self.make_rpc_request(RpcRequest::GetAccountInfo, Some(params));
+        let response = self
+            .client
+            .send(&RpcRequest::GetAccountInfo, Some(params), 0);
 
         response
             .and_then(|account_json| {
@@ -98,7 +104,7 @@ impl RpcClient {
     pub fn transaction_count(&self) -> u64 {
         debug!("transaction_count");
         for _tries in 0..5 {
-            let response = self.make_rpc_request(RpcRequest::GetTransactionCount, None);
+            let response = self.client.send(&RpcRequest::GetTransactionCount, None, 0);
 
             match response {
                 Ok(value) => {
@@ -118,7 +124,7 @@ impl RpcClient {
     /// Returns the blockhash Hash or None if there was no response from the server.
     pub fn try_get_recent_blockhash(&self, mut num_retries: u64) -> Option<Hash> {
         loop {
-            let response = self.make_rpc_request(RpcRequest::GetRecentBlockhash, None);
+            let response = self.client.send(&RpcRequest::GetRecentBlockhash, None, 0);
 
             match response {
                 Ok(value) => {
@@ -213,7 +219,8 @@ impl RpcClient {
 
         loop {
             let response =
-                self.make_rpc_request(RpcRequest::ConfirmTransaction, Some(params.clone()));
+                self.client
+                    .send(&RpcRequest::ConfirmTransaction, Some(params.clone()), 0);
 
             match response {
                 Ok(confirmation) => {
@@ -234,7 +241,8 @@ impl RpcClient {
     }
     pub fn fullnode_exit(&self) -> io::Result<bool> {
         let response = self
-            .make_rpc_request(RpcRequest::FullnodeExit, None)
+            .client
+            .send(&RpcRequest::FullnodeExit, None, 0)
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
@@ -249,52 +257,14 @@ impl RpcClient {
         })
     }
 
+    // TODO: Remove
     pub fn retry_make_rpc_request(
         &self,
         request: &RpcRequest,
         params: Option<Value>,
-        mut retries: usize,
+        retries: usize,
     ) -> Result<Value, Box<dyn error::Error>> {
-        // Concurrent requests are not supported so reuse the same request id for all requests
-        let request_id = 1;
-
-        let request_json = request.build_request_json(request_id, params);
-
-        loop {
-            match self
-                .client
-                .post(&self.url)
-                .header(CONTENT_TYPE, "application/json")
-                .body(request_json.to_string())
-                .send()
-            {
-                Ok(mut response) => {
-                    let json: Value = serde_json::from_str(&response.text()?)?;
-                    if json["error"].is_object() {
-                        Err(RpcError::RpcRequestError(format!(
-                            "RPC Error response: {}",
-                            serde_json::to_string(&json["error"]).unwrap()
-                        )))?
-                    }
-                    return Ok(json["result"].clone());
-                }
-                Err(e) => {
-                    info!(
-                        "make_rpc_request() failed, {} retries left: {:?}",
-                        retries, e
-                    );
-                    if retries == 0 {
-                        Err(e)?;
-                    }
-                    retries -= 1;
-
-                    // Sleep for approximately half a slot
-                    sleep(Duration::from_millis(
-                        500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND,
-                    ));
-                }
-            }
-        }
+        self.client.send(request, params, retries)
     }
 }
 
@@ -303,24 +273,6 @@ pub fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
         format!("https://{}", rpc_addr)
     } else {
         format!("http://{}", rpc_addr)
-    }
-}
-
-pub trait RpcRequestHandler {
-    fn make_rpc_request(
-        &self,
-        request: RpcRequest,
-        params: Option<Value>,
-    ) -> Result<Value, Box<dyn error::Error>>;
-}
-
-impl RpcRequestHandler for RpcClient {
-    fn make_rpc_request(
-        &self,
-        request: RpcRequest,
-        params: Option<Value>,
-    ) -> Result<Value, Box<dyn error::Error>> {
-        self.retry_make_rpc_request(&request, params, 0)
     }
 }
 
@@ -344,7 +296,7 @@ pub enum RpcRequest {
 }
 
 impl RpcRequest {
-    fn build_request_json(&self, id: u64, params: Option<Value>) -> Value {
+    pub(crate) fn build_request_json(&self, id: u64, params: Option<Value>) -> Value {
         let jsonrpc = "2.0";
         let method = match self {
             RpcRequest::ConfirmTransaction => "confirmTransaction",
@@ -470,21 +422,25 @@ mod tests {
         let rpc_addr = receiver.recv().unwrap();
         let rpc_client = RpcClient::new_socket(rpc_addr);
 
-        let balance = rpc_client.make_rpc_request(
-            RpcRequest::GetBalance,
+        let balance = rpc_client.retry_make_rpc_request(
+            &RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
+            0,
         );
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
-        let blockhash = rpc_client.make_rpc_request(RpcRequest::GetRecentBlockhash, None);
+        let blockhash = rpc_client.retry_make_rpc_request(&RpcRequest::GetRecentBlockhash, None, 0);
         assert_eq!(
             blockhash.unwrap().as_str().unwrap(),
             "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"
         );
 
         // Send erroneous parameter
-        let blockhash =
-            rpc_client.make_rpc_request(RpcRequest::GetRecentBlockhash, Some(json!("paramter")));
+        let blockhash = rpc_client.retry_make_rpc_request(
+            &RpcRequest::GetRecentBlockhash,
+            Some(json!("paramter")),
+            0,
+        );
         assert_eq!(blockhash.is_err(), true);
     }
 

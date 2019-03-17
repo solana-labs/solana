@@ -7,11 +7,7 @@ use serde_json;
 use serde_json::json;
 use solana_budget_api;
 use solana_budget_api::budget_transaction::BudgetTransaction;
-#[cfg(test)]
-use solana_client::rpc_mock::MockRpcClient as RpcClient;
-#[cfg(not(test))]
-use solana_client::rpc_request::RpcClient;
-use solana_client::rpc_request::{get_rpc_request_str, RpcRequest};
+use solana_client::rpc_request::{get_rpc_request_str, RpcClient, RpcRequest};
 use solana_client::rpc_signature_status::RpcSignatureStatus;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
@@ -693,12 +689,15 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
     }
 
     let drone_addr = config.drone_addr();
+
+    let mut _rpc_client;
     let rpc_client = if config.rpc_client.is_none() {
         let rpc_addr = config.rpc_addr();
-        RpcClient::new(rpc_addr)
+        _rpc_client = RpcClient::new(rpc_addr);
+        &_rpc_client
     } else {
         // Primarily for testing
-        config.rpc_client.clone().unwrap()
+        config.rpc_client.as_ref().unwrap()
     };
 
     match config.command {
@@ -1038,7 +1037,7 @@ mod tests {
     use clap::{App, Arg, ArgGroup, SubCommand};
     use serde_json::Value;
     use solana::socketaddr;
-    use solana_client::rpc_mock::{PUBKEY, SIGNATURE};
+    use solana_client::mock_rpc_client_request::{PUBKEY, SIGNATURE};
     use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use std::fs;
     use std::net::{Ipv4Addr, SocketAddr};
@@ -1494,7 +1493,7 @@ mod tests {
     fn test_wallet_process_command() {
         // Success cases
         let mut config = WalletConfig::default();
-        config.rpc_client = Some(RpcClient::new("succeeds".to_string()));
+        config.rpc_client = Some(RpcClient::new_mock("succeeds".to_string()));
 
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey().to_string();
@@ -1589,7 +1588,7 @@ mod tests {
         config.command = WalletCommand::Airdrop(50);
         assert!(process_command(&config).is_err());
 
-        config.rpc_client = Some(RpcClient::new("airdrop".to_string()));
+        config.rpc_client = Some(RpcClient::new_mock("airdrop".to_string()));
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -1600,7 +1599,7 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         // Failture cases
-        config.rpc_client = Some(RpcClient::new("fails".to_string()));
+        config.rpc_client = Some(RpcClient::new_mock("fails".to_string()));
 
         config.command = WalletCommand::Airdrop(50);
         assert!(process_command(&config).is_err());
@@ -1659,7 +1658,7 @@ mod tests {
 
         // Success case
         let mut config = WalletConfig::default();
-        config.rpc_client = Some(RpcClient::new("succeeds".to_string()));
+        config.rpc_client = Some(RpcClient::new_mock("succeeds".to_string()));
 
         config.command = WalletCommand::Deploy(pathbuf.to_str().unwrap().to_string());
         let result = process_command(&config);
@@ -1675,7 +1674,7 @@ mod tests {
         assert_eq!(program_id_vec.len(), mem::size_of::<Pubkey>());
 
         // Failure cases
-        config.rpc_client = Some(RpcClient::new("airdrop".to_string()));
+        config.rpc_client = Some(RpcClient::new_mock("airdrop".to_string()));
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::Deploy("bad/file/location.so".to_string());
@@ -1708,7 +1707,7 @@ mod tests {
 
     #[test]
     fn test_wallet_get_recent_blockhash() {
-        let rpc_client = RpcClient::new("succeeds".to_string());
+        let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
         let vec = bs58::decode(PUBKEY).into_vec().unwrap();
         let expected_blockhash = Hash::new(&vec);
@@ -1716,7 +1715,7 @@ mod tests {
         let blockhash = get_recent_blockhash(&rpc_client);
         assert_eq!(blockhash.unwrap(), expected_blockhash);
 
-        let rpc_client = RpcClient::new("fails".to_string());
+        let rpc_client = RpcClient::new_mock("fails".to_string());
 
         let blockhash = get_recent_blockhash(&rpc_client);
         assert!(blockhash.is_err());
@@ -1724,7 +1723,7 @@ mod tests {
 
     #[test]
     fn test_wallet_send_transaction() {
-        let rpc_client = RpcClient::new("succeeds".to_string());
+        let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
         let key = Keypair::new();
         let to = Keypair::new().pubkey();
@@ -1734,7 +1733,7 @@ mod tests {
         let signature = send_transaction(&rpc_client, &tx);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
-        let rpc_client = RpcClient::new("fails".to_string());
+        let rpc_client = RpcClient::new_mock("fails".to_string());
 
         let signature = send_transaction(&rpc_client, &tx);
         assert!(signature.is_err());
@@ -1742,17 +1741,17 @@ mod tests {
 
     #[test]
     fn test_wallet_confirm_transaction() {
-        let rpc_client = RpcClient::new("succeeds".to_string());
+        let rpc_client = RpcClient::new_mock("succeeds".to_string());
         let signature = "good_signature";
         let status = confirm_transaction(&rpc_client, &signature);
         assert_eq!(status.unwrap(), RpcSignatureStatus::Confirmed);
 
-        let rpc_client = RpcClient::new("bad_sig_status".to_string());
+        let rpc_client = RpcClient::new_mock("bad_sig_status".to_string());
         let signature = "bad_status";
         let status = confirm_transaction(&rpc_client, &signature);
         assert!(status.is_err());
 
-        let rpc_client = RpcClient::new("fails".to_string());
+        let rpc_client = RpcClient::new_mock("fails".to_string());
         let signature = "bad_status_fmt";
         let status = confirm_transaction(&rpc_client, &signature);
         assert!(status.is_err());
@@ -1760,7 +1759,7 @@ mod tests {
 
     #[test]
     fn test_wallet_send_and_confirm_transaction() {
-        let rpc_client = RpcClient::new("succeeds".to_string());
+        let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
         let key = Keypair::new();
         let to = Keypair::new().pubkey();
@@ -1770,18 +1769,18 @@ mod tests {
         let result = send_and_confirm_transaction(&rpc_client, &mut tx, &key);
         result.unwrap();
 
-        let rpc_client = RpcClient::new("account_in_use".to_string());
+        let rpc_client = RpcClient::new_mock("account_in_use".to_string());
         let result = send_and_confirm_transaction(&rpc_client, &mut tx, &key);
         assert!(result.is_err());
 
-        let rpc_client = RpcClient::new("fails".to_string());
+        let rpc_client = RpcClient::new_mock("fails".to_string());
         let result = send_and_confirm_transaction(&rpc_client, &mut tx, &key);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_wallet_resign_transaction() {
-        let rpc_client = RpcClient::new("succeeds".to_string());
+        let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
         let key = Keypair::new();
         let to = Keypair::new().pubkey();
@@ -1804,7 +1803,7 @@ mod tests {
 
     #[test]
     fn test_request_and_confirm_airdrop() {
-        let rpc_client = RpcClient::new("succeeds".to_string());
+        let rpc_client = RpcClient::new_mock("succeeds".to_string());
         let drone_addr = socketaddr!(0, 0);
         let pubkey = Keypair::new().pubkey();
         let lamports = 50;

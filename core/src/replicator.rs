@@ -12,9 +12,8 @@ use crate::storage_stage::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use crate::window_service::WindowService;
 use rand::thread_rng;
 use rand::Rng;
-use solana_client::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
-use solana_client::thin_client::create_client;
-use solana_client::thin_client::{retry_get_balance, ThinClient};
+use solana_client::rpc_request::{RpcClient, RpcRequest};
+use solana_client::thin_client::{create_client, retry_get_balance, ThinClient};
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
@@ -357,11 +356,11 @@ impl Replicator {
                 RpcClient::new_socket(rpc_peers[node_idx].rpc)
             };
             let storage_blockhash = rpc_client
-                .make_rpc_request(RpcRequest::GetStorageBlockhash, None)
+                .retry_make_rpc_request(&RpcRequest::GetStorageBlockhash, None, 0)
                 .expect("rpc request")
                 .to_string();
             let storage_entry_height = rpc_client
-                .make_rpc_request(RpcRequest::GetStorageEntryHeight, None)
+                .retry_make_rpc_request(&RpcRequest::GetStorageEntryHeight, None, 0)
                 .expect("rpc request")
                 .as_u64()
                 .unwrap();

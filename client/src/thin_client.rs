@@ -57,7 +57,7 @@ impl ThinClient {
         transactions_socket: UdpSocket,
         rpc_client: RpcClient,
     ) -> Self {
-        ThinClient {
+        Self {
             rpc_client,
             transactions_addr,
             transactions_socket,

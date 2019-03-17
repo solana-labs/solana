@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 use solana::fullnode::new_fullnode_for_tests;
-use solana_client::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
+use solana_client::rpc_request::{RpcClient, RpcRequest};
 use solana_drone::drone::run_local_drone;
 use solana_sdk::bpf_loader;
 use solana_wallet::wallet::{process_command, WalletCommand, WalletConfig};
@@ -47,7 +47,7 @@ fn test_wallet_deploy_program() {
 
     let params = json!([program_id_str]);
     let account_info = rpc_client
-        .make_rpc_request(RpcRequest::GetAccountInfo, Some(params))
+        .retry_make_rpc_request(&RpcRequest::GetAccountInfo, Some(params), 0)
         .unwrap();
     let account_info_obj = account_info.as_object().unwrap();
     assert_eq!(
