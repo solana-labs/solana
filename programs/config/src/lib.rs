@@ -11,6 +11,7 @@ fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
+    _tick_height: u64,
 ) -> Result<(), ProgramError> {
     if !check_id(&keyed_accounts[0].account.owner) {
         error!("account[0] is not assigned to the config program");
@@ -36,13 +37,13 @@ fn entrypoint(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
-    _tick_height: u64,
+    tick_height: u64,
 ) -> Result<(), ProgramError> {
     solana_logger::setup();
 
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
-    process_instruction(program_id, keyed_accounts, data)
+    process_instruction(program_id, keyed_accounts, data, tick_height)
 }
 
 #[cfg(test)]
@@ -50,14 +51,13 @@ mod tests {
     use super::*;
     use bincode::{deserialize, serialized_size};
     use serde_derive::{Deserialize, Serialize};
-    use solana_config_api::{id, ConfigInstruction, ConfigState, ConfigTransaction};
-    use solana_runtime::runtime;
-    use solana_sdk::account::Account;
-    use solana_sdk::hash::Hash;
+    use solana_config_api::{id, ConfigInstruction, ConfigState};
+    use solana_runtime::bank::Bank;
+    use solana_runtime::bank_client::BankClient;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
-    use solana_sdk::system_program;
-    use solana_sdk::transaction::Transaction;
+    use solana_sdk::transaction::{Instruction, Transaction};
 
     #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
     struct MyConfig {
@@ -78,125 +78,95 @@ mod tests {
         }
     }
 
-    fn create_config_account() -> Account {
-        Account::new(1, MyConfig::max_space() as usize, &id())
+    fn create_bank(lamports: u64) -> (Bank, Keypair) {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(lamports);
+        let mut bank = Bank::new(&genesis_block);
+        bank.add_instruction_processor(id(), process_instruction);
+        (bank, mint_keypair)
     }
 
-    fn process_transaction(
-        tx: &Transaction,
-        tx_accounts: &mut Vec<Account>,
-    ) -> Result<(), ProgramError> {
-        runtime::process_transaction(tx, tx_accounts, process_instruction)
+    fn create_account_instruction(from_pubkey: &Pubkey, config_pubkey: &Pubkey) -> Instruction {
+        ConfigInstruction::new_account::<MyConfig>(&from_pubkey, &config_pubkey, 1)
+    }
+
+    fn create_config_client(bank: &Bank, from_keypair: Keypair) -> BankClient {
+        let from_client = BankClient::new(&bank, from_keypair);
+        let from_pubkey = from_client.pubkey();
+        let config_client = BankClient::new(&bank, Keypair::new());
+        let config_pubkey = config_client.pubkey();
+
+        let instruction = create_account_instruction(&from_pubkey, &config_pubkey);
+        from_client.process_script(vec![instruction]).unwrap();
+
+        config_client
     }
 
     #[test]
     fn test_process_create_ok() {
         solana_logger::setup();
-        let from_account_keypair = Keypair::new();
-        let from_account = Account::new(1, 0, &system_program::id());
-
-        let config_account_keypair = Keypair::new();
-        let config_account = Account::new(0, 0, &system_program::id());
-
-        let transaction = ConfigTransaction::new_account::<MyConfig>(
-            &from_account_keypair,
-            &config_account_keypair.pubkey(),
-            Hash::default(),
-            1,
-            0,
-        );
-        let mut accounts = vec![from_account, config_account];
-        process_transaction(&transaction, &mut accounts).unwrap();
-
-        assert_eq!(id(), accounts[1].owner);
+        let (bank, from_keypair) = create_bank(10_000);
+        let config_client = create_config_client(&bank, from_keypair);
+        let config_account = bank.get_account(&config_client.pubkey()).unwrap();
+        assert_eq!(id(), config_account.owner);
         assert_eq!(
             MyConfig::default(),
-            MyConfig::deserialize(&accounts[1].data).unwrap()
+            MyConfig::deserialize(&config_account.data).unwrap()
         );
     }
 
     #[test]
     fn test_process_store_ok() {
         solana_logger::setup();
-        let config_account_keypair = Keypair::new();
-        let config_account = create_config_account();
+        let (bank, from_keypair) = create_bank(10_000);
+        let config_client = create_config_client(&bank, from_keypair);
+        let config_pubkey = config_client.pubkey();
 
-        let new_config_state = MyConfig::new(42);
+        let my_config = MyConfig::new(42);
+        let instruction = ConfigInstruction::new_store(&config_pubkey, &my_config);
+        config_client.process_script(vec![instruction]).unwrap();
 
-        let transaction = ConfigTransaction::new_store(
-            &config_account_keypair,
-            &new_config_state,
-            Hash::default(),
-            0,
-        );
-
-        let mut accounts = vec![config_account];
-        process_transaction(&transaction, &mut accounts).unwrap();
-
+        let config_account = bank.get_account(&config_pubkey).unwrap();
         assert_eq!(
-            new_config_state,
-            MyConfig::deserialize(&accounts[0].data).unwrap()
+            my_config,
+            MyConfig::deserialize(&config_account.data).unwrap()
         );
     }
 
     #[test]
     fn test_process_store_fail_instruction_data_too_large() {
         solana_logger::setup();
-        let config_account_keypair = Keypair::new();
-        let config_account = create_config_account();
+        let (bank, from_keypair) = create_bank(10_000);
+        let config_client = create_config_client(&bank, from_keypair);
+        let config_pubkey = config_client.pubkey();
 
-        let new_config_state = MyConfig::new(42);
-
-        let mut transaction = ConfigTransaction::new_store(
-            &config_account_keypair,
-            &new_config_state,
-            Hash::default(),
-            0,
-        );
+        let my_config = MyConfig::new(42);
+        let instruction = ConfigInstruction::new_store(&config_pubkey, &my_config);
 
         // Replace instruction data with a vector that's too large
+        let mut transaction = Transaction::new(vec![instruction]);
         transaction.instructions[0].data = vec![0; 123];
-
-        let mut accounts = vec![config_account];
-        process_transaction(&transaction, &mut accounts).unwrap_err();
-    }
-
-    #[test]
-    fn test_process_store_fail_account0_invalid_owner() {
-        solana_logger::setup();
-        let config_account_keypair = Keypair::new();
-        let mut config_account = create_config_account();
-        config_account.owner = Pubkey::default(); // <-- Invalid owner
-
-        let new_config_state = MyConfig::new(42);
-
-        let transaction = ConfigTransaction::new_store(
-            &config_account_keypair,
-            &new_config_state,
-            Hash::default(),
-            0,
-        );
-        let mut accounts = vec![config_account];
-        process_transaction(&transaction, &mut accounts).unwrap_err();
+        config_client.process_transaction(transaction).unwrap_err();
     }
 
     #[test]
     fn test_process_store_fail_account0_not_signer() {
         solana_logger::setup();
-        let system_account_keypair = Keypair::new();
-        let system_account = Account::new(42, 0, &system_program::id());
+        let (bank, from_keypair) = create_bank(10_000);
+        let system_keypair = Keypair::new();
+        let system_pubkey = system_keypair.pubkey();
+        bank.transfer(42, &from_keypair, &system_pubkey, bank.last_blockhash())
+            .unwrap();
+        let config_client = create_config_client(&bank, from_keypair);
+        let config_pubkey = config_client.pubkey();
 
-        let config_account_keypair = Keypair::new();
-        let config_account = create_config_account();
+        let move_instruction = SystemInstruction::new_move(&system_pubkey, &Pubkey::default(), 42);
+        let my_config = MyConfig::new(42);
+        let store_instruction = ConfigInstruction::new_store(&config_pubkey, &my_config);
 
-        let mut transaction = Transaction::new(vec![
-            SystemInstruction::new_move(&system_account_keypair.pubkey(), &Pubkey::default(), 42),
-            ConfigInstruction::new_store(&config_account_keypair.pubkey(), &MyConfig::new(42)),
-        ]);
-
-        // Don't sign the transaction with `config_account_keypair`
-        transaction.sign_unchecked(&[&system_account_keypair], Hash::default());
-        let mut accounts = vec![system_account, config_account];
-        process_transaction(&transaction, &mut accounts).unwrap_err();
+        // Don't sign the transaction with `config_client`
+        let mut transaction = Transaction::new(vec![move_instruction, store_instruction]);
+        transaction.sign_unchecked(&[&system_keypair], bank.last_blockhash());
+        let system_client = BankClient::new(&bank, system_keypair);
+        system_client.process_transaction(transaction).unwrap_err();
     }
 }
