@@ -1,6 +1,6 @@
-use crate::rpc_service::RPC_PORT;
 use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::rpc_port;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::timestamp;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
@@ -151,8 +151,8 @@ impl ContactInfo {
         let gossip_addr = Self::next_port(&bind_addr, 1);
         let tvu_addr = Self::next_port(&bind_addr, 2);
         let tpu_via_blobs_addr = Self::next_port(&bind_addr, 3);
-        let rpc_addr = SocketAddr::new(bind_addr.ip(), RPC_PORT);
-        let rpc_pubsub_addr = SocketAddr::new(bind_addr.ip(), RPC_PORT + 1);
+        let rpc_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
+        let rpc_pubsub_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
         Self::new(
             pubkey,
             gossip_addr,

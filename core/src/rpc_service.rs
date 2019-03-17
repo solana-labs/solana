@@ -13,8 +13,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 
-pub const RPC_PORT: u16 = 8899;
-
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
     pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>, // Used only by tests...

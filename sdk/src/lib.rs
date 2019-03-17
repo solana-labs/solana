@@ -8,6 +8,7 @@ pub mod native_loader;
 pub mod native_program;
 pub mod packet;
 pub mod pubkey;
+pub mod rpc_port;
 pub mod shortvec;
 pub mod signature;
 pub mod system_instruction;

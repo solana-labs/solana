@@ -21,7 +21,6 @@ use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
 use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote};
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::result::Result;
-use crate::rpc_service::RPC_PORT;
 use crate::staking_utils;
 use crate::streamer::{BlobReceiver, BlobSender};
 use bincode::{deserialize, serialize};
@@ -35,6 +34,7 @@ use solana_netutil::{bind_in_range, bind_to, find_available_port_in_range, multi
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::rpc_port;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use solana_sdk::transaction::Transaction;
@@ -1436,8 +1436,8 @@ impl Node {
             SocketAddr::new(gossip_addr.ip(), tpu_port),
             SocketAddr::new(gossip_addr.ip(), tpu_via_blobs_port),
             SocketAddr::new(gossip_addr.ip(), storage_port),
-            SocketAddr::new(gossip_addr.ip(), RPC_PORT),
-            SocketAddr::new(gossip_addr.ip(), RPC_PORT + 1),
+            SocketAddr::new(gossip_addr.ip(), rpc_port::DEFAULT_RPC_PORT),
+            SocketAddr::new(gossip_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT),
             0,
         );
         trace!("new ContactInfo: {:?}", info);

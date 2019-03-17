@@ -5,8 +5,6 @@ use clap::ArgMatches;
 use log::*;
 use serde_json;
 use serde_json::json;
-use solana::rpc_service::RPC_PORT;
-use solana::rpc_status::RpcSignatureStatus;
 use solana_budget_api;
 use solana_budget_api::budget_transaction::BudgetTransaction;
 #[cfg(test)]
@@ -14,6 +12,7 @@ use solana_client::rpc_mock::{request_airdrop_transaction, MockRpcClient as RpcC
 #[cfg(not(test))]
 use solana_client::rpc_request::RpcClient;
 use solana_client::rpc_request::{get_rpc_request_str, RpcRequest};
+use solana_client::rpc_signature_status::RpcSignatureStatus;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone::DRONE_PORT;
@@ -21,6 +20,7 @@ use solana_sdk::bpf_loader;
 use solana_sdk::hash::Hash;
 use solana_sdk::loader_transaction::LoaderTransaction;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::rpc_port::DEFAULT_RPC_PORT;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND};
@@ -111,7 +111,7 @@ impl Default for WalletConfig {
             id: Keypair::new(),
             rpc_client: None,
             rpc_host: None,
-            rpc_port: RPC_PORT,
+            rpc_port: DEFAULT_RPC_PORT,
             rpc_tls: false,
         }
     }
