@@ -54,14 +54,14 @@ pub fn sample_tx_count(
 ) {
     let client = create_client(v.client_facing_addr(), FULLNODE_PORT_RANGE);
     let mut now = Instant::now();
-    let mut initial_tx_count = client.transaction_count();
+    let mut initial_tx_count = client.get_transaction_count().expect("transaction count");
     let mut max_tps = 0.0;
     let mut total;
 
     let log_prefix = format!("{:21}:", v.tpu.to_string());
 
     loop {
-        let tx_count = client.transaction_count();
+        let tx_count = client.get_transaction_count().expect("transaction count");
         assert!(
             tx_count >= initial_tx_count,
             "expected tx_count({}) >= initial_tx_count({})",

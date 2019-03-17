@@ -25,7 +25,7 @@ fn test_thin_client_basic() {
 
     let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
 
-    let transaction_count = client.transaction_count();
+    let transaction_count = client.get_transaction_count().unwrap();
     assert_eq!(transaction_count, 0);
 
     let blockhash = client.get_recent_blockhash();
@@ -40,7 +40,7 @@ fn test_thin_client_basic() {
     let balance = client.get_balance(&bob_pubkey);
     assert_eq!(balance.unwrap(), 500);
 
-    let transaction_count = client.transaction_count();
+    let transaction_count = client.get_transaction_count().unwrap();
     assert_eq!(transaction_count, 1);
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -144,7 +144,7 @@ fn test_transaction_count() {
         transactions_socket,
         Duration::from_secs(2),
     );
-    assert_eq!(client.transaction_count(), 0);
+    client.get_transaction_count().unwrap_err();
 }
 
 #[test]

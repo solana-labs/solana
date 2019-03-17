@@ -102,23 +102,28 @@ impl RpcClient {
 
     /// Request the transaction count.  If the response packet is dropped by the network,
     /// this method will try again 5 times.
-    pub fn transaction_count(&self) -> u64 {
-        debug!("transaction_count");
-        for _tries in 0..5 {
+    pub fn get_transaction_count(&self) -> Result<u64, Box<dyn error::Error>> {
+        debug!("get_transaction_count");
+
+        let mut num_retries = 5;
+        loop {
             let response = self.client.send(&RpcRequest::GetTransactionCount, None, 0);
 
             match response {
                 Ok(value) => {
                     debug!("transaction_count response: {:?}", value);
                     let transaction_count = value.as_u64().unwrap();
-                    return transaction_count;
+                    return Ok(transaction_count);
                 }
-                Err(error) => {
-                    debug!("transaction_count failed: {:?}", error);
+                Err(err) => {
+                    debug!("transaction_count failed: {:?}", err);
+                    num_retries -= 1;
+                    if num_retries == 0 {
+                        return Err(err);
+                    }
                 }
-            };
+            }
         }
-        0
     }
 
     /// Request the last Entry ID from the server without blocking.
