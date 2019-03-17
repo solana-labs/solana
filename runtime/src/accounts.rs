@@ -106,22 +106,22 @@ struct AccountInfo {
     /// purposes to remove accounts with zero balance.
     lamports: u64,
 
-    /// Maintain vote accounts for performance reasons to avoid having
-    /// to iterate through the entire accounts each time
+    /// keep track if this is a vote account for performance reasons to avoid
+    /// having to read the accounts from the storage
     is_vote_account: bool,
 }
 
 // in a given a Fork, which AppendVecId and offset
 type AccountMap = RwLock<HashMap<Pubkey, AccountInfo>>;
 
-/// information about where Accounts are stored and which vote accounts are present
+/// information about where Accounts are stored
 /// keying hierarchy is:
 ///
-///    pubkey->fork->append_vec->offset
+///    fork->pubkey->append_vec->offset
 ///
 #[derive(Default)]
 struct AccountIndex {
-    /// For each Pubkey, the Account for a specific Fork is in a specific
+    /// For each Fork, the Account for a specific Pubkey is in a specific
     ///  AppendVec at a specific index.  There may be an Account for Pubkey
     ///  in any number of Forks.
     account_maps: RwLock<HashMap<Fork, AccountMap>>,
