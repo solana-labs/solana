@@ -1,7 +1,8 @@
 //! The `vote_signer_proxy` votes on the `blockhash` of the bank at a regular cadence
 
 use jsonrpc_core;
-use solana_client::rpc_request::{RpcClient, RpcRequest};
+use solana_client::rpc_client::RpcClient;
+use solana_client::rpc_request::RpcRequest;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_vote_signer::rpc::LocalVoteSigner;
