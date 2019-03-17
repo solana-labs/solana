@@ -170,6 +170,7 @@ impl ReplayStage {
                                 0,
                             );
                             locktower.record_vote(bank.slot());
+                            locktower.update_epoch(&bank);
                             cluster_info.write().unwrap().push_vote(vote);
                         }
                         poh_recorder.lock().unwrap().reset(

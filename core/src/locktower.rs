@@ -10,6 +10,13 @@ use solana_vote_api::vote_state::{Lockout, VoteState, MAX_LOCKOUT_HISTORY};
 const VOTE_THRESHOLD_DEPTH: usize = 8;
 const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 
+#[derive(Default)]
+pub struct Epoch {
+    slot: u64,
+    stakes: HashMap<Pubkey, u64>,
+    total_staked: u64,
+}
+
 pub struct StakeLockout {
     lockout: u64,
     stake: u64,
@@ -17,10 +24,34 @@ pub struct StakeLockout {
 
 #[derive(Default)]
 pub struct Locktower {
-    pub max_stake: u64,
+    epoch: Epoch,
     threshold_depth: usize,
     threshold_size: f64,
     lockouts: VoteState,
+}
+
+impl Epoch {
+    pub fn new(slot: u64, stakes: HashMap<Pubkey, u64>) -> Self {
+        let total_staked = stakes.values().sum();
+        Self {
+            slot,
+            stakes,
+            total_staked,
+        }
+    }
+    pub fn new_test(lamports: u64) -> Self {
+        Epoch::new(0, vec![(Pubkey::default(), lamports)].into_iter().collect())
+    }
+    pub fn new_from_stake_accounts(slot: u64, accounts: &[(Pubkey, Account)]) -> Self {
+        let stakes = accounts.iter().map(|(k, v)| (*k, v.lamports)).collect();
+        Self::new(slot, stakes)
+    }
+    pub fn new_from_bank(bank: &Bank) -> Self {
+        let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
+        let stakes = staking_utils::vote_account_balances_at_epoch(bank, bank_epoch)
+            .expect("voting require a bank with stakes");
+        Self::new(bank_epoch, stakes)
+    }
 }
 
 impl Locktower {
@@ -36,12 +67,10 @@ impl Locktower {
     }
 
     pub fn new_from_bank(bank: &Bank) -> Locktower {
-        let mut max_stake = 0;
         let current_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
         let mut lockouts = VoteState::default();
         if let Some(iter) = staking_utils::node_staked_accounts_at_epoch(bank, current_epoch) {
-            for (delegate_id, stake, account) in iter {
-                max_stake += stake;
+            for (delegate_id, _, account) in iter {
                 if *delegate_id == bank.collector_id() {
                     let state = VoteState::deserialize(&account.data).expect("votes");
                     if lockouts.votes.len() < state.votes.len() {
@@ -51,16 +80,17 @@ impl Locktower {
                 }
             }
         }
+        let epoch = Epoch::new_from_bank(bank);
         Locktower {
-            max_stake,
+            epoch,
             threshold_depth: VOTE_THRESHOLD_DEPTH,
             threshold_size: VOTE_THRESHOLD_SIZE,
             lockouts,
         }
     }
-    pub fn new(max_stake: u64, threshold_depth: usize, threshold_size: f64) -> Locktower {
+    pub fn new(epoch: Epoch, threshold_depth: usize, threshold_size: f64) -> Locktower {
         Locktower {
-            max_stake,
+            epoch,
             threshold_depth,
             threshold_size,
             lockouts: VoteState::default(),
@@ -76,7 +106,11 @@ impl Locktower {
         F: Iterator<Item = (Pubkey, Account)>,
     {
         let mut stake_lockouts = HashMap::new();
-        for (_, account) in vote_accounts {
+        for (key, account) in vote_accounts {
+            let lamports: u64 = *self.epoch.stakes.get(&key).unwrap_or(&0);
+            if lamports == 0 {
+                continue;
+            }
             let mut vote_state: VoteState = VoteState::deserialize(&account.data)
                 .expect("bank should always have valid VoteState data");
             let start_root = vote_state.root_slot;
@@ -101,9 +135,17 @@ impl Locktower {
                 Self::insert_fork_tree_lockouts(&mut stake_lockouts, &vote, flat_parents);
             }
             // each account hash a stake for all the forks in the active tree for this bank
-            Self::insert_fork_tree_stake(&mut stake_lockouts, bank_slot, &account, flat_parents);
+            Self::insert_fork_tree_stake(&mut stake_lockouts, bank_slot, lamports, flat_parents);
         }
         stake_lockouts
+    }
+
+    pub fn update_epoch(&mut self, bank: &Bank) {
+        let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
+        if bank_epoch != self.epoch.slot {
+            assert!(bank_epoch > self.epoch.slot, "epoch cannot move backwards");
+            self.epoch = Epoch::new_from_bank(bank);
+        }
     }
 
     pub fn record_vote(&mut self, slot: u64) {
@@ -163,7 +205,7 @@ impl Locktower {
         let vote = lockouts.nth_recent_vote(self.threshold_depth);
         if let Some(vote) = vote {
             if let Some(fork_stake) = stake_lockouts.get(&vote.slot) {
-                (fork_stake.stake as f64 / self.max_stake as f64) > self.threshold_size
+                (fork_stake.stake as f64 / self.epoch.total_staked as f64) > self.threshold_size
             } else {
                 false
             }
@@ -192,7 +234,7 @@ impl Locktower {
     fn insert_fork_tree_stake(
         stake_lockouts: &mut HashMap<u64, StakeLockout>,
         slot: u64,
-        account: &Account,
+        lamports: u64,
         flat_parents: &HashMap<u64, HashSet<u64>>,
     ) {
         let mut fork_tree = vec![slot];
@@ -202,7 +244,7 @@ impl Locktower {
                 lockout: 0,
                 stake: 0,
             });
-            entry.stake += account.lamports;
+            entry.stake += lamports;
         }
     }
 }
@@ -210,6 +252,7 @@ impl Locktower {
 #[cfg(test)]
 mod test {
     use super::*;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
 
     fn gen_accounts(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, Account)> {
         let mut accounts = vec![];
@@ -224,16 +267,30 @@ mod test {
             vote_state
                 .serialize(&mut account.data)
                 .expect("serialize state");
-            accounts.push((Pubkey::default(), account));
+            accounts.push((Keypair::new().pubkey(), account));
         }
         accounts
     }
 
     #[test]
+    fn test_collect_vote_lockouts_no_epoch_stakes() {
+        let accounts = gen_accounts(&[(1, &[0])]);
+        let epoch = Epoch::new_test(2);
+        let locktower = Locktower::new(epoch, 0, 0.67);
+        let flat_parents = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
+            .into_iter()
+            .collect();
+        let staked_lockouts =
+            locktower.collect_vote_lockouts(1, accounts.into_iter(), &flat_parents);
+        assert!(staked_lockouts.is_empty());
+    }
+
+    #[test]
     fn test_collect_vote_lockouts_sums() {
-        let locktower = Locktower::new(2, 0, 0.67);
         //two accounts voting for slot 0 with 1 token staked
         let accounts = gen_accounts(&[(1, &[0]), (1, &[0])]);
+        let epoch = Epoch::new_from_stake_accounts(0, &accounts);
+        let locktower = Locktower::new(epoch, 0, 0.67);
         let flat_parents = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
             .into_iter()
             .collect();
@@ -245,16 +302,17 @@ mod test {
 
     #[test]
     fn test_collect_vote_lockouts_root() {
-        let mut locktower = Locktower::new(2, 0, 0.67);
+        let votes: Vec<u64> = (0..MAX_LOCKOUT_HISTORY as u64).into_iter().collect();
+        //two accounts voting for slot 0 with 1 token staked
+        let accounts = gen_accounts(&[(1, &votes), (1, &votes)]);
+        let epoch = Epoch::new_from_stake_accounts(0, &accounts);
+        let mut locktower = Locktower::new(epoch, 0, 0.67);
         let mut flat_parents = HashMap::new();
         for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
             locktower.record_vote(i as u64);
             flat_parents.insert(i as u64, (0..i as u64).into_iter().collect());
         }
         assert_eq!(locktower.lockouts.root_slot, Some(0));
-        let votes: Vec<u64> = (0..MAX_LOCKOUT_HISTORY as u64).into_iter().collect();
-        //two accounts voting for slot 0 with 1 token staked
-        let accounts = gen_accounts(&[(1, &votes), (1, &votes)]);
         let staked_lockouts = locktower.collect_vote_lockouts(
             MAX_LOCKOUT_HISTORY as u64,
             accounts.into_iter(),
@@ -269,7 +327,7 @@ mod test {
 
     #[test]
     fn test_calculate_weight_skips_root() {
-        let mut locktower = Locktower::new(2, 0, 0.67);
+        let mut locktower = Locktower::new(Epoch::new_test(2), 0, 0.67);
         locktower.lockouts.root_slot = Some(1);
         let stakes = vec![
             (
@@ -294,7 +352,7 @@ mod test {
 
     #[test]
     fn test_calculate_weight() {
-        let locktower = Locktower::new(2, 0, 0.67);
+        let locktower = Locktower::new(Epoch::new_test(2), 0, 0.67);
         let stakes = vec![(
             0,
             StakeLockout {
@@ -309,7 +367,7 @@ mod test {
 
     #[test]
     fn test_check_vote_threshold_without_votes() {
-        let locktower = Locktower::new(2, 1, 0.67);
+        let locktower = Locktower::new(Epoch::new_test(2), 1, 0.67);
         let stakes = vec![(
             0,
             StakeLockout {
@@ -324,14 +382,14 @@ mod test {
 
     #[test]
     fn test_check_vote_lockout_empty() {
-        let locktower = Locktower::new(2, 0, 0.67);
+        let locktower = Locktower::new(Epoch::new_test(2), 0, 0.67);
         let flat_children = HashMap::new();
         assert!(locktower.check_vote_lockout(0, &flat_children));
     }
 
     #[test]
     fn test_check_vote_lockout_root_slot_child() {
-        let mut locktower = Locktower::new(2, 0, 0.67);
+        let mut locktower = Locktower::new(Epoch::new_test(2), 0, 0.67);
         let flat_children = vec![(0, vec![1].into_iter().collect())]
             .into_iter()
             .collect();
@@ -341,7 +399,7 @@ mod test {
 
     #[test]
     fn test_check_vote_lockout_root_slot_sibling() {
-        let mut locktower = Locktower::new(2, 0, 0.67);
+        let mut locktower = Locktower::new(Epoch::new_test(2), 0, 0.67);
         let flat_children = vec![(0, vec![1].into_iter().collect())]
             .into_iter()
             .collect();
@@ -351,7 +409,7 @@ mod test {
 
     #[test]
     fn test_check_already_voted() {
-        let mut locktower = Locktower::new(2, 0, 0.67);
+        let mut locktower = Locktower::new(Epoch::new_test(2), 0, 0.67);
         locktower.record_vote(0);
         assert!(locktower.check_already_voted(0));
         assert!(!locktower.check_already_voted(1));
@@ -359,7 +417,7 @@ mod test {
 
     #[test]
     fn test_check_vote_lockout_double_vote() {
-        let mut locktower = Locktower::new(2, 0, 0.67);
+        let mut locktower = Locktower::new(Epoch::new_test(2), 0, 0.67);
         let flat_children = vec![(0, vec![1].into_iter().collect()), (1, HashSet::new())]
             .into_iter()
             .collect();
@@ -370,7 +428,7 @@ mod test {
 
     #[test]
     fn test_check_vote_lockout_child() {
-        let mut locktower = Locktower::new(2, 0, 0.67);
+        let mut locktower = Locktower::new(Epoch::new_test(2), 0, 0.67);
         let flat_children = vec![(0, vec![1].into_iter().collect())]
             .into_iter()
             .collect();
@@ -380,7 +438,7 @@ mod test {
 
     #[test]
     fn test_check_vote_lockout_sibling() {
-        let mut locktower = Locktower::new(2, 0, 0.67);
+        let mut locktower = Locktower::new(Epoch::new_test(2), 0, 0.67);
         let flat_children = vec![
             (0, vec![1, 2].into_iter().collect()),
             (1, HashSet::new()),
@@ -395,7 +453,7 @@ mod test {
 
     #[test]
     fn test_check_vote_lockout_last_vote_expired() {
-        let mut locktower = Locktower::new(2, 0, 0.67);
+        let mut locktower = Locktower::new(Epoch::new_test(2), 0, 0.67);
         let flat_children = vec![(0, vec![1, 4].into_iter().collect()), (1, HashSet::new())]
             .into_iter()
             .collect();
@@ -411,7 +469,7 @@ mod test {
 
     #[test]
     fn test_check_vote_threshold_below_threshold() {
-        let mut locktower = Locktower::new(2, 1, 0.67);
+        let mut locktower = Locktower::new(Epoch::new_test(2), 1, 0.67);
         let stakes = vec![(
             0,
             StakeLockout {
@@ -426,7 +484,7 @@ mod test {
     }
     #[test]
     fn test_check_vote_threshold_above_threshold() {
-        let mut locktower = Locktower::new(2, 1, 0.67);
+        let mut locktower = Locktower::new(Epoch::new_test(2), 1, 0.67);
         let stakes = vec![(
             0,
             StakeLockout {
@@ -442,7 +500,7 @@ mod test {
 
     #[test]
     fn test_check_vote_threshold_above_threshold_after_pop() {
-        let mut locktower = Locktower::new(2, 1, 0.67);
+        let mut locktower = Locktower::new(Epoch::new_test(2), 1, 0.67);
         let stakes = vec![(
             0,
             StakeLockout {
@@ -460,7 +518,7 @@ mod test {
 
     #[test]
     fn test_check_vote_threshold_above_threshold_no_stake() {
-        let mut locktower = Locktower::new(2, 1, 0.67);
+        let mut locktower = Locktower::new(Epoch::new_test(2), 1, 0.67);
         let stakes = HashMap::new();
         locktower.record_vote(0);
         assert!(!locktower.check_vote_stake_threshold(1, &stakes));
@@ -514,7 +572,7 @@ mod test {
         account.lamports = 1;
         let set: HashSet<u64> = vec![0u64, 1u64].into_iter().collect();
         let flat_parents: HashMap<u64, HashSet<u64>> = [(2u64, set)].into_iter().cloned().collect();
-        Locktower::insert_fork_tree_stake(&mut stake_lockouts, 2, &account, &flat_parents);
+        Locktower::insert_fork_tree_stake(&mut stake_lockouts, 2, account.lamports, &flat_parents);
         assert_eq!(stake_lockouts[&0].stake, 1);
         assert_eq!(stake_lockouts[&1].stake, 1);
         assert_eq!(stake_lockouts[&2].stake, 1);
