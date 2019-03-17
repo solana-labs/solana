@@ -4,7 +4,7 @@ use reqwest;
 use reqwest::header::CONTENT_TYPE;
 use serde_json::{json, Value};
 use solana::fullnode::new_fullnode_for_tests;
-use solana_client::rpc_request::get_rpc_request_str;
+use solana_client::rpc_client::get_rpc_request_str;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;

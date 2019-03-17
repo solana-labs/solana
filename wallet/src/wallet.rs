@@ -7,7 +7,8 @@ use serde_json;
 use serde_json::json;
 use solana_budget_api;
 use solana_budget_api::budget_transaction::BudgetTransaction;
-use solana_client::rpc_request::{get_rpc_request_str, RpcClient, RpcRequest};
+use solana_client::rpc_client::{get_rpc_request_str, RpcClient};
+use solana_client::rpc_request::RpcRequest;
 use solana_client::rpc_signature_status::RpcSignatureStatus;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;

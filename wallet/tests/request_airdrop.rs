@@ -1,5 +1,5 @@
 use solana::fullnode::new_fullnode_for_tests;
-use solana_client::rpc_request::RpcClient;
+use solana_client::rpc_client::RpcClient;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::signature::KeypairUtil;
 use solana_wallet::wallet::{process_command, WalletCommand, WalletConfig};
