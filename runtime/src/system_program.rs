@@ -109,6 +109,7 @@ mod tests {
     use solana_sdk::account::Account;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::native_program::ProgramError;
+    use solana_sdk::script::Script;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
@@ -291,11 +292,11 @@ mod tests {
 
         // Erroneously sign transaction with recipient account key
         // No signature case is tested by bank `test_zero_signatures()`
-        let malicious_script = vec![Instruction::new(
+        let malicious_script = Script::new(vec![Instruction::new(
             system_program::id(),
             &SystemInstruction::Move { lamports: 10 },
             vec![(alice_pubkey, false), (mallory_pubkey, true)],
-        )];
+        )]);
         assert_eq!(
             mallory_client.process_script(malicious_script),
             Err(TransactionError::InstructionError(

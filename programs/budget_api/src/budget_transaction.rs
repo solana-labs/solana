@@ -5,9 +5,10 @@ use bincode::deserialize;
 use chrono::prelude::*;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::script::Script;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::transaction::{Script, Transaction};
+use solana_sdk::transaction::Transaction;
 
 pub struct BudgetTransaction {}
 
@@ -18,7 +19,7 @@ impl BudgetTransaction {
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
-        let mut tx = Transaction::new(script);
+        let mut tx = script.compile();
         tx.fee = fee;
         tx.sign(&[from_keypair], recent_blockhash);
         tx

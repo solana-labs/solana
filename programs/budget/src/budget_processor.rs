@@ -292,7 +292,7 @@ mod test {
             dt,
         );
         assert_eq!(
-            alice_client.process_script(vec![instruction]).unwrap_err(),
+            alice_client.process_instruction(instruction).unwrap_err(),
             TransactionError::InstructionError(
                 0,
                 InstructionError::ProgramError(ProgramError::CustomError(
@@ -312,7 +312,7 @@ mod test {
         // that pubkey's funds are now available.
         let instruction =
             BudgetInstruction::new_apply_timestamp(&alice_pubkey, &budget_pubkey, &bob_pubkey, dt);
-        alice_client.process_script(vec![instruction]).unwrap();
+        alice_client.process_instruction(instruction).unwrap();
         assert_eq!(bank.get_balance(&alice_pubkey), 1);
         assert_eq!(bank.get_balance(&budget_pubkey), 0);
         assert_eq!(bank.get_balance(&bob_pubkey), 1);
@@ -353,7 +353,7 @@ mod test {
 
         let instruction =
             BudgetInstruction::new_apply_signature(&mallory_pubkey, &budget_pubkey, &bob_pubkey);
-        mallory_client.process_script(vec![instruction]).unwrap();
+        mallory_client.process_instruction(instruction).unwrap();
         // nothing should be changed because apply witness didn't finalize a payment
         assert_eq!(bank.get_balance(&alice_pubkey), 1);
         assert_eq!(bank.get_balance(&budget_pubkey), 1);
@@ -362,7 +362,7 @@ mod test {
         // Now, cancel the transaction. mint gets her funds back
         let instruction =
             BudgetInstruction::new_apply_signature(&alice_pubkey, &budget_pubkey, &alice_pubkey);
-        alice_client.process_script(vec![instruction]).unwrap();
+        alice_client.process_instruction(instruction).unwrap();
         assert_eq!(bank.get_balance(&alice_pubkey), 2);
         assert_eq!(bank.get_account(&budget_pubkey), None);
         assert_eq!(bank.get_account(&bob_pubkey), None);
