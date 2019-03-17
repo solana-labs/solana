@@ -316,7 +316,7 @@ impl Replicator {
         );
         Self::get_airdrop_lamports(&client, &self.keypair, &self.cluster_entrypoint);
 
-        let blockhash = client.get_recent_blockhash();
+        let blockhash = client.get_recent_blockhash().expect("blockhash");
         let mut tx = StorageTransaction::new_mining_proof(
             &self.keypair,
             self.hash,
@@ -388,7 +388,7 @@ impl Replicator {
 
             let airdrop_amount = 1;
 
-            let blockhash = client.get_recent_blockhash();
+            let blockhash = client.get_recent_blockhash().expect("blockhash");
             match request_airdrop_transaction(
                 &drone_addr,
                 &keypair.pubkey(),

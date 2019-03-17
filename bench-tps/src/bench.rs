@@ -119,7 +119,7 @@ pub fn send_barrier_transaction(
             );
         }
 
-        *blockhash = barrier_client.get_recent_blockhash();
+        *blockhash = barrier_client.get_recent_blockhash().unwrap();
 
         let transaction =
             SystemTransaction::new_account(&source_keypair, dest_id, 0, *blockhash, 0);
@@ -164,7 +164,7 @@ pub fn send_barrier_transaction(
             exit(1);
         }
 
-        let new_blockhash = barrier_client.get_recent_blockhash();
+        let new_blockhash = barrier_client.get_recent_blockhash().unwrap();
         if new_blockhash == *blockhash {
             if poll_count > 0 && poll_count % 8 == 0 {
                 println!("blockhash is not advancing, still at {:?}", *blockhash);
@@ -186,7 +186,7 @@ pub fn generate_txs(
     contact_info: &ContactInfo,
 ) {
     let client = create_client(contact_info.client_facing_addr(), FULLNODE_PORT_RANGE);
-    let blockhash = client.get_recent_blockhash();
+    let blockhash = client.get_recent_blockhash().unwrap();
     let tx_count = source.len();
     println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
     let signing_start = Instant::now();
@@ -376,7 +376,7 @@ pub fn fund_keys(client: &ThinClient, source: &Keypair, dests: &[Keypair], lampo
                     to_fund_txs.len(),
                 );
 
-                let blockhash = client.get_recent_blockhash();
+                let blockhash = client.get_recent_blockhash().unwrap();
 
                 // re-sign retained to_fund_txes with updated blockhash
                 to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
@@ -415,7 +415,7 @@ pub fn airdrop_lamports(client: &ThinClient, drone_addr: &SocketAddr, id: &Keypa
             id.pubkey(),
         );
 
-        let blockhash = client.get_recent_blockhash();
+        let blockhash = client.get_recent_blockhash().unwrap();
         match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, blockhash) {
             Ok(transaction) => {
                 let signature = client.transfer_signed(&transaction).unwrap();

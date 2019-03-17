@@ -37,7 +37,7 @@ pub fn spend_and_verify_all_nodes(
             &funding_keypair,
             &random_keypair.pubkey(),
             1,
-            client.get_recent_blockhash(),
+            client.get_recent_blockhash().unwrap(),
             0,
         );
         let sig = client
@@ -62,7 +62,7 @@ pub fn send_many_transactions(node: &ContactInfo, funding_keypair: &Keypair, num
             &funding_keypair,
             &random_keypair.pubkey(),
             1,
-            client.get_recent_blockhash(),
+            client.get_recent_blockhash().unwrap(),
             0,
         );
         client
@@ -159,7 +159,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 &funding_keypair,
                 &random_keypair.pubkey(),
                 1,
-                client.get_recent_blockhash(),
+                client.get_recent_blockhash().unwrap(),
                 0,
             );
 
