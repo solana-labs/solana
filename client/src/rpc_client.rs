@@ -204,6 +204,29 @@ impl RpcClient {
         self.poll_balance_with_timeout(pubkey, &Duration::from_millis(100), &Duration::from_secs(1))
     }
 
+    pub fn wait_for_balance(&self, pubkey: &Pubkey, expected_balance: Option<u64>) -> Option<u64> {
+        const LAST: usize = 30;
+        for run in 0..LAST {
+            let balance_result = self.poll_get_balance(pubkey);
+            if expected_balance.is_none() {
+                return balance_result.ok();
+            }
+            trace!(
+                "retry_get_balance[{}] {:?} {:?}",
+                run,
+                balance_result,
+                expected_balance
+            );
+            if let (Some(expected_balance), Ok(balance_result)) = (expected_balance, balance_result)
+            {
+                if expected_balance == balance_result {
+                    return Some(balance_result);
+                }
+            }
+        }
+        None
+    }
+
     /// Poll the server to confirm a transaction.
     pub fn poll_for_signature(&self, signature: &Signature) -> io::Result<()> {
         let now = Instant::now();
