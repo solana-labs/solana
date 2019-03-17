@@ -137,6 +137,10 @@ impl ThinClient {
         self.rpc_client.poll_get_balance(pubkey)
     }
 
+    pub fn wait_for_balance(&self, pubkey: &Pubkey, expected_balance: Option<u64>) -> Option<u64> {
+        self.rpc_client.wait_for_balance(pubkey, expected_balance)
+    }
+
     pub fn poll_for_signature(&self, signature: &Signature) -> io::Result<()> {
         self.rpc_client.poll_for_signature(signature)
     }
@@ -162,30 +166,4 @@ pub fn create_client_with_timeout(
 ) -> ThinClient {
     let (_, transactions_socket) = solana_netutil::bind_in_range(range).unwrap();
     ThinClient::new_socket_with_timeout(rpc, tpu, transactions_socket, timeout)
-}
-
-pub fn retry_get_balance(
-    client: &ThinClient,
-    bob_pubkey: &Pubkey,
-    expected_balance: Option<u64>,
-) -> Option<u64> {
-    const LAST: usize = 30;
-    for run in 0..LAST {
-        let balance_result = client.poll_get_balance(bob_pubkey);
-        if expected_balance.is_none() {
-            return balance_result.ok();
-        }
-        trace!(
-            "retry_get_balance[{}] {:?} {:?}",
-            run,
-            balance_result,
-            expected_balance
-        );
-        if let (Some(expected_balance), Ok(balance_result)) = (expected_balance, balance_result) {
-            if expected_balance == balance_result {
-                return Some(balance_result);
-            }
-        }
-    }
-    None
 }

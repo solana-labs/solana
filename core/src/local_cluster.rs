@@ -6,7 +6,7 @@ use crate::gossip_service::discover;
 use crate::replicator::Replicator;
 use crate::service::Service;
 use solana_client::thin_client::create_client;
-use solana_client::thin_client::{retry_get_balance, ThinClient};
+use solana_client::thin_client::ThinClient;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -209,7 +209,9 @@ impl LocalCluster {
         client
             .retry_transfer(&source_keypair, &mut tx, 5)
             .expect("client transfer");
-        retry_get_balance(client, dest_pubkey, Some(lamports)).expect("get balance")
+        client
+            .wait_for_balance(dest_pubkey, Some(lamports))
+            .expect("get balance")
     }
 
     fn create_and_fund_vote_account(
@@ -234,7 +236,9 @@ impl LocalCluster {
             client
                 .retry_transfer(&from_account, &mut transaction, 5)
                 .expect("client transfer");
-            retry_get_balance(client, &vote_account_pubkey, Some(amount)).expect("get balance");
+            client
+                .wait_for_balance(&vote_account_pubkey, Some(amount))
+                .expect("get balance");
 
             // 2) Set delegate for new vote account
             let mut transaction = VoteTransaction::delegate_vote_account(

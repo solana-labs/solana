@@ -14,7 +14,7 @@ use rand::thread_rng;
 use rand::Rng;
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
-use solana_client::thin_client::{create_client, retry_get_balance, ThinClient};
+use solana_client::thin_client::{create_client, ThinClient};
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
@@ -382,7 +382,7 @@ impl Replicator {
         keypair: &Keypair,
         cluster_entrypoint: &ContactInfo,
     ) {
-        if retry_get_balance(client, &keypair.pubkey(), None).is_none() {
+        if client.wait_for_balance(&keypair.pubkey(), None).is_none() {
             let mut drone_addr = cluster_entrypoint.tpu;
             drone_addr.set_port(DRONE_PORT);
 

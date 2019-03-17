@@ -4,7 +4,7 @@ use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::fullnode::new_fullnode_for_tests;
 use solana::gossip_service::discover;
 use solana_client::thin_client::create_client;
-use solana_client::thin_client::{retry_get_balance, ThinClient};
+use solana_client::thin_client::ThinClient;
 use solana_logger;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -129,7 +129,8 @@ fn test_register_vote_account() {
     let signature = client.transfer_signed(&transaction).unwrap();
     client.poll_for_signature(&signature).unwrap();
 
-    let balance = retry_get_balance(&client, &vote_account_id, Some(1))
+    let balance = client
+        .wait_for_balance(&vote_account_id, Some(1))
         .expect("Expected balance for new account to exist");
     assert_eq!(balance, 1);
 
