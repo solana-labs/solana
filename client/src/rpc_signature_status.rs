@@ -1,4 +1,4 @@
-//! The `rpc_status` module defines transaction status codes
+//! The `rpc_signature_status` module defines transaction status codes
 
 use jsonrpc_core::{Error, Result};
 use std::str::FromStr;

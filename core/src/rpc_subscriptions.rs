@@ -1,11 +1,11 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_status::RpcSignatureStatus;
 use bs58;
 use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::typed::Sink;
 use jsonrpc_pubsub::SubscriptionId;
+use solana_client::rpc_signature_status::RpcSignatureStatus;
 use solana_runtime::bank::{self, Bank};
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;

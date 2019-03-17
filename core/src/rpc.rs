@@ -2,12 +2,12 @@
 
 use crate::cluster_info::ClusterInfo;
 use crate::packet::PACKET_DATA_SIZE;
-use crate::rpc_status::RpcSignatureStatus;
 use crate::storage_stage::StorageState;
 use bincode::{deserialize, serialize};
 use bs58;
 use jsonrpc_core::{Error, ErrorCode, Metadata, Result};
 use jsonrpc_derive::rpc;
+use solana_client::rpc_signature_status::RpcSignatureStatus;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_runtime::bank::{self, Bank};
 use solana_sdk::account::Account;
