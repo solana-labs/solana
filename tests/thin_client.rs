@@ -3,7 +3,7 @@ use log::*;
 use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::fullnode::new_fullnode_for_tests;
 use solana::gossip_service::discover;
-use solana_client::client::create_client;
+use solana_client::thin_client::create_client;
 use solana_client::thin_client::{retry_get_balance, ThinClient};
 use solana_logger;
 use solana_sdk::signature::{Keypair, KeypairUtil};

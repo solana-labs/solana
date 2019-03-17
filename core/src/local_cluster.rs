@@ -5,7 +5,7 @@ use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::gossip_service::discover;
 use crate::replicator::Replicator;
 use crate::service::Service;
-use solana_client::client::create_client;
+use solana_client::thin_client::create_client;
 use solana_client::thin_client::{retry_get_balance, ThinClient};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;

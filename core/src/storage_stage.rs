@@ -12,7 +12,7 @@ use crate::service::Service;
 use bincode::deserialize;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use solana_client::client::create_client_with_timeout;
+use solana_client::thin_client::create_client_with_timeout;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};

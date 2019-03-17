@@ -5,7 +5,7 @@ use crate::bench::*;
 use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::gen_keys::GenKeys;
 use solana::gossip_service::discover;
-use solana_client::client::create_client;
+use solana_client::thin_client::create_client;
 use solana_metrics;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::collections::VecDeque;

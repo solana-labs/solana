@@ -3,7 +3,7 @@ use solana_metrics;
 use rayon::prelude::*;
 use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::contact_info::ContactInfo;
-use solana_client::client::create_client;
+use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_metrics::influxdb;
