@@ -137,6 +137,7 @@ impl BudgetTransaction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::budget_expr::BudgetExpr;
     use bincode::{deserialize, serialize};
 
     #[test]
