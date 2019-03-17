@@ -1,4 +1,3 @@
-pub mod client;
 pub mod rpc_mock;
 pub mod rpc_request;
 pub mod rpc_signature_status;

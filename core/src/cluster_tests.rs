@@ -7,7 +7,7 @@ use crate::cluster_info::FULLNODE_PORT_RANGE;
 use crate::contact_info::ContactInfo;
 use crate::entry::{Entry, EntrySlice};
 use crate::gossip_service::discover;
-use solana_client::client::create_client;
+use solana_client::thin_client::create_client;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
