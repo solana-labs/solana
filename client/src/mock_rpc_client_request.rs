@@ -1,42 +1,28 @@
-// Implementation of RpcRequestHandler trait for testing Rpc requests without i/o
-
-use crate::rpc_request::{RpcRequest, RpcRequestHandler};
-use serde_json::{json, Number, Value};
-use solana_sdk::pubkey::Pubkey;
-use std::error;
+use crate::generic_rpc_client_request::GenericRpcClientRequest;
+use crate::rpc_request::RpcRequest;
+use serde_json::{Number, Value};
 
 pub const PUBKEY: &str = "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8";
 pub const SIGNATURE: &str =
     "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8";
 
-#[derive(Clone)]
-pub struct MockRpcClient {
-    pub url: String,
+pub struct MockRpcClientRequest {
+    url: String,
 }
 
-impl MockRpcClient {
+impl MockRpcClientRequest {
     pub fn new(url: String) -> Self {
-        MockRpcClient { url }
+        Self { url }
     }
+}
 
-    pub fn retry_get_balance(
-        &self,
-        pubkey: &Pubkey,
-        retries: usize,
-    ) -> Result<Option<u64>, Box<dyn error::Error>> {
-        let params = json!([format!("{}", pubkey)]);
-        let res = self
-            .retry_make_rpc_request(&RpcRequest::GetBalance, Some(params), retries)?
-            .as_u64();
-        Ok(res)
-    }
-
-    pub fn retry_make_rpc_request(
+impl GenericRpcClientRequest for MockRpcClientRequest {
+    fn send(
         &self,
         request: &RpcRequest,
-        params: Option<Value>,
-        mut _retries: usize,
-    ) -> Result<Value, Box<dyn error::Error>> {
+        params: Option<serde_json::Value>,
+        _retries: usize,
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
         if self.url == "fails" {
             return Ok(Value::Null);
         }
@@ -72,15 +58,5 @@ impl MockRpcClient {
             _ => Value::Null,
         };
         Ok(val)
-    }
-}
-
-impl RpcRequestHandler for MockRpcClient {
-    fn make_rpc_request(
-        &self,
-        request: RpcRequest,
-        params: Option<Value>,
-    ) -> Result<Value, Box<dyn error::Error>> {
-        self.retry_make_rpc_request(&request, params, 0)
     }
 }
