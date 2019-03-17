@@ -103,7 +103,7 @@ fn main() {
     airdrop_lamports(&barrier_client, &drone_addr, &barrier_source_keypair, 1);
 
     println!("Get last ID...");
-    let mut blockhash = client.get_recent_blockhash();
+    let mut blockhash = client.get_recent_blockhash().unwrap();
     println!("Got last ID {:?}", blockhash);
 
     let first_tx_count = client.get_transaction_count().expect("transaction count");

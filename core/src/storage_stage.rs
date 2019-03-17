@@ -242,7 +242,7 @@ impl StorageStage {
 
         let mut blockhash = None;
         for _ in 0..10 {
-            if let Some(new_blockhash) = client.try_get_recent_blockhash(1) {
+            if let Ok(new_blockhash) = client.get_recent_blockhash() {
                 blockhash = Some(new_blockhash);
                 break;
             }

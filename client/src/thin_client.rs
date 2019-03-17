@@ -81,7 +81,7 @@ impl ThinClient {
         tries: usize,
     ) -> io::Result<Signature> {
         for x in 0..tries {
-            transaction.sign(&[keypair], self.get_recent_blockhash());
+            transaction.sign(&[keypair], self.get_recent_blockhash()?);
             let mut buf = vec![0; transaction.serialized_size().unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
             serialize_into(&mut wr, &transaction)
@@ -111,16 +111,12 @@ impl ThinClient {
         self.rpc_client.get_transaction_count()
     }
 
-    pub fn try_get_recent_blockhash(&self, num_retries: u64) -> Option<Hash> {
-        self.rpc_client.try_get_recent_blockhash(num_retries)
-    }
-
-    pub fn get_recent_blockhash(&self) -> Hash {
+    pub fn get_recent_blockhash(&self) -> io::Result<Hash> {
         self.rpc_client.get_recent_blockhash()
     }
 
-    pub fn get_next_blockhash(&self, previous_blockhash: &Hash) -> Hash {
-        self.rpc_client.get_next_blockhash(previous_blockhash)
+    pub fn get_new_blockhash(&self, blockhash: &Hash) -> io::Result<Hash> {
+        self.rpc_client.get_new_blockhash(blockhash)
     }
 
     pub fn poll_balance_with_timeout(

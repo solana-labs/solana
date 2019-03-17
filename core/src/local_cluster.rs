@@ -197,7 +197,7 @@ impl LocalCluster {
         lamports: u64,
     ) -> u64 {
         trace!("getting leader blockhash");
-        let blockhash = client.get_recent_blockhash();
+        let blockhash = client.get_recent_blockhash().unwrap();
         let mut tx =
             SystemTransaction::new_account(&source_keypair, dest_pubkey, lamports, blockhash, 0);
         info!(
@@ -228,7 +228,7 @@ impl LocalCluster {
             let mut transaction = VoteTransaction::new_account(
                 from_account,
                 &vote_account_pubkey,
-                client.get_recent_blockhash(),
+                client.get_recent_blockhash().unwrap(),
                 amount,
                 1,
             );
@@ -243,7 +243,7 @@ impl LocalCluster {
             // 2) Set delegate for new vote account
             let mut transaction = VoteTransaction::delegate_vote_account(
                 vote_account,
-                client.get_recent_blockhash(),
+                client.get_recent_blockhash().unwrap(),
                 &delegate_id,
                 0,
             );

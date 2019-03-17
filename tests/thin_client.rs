@@ -48,7 +48,7 @@ fn test_thin_client_basic() {
     let transaction_count = client.get_transaction_count().unwrap();
     assert_eq!(transaction_count, 0);
 
-    let blockhash = client.get_recent_blockhash();
+    let blockhash = client.get_recent_blockhash().unwrap();
     info!("test_thin_client blockhash: {:?}", blockhash);
 
     let signature = transfer(&client, 500, &alice, &bob_pubkey, &blockhash).unwrap();
@@ -74,13 +74,13 @@ fn test_bad_sig() {
 
     let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
 
-    let blockhash = client.get_recent_blockhash();
+    let blockhash = client.get_recent_blockhash().unwrap();
 
     let tx = SystemTransaction::new_account(&alice, &bob_pubkey, 500, blockhash, 0);
 
     let _sig = client.transfer_signed(&tx).unwrap();
 
-    let blockhash = client.get_recent_blockhash();
+    let blockhash = client.get_recent_blockhash().unwrap();
 
     let mut tr2 = SystemTransaction::new_account(&alice, &bob_pubkey, 501, blockhash, 0);
     let mut instruction2 = deserialize(tr2.data(0)).unwrap();
@@ -107,7 +107,7 @@ fn test_register_vote_account() {
 
     // Create the validator account, transfer some lamports to that account
     let validator_keypair = Keypair::new();
-    let blockhash = client.get_recent_blockhash();
+    let blockhash = client.get_recent_blockhash().unwrap();
     let signature = transfer(
         &client,
         500,
@@ -122,7 +122,7 @@ fn test_register_vote_account() {
     // Create and register the vote account
     let validator_vote_account_keypair = Keypair::new();
     let vote_account_id = validator_vote_account_keypair.pubkey();
-    let blockhash = client.get_recent_blockhash();
+    let blockhash = client.get_recent_blockhash().unwrap();
 
     let transaction =
         VoteTransaction::new_account(&validator_keypair, &vote_account_id, blockhash, 1, 1);
@@ -179,7 +179,7 @@ fn test_zero_balance_after_nonzero() {
     discover(&leader_data.gossip, 1).unwrap();
 
     let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
-    let blockhash = client.get_recent_blockhash();
+    let blockhash = client.get_recent_blockhash().unwrap();
     info!("test_thin_client blockhash: {:?}", blockhash);
 
     let starting_alice_balance = client.poll_get_balance(&alice.pubkey()).unwrap();
