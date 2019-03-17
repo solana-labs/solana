@@ -7,7 +7,6 @@ use serde_json::json;
 use solana_budget_api;
 use solana_budget_api::budget_transaction::BudgetTransaction;
 use solana_client::rpc_client::{get_rpc_request_str, RpcClient};
-use solana_client::rpc_request::RpcRequest;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone::DRONE_PORT;
@@ -409,21 +408,18 @@ fn process_balance(config: &WalletConfig, rpc_client: &RpcClient) -> ProcessResu
 }
 
 fn process_confirm(rpc_client: &RpcClient, signature: Signature) -> ProcessResult {
-    let params = json!([format!("{}", signature)]);
-    let confirmation = rpc_client
-        .retry_make_rpc_request(&RpcRequest::ConfirmTransaction, Some(params), 5)?
-        .as_bool();
-    match confirmation {
-        Some(b) => {
-            if b {
+    match rpc_client.get_signature_status(&signature.to_string()) {
+        Ok(status) => {
+            if status == solana_client::rpc_signature_status::RpcSignatureStatus::Confirmed {
                 Ok("Confirmed".to_string())
             } else {
                 Ok("Not found".to_string())
             }
         }
-        None => Err(WalletError::RpcRequestError(
-            "Received result of an unexpected type".to_string(),
-        ))?,
+        Err(err) => Err(WalletError::RpcRequestError(format!(
+            "Unable to confirm: {:?}",
+            err
+        )))?,
     }
 }
 
@@ -628,15 +624,8 @@ fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey
 }
 
 fn process_get_transaction_count(rpc_client: &RpcClient) -> ProcessResult {
-    let transaction_count = rpc_client
-        .retry_make_rpc_request(&RpcRequest::GetTransactionCount, None, 5)?
-        .as_u64();
-    match transaction_count {
-        Some(count) => Ok(count.to_string()),
-        None => Err(WalletError::RpcRequestError(
-            "Received result of an unexpected type".to_string(),
-        ))?,
-    }
+    let transaction_count = rpc_client.get_transaction_count()?;
+    Ok(transaction_count.to_string())
 }
 
 fn process_time_elapsed(
@@ -1300,9 +1289,6 @@ mod tests {
         let good_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
         config.command = WalletCommand::Confirm(good_signature);
         assert_eq!(process_command(&config).unwrap(), "Confirmed");
-        let missing_signature = Signature::new(&bs58::decode("5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW").into_vec().unwrap());
-        config.command = WalletCommand::Confirm(missing_signature);
-        assert_eq!(process_command(&config).unwrap(), "Not found");
 
         let bob_pubkey = Keypair::new().pubkey();
         config.command = WalletCommand::ConfigureStakingAccount(None, Some(bob_pubkey));
@@ -1387,7 +1373,13 @@ mod tests {
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
-        // Failture cases
+        // bad_sig_status cases
+        config.rpc_client = Some(RpcClient::new_mock("bad_sig_status".to_string()));
+        let missing_signature = Signature::new(&bs58::decode("5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW").into_vec().unwrap());
+        config.command = WalletCommand::Confirm(missing_signature);
+        assert_eq!(process_command(&config).unwrap(), "Not found");
+
+        // Failure cases
         config.rpc_client = Some(RpcClient::new_mock("fails".to_string()));
 
         config.command = WalletCommand::Airdrop(50);

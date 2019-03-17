@@ -47,7 +47,7 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                 let str = if self.url == "account_in_use" {
                     "AccountInUse"
                 } else if self.url == "bad_sig_status" {
-                    "Nonexistent"
+                    "SignatureNotFound"
                 } else {
                     "Confirmed"
                 };
