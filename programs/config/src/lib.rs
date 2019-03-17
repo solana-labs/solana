@@ -55,9 +55,10 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::script::Script;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
-    use solana_sdk::transaction::{Instruction, Transaction};
+    use solana_sdk::transaction::Instruction;
 
     #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
     struct MyConfig {
@@ -96,7 +97,7 @@ mod tests {
         let config_pubkey = config_client.pubkey();
 
         let instruction = create_account_instruction(&from_pubkey, &config_pubkey);
-        from_client.process_script(vec![instruction]).unwrap();
+        from_client.process_instruction(instruction).unwrap();
 
         config_client
     }
@@ -123,7 +124,7 @@ mod tests {
 
         let my_config = MyConfig::new(42);
         let instruction = ConfigInstruction::new_store(&config_pubkey, &my_config);
-        config_client.process_script(vec![instruction]).unwrap();
+        config_client.process_instruction(instruction).unwrap();
 
         let config_account = bank.get_account(&config_pubkey).unwrap();
         assert_eq!(
@@ -143,7 +144,8 @@ mod tests {
         let instruction = ConfigInstruction::new_store(&config_pubkey, &my_config);
 
         // Replace instruction data with a vector that's too large
-        let mut transaction = Transaction::new(vec![instruction]);
+        let script = Script::new(vec![instruction]);
+        let mut transaction = script.compile();
         transaction.instructions[0].data = vec![0; 123];
         config_client.process_transaction(transaction).unwrap_err();
     }
@@ -164,7 +166,8 @@ mod tests {
         let store_instruction = ConfigInstruction::new_store(&config_pubkey, &my_config);
 
         // Don't sign the transaction with `config_client`
-        let mut transaction = Transaction::new(vec![move_instruction, store_instruction]);
+        let script = Script::new(vec![move_instruction, store_instruction]);
+        let mut transaction = script.compile();
         transaction.sign_unchecked(&[&system_keypair], bank.last_blockhash());
         let system_client = BankClient::new(&bank, system_keypair);
         system_client.process_transaction(transaction).unwrap_err();

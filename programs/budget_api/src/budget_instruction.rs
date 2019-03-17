@@ -5,9 +5,10 @@ use bincode::serialized_size;
 use chrono::prelude::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::script::Script;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::transaction::{Instruction, Script};
+use solana_sdk::transaction::Instruction;
 
 /// A smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -48,10 +49,10 @@ impl BudgetInstruction {
         expr: BudgetExpr,
     ) -> Script {
         let space = serialized_size(&BudgetState::new(expr.clone())).unwrap();
-        vec![
+        Script::new(vec![
             SystemInstruction::new_program_account(&from, contract, lamports, space, &id()),
             Self::new_initialize_account(contract, expr),
-        ]
+        ])
     }
 
     /// Create a new payment script.

@@ -4,13 +4,13 @@ use crate::hash::{Hash, Hasher};
 use crate::native_program::ProgramError;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::pubkey::Pubkey;
+use crate::script::Script;
 use crate::shortvec::{
     deserialize_vec_bytes, deserialize_vec_with, encode_len, serialize_vec_bytes,
     serialize_vec_with,
 };
 use crate::signature::{KeypairUtil, Signature};
 use crate::system_instruction::SystemError;
-use crate::transaction_compiler::TransactionCompiler;
 use bincode::{serialize, Error};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use serde::{Deserialize, Serialize, Serializer};
@@ -71,10 +71,7 @@ impl<P, Q> GenericInstruction<P, Q> {
 }
 
 pub type Instruction = GenericInstruction<Pubkey, (Pubkey, bool)>;
-pub type Script = Vec<Instruction>;
-
 pub type CompiledInstruction = GenericInstruction<u8, u8>;
-pub type CompiledScript = Vec<CompiledInstruction>;
 
 impl CompiledInstruction {
     pub fn serialize_with(mut writer: &mut Cursor<&mut [u8]>, ix: &Self) -> Result<(), Error> {
@@ -166,12 +163,12 @@ pub struct Transaction {
     pub program_ids: Vec<Pubkey>,
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
-    pub instructions: CompiledScript,
+    pub instructions: Vec<CompiledInstruction>,
 }
 
 impl Transaction {
-    pub fn new(script: Script) -> Self {
-        TransactionCompiler::new(script).compile()
+    pub fn new(instructions: Vec<Instruction>) -> Self {
+        Script::new(instructions).compile()
     }
 
     pub fn new_with_blockhash_and_fee<T: Serialize>(
@@ -227,7 +224,7 @@ impl Transaction {
         recent_blockhash: Hash,
         fee: u64,
         program_ids: Vec<Pubkey>,
-        instructions: CompiledScript,
+        instructions: Vec<CompiledInstruction>,
     ) -> Self {
         let mut account_keys: Vec<_> = from_keypairs
             .iter()
@@ -469,7 +466,7 @@ impl<'a> serde::de::Visitor<'a> for TransactionVisitor {
         let program_ids: Vec<Pubkey> =
             deserialize_vec_with(&mut rd, Transaction::deserialize_pubkey)
                 .map_err(Error::custom)?;
-        let instructions: CompiledScript =
+        let instructions: Vec<CompiledInstruction> =
             deserialize_vec_with(&mut rd, CompiledInstruction::deserialize_from)
                 .map_err(Error::custom)?;
         Ok(Transaction {
