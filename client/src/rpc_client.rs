@@ -280,24 +280,26 @@ impl RpcClient {
         debug!("get_transaction_count");
 
         let mut num_retries = 5;
-        loop {
+        while num_retries > 0 {
             let response = self.client.send(&RpcRequest::GetTransactionCount, None, 0);
 
             match response {
                 Ok(value) => {
                     debug!("transaction_count response: {:?}", value);
-                    let transaction_count = value.as_u64().unwrap();
-                    return Ok(transaction_count);
+                    if let Some(transaction_count) = value.as_u64() {
+                        return Ok(transaction_count);
+                    }
                 }
                 Err(err) => {
                     debug!("transaction_count failed: {:?}", err);
-                    num_retries -= 1;
-                    if num_retries == 0 {
-                        return Err(err);
-                    }
                 }
             }
+            num_retries -= 1;
         }
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Unable to get transaction count, too many retries",
+        ))?
     }
 
     pub fn get_recent_blockhash(&self) -> io::Result<Hash> {
@@ -623,8 +625,8 @@ mod tests {
 
         let rpc_client = RpcClient::new_mock("bad_sig_status".to_string());
         let signature = "bad_status";
-        let status = rpc_client.get_signature_status(&signature);
-        assert!(status.is_err());
+        let status = dbg!(rpc_client.get_signature_status(&signature));
+        assert_eq!(status.unwrap(), RpcSignatureStatus::SignatureNotFound);
 
         let rpc_client = RpcClient::new_mock("fails".to_string());
         let signature = "bad_status_fmt";
