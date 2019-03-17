@@ -15,7 +15,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
-use std;
+use std::error;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
 use std::time::{Duration, Instant};
@@ -141,8 +141,8 @@ impl ThinClient {
         self.rpc_client.get_balance(pubkey)
     }
 
-    pub fn transaction_count(&self) -> u64 {
-        self.rpc_client.transaction_count()
+    pub fn get_transaction_count(&self) -> Result<u64, Box<dyn error::Error>> {
+        self.rpc_client.get_transaction_count()
     }
 
     pub fn try_get_recent_blockhash(&self, num_retries: u64) -> Option<Hash> {

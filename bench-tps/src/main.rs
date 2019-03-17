@@ -106,7 +106,7 @@ fn main() {
     let mut blockhash = client.get_recent_blockhash();
     println!("Got last ID {:?}", blockhash);
 
-    let first_tx_count = client.transaction_count();
+    let first_tx_count = client.get_transaction_count().expect("transaction count");
     println!("Initial transaction count {}", first_tx_count);
 
     let exit_signal = Arc::new(AtomicBool::new(false));
