@@ -41,7 +41,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::thread::spawn;
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 #[derive(Serialize, Deserialize)]
 pub enum ReplicatorRequest {
@@ -179,19 +179,12 @@ impl Replicator {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         ledger_path: &str,
-        mut node: Node,
+        node: Node,
         cluster_entrypoint: ContactInfo,
         keypair: Arc<Keypair>,
         _timeout: Option<Duration>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
-
-        // replicator cannot give information on rpc and
-        // cannot be leader so tpu/rpc ports are cleared
-        node.info.rpc = "0.0.0.0:0".parse().unwrap();
-        node.info.rpc_pubsub = "0.0.0.0:0".parse().unwrap();
-        node.info.tpu = "0.0.0.0:0".parse().unwrap();
-        node.info.tpu_via_blobs = "0.0.0.0:0".parse().unwrap();
 
         info!("Replicator: id: {}", keypair.pubkey());
         info!("Creating cluster info....");
@@ -316,20 +309,17 @@ impl Replicator {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) {
         info!("window created, waiting for ledger download done");
-        let _start = Instant::now();
         let mut _received_so_far = 0;
 
         let mut current_slot = start_slot;
-        let mut done = false;
-        loop {
-            loop {
-                if let Ok(meta) = blocktree.meta(current_slot) {
-                    if let Some(meta) = meta {
-                        if meta.is_rooted {
-                            current_slot += 1;
-                            info!("current slot: {}", current_slot);
-                        } else {
-                            break;
+        'outer: loop {
+            while let Ok(meta) = blocktree.meta(current_slot) {
+                if let Some(meta) = meta {
+                    if meta.is_rooted {
+                        current_slot += 1;
+                        warn!("current slot: {}", current_slot);
+                        if current_slot >= start_slot + ENTRIES_PER_SEGMENT {
+                            break 'outer;
                         }
                     } else {
                         break;
@@ -337,17 +327,7 @@ impl Replicator {
                 } else {
                     break;
                 }
-                if current_slot >= start_slot + ENTRIES_PER_SEGMENT {
-                    info!("current slot: {} start: {}", current_slot, start_slot);
-                    done = true;
-                    break;
-                }
             }
-
-            if done {
-                break;
-            }
-
             if exit.load(Ordering::Relaxed) {
                 break;
             }
