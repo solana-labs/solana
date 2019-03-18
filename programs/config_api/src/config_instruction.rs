@@ -23,7 +23,15 @@ impl ConfigInstruction {
     }
 
     /// Store new data in a configuration account
-    pub fn new_store<T: ConfigState>(config_account_pubkey: &Pubkey, data: &T) -> Instruction {
-        Instruction::new(id(), data, vec![(*config_account_pubkey, true)])
+    pub fn new_store<T: ConfigState>(
+        from_account_pubkey: &Pubkey,
+        config_account_pubkey: &Pubkey,
+        data: &T,
+    ) -> Instruction {
+        Instruction::new(
+            id(),
+            data,
+            vec![(*from_account_pubkey, true), (*config_account_pubkey, true)],
+        )
     }
 }
