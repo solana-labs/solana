@@ -127,14 +127,14 @@ impl ReplayStage {
 
                     let locktower_start = Instant::now();
                     // Locktower voting
-                    let decendants = bank_forks.read().unwrap().decendants();
+                    let descendants = bank_forks.read().unwrap().descendants();
                     let ancestors = bank_forks.read().unwrap().ancestors();
                     let frozen_banks = bank_forks.read().unwrap().frozen_banks();
                     let mut votable: Vec<(u128, Arc<Bank>)> = frozen_banks
                         .values()
                         .filter(|b| b.is_votable())
                         .filter(|b| !locktower.has_voted(b.slot()))
-                        .filter(|b| !locktower.is_locked_out(b.slot(), &decendants))
+                        .filter(|b| !locktower.is_locked_out(b.slot(), &descendants))
                         .map(|bank| {
                             (
                                 bank,

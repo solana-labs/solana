@@ -177,19 +177,19 @@ impl Locktower {
         false
     }
 
-    pub fn is_locked_out(&self, slot: u64, decendants: &HashMap<u64, HashSet<u64>>) -> bool {
+    pub fn is_locked_out(&self, slot: u64, descendants: &HashMap<u64, HashSet<u64>>) -> bool {
         let mut lockouts = self.lockouts.clone();
         lockouts.process_vote(Vote { slot });
         for vote in &lockouts.votes {
             if vote.slot == slot {
                 continue;
             }
-            if !decendants[&vote.slot].contains(&slot) {
+            if !descendants[&vote.slot].contains(&slot) {
                 return false;
             }
         }
         if let Some(root) = lockouts.root_slot {
-            decendants[&root].contains(&slot)
+            descendants[&root].contains(&slot)
         } else {
             true
         }
@@ -378,28 +378,28 @@ mod test {
     #[test]
     fn test_is_locked_out_empty() {
         let locktower = Locktower::new(EpochStakes::new_for_tests(2), 0, 0.67);
-        let decendants = HashMap::new();
-        assert!(locktower.is_locked_out(0, &decendants));
+        let descendants = HashMap::new();
+        assert!(locktower.is_locked_out(0, &descendants));
     }
 
     #[test]
     fn test_is_locked_out_root_slot_child() {
         let mut locktower = Locktower::new(EpochStakes::new_for_tests(2), 0, 0.67);
-        let decendants = vec![(0, vec![1].into_iter().collect())]
+        let descendants = vec![(0, vec![1].into_iter().collect())]
             .into_iter()
             .collect();
         locktower.lockouts.root_slot = Some(0);
-        assert!(locktower.is_locked_out(1, &decendants));
+        assert!(locktower.is_locked_out(1, &descendants));
     }
 
     #[test]
     fn test_is_locked_out_root_slot_sibling() {
         let mut locktower = Locktower::new(EpochStakes::new_for_tests(2), 0, 0.67);
-        let decendants = vec![(0, vec![1].into_iter().collect())]
+        let descendants = vec![(0, vec![1].into_iter().collect())]
             .into_iter()
             .collect();
         locktower.lockouts.root_slot = Some(0);
-        assert!(!locktower.is_locked_out(2, &decendants));
+        assert!(!locktower.is_locked_out(2, &descendants));
     }
 
     #[test]
@@ -413,28 +413,28 @@ mod test {
     #[test]
     fn test_is_locked_out_double_vote() {
         let mut locktower = Locktower::new(EpochStakes::new_for_tests(2), 0, 0.67);
-        let decendants = vec![(0, vec![1].into_iter().collect()), (1, HashSet::new())]
+        let descendants = vec![(0, vec![1].into_iter().collect()), (1, HashSet::new())]
             .into_iter()
             .collect();
         locktower.record_vote(0);
         locktower.record_vote(1);
-        assert!(!locktower.is_locked_out(0, &decendants));
+        assert!(!locktower.is_locked_out(0, &descendants));
     }
 
     #[test]
     fn test_is_locked_out_child() {
         let mut locktower = Locktower::new(EpochStakes::new_for_tests(2), 0, 0.67);
-        let decendants = vec![(0, vec![1].into_iter().collect())]
+        let descendants = vec![(0, vec![1].into_iter().collect())]
             .into_iter()
             .collect();
         locktower.record_vote(0);
-        assert!(locktower.is_locked_out(1, &decendants));
+        assert!(locktower.is_locked_out(1, &descendants));
     }
 
     #[test]
     fn test_is_locked_out_sibling() {
         let mut locktower = Locktower::new(EpochStakes::new_for_tests(2), 0, 0.67);
-        let decendants = vec![
+        let descendants = vec![
             (0, vec![1, 2].into_iter().collect()),
             (1, HashSet::new()),
             (2, HashSet::new()),
@@ -443,18 +443,18 @@ mod test {
         .collect();
         locktower.record_vote(0);
         locktower.record_vote(1);
-        assert!(!locktower.is_locked_out(2, &decendants));
+        assert!(!locktower.is_locked_out(2, &descendants));
     }
 
     #[test]
     fn test_is_locked_out_last_vote_expired() {
         let mut locktower = Locktower::new(EpochStakes::new_for_tests(2), 0, 0.67);
-        let decendants = vec![(0, vec![1, 4].into_iter().collect()), (1, HashSet::new())]
+        let descendants = vec![(0, vec![1, 4].into_iter().collect()), (1, HashSet::new())]
             .into_iter()
             .collect();
         locktower.record_vote(0);
         locktower.record_vote(1);
-        assert!(locktower.is_locked_out(4, &decendants));
+        assert!(locktower.is_locked_out(4, &descendants));
         locktower.record_vote(4);
         assert_eq!(locktower.lockouts.votes[0].slot, 0);
         assert_eq!(locktower.lockouts.votes[0].confirmation_count, 2);
