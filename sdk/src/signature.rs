@@ -21,7 +21,7 @@ pub struct Signature(GenericArray<u8, U64>);
 
 impl Signature {
     pub fn new(signature_slice: &[u8]) -> Self {
-        Signature(GenericArray::clone_from_slice(&signature_slice))
+        Self(GenericArray::clone_from_slice(&signature_slice))
     }
 
     pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
