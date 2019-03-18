@@ -174,7 +174,7 @@ mod test {
         assert_eq!(blocktree.find_missing_data_indexes(slot, 4, 3, 1), empty);
         assert_eq!(blocktree.find_missing_data_indexes(slot, 1, 2, 0), empty);
 
-        let mut blobs = make_tiny_test_entries(2).to_blobs();
+        let mut blobs = make_tiny_test_entries(2).to_single_entry_blobs();
 
         const ONE: u64 = 1;
         const OTHER: u64 = 4;
@@ -215,7 +215,7 @@ mod test {
         let gap = 10;
         assert!(gap > 3);
         let num_entries = 10;
-        let mut blobs = make_tiny_test_entries(num_entries).to_blobs();
+        let mut blobs = make_tiny_test_entries(num_entries).to_single_entry_blobs();
         for (i, b) in blobs.iter_mut().enumerate() {
             b.set_index(i as u64 * gap);
             b.set_slot(slot);
@@ -296,7 +296,8 @@ mod test {
 
         let num_entries_per_slot = 10;
         let num_slots = 2;
-        let mut blobs = make_tiny_test_entries(num_slots * num_entries_per_slot).to_blobs();
+        let mut blobs =
+            make_tiny_test_entries(num_slots * num_entries_per_slot).to_single_entry_blobs();
 
         // Insert every nth entry for each slot
         let nth = 3;
@@ -365,7 +366,7 @@ mod test {
 
         // Write entries
         let num_entries = 10;
-        let shared_blobs = make_tiny_test_entries(num_entries).to_shared_blobs();
+        let shared_blobs = make_tiny_test_entries(num_entries).to_single_entry_shared_blobs();
 
         index_blobs(&shared_blobs, &Keypair::new().pubkey(), 0, slot, 0);
 

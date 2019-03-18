@@ -363,6 +363,17 @@ impl Blob {
         blob
     }
 
+    pub fn from_serializable<T: Serialize + ?Sized>(data: &T) -> Self {
+        let mut blob = Self::default();
+        let pos = {
+            let mut out = Cursor::new(blob.data_mut());
+            bincode::serialize_into(&mut out, data).expect("failed to serialize output");
+            out.position() as usize
+        };
+        blob.set_size(pos);
+        blob
+    }
+
     pub fn parent(&self) -> u64 {
         LittleEndian::read_u64(&self.data[PARENT_RANGE])
     }

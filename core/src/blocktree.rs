@@ -618,11 +618,11 @@ impl Blocktree {
     {
         blob_datas
             .iter()
-            .map(|blob_data| {
-                let serialized_entry_data = &blob_data.borrow()[BLOB_HEADER_SIZE..];
-                let entry: Entry = deserialize(serialized_entry_data)
+            .flat_map(|blob_data| {
+                let serialized_entries_data = &blob_data.borrow()[BLOB_HEADER_SIZE..];
+                let entries: Vec<Entry> = deserialize(serialized_entries_data)
                     .expect("Ledger should only contain well formed data");
-                entry
+                entries
             })
             .collect()
     }
@@ -1041,7 +1041,7 @@ pub mod tests {
     use crate::entry::{
         create_ticks, make_tiny_test_entries, make_tiny_test_entries_from_hash, Entry, EntrySlice,
     };
-    use crate::packet::index_blobs;
+    use crate::packet;
     use rand::seq::SliceRandom;
     use rand::thread_rng;
     use solana_sdk::hash::Hash;
@@ -1210,9 +1210,9 @@ pub mod tests {
 
     #[test]
     fn test_read_blobs_bytes() {
-        let shared_blobs = make_tiny_test_entries(10).to_shared_blobs();
+        let shared_blobs = make_tiny_test_entries(10).to_single_entry_shared_blobs();
         let slot = 0;
-        index_blobs(&shared_blobs, &Keypair::new().pubkey(), 0, slot, 0);
+        packet::index_blobs(&shared_blobs, &Keypair::new().pubkey(), 0, slot, 0);
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
@@ -1372,16 +1372,15 @@ pub mod tests {
             // Write entries
             let num_entries = 8;
             let entries = make_tiny_test_entries(num_entries);
-            let shared_blobs = entries.to_shared_blobs();
+            let mut blobs = entries.to_single_entry_blobs();
 
-            for (i, b) in shared_blobs.iter().enumerate() {
-                let mut w_b = b.write().unwrap();
-                w_b.set_index(1 << (i * 8));
-                w_b.set_slot(0);
+            for (i, b) in blobs.iter_mut().enumerate() {
+                b.set_index(1 << (i * 8));
+                b.set_slot(0);
             }
 
             blocktree
-                .write_shared_blobs(&shared_blobs)
+                .write_blobs(&blobs)
                 .expect("Expected successful write of blobs");
 
             let mut db_iterator = blocktree
@@ -1410,7 +1409,7 @@ pub mod tests {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let entries = make_tiny_test_entries(8);
-            let mut blobs = entries.clone().to_blobs();
+            let mut blobs = entries.clone().to_single_entry_blobs();
             for (i, b) in blobs.iter_mut().enumerate() {
                 b.set_slot(1);
                 if i < 4 {
@@ -1448,7 +1447,7 @@ pub mod tests {
             for slot in 0..num_slots {
                 let entries = make_tiny_test_entries(slot as usize + 1);
                 let last_entry = entries.last().unwrap().clone();
-                let mut blobs = entries.clone().to_blobs();
+                let mut blobs = entries.clone().to_single_entry_blobs();
                 for b in blobs.iter_mut() {
                     b.set_index(index);
                     b.set_slot(slot as u64);
@@ -1461,6 +1460,39 @@ pub mod tests {
                     blocktree.get_slot_entries(slot, index - 1, None).unwrap(),
                     vec![last_entry],
                 );
+            }
+        }
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    pub fn test_get_slot_entries3() {
+        // Test inserting/fetching blobs which contain multiple entries per blob
+        let blocktree_path = get_tmp_ledger_path("test_get_slot_entries3");
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let num_slots = 5 as u64;
+            let blobs_per_slot = 5 as u64;
+            let entry_serialized_size =
+                bincode::serialized_size(&make_tiny_test_entries(1)).unwrap();
+            let entries_per_slot =
+                (blobs_per_slot * packet::BLOB_DATA_SIZE as u64) / entry_serialized_size;
+
+            // Write entries
+            for slot in 0..num_slots {
+                let mut index = 0;
+                let entries = make_tiny_test_entries(entries_per_slot as usize);
+                let mut blobs = entries.clone().to_blobs();
+                assert_eq!(blobs.len() as u64, blobs_per_slot);
+                for b in blobs.iter_mut() {
+                    b.set_index(index);
+                    b.set_slot(slot as u64);
+                    index += 1;
+                }
+                blocktree
+                    .write_blobs(&blobs)
+                    .expect("Expected successful write of blobs");
+                assert_eq!(blocktree.get_slot_entries(slot, 0, None).unwrap(), entries,);
             }
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
@@ -2105,7 +2137,7 @@ pub mod tests {
         parent_slot: u64,
         is_full_slot: bool,
     ) -> Vec<Blob> {
-        let mut blobs = entries.clone().to_blobs();
+        let mut blobs = entries.clone().to_single_entry_blobs();
         for (i, b) in blobs.iter_mut().enumerate() {
             b.set_index(i as u64);
             b.set_slot(slot);

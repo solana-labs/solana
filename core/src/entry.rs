@@ -5,7 +5,7 @@
 use crate::packet::{Blob, SharedBlob, BLOB_DATA_SIZE};
 use crate::poh::Poh;
 use crate::result::Result;
-use bincode::{deserialize, serialize_into, serialized_size};
+use bincode::{deserialize, serialized_size};
 use chrono::prelude::Utc;
 use rayon::prelude::*;
 use solana_budget_api::budget_transaction::BudgetTransaction;
@@ -16,7 +16,6 @@ use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_transaction::VoteTransaction;
 use std::borrow::Borrow;
-use std::io::Cursor;
 use std::mem::size_of;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
@@ -102,14 +101,7 @@ impl Entry {
     }
 
     pub fn to_blob(&self) -> Blob {
-        let mut blob = Blob::default();
-        let pos = {
-            let mut out = Cursor::new(blob.data_mut());
-            serialize_into(&mut out, &self).expect("failed to serialize output");
-            out.position() as usize
-        };
-        blob.set_size(pos);
-        blob
+        Blob::from_serializable(&vec![&self])
     }
 
     /// Estimate serialized_size of Entry without creating an Entry.
@@ -197,15 +189,14 @@ where
     let mut num_ticks = 0;
 
     for blob in blobs.into_iter() {
-        let entry: Entry = {
+        let new_entries: Vec<Entry> = {
             let msg_size = blob.borrow().size();
             deserialize(&blob.borrow().data()[..msg_size])?
         };
 
-        if entry.is_tick() {
-            num_ticks += 1
-        }
-        entries.push(entry)
+        let num_new_ticks: u64 = new_entries.iter().map(|entry| entry.is_tick() as u64).sum();
+        num_ticks += num_new_ticks;
+        entries.extend(new_entries)
     }
     Ok((entries, num_ticks))
 }
@@ -216,6 +207,8 @@ pub trait EntrySlice {
     fn verify(&self, start_hash: &Hash) -> bool;
     fn to_shared_blobs(&self) -> Vec<SharedBlob>;
     fn to_blobs(&self) -> Vec<Blob>;
+    fn to_single_entry_blobs(&self) -> Vec<Blob>;
+    fn to_single_entry_shared_blobs(&self) -> Vec<SharedBlob>;
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
@@ -242,11 +235,30 @@ impl EntrySlice for [Entry] {
     }
 
     fn to_blobs(&self) -> Vec<Blob> {
-        self.iter().map(|entry| entry.to_blob()).collect()
+        split_serializable_chunks(
+            &self,
+            BLOB_DATA_SIZE as u64,
+            &|s| bincode::serialized_size(&s).unwrap(),
+            &mut |entries: &[Entry]| Blob::from_serializable(entries),
+        )
     }
 
     fn to_shared_blobs(&self) -> Vec<SharedBlob> {
-        self.iter().map(|entry| entry.to_shared_blob()).collect()
+        self.to_blobs()
+            .into_iter()
+            .map(|b| Arc::new(RwLock::new(b)))
+            .collect()
+    }
+
+    fn to_single_entry_shared_blobs(&self) -> Vec<SharedBlob> {
+        self.to_single_entry_blobs()
+            .into_iter()
+            .map(|b| Arc::new(RwLock::new(b)))
+            .collect()
+    }
+
+    fn to_single_entry_blobs(&self) -> Vec<Blob> {
+        self.iter().map(|entry| entry.to_blob()).collect()
     }
 
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)> {
@@ -422,7 +434,7 @@ pub fn make_consecutive_blobs(
 ) -> Vec<SharedBlob> {
     let entries = create_ticks(num_blobs_to_make, start_hash);
 
-    let blobs = entries.to_shared_blobs();
+    let blobs = entries.to_single_entry_shared_blobs();
     let mut index = start_height;
     for blob in &blobs {
         let mut blob = blob.write().unwrap();
@@ -596,12 +608,29 @@ mod tests {
     }
 
     #[test]
-    fn test_entries_to_shared_blobs() {
+    fn test_entries_to_blobs() {
         solana_logger::setup();
         let entries = make_test_entries();
 
         let blob_q = entries.to_blobs();
 
+        assert_eq!(reconstruct_entries_from_blobs(blob_q).unwrap().0, entries);
+    }
+
+    #[test]
+    fn test_multiple_entries_to_blobs() {
+        solana_logger::setup();
+        let num_blobs = 10;
+        let serialized_size =
+            bincode::serialized_size(&make_tiny_test_entries_from_hash(&Hash::default(), 1))
+                .unwrap();
+
+        let num_entries = (num_blobs * BLOB_DATA_SIZE as u64) / serialized_size;
+        let entries = make_tiny_test_entries_from_hash(&Hash::default(), num_entries as usize);
+
+        let blob_q = entries.to_blobs();
+
+        assert_eq!(blob_q.len() as u64, num_blobs);
         assert_eq!(reconstruct_entries_from_blobs(blob_q).unwrap().0, entries);
     }
 
