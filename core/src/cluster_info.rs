@@ -1347,6 +1347,7 @@ pub struct Sockets {
     pub broadcast: UdpSocket,
     pub repair: UdpSocket,
     pub retransmit: UdpSocket,
+    pub storage: Option<UdpSocket>,
 }
 
 #[derive(Debug)]
@@ -1359,6 +1360,13 @@ impl Node {
     pub fn new_localhost() -> Self {
         let pubkey = Keypair::new().pubkey();
         Self::new_localhost_with_pubkey(&pubkey)
+    }
+    pub fn new_localhost_replicator(pubkey: &Pubkey) -> Self {
+        let mut new = Self::new_localhost_with_pubkey(pubkey);
+        let storage = UdpSocket::bind("127.0.0.1:0").unwrap();
+        new.info.storage_addr = storage.local_addr().unwrap();
+        new.sockets.storage = Some(storage);
+        new
     }
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
         let tpu = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -1396,6 +1404,7 @@ impl Node {
                 broadcast,
                 repair,
                 retransmit,
+                storage: None,
             },
         }
     }
@@ -1427,7 +1436,6 @@ impl Node {
         let (_, repair) = bind();
         let (_, broadcast) = bind();
         let (_, retransmit) = bind();
-        let (storage_port, _) = bind();
 
         let info = ContactInfo::new(
             pubkey,
@@ -1435,7 +1443,7 @@ impl Node {
             SocketAddr::new(gossip_addr.ip(), tvu_port),
             SocketAddr::new(gossip_addr.ip(), tpu_port),
             SocketAddr::new(gossip_addr.ip(), tpu_via_blobs_port),
-            SocketAddr::new(gossip_addr.ip(), storage_port),
+            "0.0.0.0:0".parse().unwrap(),
             SocketAddr::new(gossip_addr.ip(), rpc_port::DEFAULT_RPC_PORT),
             SocketAddr::new(gossip_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT),
             0,
@@ -1452,6 +1460,7 @@ impl Node {
                 broadcast,
                 repair,
                 retransmit,
+                storage: None,
             },
         }
     }
