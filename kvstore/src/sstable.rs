@@ -154,7 +154,7 @@ impl SSTable {
                 (meta.start, meta.level)
             };
 
-            while level as usize >= tables.len() {
+            while level as usize >= sorted.len() {
                 sorted.push(BTreeMap::new());
             }
             sorted[level as usize].insert(key, sst.clone());
