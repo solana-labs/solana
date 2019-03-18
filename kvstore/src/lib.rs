@@ -36,6 +36,7 @@ const LOG_FILE: &str = "mem-log";
 const DEFAULT_TABLE_SIZE: usize = 64 * 1024 * 1024;
 const DEFAULT_MEM_SIZE: usize = 64 * 1024 * 1024;
 const DEFAULT_MAX_PAGES: usize = 10;
+const COMMIT_ORDERING: Ordering = Ordering::Relaxed;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Config {
@@ -97,7 +98,7 @@ impl KvStore {
     pub fn put(&self, key: &Key, data: &[u8]) -> Result<()> {
         let mut memtable = self.mem.write().unwrap();
         let mut log = self.log.write().unwrap();
-        let commit = self.commit.fetch_add(1, Ordering::Relaxed) as i64;
+        let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
 
         storage::put(&mut *memtable, &mut *log, key, commit as i64, data)?;
 
@@ -115,7 +116,7 @@ impl KvStore {
     {
         let mut memtable = self.mem.write().unwrap();
         let mut log = self.log.write().unwrap();
-        let commit = self.commit.fetch_add(1, Ordering::Relaxed) as i64;
+        let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
 
         for pair in rows {
             let (ref key, ref data) = pair.borrow();
@@ -145,7 +146,7 @@ impl KvStore {
     pub fn delete(&self, key: &Key) -> Result<()> {
         let mut memtable = self.mem.write().unwrap();
         let mut log = self.log.write().unwrap();
-        let commit = self.commit.fetch_add(1, Ordering::Relaxed) as i64;
+        let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
 
         storage::delete(&mut *memtable, &mut *log, key, commit)?;
 
@@ -161,7 +162,7 @@ impl KvStore {
     {
         let mut memtable = self.mem.write().unwrap();
         let mut log = self.log.write().unwrap();
-        let commit = self.commit.fetch_add(1, Ordering::Relaxed) as i64;
+        let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
 
         for key in rows {
             storage::delete(&mut *memtable, &mut *log, key.borrow(), commit)?;
