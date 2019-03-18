@@ -637,26 +637,18 @@ mod tests {
         poh_service.join().unwrap();
         drop(poh_recorder);
 
-        // Poll the entry_receiver, feeding it into a new bank
-        // until the balance is what we expect.
+        // consume the entire entry_receiver, feed it into a new bank
+        // check that the balance is what we expect.
         let bank = Bank::new(&genesis_block);
-        for _ in 0..10 {
-            let entries: Vec<_> = entry_receiver
+        let entries: Vec<_> = entry_receiver
+            .iter()
+            .flat_map(|x| x.1.into_iter().map(|e| e.0))
+            .collect();
+
+        for entry in &entries {
+            bank.process_transactions(&entry.transactions)
                 .iter()
-                .flat_map(|x| x.1.into_iter().map(|e| e.0))
-                .collect();
-
-            for entry in &entries {
-                bank.process_transactions(&entry.transactions)
-                    .iter()
-                    .for_each(|x| assert_eq!(*x, Ok(())));
-            }
-
-            if bank.get_balance(&alice.pubkey()) == 1 {
-                break;
-            }
-
-            sleep(Duration::from_millis(100));
+                .for_each(|x| assert_eq!(*x, Ok(())));
         }
 
         // Assert the user holds one lamport, not two. If the stage only outputs one

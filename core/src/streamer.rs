@@ -208,17 +208,18 @@ mod test {
     use std::sync::Arc;
     use std::time::Duration;
 
-    fn get_msgs(r: PacketReceiver, num: &mut usize) {
-        for _t in 0..5 {
-            let timer = Duration::new(1, 0);
-            match r.recv_timeout(timer) {
-                Ok(m) => *num += m.read().unwrap().packets.len(),
-                _ => info!("get_msgs error"),
-            }
-            if *num == 10 {
+    fn get_msgs(r: PacketReceiver, num: &mut usize) -> Result<()> {
+        for _ in 0..10 {
+            let m = r.recv_timeout(Duration::new(1, 0))?;
+
+            *num -= m.read().unwrap().packets.len();
+
+            if *num == 0 {
                 break;
             }
         }
+
+        Ok(())
     }
     #[test]
     fn streamer_debug() {
@@ -240,7 +241,7 @@ mod test {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
             let mut msgs = Vec::new();
-            for i in 0..10 {
+            for i in 0..5 {
                 let b = SharedBlob::default();
                 {
                     let mut w = b.write().unwrap();
@@ -254,9 +255,9 @@ mod test {
             t_responder
         };
 
-        let mut num = 0;
-        get_msgs(r_reader, &mut num);
-        assert_eq!(num, 10);
+        let mut num = 5;
+        get_msgs(r_reader, &mut num).expect("get_msgs");
+        assert_eq!(num, 0);
         exit.store(true, Ordering::Relaxed);
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
