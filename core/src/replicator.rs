@@ -122,12 +122,19 @@ impl Replicator {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         ledger_path: &str,
-        node: Node,
+        mut node: Node,
         cluster_entrypoint: ContactInfo,
         keypair: Arc<Keypair>,
         _timeout: Option<Duration>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
+
+        // replicator cannot give information on rpc and
+        // cannot be leader so tpu/rpc ports are cleared
+        node.info.rpc = "0.0.0.0:0".parse().unwrap();
+        node.info.rpc_pubsub = "0.0.0.0:0".parse().unwrap();
+        node.info.tpu = "0.0.0.0:0".parse().unwrap();
+        node.info.tpu_via_blobs = "0.0.0.0:0".parse().unwrap();
 
         info!("Replicator: id: {}", keypair.pubkey());
         info!("Creating cluster info....");

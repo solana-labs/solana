@@ -8,6 +8,7 @@ use solana::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree, Blocktree};
 use solana::cluster_info::Node;
 use solana::contact_info::ContactInfo;
 use solana::fullnode::{Fullnode, FullnodeConfig};
+use solana::gossip_service::discover;
 use solana::local_cluster::LocalCluster;
 use solana::replicator::Replicator;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
@@ -35,6 +36,17 @@ fn test_replicator_startup_basic() {
         DEFAULT_TICKS_PER_SLOT,
         DEFAULT_SLOTS_PER_EPOCH,
     );
+
+    let cluster_nodes = discover(&cluster.entry_point_info.gossip, 3).unwrap();
+    assert_eq!(cluster_nodes.len(), 3);
+    let mut replicator_count = 0;
+    for node in &cluster_nodes {
+        info!("storage: {:?} rpc: {:?}", node.storage_addr, node.rpc);
+        if ContactInfo::is_valid_address(&node.storage_addr) {
+            replicator_count += 1;
+        }
+    }
+    assert_eq!(replicator_count, 1);
 }
 
 #[test]
