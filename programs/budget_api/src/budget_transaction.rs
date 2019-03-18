@@ -142,14 +142,6 @@ mod tests {
     }
 
     #[test]
-    fn test_claim() {
-        let keypair = Keypair::new();
-        let zero = Hash::default();
-        let tx0 = BudgetTransaction::new_payment(&keypair, &keypair.pubkey(), 42, zero, 0);
-        assert!(verify_plan(&tx0));
-    }
-
-    #[test]
     fn test_payment() {
         let zero = Hash::default();
         let keypair0 = Keypair::new();
@@ -157,70 +149,6 @@ mod tests {
         let pubkey1 = keypair1.pubkey();
         let tx0 = BudgetTransaction::new_payment(&keypair0, &pubkey1, 42, zero, 0);
         assert!(verify_plan(&tx0));
-    }
-
-    #[test]
-    fn test_payment_with_fee() {
-        let zero = Hash::default();
-        let keypair0 = Keypair::new();
-        let pubkey1 = Keypair::new().pubkey();
-        let tx0 = BudgetTransaction::new_payment(&keypair0, &pubkey1, 1, zero, 1);
-        assert!(verify_plan(&tx0));
-    }
-
-    #[test]
-    fn test_serialize_claim() {
-        let zero = Hash::default();
-        let keypair0 = Keypair::new();
-        let pubkey1 = Keypair::new().pubkey();
-        let tx0 = BudgetTransaction::new_payment(&keypair0, &pubkey1, 1, zero, 1);
-        let buf = serialize(&tx0).unwrap();
-        let tx1: Transaction = deserialize(&buf).unwrap();
-        assert_eq!(tx1, tx0);
-    }
-
-    #[test]
-    fn test_lamport_attack() {
-        let zero = Hash::default();
-        let keypair = Keypair::new();
-        let pubkey = keypair.pubkey();
-        let mut tx = BudgetTransaction::new_payment(&keypair, &pubkey, 42, zero, 0);
-        let mut system_instruction = deserialize_system_instruction(&tx, 0).unwrap();
-        if let SystemInstruction::CreateAccount {
-            ref mut lamports, ..
-        } = system_instruction
-        {
-            *lamports = 1_000_000; // <-- attack, part 1!
-            let mut instruction = deserialize_budget_instruction(&tx, 1).unwrap();
-            if let BudgetInstruction::InitializeAccount(ref mut expr) = instruction {
-                if let BudgetExpr::Pay(ref mut payment) = expr {
-                    payment.lamports = *lamports; // <-- attack, part 2!
-                }
-            }
-            tx.instructions[1].data = serialize(&instruction).unwrap();
-        }
-        tx.instructions[0].data = serialize(&system_instruction).unwrap();
-        assert!(verify_plan(&tx));
-        assert!(!tx.verify_signature());
-    }
-
-    #[test]
-    fn test_hijack_attack() {
-        let keypair0 = Keypair::new();
-        let keypair1 = Keypair::new();
-        let thief_keypair = Keypair::new();
-        let pubkey1 = keypair1.pubkey();
-        let zero = Hash::default();
-        let mut tx = BudgetTransaction::new_payment(&keypair0, &pubkey1, 42, zero, 0);
-        let mut instruction = deserialize_budget_instruction(&tx, 1);
-        if let Some(BudgetInstruction::InitializeAccount(ref mut expr)) = instruction {
-            if let BudgetExpr::Pay(ref mut payment) = expr {
-                payment.to = thief_keypair.pubkey(); // <-- attack!
-            }
-        }
-        tx.instructions[1].data = serialize(&instruction).unwrap();
-        assert!(verify_plan(&tx));
-        assert!(!tx.verify_signature());
     }
 
     #[test]
