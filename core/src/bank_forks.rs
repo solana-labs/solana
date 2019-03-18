@@ -28,25 +28,25 @@ impl BankForks {
         }
     }
 
-    //produce a flat map of banks to all of its parents
-    pub fn flat_parents(&self) -> HashMap<u64, HashSet<u64>> {
-        let mut flat_parents = HashMap::new();
+    /// Create a map of bank slot id to the set of ancestors for the bank slot.
+    pub fn ancestors(&self) -> HashMap<u64, HashSet<u64>> {
+        let mut ancestors = HashMap::new();
         let mut pending: Vec<Arc<Bank>> = self.banks.values().cloned().collect();
         while !pending.is_empty() {
             let bank = pending.pop().unwrap();
-            if flat_parents.get(&bank.slot()).is_some() {
+            if ancestors.get(&bank.slot()).is_some() {
                 continue;
             }
             let set = bank.parents().into_iter().map(|b| b.slot()).collect();
-            flat_parents.insert(bank.slot(), set);
+            ancestors.insert(bank.slot(), set);
             pending.extend(bank.parents().into_iter());
         }
-        flat_parents
+        ancestors
     }
 
-    //produce a flat map of banks to all of its children
-    pub fn flat_children(&self) -> HashMap<u64, HashSet<u64>> {
-        let mut flat_children = HashMap::new();
+    /// Create a map of bank slot id to the set of all of its descendants
+    pub fn decendants(&self) -> HashMap<u64, HashSet<u64>> {
+        let mut decendants = HashMap::new();
         let mut pending: Vec<Arc<Bank>> = self.banks.values().cloned().collect();
         let mut done = HashSet::new();
         assert!(!pending.is_empty());
@@ -56,16 +56,16 @@ impl BankForks {
                 continue;
             }
             done.insert(bank.slot());
-            let _ = flat_children.entry(bank.slot()).or_insert(HashSet::new());
+            let _ = decendants.entry(bank.slot()).or_insert(HashSet::new());
             for parent in bank.parents() {
-                flat_children
+                decendants
                     .entry(parent.slot())
                     .or_insert(HashSet::new())
                     .insert(bank.slot());
             }
             pending.extend(bank.parents().into_iter());
         }
-        flat_children
+        decendants
     }
 
     pub fn frozen_banks(&self) -> HashMap<u64, Arc<Bank>> {
@@ -148,7 +148,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_forks_flat_children() {
+    fn test_bank_forks_decendants() {
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
@@ -157,15 +157,15 @@ mod tests {
         bank_forks.insert(1, bank);
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
         bank_forks.insert(2, bank);
-        let flat_children = bank_forks.flat_children();
-        let children: Vec<u64> = flat_children[&0].iter().cloned().collect();
+        let decendants = bank_forks.decendants();
+        let children: Vec<u64> = decendants[&0].iter().cloned().collect();
         assert_eq!(children, vec![1, 2]);
-        assert!(flat_children[&1].is_empty());
-        assert!(flat_children[&2].is_empty());
+        assert!(decendants[&1].is_empty());
+        assert!(decendants[&2].is_empty());
     }
 
     #[test]
-    fn test_bank_forks_flat_parents() {
+    fn test_bank_forks_ancestors() {
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
@@ -174,11 +174,11 @@ mod tests {
         bank_forks.insert(1, bank);
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
         bank_forks.insert(2, bank);
-        let flat_parents = bank_forks.flat_parents();
-        assert!(flat_parents[&0].is_empty());
-        let parents: Vec<u64> = flat_parents[&1].iter().cloned().collect();
+        let ancestors = bank_forks.ancestors();
+        assert!(ancestors[&0].is_empty());
+        let parents: Vec<u64> = ancestors[&1].iter().cloned().collect();
         assert_eq!(parents, vec![0]);
-        let parents: Vec<u64> = flat_parents[&2].iter().cloned().collect();
+        let parents: Vec<u64> = ancestors[&2].iter().cloned().collect();
         assert_eq!(parents, vec![0]);
     }
 
