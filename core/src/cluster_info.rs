@@ -1703,69 +1703,50 @@ mod tests {
         assert!(cluster_info.leader_data().is_none());
     }
 
+    fn assert_in_range(x: u16, range: (u16, u16)) {
+        assert!(x >= range.0);
+        assert!(x < range.1);
+    }
+
+    fn check_sockets(sockets: &Vec<UdpSocket>, ip: IpAddr, range: (u16, u16)) {
+        assert!(sockets.len() > 1);
+        let port = sockets[0].local_addr().unwrap().port();
+        for socket in sockets.iter() {
+            check_socket(socket, ip, range);
+            assert_eq!(socket.local_addr().unwrap().port(), port);
+        }
+    }
+
+    fn check_socket(socket: &UdpSocket, ip: IpAddr, range: (u16, u16)) {
+        let local_addr = socket.local_addr().unwrap();
+        assert_eq!(local_addr.ip(), ip);
+        assert_in_range(local_addr.port(), range);
+    }
+
+    fn check_node_sockets(node: &Node, ip: IpAddr, range: (u16, u16)) {
+        check_socket(&node.sockets.gossip, ip, range);
+        check_socket(&node.sockets.repair, ip, range);
+
+        check_sockets(&node.sockets.tvu, ip, range);
+        check_sockets(&node.sockets.tpu, ip, range);
+    }
+
     #[test]
     fn new_with_external_ip_test_random() {
         let ip = Ipv4Addr::from(0);
         let node = Node::new_with_external_ip(&Keypair::new().pubkey(), &socketaddr!(ip, 0));
-        assert_eq!(node.sockets.gossip.local_addr().unwrap().ip(), ip);
-        assert!(node.sockets.tvu.len() > 1);
-        for tx_socket in node.sockets.tvu.iter() {
-            assert_eq!(tx_socket.local_addr().unwrap().ip(), ip);
-        }
-        assert!(node.sockets.tpu.len() > 1);
-        for tx_socket in node.sockets.tpu.iter() {
-            assert_eq!(tx_socket.local_addr().unwrap().ip(), ip);
-        }
-        assert_eq!(node.sockets.repair.local_addr().unwrap().ip(), ip);
 
-        assert!(node.sockets.gossip.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
-        assert!(node.sockets.gossip.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
-        let tx_port = node.sockets.tvu[0].local_addr().unwrap().port();
-        assert!(tx_port >= FULLNODE_PORT_RANGE.0);
-        assert!(tx_port < FULLNODE_PORT_RANGE.1);
-        for tx_socket in node.sockets.tvu.iter() {
-            assert_eq!(tx_socket.local_addr().unwrap().port(), tx_port);
-        }
-        let tx_port = node.sockets.tpu[0].local_addr().unwrap().port();
-        assert!(tx_port >= FULLNODE_PORT_RANGE.0);
-        assert!(tx_port < FULLNODE_PORT_RANGE.1);
-        for tx_socket in node.sockets.tpu.iter() {
-            assert_eq!(tx_socket.local_addr().unwrap().port(), tx_port);
-        }
-        assert!(node.sockets.repair.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
-        assert!(node.sockets.repair.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+        check_node_sockets(&node, IpAddr::V4(ip), FULLNODE_PORT_RANGE);
     }
 
     #[test]
     fn new_with_external_ip_test_gossip() {
         let ip = IpAddr::V4(Ipv4Addr::from(0));
         let node = Node::new_with_external_ip(&Keypair::new().pubkey(), &socketaddr!(0, 8050));
-        assert_eq!(node.sockets.gossip.local_addr().unwrap().ip(), ip);
-        assert!(node.sockets.tvu.len() > 1);
-        for tx_socket in node.sockets.tvu.iter() {
-            assert_eq!(tx_socket.local_addr().unwrap().ip(), ip);
-        }
-        assert!(node.sockets.tpu.len() > 1);
-        for tx_socket in node.sockets.tpu.iter() {
-            assert_eq!(tx_socket.local_addr().unwrap().ip(), ip);
-        }
-        assert_eq!(node.sockets.repair.local_addr().unwrap().ip(), ip);
+
+        check_node_sockets(&node, ip, FULLNODE_PORT_RANGE);
 
         assert_eq!(node.sockets.gossip.local_addr().unwrap().port(), 8050);
-        let tx_port = node.sockets.tvu[0].local_addr().unwrap().port();
-        assert!(tx_port >= FULLNODE_PORT_RANGE.0);
-        assert!(tx_port < FULLNODE_PORT_RANGE.1);
-        for tx_socket in node.sockets.tvu.iter() {
-            assert_eq!(tx_socket.local_addr().unwrap().port(), tx_port);
-        }
-        let tx_port = node.sockets.tpu[0].local_addr().unwrap().port();
-        assert!(tx_port >= FULLNODE_PORT_RANGE.0);
-        assert!(tx_port < FULLNODE_PORT_RANGE.1);
-        for tx_socket in node.sockets.tpu.iter() {
-            assert_eq!(tx_socket.local_addr().unwrap().port(), tx_port);
-        }
-        assert!(node.sockets.repair.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
-        assert!(node.sockets.repair.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
     }
 
     //test that all cluster_info objects only generate signed messages
