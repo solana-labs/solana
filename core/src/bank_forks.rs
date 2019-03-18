@@ -45,8 +45,8 @@ impl BankForks {
     }
 
     /// Create a map of bank slot id to the set of all of its descendants
-    pub fn decendants(&self) -> HashMap<u64, HashSet<u64>> {
-        let mut decendants = HashMap::new();
+    pub fn descendants(&self) -> HashMap<u64, HashSet<u64>> {
+        let mut descendants = HashMap::new();
         let mut pending: Vec<Arc<Bank>> = self.banks.values().cloned().collect();
         let mut done = HashSet::new();
         assert!(!pending.is_empty());
@@ -56,16 +56,16 @@ impl BankForks {
                 continue;
             }
             done.insert(bank.slot());
-            let _ = decendants.entry(bank.slot()).or_insert(HashSet::new());
+            let _ = descendants.entry(bank.slot()).or_insert(HashSet::new());
             for parent in bank.parents() {
-                decendants
+                descendants
                     .entry(parent.slot())
                     .or_insert(HashSet::new())
                     .insert(bank.slot());
             }
             pending.extend(bank.parents().into_iter());
         }
-        decendants
+        descendants
     }
 
     pub fn frozen_banks(&self) -> HashMap<u64, Arc<Bank>> {
@@ -148,7 +148,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_forks_decendants() {
+    fn test_bank_forks_descendants() {
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
@@ -157,11 +157,11 @@ mod tests {
         bank_forks.insert(1, bank);
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
         bank_forks.insert(2, bank);
-        let decendants = bank_forks.decendants();
-        let children: Vec<u64> = decendants[&0].iter().cloned().collect();
+        let descendants = bank_forks.descendants();
+        let children: Vec<u64> = descendants[&0].iter().cloned().collect();
         assert_eq!(children, vec![1, 2]);
-        assert!(decendants[&1].is_empty());
-        assert!(decendants[&2].is_empty());
+        assert!(descendants[&1].is_empty());
+        assert!(descendants[&2].is_empty());
     }
 
     #[test]
