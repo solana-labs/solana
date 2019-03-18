@@ -192,17 +192,11 @@ impl ReplayStage {
                         is_tpu_bank_active = false;
                     }
 
-                    let mut reached_leader_tick = false;
-                    if !is_tpu_bank_active {
+                    let (reached_leader_tick, grace_ticks) = if !is_tpu_bank_active {
                         let poh = poh_recorder.lock().unwrap();
-                        reached_leader_tick = poh.reached_leader_tick();
-
-                        debug!(
-                            "{:?} TPU bank inactive. poh tick {}, leader {}",
-                            my_id,
-                            poh.tick_height(),
-                            reached_leader_tick
-                        );
+                        poh.reached_leader_tick()
+                    } else {
+                        (false, 0)
                     };
 
                     if !is_tpu_bank_active {
@@ -220,6 +214,7 @@ impl ReplayStage {
                             &blocktree,
                             poh_slot,
                             reached_leader_tick,
+                            grace_ticks,
                         );
                     }
 
@@ -252,6 +247,7 @@ impl ReplayStage {
         blocktree: &Blocktree,
         poh_slot: u64,
         reached_leader_tick: bool,
+        grace_ticks: u64,
     ) {
         trace!("{} checking poh slot {}", my_id, poh_slot);
         if blocktree.meta(poh_slot).unwrap().is_some() {
@@ -278,6 +274,10 @@ impl ReplayStage {
                                 .add_field(
                                     "count",
                                     influxdb::Value::Integer(poh_slot as i64),
+                                )
+                                .add_field(
+                                    "grace",
+                                    influxdb::Value::Integer(grace_ticks as i64),
                                 )
                                 .to_owned(),);
                         let tpu_bank = Bank::new_from_parent(parent, my_id, poh_slot);
