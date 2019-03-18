@@ -31,15 +31,9 @@ impl BankForks {
     /// Create a map of bank slot id to the set of ancestors for the bank slot.
     pub fn ancestors(&self) -> HashMap<u64, HashSet<u64>> {
         let mut ancestors = HashMap::new();
-        let mut pending: Vec<Arc<Bank>> = self.banks.values().cloned().collect();
-        while !pending.is_empty() {
-            let bank = pending.pop().unwrap();
-            if ancestors.get(&bank.slot()).is_some() {
-                continue;
-            }
+        for bank in self.banks.values() {
             let set = bank.parents().into_iter().map(|b| b.slot()).collect();
             ancestors.insert(bank.slot(), set);
-            pending.extend(bank.parents().into_iter());
         }
         ancestors
     }
@@ -47,15 +41,7 @@ impl BankForks {
     /// Create a map of bank slot id to the set of all of its descendants
     pub fn descendants(&self) -> HashMap<u64, HashSet<u64>> {
         let mut descendants = HashMap::new();
-        let mut pending: Vec<Arc<Bank>> = self.banks.values().cloned().collect();
-        let mut done = HashSet::new();
-        assert!(!pending.is_empty());
-        while !pending.is_empty() {
-            let bank = pending.pop().unwrap();
-            if done.contains(&bank.slot()) {
-                continue;
-            }
-            done.insert(bank.slot());
+        for bank in self.banks.values() {
             let _ = descendants.entry(bank.slot()).or_insert(HashSet::new());
             for parent in bank.parents() {
                 descendants
@@ -63,22 +49,18 @@ impl BankForks {
                     .or_insert(HashSet::new())
                     .insert(bank.slot());
             }
-            pending.extend(bank.parents().into_iter());
         }
         descendants
     }
 
     pub fn frozen_banks(&self) -> HashMap<u64, Arc<Bank>> {
-        let mut frozen_banks: Vec<Arc<Bank>> = vec![];
-        frozen_banks.extend(self.banks.values().filter(|v| v.is_frozen()).cloned());
-        frozen_banks.extend(
-            self.banks
-                .iter()
-                .flat_map(|(_, v)| v.parents())
-                .filter(|v| v.is_frozen()),
-        );
-        frozen_banks.into_iter().map(|b| (b.slot(), b)).collect()
+        self.banks
+            .iter()
+            .filter(|(_, b)| b.is_frozen())
+            .map(|(k, b)| (*k, b.clone()))
+            .collect()
     }
+
     pub fn active_banks(&self) -> Vec<u64> {
         self.banks
             .iter()
@@ -104,27 +86,36 @@ impl BankForks {
 
     // TODO: use the bank's own ID instead of receiving a parameter?
     pub fn insert(&mut self, bank_slot: u64, bank: Bank) {
-        let mut bank = Arc::new(bank);
+        let bank = Arc::new(bank);
         assert_eq!(bank_slot, bank.slot());
         let prev = self.banks.insert(bank_slot, bank.clone());
         assert!(prev.is_none());
 
         self.working_bank = bank.clone();
-
-        // TODO: this really only needs to look at the first
-        //  parent if we're always calling insert()
-        //  when we construct a child bank
-        while let Some(parent) = bank.parent() {
-            if let Some(prev) = self.banks.remove(&parent.slot()) {
-                assert!(Arc::ptr_eq(&prev, &parent));
-            }
-            bank = parent;
-        }
     }
 
     // TODO: really want to kill this...
     pub fn working_bank(&self) -> Arc<Bank> {
         self.working_bank.clone()
+    }
+
+    pub fn set_root(&mut self, root: u64) {
+        let root_bank = self
+            .banks
+            .get(&root)
+            .expect("root bank didn't exist in bank_forks");
+        root_bank.squash();
+        self.prune_non_root(root);
+    }
+
+    fn prune_non_root(&mut self, root: u64) {
+        self.banks.retain(|slot, bank| {
+            if *slot < root {
+                false
+            } else {
+                bank.is_descendant_of(root)
+            }
+        })
     }
 }
 
