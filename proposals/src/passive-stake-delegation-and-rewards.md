@@ -18,7 +18,7 @@ validator.
 In the current design each staker creates their own VoteState, and assigns a
 **delegate** in the VoteState that can submit votes.  Since the validator has to
 actively vote for each stake delegated to it, validators can censor stakes by
-not voting to them.
+not voting for them.
 
 The number of votes is equal to the number of stakers, and not the number of
 validators.  Replicator clients are expected to delegate their replication
