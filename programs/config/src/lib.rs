@@ -58,7 +58,7 @@ mod tests {
     use solana_sdk::script::Script;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
-    use solana_sdk::transaction::Instruction;
+    use solana_sdk::transaction::{Instruction, InstructionError, TransactionError};
 
     #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
     struct MyConfig {
@@ -148,6 +148,24 @@ mod tests {
         let mut transaction = script.compile();
         transaction.instructions[0].data = vec![0; 123];
         config_client.process_transaction(transaction).unwrap_err();
+    }
+
+    #[test]
+    fn test_process_store_fail_account0_invalid_owner() {
+        solana_logger::setup();
+        let (bank, from_keypair) = create_bank(10_000);
+        let config_client = BankClient::new(&bank, from_keypair);
+        let config_pubkey = config_client.pubkey(); // <-- Invalid owner, not a config account
+
+        let my_config = MyConfig::new(42);
+        let instruction = ConfigInstruction::new_store(&config_pubkey, &my_config);
+        assert_eq!(
+            config_client.process_instruction(instruction),
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::ProgramError(ProgramError::IncorrectProgramId)
+            ))
+        );
     }
 
     #[test]
