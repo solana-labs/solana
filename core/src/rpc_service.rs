@@ -1,12 +1,12 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
+use crate::bank_forks::BankForks;
 use crate::cluster_info::ClusterInfo;
 use crate::rpc::*;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{hyper, AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
-use solana_runtime::bank::Bank;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -24,6 +24,7 @@ impl JsonRpcService {
         rpc_addr: SocketAddr,
         storage_state: StorageState,
         config: JsonRpcConfig,
+        bank_forks: Arc<RwLock<BankForks>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
@@ -31,6 +32,7 @@ impl JsonRpcService {
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             storage_state,
             config,
+            bank_forks,
             exit,
         )));
         let request_processor_ = request_processor.clone();
@@ -69,10 +71,6 @@ impl JsonRpcService {
             request_processor,
         }
     }
-
-    pub fn set_bank(&mut self, bank: &Arc<Bank>) {
-        self.request_processor.write().unwrap().set_bank(bank);
-    }
 }
 
 impl Service for JsonRpcService {
@@ -104,14 +102,15 @@ mod tests {
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
         );
-        let mut rpc_service = JsonRpcService::new(
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank.slot(), bank)));
+        let rpc_service = JsonRpcService::new(
             &cluster_info,
             rpc_addr,
             StorageState::default(),
             JsonRpcConfig::default(),
+            bank_forks,
             &exit,
         );
-        rpc_service.set_bank(&Arc::new(bank));
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
 
@@ -122,7 +121,6 @@ mod tests {
                 .read()
                 .unwrap()
                 .get_balance(&alice.pubkey())
-                .unwrap()
         );
         exit.store(true, Ordering::Relaxed);
         rpc_service.join().unwrap();
