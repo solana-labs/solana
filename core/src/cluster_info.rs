@@ -1362,11 +1362,39 @@ impl Node {
         Self::new_localhost_with_pubkey(&pubkey)
     }
     pub fn new_localhost_replicator(pubkey: &Pubkey) -> Self {
-        let mut new = Self::new_localhost_with_pubkey(pubkey);
+        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let storage = UdpSocket::bind("127.0.0.1:0").unwrap();
-        new.info.storage_addr = storage.local_addr().unwrap();
-        new.sockets.storage = Some(storage);
-        new
+        let empty = "0.0.0.0:0".parse().unwrap();
+        let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
+
+        let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let info = ContactInfo::new(
+            pubkey,
+            gossip.local_addr().unwrap(),
+            tvu.local_addr().unwrap(),
+            empty,
+            empty,
+            storage.local_addr().unwrap(),
+            empty,
+            empty,
+            timestamp(),
+        );
+
+        Node {
+            info,
+            sockets: Sockets {
+                gossip,
+                tvu: vec![tvu],
+                tpu: vec![],
+                tpu_via_blobs: vec![],
+                broadcast,
+                repair,
+                retransmit,
+                storage: Some(storage),
+            },
+        }
     }
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
         let tpu = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -1408,12 +1436,8 @@ impl Node {
             },
         }
     }
-    pub fn new_with_external_ip(pubkey: &Pubkey, gossip_addr: &SocketAddr) -> Node {
-        fn bind() -> (u16, UdpSocket) {
-            bind_in_range(FULLNODE_PORT_RANGE).expect("Failed to bind")
-        };
-
-        let (gossip_port, gossip) = if gossip_addr.port() != 0 {
+    fn get_gossip_port(gossip_addr: &SocketAddr) -> (u16, UdpSocket) {
+        if gossip_addr.port() != 0 {
             (
                 gossip_addr.port(),
                 bind_to(gossip_addr.port(), false).unwrap_or_else(|e| {
@@ -1421,8 +1445,14 @@ impl Node {
                 }),
             )
         } else {
-            bind()
-        };
+            Self::bind()
+        }
+    }
+    fn bind() -> (u16, UdpSocket) {
+        bind_in_range(FULLNODE_PORT_RANGE).expect("Failed to bind")
+    }
+    pub fn new_with_external_ip(pubkey: &Pubkey, gossip_addr: &SocketAddr) -> Node {
+        let (gossip_port, gossip) = Self::get_gossip_port(gossip_addr);
 
         let (tvu_port, tvu_sockets) =
             multi_bind_in_range(FULLNODE_PORT_RANGE, 8).expect("tvu multi_bind");
@@ -1433,9 +1463,9 @@ impl Node {
         let (tpu_via_blobs_port, tpu_via_blobs_sockets) =
             multi_bind_in_range(FULLNODE_PORT_RANGE, 8).expect("tpu multi_bind");
 
-        let (_, repair) = bind();
-        let (_, broadcast) = bind();
-        let (_, retransmit) = bind();
+        let (_, repair) = Self::bind();
+        let (_, broadcast) = Self::bind();
+        let (_, retransmit) = Self::bind();
 
         let info = ContactInfo::new(
             pubkey,
@@ -1463,6 +1493,21 @@ impl Node {
                 storage: None,
             },
         }
+    }
+    pub fn new_replicator_with_external_ip(pubkey: &Pubkey, gossip_addr: &SocketAddr) -> Node {
+        let mut new = Self::new_with_external_ip(pubkey, gossip_addr);
+        let (storage_port, storage_socket) = Self::bind();
+
+        new.info.storage_addr = SocketAddr::new(gossip_addr.ip(), storage_port);
+        new.sockets.storage = Some(storage_socket);
+
+        let empty = "0.0.0.0:0".parse().unwrap();
+        new.info.tpu = empty;
+        new.info.tpu_via_blobs = empty;
+        new.sockets.tpu = vec![];
+        new.sockets.tpu_via_blobs = vec![];
+
+        new
     }
 }
 
@@ -1756,6 +1801,19 @@ mod tests {
         check_node_sockets(&node, ip, FULLNODE_PORT_RANGE);
 
         assert_eq!(node.sockets.gossip.local_addr().unwrap().port(), 8050);
+    }
+
+    #[test]
+    fn new_replicator_external_ip_test() {
+        let ip = IpAddr::V4(Ipv4Addr::from(0));
+        let node =
+            Node::new_replicator_with_external_ip(&Keypair::new().pubkey(), &socketaddr!(0, 8050));
+
+        check_socket(&node.sockets.storage.unwrap(), ip, FULLNODE_PORT_RANGE);
+        check_socket(&node.sockets.gossip, ip, FULLNODE_PORT_RANGE);
+        check_socket(&node.sockets.repair, ip, FULLNODE_PORT_RANGE);
+
+        check_sockets(&node.sockets.tvu, ip, FULLNODE_PORT_RANGE);
     }
 
     //test that all cluster_info objects only generate signed messages
