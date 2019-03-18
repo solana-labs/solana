@@ -42,6 +42,7 @@ pub mod leader_schedule;
 pub mod leader_schedule_utils;
 pub mod local_cluster;
 pub mod local_vote_signer_service;
+pub mod locktower;
 pub mod packet;
 pub mod poh;
 pub mod poh_recorder;

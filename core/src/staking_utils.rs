@@ -58,7 +58,7 @@ fn node_staked_accounts(bank: &Bank) -> impl Iterator<Item = (Pubkey, u64, Accou
     })
 }
 
-fn node_staked_accounts_at_epoch(
+pub fn node_staked_accounts_at_epoch(
     bank: &Bank,
     epoch_height: u64,
 ) -> Option<impl Iterator<Item = (&Pubkey, u64, &Account)>> {

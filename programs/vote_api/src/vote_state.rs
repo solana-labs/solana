@@ -39,6 +39,9 @@ impl Lockout {
     pub fn expiration_slot(&self) -> u64 {
         self.slot + self.lockout()
     }
+    pub fn is_expired(&self, slot: u64) -> bool {
+        self.expiration_slot() < slot
+    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -110,6 +113,15 @@ impl VoteState {
         self.double_lockouts();
     }
 
+    pub fn nth_recent_vote(&self, position: usize) -> Option<&Lockout> {
+        if position < self.votes.len() {
+            let pos = self.votes.len() - 1 - position;
+            self.votes.get(pos)
+        } else {
+            None
+        }
+    }
+
     /// Number of "credits" owed to this account from the mining pool. Submit this
     /// VoteState to the Rewards program to trade credits for lamports.
     pub fn credits(&self) -> u64 {
@@ -123,11 +135,7 @@ impl VoteState {
 
     fn pop_expired_votes(&mut self, slot: u64) {
         loop {
-            if self
-                .votes
-                .back()
-                .map_or(false, |v| v.expiration_slot() < slot)
-            {
+            if self.votes.back().map_or(false, |v| v.is_expired(slot)) {
                 self.votes.pop_back();
             } else {
                 break;
@@ -460,6 +468,34 @@ mod tests {
         assert_eq!(vote_state.credits(), 3);
         vote_state.clear_credits();
         assert_eq!(vote_state.credits(), 0);
+    }
+
+    #[test]
+    fn test_duplicate_vote() {
+        let voter_id = Keypair::new().pubkey();
+        let mut vote_state = VoteState::new(&voter_id);
+        vote_state.process_vote(Vote::new(0));
+        vote_state.process_vote(Vote::new(1));
+        vote_state.process_vote(Vote::new(0));
+        assert_eq!(vote_state.nth_recent_vote(0).unwrap().slot, 1);
+        assert_eq!(vote_state.nth_recent_vote(1).unwrap().slot, 0);
+        assert!(vote_state.nth_recent_vote(2).is_none());
+    }
+
+    #[test]
+    fn test_nth_recent_vote() {
+        let voter_id = Keypair::new().pubkey();
+        let mut vote_state = VoteState::new(&voter_id);
+        for i in 0..MAX_LOCKOUT_HISTORY {
+            vote_state.process_vote(Vote::new(i as u64));
+        }
+        for i in 0..(MAX_LOCKOUT_HISTORY - 1) {
+            assert_eq!(
+                vote_state.nth_recent_vote(i).unwrap().slot as usize,
+                MAX_LOCKOUT_HISTORY - i - 1,
+            );
+        }
+        assert!(vote_state.nth_recent_vote(MAX_LOCKOUT_HISTORY).is_none());
     }
 
     fn check_lockouts(vote_state: &VoteState) {

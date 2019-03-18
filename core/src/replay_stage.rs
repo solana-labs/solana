@@ -6,6 +6,7 @@ use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
 use crate::leader_schedule_utils;
+use crate::locktower::Locktower;
 use crate::packet::BlobError;
 use crate::poh_recorder::PohRecorder;
 use crate::result;
@@ -17,7 +18,7 @@ use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::KeypairUtil;
-use solana_sdk::timing::duration_as_ms;
+use solana_sdk::timing::{self, duration_as_ms};
 use solana_vote_api::vote_transaction::VoteTransaction;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -78,6 +79,7 @@ impl ReplayStage {
         let my_id = *my_id;
         let vote_account = *vote_account;
         let mut ticks_per_slot = 0;
+        let mut locktower = Locktower::new_from_forks(&bank_forks.read().unwrap());
 
         // Start the replay stage loop
         let t_replay = Builder::new()
@@ -94,7 +96,6 @@ impl ReplayStage {
                     Self::generate_new_bank_forks(&blocktree, &mut bank_forks.write().unwrap());
                     let active_banks = bank_forks.read().unwrap().active_banks();
                     trace!("active banks {:?}", active_banks);
-                    let mut votable: Vec<Arc<Bank>> = vec![];
                     let mut is_tpu_bank_active = poh_recorder.lock().unwrap().bank().is_some();
                     for bank_slot in &active_banks {
                         let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
@@ -113,7 +114,6 @@ impl ReplayStage {
                                 &my_id,
                                 bank,
                                 &mut progress,
-                                &mut votable,
                                 &slot_full_sender,
                             );
                         }
@@ -125,11 +125,40 @@ impl ReplayStage {
                         ticks_per_slot = bank.ticks_per_slot();
                     }
 
-                    // TODO: fork selection
-                    // vote on the latest one for now
-                    votable.sort_by(|b1, b2| b1.slot().cmp(&b2.slot()));
+                    let locktower_start = Instant::now();
+                    // Locktower voting
+                    let decendants = bank_forks.read().unwrap().decendants();
+                    let ancestors = bank_forks.read().unwrap().ancestors();
+                    let frozen_banks = bank_forks.read().unwrap().frozen_banks();
+                    let mut votable: Vec<(u128, Arc<Bank>)> = frozen_banks
+                        .values()
+                        .filter(|b| b.is_votable())
+                        .filter(|b| !locktower.has_voted(b.slot()))
+                        .filter(|b| !locktower.is_locked_out(b.slot(), &decendants))
+                        .map(|bank| {
+                            (
+                                bank,
+                                locktower.collect_vote_lockouts(
+                                    bank.slot(),
+                                    bank.vote_accounts(),
+                                    &ancestors,
+                                ),
+                            )
+                        })
+                        .filter(|(b, stake_lockouts)| {
+                            locktower.check_vote_stake_threshold(b.slot(), &stake_lockouts)
+                        })
+                        .map(|(b, stake_lockouts)| {
+                            (locktower.calculate_weight(&stake_lockouts), b.clone())
+                        })
+                        .collect();
 
-                    if let Some(bank) = votable.last() {
+                    votable.sort_by_key(|b| b.0);
+                    let ms = timing::duration_as_ms(&locktower_start.elapsed());
+                    info!("@{:?} locktower duration: {:?}", timing::timestamp(), ms,);
+                    inc_new_counter_info!("replay_stage-locktower_duration", ms as usize);
+
+                    if let Some((_, bank)) = votable.last() {
                         subscriptions.notify_subscribers(&bank);
 
                         if let Some(ref voting_keypair) = voting_keypair {
@@ -141,6 +170,8 @@ impl ReplayStage {
                                 bank.last_blockhash(),
                                 0,
                             );
+                            locktower.record_vote(bank.slot());
+                            locktower.update_epoch(&bank);
                             cluster_info.write().unwrap().push_vote(vote);
                         }
                         let next_leader_slot =
@@ -350,7 +381,6 @@ impl ReplayStage {
         my_id: &Pubkey,
         bank: Arc<Bank>,
         progress: &mut HashMap<u64, (Hash, usize)>,
-        votable: &mut Vec<Arc<Bank>>,
         slot_full_sender: &Sender<(u64, Pubkey)>,
     ) {
         bank.freeze();
@@ -358,9 +388,6 @@ impl ReplayStage {
         progress.remove(&bank.slot());
         if let Err(e) = slot_full_sender.send((bank.slot(), bank.collector_id())) {
             info!("{} slot_full alert failed: {:?}", my_id, e);
-        }
-        if bank.is_votable() {
-            votable.push(bank);
         }
     }
 
@@ -488,42 +515,6 @@ mod test {
             poh_service.join().unwrap();
         }
         let _ignored = remove_dir_all(&my_ledger_path);
-    }
-
-    #[test]
-    fn test_no_vote_empty_transmission() {
-        let genesis_block = GenesisBlock::new(10_000).0;
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let mut blockhash = bank.last_blockhash();
-        let mut entries = Vec::new();
-        for _ in 0..genesis_block.ticks_per_slot {
-            let entry = next_entry_mut(&mut blockhash, 1, vec![]); //just ticks
-            entries.push(entry);
-        }
-        let (sender, _receiver) = channel();
-
-        let mut progress = HashMap::new();
-        let (forward_entry_sender, _forward_entry_receiver) = channel();
-        ReplayStage::replay_entries_into_bank(
-            &bank,
-            entries.clone(),
-            &mut progress,
-            &forward_entry_sender,
-            0,
-        )
-        .unwrap();
-
-        let mut votable = vec![];
-        ReplayStage::process_completed_bank(
-            &Pubkey::default(),
-            bank,
-            &mut progress,
-            &mut votable,
-            &sender,
-        );
-        assert!(progress.is_empty());
-        // Don't vote on slot that only contained ticks
-        assert!(votable.is_empty());
     }
 
     #[test]

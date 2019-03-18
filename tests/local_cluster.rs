@@ -22,6 +22,7 @@ fn test_spend_and_verify_all_nodes_1() {
 }
 
 #[test]
+#[ignore] //TODO: confirmations are not useful: #3346
 fn test_spend_and_verify_all_nodes_2() {
     solana_logger::setup();
     let num_nodes = 2;
@@ -34,6 +35,7 @@ fn test_spend_and_verify_all_nodes_2() {
 }
 
 #[test]
+#[ignore] //TODO: confirmations are not useful: #3346
 fn test_spend_and_verify_all_nodes_3() {
     solana_logger::setup();
     let num_nodes = 3;
