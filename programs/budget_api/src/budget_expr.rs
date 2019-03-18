@@ -98,35 +98,37 @@ impl BudgetExpr {
         )
     }
 
-    /// Create a budget that pays `lamports` to `to` after the given DateTime.
+    /// Create a budget that pays `lamports` to `to` after the given DateTime signed
+    /// by `dt_pubkey`.
     pub fn new_future_payment(
         dt: DateTime<Utc>,
-        from: &Pubkey,
+        dt_pubkey: &Pubkey,
         lamports: u64,
         to: &Pubkey,
     ) -> Self {
         BudgetExpr::After(
-            Condition::Timestamp(dt, *from),
+            Condition::Timestamp(dt, *dt_pubkey),
             Box::new(Self::new_payment(lamports, to)),
         )
     }
 
     /// Create a budget that pays `lamports` to `to` after the given DateTime
-    /// unless cancelled by `from`.
+    /// signed by `dt_pubkey` unless canceled by `from`.
     pub fn new_cancelable_future_payment(
         dt: DateTime<Utc>,
-        from: &Pubkey,
+        dt_pubkey: &Pubkey,
         lamports: u64,
         to: &Pubkey,
+        from: &Pubkey,
     ) -> Self {
         BudgetExpr::Or(
             (
-                Condition::Timestamp(dt, *from),
+                Condition::Timestamp(dt, *dt_pubkey),
                 Box::new(Self::new_payment(lamports, to)),
             ),
             (
                 Condition::Signature(*from),
-                Box::new(Self::new_payment(lamports, to)),
+                Box::new(Self::new_payment(lamports, from)),
             ),
         )
     }
@@ -211,7 +213,7 @@ mod tests {
         assert!(BudgetExpr::new_payment(42, &to).verify(42));
         assert!(BudgetExpr::new_authorized_payment(&from, 42, &to).verify(42));
         assert!(BudgetExpr::new_future_payment(dt, &from, 42, &to).verify(42));
-        assert!(BudgetExpr::new_cancelable_future_payment(dt, &from, 42, &to).verify(42));
+        assert!(BudgetExpr::new_cancelable_future_payment(dt, &from, 42, &to, &from).verify(42));
     }
 
     #[test]
@@ -255,11 +257,11 @@ mod tests {
         let from = Pubkey::default();
         let to = Pubkey::default();
 
-        let mut expr = BudgetExpr::new_cancelable_future_payment(dt, &from, 42, &to);
+        let mut expr = BudgetExpr::new_cancelable_future_payment(dt, &from, 42, &to, &from);
         expr.apply_witness(&Witness::Timestamp(dt), &from);
         assert_eq!(expr, BudgetExpr::new_payment(42, &to));
 
-        let mut expr = BudgetExpr::new_cancelable_future_payment(dt, &from, 42, &to);
+        let mut expr = BudgetExpr::new_cancelable_future_payment(dt, &from, 42, &to, &from);
         expr.apply_witness(&Witness::Signature, &from);
         assert_eq!(expr, BudgetExpr::new_payment(42, &from));
     }

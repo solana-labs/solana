@@ -1,4 +1,4 @@
-use crate::budget_expr::{BudgetExpr, Condition};
+use crate::budget_expr::BudgetExpr;
 use crate::budget_instruction::BudgetInstruction;
 use crate::budget_state::BudgetState;
 use crate::id;
@@ -43,22 +43,10 @@ impl BudgetScript {
         cancelable: Option<Pubkey>,
         lamports: u64,
     ) -> Script {
-        let expr = if let Some(from) = cancelable {
-            BudgetExpr::Or(
-                (
-                    Condition::Timestamp(dt, *dt_pubkey),
-                    Box::new(BudgetExpr::new_payment(lamports, to)),
-                ),
-                (
-                    Condition::Signature(from),
-                    Box::new(BudgetExpr::new_payment(lamports, &from)),
-                ),
-            )
+        let expr = if let Some(from) = &cancelable {
+            BudgetExpr::new_cancelable_future_payment(dt, dt_pubkey, lamports, to, from)
         } else {
-            BudgetExpr::After(
-                Condition::Timestamp(dt, *dt_pubkey),
-                Box::new(BudgetExpr::new_payment(lamports, to)),
-            )
+            BudgetExpr::new_future_payment(dt, dt_pubkey, lamports, to)
         };
 
         Self::new_account(from, contract, lamports, expr)
@@ -73,8 +61,8 @@ impl BudgetScript {
         cancelable: Option<Pubkey>,
         lamports: u64,
     ) -> Script {
-        let expr = if let Some(from) = cancelable {
-            BudgetExpr::new_cancelable_authorized_payment(witness, lamports, to, &from)
+        let expr = if let Some(from) = &cancelable {
+            BudgetExpr::new_cancelable_authorized_payment(witness, lamports, to, from)
         } else {
             BudgetExpr::new_authorized_payment(witness, lamports, to)
         };
