@@ -1,7 +1,6 @@
 use solana_runtime::bank::{Bank, Result};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
-use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
@@ -134,7 +133,7 @@ fn test_vote_via_bank_with_no_signature() {
         result,
         Err(TransactionError::InstructionError(
             1,
-            InstructionError::ProgramError(ProgramError::InvalidArgument)
+            InstructionError::InvalidArgument
         ))
     );
 }

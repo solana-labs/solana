@@ -3,29 +3,29 @@
 use log::*;
 use solana_config_api::check_id;
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
+use solana_sdk::transaction::InstructionError;
 
 fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
     _tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<(), InstructionError> {
     if !check_id(&keyed_accounts[0].account.owner) {
         error!("account[0] is not assigned to the config program");
-        Err(ProgramError::IncorrectProgramId)?;
+        Err(InstructionError::IncorrectProgramId)?;
     }
 
     if keyed_accounts[0].signer_key().is_none() {
         error!("account[0] should sign the transaction");
-        Err(ProgramError::MissingRequiredSignature)?;
+        Err(InstructionError::MissingRequiredSignature)?;
     }
 
     if keyed_accounts[0].account.data.len() < data.len() {
         error!("instruction data too large");
-        Err(ProgramError::InvalidInstructionData)?;
+        Err(InstructionError::InvalidInstructionData)?;
     }
 
     keyed_accounts[0].account.data[0..data.len()].copy_from_slice(data);
@@ -38,7 +38,7 @@ fn entrypoint(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
     tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<(), InstructionError> {
     solana_logger::setup();
 
     trace!("process_instruction: {:?}", data);
@@ -163,7 +163,7 @@ mod tests {
             config_client.process_instruction(instruction),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::ProgramError(ProgramError::IncorrectProgramId)
+                InstructionError::IncorrectProgramId
             ))
         );
     }

@@ -1,6 +1,5 @@
 use crate::native_loader;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
-use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
 use solana_sdk::transaction::{InstructionError, Transaction, TransactionError};
@@ -70,18 +69,18 @@ fn verify_instruction(
     Ok(())
 }
 
-fn verify_error(err: ProgramError) -> ProgramError {
+fn verify_error(err: InstructionError) -> InstructionError {
     match err {
-        ProgramError::CustomError(mut error) => {
+        InstructionError::CustomError(mut error) => {
             error.truncate(32);
-            ProgramError::CustomError(error)
+            InstructionError::CustomError(error)
         }
         e => e,
     }
 }
 
 pub type ProcessInstruction =
-    fn(&Pubkey, &mut [KeyedAccount], &[u8], u64) -> Result<(), ProgramError>;
+    fn(&Pubkey, &mut [KeyedAccount], &[u8], u64) -> Result<(), InstructionError>;
 
 pub struct Runtime {
     instruction_processors: Vec<(Pubkey, ProcessInstruction)>,
@@ -118,7 +117,7 @@ impl Runtime {
         executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
         tick_height: u64,
-    ) -> Result<(), ProgramError> {
+    ) -> Result<(), InstructionError> {
         let program_id = tx.program_id(instruction_index);
 
         let mut keyed_accounts = create_keyed_accounts(executable_accounts);
@@ -182,8 +181,7 @@ impl Runtime {
             program_accounts,
             tick_height,
         )
-        .map_err(verify_error)
-        .map_err(InstructionError::ProgramError)?;
+        .map_err(verify_error)?;
 
         // Verify the instruction
         for ((pre_program_id, pre_lamports, pre_data), post_account) in
@@ -322,15 +320,15 @@ mod tests {
 
     #[test]
     fn test_verify_error() {
-        let short_error = ProgramError::CustomError(vec![1, 2, 3]);
+        let short_error = InstructionError::CustomError(vec![1, 2, 3]);
         let expected_short_error = short_error.clone(); // short CustomError errors should be untouched
         assert_eq!(verify_error(short_error), expected_short_error);
 
-        let long_error = ProgramError::CustomError(vec![8; 40]);
-        let expected_long_error = ProgramError::CustomError(vec![8; 32]); // long CustomError errors should be truncated
+        let long_error = InstructionError::CustomError(vec![8; 40]);
+        let expected_long_error = InstructionError::CustomError(vec![8; 32]); // long CustomError errors should be truncated
         assert_eq!(verify_error(long_error), expected_long_error);
 
-        let other_error = ProgramError::GenericError;
+        let other_error = InstructionError::GenericError;
         let expected_other_error = other_error.clone(); // non-CustomError errors should be untouched
         assert_eq!(verify_error(other_error), expected_other_error);
     }

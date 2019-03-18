@@ -7,8 +7,9 @@ use libloading::os::windows::*;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
-use solana_sdk::native_program::{self, ProgramError};
+use solana_sdk::native_program;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::InstructionError;
 use std::env;
 use std::path::PathBuf;
 use std::str;
@@ -51,7 +52,7 @@ pub fn entrypoint(
     keyed_accounts: &mut [KeyedAccount],
     ix_data: &[u8],
     tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<(), InstructionError> {
     if keyed_accounts[0].account.executable {
         // dispatch it
         let (names, params) = keyed_accounts.split_at_mut(1);
@@ -60,7 +61,7 @@ pub fn entrypoint(
             Ok(v) => v,
             Err(e) => {
                 warn!("Invalid UTF-8 sequence: {}", e);
-                return Err(ProgramError::GenericError);
+                return Err(InstructionError::GenericError);
             }
         };
         trace!("Call native {:?}", name);
@@ -77,20 +78,20 @@ pub fn entrypoint(
                                 e,
                                 native_program::ENTRYPOINT
                             );
-                            return Err(ProgramError::GenericError);
+                            return Err(InstructionError::GenericError);
                         }
                     };
                 return entrypoint(program_id, params, ix_data, tick_height);
             },
             Err(e) => {
                 warn!("Unable to load: {:?}", e);
-                return Err(ProgramError::GenericError);
+                return Err(InstructionError::GenericError);
             }
         }
     } else if let Ok(instruction) = deserialize(ix_data) {
         if keyed_accounts[0].signer_key().is_none() {
             warn!("key[0] did not sign the transaction");
-            return Err(ProgramError::GenericError);
+            return Err(InstructionError::GenericError);
         }
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
@@ -102,7 +103,7 @@ pub fn entrypoint(
                         keyed_accounts[0].account.data.len(),
                         offset + bytes.len()
                     );
-                    return Err(ProgramError::GenericError);
+                    return Err(InstructionError::GenericError);
                 }
                 // native loader takes a name and we assume it all comes in at once
                 keyed_accounts[0].account.data = bytes;
@@ -118,7 +119,7 @@ pub fn entrypoint(
         }
     } else {
         warn!("Invalid data in instruction: {:?}", ix_data);
-        return Err(ProgramError::GenericError);
+        return Err(InstructionError::GenericError);
     }
     Ok(())
 }

@@ -1,10 +1,10 @@
 use bincode::serialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::{SystemError, SystemInstruction};
 use solana_sdk::system_program;
+use solana_sdk::transaction::InstructionError;
 
 const FROM_ACCOUNT_INDEX: usize = 0;
 const TO_ACCOUNT_INDEX: usize = 1;
@@ -69,7 +69,7 @@ pub fn entrypoint(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
     _tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<(), InstructionError> {
     if let Ok(instruction) = bincode::deserialize(data) {
         trace!("process_instruction: {:?}", instruction);
         trace!("keyed_accounts: {:?}", keyed_accounts);
@@ -77,7 +77,7 @@ pub fn entrypoint(
         // All system instructions require that accounts_keys[0] be a signer
         if keyed_accounts[FROM_ACCOUNT_INDEX].signer_key().is_none() {
             info!("account[from] is unsigned");
-            Err(ProgramError::MissingRequiredSignature)?;
+            Err(InstructionError::MissingRequiredSignature)?;
         }
 
         match instruction {
@@ -88,16 +88,16 @@ pub fn entrypoint(
             } => create_system_account(keyed_accounts, lamports, space, &program_id),
             SystemInstruction::Assign { program_id } => {
                 if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].account.owner) {
-                    Err(ProgramError::IncorrectProgramId)?;
+                    Err(InstructionError::IncorrectProgramId)?;
                 }
                 assign_account_to_program(keyed_accounts, &program_id)
             }
             SystemInstruction::Move { lamports } => move_lamports(keyed_accounts, lamports),
         }
-        .map_err(|e| ProgramError::CustomError(serialize(&e).unwrap()))
+        .map_err(|e| InstructionError::CustomError(serialize(&e).unwrap()))
     } else {
         info!("Invalid instruction data: {:?}", data);
-        Err(ProgramError::InvalidInstructionData)
+        Err(InstructionError::InvalidInstructionData)
     }
 }
 
@@ -108,7 +108,6 @@ mod tests {
     use crate::bank_client::BankClient;
     use solana_sdk::account::Account;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::native_program::ProgramError;
     use solana_sdk::script::Script;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
@@ -245,7 +244,7 @@ mod tests {
         };
         let data = serialize(&instruction).unwrap();
         let result = entrypoint(&system_program::id(), &mut keyed_accounts, &data, 0);
-        assert_eq!(result, Err(ProgramError::IncorrectProgramId));
+        assert_eq!(result, Err(InstructionError::IncorrectProgramId));
         assert_eq!(from_account.owner, new_program_owner);
     }
 
@@ -301,7 +300,7 @@ mod tests {
             mallory_client.process_script(malicious_script),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::ProgramError(ProgramError::MissingRequiredSignature)
+                InstructionError::MissingRequiredSignature
             ))
         );
         assert_eq!(bank.get_balance(&alice_pubkey), 50);

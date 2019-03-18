@@ -697,7 +697,7 @@ mod tests {
         let (_, entries) = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
-        // ProgramErrors should still be recorded
+        // InstructionErrors should still be recorded
         results[0] = Err(TransactionError::InstructionError(
             1,
             InstructionError::new_result_with_negative_lamports(),

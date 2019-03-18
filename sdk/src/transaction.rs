@@ -1,7 +1,6 @@
 //! The `transaction` module provides functionality for creating log transactions.
 
 use crate::hash::{Hash, Hasher};
-use crate::native_program::ProgramError;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::pubkey::Pubkey;
 use crate::script::Script;
@@ -21,8 +20,33 @@ use std::mem::size_of;
 /// Reasons the runtime might have rejected an instruction.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum InstructionError {
-    /// Executing the instruction produced an error.
-    ProgramError(ProgramError),
+    /// Deprecated! Use CustomError instead!
+    /// The program instruction returned an error
+    GenericError,
+
+    /// The arguments provided to a program instruction where invalid
+    InvalidArgument,
+
+    /// An instruction's data contents was invalid
+    InvalidInstructionData,
+
+    /// An account's data contents was invalid
+    InvalidAccountData,
+
+    /// An account's data was too small
+    AccountDataTooSmall,
+
+    /// The account did not have the expected program id
+    IncorrectProgramId,
+
+    /// A signature was required but not found
+    MissingRequiredSignature,
+
+    /// An initialize instruction was sent to an account that has already been initialized.
+    AccountAlreadyInitialized,
+
+    /// An attempt to operate on an account that hasn't been initialized.
+    UninitializedAccount,
 
     /// Program's instruction lamport balance does not equal the balance after the instruction
     UnbalancedInstruction,
@@ -38,13 +62,19 @@ pub enum InstructionError {
 
     /// An account was referenced more than once in a single instruction
     DuplicateAccountIndex,
+
+    /// CustomError allows on-chain programs to implement program-specific error types and see
+    /// them returned by the Solana runtime. A CustomError may be any type that is serialized
+    /// to a Vec of bytes, max length 32 bytes. Any CustomError Vec greater than this length will
+    /// be truncated by the runtime.
+    CustomError(Vec<u8>),
 }
 
 impl InstructionError {
     pub fn new_result_with_negative_lamports() -> Self {
         let serialized_error =
             bincode::serialize(&SystemError::ResultWithNegativeLamports).unwrap();
-        InstructionError::ProgramError(ProgramError::CustomError(serialized_error))
+        InstructionError::CustomError(serialized_error)
     }
 }
 
