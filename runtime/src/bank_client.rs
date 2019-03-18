@@ -7,20 +7,34 @@ use solana_sdk::transaction::{Instruction, Transaction, TransactionError};
 
 pub struct BankClient<'a> {
     bank: &'a Bank,
-    keypair: Keypair,
+    keypairs: Vec<Keypair>,
 }
 
 impl<'a> BankClient<'a> {
+    pub fn new_with_keypairs(bank: &'a Bank, keypairs: Vec<Keypair>) -> Self {
+        assert!(!keypairs.is_empty());
+        Self { bank, keypairs }
+    }
+
     pub fn new(bank: &'a Bank, keypair: Keypair) -> Self {
-        Self { bank, keypair }
+        Self::new_with_keypairs(bank, vec![keypair])
     }
 
     pub fn pubkey(&self) -> Pubkey {
-        self.keypair.pubkey()
+        self.keypairs[0].pubkey()
+    }
+
+    pub fn pubkeys(&self) -> Vec<Pubkey> {
+        self.keypairs.iter().map(|x| x.pubkey()).collect()
+    }
+
+    fn sign(&self, tx: &mut Transaction) {
+        let keypairs: Vec<_> = self.keypairs.iter().collect();
+        tx.sign(&keypairs, self.bank.last_blockhash());
     }
 
     pub fn process_transaction(&self, mut tx: Transaction) -> Result<(), TransactionError> {
-        tx.sign(&[&self.keypair], self.bank.last_blockhash());
+        self.sign(&mut tx);
         self.bank.process_transaction(&tx)
     }
 
@@ -46,5 +60,30 @@ impl<'a> BankClient<'a> {
     pub fn transfer(&self, lamports: u64, pubkey: &Pubkey) -> Result<(), TransactionError> {
         let move_instruction = SystemInstruction::new_move(&self.pubkey(), pubkey, lamports);
         self.process_instruction(move_instruction)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use solana_sdk::genesis_block::GenesisBlock;
+
+    #[test]
+    fn test_bank_client_new_with_keypairs() {
+        let (genesis_block, john_doe_keypair) = GenesisBlock::new(10_000);
+        let jane_doe_keypair = Keypair::new();
+        let doe_keypairs = vec![john_doe_keypair, jane_doe_keypair];
+        let bank = Bank::new(&genesis_block);
+        let doe_client = BankClient::new_with_keypairs(&bank, doe_keypairs);
+        let jane_pubkey = doe_client.pubkeys()[1];
+
+        // Create 2-2 Multisig Move instruction.
+        let bob_pubkey = Keypair::new().pubkey();
+        let mut move_instruction =
+            SystemInstruction::new_move(&doe_client.pubkey(), &bob_pubkey, 42);
+        move_instruction.accounts.push((jane_pubkey, true));
+
+        doe_client.process_instruction(move_instruction).unwrap();
+        assert_eq!(bank.get_balance(&bob_pubkey), 42);
     }
 }
