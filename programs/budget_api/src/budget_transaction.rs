@@ -1,6 +1,7 @@
 //! The `budget_transaction` module provides functionality for creating Budget transactions.
 
 use crate::budget_instruction::BudgetInstruction;
+use crate::budget_script::BudgetScript;
 use bincode::deserialize;
 use chrono::prelude::*;
 use solana_sdk::hash::Hash;
@@ -33,7 +34,7 @@ impl BudgetTransaction {
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
-        let script = BudgetInstruction::new_payment_script(&from_keypair.pubkey(), to, lamports);
+        let script = BudgetScript::pay(&from_keypair.pubkey(), to, lamports);
         Self::new_signed(from_keypair, script, recent_blockhash, fee)
     }
 
@@ -77,7 +78,7 @@ impl BudgetTransaction {
         lamports: u64,
         recent_blockhash: Hash,
     ) -> Transaction {
-        let script = BudgetInstruction::new_on_date_script(
+        let script = BudgetScript::pay_on_date(
             &from_keypair.pubkey(),
             to,
             contract,
@@ -99,7 +100,7 @@ impl BudgetTransaction {
         lamports: u64,
         recent_blockhash: Hash,
     ) -> Transaction {
-        let script = BudgetInstruction::new_when_signed_script(
+        let script = BudgetScript::pay_on_signature(
             &from_keypair.pubkey(),
             to,
             contract,

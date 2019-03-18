@@ -144,6 +144,7 @@ pub fn process_instruction(
 mod test {
     use super::*;
     use solana_budget_api::budget_instruction::BudgetInstruction;
+    use solana_budget_api::budget_script::BudgetScript;
     use solana_budget_api::id;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
@@ -164,7 +165,7 @@ mod test {
         let alice_client = BankClient::new(&bank, mint_keypair);
         let alice_pubkey = alice_client.pubkey();
         let bob_pubkey = Keypair::new().pubkey();
-        let script = BudgetInstruction::new_payment_script(&alice_pubkey, &bob_pubkey, 100);
+        let script = BudgetScript::pay(&alice_pubkey, &bob_pubkey, 100);
         alice_client.process_script(script).unwrap();
         assert_eq!(bank.get_balance(&bob_pubkey), 100);
     }
@@ -179,7 +180,7 @@ mod test {
         let budget_pubkey = Keypair::new().pubkey();
         let bob_pubkey = Keypair::new().pubkey();
         let witness = Keypair::new().pubkey();
-        let script = BudgetInstruction::new_when_signed_script(
+        let script = BudgetScript::pay_on_signature(
             &alice_pubkey,
             &bob_pubkey,
             &budget_pubkey,
@@ -221,7 +222,7 @@ mod test {
         let budget_pubkey = Keypair::new().pubkey();
         let bob_pubkey = Keypair::new().pubkey();
         let dt = Utc::now();
-        let script = BudgetInstruction::new_on_date_script(
+        let script = BudgetScript::pay_on_date(
             &alice_pubkey,
             &bob_pubkey,
             &budget_pubkey,
@@ -259,7 +260,7 @@ mod test {
     }
 
     #[test]
-    fn test_transfer_on_date() {
+    fn test_pay_on_date() {
         let (bank, mint_keypair) = create_bank(2);
         let alice_client = BankClient::new(&bank, mint_keypair);
         let alice_pubkey = alice_client.pubkey();
@@ -267,7 +268,7 @@ mod test {
         let bob_pubkey = Keypair::new().pubkey();
         let mallory_pubkey = Keypair::new().pubkey();
         let dt = Utc::now();
-        let script = BudgetInstruction::new_on_date_script(
+        let script = BudgetScript::pay_on_date(
             &alice_pubkey,
             &bob_pubkey,
             &budget_pubkey,
@@ -320,7 +321,7 @@ mod test {
     }
 
     #[test]
-    fn test_cancel_transfer() {
+    fn test_cancel_payment() {
         let (bank, mint_keypair) = create_bank(3);
         let alice_client = BankClient::new(&bank, mint_keypair);
         let alice_pubkey = alice_client.pubkey();
@@ -328,7 +329,7 @@ mod test {
         let bob_pubkey = Keypair::new().pubkey();
         let dt = Utc::now();
 
-        let script = BudgetInstruction::new_on_date_script(
+        let script = BudgetScript::pay_on_date(
             &alice_pubkey,
             &bob_pubkey,
             &budget_pubkey,
