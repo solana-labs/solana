@@ -152,8 +152,14 @@ impl Locktower {
         }
     }
 
-    pub fn record_vote(&mut self, slot: u64) {
+    pub fn record_vote(&mut self, slot: u64) -> Option<u64> {
+        let root_slot = self.lockouts.root_slot;
         self.lockouts.process_vote(Vote { slot });
+        if root_slot != self.lockouts.root_slot {
+            Some(self.lockouts.root_slot.unwrap())
+        } else {
+            None
+        }
     }
 
     pub fn calculate_weight(&self, stake_lockouts: &HashMap<u64, StakeLockout>) -> u128 {

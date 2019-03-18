@@ -170,7 +170,9 @@ impl ReplayStage {
                                 bank.last_blockhash(),
                                 0,
                             );
-                            locktower.record_vote(bank.slot());
+                            if let Some(new_root) = locktower.record_vote(bank.slot()) {
+                                bank_forks.write().unwrap().set_root(new_root);
+                            }
                             locktower.update_epoch(&bank);
                             cluster_info.write().unwrap().push_vote(vote);
                         }
@@ -399,6 +401,7 @@ impl ReplayStage {
         let next_slots = blocktree
             .get_slots_since(&frozen_bank_slots)
             .expect("Db error");
+        // Filter out what we've already seen
         trace!("generate new forks {:?}", next_slots);
         for (parent_id, children) in next_slots {
             let parent_bank = frozen_banks
@@ -406,12 +409,8 @@ impl ReplayStage {
                 .expect("missing parent in bank forks")
                 .clone();
             for child_id in children {
-                if frozen_banks.get(&child_id).is_some() {
-                    trace!("child already frozen {}", child_id);
-                    continue;
-                }
                 if forks.get(child_id).is_some() {
-                    trace!("child already active {}", child_id);
+                    trace!("child already active or frozen {}", child_id);
                     continue;
                 }
                 let leader = leader_schedule_utils::slot_leader_at(child_id, &parent_bank).unwrap();
@@ -437,11 +436,12 @@ impl Service for ReplayStage {
 mod test {
     use super::*;
     use crate::banking_stage::create_test_recorder;
-    use crate::blocktree::create_new_tmp_ledger;
+    use crate::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path};
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
     use crate::entry::{next_entry_mut, Entry};
     use crate::fullnode::new_banks_from_blocktree;
+    use crate::packet::Blob;
     use crate::replay_stage::ReplayStage;
     use crate::result::Error;
     use solana_sdk::genesis_block::GenesisBlock;
@@ -575,5 +575,41 @@ mod test {
             ),
         }
         assert!(forward_entry_receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn test_child_slots_of_same_parent() {
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Arc::new(
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            );
+
+            let genesis_block = GenesisBlock::new(10_000).0;
+            let bank0 = Bank::new(&genesis_block);
+            let mut bank_forks = BankForks::new(0, bank0);
+            bank_forks.working_bank().freeze();
+
+            // Insert blob for slot 1, generate new forks, check result
+            let mut blob_slot_1 = Blob::default();
+            blob_slot_1.set_slot(1);
+            blob_slot_1.set_parent(0);
+            blocktree.insert_data_blobs(&vec![blob_slot_1]).unwrap();
+            assert!(bank_forks.get(1).is_none());
+            ReplayStage::generate_new_bank_forks(&blocktree, &mut bank_forks);
+            assert!(bank_forks.get(1).is_some());
+
+            // Inset blob for slot 3, generate new forks, check result
+            let mut blob_slot_2 = Blob::default();
+            blob_slot_2.set_slot(2);
+            blob_slot_2.set_parent(0);
+            blocktree.insert_data_blobs(&vec![blob_slot_2]).unwrap();
+            assert!(bank_forks.get(2).is_none());
+            ReplayStage::generate_new_bank_forks(&blocktree, &mut bank_forks);
+            assert!(bank_forks.get(1).is_some());
+            assert!(bank_forks.get(2).is_some());
+        }
+
+        let _ignored = remove_dir_all(&ledger_path);
     }
 }

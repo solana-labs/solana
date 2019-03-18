@@ -859,6 +859,24 @@ impl Bank {
         self.accounts
             .store_slow(self.accounts_id, &program_id, &bogus_account);
     }
+
+    pub fn is_descendant_of(&self, parent: u64) -> bool {
+        if self.slot() == parent {
+            return true;
+        }
+        let mut next_parent = self.parent();
+
+        while let Some(p) = next_parent {
+            if p.slot() == parent {
+                return true;
+            } else if p.slot() < parent {
+                return false;
+            }
+            next_parent = p.parent();
+        }
+
+        false
+    }
 }
 
 #[cfg(test)]
@@ -1623,5 +1641,29 @@ mod tests {
         }
 
         assert_eq!(bank.is_votable(), true);
+    }
+
+    #[test]
+    fn test_is_descendant_of() {
+        let (genesis_block, _) = GenesisBlock::new(1);
+        let parent = Arc::new(Bank::new(&genesis_block));
+        // Bank 1
+        let bank = Arc::new(new_from_parent(&parent));
+        // Bank 2
+        let bank2 = new_from_parent(&bank);
+        // Bank 5
+        let bank5 = Bank::new_from_parent(&bank, &Pubkey::default(), 5);
+
+        // Parents of bank 2: 0 -> 1 -> 2
+        assert!(bank2.is_descendant_of(0));
+        assert!(bank2.is_descendant_of(1));
+        assert!(bank2.is_descendant_of(2));
+        assert!(!bank2.is_descendant_of(3));
+
+        // Parents of bank 3: 0 -> 1 -> 5
+        assert!(bank5.is_descendant_of(0));
+        assert!(bank5.is_descendant_of(1));
+        assert!(!bank5.is_descendant_of(2));
+        assert!(!bank5.is_descendant_of(4));
     }
 }
