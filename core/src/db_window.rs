@@ -107,13 +107,20 @@ mod test {
     use std::time::Duration;
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
-        for _t in 0..5 {
+        for _t in 0..20 {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
-                Ok(m) => *num += m.read().unwrap().packets.len(),
+                Ok(m) => {
+                    let len = m.read().unwrap().packets.len();
+                    if *num >= len {
+                        *num -= len;
+                    } else {
+                        *num = 0;
+                    }
+                }
                 e => info!("error {:?}", e),
             }
-            if *num == 10 {
+            if *num == 0 {
                 break;
             }
         }
@@ -153,9 +160,9 @@ mod test {
             t_responder
         };
 
-        let mut num = 0;
+        let mut num = 10;
         get_msgs(r_reader, &mut num);
-        assert_eq!(num, 10);
+        assert_eq!(num, 0);
         exit.store(true, Ordering::Relaxed);
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
