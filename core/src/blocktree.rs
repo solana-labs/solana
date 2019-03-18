@@ -612,6 +612,11 @@ impl Blocktree {
         Ok(result)
     }
 
+    pub fn deserialize_blob_data(data: &[u8]) -> Result<Vec<Entry>> {
+        let entries = deserialize(data)?;
+        Ok(entries)
+    }
+
     fn deserialize_blobs<I>(blob_datas: &[I]) -> Vec<Entry>
     where
         I: Borrow<[u8]>,
@@ -620,9 +625,8 @@ impl Blocktree {
             .iter()
             .flat_map(|blob_data| {
                 let serialized_entries_data = &blob_data.borrow()[BLOB_HEADER_SIZE..];
-                let entries: Vec<Entry> = deserialize(serialized_entries_data)
-                    .expect("Ledger should only contain well formed data");
-                entries
+                Self::deserialize_blob_data(serialized_entries_data)
+                    .expect("Ledger should only contain well formed data")
             })
             .collect()
     }
