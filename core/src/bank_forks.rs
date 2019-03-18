@@ -1,7 +1,7 @@
 //! The `bank_forks` module implments BankForks a DAG of checkpointed Banks
 
+use hashbrown::{HashMap, HashSet};
 use solana_runtime::bank::Bank;
-use std::collections::HashMap;
 use std::ops::Index;
 use std::sync::Arc;
 
@@ -27,6 +27,47 @@ impl BankForks {
             working_bank,
         }
     }
+
+    /// Create a map of bank slot id to the set of ancestors for the bank slot.
+    pub fn ancestors(&self) -> HashMap<u64, HashSet<u64>> {
+        let mut ancestors = HashMap::new();
+        let mut pending: Vec<Arc<Bank>> = self.banks.values().cloned().collect();
+        while !pending.is_empty() {
+            let bank = pending.pop().unwrap();
+            if ancestors.get(&bank.slot()).is_some() {
+                continue;
+            }
+            let set = bank.parents().into_iter().map(|b| b.slot()).collect();
+            ancestors.insert(bank.slot(), set);
+            pending.extend(bank.parents().into_iter());
+        }
+        ancestors
+    }
+
+    /// Create a map of bank slot id to the set of all of its descendants
+    pub fn decendants(&self) -> HashMap<u64, HashSet<u64>> {
+        let mut decendants = HashMap::new();
+        let mut pending: Vec<Arc<Bank>> = self.banks.values().cloned().collect();
+        let mut done = HashSet::new();
+        assert!(!pending.is_empty());
+        while !pending.is_empty() {
+            let bank = pending.pop().unwrap();
+            if done.contains(&bank.slot()) {
+                continue;
+            }
+            done.insert(bank.slot());
+            let _ = decendants.entry(bank.slot()).or_insert(HashSet::new());
+            for parent in bank.parents() {
+                decendants
+                    .entry(parent.slot())
+                    .or_insert(HashSet::new())
+                    .insert(bank.slot());
+            }
+            pending.extend(bank.parents().into_iter());
+        }
+        decendants
+    }
+
     pub fn frozen_banks(&self) -> HashMap<u64, Arc<Bank>> {
         let mut frozen_banks: Vec<Arc<Bank>> = vec![];
         frozen_banks.extend(self.banks.values().filter(|v| v.is_frozen()).cloned());
@@ -104,6 +145,41 @@ mod tests {
         bank_forks.insert(1, child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);
         assert_eq!(bank_forks.working_bank().tick_height(), 1);
+    }
+
+    #[test]
+    fn test_bank_forks_decendants() {
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
+        let mut bank_forks = BankForks::new(0, bank);
+        let bank0 = bank_forks[0].clone();
+        let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.insert(1, bank);
+        let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
+        bank_forks.insert(2, bank);
+        let decendants = bank_forks.decendants();
+        let children: Vec<u64> = decendants[&0].iter().cloned().collect();
+        assert_eq!(children, vec![1, 2]);
+        assert!(decendants[&1].is_empty());
+        assert!(decendants[&2].is_empty());
+    }
+
+    #[test]
+    fn test_bank_forks_ancestors() {
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
+        let mut bank_forks = BankForks::new(0, bank);
+        let bank0 = bank_forks[0].clone();
+        let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.insert(1, bank);
+        let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
+        bank_forks.insert(2, bank);
+        let ancestors = bank_forks.ancestors();
+        assert!(ancestors[&0].is_empty());
+        let parents: Vec<u64> = ancestors[&1].iter().cloned().collect();
+        assert_eq!(parents, vec![0]);
+        let parents: Vec<u64> = ancestors[&2].iter().cloned().collect();
+        assert_eq!(parents, vec![0]);
     }
 
     #[test]
