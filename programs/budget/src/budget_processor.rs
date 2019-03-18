@@ -6,8 +6,8 @@ use solana_budget_api::budget_instruction::BudgetInstruction;
 use solana_budget_api::budget_state::{BudgetError, BudgetState};
 use solana_budget_api::payment_plan::Witness;
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::InstructionError;
 
 /// Process a Witness Signature. Any payment plans waiting on this signature
 /// will progress one step.
@@ -75,10 +75,10 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
     _tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<(), InstructionError> {
     let instruction = deserialize(data).map_err(|err| {
         info!("Invalid transaction data: {:?} {:?}", data, err);
-        ProgramError::InvalidInstructionData
+        InstructionError::InvalidInstructionData
     })?;
 
     trace!("process_instruction: {:?}", instruction);
@@ -94,7 +94,7 @@ pub fn process_instruction(
             let existing = BudgetState::deserialize(&keyed_accounts[0].account.data).ok();
             if Some(true) == existing.map(|x| x.initialized) {
                 trace!("contract already exists");
-                return Err(ProgramError::AccountAlreadyInitialized);
+                return Err(InstructionError::AccountAlreadyInitialized);
             }
             let mut budget_state = BudgetState::default();
             budget_state.pending_budget = Some(expr);
@@ -108,14 +108,14 @@ pub fn process_instruction(
             }
             if !budget_state.initialized {
                 trace!("contract is uninitialized");
-                return Err(ProgramError::UninitializedAccount);
+                return Err(InstructionError::UninitializedAccount);
             }
             if keyed_accounts[0].signer_key().is_none() {
-                return Err(ProgramError::MissingRequiredSignature);
+                return Err(InstructionError::MissingRequiredSignature);
             }
             trace!("apply timestamp");
             apply_timestamp(&mut budget_state, keyed_accounts, dt)
-                .map_err(|e| ProgramError::CustomError(serialize(&e).unwrap()))?;
+                .map_err(|e| InstructionError::CustomError(serialize(&e).unwrap()))?;
             trace!("apply timestamp committed");
             budget_state.serialize(&mut keyed_accounts[1].account.data)
         }
@@ -126,14 +126,14 @@ pub fn process_instruction(
             }
             if !budget_state.initialized {
                 trace!("contract is uninitialized");
-                return Err(ProgramError::UninitializedAccount);
+                return Err(InstructionError::UninitializedAccount);
             }
             if keyed_accounts[0].signer_key().is_none() {
-                return Err(ProgramError::MissingRequiredSignature);
+                return Err(InstructionError::MissingRequiredSignature);
             }
             trace!("apply signature");
             apply_signature(&mut budget_state, keyed_accounts)
-                .map_err(|e| ProgramError::CustomError(serialize(&e).unwrap()))?;
+                .map_err(|e| InstructionError::CustomError(serialize(&e).unwrap()))?;
             trace!("apply signature committed");
             budget_state.serialize(&mut keyed_accounts[1].account.data)
         }
@@ -207,7 +207,7 @@ mod test {
             mallory_client.process_transaction(transaction),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::ProgramError(ProgramError::MissingRequiredSignature)
+                InstructionError::MissingRequiredSignature
             ))
         );
     }
@@ -254,7 +254,7 @@ mod test {
             mallory_client.process_transaction(transaction),
             Err(TransactionError::InstructionError(
                 0,
-                InstructionError::ProgramError(ProgramError::MissingRequiredSignature)
+                InstructionError::MissingRequiredSignature
             ))
         );
     }
@@ -296,9 +296,7 @@ mod test {
             alice_client.process_instruction(instruction).unwrap_err(),
             TransactionError::InstructionError(
                 0,
-                InstructionError::ProgramError(ProgramError::CustomError(
-                    serialize(&BudgetError::DestinationMissing).unwrap()
-                ))
+                InstructionError::CustomError(serialize(&BudgetError::DestinationMissing).unwrap())
             )
         );
         assert_eq!(bank.get_balance(&alice_pubkey), 1);

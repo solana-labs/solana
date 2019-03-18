@@ -7,8 +7,8 @@ use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::{Account, KeyedAccount};
-use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::InstructionError;
 use std::collections::VecDeque;
 
 // Maximum number of votes to keep around
@@ -73,14 +73,14 @@ impl VoteState {
         serialized_size(&vote_state).unwrap() as usize
     }
 
-    pub fn deserialize(input: &[u8]) -> Result<Self, ProgramError> {
-        deserialize(input).map_err(|_| ProgramError::InvalidAccountData)
+    pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
+        deserialize(input).map_err(|_| InstructionError::InvalidAccountData)
     }
 
-    pub fn serialize(&self, output: &mut [u8]) -> Result<(), ProgramError> {
+    pub fn serialize(&self, output: &mut [u8]) -> Result<(), InstructionError> {
         serialize_into(output, self).map_err(|err| match *err {
-            ErrorKind::SizeLimit => ProgramError::AccountDataTooSmall,
-            _ => ProgramError::GenericError,
+            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
+            _ => InstructionError::GenericError,
         })
     }
 
@@ -152,15 +152,15 @@ impl VoteState {
 pub fn delegate_stake(
     keyed_accounts: &mut [KeyedAccount],
     node_id: &Pubkey,
-) -> Result<(), ProgramError> {
+) -> Result<(), InstructionError> {
     if !check_id(&keyed_accounts[0].account.owner) {
         error!("account[0] is not assigned to the VOTE_PROGRAM");
-        Err(ProgramError::InvalidArgument)?;
+        Err(InstructionError::InvalidArgument)?;
     }
 
     if keyed_accounts[0].signer_key().is_none() {
         error!("account[0] should sign the transaction");
-        Err(ProgramError::InvalidArgument)?;
+        Err(InstructionError::InvalidArgument)?;
     }
 
     let vote_state = VoteState::deserialize(&keyed_accounts[0].account.data);
@@ -169,7 +169,7 @@ pub fn delegate_stake(
         vote_state.serialize(&mut keyed_accounts[0].account.data)?;
     } else {
         error!("account[0] does not valid data");
-        Err(ProgramError::InvalidAccountData)?;
+        Err(InstructionError::InvalidAccountData)?;
     }
 
     Ok(())
@@ -181,15 +181,15 @@ pub fn delegate_stake(
 pub fn authorize_voter(
     keyed_accounts: &mut [KeyedAccount],
     voter_id: &Pubkey,
-) -> Result<(), ProgramError> {
+) -> Result<(), InstructionError> {
     if !check_id(&keyed_accounts[0].account.owner) {
         error!("account[0] is not assigned to the VOTE_PROGRAM");
-        Err(ProgramError::InvalidArgument)?;
+        Err(InstructionError::InvalidArgument)?;
     }
 
     if keyed_accounts[0].signer_key().is_none() {
         error!("account[0] should sign the transaction");
-        Err(ProgramError::InvalidArgument)?;
+        Err(InstructionError::InvalidArgument)?;
     }
 
     let vote_state = VoteState::deserialize(&keyed_accounts[0].account.data);
@@ -198,7 +198,7 @@ pub fn authorize_voter(
         vote_state.serialize(&mut keyed_accounts[0].account.data)?;
     } else {
         error!("account[0] does not valid data");
-        Err(ProgramError::InvalidAccountData)?;
+        Err(InstructionError::InvalidAccountData)?;
     }
 
     Ok(())
@@ -207,10 +207,10 @@ pub fn authorize_voter(
 /// Initialize the vote_state for a vote account
 /// Assumes that the account is being init as part of a account creation or balance transfer and
 /// that the transaction must be signed by the staker's keys
-pub fn initialize_account(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
+pub fn initialize_account(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
     if !check_id(&keyed_accounts[0].account.owner) {
         error!("account[0] is not assigned to the VOTE_PROGRAM");
-        Err(ProgramError::InvalidArgument)?;
+        Err(InstructionError::InvalidArgument)?;
     }
 
     let staker_id = keyed_accounts[0].unsigned_key();
@@ -221,20 +221,23 @@ pub fn initialize_account(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Pro
             vote_state.serialize(&mut keyed_accounts[0].account.data)?;
         } else {
             error!("account[0] data already initialized");
-            Err(ProgramError::InvalidAccountData)?;
+            Err(InstructionError::InvalidAccountData)?;
         }
     } else {
         error!("account[0] does not have valid data");
-        Err(ProgramError::InvalidAccountData)?;
+        Err(InstructionError::InvalidAccountData)?;
     }
 
     Ok(())
 }
 
-pub fn process_vote(keyed_accounts: &mut [KeyedAccount], vote: Vote) -> Result<(), ProgramError> {
+pub fn process_vote(
+    keyed_accounts: &mut [KeyedAccount],
+    vote: Vote,
+) -> Result<(), InstructionError> {
     if !check_id(&keyed_accounts[0].account.owner) {
         error!("account[0] is not assigned to the VOTE_PROGRAM");
-        Err(ProgramError::InvalidArgument)?;
+        Err(InstructionError::InvalidArgument)?;
     }
 
     let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.data)?;
@@ -248,11 +251,11 @@ pub fn process_vote(keyed_accounts: &mut [KeyedAccount], vote: Vote) -> Result<(
 
     if keyed_accounts.get(signer_index).is_none() {
         error!("account[{}] not provided", signer_index);
-        Err(ProgramError::InvalidArgument)?;
+        Err(InstructionError::InvalidArgument)?;
     }
     if keyed_accounts[signer_index].signer_key().is_none() {
         error!("account[{}] should sign the transaction", signer_index);
-        Err(ProgramError::InvalidArgument)?;
+        Err(InstructionError::InvalidArgument)?;
     }
 
     vote_state.process_vote(vote);
@@ -260,10 +263,10 @@ pub fn process_vote(keyed_accounts: &mut [KeyedAccount], vote: Vote) -> Result<(
     Ok(())
 }
 
-pub fn clear_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
+pub fn clear_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
     if !check_id(&keyed_accounts[0].account.owner) {
         error!("account[0] is not assigned to the VOTE_PROGRAM");
-        Err(ProgramError::InvalidArgument)?;
+        Err(InstructionError::InvalidArgument)?;
     }
 
     let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.data)?;
@@ -280,7 +283,7 @@ pub fn create_vote_account(lamports: u64) -> Account {
 pub fn initialize_and_deserialize(
     vote_id: &Pubkey,
     vote_account: &mut Account,
-) -> Result<VoteState, ProgramError> {
+) -> Result<VoteState, InstructionError> {
     let mut keyed_accounts = [KeyedAccount::new(vote_id, false, vote_account)];
     initialize_account(&mut keyed_accounts)?;
     let vote_state = VoteState::deserialize(&vote_account.data).unwrap();
@@ -291,7 +294,7 @@ pub fn vote_and_deserialize(
     vote_id: &Pubkey,
     vote_account: &mut Account,
     vote: Vote,
-) -> Result<VoteState, ProgramError> {
+) -> Result<VoteState, InstructionError> {
     let mut keyed_accounts = [KeyedAccount::new(vote_id, true, vote_account)];
     process_vote(&mut keyed_accounts, vote)?;
     let vote_state = VoteState::deserialize(&vote_account.data).unwrap();
@@ -324,7 +327,7 @@ mod tests {
 
         // reinit should fail
         let res = initialize_account(&mut keyed_accounts);
-        assert_eq!(res, Err(ProgramError::InvalidAccountData));
+        assert_eq!(res, Err(InstructionError::InvalidAccountData));
     }
 
     #[test]
@@ -369,7 +372,7 @@ mod tests {
         let vote = Vote::new(1);
         let mut keyed_accounts = [KeyedAccount::new(&vote_id, false, &mut vote_account)];
         let res = process_vote(&mut keyed_accounts, vote);
-        assert_eq!(res, Err(ProgramError::InvalidArgument));
+        assert_eq!(res, Err(InstructionError::InvalidArgument));
     }
 
     #[test]
@@ -379,7 +382,7 @@ mod tests {
 
         let vote = Vote::new(1);
         let res = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone());
-        assert_eq!(res, Err(ProgramError::InvalidArgument));
+        assert_eq!(res, Err(InstructionError::InvalidArgument));
     }
 
     #[test]

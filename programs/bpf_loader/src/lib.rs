@@ -6,9 +6,9 @@ use log::*;
 use solana_rbpf::{EbpfVmRaw, MemoryRegion};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
-use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
+use solana_sdk::transaction::InstructionError;
 use std::ffi::CStr;
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind};
@@ -185,7 +185,7 @@ fn entrypoint(
     keyed_accounts: &mut [KeyedAccount],
     tx_data: &[u8],
     tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<(), InstructionError> {
     solana_logger::setup();
 
     if keyed_accounts[0].account.executable {
@@ -197,7 +197,7 @@ fn entrypoint(
             Ok(vm) => vm,
             Err(e) => {
                 warn!("Failed to create BPF VM: {}", e);
-                return Err(ProgramError::GenericError);
+                return Err(InstructionError::GenericError);
             }
         };
         let mut v = serialize_parameters(program_id, params, &tx_data, tick_height);
@@ -205,12 +205,12 @@ fn entrypoint(
             Ok(status) => {
                 if 0 == status {
                     warn!("BPF program failed: {}", status);
-                    return Err(ProgramError::GenericError);
+                    return Err(InstructionError::GenericError);
                 }
             }
             Err(e) => {
                 warn!("BPF VM failed to run program: {}", e);
-                return Err(ProgramError::GenericError);
+                return Err(InstructionError::GenericError);
             }
         }
         deserialize_parameters(params, &v);
@@ -221,7 +221,7 @@ fn entrypoint(
     } else if let Ok(instruction) = bincode::deserialize(tx_data) {
         if keyed_accounts[0].signer_key().is_none() {
             warn!("key[0] did not sign the transaction");
-            return Err(ProgramError::GenericError);
+            return Err(InstructionError::GenericError);
         }
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
@@ -234,7 +234,7 @@ fn entrypoint(
                         keyed_accounts[0].account.data.len(),
                         offset + len
                     );
-                    return Err(ProgramError::GenericError);
+                    return Err(InstructionError::GenericError);
                 }
                 keyed_accounts[0].account.data[offset..offset + len].copy_from_slice(&bytes);
             }
@@ -248,7 +248,7 @@ fn entrypoint(
         }
     } else {
         warn!("Invalid program transaction: {:?}", tx_data);
-        return Err(ProgramError::GenericError);
+        return Err(InstructionError::GenericError);
     }
     Ok(())
 }

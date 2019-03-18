@@ -2,7 +2,6 @@ use solana_runtime::bank::Bank;
 use solana_runtime::loader_utils::load_program;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::native_loader;
-use solana_sdk::native_program::ProgramError;
 use solana_sdk::transaction::{InstructionError, Transaction, TransactionError};
 
 #[test]
@@ -26,7 +25,7 @@ fn test_program_native_failure() {
         bank.process_transaction(&tx),
         Err(TransactionError::InstructionError(
             0,
-            InstructionError::ProgramError(ProgramError::GenericError)
+            InstructionError::GenericError
         ))
     );
 }

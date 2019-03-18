@@ -6,9 +6,9 @@ use log::*;
 extern crate solana_sdk;
 
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
+use solana_sdk::transaction::InstructionError;
 use solana_storage_api::*;
 
 pub const TOTAL_VALIDATOR_REWARDS: u64 = 1000;
@@ -30,19 +30,19 @@ fn entrypoint(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
     _tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<(), InstructionError> {
     solana_logger::setup();
 
     if keyed_accounts.len() != 1 {
         // keyed_accounts[1] should be the main storage key
         // to access its data
-        Err(ProgramError::InvalidArgument)?;
+        Err(InstructionError::InvalidArgument)?;
     }
 
     // accounts_keys[0] must be signed
     if keyed_accounts[0].signer_key().is_none() {
         info!("account[0] is unsigned");
-        Err(ProgramError::GenericError)?;
+        Err(InstructionError::GenericError)?;
     }
 
     if let Ok(syscall) = bincode::deserialize(data) {
@@ -68,7 +68,7 @@ fn entrypoint(
                 let current_segment_index =
                     get_segment_from_entry(storage_account_state.entry_height);
                 if segment_index >= current_segment_index {
-                    return Err(ProgramError::InvalidArgument);
+                    return Err(InstructionError::InvalidArgument);
                 }
 
                 debug!(
@@ -91,7 +91,7 @@ fn entrypoint(
                     segments, original_segments
                 );
                 if segments <= original_segments {
-                    return Err(ProgramError::InvalidArgument);
+                    return Err(InstructionError::InvalidArgument);
                 }
 
                 storage_account_state.entry_height = entry_height;
@@ -117,18 +117,18 @@ fn entrypoint(
                 proof_mask,
             } => {
                 if entry_height >= storage_account_state.entry_height {
-                    return Err(ProgramError::InvalidArgument);
+                    return Err(InstructionError::InvalidArgument);
                 }
 
                 let segment_index = get_segment_from_entry(entry_height);
                 if storage_account_state.previous_proofs[segment_index].len() != proof_mask.len() {
-                    return Err(ProgramError::InvalidArgument);
+                    return Err(InstructionError::InvalidArgument);
                 }
 
                 // TODO: Check that each proof mask matches the signature
                 /*for (i, entry) in proof_mask.iter().enumerate() {
                     if storage_account_state.previous_proofs[segment_index][i] != signature.as_ref[0] {
-                        return Err(ProgramError::InvalidArgument);
+                        return Err(InstructionError::InvalidArgument);
                     }
                 }*/
 
@@ -164,13 +164,13 @@ fn entrypoint(
         )
         .is_err()
         {
-            return Err(ProgramError::AccountDataTooSmall);
+            return Err(InstructionError::AccountDataTooSmall);
         }
 
         Ok(())
     } else {
         info!("Invalid instruction data: {:?}", data);
-        Err(ProgramError::InvalidInstructionData)
+        Err(InstructionError::InvalidInstructionData)
     }
 }
 
@@ -186,7 +186,7 @@ mod test {
     fn test_transaction(
         tx: &Transaction,
         program_accounts: &mut [Account],
-    ) -> Result<(), ProgramError> {
+    ) -> Result<(), InstructionError> {
         assert_eq!(tx.instructions.len(), 1);
         let CompiledInstruction {
             ref accounts,
@@ -237,7 +237,7 @@ mod test {
 
         assert_eq!(
             entrypoint(&id(), &mut keyed_accounts, &tx.instructions[0].data, 42),
-            Err(ProgramError::AccountDataTooSmall)
+            Err(InstructionError::AccountDataTooSmall)
         );
     }
 
