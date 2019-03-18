@@ -73,4 +73,28 @@ mod tests {
         // Check that the same schedule is reproducibly generated
         assert_eq!(leader_schedule, leader_schedule2);
     }
+
+    #[test]
+    fn test_repeated_leader_schedule() {
+        let num_keys = 10;
+        let stakes: Vec<_> = (0..num_keys)
+            .map(|i| (Keypair::new().pubkey(), i))
+            .collect();
+
+        let seed = Keypair::new().pubkey();
+        let mut seed_bytes = [0u8; 32];
+        seed_bytes.copy_from_slice(seed.as_ref());
+        let len = num_keys * 10;
+        let repeat = 8;
+        let leader_schedule = LeaderSchedule::new(&stakes, seed_bytes, len, repeat);
+        assert_eq!(leader_schedule.slot_leaders.len() as u64, len);
+        let mut leader_node = Pubkey::default();
+        for (i, node) in leader_schedule.slot_leaders.iter().enumerate() {
+            if i % repeat as usize == 0 {
+                leader_node = *node;
+            } else {
+                assert_eq!(leader_node, *node);
+            }
+        }
+    }
 }

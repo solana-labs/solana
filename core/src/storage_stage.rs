@@ -16,6 +16,7 @@ use solana_client::thin_client::create_client_with_timeout;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use solana_sdk::transaction::Transaction;
 use solana_storage_api::{self, StorageProgram, StorageTransaction};
 use std::collections::HashSet;
@@ -62,7 +63,7 @@ pub const STORAGE_ROTATE_TEST_COUNT: u64 = 128;
 // TODO: some way to dynamically size NUM_IDENTITIES
 const NUM_IDENTITIES: usize = 1024;
 pub const NUM_STORAGE_SAMPLES: usize = 4;
-pub const ENTRIES_PER_SEGMENT: u64 = 16;
+pub const ENTRIES_PER_SEGMENT: u64 = DEFAULT_TICKS_PER_SLOT;
 const KEY_SIZE: usize = 64;
 
 type TransactionSender = Sender<Transaction>;
