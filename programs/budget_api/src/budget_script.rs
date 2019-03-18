@@ -74,21 +74,9 @@ impl BudgetScript {
         lamports: u64,
     ) -> Script {
         let expr = if let Some(from) = cancelable {
-            BudgetExpr::Or(
-                (
-                    Condition::Signature(*witness),
-                    Box::new(BudgetExpr::new_payment(lamports, to)),
-                ),
-                (
-                    Condition::Signature(from),
-                    Box::new(BudgetExpr::new_payment(lamports, &from)),
-                ),
-            )
+            BudgetExpr::new_cancelable_authorized_payment(witness, lamports, to, &from)
         } else {
-            BudgetExpr::After(
-                Condition::Signature(*witness),
-                Box::new(BudgetExpr::new_payment(lamports, to)),
-            )
+            BudgetExpr::new_authorized_payment(witness, lamports, to)
         };
 
         Self::new_account(from, contract, lamports, expr)
