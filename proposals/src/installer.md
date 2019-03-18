@@ -88,117 +88,6 @@ Note that the `manifest` field itself contains a corresponding signature
 To guard against rollback attacks, `solana-install` will refuse to install an
 update with an older `timestamp_secs` than what is currently installed.
 
-### solana-install Tool
-
-The `solana-install` tool is used by the user to install and update their cluster software.
-
-It manages the following files and directories in the user's home directory:
-* `~/.config/solana/updater.json` - user configuration and information about currently installed software version
-* `~/.local/share/solana-install/bin` - a symlink to the current release. eg, `~/.local/share/solana-update/<update-pubkey>-<manifest_signature>/bin`
-* `~/.local/share/solana-install/<update-pubkey>-<manifest_signature>/` - contents of the release
-* `~/.local/share/solana-install/<update-pubkey>-<manifest_signature>.tmp/` - temporary directory used while downloading a new release
-
-#### Command-line Interface
-```bash
-$ solana-install --help
-solana-install 0.13.0
-The solana cluster software installer
-
-USAGE:
-    solana-install [SUBCOMMAND]
-
-FLAGS:
-    -h, --help    Prints help information
-
-SUBCOMMANDS:
-    deploy    deploys a new update
-    help      Prints this message or the help of the given subcommand(s)
-    info      displays information about the current installation
-    init      initializes a new installation
-    run       Runs a program while periodically checking and applying software updates. The program will be
-              restarted upon a successful software update
-    update    checks for an update, and if available downloads and applies it
-```
-
-##### init
-```bash
-$ solana-install init --help
-solana-install-init
-initializes a new installation
-
-USAGE:
-    solana-install init [OPTIONS]
-
-FLAGS:
-    -h, --help    Prints help information
-
-OPTIONS:
-    -u, --url <URL>          JSON RPC URL for the solana cluster [default: https://api.testnet.solana.com/]
-    -p, --pubkey <PUBKEY>    Public key of the update manifest [default: Solana-managed update manifest]
-```
-
-##### info
-```bash
-$ solana-install info --help
-solana-install-info
-displays information about the current installation
-
-USAGE:
-    solana-install info [FLAGS]
-
-FLAGS:
-    -h, --help    Prints help information
-    -l            only display local information, don't check the cluster for new updates
-```
-
-##### deploy
-```bash
-$ solana-install deploy --help
-solana-install-deploy
-deploys a new update
-
-USAGE:
-    solana-install deploy <URL> <PATH>
-
-FLAGS:
-    -h, --help    Prints help information
-
-ARGS:
-    <URL>     URL to the solana release archive
-    <PATH>    Keypair file for the update manifest (/path/to/keypair.json)
-```
-
-##### update
-```bash
-$ solana-install update --help
-solana-install-update
-checks for an update, and if available downloads and applies it
-
-USAGE:
-    solana-install update
-
-FLAGS:
-    -h, --help    Prints help information
-```
-
-##### run
-```bash
-$ solana-install run --help
-solana-install-run
-Runs a program while periodically checking and applying software updates. The program will be restarted upon a
-successful software update
-
-USAGE:
-    solana-install run <program_name> [program_arguments]...
-
-FLAGS:
-    -h, --help    Prints help information
-
-ARGS:
-    <program_name>            program to run
-    <program_arguments>...    arguments to supply to the program
-```
-
 ### Release Archive Contents
 A release archive is expected to be a tar file compressed with
 bzip2 with the following internal structure:
@@ -211,3 +100,109 @@ bzip2 with the following internal structure:
   `~/.local/share/solana-install/bin` for use by the `PATH` environment
   variable.
 * `...` -- any additional files and directories are permitted
+
+### solana-install Tool
+
+The `solana-install` tool is used by the user to install and update their cluster software.
+
+It manages the following files and directories in the user's home directory:
+* `~/.config/solana/updater.json` - user configuration and information about currently installed software version
+* `~/.local/share/solana-install/bin` - a symlink to the current release. eg, `~/.local/share/solana-update/<update-pubkey>-<manifest_signature>/bin`
+* `~/.local/share/solana-install/<update-pubkey>-<manifest_signature>/` - contents of the release
+* `~/.local/share/solana-install/<update-pubkey>-<manifest_signature>.tmp/` - temporary directory used while downloading a new release
+
+#### Command-line Interface
+
+```manpage
+solana-install 0.13.0
+The solana cluster software installer
+
+USAGE:
+    solana-install [OPTIONS] <SUBCOMMAND>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -c, --config <PATH>    Configuration file to use [default: /Users/mvines/Library/Preferences/solana/install.yml]
+
+SUBCOMMANDS:
+    deploy    deploys a new update
+    help      Prints this message or the help of the given subcommand(s)
+    info      displays information about the current installation
+    init      initializes a new installation
+    run       Runs a program while periodically checking and applying software updates
+    update    checks for an update, and if available downloads and applies it
+```
+
+```manpage
+solana-install-init
+initializes a new installation
+
+USAGE:
+    solana-install init [OPTIONS]
+
+FLAGS:
+    -h, --help    Prints help information
+
+OPTIONS:
+    -d, --data_dir <PATH>    Directory to store install data [default: /Users/mvines/Library/Application Support/solana]
+    -u, --url <URL>          JSON RPC URL for the solana cluster [default: https://api.testnet.solana.com/]
+    -p, --pubkey <PUBKEY>    Public key of the update manifest [default: 9XX329sPuskWhH4DQh6k16c87dHKhXLBZTL3Gxmve8Gp]
+```
+
+```manpage
+solana-install-info
+displays information about the current installation
+
+USAGE:
+    solana-install info [FLAGS]
+
+FLAGS:
+    -h, --help     Prints help information
+    -l, --local    only display local information, don't check the cluster for new updates
+```
+
+```manpage
+solana-install-deploy
+deploys a new update
+
+USAGE:
+    solana-install deploy <download_url> <update_manifest_keypair>
+
+FLAGS:
+    -h, --help    Prints help information
+
+ARGS:
+    <download_url>               URL to the solana release archive
+    <update_manifest_keypair>    Keypair file for the update manifest (/path/to/keypair.json)
+```
+
+```manpage
+solana-install-update
+checks for an update, and if available downloads and applies it
+
+USAGE:
+    solana-install update
+
+FLAGS:
+    -h, --help    Prints help information
+```
+
+```manpage
+solana-install-run
+Runs a program while periodically checking and applying software updates
+
+USAGE:
+    solana-install run <program_name> [program_arguments]...
+
+FLAGS:
+    -h, --help    Prints help information
+
+ARGS:
+    <program_name>            program to run
+    <program_arguments>...    arguments to supply to the program
+
+The program will be restarted upon a successful software update
+```
