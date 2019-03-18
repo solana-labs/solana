@@ -12,11 +12,21 @@ pub struct LeaderSchedule {
 
 impl LeaderSchedule {
     // Note: passing in zero stakers will cause a panic.
-    pub fn new(ids_and_stakes: &[(Pubkey, u64)], seed: [u8; 32], len: u64) -> Self {
+    pub fn new(ids_and_stakes: &[(Pubkey, u64)], seed: [u8; 32], len: u64, repeat: u64) -> Self {
         let (ids, stakes): (Vec<_>, Vec<_>) = ids_and_stakes.iter().cloned().unzip();
         let rng = &mut ChaChaRng::from_seed(seed);
         let weighted_index = WeightedIndex::new(stakes).unwrap();
-        let slot_leaders = (0..len).map(|_| ids[weighted_index.sample(rng)]).collect();
+        let mut current_node = Pubkey::default();
+        let slot_leaders = (0..len)
+            .map(|i| {
+                if i % repeat == 0 {
+                    current_node = ids[weighted_index.sample(rng)];
+                    current_node
+                } else {
+                    current_node
+                }
+            })
+            .collect();
         Self { slot_leaders }
     }
 }
@@ -57,8 +67,8 @@ mod tests {
         let mut seed_bytes = [0u8; 32];
         seed_bytes.copy_from_slice(seed.as_ref());
         let len = num_keys * 10;
-        let leader_schedule = LeaderSchedule::new(&stakes, seed_bytes, len);
-        let leader_schedule2 = LeaderSchedule::new(&stakes, seed_bytes, len);
+        let leader_schedule = LeaderSchedule::new(&stakes, seed_bytes, len, 1);
+        let leader_schedule2 = LeaderSchedule::new(&stakes, seed_bytes, len, 1);
         assert_eq!(leader_schedule.slot_leaders.len() as u64, len);
         // Check that the same schedule is reproducibly generated
         assert_eq!(leader_schedule, leader_schedule2);
