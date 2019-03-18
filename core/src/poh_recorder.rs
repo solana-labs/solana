@@ -75,7 +75,8 @@ impl PohRecorder {
         self.poh.tick_height
     }
 
-    pub fn reached_leader_tick(&self) -> bool {
+    // returns if leader tick has reached, and how many grace ticks were afforded
+    pub fn reached_leader_tick(&self) -> (bool, u64) {
         self.start_leader_at_tick
             .map(|target_tick| {
                 // Either grace period has expired,
@@ -87,11 +88,23 @@ impl PohRecorder {
                     target_tick,
                     self.max_last_leader_grace_ticks
                 );
-                self.tick_height() >= target_tick
+
+                let leader_ideal_start_tick =
+                    target_tick.saturating_sub(self.max_last_leader_grace_ticks);
+
+                if self.tick_height() >= target_tick
                     || self.max_last_leader_grace_ticks
                         >= target_tick.saturating_sub(self.start_tick)
+                {
+                    return (
+                        true,
+                        self.tick_height().saturating_sub(leader_ideal_start_tick),
+                    );
+                }
+
+                (false, 0)
             })
-            .unwrap_or(false)
+            .unwrap_or((false, 0))
     }
 
     // synchronize PoH with a bank
@@ -625,7 +638,7 @@ mod tests {
             PohRecorder::new(0, prev_hash, 0, None, bank.ticks_per_slot());
 
         // Test that with no leader slot, we don't reach the leader tick
-        assert_eq!(poh_recorder.reached_leader_tick(), false);
+        assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
         for _ in 0..bank.ticks_per_slot() {
             poh_recorder.tick();
@@ -635,7 +648,7 @@ mod tests {
         assert_eq!(poh_recorder.tick_height(), 0);
 
         // Test that with no leader slot, we don't reach the leader tick after sending some ticks
-        assert_eq!(poh_recorder.reached_leader_tick(), false);
+        assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
         poh_recorder.reset(
             poh_recorder.tick_height(),
@@ -646,7 +659,7 @@ mod tests {
         );
 
         // Test that with no leader slot in reset(), we don't reach the leader tick
-        assert_eq!(poh_recorder.reached_leader_tick(), false);
+        assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
         // Provide a leader slot 1 slot down
         poh_recorder.reset(
@@ -671,7 +684,7 @@ mod tests {
         );
 
         // Test that we don't reach the leader tick because of grace ticks
-        assert_eq!(poh_recorder.reached_leader_tick(), false);
+        assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
         // reset poh now. it should discard the grace ticks wait
         poh_recorder.reset(
@@ -682,7 +695,8 @@ mod tests {
             bank.ticks_per_slot(),
         );
         // without sending more ticks, we should be leader now
-        assert_eq!(poh_recorder.reached_leader_tick(), true);
+        assert_eq!(poh_recorder.reached_leader_tick().0, true);
+        assert_eq!(poh_recorder.reached_leader_tick().1, 0);
 
         // Now test that with grace ticks we can reach leader ticks
         // Set the leader slot 1 slot down
@@ -700,19 +714,54 @@ mod tests {
         }
 
         // We are not the leader yet, as expected
-        assert_eq!(poh_recorder.reached_leader_tick(), false);
+        assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
         // Send 1 less tick than the grace ticks
         for _ in 0..bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR - 1 {
             poh_recorder.tick();
         }
         // We are still not the leader
-        assert_eq!(poh_recorder.reached_leader_tick(), false);
+        assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
         // Send one more tick
         poh_recorder.tick();
 
         // We should be the leader now
-        assert_eq!(poh_recorder.reached_leader_tick(), true);
+        assert_eq!(poh_recorder.reached_leader_tick().0, true);
+        assert_eq!(
+            poh_recorder.reached_leader_tick().1,
+            bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR
+        );
+
+        // Let's test that correct grace ticks are reported
+        // Set the leader slot 1 slot down
+        poh_recorder.reset(
+            poh_recorder.tick_height(),
+            bank.last_blockhash(),
+            3,
+            Some(4),
+            bank.ticks_per_slot(),
+        );
+
+        // Send remaining ticks for the slot (remember we sent extra ticks in the previous part of the test)
+        for _ in bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR..bank.ticks_per_slot() {
+            poh_recorder.tick();
+        }
+
+        // Send one extra tick before resetting (so that there's one grace tick)
+        poh_recorder.tick();
+
+        // We are not the leader yet, as expected
+        assert_eq!(poh_recorder.reached_leader_tick().0, false);
+        poh_recorder.reset(
+            poh_recorder.tick_height(),
+            bank.last_blockhash(),
+            3,
+            Some(4),
+            bank.ticks_per_slot(),
+        );
+        // without sending more ticks, we should be leader now
+        assert_eq!(poh_recorder.reached_leader_tick().0, true);
+        assert_eq!(poh_recorder.reached_leader_tick().1, 1);
     }
 }
