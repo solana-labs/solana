@@ -64,6 +64,26 @@ impl BudgetExpr {
         )
     }
 
+    /// Create a budget that pays `lamports` to `to` after being witnessed by `witness` unless
+    /// canceled with a signature from `from`.
+    pub fn new_cancelable_authorized_payment(
+        witness: &Pubkey,
+        lamports: u64,
+        to: &Pubkey,
+        from: &Pubkey,
+    ) -> Self {
+        BudgetExpr::Or(
+            (
+                Condition::Signature(*witness),
+                Box::new(BudgetExpr::new_payment(lamports, to)),
+            ),
+            (
+                Condition::Signature(*from),
+                Box::new(BudgetExpr::new_payment(lamports, from)),
+            ),
+        )
+    }
+
     /// Create a budget that pays lamports` to `to` after being witnessed by 2x `from`s
     pub fn new_2_2_multisig_payment(
         from0: &Pubkey,
