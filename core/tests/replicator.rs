@@ -8,7 +8,6 @@ use bincode::{deserialize, serialize};
 use solana::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree, Blocktree};
 use solana::cluster_info::{ClusterInfo, Node};
 use solana::contact_info::ContactInfo;
-use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::gossip_service::discover;
 use solana::local_cluster::LocalCluster;
@@ -82,10 +81,13 @@ fn download_from_replicator(replicator_info: &ContactInfo) {
             for b in blobs {
                 let br = b.read().unwrap();
                 assert!(br.index() == repair_index);
-                let entry: Entry = deserialize(&br.data()[..br.meta.size]).unwrap();
-                info!("entry: {:?}", entry);
-                assert_ne!(entry.hash, Hash::default());
-                received_blob = true;
+                info!("br: {:?}", br);
+                let entries = Blocktree::deserialize_blob_data(&br.data()).unwrap();
+                for entry in &entries {
+                    info!("entry: {:?}", entry);
+                    assert_ne!(entry.hash, Hash::default());
+                    received_blob = true;
+                }
             }
             break;
         }
