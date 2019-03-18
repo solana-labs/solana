@@ -2,6 +2,7 @@ use crate::leader_schedule::LeaderSchedule;
 use crate::staking_utils;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::timing::NUM_CONSECUTIVE_LEADER_SLOTS;
 
 /// Return the leader schedule for the given epoch.
 fn leader_schedule(epoch_height: u64, bank: &Bank) -> Option<LeaderSchedule> {
@@ -10,8 +11,20 @@ fn leader_schedule(epoch_height: u64, bank: &Bank) -> Option<LeaderSchedule> {
         seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
         let mut stakes: Vec<_> = stakes.into_iter().collect();
         sort_stakes(&mut stakes);
-        LeaderSchedule::new(&stakes, seed, bank.get_slots_in_epoch(epoch_height))
+        LeaderSchedule::new(
+            &stakes,
+            seed,
+            slot_to_leader_schedule_index(bank.get_slots_in_epoch(epoch_height)),
+        )
     })
+}
+
+fn slot_to_leader_schedule_index(slot: u64) -> u64 {
+    slot / NUM_CONSECUTIVE_LEADER_SLOTS
+}
+
+fn leader_schedule_index_to_slot(index: u64, slot_offset: u64) -> u64 {
+    slot_offset + index * NUM_CONSECUTIVE_LEADER_SLOTS
 }
 
 fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
@@ -34,12 +47,14 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
 pub fn slot_leader_at(slot: u64, bank: &Bank) -> Option<Pubkey> {
     let (epoch, slot_index) = bank.get_epoch_and_slot_index(slot);
 
-    leader_schedule(epoch, bank).map(|leader_schedule| leader_schedule[slot_index])
+    leader_schedule(epoch, bank)
+        .map(|leader_schedule| leader_schedule[slot_to_leader_schedule_index(slot_index)])
 }
 
 /// Return the next slot after the given current_slot that the given node will be leader
 pub fn next_leader_slot(pubkey: &Pubkey, current_slot: u64, bank: &Bank) -> Option<u64> {
     let (epoch, slot_index) = bank.get_epoch_and_slot_index(current_slot + 1);
+    let leader_index = slot_to_leader_schedule_index(slot_index);
 
     if let Some(leader_schedule) = leader_schedule(epoch, bank) {
         // clippy thinks I should do this:
@@ -51,9 +66,12 @@ pub fn next_leader_slot(pubkey: &Pubkey, current_slot: u64, bank: &Bank) -> Opti
         //
         //  but leader_schedule doesn't implement Iter...
         #[allow(clippy::needless_range_loop)]
-        for i in slot_index..bank.get_slots_in_epoch(epoch) {
+        for i in leader_index..slot_to_leader_schedule_index(bank.get_slots_in_epoch(epoch)) {
             if *pubkey == leader_schedule[i] {
-                return Some(current_slot + 1 + (i - slot_index) as u64);
+                return Some(leader_schedule_index_to_slot(
+                    i - leader_index,
+                    current_slot + 1,
+                ));
             }
         }
     }
