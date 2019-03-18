@@ -498,13 +498,19 @@ fn categorize_blob(
 
 #[cfg(test)]
 pub mod test {
+    #[derive(Default, Clone)]
+    pub struct WindowSlot {
+        pub data: Option<SharedBlob>,
+        pub coding: Option<SharedBlob>,
+        pub leader_unknown: bool,
+    }
+
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::Blocktree;
     use crate::entry::{make_tiny_test_entries, EntrySlice};
 
     use crate::packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_SIZE};
-    use crate::window::WindowSlot;
     use rand::{thread_rng, Rng};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
