@@ -29,4 +29,4 @@ solana-budget-program = { path = "../programs/budget", version = "0.13.0" }
 solana = { path = "../core", version = "0.13.0" }
 
 [features]
-cuda = ["solana/cuda"]
+cuda = []
