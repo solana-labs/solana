@@ -129,8 +129,12 @@ mod tests {
 
         let ids_and_stakes: Vec<_> = staking_utils::delegated_stakes(&bank).into_iter().collect();
         let seed = [0u8; 32];
-        let leader_schedule =
-            LeaderSchedule::new(&ids_and_stakes, seed, genesis_block.slots_per_epoch);
+        let leader_schedule = LeaderSchedule::new(
+            &ids_and_stakes,
+            seed,
+            genesis_block.slots_per_epoch,
+            NUM_CONSECUTIVE_LEADER_SLOTS,
+        );
 
         assert_eq!(leader_schedule[0], pubkey);
         assert_eq!(leader_schedule[1], pubkey);
