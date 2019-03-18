@@ -10,6 +10,7 @@ use crate::entry::{Entry, EntryReceiver};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use bincode::deserialize;
+use hashbrown::HashMap;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_client::thin_client::create_client_with_timeout;
@@ -17,8 +18,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::transaction::Transaction;
-use solana_storage_api::{self, StorageProgram, StorageTransaction};
-use std::collections::HashSet;
+use solana_storage_api::{self, ProofStatus, StorageProgram, StorageTransaction};
 use std::io;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -31,7 +31,7 @@ use std::time::Duration;
 // Vec of [ledger blocks] x [keys]
 type StorageResults = Vec<Hash>;
 type StorageKeys = Vec<u8>;
-type ReplicatorMap = Vec<HashSet<Pubkey>>;
+type ReplicatorMap = Vec<HashMap<Pubkey, Hash>>;
 
 #[derive(Default)]
 pub struct StorageStateInner {
@@ -126,6 +126,7 @@ impl StorageState {
         if index < replicator_map.len() {
             replicator_map[index]
                 .iter()
+                .map(|(id, _)| id)
                 .cloned()
                 .take(MAX_PUBKEYS_TO_RETURN)
                 .collect::<Vec<_>>()
@@ -287,7 +288,6 @@ impl StorageStage {
     ) -> Result<()> {
         let mut seed = [0u8; 32];
         let signature = keypair.sign(&entry_id.as_ref());
-
         let tx = StorageTransaction::new_advertise_recent_blockhash(
             keypair,
             entry_id,
@@ -349,8 +349,6 @@ impl StorageStage {
                 }
             }
         }
-        // TODO: bundle up mining submissions from replicators
-        // and submit them in a tx to the leader to get reward.
         Ok(())
     }
 
@@ -377,7 +375,7 @@ impl StorageStage {
                             Ok(StorageProgram::SubmitMiningProof {
                                 entry_height: proof_entry_height,
                                 signature,
-                                ..
+                                sha_state,
                             }) => {
                                 if proof_entry_height < *entry_height {
                                     {
@@ -400,14 +398,13 @@ impl StorageStage {
                                     if statew.replicator_map.len() <= max_segment_index {
                                         statew
                                             .replicator_map
-                                            .resize(max_segment_index, HashSet::new());
+                                            .resize(max_segment_index, HashMap::new());
                                     }
                                     let proof_segment_index =
                                         (proof_entry_height / ENTRIES_PER_SEGMENT) as usize;
-                                    if proof_segment_index < statew.replicator_map.len() {
-                                        statew.replicator_map[proof_segment_index]
-                                            .insert(tx.account_keys[0]);
-                                    }
+                                    statew.replicator_map[proof_segment_index]
+                                        .insert(tx.account_keys[0], sha_state);
+                                    // collect the proof sha here
                                 }
                                 debug!("storage proof: entry_height: {}", entry_height);
                             }
@@ -434,6 +431,33 @@ impl StorageStage {
                     *entry_height,
                     tx_sender,
                 )?;
+                // bundle up mining submissions from replicators and submit them in a tx to the leader to get reward.
+                let r_state = storage_state.read().unwrap();
+                let results = r_state.storage_results.clone();
+                let proof_mask: Vec<_> = r_state
+                    .replicator_map
+                    .iter()
+                    .zip(results)
+                    .flat_map(|(submissions, result)| {
+                        submissions
+                            .iter()
+                            .map(|(_, sha_state)| {
+                                if *sha_state == result {
+                                    ProofStatus::Valid
+                                } else {
+                                    ProofStatus::NotValid
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect();
+                let tx = StorageTransaction::new_proof_validation(
+                    keypair,
+                    entry.hash,
+                    *entry_height,
+                    proof_mask,
+                );
+                tx_sender.send(tx)?;
             }
             *entry_height += 1;
             *poh_height += entry.num_hashes;
