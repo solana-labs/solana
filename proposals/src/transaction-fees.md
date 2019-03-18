@@ -5,7 +5,7 @@ a slot leader is permitted to charge to process a transaction. The cluster, on
 the other hand, agrees on a minimum fee. If the network is congested, the slot
 leader may prioritize the transactions offering higher fees. That means the
 client won't know how much was collected until the transaction is confirmed by
-the cluster and the remaining balance is checked. It smells of exactly we
+the cluster and the remaining balance is checked. It smells of exactly what we
 dislike about Ethereum's "gas", non-determinism.
 
 ## Implementation Status
