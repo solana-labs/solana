@@ -19,4 +19,3 @@ solana-sdk = { path = "../sdk", version = "0.13.0" }
 [[bin]]
 name = "solana-keygen"
 path = "src/keygen.rs"
-
