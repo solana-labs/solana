@@ -1,0 +1,30 @@
+msc {
+  hscale="2.2";
+   VoteSigner,
+   Validator,
+   Cluster,
+   StakerX,
+   StakerY;
+
+   |||;
+  Validator box Validator [label="boot.."];
+
+  VoteSigner <:> Validator [label="register\n\n(optional)"];
+  Validator => Cluster [label="VoteState::Initialize(VoteSigner)"];
+  StakerX => Cluster [label="StakeState::Delegate(Validator)"];
+  StakerY => Cluster [label="StakeState::Delegate(Validator)"];
+
+     |||;
+  Validator box Cluster [label="\nvalidate\n"];
+  Validator => VoteSigner [label="sign(vote)"];
+  VoteSigner >> Validator [label="signed vote"];
+
+  Validator => Cluster [label="gossip(vote)"];
+  ...;
+  ... ;
+  Validator abox Validator [label="\nmax\nlockout\n"];
+       |||;
+  StakerX => Cluster [label="StakeState::RedeemCredits()"];
+  StakerY => Cluster [label="StakeState::RedeemCredits()"] ;
+
+}
