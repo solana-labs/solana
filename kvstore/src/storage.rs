@@ -2,92 +2,79 @@ use crate::error::Result;
 use crate::mapper::{Kind, Mapper};
 use crate::sstable::{Key, Merged, SSTable, Value};
 use crate::writelog::WriteLog;
-
-use chrono::Utc;
-
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-
-type MemTable = BTreeMap<Key, Value>;
 
 // Size of timestamp + size of key
 const OVERHEAD: usize = 8 + 3 * 8;
 const LOG_ERR: &str = "Write to log failed! Halting.";
 
 #[derive(Debug)]
-pub struct WriteState {
-    pub commit: i64,
-    pub log: WriteLog,
-    pub values: MemTable,
+pub struct MemTable {
     pub mem_size: usize,
+    pub values: BTreeMap<Key, Value>,
 }
 
-impl WriteState {
-    pub fn new(log: WriteLog, values: BTreeMap<Key, Value>) -> WriteState {
+impl MemTable {
+    pub fn new(values: BTreeMap<Key, Value>) -> MemTable {
         let mem_size = values.values().fold(0, |acc, elem| acc + val_mem_use(elem));
-        WriteState {
-            commit: Utc::now().timestamp(),
-            log,
-            mem_size,
-            values,
+        MemTable { mem_size, values }
+    }
+}
+
+pub fn put(
+    mem: &mut MemTable,
+    log: &mut WriteLog,
+    key: &Key,
+    commit: i64,
+    data: &[u8],
+) -> Result<()> {
+    log.log_put(key, commit, data).expect(LOG_ERR);
+
+    let value = Value {
+        ts: commit,
+        val: Some(data.to_vec()),
+    };
+
+    mem.mem_size += val_mem_use(&value);
+
+    match mem.values.entry(*key) {
+        Entry::Vacant(entry) => {
+            entry.insert(value);
+        }
+        Entry::Occupied(mut entry) => {
+            let old = entry.insert(value);
+            mem.mem_size -= val_mem_use(&old);
         }
     }
 
-    pub fn put(&mut self, key: &Key, data: &[u8]) -> Result<()> {
-        use std::collections::btree_map::Entry;
-        let ts = self.commit;
-        let value = Value {
-            ts,
-            val: Some(data.to_vec()),
-        };
-        self.log.log_put(key, ts, data).expect(LOG_ERR);
+    Ok(())
+}
 
-        self.mem_size += val_mem_use(&value);
+pub fn delete(mem: &mut MemTable, log: &mut WriteLog, key: &Key, commit: i64) -> Result<()> {
+    log.log_delete(key, commit).expect(LOG_ERR);
+    let value = Value {
+        ts: commit,
+        val: None,
+    };
 
-        match self.values.entry(*key) {
-            Entry::Vacant(entry) => {
-                entry.insert(value);
-            }
-            Entry::Occupied(mut entry) => {
-                let old = entry.insert(value);
-                self.mem_size -= val_mem_use(&old);
-            }
+    mem.mem_size += val_mem_use(&value);
+
+    match mem.values.entry(*key) {
+        Entry::Vacant(entry) => {
+            entry.insert(value);
         }
-
-        Ok(())
-    }
-
-    pub fn delete(&mut self, key: &Key) -> Result<()> {
-        use std::collections::btree_map::Entry;
-        let ts = self.commit;
-        let value = Value { ts, val: None };
-
-        self.log.log_delete(key, ts).expect(LOG_ERR);
-
-        self.mem_size += val_mem_use(&value);
-
-        match self.values.entry(*key) {
-            Entry::Vacant(entry) => {
-                entry.insert(value);
-            }
-            Entry::Occupied(mut entry) => {
-                let old = entry.insert(value);
-                self.mem_size -= val_mem_use(&old);
-            }
+        Entry::Occupied(mut entry) => {
+            let old = entry.insert(value);
+            mem.mem_size -= val_mem_use(&old);
         }
-
-        Ok(())
     }
 
-    pub fn reset(&mut self) -> Result<()> {
-        self.values.clear();
-        self.log.reset()?;
-        self.mem_size = 0;
-        Ok(())
-    }
+    Ok(())
 }
 
 pub fn flush_table(
-    mem: &MemTable,
+    mem: &BTreeMap<Key, Value>,
     mapper: &dyn Mapper,
     pages: &mut Vec<BTreeMap<Key, SSTable>>,
 ) -> Result<()> {
@@ -110,7 +97,11 @@ pub fn flush_table(
     Ok(())
 }
 
-pub fn get(mem: &MemTable, pages: &[BTreeMap<Key, SSTable>], key: &Key) -> Result<Option<Vec<u8>>> {
+pub fn get(
+    mem: &BTreeMap<Key, Value>,
+    pages: &[BTreeMap<Key, SSTable>],
+    key: &Key,
+) -> Result<Option<Vec<u8>>> {
     if let Some(idx) = mem.get(key) {
         return Ok(idx.val.clone());
     }
@@ -134,7 +125,7 @@ pub fn get(mem: &MemTable, pages: &[BTreeMap<Key, SSTable>], key: &Key) -> Resul
 }
 
 pub fn range(
-    mem: &MemTable,
+    mem: &BTreeMap<Key, Value>,
     tables: &[BTreeMap<Key, SSTable>],
     range: std::ops::RangeInclusive<Key>,
 ) -> Result<impl Iterator<Item = (Key, Vec<u8>)>> {
@@ -144,20 +135,16 @@ pub fn range(
         .range(range.clone())
         .map(|(k, v)| (*k, v.clone()))
         .collect::<Vec<_>>();
-
-    let mut disk = Vec::new();
+    sources.push(Box::new(mem.into_iter()));
 
     for level in tables.iter() {
         for sst in level.values() {
             let iter = sst.range(&range)?;
             let iter = Box::new(iter) as Box<dyn Iterator<Item = (Key, Value)>>;
 
-            disk.push(iter);
+            sources.push(iter);
         }
     }
-
-    sources.push(Box::new(mem.into_iter()));
-    sources.extend(disk);
 
     let rows = Merged::new(sources).map(|(k, v)| (k, v.val.unwrap()));
 

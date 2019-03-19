@@ -8,7 +8,6 @@ use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
 
 // RocksDb's log uses this size.
 // May be worth making configurable and experimenting
@@ -17,7 +16,7 @@ const BLOCK_SIZE: usize = 32 * 1024;
 #[derive(Debug)]
 pub struct WriteLog {
     log_path: PathBuf,
-    logger: RwLock<Logger>,
+    logger: Logger,
     config: Config,
     in_memory: bool,
 }
@@ -35,7 +34,7 @@ impl WriteLog {
         Ok(WriteLog {
             config,
             log_path: path.to_path_buf(),
-            logger: RwLock::new(Logger::disk(file)),
+            logger: Logger::disk(file),
             in_memory: false,
         })
     }
@@ -44,15 +43,13 @@ impl WriteLog {
     pub fn memory(config: Config) -> WriteLog {
         WriteLog {
             config,
-            logger: RwLock::new(Logger::memory()),
+            logger: Logger::memory(),
             log_path: Path::new("").to_path_buf(),
             in_memory: true,
         }
     }
 
-    pub fn reset(&self) -> Result<()> {
-        let mut logger = self.logger.write().unwrap();
-
+    pub fn reset(&mut self) -> Result<()> {
         let new_logger = if self.in_memory {
             Logger::memory()
         } else {
@@ -60,44 +57,38 @@ impl WriteLog {
             Logger::disk(file)
         };
 
-        *logger = new_logger;
+        self.logger = new_logger;
 
         Ok(())
     }
 
-    pub fn log_put(&self, key: &Key, ts: i64, val: &[u8]) -> Result<()> {
-        let mut logger = self.logger.write().unwrap();
-
-        log(&mut logger, key, ts, Some(val))?;
+    pub fn log_put(&mut self, key: &Key, ts: i64, val: &[u8]) -> Result<()> {
+        log(&mut self.logger, key, ts, Some(val))?;
 
         if self.config.sync_every_write {
-            sync(&mut logger, self.config.use_fsync)?;
+            sync(&mut self.logger, self.config.use_fsync)?;
         }
 
         Ok(())
     }
 
-    pub fn log_delete(&self, key: &Key, ts: i64) -> Result<()> {
-        let mut logger = self.logger.write().unwrap();
-
-        log(&mut logger, key, ts, None)?;
+    pub fn log_delete(&mut self, key: &Key, ts: i64) -> Result<()> {
+        log(&mut self.logger, key, ts, None)?;
 
         if self.config.sync_every_write {
-            sync(&mut logger, self.config.use_fsync)?;
+            sync(&mut self.logger, self.config.use_fsync)?;
         }
 
         Ok(())
     }
 
     #[allow(dead_code)]
-    pub fn sync(&self) -> Result<()> {
-        let mut logger = self.logger.write().unwrap();
-
-        sync(&mut logger, self.config.use_fsync)
+    pub fn sync(&mut self) -> Result<()> {
+        sync(&mut self.logger, self.config.use_fsync)
     }
 
-    pub fn materialize(&self) -> Result<BTreeMap<Key, Value>> {
-        let mmap = self.logger.write().unwrap().writer.mmap()?;
+    pub fn materialize(&mut self) -> Result<BTreeMap<Key, Value>> {
+        let mmap = self.logger.writer.mmap()?;
         read_log(&mmap)
     }
 }
@@ -281,7 +272,7 @@ mod test {
 
     #[test]
     fn test_log_round_trip() {
-        let wal = WriteLog::memory(Config::default());
+        let mut wal = WriteLog::memory(Config::default());
 
         let values: BTreeMap<Key, Value> = (0u64..100)
             .map(|n| {
@@ -313,7 +304,7 @@ mod test {
     fn test_reset() {
         use crate::error::Error;
 
-        let wal = WriteLog::memory(Config::default());
+        let mut wal = WriteLog::memory(Config::default());
 
         let values: BTreeMap<Key, Value> = (0u64..100)
             .map(|n| {

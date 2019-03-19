@@ -1,12 +1,13 @@
 use crate::mapper::{Disk, Mapper, Memory};
 use crate::sstable::SSTable;
-use crate::storage::WriteState;
+use crate::storage::MemTable;
 use crate::writelog::WriteLog;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
@@ -35,6 +36,7 @@ const LOG_FILE: &str = "mem-log";
 const DEFAULT_TABLE_SIZE: usize = 64 * 1024 * 1024;
 const DEFAULT_MEM_SIZE: usize = 64 * 1024 * 1024;
 const DEFAULT_MAX_PAGES: usize = 10;
+const COMMIT_ORDERING: Ordering = Ordering::Relaxed;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Config {
@@ -47,10 +49,12 @@ pub struct Config {
 
 #[derive(Debug)]
 pub struct KvStore {
-    write: RwLock<WriteState>,
-    tables: RwLock<Vec<BTreeMap<Key, SSTable>>>,
     config: Config,
     root: PathBuf,
+    commit: AtomicUsize,
+    mem: RwLock<MemTable>,
+    log: Arc<RwLock<WriteLog>>,
+    tables: RwLock<Vec<BTreeMap<Key, SSTable>>>,
     mapper: Arc<dyn Mapper>,
     sender: Mutex<Sender<compactor::Req>>,
     receiver: Mutex<Receiver<compactor::Resp>>,
@@ -92,12 +96,13 @@ impl KvStore {
     }
 
     pub fn put(&self, key: &Key, data: &[u8]) -> Result<()> {
-        self.ensure_mem()?;
+        let mut memtable = self.mem.write().unwrap();
+        let mut log = self.log.write().unwrap();
+        let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
 
-        let mut write = self.write.write().unwrap();
+        storage::put(&mut *memtable, &mut *log, key, commit as i64, data)?;
 
-        write.put(key, data)?;
-        write.commit += 1;
+        self.ensure_memtable(&mut *memtable, &mut *log)?;
 
         Ok(())
     }
@@ -109,18 +114,23 @@ impl KvStore {
         K: std::borrow::Borrow<Key>,
         V: std::borrow::Borrow<[u8]>,
     {
-        {
-            let mut write = self.write.write().unwrap();
+        let mut memtable = self.mem.write().unwrap();
+        let mut log = self.log.write().unwrap();
+        let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
 
-            for pair in rows {
-                let tup = pair.borrow();
-                let (key, data) = (tup.0.borrow(), tup.1.borrow());
-                write.put(key, data)?;
-            }
-            write.commit += 1;
+        for pair in rows {
+            let (ref key, ref data) = pair.borrow();
+
+            storage::put(
+                &mut *memtable,
+                &mut *log,
+                key.borrow(),
+                commit,
+                data.borrow(),
+            )?;
         }
 
-        self.ensure_mem()?;
+        self.ensure_memtable(&mut *memtable, &mut *log)?;
 
         Ok(())
     }
@@ -128,22 +138,20 @@ impl KvStore {
     pub fn get(&self, key: &Key) -> Result<Option<Vec<u8>>> {
         self.query_compactor()?;
 
-        let (write_state, tables) = (self.write.read().unwrap(), self.tables.read().unwrap());
+        let (memtable, tables) = (self.mem.read().unwrap(), self.tables.read().unwrap());
 
-        storage::get(&write_state.values, &*tables, key)
+        storage::get(&memtable.values, &*tables, key)
     }
 
     pub fn delete(&self, key: &Key) -> Result<()> {
-        self.query_compactor()?;
+        let mut memtable = self.mem.write().unwrap();
+        let mut log = self.log.write().unwrap();
+        let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
 
-        {
-            let mut write = self.write.write().unwrap();
+        storage::delete(&mut *memtable, &mut *log, key, commit)?;
 
-            write.delete(key)?;
-            write.commit += 1;
-        }
+        self.ensure_memtable(&mut *memtable, &mut *log)?;
 
-        self.ensure_mem()?;
         Ok(())
     }
 
@@ -152,18 +160,16 @@ impl KvStore {
         Iter: Iterator<Item = K>,
         K: std::borrow::Borrow<Key>,
     {
-        self.query_compactor()?;
+        let mut memtable = self.mem.write().unwrap();
+        let mut log = self.log.write().unwrap();
+        let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
 
-        {
-            let mut write = self.write.write().unwrap();
-            for k in rows {
-                let key = k.borrow();
-                write.delete(key)?;
-            }
-            write.commit += 1;
+        for key in rows {
+            storage::delete(&mut *memtable, &mut *log, key.borrow(), commit)?;
         }
 
-        self.ensure_mem()?;
+        self.ensure_memtable(&mut *memtable, &mut *log)?;
+
         Ok(())
     }
 
@@ -176,9 +182,12 @@ impl KvStore {
     }
 
     pub fn snapshot(&self) -> Snapshot {
-        let (state, tables) = (self.write.read().unwrap(), self.tables.read().unwrap());
+        let (memtable, tables) = (
+            self.mem.read().unwrap().values.clone(),
+            self.tables.read().unwrap().clone(),
+        );
 
-        Snapshot::new(state.values.clone(), tables.clone())
+        Snapshot::new(memtable, tables)
     }
 
     pub fn range(
@@ -187,8 +196,9 @@ impl KvStore {
     ) -> Result<impl Iterator<Item = (Key, Vec<u8>)>> {
         self.query_compactor()?;
 
-        let (write_state, tables) = (self.write.read().unwrap(), self.tables.read().unwrap());
-        storage::range(&write_state.values, &*tables, range)
+        let (memtable, tables) = (self.mem.read().unwrap(), self.tables.read().unwrap());
+
+        storage::range(&memtable.values, &*tables, range)
     }
 
     pub fn destroy<P>(path: P) -> Result<()>
@@ -222,31 +232,22 @@ impl KvStore {
         Ok(())
     }
 
-    fn ensure_mem(&self) -> Result<()> {
-        let trigger_compact = {
-            let mut write_rw = self.write.write().unwrap();
+    fn ensure_memtable(&self, mem: &mut MemTable, log: &mut WriteLog) -> Result<()> {
+        if mem.mem_size < self.config.max_mem {
+            return Ok(());
+        }
 
-            if write_rw.mem_size < self.config.max_mem {
-                return Ok(());
-            }
+        let mut tables = self.tables.write().unwrap();
 
-            let mut tables = self.tables.write().unwrap();
-            storage::flush_table(&write_rw.values, &*self.mapper, &mut *tables)?;
+        storage::flush_table(&mem.values, &*self.mapper, &mut *tables)?;
+        mem.values.clear();
+        mem.mem_size = 0;
+        log.reset().expect("Write-log rotation failed");
 
-            write_rw.reset()?;
-            write_rw.commit += 1;
+        if is_lvl0_full(&tables, &self.config) {
+            let sender = self.sender.lock().unwrap();
 
-            is_lvl0_full(&tables, &self.config)
-        };
-
-        dump_tables(&self.root, &*self.mapper).unwrap();
-        if trigger_compact {
-            let tables_path = self.root.join(TABLES_FILE);
-            self.sender
-                .lock()
-                .unwrap()
-                .send(compactor::Req::Start(tables_path))
-                .expect("compactor thread dead");
+            sender.send(compactor::Req::Start(PathBuf::new()))?;
         }
 
         Ok(())
@@ -274,17 +275,16 @@ fn open(root: &Path, mapper: Arc<dyn Mapper>, config: Config) -> Result<KvStore>
         fs::create_dir(&root)?;
     }
 
-    let write_log = WriteLog::open(&log_path, config.log_config)?;
-    let mem = if restore_log && !config.in_memory {
-        write_log.materialize()?
+    let commit = chrono::Utc::now().timestamp();
+    let mut log = WriteLog::open(&log_path, config.log_config)?;
+    let values = if restore_log && !config.in_memory {
+        log.materialize()?
     } else {
         BTreeMap::new()
     };
-
-    let write = RwLock::new(WriteState::new(write_log, mem));
+    let mem = MemTable::new(values);
 
     let tables = load_tables(&root, &*mapper)?;
-    let tables = RwLock::new(tables);
 
     let cfg = compactor::Config {
         max_pages: config.max_tables,
@@ -292,16 +292,17 @@ fn open(root: &Path, mapper: Arc<dyn Mapper>, config: Config) -> Result<KvStore>
     };
     let (sender, receiver, compactor_handle) = compactor::spawn_compactor(Arc::clone(&mapper), cfg)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    let (sender, receiver) = (Mutex::new(sender), Mutex::new(receiver));
 
     Ok(KvStore {
-        write,
-        tables,
         config,
-        mapper,
         root,
-        sender,
-        receiver,
+        commit: AtomicUsize::new(commit as usize),
+        mem: RwLock::new(mem),
+        log: Arc::new(RwLock::new(log)),
+        tables: RwLock::new(tables),
+        mapper,
+        sender: Mutex::new(sender),
+        receiver: Mutex::new(receiver),
         compactor_handle,
     })
 }
