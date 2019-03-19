@@ -8,7 +8,7 @@ use solana_sdk::transaction::Transaction;
 /// Reasons the runtime might have rejected a transaction.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RuntimeError {
-    /// Executing the instruction at the give&n index produced an error.
+    /// Executing the instruction at the given index produced an error.
     ProgramError(u8, ProgramError),
 }
 
@@ -144,7 +144,7 @@ pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
 }
 
 /// Get mut references to a subset of elements.
-fn get_subset_unchecked_mut<'a, T>(xs: &'a mut [T], indexes: &[u8]) -> Vec<&'a mut T> {
+fn get_subset_mut<'a, T>(xs: &'a mut [T], indexes: &[u8]) -> Result<Vec<&'a mut T>, ProgramError> {
     // Since the compiler doesn't know the indexes are unique, dereferencing
     // multiple mut elements is assumed to be unsafe. If, however, all
     // indexes are unique, it's perfectly safe. The returned elements will share
@@ -153,16 +153,16 @@ fn get_subset_unchecked_mut<'a, T>(xs: &'a mut [T], indexes: &[u8]) -> Vec<&'a m
     // Make certain there are no duplicate indexes. If there are, panic because we
     // can't return multiple mut references to the same element.
     if has_duplicates(indexes) {
-        panic!("duplicate indexes");
+        Err(ProgramError::DuplicateAccountIndex)?;
     }
 
-    indexes
+    Ok(indexes
         .iter()
         .map(|i| {
             let ptr = &mut xs[*i as usize] as *mut T;
             unsafe { &mut *ptr }
         })
-        .collect()
+        .collect())
 }
 
 /// Execute a transaction.
@@ -176,7 +176,9 @@ pub fn execute_transaction(
 ) -> Result<(), RuntimeError> {
     for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
         let executable_accounts = &mut (&mut loaders[instruction.program_ids_index as usize]);
-        let mut program_accounts = get_subset_unchecked_mut(tx_accounts, &instruction.accounts);
+
+        let mut program_accounts = get_subset_mut(tx_accounts, &instruction.accounts)
+            .map_err(|err| RuntimeError::ProgramError(instruction_index as u8, err))?;
         execute_instruction(
             tx,
             instruction_index,
@@ -203,7 +205,7 @@ where
         tx_accounts.push(Account::new(0, 0, &system_program::id()));
     }
     for (i, ix) in tx.instructions.iter().enumerate() {
-        let mut ix_accounts = get_subset_unchecked_mut(tx_accounts, &ix.accounts);
+        let mut ix_accounts = get_subset_mut(tx_accounts, &ix.accounts).unwrap();
         let mut keyed_accounts: Vec<_> = ix
             .accounts
             .iter()
@@ -249,26 +251,26 @@ mod tests {
     }
 
     #[test]
-    fn test_get_subset_unchecked_mut() {
-        assert_eq!(get_subset_unchecked_mut(&mut [7, 8], &[0]), vec![&mut 7]);
+    fn test_get_subset_mut() {
+        assert_eq!(get_subset_mut(&mut [7, 8], &[0]).unwrap(), vec![&mut 7]);
         assert_eq!(
-            get_subset_unchecked_mut(&mut [7, 8], &[0, 1]),
+            get_subset_mut(&mut [7, 8], &[0, 1]).unwrap(),
             vec![&mut 7, &mut 8]
         );
     }
 
     #[test]
     #[should_panic]
-    fn test_get_subset_unchecked_mut_duplicate_index() {
+    fn test_get_subset_mut_duplicate_index() {
         // This panics, because it assumes duplicate detection is done elsewhere.
-        get_subset_unchecked_mut(&mut [7, 8], &[0, 0]);
+        get_subset_mut(&mut [7, 8], &[0, 0]).unwrap();
     }
 
     #[test]
     #[should_panic]
-    fn test_get_subset_unchecked_mut_out_of_bounds() {
+    fn test_get_subset_mut_out_of_bounds() {
         // This panics, because it assumes bounds validation is done elsewhere.
-        get_subset_unchecked_mut(&mut [7, 8], &[2]);
+        get_subset_mut(&mut [7, 8], &[2]).unwrap();
     }
 
     #[test]

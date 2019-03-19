@@ -40,6 +40,9 @@ pub enum ProgramError {
     /// SystemInstruction::Assign was attempted on an account unowned by the system program
     AssignOfUnownedAccount,
 
+    /// An account was referenced more than once in a single instruction
+    DuplicateAccountIndex,
+
     /// CustomError allows on-chain programs to implement program-specific error types and see
     /// them returned by the Solana runtime. A CustomError may be any type that is serialized
     /// to a Vec of bytes, max length 32 bytes. Any CustomError Vec greater than this length will
