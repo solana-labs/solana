@@ -331,8 +331,8 @@ mod test {
             100,
             &fullnode_exit,
             num_replicators,
-            DEFAULT_TICKS_PER_SLOT,
-            DEFAULT_SLOTS_PER_EPOCH,
+            16,
+            16,
         );
         assert_eq!(cluster.fullnodes.len(), NUM_NODES);
         assert_eq!(cluster.replicators.len(), num_replicators);
