@@ -4,7 +4,9 @@ use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::transaction::{Instruction, InstructionError, Transaction, TransactionError};
+use solana_sdk::transaction::{
+    AccountMeta, Instruction, InstructionError, Transaction, TransactionError,
+};
 use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
 use solana_vote_api::vote_state::VoteState;
 use solana_vote_api::vote_transaction::VoteTransaction;
@@ -112,7 +114,7 @@ fn test_vote_via_bank_with_no_signature() {
     let vote_ix = Instruction::new(
         solana_vote_api::id(),
         &VoteInstruction::Vote(Vote::new(0)),
-        vec![(vote_id, false)], // <--- attack!! No signature.
+        vec![AccountMeta(vote_id, false)], // <--- attack!! No signature.
     );
 
     // Sneak in an instruction so that the transaction is signed but

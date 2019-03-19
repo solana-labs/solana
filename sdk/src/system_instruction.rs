@@ -1,6 +1,6 @@
 use crate::pubkey::Pubkey;
 use crate::system_program;
-use crate::transaction::Instruction;
+use crate::transaction::{AccountMeta, Instruction};
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub enum SystemError {
@@ -46,7 +46,7 @@ impl SystemInstruction {
                 space,
                 program_id: *program_id,
             },
-            vec![(*from_id, true), (*to_id, false)],
+            vec![AccountMeta(*from_id, true), AccountMeta(*to_id, false)],
         )
     }
 
@@ -54,7 +54,7 @@ impl SystemInstruction {
         Instruction::new(
             system_program::id(),
             &SystemInstruction::Move { lamports },
-            vec![(*from_id, true), (*to_id, false)],
+            vec![AccountMeta(*from_id, true), AccountMeta(*to_id, false)],
         )
     }
 }

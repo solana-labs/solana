@@ -67,6 +67,7 @@ impl<'a> BankClient<'a> {
 mod tests {
     use super::*;
     use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::transaction::AccountMeta;
 
     #[test]
     fn test_bank_client_new_with_keypairs() {
@@ -81,7 +82,9 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let mut move_instruction =
             SystemInstruction::new_move(&doe_client.pubkey(), &bob_pubkey, 42);
-        move_instruction.accounts.push((jane_pubkey, true));
+        move_instruction
+            .accounts
+            .push(AccountMeta(jane_pubkey, true));
 
         doe_client.process_instruction(move_instruction).unwrap();
         assert_eq!(bank.get_balance(&bob_pubkey), 42);
