@@ -283,7 +283,7 @@ impl ReplayStage {
                                 )
                                 .to_owned(),);
                         let tpu_bank = Bank::new_from_parent(parent, my_id, poh_slot);
-                        bank_forks.write().unwrap().insert(poh_slot, tpu_bank);
+                        bank_forks.write().unwrap().insert(tpu_bank);
                         if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
                             assert_eq!(
                                 bank_forks.read().unwrap().working_bank().slot(),
@@ -415,10 +415,7 @@ impl ReplayStage {
                 }
                 let leader = leader_schedule_utils::slot_leader_at(child_id, &parent_bank).unwrap();
                 info!("new fork:{} parent:{}", child_id, parent_id);
-                forks.insert(
-                    child_id,
-                    Bank::new_from_parent(&parent_bank, &leader, child_id),
-                );
+                forks.insert(Bank::new_from_parent(&parent_bank, &leader, child_id));
             }
         }
     }
@@ -599,7 +596,7 @@ mod test {
             ReplayStage::generate_new_bank_forks(&blocktree, &mut bank_forks);
             assert!(bank_forks.get(1).is_some());
 
-            // Inset blob for slot 3, generate new forks, check result
+            // Insert blob for slot 3, generate new forks, check result
             let mut blob_slot_2 = Blob::default();
             blob_slot_2.set_slot(2);
             blob_slot_2.set_parent(0);
