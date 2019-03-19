@@ -100,9 +100,19 @@ impl<P, Q> GenericInstruction<P, Q> {
     }
 }
 
-/// An account's pubkey and a Boolean that is true if an Instruciton
-/// requires a Transaction signature corresponding to this key.
-pub struct AccountMeta(pub Pubkey, pub bool);
+/// Account metadata used to define Instructions
+pub struct AccountMeta {
+    /// An account's public key
+    pub pubkey: Pubkey,
+    /// True if an Instruciton requires a Transaction signature matching `pubkey`.
+    pub is_signer: bool,
+}
+
+impl AccountMeta {
+    pub fn new(pubkey: Pubkey, is_signer: bool) -> Self {
+        Self { pubkey, is_signer }
+    }
+}
 
 pub type Instruction = GenericInstruction<Pubkey, AccountMeta>;
 pub type CompiledInstruction = GenericInstruction<u8, u8>;
@@ -213,11 +223,11 @@ impl Transaction {
         recent_blockhash: Hash,
         fee: u64,
     ) -> Self {
-        let mut account_keys = vec![AccountMeta(*from_pubkey, true)];
+        let mut account_metas = vec![AccountMeta::new(*from_pubkey, true)];
         for pubkey in transaction_keys {
-            account_keys.push(AccountMeta(*pubkey, false));
+            account_metas.push(AccountMeta::new(*pubkey, false));
         }
-        let instruction = Instruction::new(*program_id, data, account_keys);
+        let instruction = Instruction::new(*program_id, data, account_metas);
         let mut transaction = Self::new(vec![instruction]);
         transaction.fee = fee;
         transaction.recent_blockhash = recent_blockhash;
@@ -709,7 +719,7 @@ mod tests {
         let program_id = Pubkey::default();
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
-        let ix = Instruction::new(program_id, &0, vec![AccountMeta(id0, true)]);
+        let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         Transaction::new(vec![ix]).sign(&Vec::<&Keypair>::new(), Hash::default());
     }
 
@@ -719,7 +729,7 @@ mod tests {
         let program_id = Pubkey::default();
         let keypair0 = Keypair::new();
         let wrong_id = Pubkey::default();
-        let ix = Instruction::new(program_id, &0, vec![AccountMeta(wrong_id, true)]);
+        let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(wrong_id, true)]);
         Transaction::new(vec![ix]).sign(&[&keypair0], Hash::default());
     }
 
@@ -728,7 +738,7 @@ mod tests {
         let program_id = Pubkey::default();
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
-        let ix = Instruction::new(program_id, &0, vec![AccountMeta(id0, true)]);
+        let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let mut tx = Transaction::new(vec![ix]);
         tx.sign(&[&keypair0], Hash::default());
         assert_eq!(tx.instructions[0], CompiledInstruction::new(0, &0, vec![0]));
