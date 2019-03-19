@@ -325,9 +325,7 @@ export class BudgetProgram {
     program: PublicKey,
     to: PublicKey,
   ): Transaction {
-    const dataLayout = BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-    ]);
+    const dataLayout = BufferLayout.struct([BufferLayout.u32('instruction')]);
 
     const data = Buffer.alloc(dataLayout.span);
     dataLayout.encode(

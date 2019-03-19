@@ -472,9 +472,7 @@ test('account change notification', async () => {
   expect(mockCallback.mock.calls[0][0].lamports).toBe(41);
   expect(mockCallback.mock.calls[0][0].owner).toEqual(BpfLoader.programId);
   expect(mockCallback.mock.calls[0][0].executable).toBe(false);
-  expect(mockCallback.mock.calls[0][0].data).toEqual(
-    Buffer.from([1, 2, 3]),
-  );
+  expect(mockCallback.mock.calls[0][0].data).toEqual(Buffer.from([1, 2, 3]));
 });
 
 test('program account change notification', async () => {

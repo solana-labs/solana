@@ -263,9 +263,7 @@ export class Token {
     const tokenAccount = new Account();
     let transaction;
 
-    const dataLayout = BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-    ]);
+    const dataLayout = BufferLayout.struct([BufferLayout.u32('instruction')]);
 
     const data = Buffer.alloc(dataLayout.span);
     dataLayout.encode(
@@ -555,9 +553,7 @@ export class Token {
     account: PublicKey,
     newOwner: PublicKey,
   ): TransactionInstruction {
-    const dataLayout = BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-    ]);
+    const dataLayout = BufferLayout.struct([BufferLayout.u32('instruction')]);
 
     const data = Buffer.alloc(dataLayout.span);
     dataLayout.encode(

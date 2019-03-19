@@ -108,9 +108,7 @@ export class Loader {
    * @param program `load()`ed Account
    */
   async finalize(program: Account) {
-    const dataLayout = BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-    ]);
+    const dataLayout = BufferLayout.struct([BufferLayout.u32('instruction')]);
 
     const data = Buffer.alloc(dataLayout.span);
     dataLayout.encode(
