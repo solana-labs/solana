@@ -2,7 +2,7 @@
 
 use crate::hash::Hash;
 use crate::pubkey::Pubkey;
-use crate::transaction::{CompiledInstruction, Instruction, Transaction};
+use crate::transaction::{AccountMeta, CompiledInstruction, Instruction, Transaction};
 use itertools::Itertools;
 
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
@@ -14,7 +14,12 @@ fn compile_instruction(
     keys: &[Pubkey],
     program_ids: &[Pubkey],
 ) -> CompiledInstruction {
-    let accounts: Vec<_> = ix.accounts.iter().map(|(k, _)| position(keys, k)).collect();
+    let accounts: Vec<_> = ix
+        .accounts
+        .iter()
+        .map(|AccountMeta(k, _)| position(keys, k))
+        .collect();
+
     CompiledInstruction {
         program_ids_index: position(program_ids, &ix.program_ids_index),
         data: ix.data.clone(),
@@ -55,7 +60,7 @@ impl Script {
 
         let mut signed_keys = vec![];
         let mut unsigned_keys = vec![];
-        for (key, signed) in keys_and_signed.into_iter().unique_by(|x| x.0) {
+        for AccountMeta(key, signed) in keys_and_signed.into_iter().unique_by(|x| x.0) {
             if *signed {
                 signed_keys.push(*key);
             } else {
@@ -139,8 +144,8 @@ mod tests {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
         let keys = Script::new(vec![
-            Instruction::new(program_id, &0, vec![(id0, true)]),
-            Instruction::new(program_id, &0, vec![(id0, true)]),
+            Instruction::new(program_id, &0, vec![AccountMeta(id0, true)]),
+            Instruction::new(program_id, &0, vec![AccountMeta(id0, true)]),
         ])
         .keys();
         assert_eq!(keys, (vec![id0], vec![]));
@@ -151,8 +156,8 @@ mod tests {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
         let keys = Script::new(vec![
-            Instruction::new(program_id, &0, vec![(id0, false)]),
-            Instruction::new(program_id, &0, vec![(id0, true)]),
+            Instruction::new(program_id, &0, vec![AccountMeta(id0, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta(id0, true)]),
         ])
         .keys();
         assert_eq!(keys, (vec![id0], vec![]));
@@ -164,8 +169,8 @@ mod tests {
         let id0 = Keypair::new().pubkey();
         let id1 = Pubkey::default(); // Key less than id0
         let keys = Script::new(vec![
-            Instruction::new(program_id, &0, vec![(id0, false)]),
-            Instruction::new(program_id, &0, vec![(id1, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta(id0, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta(id1, false)]),
         ])
         .keys();
         assert_eq!(keys, (vec![], vec![id0, id1]));
@@ -177,9 +182,9 @@ mod tests {
         let id0 = Pubkey::default();
         let id1 = Keypair::new().pubkey();
         let keys = Script::new(vec![
-            Instruction::new(program_id, &0, vec![(id0, false)]),
-            Instruction::new(program_id, &0, vec![(id1, false)]),
-            Instruction::new(program_id, &0, vec![(id0, true)]),
+            Instruction::new(program_id, &0, vec![AccountMeta(id0, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta(id1, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta(id0, true)]),
         ])
         .keys();
         assert_eq!(keys, (vec![id0], vec![id1]));
@@ -191,8 +196,8 @@ mod tests {
         let id0 = Pubkey::default();
         let id1 = Keypair::new().pubkey();
         let keys = Script::new(vec![
-            Instruction::new(program_id, &0, vec![(id0, false)]),
-            Instruction::new(program_id, &0, vec![(id1, true)]),
+            Instruction::new(program_id, &0, vec![AccountMeta(id0, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta(id1, true)]),
         ])
         .keys();
         assert_eq!(keys, (vec![id1], vec![id0]));
@@ -203,10 +208,12 @@ mod tests {
     fn test_transaction_builder_signed_keys_len() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
-        let tx = Script::new(vec![Instruction::new(program_id, &0, vec![(id0, false)])]).compile();
+        let ix = Instruction::new(program_id, &0, vec![AccountMeta(id0, false)]);
+        let tx = Script::new(vec![ix]).compile();
         assert_eq!(tx.signatures.capacity(), 0);
 
-        let tx = Script::new(vec![Instruction::new(program_id, &0, vec![(id0, true)])]).compile();
+        let ix = Instruction::new(program_id, &0, vec![AccountMeta(id0, true)]);
+        let tx = Script::new(vec![ix]).compile();
         assert_eq!(tx.signatures.capacity(), 1);
     }
 
@@ -218,9 +225,9 @@ mod tests {
         let keypair1 = Keypair::new();
         let id1 = keypair1.pubkey();
         let tx = Script::new(vec![
-            Instruction::new(program_id0, &0, vec![(id0, false)]),
-            Instruction::new(program_id1, &0, vec![(id1, true)]),
-            Instruction::new(program_id0, &0, vec![(id1, false)]),
+            Instruction::new(program_id0, &0, vec![AccountMeta(id0, false)]),
+            Instruction::new(program_id1, &0, vec![AccountMeta(id1, true)]),
+            Instruction::new(program_id0, &0, vec![AccountMeta(id1, false)]),
         ])
         .compile();
         assert_eq!(tx.instructions[0], CompiledInstruction::new(0, &0, vec![1]));

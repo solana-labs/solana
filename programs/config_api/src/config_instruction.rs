@@ -2,7 +2,7 @@ use crate::id;
 use crate::ConfigState;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::transaction::Instruction;
+use solana_sdk::transaction::{AccountMeta, Instruction};
 
 pub struct ConfigInstruction {}
 
@@ -28,10 +28,10 @@ impl ConfigInstruction {
         config_account_pubkey: &Pubkey,
         data: &T,
     ) -> Instruction {
-        Instruction::new(
-            id(),
-            data,
-            vec![(*from_account_pubkey, true), (*config_account_pubkey, true)],
-        )
+        let account_metas = vec![
+            AccountMeta(*from_account_pubkey, true),
+            AccountMeta(*config_account_pubkey, true),
+        ];
+        Instruction::new(id(), data, account_metas)
     }
 }

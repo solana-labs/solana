@@ -3,7 +3,7 @@ use crate::id;
 use chrono::prelude::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::transaction::Instruction;
+use solana_sdk::transaction::{AccountMeta, Instruction};
 
 /// A smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -31,9 +31,9 @@ impl BudgetInstruction {
     pub fn new_initialize_account(contract: &Pubkey, expr: BudgetExpr) -> Instruction {
         let mut keys = vec![];
         if let BudgetExpr::Pay(payment) = &expr {
-            keys.push((payment.to, false));
+            keys.push(AccountMeta(payment.to, false));
         }
-        keys.push((*contract, false));
+        keys.push(AccountMeta(*contract, false));
         Instruction::new(id(), &BudgetInstruction::InitializeAccount(expr), keys)
     }
 
@@ -43,17 +43,17 @@ impl BudgetInstruction {
         to: &Pubkey,
         dt: DateTime<Utc>,
     ) -> Instruction {
-        let mut keys = vec![(*from, true), (*contract, false)];
+        let mut keys = vec![AccountMeta(*from, true), AccountMeta(*contract, false)];
         if from != to {
-            keys.push((*to, false));
+            keys.push(AccountMeta(*to, false));
         }
         Instruction::new(id(), &BudgetInstruction::ApplyTimestamp(dt), keys)
     }
 
     pub fn new_apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
-        let mut keys = vec![(*from, true), (*contract, false)];
+        let mut keys = vec![AccountMeta(*from, true), AccountMeta(*contract, false)];
         if from != to {
-            keys.push((*to, false));
+            keys.push(AccountMeta(*to, false));
         }
         Instruction::new(id(), &BudgetInstruction::ApplySignature, keys)
     }
