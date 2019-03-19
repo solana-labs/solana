@@ -98,7 +98,12 @@ impl<T: Clone> StatusCache<T> {
 
     /// Save an error status for a signature
     pub fn save_failure_status(&mut self, sig: &Signature, err: T) {
-        assert!(self.has_signature(sig), "sig not found");
+        assert!(
+            self.active
+                .as_ref()
+                .map_or(false, |active| active.has_signature(sig)),
+            "sig not found"
+        );
 
         self.active
             .as_mut()
@@ -132,7 +137,7 @@ impl<T: Clone> StatusCache<T> {
             warn!("=========== FIXME: squash() on an active parent! ================");
         }
         // TODO: put this assert back in
-        assert!(parent.active.is_none());
+        //assert!(parent.active.is_none());
 
         if self.merges.len() < MAX_CACHE_ENTRIES {
             for merge in parent
