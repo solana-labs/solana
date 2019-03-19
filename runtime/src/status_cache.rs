@@ -196,7 +196,7 @@ mod tests {
         let checkpoints = [&second, &first];
         assert_eq!(
             BankStatusCache::get_signature_status_all(&checkpoints, &sig),
-            Some((0, Ok(()))),
+            Some((1, Ok(()))),
         );
         assert!(StatusCache::has_signature_all(&checkpoints, &sig));
     }
