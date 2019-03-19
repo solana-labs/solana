@@ -125,6 +125,7 @@ impl Locktower {
                         confirmation_count: MAX_LOCKOUT_HISTORY as u32,
                         slot: root,
                     };
+                    trace!("ROOT: {}", vote.slot);
                     Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
                 }
             }
@@ -228,7 +229,7 @@ impl Locktower {
         ancestors: &HashMap<u64, HashSet<u64>>,
     ) {
         let mut slot_with_ancestors = vec![vote.slot];
-        slot_with_ancestors.extend(&ancestors[&vote.slot]);
+        slot_with_ancestors.extend(ancestors.get(&vote.slot).unwrap_or(&HashSet::new()));
         for slot in slot_with_ancestors {
             let entry = &mut stake_lockouts.entry(slot).or_default();
             entry.lockout += vote.lockout();
@@ -244,7 +245,7 @@ impl Locktower {
         ancestors: &HashMap<u64, HashSet<u64>>,
     ) {
         let mut slot_with_ancestors = vec![slot];
-        slot_with_ancestors.extend(&ancestors[&slot]);
+        slot_with_ancestors.extend(ancestors.get(&slot).unwrap_or(&HashSet::new()));
         for slot in slot_with_ancestors {
             let entry = &mut stake_lockouts.entry(slot).or_default();
             entry.stake += lamports;
