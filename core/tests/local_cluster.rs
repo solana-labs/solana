@@ -114,6 +114,7 @@ fn test_two_unbalanced_stakes() {
 }
 
 #[test]
+#[ignore]
 fn test_forwarding() {
     // Set up a cluster where one node is never the leader, so all txs sent to this node
     // will be have to be forwarded in order to be confirmed
