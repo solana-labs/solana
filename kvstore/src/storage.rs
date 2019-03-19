@@ -1,13 +1,11 @@
 use crate::error::Result;
 use crate::mapper::{Kind, Mapper};
 use crate::sstable::{Key, Merged, SSTable, Value};
-use crate::writelog::WriteLog;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 
 // Size of timestamp + size of key
 const OVERHEAD: usize = 8 + 3 * 8;
-const LOG_ERR: &str = "Write to log failed! Halting.";
 
 #[derive(Debug)]
 pub struct MemTable {
@@ -20,57 +18,44 @@ impl MemTable {
         let mem_size = values.values().fold(0, |acc, elem| acc + val_mem_use(elem));
         MemTable { mem_size, values }
     }
-}
 
-pub fn put(
-    mem: &mut MemTable,
-    log: &mut WriteLog,
-    key: &Key,
-    commit: i64,
-    data: &[u8],
-) -> Result<()> {
-    log.log_put(key, commit, data).expect(LOG_ERR);
+    pub fn put(&mut self, key: &Key, commit: i64, data: &[u8]) {
+        let value = Value {
+            ts: commit,
+            val: Some(data.to_vec()),
+        };
 
-    let value = Value {
-        ts: commit,
-        val: Some(data.to_vec()),
-    };
+        self.mem_size += val_mem_use(&value);
 
-    mem.mem_size += val_mem_use(&value);
-
-    match mem.values.entry(*key) {
-        Entry::Vacant(entry) => {
-            entry.insert(value);
-        }
-        Entry::Occupied(mut entry) => {
-            let old = entry.insert(value);
-            mem.mem_size -= val_mem_use(&old);
+        match self.values.entry(*key) {
+            Entry::Vacant(entry) => {
+                entry.insert(value);
+            }
+            Entry::Occupied(mut entry) => {
+                let old = entry.insert(value);
+                self.mem_size -= val_mem_use(&old);
+            }
         }
     }
 
-    Ok(())
-}
+    pub fn delete(&mut self, key: &Key, commit: i64) {
+        let value = Value {
+            ts: commit,
+            val: None,
+        };
 
-pub fn delete(mem: &mut MemTable, log: &mut WriteLog, key: &Key, commit: i64) -> Result<()> {
-    log.log_delete(key, commit).expect(LOG_ERR);
-    let value = Value {
-        ts: commit,
-        val: None,
-    };
+        self.mem_size += val_mem_use(&value);
 
-    mem.mem_size += val_mem_use(&value);
-
-    match mem.values.entry(*key) {
-        Entry::Vacant(entry) => {
-            entry.insert(value);
-        }
-        Entry::Occupied(mut entry) => {
-            let old = entry.insert(value);
-            mem.mem_size -= val_mem_use(&old);
+        match self.values.entry(*key) {
+            Entry::Vacant(entry) => {
+                entry.insert(value);
+            }
+            Entry::Occupied(mut entry) => {
+                let old = entry.insert(value);
+                self.mem_size -= val_mem_use(&old);
+            }
         }
     }
-
-    Ok(())
 }
 
 pub fn flush_table(

@@ -19,8 +19,8 @@ mod mapper;
 mod readtx;
 mod sstable;
 mod storage;
+mod writebatch;
 mod writelog;
-mod writetx;
 
 #[macro_use]
 extern crate serde_derive;
@@ -28,8 +28,8 @@ extern crate serde_derive;
 pub use self::error::{Error, Result};
 pub use self::readtx::ReadTx as Snapshot;
 pub use self::sstable::Key;
+pub use self::writebatch::{Config as WriteBatchConfig, WriteBatch};
 pub use self::writelog::Config as LogConfig;
-pub use self::writetx::WriteTx;
 
 const TABLES_FILE: &str = "tables.meta";
 const LOG_FILE: &str = "mem-log";
@@ -100,7 +100,8 @@ impl KvStore {
         let mut log = self.log.write().unwrap();
         let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
 
-        storage::put(&mut *memtable, &mut *log, key, commit as i64, data)?;
+        log.log_put(key, commit, data).unwrap();
+        memtable.put(key, commit, data);
 
         self.ensure_memtable(&mut *memtable, &mut *log)?;
 
@@ -119,15 +120,11 @@ impl KvStore {
         let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
 
         for pair in rows {
-            let (ref key, ref data) = pair.borrow();
+            let (ref k, ref d) = pair.borrow();
+            let (key, data) = (k.borrow(), d.borrow());
 
-            storage::put(
-                &mut *memtable,
-                &mut *log,
-                key.borrow(),
-                commit,
-                data.borrow(),
-            )?;
+            log.log_put(key, commit, data).unwrap();
+            memtable.put(key, commit, data);
         }
 
         self.ensure_memtable(&mut *memtable, &mut *log)?;
@@ -148,7 +145,8 @@ impl KvStore {
         let mut log = self.log.write().unwrap();
         let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
 
-        storage::delete(&mut *memtable, &mut *log, key, commit)?;
+        log.log_delete(key, commit).unwrap();
+        memtable.delete(key, commit);
 
         self.ensure_memtable(&mut *memtable, &mut *log)?;
 
@@ -164,8 +162,10 @@ impl KvStore {
         let mut log = self.log.write().unwrap();
         let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
 
-        for key in rows {
-            storage::delete(&mut *memtable, &mut *log, key.borrow(), commit)?;
+        for k in rows {
+            let key = k.borrow();
+            log.log_delete(key, commit).unwrap();
+            memtable.delete(key, commit);
         }
 
         self.ensure_memtable(&mut *memtable, &mut *log)?;
@@ -173,12 +173,25 @@ impl KvStore {
         Ok(())
     }
 
-    pub fn transaction(&self) -> Result<WriteTx> {
-        unimplemented!()
+    pub fn batch(&self, config: WriteBatchConfig) -> WriteBatch {
+        let commit = self.commit.fetch_add(1, COMMIT_ORDERING) as i64;
+
+        WriteBatch {
+            config,
+            commit,
+            memtable: MemTable::new(BTreeMap::new()),
+            log: Arc::clone(&self.log),
+        }
     }
 
-    pub fn commit(&self, _txn: WriteTx) -> Result<()> {
-        unimplemented!()
+    pub fn commit(&self, mut batch: WriteBatch) -> Result<()> {
+        let mut memtable = self.mem.write().unwrap();
+        let mut log = self.log.write().unwrap();
+
+        memtable.values.append(&mut batch.memtable.values);
+        self.ensure_memtable(&mut *memtable, &mut *log)?;
+
+        Ok(())
     }
 
     pub fn snapshot(&self) -> Snapshot {
