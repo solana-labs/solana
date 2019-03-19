@@ -27,6 +27,8 @@ pub enum RepairType {
 struct RepairInfo {
     max_slot: u64,
     repair_tries: u64,
+    // List of (slot, weight) representing weighted forks
+    forks: Vec<(u64, u64)>,
 }
 
 impl RepairInfo {
@@ -34,7 +36,13 @@ impl RepairInfo {
         RepairInfo {
             max_slot: 0,
             repair_tries: 0,
+            forks: vec![],
         }
+    }
+
+    fn set_forks(&mut self, mut forks: Vec<(u64, u64)>) {
+        forks.sort_by(|a, b| b.1.cmp(&a.1));
+        self.forks = forks;
     }
 }
 
@@ -71,12 +79,7 @@ impl RepairService {
                 break;
             }
 
-            let repairs = Self::generate_repairs(
-                blocktree,
-                MAX_REPAIR_LENGTH,
-                &mut repair_info,
-                &repair_slot_range,
-            );
+            let repairs = Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH, &mut repair_info);
 
             if let Ok(repairs) = repairs {
                 let reqs: Vec<_> = repairs
@@ -179,45 +182,41 @@ impl RepairService {
         blocktree: &Blocktree,
         max_repairs: usize,
         repair_info: &mut RepairInfo,
-        repair_range: &RepairSlotRange,
     ) -> Result<(Vec<RepairType>)> {
         // Slot height and blob indexes for blobs we want to repair
         let mut repairs: Vec<RepairType> = vec![];
-        let mut current_slot = Some(repair_range.start);
-        while repairs.len() < max_repairs && current_slot.is_some() {
-            if current_slot.unwrap() > repair_range.end {
+
+        // Iterate through the possible forks in order (they are weighted by lockout)
+        for (slot, _) in &repair_info.forks {
+            Self::repair_forks_at_slot(blocktree, &mut repairs, max_repairs, *slot);
+            if repairs.len() >= max_repairs {
                 break;
             }
-
-            if current_slot.unwrap() > repair_info.max_slot {
-                repair_info.repair_tries = 0;
-                repair_info.max_slot = current_slot.unwrap();
-            }
-
-            if let Some(slot) = blocktree.meta(current_slot.unwrap())? {
-                let new_repairs = Self::process_slot(
-                    blocktree,
-                    current_slot.unwrap(),
-                    &slot,
-                    max_repairs - repairs.len(),
-                );
-                repairs.extend(new_repairs);
-            }
-            current_slot = blocktree.get_next_slot(current_slot.unwrap())?;
-        }
-
-        // Only increment repair_tries if the ledger contains every blob for every slot
-        if repairs.is_empty() {
-            repair_info.repair_tries += 1;
-        }
-
-        // Optimistically try the next slot if we haven't gotten any repairs
-        // for a while
-        if repair_info.repair_tries >= MAX_REPAIR_TRIES {
-            repairs.push(RepairType::HighestBlob(repair_info.max_slot + 1, 0))
         }
 
         Ok(repairs)
+    }
+
+    /// Repairs any fork starting at the input slot
+    fn repair_forks_at_slot(
+        blocktree: &Blocktree,
+        repairs: &mut Vec<RepairType>,
+        max_repairs: usize,
+        slot: u64,
+    ) {
+        let mut pending_slots = vec![slot];
+        while repairs.len() < max_repairs && !pending_slots.is_empty() {
+            let slot = pending_slots.pop().unwrap();
+            let slot_meta = blocktree
+                .meta(slot)
+                .unwrap()
+                .expect("slot referenced as the child of another slot doesn't exist");
+            let new_repairs =
+                Self::process_slot(blocktree, slot, &slot_meta, max_repairs - repairs.len());
+            repairs.extend(new_repairs);
+            let next_slots = slot_meta.next_slots;
+            pending_slots.extend(next_slots);
+        }
     }
 }
 
@@ -265,13 +264,7 @@ mod test {
                     vec![]
                 };
                 assert_eq!(
-                    RepairService::generate_repairs(
-                        &blocktree,
-                        2,
-                        &mut repair_info,
-                        &repair_slot_range
-                    )
-                    .unwrap(),
+                    RepairService::generate_repairs(&blocktree, 2, &mut repair_info,).unwrap(),
                     expected
                 );
             }
