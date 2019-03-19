@@ -115,7 +115,6 @@ mod tests {
     use crate::entry::make_tiny_test_entries;
     use crate::replicator::sample_file;
     use solana_sdk::hash::Hash;
-    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::fs::{remove_dir_all, remove_file};
     use std::path::Path;
     use std::sync::Arc;
@@ -163,7 +162,7 @@ mod tests {
         let entries = make_tiny_test_entries(32);
         let ledger_dir = "test_encrypt_file_many_keys_multiple";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
-        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
+        let ticks_per_slot = 16;
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         blocktree
             .write_entries(0, 0, 0, ticks_per_slot, &entries)
