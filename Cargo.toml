@@ -36,24 +36,6 @@ solana-sdk = { path = "sdk", version = "0.13.0" }
 solana-vote-api = { path = "programs/vote_api", version = "0.13.0" }
 sys-info = "0.5.6"
 
-[[bench]]
-name = "banking_stage"
-
-[[bench]]
-name = "blocktree"
-
-[[bench]]
-name = "ledger"
-
-[[bench]]
-name = "gen_keys"
-
-[[bench]]
-name = "sigverify"
-
-[[bench]]
-required-features = ["chacha"]
-name = "chacha"
 
 [workspace]
 members = [

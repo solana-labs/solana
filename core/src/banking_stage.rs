@@ -201,7 +201,7 @@ impl BankingStage {
         }
     }
 
-    fn num_threads() -> u32 {
+    pub fn num_threads() -> u32 {
         sys_info::cpu_num().unwrap_or(NUM_THREADS)
     }
 
