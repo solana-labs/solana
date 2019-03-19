@@ -33,11 +33,11 @@ pub enum VoteInstruction {
 
 impl VoteInstruction {
     pub fn new_clear_credits(vote_id: &Pubkey) -> Instruction {
-        let account_metas = vec![AccountMeta(*vote_id, true)];
+        let account_metas = vec![AccountMeta::new(*vote_id, true)];
         Instruction::new(id(), &VoteInstruction::ClearCredits, account_metas)
     }
     pub fn new_delegate_stake(vote_id: &Pubkey, delegate_id: &Pubkey) -> Instruction {
-        let account_metas = vec![AccountMeta(*vote_id, true)];
+        let account_metas = vec![AccountMeta::new(*vote_id, true)];
         Instruction::new(
             id(),
             &VoteInstruction::DelegateStake(*delegate_id),
@@ -45,7 +45,7 @@ impl VoteInstruction {
         )
     }
     pub fn new_authorize_voter(vote_id: &Pubkey, authorized_voter_id: &Pubkey) -> Instruction {
-        let account_metas = vec![AccountMeta(*vote_id, true)];
+        let account_metas = vec![AccountMeta::new(*vote_id, true)];
         Instruction::new(
             id(),
             &VoteInstruction::AuthorizeVoter(*authorized_voter_id),
@@ -53,11 +53,11 @@ impl VoteInstruction {
         )
     }
     pub fn new_initialize_account(vote_id: &Pubkey) -> Instruction {
-        let account_metas = vec![AccountMeta(*vote_id, false)];
+        let account_metas = vec![AccountMeta::new(*vote_id, false)];
         Instruction::new(id(), &VoteInstruction::InitializeAccount, account_metas)
     }
     pub fn new_vote(vote_id: &Pubkey, vote: Vote) -> Instruction {
-        let account_metas = vec![AccountMeta(*vote_id, true)];
+        let account_metas = vec![AccountMeta::new(*vote_id, true)];
         Instruction::new(id(), &VoteInstruction::Vote(vote), account_metas)
     }
 }

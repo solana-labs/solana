@@ -292,8 +292,8 @@ mod tests {
         // Erroneously sign transaction with recipient account key
         // No signature case is tested by bank `test_zero_signatures()`
         let account_metas = vec![
-            AccountMeta(alice_pubkey, false),
-            AccountMeta(mallory_pubkey, true),
+            AccountMeta::new(alice_pubkey, false),
+            AccountMeta::new(mallory_pubkey, true),
         ];
         let malicious_script = Script::new(vec![Instruction::new(
             system_program::id(),

@@ -114,7 +114,7 @@ fn test_vote_via_bank_with_no_signature() {
     let vote_ix = Instruction::new(
         solana_vote_api::id(),
         &VoteInstruction::Vote(Vote::new(0)),
-        vec![AccountMeta(vote_id, false)], // <--- attack!! No signature.
+        vec![AccountMeta::new(vote_id, false)], // <--- attack!! No signer required.
     );
 
     // Sneak in an instruction so that the transaction is signed but

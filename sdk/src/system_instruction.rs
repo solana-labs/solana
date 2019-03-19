@@ -39,6 +39,10 @@ impl SystemInstruction {
         space: u64,
         program_id: &Pubkey,
     ) -> Instruction {
+        let account_metas = vec![
+            AccountMeta::new(*from_id, true),
+            AccountMeta::new(*to_id, false),
+        ];
         Instruction::new(
             system_program::id(),
             &SystemInstruction::CreateAccount {
@@ -46,15 +50,19 @@ impl SystemInstruction {
                 space,
                 program_id: *program_id,
             },
-            vec![AccountMeta(*from_id, true), AccountMeta(*to_id, false)],
+            account_metas,
         )
     }
 
     pub fn new_move(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction {
+        let account_metas = vec![
+            AccountMeta::new(*from_id, true),
+            AccountMeta::new(*to_id, false),
+        ];
         Instruction::new(
             system_program::id(),
             &SystemInstruction::Move { lamports },
-            vec![AccountMeta(*from_id, true), AccountMeta(*to_id, false)],
+            account_metas,
         )
     }
 }

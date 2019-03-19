@@ -84,7 +84,7 @@ mod tests {
             SystemInstruction::new_move(&doe_client.pubkey(), &bob_pubkey, 42);
         move_instruction
             .accounts
-            .push(AccountMeta(jane_pubkey, true));
+            .push(AccountMeta::new(jane_pubkey, true));
 
         doe_client.process_instruction(move_instruction).unwrap();
         assert_eq!(bank.get_balance(&bob_pubkey), 42);

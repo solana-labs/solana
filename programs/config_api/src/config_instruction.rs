@@ -29,8 +29,8 @@ impl ConfigInstruction {
         data: &T,
     ) -> Instruction {
         let account_metas = vec![
-            AccountMeta(*from_account_pubkey, true),
-            AccountMeta(*config_account_pubkey, true),
+            AccountMeta::new(*from_account_pubkey, true),
+            AccountMeta::new(*config_account_pubkey, true),
         ];
         Instruction::new(id(), data, account_metas)
     }

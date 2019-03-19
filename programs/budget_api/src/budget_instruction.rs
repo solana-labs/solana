@@ -31,9 +31,9 @@ impl BudgetInstruction {
     pub fn new_initialize_account(contract: &Pubkey, expr: BudgetExpr) -> Instruction {
         let mut keys = vec![];
         if let BudgetExpr::Pay(payment) = &expr {
-            keys.push(AccountMeta(payment.to, false));
+            keys.push(AccountMeta::new(payment.to, false));
         }
-        keys.push(AccountMeta(*contract, false));
+        keys.push(AccountMeta::new(*contract, false));
         Instruction::new(id(), &BudgetInstruction::InitializeAccount(expr), keys)
     }
 
@@ -43,18 +43,24 @@ impl BudgetInstruction {
         to: &Pubkey,
         dt: DateTime<Utc>,
     ) -> Instruction {
-        let mut keys = vec![AccountMeta(*from, true), AccountMeta(*contract, false)];
+        let mut account_metas = vec![
+            AccountMeta::new(*from, true),
+            AccountMeta::new(*contract, false),
+        ];
         if from != to {
-            keys.push(AccountMeta(*to, false));
+            account_metas.push(AccountMeta::new(*to, false));
         }
-        Instruction::new(id(), &BudgetInstruction::ApplyTimestamp(dt), keys)
+        Instruction::new(id(), &BudgetInstruction::ApplyTimestamp(dt), account_metas)
     }
 
     pub fn new_apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
-        let mut keys = vec![AccountMeta(*from, true), AccountMeta(*contract, false)];
+        let mut account_metas = vec![
+            AccountMeta::new(*from, true),
+            AccountMeta::new(*contract, false),
+        ];
         if from != to {
-            keys.push(AccountMeta(*to, false));
+            account_metas.push(AccountMeta::new(*to, false));
         }
-        Instruction::new(id(), &BudgetInstruction::ApplySignature, keys)
+        Instruction::new(id(), &BudgetInstruction::ApplySignature, account_metas)
     }
 }
