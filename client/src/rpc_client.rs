@@ -497,20 +497,14 @@ impl RpcClient {
                 1,
             )
             .map_err(|error| {
-                debug!(
-                    "Response get_signature_confirmations: {}",
-                    error
-                );
+                debug!("Response get_signature_confirmations: {}", error);
                 io::Error::new(
                     io::ErrorKind::Other,
                     "GetSignatureConfirmations request failure",
                 )
             })?;
         serde_json::from_value(response).map_err(|error| {
-            debug!(
-                "ParseError: get_signature_confirmations: {}",
-                error
-            );
+            debug!("ParseError: get_signature_confirmations: {}", error);
             io::Error::new(
                 io::ErrorKind::Other,
                 "GetSignatureConfirmations parse failure",

@@ -176,7 +176,8 @@ impl ThinClient {
         signature: &Signature,
         confs: usize,
     ) -> io::Result<()> {
-        self.rpc_client.poll_for_confirmed_signature(signature, confs)
+        self.rpc_client
+            .poll_for_confirmed_signature(signature, confs)
     }
 
     /// Check a signature in the bank. This method blocks
