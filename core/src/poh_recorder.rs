@@ -92,9 +92,10 @@ impl PohRecorder {
                 let leader_ideal_start_tick =
                     target_tick.saturating_sub(self.max_last_leader_grace_ticks);
 
-                if self.tick_height() >= target_tick
-                    || self.max_last_leader_grace_ticks
-                        >= target_tick.saturating_sub(self.start_tick)
+                if self.tick_height().saturating_sub(target_tick) < self.max_last_leader_grace_ticks
+                    && (self.tick_height() >= target_tick
+                        || self.max_last_leader_grace_ticks
+                            >= target_tick.saturating_sub(self.start_tick))
                 {
                     return (
                         true,
@@ -763,5 +764,24 @@ mod tests {
         // without sending more ticks, we should be leader now
         assert_eq!(poh_recorder.reached_leader_tick().0, true);
         assert_eq!(poh_recorder.reached_leader_tick().1, 1);
+
+        // Let's test that if a node overshoots the ticks for its target
+        // leader slot, reached_leader_tick() will return false
+        // Set the leader slot 1 slot down
+        poh_recorder.reset(
+            poh_recorder.tick_height(),
+            bank.last_blockhash(),
+            4,
+            Some(5),
+            bank.ticks_per_slot(),
+        );
+
+        // Send remaining ticks for the slot (remember we sent extra ticks in the previous part of the test)
+        for _ in 0..4 * bank.ticks_per_slot() {
+            poh_recorder.tick();
+        }
+
+        // We are not the leader, as expected
+        assert_eq!(poh_recorder.reached_leader_tick().0, false);
     }
 }
