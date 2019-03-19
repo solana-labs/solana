@@ -13,6 +13,8 @@ use solana::replicator::Replicator;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
+use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use std::fs::remove_dir_all;
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,8 +27,14 @@ fn test_replicator_startup_basic() {
     const NUM_NODES: usize = 2;
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
-    let _cluster =
-        LocalCluster::new_with_config_replicators(&[100; NUM_NODES], 10_000, &fullnode_config, 1);
+    let _cluster = LocalCluster::new_with_config_replicators(
+        &[100; NUM_NODES],
+        10_000,
+        &fullnode_config,
+        1,
+        DEFAULT_TICKS_PER_SLOT,
+        DEFAULT_SLOTS_PER_EPOCH,
+    );
 }
 
 #[test]

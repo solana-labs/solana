@@ -97,4 +97,46 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_repeated_leader_schedule_specific() {
+        let alice_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Keypair::new().pubkey();
+        let stakes = vec![(alice_pubkey, 2), (bob_pubkey, 1)];
+
+        let seed = Pubkey::default();
+        let mut seed_bytes = [0u8; 32];
+        seed_bytes.copy_from_slice(seed.as_ref());
+        let len = 8;
+        // What the schedule looks like without any repeats
+        let leaders1 = LeaderSchedule::new(&stakes, seed_bytes, len, 1).slot_leaders;
+
+        // What the schedule looks like with repeats
+        let leaders2 = LeaderSchedule::new(&stakes, seed_bytes, len, 2).slot_leaders;
+        assert_eq!(leaders1.len(), leaders2.len());
+
+        let leaders1_expected = vec![
+            alice_pubkey,
+            alice_pubkey,
+            alice_pubkey,
+            bob_pubkey,
+            alice_pubkey,
+            alice_pubkey,
+            alice_pubkey,
+            alice_pubkey,
+        ];
+        let leaders2_expected = vec![
+            alice_pubkey,
+            alice_pubkey,
+            alice_pubkey,
+            alice_pubkey,
+            alice_pubkey,
+            alice_pubkey,
+            bob_pubkey,
+            bob_pubkey,
+        ];
+
+        assert_eq!(leaders1, leaders1_expected);
+        assert_eq!(leaders2, leaders2_expected);
+    }
 }

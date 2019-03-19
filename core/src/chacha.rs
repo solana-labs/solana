@@ -98,6 +98,7 @@ mod tests {
     use solana_sdk::hash::{hash, Hash, Hasher};
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::fs::remove_file;
     use std::fs::File;
     use std::io::Read;
@@ -141,7 +142,7 @@ mod tests {
         solana_logger::setup();
         let ledger_dir = "chacha_test_encrypt_file";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
-        let ticks_per_slot = 16;
+        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
         let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         let out_path = Path::new("test_chacha_encrypt_file_output.txt.enc");
 
