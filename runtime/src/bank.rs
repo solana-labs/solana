@@ -247,6 +247,7 @@ impl Bank {
             //  freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
         }
+        self.status_cache.write().unwrap().freeze();
     }
 
     /// squash the parent's state up into this Bank,
