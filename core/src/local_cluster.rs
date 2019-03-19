@@ -11,6 +11,8 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
+use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use solana_vote_api::vote_state::VoteState;
 use solana_vote_api::vote_transaction::VoteTransaction;
 use std::fs::remove_dir_all;
@@ -40,7 +42,31 @@ impl LocalCluster {
         cluster_lamports: u64,
         fullnode_config: &FullnodeConfig,
     ) -> Self {
-        Self::new_with_config_replicators(node_stakes, cluster_lamports, fullnode_config, 0)
+        Self::new_with_config_replicators(
+            node_stakes,
+            cluster_lamports,
+            fullnode_config,
+            0,
+            DEFAULT_TICKS_PER_SLOT,
+            DEFAULT_SLOTS_PER_EPOCH,
+        )
+    }
+
+    pub fn new_with_tick_config(
+        node_stakes: &[u64],
+        cluster_lamports: u64,
+        fullnode_config: &FullnodeConfig,
+        ticks_per_slot: u64,
+        slots_per_epoch: u64,
+    ) -> Self {
+        Self::new_with_config_replicators(
+            node_stakes,
+            cluster_lamports,
+            fullnode_config,
+            0,
+            ticks_per_slot,
+            slots_per_epoch,
+        )
     }
 
     pub fn new_with_config_replicators(
@@ -48,12 +74,16 @@ impl LocalCluster {
         cluster_lamports: u64,
         fullnode_config: &FullnodeConfig,
         num_replicators: usize,
+        ticks_per_slot: u64,
+        slots_per_epoch: u64,
     ) -> Self {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
-        let (genesis_block, mint_keypair) =
+        let (mut genesis_block, mint_keypair) =
             GenesisBlock::new_with_leader(cluster_lamports, &leader_pubkey, node_stakes[0]);
+        genesis_block.ticks_per_slot = ticks_per_slot;
+        genesis_block.slots_per_epoch = slots_per_epoch;
         let (genesis_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
         let mut ledger_paths = vec![];
@@ -301,6 +331,8 @@ mod test {
             100,
             &fullnode_exit,
             num_replicators,
+            16,
+            16,
         );
         assert_eq!(cluster.fullnodes.len(), NUM_NODES);
         assert_eq!(cluster.replicators.len(), num_replicators);

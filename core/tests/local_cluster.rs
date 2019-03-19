@@ -5,7 +5,6 @@ use solana::fullnode::FullnodeConfig;
 use solana::gossip_service::discover;
 use solana::local_cluster::LocalCluster;
 use solana::poh_service::PohServiceConfig;
-use solana_sdk::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -98,19 +97,27 @@ fn test_leader_failure_3() {
 fn test_two_unbalanced_stakes() {
     let mut fullnode_config = FullnodeConfig::default();
     let num_ticks_per_second = 100;
+    let num_ticks_per_slot = 160;
+    let num_slots_per_epoch = 16;
     fullnode_config.tick_config =
         PohServiceConfig::Sleep(Duration::from_millis(100 / num_ticks_per_second));
     fullnode_config.rpc_config.enable_fullnode_exit = true;
-    let mut cluster = LocalCluster::new_with_config(&[999_990, 3], 1_000_000, &fullnode_config);
+    let mut cluster = LocalCluster::new_with_tick_config(
+        &[999_990, 3],
+        1_000_000,
+        &fullnode_config,
+        num_ticks_per_slot,
+        num_slots_per_epoch,
+    );
     let num_epochs_to_sleep = 10;
-    let num_ticks_to_sleep = num_epochs_to_sleep * DEFAULT_TICKS_PER_SLOT * DEFAULT_SLOTS_PER_EPOCH;
+    let num_ticks_to_sleep = num_epochs_to_sleep * num_ticks_per_slot * num_slots_per_epoch;
     sleep(Duration::from_millis(
-        num_ticks_to_sleep / num_ticks_per_second * 100,
+        num_ticks_to_sleep / num_ticks_per_second as u64 * 100,
     ));
 
     cluster.close_preserve_ledgers();
     let leader_ledger = cluster.ledger_paths[1].clone();
-    cluster_tests::verify_ledger_ticks(&leader_ledger, DEFAULT_TICKS_PER_SLOT as usize);
+    cluster_tests::verify_ledger_ticks(&leader_ledger, num_ticks_per_slot as usize);
 }
 
 #[test]

@@ -75,8 +75,10 @@ fn test_replay() {
     let total_balance = 10_000;
     let leader_balance = 100;
     let starting_mint_balance = total_balance - leader_balance;
-    let (genesis_block, mint_keypair) =
+    let (mut genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(total_balance, &leader.info.id, leader_balance);
+    genesis_block.ticks_per_slot = 160;
+    genesis_block.slots_per_epoch = 16;
     let (blocktree_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     let tvu_addr = target1.info.tvu;
