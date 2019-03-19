@@ -130,11 +130,25 @@ impl ReplayStage {
                     let descendants = bank_forks.read().unwrap().descendants();
                     let ancestors = bank_forks.read().unwrap().ancestors();
                     let frozen_banks = bank_forks.read().unwrap().frozen_banks();
+
+                    trace!("frozen_banks {}", frozen_banks.len());
                     let mut votable: Vec<(u128, Arc<Bank>)> = frozen_banks
                         .values()
-                        .filter(|b| b.is_votable())
-                        .filter(|b| !locktower.has_voted(b.slot()))
-                        .filter(|b| !locktower.is_locked_out(b.slot(), &descendants))
+                        .filter(|b| {
+                            let is_votable = b.is_votable();
+                            trace!("bank is votable: {} {}", b.slot(), is_votable);
+                            is_votable
+                        })
+                        .filter(|b| {
+                            let has_voted = locktower.has_voted(b.slot());
+                            trace!("bank is has_voted: {} {}", b.slot(), has_voted);
+                            !has_voted
+                        })
+                        .filter(|b| {
+                            let is_locked_out = locktower.is_locked_out(b.slot(), &descendants);
+                            trace!("bank is is_locked_out: {} {}", b.slot(), is_locked_out);
+                            !is_locked_out
+                        })
                         .map(|bank| {
                             (
                                 bank,
@@ -146,7 +160,10 @@ impl ReplayStage {
                             )
                         })
                         .filter(|(b, stake_lockouts)| {
-                            locktower.check_vote_stake_threshold(b.slot(), &stake_lockouts)
+                            let vote_threshold =
+                                locktower.check_vote_stake_threshold(b.slot(), &stake_lockouts);
+                            trace!("bank vote_threshold: {} {}", b.slot(), vote_threshold);
+                            vote_threshold
                         })
                         .map(|(b, stake_lockouts)| {
                             (locktower.calculate_weight(&stake_lockouts), b.clone())
@@ -154,8 +171,18 @@ impl ReplayStage {
                         .collect();
 
                     votable.sort_by_key(|b| b.0);
+                    trace!("votable_banks {}", votable.len());
                     let ms = timing::duration_as_ms(&locktower_start.elapsed());
-                    info!("@{:?} locktower duration: {:?}", timing::timestamp(), ms,);
+                    if !votable.is_empty() {
+                        let weights: Vec<u128> = votable.iter().map(|x| x.0).collect();
+                        info!(
+                            "@{:?} locktower duration: {:?} len: {} weights: {:?}",
+                            timing::timestamp(),
+                            ms,
+                            votable.len(),
+                            weights
+                        );
+                    }
                     inc_new_counter_info!("replay_stage-locktower_duration", ms as usize);
 
                     if let Some((_, bank)) = votable.last() {
