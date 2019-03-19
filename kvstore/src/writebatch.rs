@@ -114,3 +114,114 @@ impl Default for Config {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::writelog::Config as WalConfig;
+    use rand::{self, thread_rng, Rng};
+
+    const CAPACITY: usize = 10 * 1024;
+
+    #[test]
+    fn test_put_associative() {
+        let mut writebatch = setup();
+        let input: Vec<_> = gen_pairs(32).take(100).collect();
+
+        writebatch.put_many(input.iter()).unwrap();
+
+        let mut writebatch2 = setup();
+        for (key, data) in &input {
+            writebatch2.put(key, data).unwrap();
+        }
+
+        let (materialized_1, materialized_2) = (
+            writebatch.log.write().unwrap().materialize().unwrap(),
+            writebatch2.log.write().unwrap().materialize().unwrap(),
+        );
+
+        assert_eq!(materialized_1, materialized_2);
+    }
+
+    #[test]
+    fn test_delete_associative() {
+        let (mut writebatch, mut writebatch2) = (setup(), setup());
+        let input: Vec<_> = gen_pairs(32).take(100).collect();
+
+        writebatch.put_many(input.iter()).unwrap();
+        writebatch2.put_many(input.iter()).unwrap();
+
+        writebatch.delete_many(input.iter().map(|(k, _)| k));
+
+        for (key, _) in &input {
+            writebatch2.delete(key);
+        }
+
+        let (materialized_1, materialized_2) = (
+            writebatch.log.write().unwrap().materialize().unwrap(),
+            writebatch2.log.write().unwrap().materialize().unwrap(),
+        );
+
+        assert_eq!(materialized_1, materialized_2);
+    }
+
+    #[test]
+    fn test_no_put_when_full() {
+        const AMT_RECORDS: usize = 64;
+
+        let mut writebatch = setup();
+
+        let space_per_record = CAPACITY / AMT_RECORDS - MemTable::OVERHEAD_PER_RECORD;
+        let input: Vec<_> = gen_pairs(space_per_record).take(AMT_RECORDS).collect();
+
+        writebatch.put_many(input.iter()).unwrap();
+
+        match writebatch.check_capacity() {
+            Err(Error::WriteBatchFull(CAPACITY)) => {}
+            _ => panic!("Writebatch should be exactly at capacity"),
+        }
+
+        let (key, data) = gen_pairs(space_per_record).next().unwrap();
+        let result = writebatch.put(&key, &data);
+        assert!(result.is_err());
+
+        // Free up space
+        writebatch.delete(&input[0].0);
+        let result = writebatch.put(&key, &data);
+        assert!(result.is_ok());
+    }
+
+    fn setup() -> WriteBatch {
+        let config = Config {
+            log_writes: true,
+            max_size: CAPACITY,
+        };
+
+        let log = WriteLog::memory(WalConfig::default());
+
+        WriteBatch {
+            config,
+            commit: -1,
+            memtable: MemTable::default(),
+            log: Arc::new(RwLock::new(log)),
+        }
+    }
+
+    fn gen_keys() -> impl Iterator<Item = Key> {
+        let mut rng = thread_rng();
+
+        std::iter::repeat_with(move || {
+            let buf = rng.gen();
+
+            Key(buf)
+        })
+    }
+
+    fn gen_data(size: usize) -> impl Iterator<Item = Vec<u8>> {
+        std::iter::repeat(vec![1u8; size])
+    }
+
+    fn gen_pairs(data_size: usize) -> impl Iterator<Item = (Key, Vec<u8>)> {
+        gen_keys().zip(gen_data(data_size))
+    }
+}
