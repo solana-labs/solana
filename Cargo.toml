@@ -36,7 +36,6 @@ members = [
     ".",
     "bench-streamer",
     "bench-tps",
-    "core",
     "drone",
     "fullnode",
     "genesis",
