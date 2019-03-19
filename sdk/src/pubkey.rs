@@ -1,8 +1,11 @@
-use bs58;
 use generic_array::typenum::U32;
 use generic_array::GenericArray;
+use std::error;
 use std::fmt;
+use std::fs::{self, File};
+use std::io::Write;
 use std::mem;
+use std::path::Path;
 use std::str::FromStr;
 
 #[repr(C)]
@@ -14,6 +17,14 @@ pub enum ParsePubkeyError {
     WrongSize,
     Invalid,
 }
+
+impl fmt::Display for ParsePubkeyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ParsePubkeyError: {:?}", self)
+    }
+}
+
+impl error::Error for ParsePubkeyError {}
 
 impl FromStr for Pubkey {
     type Err = ParsePubkeyError;
@@ -54,11 +65,30 @@ impl fmt::Display for Pubkey {
     }
 }
 
+pub fn write_pubkey(outfile: &str, pubkey: Pubkey) -> Result<(), Box<error::Error>> {
+    let printable = format!("{}", pubkey);
+    let serialized = serde_json::to_string(&printable)?;
+
+    if let Some(outdir) = Path::new(&outfile).parent() {
+        fs::create_dir_all(outdir)?;
+    }
+    let mut f = File::create(outfile)?;
+    f.write_all(&serialized.clone().into_bytes())?;
+
+    Ok(())
+}
+
+pub fn read_pubkey(infile: &str) -> Result<Pubkey, Box<error::Error>> {
+    let f = File::open(infile.to_string())?;
+    let printable: String = serde_json::from_reader(f)?;
+    Ok(Pubkey::from_str(&printable)?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::signature::{Keypair, KeypairUtil};
-    use bs58;
+    use std::fs::remove_file;
 
     #[test]
     fn pubkey_fromstr() {
@@ -93,4 +123,14 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_read_write_pubkey() -> Result<(), Box<error::Error>> {
+        let filename = "test_pubkey.json";
+        let pubkey = Keypair::new().pubkey();
+        write_pubkey(filename, pubkey)?;
+        let read = read_pubkey(filename)?;
+        assert_eq!(read, pubkey);
+        remove_file(filename)?;
+        Ok(())
+    }
 }
