@@ -2,6 +2,7 @@ use crate::leader_schedule::LeaderSchedule;
 use crate::staking_utils;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::timing::NUM_CONSECUTIVE_LEADER_SLOTS;
 
 /// Return the leader schedule for the given epoch.
 fn leader_schedule(epoch_height: u64, bank: &Bank) -> Option<LeaderSchedule> {
@@ -10,7 +11,12 @@ fn leader_schedule(epoch_height: u64, bank: &Bank) -> Option<LeaderSchedule> {
         seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
         let mut stakes: Vec<_> = stakes.into_iter().collect();
         sort_stakes(&mut stakes);
-        LeaderSchedule::new(&stakes, seed, bank.get_slots_in_epoch(epoch_height))
+        LeaderSchedule::new(
+            &stakes,
+            seed,
+            bank.get_slots_in_epoch(epoch_height),
+            NUM_CONSECUTIVE_LEADER_SLOTS,
+        )
     })
 }
 
@@ -123,8 +129,12 @@ mod tests {
 
         let ids_and_stakes: Vec<_> = staking_utils::delegated_stakes(&bank).into_iter().collect();
         let seed = [0u8; 32];
-        let leader_schedule =
-            LeaderSchedule::new(&ids_and_stakes, seed, genesis_block.slots_per_epoch);
+        let leader_schedule = LeaderSchedule::new(
+            &ids_and_stakes,
+            seed,
+            genesis_block.slots_per_epoch,
+            NUM_CONSECUTIVE_LEADER_SLOTS,
+        );
 
         assert_eq!(leader_schedule[0], pubkey);
         assert_eq!(leader_schedule[1], pubkey);
