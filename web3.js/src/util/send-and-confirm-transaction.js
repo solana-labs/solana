@@ -7,6 +7,7 @@ import {Transaction} from '../transaction';
 import {sleep} from './sleep';
 import type {Account} from '../account';
 import type {TransactionSignature} from '../transaction';
+import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../timing';
 
 /**
  * Sign, send and confirm a transaction
@@ -22,9 +23,9 @@ export async function sendAndConfirmTransaction(
     const start = Date.now();
     signature = await connection.sendTransaction(transaction, ...signers);
 
-    // Wait up to a couple seconds for a confirmation
+    // Wait up to a couple slots for a confirmation
     let status = 'SignatureNotFound';
-    let statusRetries = 4;
+    let statusRetries = 6;
     for (;;) {
       status = await connection.getSignatureStatus(signature);
       if (status !== 'SignatureNotFound') {
@@ -34,7 +35,8 @@ export async function sendAndConfirmTransaction(
       if (--statusRetries <= 0) {
         break;
       }
-      await sleep(500);
+      // Sleep for approximately half a slot
+      await sleep((500 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
     }
 
     if (status === 'Confirmed') {
