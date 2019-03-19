@@ -49,7 +49,9 @@ declare module '@solana/web3.js' {
   };
 
   declare type AccountChangeCallback = (accountInfo: AccountInfo) => void;
-  declare type ProgramAccountChangeCallback = (keyedAccountInfo: KeyedAccountInfo) => void;
+  declare type ProgramAccountChangeCallback = (
+    keyedAccountInfo: KeyedAccountInfo,
+  ) => void;
 
   declare export type SignatureStatus =
     | 'Confirmed'
