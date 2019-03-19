@@ -84,11 +84,9 @@ impl BankForks {
         }
     }
 
-    // TODO: use the bank's own ID instead of receiving a parameter?
-    pub fn insert(&mut self, bank_slot: u64, bank: Bank) {
+    pub fn insert(&mut self, bank: Bank) {
         let bank = Arc::new(bank);
-        assert_eq!(bank_slot, bank.slot());
-        let prev = self.banks.insert(bank_slot, bank.clone());
+        let prev = self.banks.insert(bank.slot(), bank.clone());
         assert!(prev.is_none());
 
         self.working_bank = bank.clone();
@@ -109,13 +107,8 @@ impl BankForks {
     }
 
     fn prune_non_root(&mut self, root: u64) {
-        self.banks.retain(|slot, bank| {
-            if *slot < root {
-                false
-            } else {
-                bank.is_descendant_of(root)
-            }
-        })
+        self.banks
+            .retain(|slot, bank| *slot >= root || bank.is_in_subtree_of(root))
     }
 }
 
@@ -133,7 +126,7 @@ mod tests {
         let mut bank_forks = BankForks::new(0, bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         child_bank.register_tick(&Hash::default());
-        bank_forks.insert(1, child_bank);
+        bank_forks.insert(child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);
         assert_eq!(bank_forks.working_bank().tick_height(), 1);
     }
@@ -145,9 +138,9 @@ mod tests {
         let mut bank_forks = BankForks::new(0, bank);
         let bank0 = bank_forks[0].clone();
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-        bank_forks.insert(1, bank);
+        bank_forks.insert(bank);
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
-        bank_forks.insert(2, bank);
+        bank_forks.insert(bank);
         let descendants = bank_forks.descendants();
         let children: Vec<u64> = descendants[&0].iter().cloned().collect();
         assert_eq!(children, vec![1, 2]);
@@ -162,9 +155,9 @@ mod tests {
         let mut bank_forks = BankForks::new(0, bank);
         let bank0 = bank_forks[0].clone();
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
-        bank_forks.insert(1, bank);
+        bank_forks.insert(bank);
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
-        bank_forks.insert(2, bank);
+        bank_forks.insert(bank);
         let ancestors = bank_forks.ancestors();
         assert!(ancestors[&0].is_empty());
         let parents: Vec<u64> = ancestors[&1].iter().cloned().collect();
@@ -179,7 +172,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
-        bank_forks.insert(1, child_bank);
+        bank_forks.insert(child_bank);
         assert!(bank_forks.frozen_banks().get(&0).is_some());
         assert!(bank_forks.frozen_banks().get(&1).is_none());
     }
@@ -190,7 +183,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
-        bank_forks.insert(1, child_bank);
+        bank_forks.insert(child_bank);
         assert_eq!(bank_forks.active_banks(), vec![1]);
     }
 
