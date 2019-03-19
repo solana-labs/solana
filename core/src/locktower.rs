@@ -7,8 +7,8 @@ use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState, MAX_LOCKOUT_HISTORY};
 
-const VOTE_THRESHOLD_DEPTH: usize = 8;
-const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
+pub const VOTE_THRESHOLD_DEPTH: usize = 8;
+pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 
 #[derive(Default)]
 pub struct EpochStakes {
@@ -191,13 +191,13 @@ impl Locktower {
                 continue;
             }
             if !descendants[&vote.slot].contains(&slot) {
-                return false;
+                return true;
             }
         }
         if let Some(root) = lockouts.root_slot {
-            descendants[&root].contains(&slot)
+            !descendants[&root].contains(&slot)
         } else {
-            true
+            false
         }
     }
 
@@ -385,27 +385,27 @@ mod test {
     fn test_is_locked_out_empty() {
         let locktower = Locktower::new(EpochStakes::new_for_tests(2), 0, 0.67);
         let descendants = HashMap::new();
-        assert!(locktower.is_locked_out(0, &descendants));
+        assert!(!locktower.is_locked_out(0, &descendants));
     }
 
     #[test]
-    fn test_is_locked_out_root_slot_child() {
+    fn test_is_locked_out_root_slot_child_pass() {
         let mut locktower = Locktower::new(EpochStakes::new_for_tests(2), 0, 0.67);
         let descendants = vec![(0, vec![1].into_iter().collect())]
             .into_iter()
             .collect();
         locktower.lockouts.root_slot = Some(0);
-        assert!(locktower.is_locked_out(1, &descendants));
+        assert!(!locktower.is_locked_out(1, &descendants));
     }
 
     #[test]
-    fn test_is_locked_out_root_slot_sibling() {
+    fn test_is_locked_out_root_slot_sibling_fail() {
         let mut locktower = Locktower::new(EpochStakes::new_for_tests(2), 0, 0.67);
         let descendants = vec![(0, vec![1].into_iter().collect())]
             .into_iter()
             .collect();
         locktower.lockouts.root_slot = Some(0);
-        assert!(!locktower.is_locked_out(2, &descendants));
+        assert!(locktower.is_locked_out(2, &descendants));
     }
 
     #[test]
@@ -424,7 +424,7 @@ mod test {
             .collect();
         locktower.record_vote(0);
         locktower.record_vote(1);
-        assert!(!locktower.is_locked_out(0, &descendants));
+        assert!(locktower.is_locked_out(0, &descendants));
     }
 
     #[test]
@@ -434,7 +434,7 @@ mod test {
             .into_iter()
             .collect();
         locktower.record_vote(0);
-        assert!(locktower.is_locked_out(1, &descendants));
+        assert!(!locktower.is_locked_out(1, &descendants));
     }
 
     #[test]
@@ -449,7 +449,7 @@ mod test {
         .collect();
         locktower.record_vote(0);
         locktower.record_vote(1);
-        assert!(!locktower.is_locked_out(2, &descendants));
+        assert!(locktower.is_locked_out(2, &descendants));
     }
 
     #[test]
@@ -460,7 +460,7 @@ mod test {
             .collect();
         locktower.record_vote(0);
         locktower.record_vote(1);
-        assert!(locktower.is_locked_out(4, &descendants));
+        assert!(!locktower.is_locked_out(4, &descendants));
         locktower.record_vote(4);
         assert_eq!(locktower.lockouts.votes[0].slot, 0);
         assert_eq!(locktower.lockouts.votes[0].confirmation_count, 2);
