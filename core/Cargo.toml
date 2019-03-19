@@ -40,6 +40,7 @@ nix = "0.13.0"
 rand = "0.6.5"
 rand_chacha = "0.1.1"
 rayon = "1.0.0"
+reqwest = "0.9.11"
 ring = "0.13.2"
 rocksdb = "0.11.0"
 serde = "1.0.89"
@@ -67,3 +68,22 @@ hex-literal = "0.1.4"
 matches = "0.1.6"
 solana-vote-program = { path = "../programs/vote", version = "0.13.0" }
 solana-budget-program = { path = "../programs/budget", version = "0.13.0" }
+
+[[bench]]
+name = "banking_stage"
+
+[[bench]]
+name = "blocktree"
+
+[[bench]]
+name = "ledger"
+
+[[bench]]
+name = "gen_keys"
+
+[[bench]]
+name = "sigverify"
+
+[[bench]]
+required-features = ["chacha"]
+name = "chacha"

@@ -47,6 +47,20 @@ impl BankingStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: Receiver<VerifiedPackets>,
     ) -> Self {
+        Self::new_num_threads(
+            cluster_info,
+            poh_recorder,
+            verified_receiver,
+            Self::num_threads(),
+        )
+    }
+
+    pub fn new_num_threads(
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        verified_receiver: Receiver<VerifiedPackets>,
+        num_threads: u32,
+    ) -> Self {
         let verified_receiver = Arc::new(Mutex::new(verified_receiver));
 
         // Single thread to generate entries from many banks.
@@ -57,7 +71,7 @@ impl BankingStage {
         // Single thread to compute confirmation
         let lcs_handle = LeaderConfirmationService::start(&poh_recorder, exit.clone());
         // Many banks that process transactions in parallel.
-        let mut bank_thread_hdls: Vec<JoinHandle<()>> = (0..Self::num_threads())
+        let mut bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|_| {
                 let verified_receiver = verified_receiver.clone();
                 let poh_recorder = poh_recorder.clone();
@@ -437,15 +451,18 @@ pub fn create_test_recorder(
     Receiver<WorkingBankEntries>,
 ) {
     let exit = Arc::new(AtomicBool::new(false));
-    let (poh_recorder, entry_receiver) = PohRecorder::new(
+    let (mut poh_recorder, entry_receiver) = PohRecorder::new(
         bank.tick_height(),
         bank.last_blockhash(),
         bank.slot(),
         Some(4),
         bank.ticks_per_slot(),
     );
+    poh_recorder.set_bank(&bank);
+
     let poh_recorder = Arc::new(Mutex::new(poh_recorder));
     let poh_service = PohService::new(poh_recorder.clone(), &PohServiceConfig::default(), &exit);
+
     (exit, poh_recorder, poh_service, entry_receiver)
 }
 
@@ -489,7 +506,6 @@ mod tests {
         let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
-        poh_recorder.lock().unwrap().set_bank(&bank);
         let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
         trace!("sending bank");
         sleep(Duration::from_millis(600));
@@ -520,7 +536,6 @@ mod tests {
         let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
-        poh_recorder.lock().unwrap().set_bank(&bank);
         let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
 
         // fund another account so we can send 2 good transactions in a single batch.
@@ -592,17 +607,12 @@ mod tests {
 
     #[test]
     fn test_banking_stage_entryfication() {
+        solana_logger::setup();
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
-        let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
-        poh_recorder.lock().unwrap().set_bank(&bank);
-        let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
 
         // Process a batch that includes a transaction that receives two lamports.
         let alice = Keypair::new();
@@ -632,31 +642,37 @@ mod tests {
             .send(vec![(packets[0].clone(), vec![1u8])])
             .unwrap();
 
+        let entry_receiver = {
+            // start a banking_stage to eat verified receiver
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
+            let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+            let cluster_info = Arc::new(RwLock::new(cluster_info));
+            let _banking_stage =
+                BankingStage::new_num_threads(&cluster_info, &poh_recorder, verified_receiver, 1);
+
+            // wait for banking_stage to eat the packets
+            while bank.get_balance(&alice.pubkey()) != 1 {
+                sleep(Duration::from_millis(100));
+            }
+            exit.store(true, Ordering::Relaxed);
+            poh_service.join().unwrap();
+            entry_receiver
+        };
         drop(verified_sender);
-        exit.store(true, Ordering::Relaxed);
-        poh_service.join().unwrap();
-        drop(poh_recorder);
 
-        // Poll the entry_receiver, feeding it into a new bank
-        // until the balance is what we expect.
+        // consume the entire entry_receiver, feed it into a new bank
+        // check that the balance is what we expect.
+        let entries: Vec<_> = entry_receiver
+            .iter()
+            .flat_map(|x| x.1.into_iter().map(|e| e.0))
+            .collect();
+
         let bank = Bank::new(&genesis_block);
-        for _ in 0..10 {
-            let entries: Vec<_> = entry_receiver
+        for entry in &entries {
+            bank.process_transactions(&entry.transactions)
                 .iter()
-                .flat_map(|x| x.1.into_iter().map(|e| e.0))
-                .collect();
-
-            for entry in &entries {
-                bank.process_transactions(&entry.transactions)
-                    .iter()
-                    .for_each(|x| assert_eq!(*x, Ok(())));
-            }
-
-            if bank.get_balance(&alice.pubkey()) == 1 {
-                break;
-            }
-
-            sleep(Duration::from_millis(100));
+                .for_each(|x| assert_eq!(*x, Ok(())));
         }
 
         // Assert the user holds one lamport, not two. If the stage only outputs one

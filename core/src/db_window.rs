@@ -95,71 +95,10 @@ mod test {
     use crate::erasure::test::{generate_blocktree_from_window, setup_window_ledger};
     #[cfg(all(feature = "erasure", test))]
     use crate::erasure::{NUM_CODING, NUM_DATA};
-    use crate::packet::{index_blobs, Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
-    use crate::streamer::{receiver, responder, PacketReceiver};
+    use crate::packet::{index_blobs, Blob};
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use std::io;
-    use std::io::Write;
-    use std::net::UdpSocket;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::channel;
     use std::sync::Arc;
-    use std::time::Duration;
 
-    fn get_msgs(r: PacketReceiver, num: &mut usize) {
-        for _t in 0..5 {
-            let timer = Duration::new(1, 0);
-            match r.recv_timeout(timer) {
-                Ok(m) => *num += m.read().unwrap().packets.len(),
-                e => info!("error {:?}", e),
-            }
-            if *num == 10 {
-                break;
-            }
-        }
-    }
-    #[test]
-    pub fn streamer_debug() {
-        write!(io::sink(), "{:?}", Packet::default()).unwrap();
-        write!(io::sink(), "{:?}", Packets::default()).unwrap();
-        write!(io::sink(), "{:?}", Blob::default()).unwrap();
-    }
-
-    #[test]
-    pub fn streamer_send_test() {
-        let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
-
-        let addr = read.local_addr().unwrap();
-        let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let exit = Arc::new(AtomicBool::new(false));
-        let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(Arc::new(read), &exit, s_reader, "window-streamer-test");
-        let t_responder = {
-            let (s_responder, r_responder) = channel();
-            let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
-            let mut msgs = Vec::new();
-            for i in 0..10 {
-                let b = SharedBlob::default();
-                {
-                    let mut w = b.write().unwrap();
-                    w.data[0] = i as u8;
-                    w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&addr);
-                }
-                msgs.push(b);
-            }
-            s_responder.send(msgs).expect("send");
-            t_responder
-        };
-
-        let mut num = 0;
-        get_msgs(r_reader, &mut num);
-        assert_eq!(num, 10);
-        exit.store(true, Ordering::Relaxed);
-        t_receiver.join().expect("join");
-        t_responder.join().expect("join");
-    }
     #[test]
     pub fn test_find_missing_data_indexes_sanity() {
         let slot = 0;

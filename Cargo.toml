@@ -20,13 +20,7 @@ erasure = ["solana/erasure"]
 
 [dev-dependencies]
 bincode = "1.1.2"
-bs58 = "0.2.0"
-hashbrown = "0.1.8"
 log = "0.4.2"
-rand = "0.6.5"
-rayon = "1.0.0"
-reqwest = "0.9.11"
-serde_json = "1.0.39"
 solana = { path = "core", version = "0.13.0" }
 solana-budget-program = { path = "programs/budget", version = "0.13.0" }
 solana-client = { path = "client", version = "0.13.0" }
@@ -35,33 +29,13 @@ solana-netutil = { path = "netutil", version = "0.13.0" }
 solana-runtime = { path = "runtime", version = "0.13.0" }
 solana-sdk = { path = "sdk", version = "0.13.0" }
 solana-vote-api = { path = "programs/vote_api", version = "0.13.0" }
-sys-info = "0.5.6"
 
-[[bench]]
-name = "banking_stage"
-
-[[bench]]
-name = "blocktree"
-
-[[bench]]
-name = "ledger"
-
-[[bench]]
-name = "gen_keys"
-
-[[bench]]
-name = "sigverify"
-
-[[bench]]
-required-features = ["chacha"]
-name = "chacha"
 
 [workspace]
 members = [
     ".",
     "bench-streamer",
     "bench-tps",
-    "core",
     "drone",
     "fullnode",
     "genesis",

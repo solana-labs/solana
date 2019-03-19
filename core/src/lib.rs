@@ -68,8 +68,6 @@ pub mod test_tx;
 pub mod tpu;
 pub mod tvu;
 pub mod voting_keypair;
-#[cfg(test)]
-pub mod window;
 pub mod window_service;
 
 #[cfg(test)]

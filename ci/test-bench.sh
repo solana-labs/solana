@@ -39,17 +39,15 @@ fi
 
 BENCH_FILE=bench_output.log
 BENCH_ARTIFACT=current_bench_results.log
-_ cargo +$rust_nightly bench ${V:+--verbose} \
+
+# Run core benches
+_ cargo +$rust_nightly bench --manifest-path core/Cargo.toml ${V:+--verbose} \
   -- -Z unstable-options --format=json | tee "$BENCH_FILE"
 
 # Run bpf benches
-echo --- program/bpf
-(
-  set -x
-  cd programs/bpf
-  cargo +$rust_nightly bench ${V:+--verbose} --features=bpf_c \
-    -- -Z unstable-options --format=json --nocapture | tee -a ../../../"$BENCH_FILE"
-)
+_ cargo +$rust_nightly bench --manifest-path programs/bpf/Cargo.toml ${V:+--verbose} --features=bpf_c \
+  -- -Z unstable-options --format=json --nocapture | tee -a "$BENCH_FILE"
+
 
 _ cargo +$rust_nightly run --release --package solana-upload-perf \
   -- "$BENCH_FILE" "$TARGET_BRANCH" "$UPLOAD_METRICS" > "$BENCH_ARTIFACT"
