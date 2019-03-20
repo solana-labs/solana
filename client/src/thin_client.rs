@@ -79,7 +79,7 @@ impl ThinClient {
         keypair: &Keypair,
         transaction: &mut Transaction,
         tries: usize,
-        confs: usize,
+        min_confirmed_blocks: usize,
     ) -> io::Result<Signature> {
         for x in 0..tries {
             transaction.sign(&[keypair], self.get_recent_blockhash()?);
@@ -90,7 +90,7 @@ impl ThinClient {
             self.transactions_socket
                 .send_to(&buf[..], &self.transactions_addr)?;
             if self
-                .poll_for_confirmed_signature(&transaction.signatures[0], confs)
+                .poll_for_signature_confirmation(&transaction.signatures[0], min_confirmed_blocks)
                 .is_ok()
             {
                 return Ok(transaction.signatures[0]);
@@ -170,14 +170,14 @@ impl ThinClient {
     pub fn poll_for_signature(&self, signature: &Signature) -> io::Result<()> {
         self.rpc_client.poll_for_signature(signature)
     }
-    /// Poll the server to confirm a transaction.
-    pub fn poll_for_confirmed_signature(
+    /// Poll the server until the signature has been confirmed by at least `min_confirmed_blocks`
+    pub fn poll_for_signature_confirmation(
         &self,
         signature: &Signature,
-        confs: usize,
+        min_confirmed_blocks: usize,
     ) -> io::Result<()> {
         self.rpc_client
-            .poll_for_confirmed_signature(signature, confs)
+            .poll_for_signature_confirmation(signature, min_confirmed_blocks)
     }
 
     /// Check a signature in the bank. This method blocks

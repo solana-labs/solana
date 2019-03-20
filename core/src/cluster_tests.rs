@@ -49,7 +49,7 @@ pub fn spend_and_verify_all_nodes(
             .unwrap();
         for validator in &cluster_nodes {
             let client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
-            client.poll_for_confirmed_signature(&sig, confs).unwrap();
+            client.poll_for_signature_confirmation(&sig, confs).unwrap();
         }
     }
 }
@@ -140,7 +140,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     assert!(client.fullnode_exit().unwrap());
     info!("sleeping for 2 leader fortnights");
     sleep(Duration::from_millis(
-        SLOT_MILLIS * NUM_CONSECUTIVE_LEADER_SLOTS * 2,
+        SLOT_MILLIS * NUM_CONSECUTIVE_LEADER_SLOTS,
     ));
     info!("done sleeping for 2 fortnights");
     for ingress_node in &cluster_nodes {
@@ -212,7 +212,7 @@ fn poll_all_nodes_for_signature(
             continue;
         }
         let client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
-        client.poll_for_confirmed_signature(&sig, confs)?;
+        client.poll_for_signature_confirmation(&sig, confs)?;
     }
 
     Ok(())

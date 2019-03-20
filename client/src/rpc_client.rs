@@ -440,7 +440,7 @@ impl RpcClient {
     }
 
     /// Poll the server to confirm a transaction.
-    pub fn poll_for_confirmed_signature(
+    pub fn poll_for_signature_confirmation(
         &self,
         signature: &Signature,
         min_confirmed_blocks: usize,
