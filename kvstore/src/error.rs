@@ -12,6 +12,7 @@ pub enum Error {
     Corrupted(bincode::Error),
     Channel(Box<dyn StdErr + Sync + Send>),
     Missing,
+    WriteBatchFull(usize),
 }
 
 impl fmt::Display for Error {
@@ -21,6 +22,7 @@ impl fmt::Display for Error {
             Error::Channel(e) => write!(f, "Internal communication error: {}", e),
             Error::Io(e) => write!(f, "I/O error: {}", e),
             Error::Missing => write!(f, "Item not present in ledger"),
+            Error::WriteBatchFull(capacity) => write!(f, "WriteBatch capacity {} full", capacity),
         }
     }
 }
@@ -32,6 +34,7 @@ impl StdErr for Error {
             Error::Corrupted(ref e) => Some(e),
             Error::Channel(e) => Some(e.as_ref()),
             Error::Missing => None,
+            Error::WriteBatchFull(_) => None,
         }
     }
 }
