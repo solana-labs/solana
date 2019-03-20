@@ -33,7 +33,7 @@ const USERDATA_CHUNK_SIZE: usize = 256;
 pub enum WalletCommand {
     Address,
     Airdrop(u64),
-    Balance,
+    Balance(Pubkey),
     Cancel(Pubkey),
     Confirm(Signature),
     // ConfigureStakingAccount(delegate_id, authorized_voter_id)
@@ -96,7 +96,7 @@ pub struct WalletConfig {
 impl Default for WalletConfig {
     fn default() -> WalletConfig {
         WalletConfig {
-            command: WalletCommand::Balance,
+            command: WalletCommand::Balance(Pubkey::default()),
             drone_host: None,
             drone_port: DRONE_PORT,
             host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
@@ -144,7 +144,10 @@ pub fn parse_command(
             let lamports = airdrop_matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::Airdrop(lamports))
         }
-        ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
+        ("balance", Some(balance_matches)) => {
+            let pubkey = pubkey_of(&balance_matches, "pubkey").unwrap_or(*pubkey);
+            Ok(WalletCommand::Balance(pubkey))
+        }
         ("cancel", Some(cancel_matches)) => {
             let process_id = pubkey_of(cancel_matches, "process_id").unwrap();
             Ok(WalletCommand::Cancel(process_id))
@@ -293,11 +296,13 @@ fn process_airdrop(
     Ok(format!("Your balance is: {:?}", current_balance))
 }
 
-fn process_balance(config: &WalletConfig, rpc_client: &RpcClient) -> ProcessResult {
-    let balance = rpc_client.retry_get_balance(&config.id.pubkey(), 5)?;
+fn process_balance(pubkey: &Pubkey, rpc_client: &RpcClient) -> ProcessResult {
+    let balance = rpc_client.retry_get_balance(pubkey, 5)?;
     match balance {
-        Some(0) => Ok("No account found! Request an airdrop to get started.".to_string()),
-        Some(lamports) => Ok(format!("Your balance is: {:?}", lamports)),
+        Some(lamports) => {
+            let ess = if lamports == 1 { "" } else { "s" };
+            Ok(format!("{:?} lamport{}", lamports, ess))
+        }
         None => Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
         ))?,
@@ -596,7 +601,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         }
 
         // Check client balance
-        WalletCommand::Balance => process_balance(config, &rpc_client),
+        WalletCommand::Balance(pubkey) => process_balance(&pubkey, &rpc_client),
 
         // Cancel a contract by contract Pubkey
         WalletCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, &pubkey),
@@ -1166,8 +1171,8 @@ mod tests {
         config.command = WalletCommand::Address;
         assert_eq!(process_command(&config).unwrap(), pubkey);
 
-        config.command = WalletCommand::Balance;
-        assert_eq!(process_command(&config).unwrap(), "Your balance is: 50");
+        config.command = WalletCommand::Balance(config.id.pubkey());
+        assert_eq!(process_command(&config).unwrap(), "50 lamports");
 
         let process_id = Keypair::new().pubkey();
         config.command = WalletCommand::Cancel(process_id);
@@ -1272,7 +1277,7 @@ mod tests {
         config.command = WalletCommand::Airdrop(50);
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::Balance;
+        config.command = WalletCommand::Balance(config.id.pubkey());
         assert!(process_command(&config).is_err());
 
         let any_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());

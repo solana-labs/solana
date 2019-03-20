@@ -169,7 +169,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("The number of lamports to request"),
                 ),
         )
-        .subcommand(SubCommand::with_name("balance").about("Get your balance"))
+        .subcommand(
+            SubCommand::with_name("balance")
+                .about("Get your balance")
+                .arg(
+                    Arg::with_name("pubkey")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .validator(is_pubkey)
+                        .help("The public key of the balance to check"),
+                ),
+        )
         .subcommand(
             SubCommand::with_name("cancel")
                 .about("Cancel a transfer")
