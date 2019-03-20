@@ -43,6 +43,11 @@ pub struct CRCReader<R: Read> {
     chunk_size: usize,
 }
 
+/// Helper trait to make zeroing buffers easier
+pub trait Fill<T> {
+    fn fill(&mut self, v: T);
+}
+
 impl SharedWriter {
     pub fn new(buf: Arc<RwLock<Vec<u8>>>) -> SharedWriter {
         SharedWriter { buf, pos: 0 }
@@ -143,6 +148,17 @@ impl<R: Read> CRCReader<R> {
         self.buffer.extend_from_slice(payload);
 
         Ok(())
+    }
+}
+
+impl<T> Fill<T> for [T]
+where
+    T: Clone,
+{
+    fn fill(&mut self, v: T) {
+        for i in self {
+            *i = v.clone()
+        }
     }
 }
 
