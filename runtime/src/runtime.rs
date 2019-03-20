@@ -18,7 +18,7 @@ pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
 }
 
 /// Get mut references to a subset of elements.
-fn get_subset_mut<'a, T>(
+fn get_subset_unchecked_mut<'a, T>(
     xs: &'a mut [T],
     indexes: &[u8],
 ) -> Result<Vec<&'a mut T>, InstructionError> {
@@ -215,7 +215,7 @@ impl Runtime {
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
             let executable_accounts = &mut loaders[instruction.program_ids_index as usize];
-            let mut program_accounts = get_subset_mut(tx_accounts, &instruction.accounts)
+            let mut program_accounts = get_subset_unchecked_mut(tx_accounts, &instruction.accounts)
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
             self.execute_instruction(
                 tx,
@@ -242,27 +242,31 @@ mod tests {
     }
 
     #[test]
-    fn test_get_subset_mut() {
-        assert_eq!(get_subset_mut(&mut [7, 8], &[0]).unwrap(), vec![&mut 7]);
+    fn test_get_subset_unchecked_mut() {
         assert_eq!(
-            get_subset_mut(&mut [7, 8], &[0, 1]).unwrap(),
+            get_subset_unchecked_mut(&mut [7, 8], &[0]).unwrap(),
+            vec![&mut 7]
+        );
+        assert_eq!(
+            get_subset_unchecked_mut(&mut [7, 8], &[0, 1]).unwrap(),
             vec![&mut 7, &mut 8]
         );
     }
 
     #[test]
-    fn test_get_subset_mut_duplicate_index() {
+    fn test_get_subset_unchecked_mut_duplicate_index() {
+        // This panics, because it assumes duplicate detection is done elsewhere.
         assert_eq!(
-            get_subset_mut(&mut [7, 8], &[0, 0]).unwrap_err(),
+            get_subset_unchecked_mut(&mut [7, 8], &[0, 0]).unwrap_err(),
             InstructionError::DuplicateAccountIndex
         );
     }
 
     #[test]
     #[should_panic]
-    fn test_get_subset_mut_out_of_bounds() {
+    fn test_get_subset_unchecked_mut_out_of_bounds() {
         // This panics, because it assumes bounds validation is done elsewhere.
-        get_subset_mut(&mut [7, 8], &[2]).unwrap();
+        get_subset_unchecked_mut(&mut [7, 8], &[2]).unwrap();
     }
 
     #[test]
