@@ -67,18 +67,18 @@ use solana_sdk::signature::Signature;
 
 /// Information required to download and apply a given update
 pub struct UpdateManifest {
-  pub target: String,                 // Target triple (TARGET)
-  pub commit: String,                 // git sha1 of this update, must match the commit sha1 in the release tar.bz2
-  pub timestamp_secs: u64,            // When the release was deployed (seconds since UNIX EPOC)
-  pub download_url: String,           // Download URL to the release tar.bz2
-  pub download_signature: Signature,  // Signature of the release tar.bz2 file, verify with the Account public key
+    pub timestamp_secs: u64, // When the release was deployed in seconds since UNIX EPOCH
+    pub download_url: String, // Download URL to the release tar.bz2
+    pub download_sha256: String, // SHA256 digest of the release tar.bz2 file
 }
 
 /// Userdata of an Update Manifest program Account.
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 pub struct SignedUpdateManifest {
-  pub manifest: UpdateManifest,
-  pub manifest_signature: Signature,  // Signature of UpdateInfo, verify with the Account public key
+    pub manifest: UpdateManifest,
+    pub manifest_signature: Signature,
 }
+
 ```
 
 Note that the `manifest` field itself contains a corresponding signature
@@ -92,9 +92,8 @@ update with an older `timestamp_secs` than what is currently installed.
 A release archive is expected to be a tar file compressed with
 bzip2 with the following internal structure:
 
-* `/version.yml` - a simple YAML file containing the fields (1) `"commit"` - the git
-  sha1 for this release, and (2) `"target"` - the target tuple.  Any additional
-  fields are ignored.
+* `/version.yml` - a simple YAML file containing the field `"target"` - the
+  target tuple.  Any additional fields are ignored.
 * `/bin/` -- directory containing available programs in the release.
   `solana-install` will symlink this directory to
   `~/.local/share/solana-install/bin` for use by the `PATH` environment
@@ -106,10 +105,9 @@ bzip2 with the following internal structure:
 The `solana-install` tool is used by the user to install and update their cluster software.
 
 It manages the following files and directories in the user's home directory:
-* `~/.config/solana/updater.json` - user configuration and information about currently installed software version
-* `~/.local/share/solana-install/bin` - a symlink to the current release. eg, `~/.local/share/solana-update/<update-pubkey>-<manifest_signature>/bin`
-* `~/.local/share/solana-install/<update-pubkey>-<manifest_signature>/` - contents of the release
-* `~/.local/share/solana-install/<update-pubkey>-<manifest_signature>.tmp/` - temporary directory used while downloading a new release
+* `~/.config/solana/install/config.yml` - user configuration and information about currently installed software version
+* `~/.local/share/solana/install/bin` - a symlink to the current release. eg, `~/.local/share/solana-update/<update-pubkey>-<manifest_signature>/bin`
+* `~/.local/share/solana/install/releases/<download_sha256>/` - contents of a release
 
 #### Command-line Interface
 

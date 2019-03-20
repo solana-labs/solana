@@ -2,24 +2,29 @@ pub const JSON_RPC_URL: &str = "https://api.testnet.solana.com/";
 
 lazy_static! {
     pub static ref CONFIG_FILE: Option<String> = {
-        dirs::config_dir().map(|mut path| {
-            path.push("solana");
-            path.push("install.yml");
+        dirs::home_dir().map(|mut path| {
+            path.extend(&[".config", "solana", "install", "config.yml"]);
+            path.to_str().unwrap().to_string()
+        })
+    };
+    pub static ref USER_KEYPAIR: Option<String> = {
+        dirs::home_dir().map(|mut path| {
+            path.extend(&[".config", "solana", "id.json"]);
             path.to_str().unwrap().to_string()
         })
     };
     pub static ref DATA_DIR: Option<String> = {
-        dirs::data_dir().map(|mut path| {
-            path.push("solana");
+        dirs::home_dir().map(|mut path| {
+            path.extend(&[".local", "share", "solana", "install"]);
             path.to_str().unwrap().to_string()
         })
     };
 }
 
-pub fn update_pubkey(target: &str) -> Option<&str> {
+pub fn update_manifest_pubkey(target: &str) -> Option<&str> {
     match target {
-        "x86_64-apple-darwin" => Some("9XX329sPuskWhH4DQh6k16c87dHKhXLBZTL3Gxmve8Gp"), // TODO: This pubkey is invalid
-        "x86_64-unknown-linux-gnu" => Some("8XX329sPuskWhH4DQh6k16c87dHKhXLBZTL3Gxmve8Gp"), // TODO: This pubkey is invalid
+        "x86_64-apple-darwin" => None,
+        "x86_64-unknown-linux-gnu" => Some("EVS4V6wha5J5qzw8ZJBroMq9g6EKMg5iFWqCRrKwfo3z"), // SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu
         _ => None,
     }
 }
