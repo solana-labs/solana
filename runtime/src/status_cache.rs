@@ -93,7 +93,9 @@ impl<T: Clone> StatusCache<T> {
 
     /// add a signature
     pub fn add(&mut self, sig: &Signature) {
-        self.active.as_mut().map(|active| active.add(&sig));
+        if let Some(active) = self.active.as_mut() {
+            active.add(&sig);
+        }
     }
 
     /// Save an error status for a signature
@@ -111,7 +113,9 @@ impl<T: Clone> StatusCache<T> {
     }
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear(&mut self) {
-        self.active.as_mut().map(|active| active.clear());
+        if let Some(active) = self.active.as_mut() {
+            active.clear();
+        }
         self.merges = VecDeque::new();
     }
 
@@ -126,7 +130,7 @@ impl<T: Clone> StatusCache<T> {
     pub fn get_signature_status(&self, sig: &Signature) -> Option<Result<(), T>> {
         self.active
             .as_ref()
-            .map_or(None, |active| active.get_signature_status(sig))
+            .and_then(|active| active.get_signature_status(sig))
             .or_else(|| self.get_signature_status_merged(sig))
     }
 
