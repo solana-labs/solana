@@ -443,20 +443,30 @@ impl RpcClient {
     pub fn poll_for_confirmed_signature(
         &self,
         signature: &Signature,
-        confs: usize,
+        min_confirmed_blocks: usize,
     ) -> io::Result<()> {
         let mut now = Instant::now();
-        let mut start = 0;
-        let mut prev = 0;
-        while !self.check_confirmations(signature, confs, &mut prev) {
-            if start != prev {
-                info!(
-                    "signature {} confirmed {} out of {}",
-                    signature, start, confs
-                );
-                now = Instant::now();
-                start = prev;
-            }
+        let mut confirmed_blocks = 0;
+        loop {
+            let response = self.get_signature_confirmations(signature);
+            match response {
+                Ok(count) => {
+                    if confirmed_blocks != count {
+                        info!(
+                            "signature {} confirmed {} out of {}",
+                            signature, count, min_confirmed_blocks
+                        );
+                        now = Instant::now();
+                        confirmed_blocks = count;
+                    }
+                    if count >= min_confirmed_blocks {
+                        break;
+                    }
+                }
+                Err(err) => {
+                    debug!("check_confirmations request failed: {:?}", err);
+                }
+            };
             if now.elapsed().as_secs() > 15 {
                 // TODO: Return a better error.
                 return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
@@ -464,27 +474,6 @@ impl RpcClient {
             sleep(Duration::from_millis(250));
         }
         Ok(())
-    }
-
-    pub fn check_confirmations(
-        &self,
-        signature: &Signature,
-        confs: usize,
-        prev: &mut usize,
-    ) -> bool {
-        trace!("check_confirmations: {:?}", signature);
-        loop {
-            let response = self.get_signature_confirmations(signature);
-            match response {
-                Ok(count) => {
-                    *prev = count;
-                    return count >= confs;
-                }
-                Err(err) => {
-                    debug!("check_confirmations request failed: {:?}", err);
-                }
-            };
-        }
     }
 
     pub fn get_signature_confirmations(&self, sig: &Signature) -> io::Result<usize> {
