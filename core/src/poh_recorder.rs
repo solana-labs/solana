@@ -54,15 +54,13 @@ pub struct PohRecorder {
 
 impl PohRecorder {
     pub fn clear_bank(&mut self) {
-        if let Some(bank) = &self.working_bank {
+        if let Some(working_bank) = self.working_bank.take() {
+            let bank = working_bank.bank;
             let next_leader_slot =
-                leader_schedule_utils::next_leader_slot(&self.id, bank.bank.slot(), &bank.bank);
+                leader_schedule_utils::next_leader_slot(&self.id, bank.slot(), &bank);
             self.start_leader_at_tick = next_leader_slot
-                .map(|slot| {
-                    Some(slot * bank.bank.ticks_per_slot() + self.max_last_leader_grace_ticks)
-                })
+                .map(|slot| Some(slot * bank.ticks_per_slot() + self.max_last_leader_grace_ticks))
                 .unwrap_or(None);
-            self.working_bank = None;
         }
         if let Some(ref signal) = self.clear_bank_signal {
             let _ = signal.try_send(true);
