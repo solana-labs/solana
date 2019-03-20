@@ -3,7 +3,7 @@ set -e
 
 cd "$(dirname "$0")"/..
 
-cargo build --package wallet
+cargo build --package solana-wallet
 export PATH=$PWD/target/debug:$PATH
 
 echo "\`\`\`manpage"
