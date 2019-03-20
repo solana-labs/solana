@@ -410,9 +410,9 @@ fn overlapping<T: Ord + Eq>(r1: &RangeInclusive<T>, r2: &RangeInclusive<T>) -> b
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
-    use rand::{thread_rng, Rng};
+    use crate::test::gen;
     use std::sync::{Arc, RwLock};
 
     #[test]
@@ -557,17 +557,8 @@ mod test {
     }
 
     fn gen_records() -> impl Iterator<Item = (Key, Value)> {
-        let mut rng = thread_rng();
-        let commit = rng.gen();
-
-        std::iter::repeat_with(move || {
-            let buf: [u8; KEY_LEN] = rng.gen();
-            let data_size: u8 = buf[0];
-
-            let val = Some(vec![0; data_size as usize]);
-
-            (Key(buf), Value::new(commit, val))
-        })
+        gen::pairs_vary(0..255)
+            .map(|(key, bytes)| (key, Value::new(bytes.len() as i64, Some(bytes))))
     }
 
 }

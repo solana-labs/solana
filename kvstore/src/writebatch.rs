@@ -118,15 +118,15 @@ impl Default for Config {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::test::gen;
     use crate::writelog::Config as WalConfig;
-    use rand::{self, thread_rng, Rng};
 
     const CAPACITY: usize = 10 * 1024;
 
     #[test]
     fn test_put_associative() {
         let mut writebatch = setup();
-        let input: Vec<_> = gen_pairs(32).take(100).collect();
+        let input: Vec<_> = gen::pairs(32).take(100).collect();
 
         writebatch.put_many(input.iter()).unwrap();
 
@@ -146,7 +146,7 @@ mod test {
     #[test]
     fn test_delete_associative() {
         let (mut writebatch, mut writebatch2) = (setup(), setup());
-        let input: Vec<_> = gen_pairs(32).take(100).collect();
+        let input: Vec<_> = gen::pairs(32).take(100).collect();
 
         writebatch.put_many(input.iter()).unwrap();
         writebatch2.put_many(input.iter()).unwrap();
@@ -172,7 +172,7 @@ mod test {
         let mut writebatch = setup();
 
         let space_per_record = CAPACITY / AMT_RECORDS - MemTable::OVERHEAD_PER_RECORD;
-        let input: Vec<_> = gen_pairs(space_per_record).take(AMT_RECORDS).collect();
+        let input: Vec<_> = gen::pairs(space_per_record).take(AMT_RECORDS).collect();
 
         writebatch.put_many(input.iter()).unwrap();
 
@@ -181,7 +181,7 @@ mod test {
             _ => panic!("Writebatch should be exactly at capacity"),
         }
 
-        let (key, data) = gen_pairs(space_per_record).next().unwrap();
+        let (key, data) = gen::pairs(space_per_record).next().unwrap();
         let result = writebatch.put(&key, &data);
         assert!(result.is_err());
 
@@ -205,23 +205,5 @@ mod test {
             memtable: MemTable::default(),
             log: Arc::new(RwLock::new(log)),
         }
-    }
-
-    fn gen_keys() -> impl Iterator<Item = Key> {
-        let mut rng = thread_rng();
-
-        std::iter::repeat_with(move || {
-            let buf = rng.gen();
-
-            Key(buf)
-        })
-    }
-
-    fn gen_data(size: usize) -> impl Iterator<Item = Vec<u8>> {
-        std::iter::repeat(vec![1u8; size])
-    }
-
-    fn gen_pairs(data_size: usize) -> impl Iterator<Item = (Key, Vec<u8>)> {
-        gen_keys().zip(gen_data(data_size))
     }
 }
