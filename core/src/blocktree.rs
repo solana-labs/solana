@@ -28,7 +28,7 @@ use std::fs;
 use std::io;
 use std::rc::Rc;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 mod db;
 
@@ -126,6 +126,7 @@ pub struct Blocktree {
     erasure_cf: LedgerColumn<cf::Coding>,
     detached_heads_cf: LedgerColumn<cf::DetachedHeads>,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
+    pub slots_of_interest: RwLock<Vec<(u128, u64)>>,
 }
 
 // Column family for metadata about a leader slot
@@ -689,6 +690,10 @@ impl Blocktree {
     pub fn deserialize_blob_data(data: &[u8]) -> Result<Vec<Entry>> {
         let entries = deserialize(data)?;
         Ok(entries)
+    }
+
+    pub fn set_slots_of_interest(&self, slots_of_interest: Vec<(u128, u64)>) {
+        *self.slots_of_interest.write().unwrap() = slots_of_interest;
     }
 
     fn deserialize_blobs<I>(blob_datas: &[I]) -> Vec<Entry>
