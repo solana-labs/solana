@@ -122,6 +122,18 @@ impl WalletConfig {
     }
 }
 
+// Return the pubkey for an argument with `name` or None if not present.
+fn pubkey_of(matches: &ArgMatches<'_>, name: &str) -> Option<Pubkey> {
+    matches.value_of(name).map(|x| x.parse::<Pubkey>().unwrap())
+}
+
+// Return the pubkeys for arguments with `name` or None if none present.
+fn pubkeys_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Pubkey>> {
+    matches
+        .values_of(name)
+        .map(|xs| xs.map(|x| x.parse::<Pubkey>().unwrap()).collect())
+}
+
 pub fn parse_command(
     pubkey: &Pubkey,
     matches: &ArgMatches<'_>,
@@ -134,15 +146,7 @@ pub fn parse_command(
         }
         ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
         ("cancel", Some(cancel_matches)) => {
-            let pubkey_vec = bs58::decode(cancel_matches.value_of("process_id").unwrap())
-                .into_vec()
-                .expect("base58-encoded public key");
-
-            if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-                eprintln!("{}", cancel_matches.usage());
-                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
-            }
-            let process_id = Pubkey::new(&pubkey_vec);
+            let process_id = pubkey_of(cancel_matches, "process_id").unwrap();
             Ok(WalletCommand::Cancel(process_id))
         }
         ("confirm", Some(confirm_matches)) => {
@@ -159,41 +163,15 @@ pub fn parse_command(
             }
         }
         ("configure-staking-account", Some(staking_config_matches)) => {
-            let delegate_id = staking_config_matches
-                .value_of("delegate")
-                .map(|pubkey_string| {
-                    let pubkey_vec = bs58::decode(pubkey_string)
-                        .into_vec()
-                        .expect("base58-encoded public key");
-                    // TODO: Add valid pubkey check
-                    Pubkey::new(&pubkey_vec)
-                });
-            let authorized_voter_id =
-                staking_config_matches
-                    .value_of("authorize")
-                    .map(|pubkey_string| {
-                        let pubkey_vec = bs58::decode(pubkey_string)
-                            .into_vec()
-                            .expect("base58-encoded public key");
-                        // TODO: Add valid pubkey check
-                        Pubkey::new(&pubkey_vec)
-                    });
+            let delegate_id = pubkey_of(staking_config_matches, "delegate");
+            let authorized_voter_id = pubkey_of(staking_config_matches, "authorize");
             Ok(WalletCommand::ConfigureStakingAccount(
                 delegate_id,
                 authorized_voter_id,
             ))
         }
         ("create-staking-account", Some(staking_matches)) => {
-            let voting_account_string = staking_matches.value_of("voting_account_id").unwrap();
-            let voting_account_vec = bs58::decode(voting_account_string)
-                .into_vec()
-                .expect("base58-encoded public key");
-
-            if voting_account_vec.len() != mem::size_of::<Pubkey>() {
-                eprintln!("{}", staking_matches.usage());
-                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
-            }
-            let voting_account_id = Pubkey::new(&voting_account_vec);
+            let voting_account_id = pubkey_of(staking_matches, "voting_account_id").unwrap();
             let lamports = staking_matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::CreateStakingAccount(
                 voting_account_id,
@@ -209,21 +187,7 @@ pub fn parse_command(
         ("get-transaction-count", Some(_matches)) => Ok(WalletCommand::GetTransactionCount),
         ("pay", Some(pay_matches)) => {
             let lamports = pay_matches.value_of("lamports").unwrap().parse()?;
-            let to = if pay_matches.is_present("to") {
-                let pubkey_vec = bs58::decode(pay_matches.value_of("to").unwrap())
-                    .into_vec()
-                    .expect("base58-encoded public key");
-
-                if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-                    eprintln!("{}", pay_matches.usage());
-                    Err(WalletError::BadParameter(
-                        "Invalid to public key".to_string(),
-                    ))?;
-                }
-                Pubkey::new(&pubkey_vec)
-            } else {
-                *pubkey
-            };
+            let to = pubkey_of(&pay_matches, "to").unwrap_or(*pubkey);
             let timestamp = if pay_matches.is_present("timestamp") {
                 // Parse input for serde_json
                 let date_string = if !pay_matches.value_of("timestamp").unwrap().contains('Z') {
@@ -235,41 +199,8 @@ pub fn parse_command(
             } else {
                 None
             };
-            let timestamp_pubkey = if pay_matches.is_present("timestamp_pubkey") {
-                let pubkey_vec = bs58::decode(pay_matches.value_of("timestamp_pubkey").unwrap())
-                    .into_vec()
-                    .expect("base58-encoded public key");
-
-                if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-                    eprintln!("{}", pay_matches.usage());
-                    Err(WalletError::BadParameter(
-                        "Invalid timestamp public key".to_string(),
-                    ))?;
-                }
-                Some(Pubkey::new(&pubkey_vec))
-            } else {
-                None
-            };
-            let witness_vec = if pay_matches.is_present("witness") {
-                let witnesses = pay_matches.values_of("witness").unwrap();
-                let mut collection = Vec::new();
-                for witness in witnesses {
-                    let pubkey_vec = bs58::decode(witness)
-                        .into_vec()
-                        .expect("base58-encoded public key");
-
-                    if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-                        eprintln!("{}", pay_matches.usage());
-                        Err(WalletError::BadParameter(
-                            "Invalid witness public key".to_string(),
-                        ))?;
-                    }
-                    collection.push(Pubkey::new(&pubkey_vec));
-                }
-                Some(collection)
-            } else {
-                None
-            };
+            let timestamp_pubkey = pubkey_of(&pay_matches, "timestamp_pubkey");
+            let witness_vec = pubkeys_of(&pay_matches, "witness");
             let cancelable = if pay_matches.is_present("cancelable") {
                 Some(*pubkey)
             } else {
@@ -286,47 +217,13 @@ pub fn parse_command(
             ))
         }
         ("send-signature", Some(sig_matches)) => {
-            let pubkey_vec = bs58::decode(sig_matches.value_of("to").unwrap())
-                .into_vec()
-                .expect("base58-encoded public key");
-
-            if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-                eprintln!("{}", sig_matches.usage());
-                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
-            }
-            let to = Pubkey::new(&pubkey_vec);
-
-            let pubkey_vec = bs58::decode(sig_matches.value_of("process_id").unwrap())
-                .into_vec()
-                .expect("base58-encoded public key");
-
-            if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-                eprintln!("{}", sig_matches.usage());
-                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
-            }
-            let process_id = Pubkey::new(&pubkey_vec);
+            let to = pubkey_of(&sig_matches, "to").unwrap();
+            let process_id = pubkey_of(&sig_matches, "process_id").unwrap();
             Ok(WalletCommand::Witness(to, process_id))
         }
         ("send-timestamp", Some(timestamp_matches)) => {
-            let pubkey_vec = bs58::decode(timestamp_matches.value_of("to").unwrap())
-                .into_vec()
-                .expect("base58-encoded public key");
-
-            if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-                eprintln!("{}", timestamp_matches.usage());
-                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
-            }
-            let to = Pubkey::new(&pubkey_vec);
-
-            let pubkey_vec = bs58::decode(timestamp_matches.value_of("process_id").unwrap())
-                .into_vec()
-                .expect("base58-encoded public key");
-
-            if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-                eprintln!("{}", timestamp_matches.usage());
-                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
-            }
-            let process_id = Pubkey::new(&pubkey_vec);
+            let to = pubkey_of(&timestamp_matches, "to").unwrap();
+            let process_id = pubkey_of(&timestamp_matches, "process_id").unwrap();
             let dt = if timestamp_matches.is_present("datetime") {
                 // Parse input for serde_json
                 let date_string = if !timestamp_matches
@@ -1130,13 +1027,6 @@ mod tests {
             parse_command(&pubkey, &test_create_staking_account).unwrap(),
             WalletCommand::CreateStakingAccount(pubkey, 50)
         );
-        let test_bad_pubkey = test_commands.clone().get_matches_from(vec![
-            "test",
-            "create-staking-account",
-            "deadbeef",
-            "50",
-        ]);
-        assert!(parse_command(&pubkey, &test_bad_pubkey).is_err());
 
         // Test Deploy Subcommand
         let test_deploy =
@@ -1157,10 +1047,6 @@ mod tests {
             parse_command(&pubkey, &test_pay).unwrap(),
             WalletCommand::Pay(50, pubkey, None, None, None, None)
         );
-        let test_bad_pubkey = test_commands
-            .clone()
-            .get_matches_from(vec!["test", "pay", "deadbeef", "50"]);
-        assert!(parse_command(&pubkey, &test_bad_pubkey).is_err());
 
         // Test Pay Subcommand w/ Witness
         let test_pay_multiple_witnesses = test_commands.clone().get_matches_from(vec![
