@@ -4,10 +4,10 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::transaction::Transaction;
 
-pub const ENTRIES_PER_SEGMENT: u64 = 16;
+pub const SLOTS_PER_SEGMENT: u64 = 16;
 
-pub fn get_segment_from_entry(entry_height: u64) -> usize {
-    (entry_height / ENTRIES_PER_SEGMENT) as usize
+pub fn get_segment_from_slot(slot: u64) -> usize {
+    (slot / SLOTS_PER_SEGMENT) as usize
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -32,7 +32,7 @@ pub struct ValidationInfo {
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct StorageProgramState {
-    pub entry_height: u64,
+    pub slot: u64,
     pub hash: Hash,
 
     pub proofs: Vec<Vec<ProofInfo>>,
@@ -46,18 +46,18 @@ pub struct StorageProgramState {
 pub enum StorageProgram {
     SubmitMiningProof {
         sha_state: Hash,
-        entry_height: u64,
+        slot: u64,
         signature: Signature,
     },
     AdvertiseStorageRecentBlockhash {
         hash: Hash,
-        entry_height: u64,
+        slot: u64,
     },
     ClaimStorageReward {
-        entry_height: u64,
+        slot: u64,
     },
     ProofValidation {
-        entry_height: u64,
+        slot: u64,
         proof_mask: Vec<ProofStatus>,
     },
 }
@@ -82,12 +82,12 @@ impl StorageTransaction {
         from_keypair: &Keypair,
         sha_state: Hash,
         recent_blockhash: Hash,
-        entry_height: u64,
+        slot: u64,
         signature: Signature,
     ) -> Transaction {
         let program = StorageProgram::SubmitMiningProof {
             sha_state,
-            entry_height,
+            slot,
             signature,
         };
         Transaction::new_signed(from_keypair, &[], &id(), &program, recent_blockhash, 0)
@@ -97,11 +97,11 @@ impl StorageTransaction {
         from_keypair: &Keypair,
         storage_hash: Hash,
         recent_blockhash: Hash,
-        entry_height: u64,
+        slot: u64,
     ) -> Transaction {
         let program = StorageProgram::AdvertiseStorageRecentBlockhash {
             hash: storage_hash,
-            entry_height,
+            slot,
         };
         Transaction::new_signed(from_keypair, &[], &id(), &program, recent_blockhash, 0)
     }
@@ -109,22 +109,19 @@ impl StorageTransaction {
     pub fn new_proof_validation(
         from_keypair: &Keypair,
         recent_blockhash: Hash,
-        entry_height: u64,
+        slot: u64,
         proof_mask: Vec<ProofStatus>,
     ) -> Transaction {
-        let program = StorageProgram::ProofValidation {
-            entry_height,
-            proof_mask,
-        };
+        let program = StorageProgram::ProofValidation { slot, proof_mask };
         Transaction::new_signed(from_keypair, &[], &id(), &program, recent_blockhash, 0)
     }
 
     pub fn new_reward_claim(
         from_keypair: &Keypair,
         recent_blockhash: Hash,
-        entry_height: u64,
+        slot: u64,
     ) -> Transaction {
-        let program = StorageProgram::ClaimStorageReward { entry_height };
+        let program = StorageProgram::ClaimStorageReward { slot };
         Transaction::new_signed(from_keypair, &[], &id(), &program, recent_blockhash, 0)
     }
 }

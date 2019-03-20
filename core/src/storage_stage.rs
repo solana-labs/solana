@@ -6,7 +6,6 @@ use crate::blocktree::Blocktree;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use crate::cluster_info::{ClusterInfo, FULLNODE_PORT_RANGE};
-use crate::entry::{Entry, EntryReceiver};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use bincode::deserialize;
@@ -22,6 +21,7 @@ use std::collections::HashSet;
 use std::io;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Receiver;
 use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
@@ -39,7 +39,7 @@ pub struct StorageStateInner {
     storage_keys: StorageKeys,
     replicator_map: ReplicatorMap,
     storage_blockhash: Hash,
-    entry_height: u64,
+    slot: u64,
 }
 
 #[derive(Clone, Default)]
@@ -52,23 +52,17 @@ pub struct StorageStage {
     t_storage_create_accounts: JoinHandle<()>,
 }
 
-macro_rules! cross_boundary {
-    ($start:expr, $len:expr, $boundary:expr) => {
-        (($start + $len) & !($boundary - 1)) > $start & !($boundary - 1)
-    };
-}
-
 pub const STORAGE_ROTATE_TEST_COUNT: u64 = 128;
 // TODO: some way to dynamically size NUM_IDENTITIES
 const NUM_IDENTITIES: usize = 1024;
 pub const NUM_STORAGE_SAMPLES: usize = 4;
-pub const ENTRIES_PER_SEGMENT: u64 = 16;
+pub const SLOTS_PER_SEGMENT: u64 = 16;
 const KEY_SIZE: usize = 64;
 
 type TransactionSender = Sender<Transaction>;
 
-pub fn get_segment_from_entry(entry_height: u64) -> u64 {
-    entry_height / ENTRIES_PER_SEGMENT
+pub fn get_segment_from_slot(slot: u64) -> u64 {
+    slot / SLOTS_PER_SEGMENT
 }
 
 fn get_identity_index_from_signature(key: &Signature) -> usize {
@@ -91,7 +85,7 @@ impl StorageState {
             storage_keys,
             storage_results,
             replicator_map,
-            entry_height: 0,
+            slot: 0,
             storage_blockhash: Hash::default(),
         };
 
@@ -114,14 +108,14 @@ impl StorageState {
         self.state.read().unwrap().storage_blockhash
     }
 
-    pub fn get_entry_height(&self) -> u64 {
-        self.state.read().unwrap().entry_height
+    pub fn get_slot(&self) -> u64 {
+        self.state.read().unwrap().slot
     }
 
-    pub fn get_pubkeys_for_entry_height(&self, entry_height: u64) -> Vec<Pubkey> {
+    pub fn get_pubkeys_for_slot(&self, slot: u64) -> Vec<Pubkey> {
         // TODO: keep track of age?
         const MAX_PUBKEYS_TO_RETURN: usize = 5;
-        let index = (entry_height / ENTRIES_PER_SEGMENT) as usize;
+        let index = get_segment_from_slot(slot) as usize;
         let replicator_map = &self.state.read().unwrap().replicator_map;
         if index < replicator_map.len() {
             replicator_map[index]
@@ -138,16 +132,13 @@ impl StorageState {
 impl StorageStage {
     pub fn new(
         storage_state: &StorageState,
-        storage_entry_receiver: EntryReceiver,
+        slot_receiver: Receiver<u64>,
         blocktree: Option<Arc<Blocktree>>,
         keypair: &Arc<Keypair>,
         exit: &Arc<AtomicBool>,
-        entry_height: u64,
         storage_rotate_count: u64,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Self {
-        debug!("storage_stage::new: entry_height: {}", entry_height);
-        storage_state.state.write().unwrap().entry_height = entry_height;
         let storage_state_inner = storage_state.state.clone();
         let exit0 = exit.clone();
         let keypair0 = keypair.clone();
@@ -159,19 +150,19 @@ impl StorageStage {
             .spawn(move || {
                 let mut poh_height = 0;
                 let mut current_key = 0;
-                let mut entry_height = entry_height;
+                let mut slot_count = 0;
                 loop {
                     if let Some(ref some_blocktree) = blocktree {
                         if let Err(e) = Self::process_entries(
                             &keypair0,
                             &storage_state_inner,
-                            &storage_entry_receiver,
+                            &slot_receiver,
                             &some_blocktree,
                             &mut poh_height,
-                            &mut entry_height,
                             &mut current_key,
                             storage_rotate_count,
                             &tx_sender,
+                            &mut slot_count,
                         ) {
                             match e {
                                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -282,7 +273,7 @@ impl StorageStage {
         keypair: &Arc<Keypair>,
         _blocktree: &Arc<Blocktree>,
         entry_id: Hash,
-        entry_height: u64,
+        slot: u64,
         tx_sender: &TransactionSender,
     ) -> Result<()> {
         let mut seed = [0u8; 32];
@@ -292,7 +283,7 @@ impl StorageStage {
             keypair,
             entry_id,
             Hash::default(),
-            entry_height,
+            slot,
         );
         tx_sender.send(tx)?;
 
@@ -300,10 +291,10 @@ impl StorageStage {
 
         let mut rng = ChaChaRng::from_seed(seed);
 
-        state.write().unwrap().entry_height = entry_height;
+        state.write().unwrap().slot = slot;
 
         // Regenerate the answers
-        let num_segments = (entry_height / ENTRIES_PER_SEGMENT) as usize;
+        let num_segments = get_segment_from_slot(slot) as usize;
         if num_segments == 0 {
             info!("Ledger has 0 segments!");
             return Ok(());
@@ -354,89 +345,102 @@ impl StorageStage {
         Ok(())
     }
 
+    fn process_storage_transaction(
+        data: &[u8],
+        slot: u64,
+        storage_state: &Arc<RwLock<StorageStateInner>>,
+        current_key_idx: &mut usize,
+        transaction_key0: Pubkey,
+    ) {
+        match deserialize(data) {
+            Ok(StorageProgram::SubmitMiningProof {
+                slot: proof_slot,
+                signature,
+                ..
+            }) => {
+                if proof_slot < slot {
+                    {
+                        debug!(
+                            "generating storage_keys from storage txs current_key_idx: {}",
+                            *current_key_idx
+                        );
+                        let storage_keys = &mut storage_state.write().unwrap().storage_keys;
+                        storage_keys[*current_key_idx..*current_key_idx + size_of::<Signature>()]
+                            .copy_from_slice(signature.as_ref());
+                        *current_key_idx += size_of::<Signature>();
+                        *current_key_idx %= storage_keys.len();
+                    }
+
+                    let mut statew = storage_state.write().unwrap();
+                    let max_segment_index = get_segment_from_slot(slot) as usize;
+                    if statew.replicator_map.len() <= max_segment_index {
+                        statew
+                            .replicator_map
+                            .resize(max_segment_index, HashSet::new());
+                    }
+                    let proof_segment_index = get_segment_from_slot(proof_slot) as usize;
+                    if proof_segment_index < statew.replicator_map.len() {
+                        statew.replicator_map[proof_segment_index].insert(transaction_key0);
+                    }
+                }
+                debug!("storage proof: slot: {}", slot);
+            }
+            Ok(_) => {}
+            Err(e) => {
+                info!("error: {:?}", e);
+            }
+        }
+    }
+
     pub fn process_entries(
         keypair: &Arc<Keypair>,
         storage_state: &Arc<RwLock<StorageStateInner>>,
-        entry_receiver: &EntryReceiver,
+        slot_receiver: &Receiver<u64>,
         blocktree: &Arc<Blocktree>,
         poh_height: &mut u64,
-        entry_height: &mut u64,
         current_key_idx: &mut usize,
         storage_rotate_count: u64,
         tx_sender: &TransactionSender,
+        slot_count: &mut u64,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
-        let entries: Vec<Entry> = entry_receiver.recv_timeout(timeout)?;
-        for entry in entries {
-            // Go through the transactions, find proofs, and use them to update
-            // the storage_keys with their signatures
-            for tx in entry.transactions {
-                for (i, program_id) in tx.program_ids.iter().enumerate() {
-                    if solana_storage_api::check_id(&program_id) {
-                        match deserialize(&tx.instructions[i].data) {
-                            Ok(StorageProgram::SubmitMiningProof {
-                                entry_height: proof_entry_height,
-                                signature,
-                                ..
-                            }) => {
-                                if proof_entry_height < *entry_height {
-                                    {
-                                        debug!(
-                                            "generating storage_keys from storage txs current_key_idx: {}",
-                                            *current_key_idx
-                                        );
-                                        let storage_keys =
-                                            &mut storage_state.write().unwrap().storage_keys;
-                                        storage_keys[*current_key_idx
-                                            ..*current_key_idx + size_of::<Signature>()]
-                                            .copy_from_slice(signature.as_ref());
-                                        *current_key_idx += size_of::<Signature>();
-                                        *current_key_idx %= storage_keys.len();
-                                    }
-
-                                    let mut statew = storage_state.write().unwrap();
-                                    let max_segment_index =
-                                        (*entry_height / ENTRIES_PER_SEGMENT) as usize;
-                                    if statew.replicator_map.len() <= max_segment_index {
-                                        statew
-                                            .replicator_map
-                                            .resize(max_segment_index, HashSet::new());
-                                    }
-                                    let proof_segment_index =
-                                        (proof_entry_height / ENTRIES_PER_SEGMENT) as usize;
-                                    if proof_segment_index < statew.replicator_map.len() {
-                                        statew.replicator_map[proof_segment_index]
-                                            .insert(tx.account_keys[0]);
-                                    }
-                                }
-                                debug!("storage proof: entry_height: {}", entry_height);
-                            }
-                            Ok(_) => {}
-                            Err(e) => {
-                                info!("error: {:?}", e);
-                            }
+        let slot: u64 = slot_receiver.recv_timeout(timeout)?;
+        storage_state.write().unwrap().slot = slot;
+        *slot_count += 1;
+        if let Ok(entries) = blocktree.get_slot_entries(slot, 0, None) {
+            for entry in entries {
+                // Go through the transactions, find proofs, and use them to update
+                // the storage_keys with their signatures
+                for tx in entry.transactions {
+                    for (i, program_id) in tx.program_ids.iter().enumerate() {
+                        if solana_storage_api::check_id(&program_id) {
+                            Self::process_storage_transaction(
+                                &tx.instructions[i].data,
+                                slot,
+                                storage_state,
+                                current_key_idx,
+                                tx.account_keys[0],
+                            );
                         }
                     }
                 }
+                if *slot_count % storage_rotate_count == 0 {
+                    trace!(
+                        "crosses sending at poh_height: {} slot: {}! hashes: {}",
+                        *poh_height,
+                        slot,
+                        entry.num_hashes
+                    );
+                    Self::process_entry_crossing(
+                        &storage_state,
+                        &keypair,
+                        &blocktree,
+                        entry.hash,
+                        slot,
+                        tx_sender,
+                    )?;
+                }
             }
-            if cross_boundary!(*poh_height, entry.num_hashes, storage_rotate_count) {
-                trace!(
-                    "crosses sending at poh_height: {} entry_height: {}! hashes: {}",
-                    *poh_height,
-                    entry_height,
-                    entry.num_hashes
-                );
-                Self::process_entry_crossing(
-                    &storage_state,
-                    &keypair,
-                    &blocktree,
-                    entry.hash,
-                    *entry_height,
-                    tx_sender,
-                )?;
-            }
-            *entry_height += 1;
-            *poh_height += entry.num_hashes;
         }
         Ok(())
     }
@@ -485,15 +489,14 @@ mod tests {
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
 
-        let (_storage_entry_sender, storage_entry_receiver) = channel();
+        let (_slot_sender, slot_receiver) = channel();
         let storage_state = StorageState::new();
         let storage_stage = StorageStage::new(
             &storage_state,
-            storage_entry_receiver,
+            slot_receiver,
             None,
             &keypair,
             &exit.clone(),
-            0,
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
@@ -518,26 +521,26 @@ mod tests {
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
         let entries = make_tiny_test_entries(64);
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+        let slot = 1;
         blocktree
-            .write_entries(1, 0, 0, ticks_per_slot, &entries)
+            .write_entries(slot, 0, 0, ticks_per_slot, &entries)
             .unwrap();
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
 
-        let (storage_entry_sender, storage_entry_receiver) = channel();
+        let (slot_sender, slot_receiver) = channel();
         let storage_state = StorageState::new();
         let storage_stage = StorageStage::new(
             &storage_state,
-            storage_entry_receiver,
-            Some(Arc::new(blocktree)),
+            slot_receiver,
+            Some(blocktree.clone()),
             &keypair,
             &exit.clone(),
-            0,
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
-        storage_entry_sender.send(entries.clone()).unwrap();
+        slot_sender.send(slot).unwrap();
 
         let keypair = Keypair::new();
         let hash = Hash::default();
@@ -545,8 +548,12 @@ mod tests {
         let mut result = storage_state.get_mining_result(&signature);
         assert_eq!(result, Hash::default());
 
-        for _ in 0..9 {
-            storage_entry_sender.send(entries.clone()).unwrap();
+        for i in slot..slot + 3 {
+            blocktree
+                .write_entries(i, 0, 0, ticks_per_slot, &entries)
+                .unwrap();
+
+            slot_sender.send(i).unwrap();
         }
         for _ in 0..5 {
             result = storage_state.get_mining_result(&signature);
@@ -582,7 +589,7 @@ mod tests {
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
         let entries = make_tiny_test_entries(128);
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         blocktree
             .write_entries(1, 0, 0, ticks_per_slot, &entries)
             .unwrap();
@@ -594,14 +601,13 @@ mod tests {
         let storage_stage = StorageStage::new(
             &storage_state,
             storage_entry_receiver,
-            Some(Arc::new(blocktree)),
+            Some(blocktree.clone()),
             &keypair,
             &exit.clone(),
-            0,
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
-        storage_entry_sender.send(entries.clone()).unwrap();
+        storage_entry_sender.send(1).unwrap();
 
         let mut reference_keys;
         {
@@ -620,7 +626,10 @@ mod tests {
         );
         mining_txs.push(mining_proof_tx);
         let proof_entries = vec![Entry::new(&Hash::default(), 1, mining_txs)];
-        storage_entry_sender.send(proof_entries).unwrap();
+        blocktree
+            .write_entries(2, 0, 0, ticks_per_slot, &proof_entries)
+            .unwrap();
+        storage_entry_sender.send(2).unwrap();
 
         for _ in 0..5 {
             {

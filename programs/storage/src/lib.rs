@@ -54,26 +54,22 @@ fn entrypoint(
             StorageProgramState::default()
         };
 
-        debug!(
-            "deserialized state height: {}",
-            storage_account_state.entry_height
-        );
+        debug!("deserialized state slot: {}", storage_account_state.slot);
         match syscall {
             StorageProgram::SubmitMiningProof {
                 sha_state,
-                entry_height,
+                slot,
                 signature,
             } => {
-                let segment_index = get_segment_from_entry(entry_height);
-                let current_segment_index =
-                    get_segment_from_entry(storage_account_state.entry_height);
+                let segment_index = get_segment_from_slot(slot);
+                let current_segment_index = get_segment_from_slot(storage_account_state.slot);
                 if segment_index >= current_segment_index {
                     return Err(InstructionError::InvalidArgument);
                 }
 
                 debug!(
-                    "Mining proof submitted with state {:?} entry_height: {}",
-                    sha_state, entry_height
+                    "Mining proof submitted with state {:?} slot: {}",
+                    sha_state, slot
                 );
 
                 let proof_info = ProofInfo {
@@ -83,9 +79,9 @@ fn entrypoint(
                 };
                 storage_account_state.proofs[segment_index].push(proof_info);
             }
-            StorageProgram::AdvertiseStorageRecentBlockhash { hash, entry_height } => {
-                let original_segments = storage_account_state.entry_height / ENTRIES_PER_SEGMENT;
-                let segments = entry_height / ENTRIES_PER_SEGMENT;
+            StorageProgram::AdvertiseStorageRecentBlockhash { hash, slot } => {
+                let original_segments = get_segment_from_slot(storage_account_state.slot);
+                let segments = get_segment_from_slot(slot);
                 debug!(
                     "advertise new last id segments: {} orig: {}",
                     segments, original_segments
@@ -94,7 +90,7 @@ fn entrypoint(
                     return Err(InstructionError::InvalidArgument);
                 }
 
-                storage_account_state.entry_height = entry_height;
+                storage_account_state.slot = slot;
                 storage_account_state.hash = hash;
 
                 // move the proofs to previous_proofs
@@ -112,15 +108,12 @@ fn entrypoint(
                     .lockout_validations
                     .resize(segments as usize, Vec::new());
             }
-            StorageProgram::ProofValidation {
-                entry_height,
-                proof_mask,
-            } => {
-                if entry_height >= storage_account_state.entry_height {
+            StorageProgram::ProofValidation { slot, proof_mask } => {
+                if slot >= storage_account_state.slot {
                     return Err(InstructionError::InvalidArgument);
                 }
 
-                let segment_index = get_segment_from_entry(entry_height);
+                let segment_index = get_segment_from_slot(slot);
                 if storage_account_state.previous_proofs[segment_index].len() != proof_mask.len() {
                     return Err(InstructionError::InvalidArgument);
                 }
@@ -138,8 +131,8 @@ fn entrypoint(
                 };
                 storage_account_state.lockout_validations[segment_index].push(info);
             }
-            StorageProgram::ClaimStorageReward { entry_height } => {
-                let claims_index = get_segment_from_entry(entry_height);
+            StorageProgram::ClaimStorageReward { slot } => {
+                let claims_index = get_segment_from_slot(slot);
                 let account_key = keyed_accounts[0].signer_key().unwrap();
                 let mut num_validations = 0;
                 let mut total_validations = 0;
@@ -232,7 +225,7 @@ mod test {
             &keypair,
             Hash::default(),
             Hash::default(),
-            ENTRIES_PER_SEGMENT,
+            SLOTS_PER_SEGMENT,
         );
 
         assert_eq!(
@@ -261,7 +254,7 @@ mod test {
     }
 
     #[test]
-    fn test_submit_mining_invalid_entry_height() {
+    fn test_submit_mining_invalid_slot() {
         solana_logger::setup();
         let keypair = Keypair::new();
         let mut accounts = [Account::default(), Account::default()];
@@ -290,7 +283,7 @@ mod test {
             &keypair,
             Hash::default(),
             Hash::default(),
-            ENTRIES_PER_SEGMENT,
+            SLOTS_PER_SEGMENT,
         );
 
         test_transaction(&tx, &mut accounts).unwrap();
@@ -313,13 +306,13 @@ mod test {
         let mut accounts = [Account::default(), Account::default()];
         accounts[0].data.resize(16 * 1024, 0);
 
-        let entry_height = 0;
+        let slot = 0;
 
         let tx = StorageTransaction::new_advertise_recent_blockhash(
             &keypair,
             Hash::default(),
             Hash::default(),
-            ENTRIES_PER_SEGMENT,
+            SLOTS_PER_SEGMENT,
         );
 
         test_transaction(&tx, &mut accounts).unwrap();
@@ -328,7 +321,7 @@ mod test {
             &keypair,
             Hash::default(),
             Hash::default(),
-            entry_height,
+            slot,
             Signature::default(),
         );
         test_transaction(&tx, &mut accounts).unwrap();
@@ -337,14 +330,14 @@ mod test {
             &keypair,
             Hash::default(),
             Hash::default(),
-            ENTRIES_PER_SEGMENT * 2,
+            SLOTS_PER_SEGMENT * 2,
         );
         test_transaction(&tx, &mut accounts).unwrap();
 
         let tx = StorageTransaction::new_proof_validation(
             &keypair,
             Hash::default(),
-            entry_height,
+            slot,
             vec![ProofStatus::Valid],
         );
         test_transaction(&tx, &mut accounts).unwrap();
@@ -353,11 +346,11 @@ mod test {
             &keypair,
             Hash::default(),
             Hash::default(),
-            ENTRIES_PER_SEGMENT * 3,
+            SLOTS_PER_SEGMENT * 3,
         );
         test_transaction(&tx, &mut accounts).unwrap();
 
-        let tx = StorageTransaction::new_reward_claim(&keypair, Hash::default(), entry_height);
+        let tx = StorageTransaction::new_reward_claim(&keypair, Hash::default(), slot);
         test_transaction(&tx, &mut accounts).unwrap();
 
         assert!(accounts[0].lamports == TOTAL_VALIDATOR_REWARDS);

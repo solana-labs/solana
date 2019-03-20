@@ -6,19 +6,19 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_storage_api::{StorageTransaction, ENTRIES_PER_SEGMENT};
+use solana_storage_api::{StorageTransaction, SLOTS_PER_SEGMENT};
 
-fn get_storage_entry_height(bank: &Bank, account: &Pubkey) -> u64 {
+fn get_storage_slot(bank: &Bank, account: &Pubkey) -> u64 {
     match bank.get_account(&account) {
         Some(storage_system_account) => {
             let state = deserialize(&storage_system_account.data);
             if let Ok(state) = state {
                 let state: solana_storage_api::StorageProgramState = state;
-                return state.entry_height;
+                return state.slot;
             }
         }
         None => {
-            info!("error in reading entry_height");
+            info!("error in reading slot");
         }
     }
     0
@@ -78,25 +78,22 @@ fn test_bank_storage() {
         &bob,
         storage_blockhash,
         blockhash,
-        ENTRIES_PER_SEGMENT,
+        SLOTS_PER_SEGMENT,
     );
 
     bank.process_transaction(&tx).unwrap();
 
-    let entry_height = 0;
+    let slot = 0;
     let tx = StorageTransaction::new_mining_proof(
         &bob,
         Hash::default(),
         blockhash,
-        entry_height,
+        slot,
         Signature::default(),
     );
     let _result = bank.process_transaction(&tx).unwrap();
 
-    assert_eq!(
-        get_storage_entry_height(&bank, &bob.pubkey()),
-        ENTRIES_PER_SEGMENT
-    );
+    assert_eq!(get_storage_slot(&bank, &bob.pubkey()), SLOTS_PER_SEGMENT);
     assert_eq!(
         get_storage_blockhash(&bank, &bob.pubkey()),
         storage_blockhash

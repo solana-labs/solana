@@ -9,7 +9,7 @@ use crate::packet::to_shared_blob;
 use crate::repair_service::RepairSlotRange;
 use crate::result::Result;
 use crate::service::Service;
-use crate::storage_stage::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
+use crate::storage_stage::{get_segment_from_slot, SLOTS_PER_SEGMENT};
 use crate::streamer::receiver;
 use crate::streamer::responder;
 use crate::window_service::WindowService;
@@ -103,18 +103,15 @@ pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
     Ok(hasher.result())
 }
 
-fn get_entry_heights_from_blockhash(
-    signature: &ring::signature::Signature,
-    storage_entry_height: u64,
-) -> u64 {
+fn get_slot_from_blockhash(signature: &ring::signature::Signature, storage_slot: u64) -> u64 {
     let signature_vec = signature.as_ref();
     let mut segment_index = u64::from(signature_vec[0])
         | (u64::from(signature_vec[1]) << 8)
         | (u64::from(signature_vec[1]) << 16)
         | (u64::from(signature_vec[2]) << 24);
-    let max_segment_index = get_segment_from_entry(storage_entry_height);
+    let max_segment_index = get_segment_from_slot(storage_slot);
     segment_index %= max_segment_index as u64;
-    segment_index * ENTRIES_PER_SEGMENT
+    segment_index * SLOTS_PER_SEGMENT
 }
 
 fn create_request_processor(
@@ -213,16 +210,15 @@ impl Replicator {
         info!("Looking for leader at {:?}", cluster_entrypoint);
         crate::gossip_service::discover(&cluster_entrypoint.gossip, 1)?;
 
-        let (storage_blockhash, storage_entry_height) =
-            Self::poll_for_blockhash_and_entry_height(&cluster_info)?;
+        let (storage_blockhash, storage_slot) = Self::poll_for_blockhash_and_slot(&cluster_info)?;
 
         let node_info = node.info.clone();
         let signature = keypair.sign(storage_blockhash.as_ref());
-        let slot = get_entry_heights_from_blockhash(&signature, storage_entry_height);
+        let slot = get_slot_from_blockhash(&signature, storage_slot);
         info!("replicating slot: {}", slot);
 
         let mut repair_slot_range = RepairSlotRange::default();
-        repair_slot_range.end = slot + ENTRIES_PER_SEGMENT;
+        repair_slot_range.end = slot + SLOTS_PER_SEGMENT;
         repair_slot_range.start = slot;
 
         let repair_socket = Arc::new(node.sockets.repair);
@@ -318,7 +314,7 @@ impl Replicator {
                     if meta.is_connected {
                         current_slot += 1;
                         warn!("current slot: {}", current_slot);
-                        if current_slot >= start_slot + ENTRIES_PER_SEGMENT {
+                        if current_slot >= start_slot + SLOTS_PER_SEGMENT {
                             break 'outer;
                         }
                     } else {
@@ -430,11 +426,11 @@ impl Replicator {
         }
     }
 
-    pub fn entry_height(&self) -> u64 {
+    pub fn slot(&self) -> u64 {
         self.slot
     }
 
-    fn poll_for_blockhash_and_entry_height(
+    fn poll_for_blockhash_and_slot(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Result<(String, u64)> {
         for _ in 0..10 {
@@ -449,20 +445,20 @@ impl Replicator {
                 .retry_make_rpc_request(&RpcRequest::GetStorageBlockhash, None, 0)
                 .expect("rpc request")
                 .to_string();
-            let storage_entry_height = rpc_client
-                .retry_make_rpc_request(&RpcRequest::GetStorageEntryHeight, None, 0)
+            let storage_slot = rpc_client
+                .retry_make_rpc_request(&RpcRequest::GetStorageSlot, None, 0)
                 .expect("rpc request")
                 .as_u64()
                 .unwrap();
-            info!("max entry_height: {}", storage_entry_height);
-            if get_segment_from_entry(storage_entry_height) != 0 {
-                return Ok((storage_blockhash, storage_entry_height));
+            info!("max slot: {}", storage_slot);
+            if get_segment_from_slot(storage_slot) != 0 {
+                return Ok((storage_blockhash, storage_slot));
             }
             sleep(Duration::from_secs(3));
         }
         Err(Error::new(
             ErrorKind::Other,
-            "Couldn't get blockhash or entry_height",
+            "Couldn't get blockhash or slot",
         ))?
     }
 

@@ -83,7 +83,7 @@ fn test_replay() {
 
     let tvu_addr = target1.info.tvu;
 
-    let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
+    let (bank_forks, _bank_forks_info, blocktree, ledger_signal_receiver) =
         fullnode::new_banks_from_blocktree(&blocktree_path, None);
     let bank = bank_forks.working_bank();
     assert_eq!(
@@ -105,7 +105,6 @@ fn test_replay() {
         &voting_keypair.pubkey(),
         Some(Arc::new(voting_keypair)),
         &bank_forks,
-        &bank_forks_info,
         &cref1,
         {
             Sockets {

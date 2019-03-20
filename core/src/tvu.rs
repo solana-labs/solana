@@ -16,7 +16,6 @@ use crate::bank_forks::BankForks;
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blockstream_service::BlockstreamService;
 use crate::blocktree::Blocktree;
-use crate::blocktree_processor::BankForksInfo;
 use crate::cluster_info::ClusterInfo;
 use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::ReplayStage;
@@ -58,7 +57,6 @@ impl Tvu {
         vote_account: &Pubkey,
         voting_keypair: Option<Arc<T>>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        bank_forks_info: &[BankForksInfo],
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
         blocktree: Arc<Blocktree>,
@@ -106,7 +104,7 @@ impl Tvu {
             &exit,
         );
 
-        let (replay_stage, slot_full_receiver, forward_entry_receiver) = ReplayStage::new(
+        let (replay_stage, slot_full_receiver, rooted_slots_receiver) = ReplayStage::new(
             &keypair.pubkey(),
             vote_account,
             voting_keypair,
@@ -133,11 +131,10 @@ impl Tvu {
 
         let storage_stage = StorageStage::new(
             storage_state,
-            forward_entry_receiver,
+            rooted_slots_receiver,
             Some(blocktree),
             &keypair,
             &exit,
-            bank_forks_info[0].entry_height, // TODO: StorageStage needs to deal with BankForks somehow still
             storage_rotate_count,
             &cluster_info,
         );
@@ -189,10 +186,6 @@ pub mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(starting_balance);
 
         let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
-        let bank_forks_info = vec![BankForksInfo {
-            bank_slot: 0,
-            entry_height: 0,
-        }];
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
@@ -209,7 +202,6 @@ pub mod tests {
             &voting_keypair.pubkey(),
             Some(Arc::new(voting_keypair)),
             &Arc::new(RwLock::new(bank_forks)),
-            &bank_forks_info,
             &cref1,
             {
                 Sockets {

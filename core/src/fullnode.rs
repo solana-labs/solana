@@ -205,7 +205,6 @@ impl Fullnode {
             vote_account,
             voting_keypair,
             &bank_forks,
-            &bank_forks_info,
             &cluster_info,
             sockets,
             blocktree.clone(),
