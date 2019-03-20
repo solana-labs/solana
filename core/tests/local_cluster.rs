@@ -63,34 +63,7 @@ fn test_fullnode_exit_2() {
     cluster_tests::fullnode_exit(&local.entry_point_info, num_nodes);
 }
 
-#[test]
-#[ignore]
-fn test_leader_failure_2() {
-    let num_nodes = 2;
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.rpc_config.enable_fullnode_exit = true;
-    let local = LocalCluster::new_with_config(&[100; 2], 10_000, &fullnode_config);
-    cluster_tests::kill_entry_and_spend_and_verify_rest(
-        &local.entry_point_info,
-        &local.funding_keypair,
-        num_nodes,
-    );
-}
-
-#[test]
-#[ignore]
-fn test_leader_failure_3() {
-    let num_nodes = 3;
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.rpc_config.enable_fullnode_exit = true;
-    let local = LocalCluster::new_with_config(&[100; 3], 10_000, &fullnode_config);
-    cluster_tests::kill_entry_and_spend_and_verify_rest(
-        &local.entry_point_info,
-        &local.funding_keypair,
-        num_nodes,
-    );
-}
-
+// Cluster needs a supermajority to remain, so the minimum size for this test is 4
 #[test]
 fn test_leader_failure_4() {
     solana_logger::setup();
