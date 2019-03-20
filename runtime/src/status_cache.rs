@@ -24,6 +24,10 @@ struct Status<T> {
 }
 
 impl<T: Clone> Status<T> {
+    // new needs to be called once per second to be useful for the Bank
+    // 1M TPS * 1s (length of block in sigs) == 1M items in filter
+    // 1.0E-8 false positive rate
+    // https://hur.st/bloomfilter/?n=1000000&p=1.0E-8&m=&k=
     fn new(blockhash: &Hash) -> Self {
         let keys = (0..27).map(|i| blockhash.hash_at_index(i)).collect();
         Status {
