@@ -467,6 +467,24 @@ impl Bank {
         self.accounts
             .load_accounts(self.accounts_id, txs, results, error_counters)
     }
+    fn check_refs(
+        &self,
+        txs: &[Transaction],
+        lock_results: Vec<Result<()>>,
+        error_counters: &mut ErrorCounters,
+    ) -> Vec<Result<()>> {
+        txs.iter()
+            .zip(lock_results.into_iter())
+            .map(|(tx, lock_res)| {
+                if lock_res.is_ok() && !tx.verify_refs() {
+                    error_counters.invalid_account_index += 1;
+                    Err(TransactionError::InvalidAccountIndex)
+                } else {
+                    lock_res
+                }
+            })
+            .collect()
+    }
     fn check_age(
         &self,
         txs: &[Transaction],
@@ -524,7 +542,8 @@ impl Bank {
         debug!("processing transactions: {}", txs.len());
         let mut error_counters = ErrorCounters::default();
         let now = Instant::now();
-        let age_results = self.check_age(txs, lock_results, max_age, &mut error_counters);
+        let refs_results = self.check_refs(txs, lock_results, &mut error_counters);
+        let age_results = self.check_age(txs, refs_results, max_age, &mut error_counters);
         let sig_results = self.check_signatures(txs, age_results, &mut error_counters);
         let mut loaded_accounts = self.load_accounts(txs, sig_results, &mut error_counters);
         let tick_height = self.tick_height();
@@ -580,6 +599,12 @@ impl Bank {
             inc_new_counter_info!(
                 "bank-process_transactions-error-blockhash_not_found",
                 error_counters.blockhash_not_found
+            );
+        }
+        if 0 != error_counters.invalid_account_index {
+            inc_new_counter_info!(
+                "bank-process_transactions-error-invalid_account_index",
+                error_counters.invalid_account_index
             );
         }
         if 0 != error_counters.reserve_blockhash {
@@ -1273,6 +1298,35 @@ mod tests {
         assert!(bank
             .transfer(2, &mint_keypair, &bob.pubkey(), genesis_block.hash())
             .is_ok());
+    }
+
+    #[test]
+    fn test_bank_invalid_account_index() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let keypair = Keypair::new();
+        let bank = Bank::new(&genesis_block);
+
+        let tx = SystemTransaction::new_move(
+            &mint_keypair,
+            &keypair.pubkey(),
+            1,
+            genesis_block.hash(),
+            0,
+        );
+
+        let mut tx_invalid_program_index = tx.clone();
+        tx_invalid_program_index.instructions[0].program_ids_index = 42;
+        assert_eq!(
+            bank.process_transaction(&tx_invalid_program_index),
+            Err(TransactionError::InvalidAccountIndex)
+        );
+
+        let mut tx_invalid_account_index = tx.clone();
+        tx_invalid_account_index.instructions[0].accounts[0] = 42;
+        assert_eq!(
+            bank.process_transaction(&tx_invalid_account_index),
+            Err(TransactionError::InvalidAccountIndex)
+        );
     }
 
     #[test]

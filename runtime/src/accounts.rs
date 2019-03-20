@@ -32,6 +32,7 @@ pub struct ErrorCounters {
     pub blockhash_too_old: usize,
     pub reserve_blockhash: usize,
     pub insufficient_funds: usize,
+    pub invalid_account_index: usize,
     pub duplicate_signature: usize,
     pub call_chain_too_deep: usize,
     pub missing_signature_for_fee: usize,

@@ -388,7 +388,7 @@ impl BankingStage {
                     .filter_map(|((tx, ver), index)| match tx {
                         None => None,
                         Some(tx) => {
-                            if tx.verify_refs() && ver != 0 {
+                            if ver != 0 {
                                 Some((tx, index))
                             } else {
                                 None

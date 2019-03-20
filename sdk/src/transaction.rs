@@ -189,6 +189,9 @@ pub enum TransactionError {
 
     /// Transaction has a fee but has no signature present
     MissingSignatureForFee,
+
+    /// Transaction contains an invalid account reference
+    InvalidAccountIndex,
 }
 
 /// An atomic transaction
