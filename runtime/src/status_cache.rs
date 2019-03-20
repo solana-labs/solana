@@ -1,11 +1,13 @@
 use crate::bloom::{Bloom, BloomHashIndex};
 use hashbrown::HashMap;
+use log::*;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
 use std::collections::VecDeque;
 use std::ops::Deref;
 #[cfg(test)]
 use std::ops::DerefMut;
+use std::sync::Arc;
 
 /// Each cache entry is designed to span ~1 second of signatures
 const MAX_CACHE_ENTRIES: usize = solana_sdk::timing::MAX_HASH_AGE_IN_SECONDS;
@@ -13,15 +15,51 @@ const MAX_CACHE_ENTRIES: usize = solana_sdk::timing::MAX_HASH_AGE_IN_SECONDS;
 type FailureMap<T> = HashMap<Signature, T>;
 
 #[derive(Clone)]
-pub struct StatusCache<T> {
-    /// all signatures seen at this checkpoint
+struct Status<T> {
+    /// all signatures seen during a hash period
     signatures: Bloom<Signature>,
 
     /// failures
     failures: FailureMap<T>,
+}
 
-    /// Merges are empty unless this is the root checkpoint which cannot be unrolled
-    merges: VecDeque<StatusCache<T>>,
+impl<T: Clone> Status<T> {
+    fn new(blockhash: &Hash) -> Self {
+        let keys = (0..27).map(|i| blockhash.hash_at_index(i)).collect();
+        Status {
+            signatures: Bloom::new(38_340_234, keys),
+            failures: HashMap::default(),
+        }
+    }
+    fn has_signature(&self, sig: &Signature) -> bool {
+        self.signatures.contains(&sig)
+    }
+
+    fn add(&mut self, sig: &Signature) {
+        self.signatures.add(&sig);
+    }
+
+    fn clear(&mut self) {
+        self.failures.clear();
+        self.signatures.clear();
+    }
+    pub fn get_signature_status(&self, sig: &Signature) -> Option<Result<(), T>> {
+        if let Some(res) = self.failures.get(sig) {
+            return Some(Err(res.clone()));
+        } else if self.signatures.contains(sig) {
+            return Some(Ok(()));
+        }
+        None
+    }
+}
+
+#[derive(Clone)]
+pub struct StatusCache<T> {
+    /// currently active status
+    active: Option<Status<T>>,
+
+    /// merges cover previous periods, and are read-only
+    merges: VecDeque<Arc<Status<T>>>,
 }
 
 impl<T: Clone> Default for StatusCache<T> {
@@ -32,11 +70,9 @@ impl<T: Clone> Default for StatusCache<T> {
 
 impl<T: Clone> StatusCache<T> {
     pub fn new(blockhash: &Hash) -> Self {
-        let keys = (0..27).map(|i| blockhash.hash_at_index(i)).collect();
         Self {
-            signatures: Bloom::new(38_340_234, keys),
-            failures: HashMap::new(),
-            merges: VecDeque::new(),
+            active: Some(Status::new(blockhash)),
+            merges: VecDeque::default(),
         }
     }
     fn has_signature_merged(&self, sig: &Signature) -> bool {
@@ -49,23 +85,40 @@ impl<T: Clone> StatusCache<T> {
     }
     /// test if a signature is known
     pub fn has_signature(&self, sig: &Signature) -> bool {
-        self.signatures.contains(&sig) || self.has_signature_merged(sig)
+        self.active
+            .as_ref()
+            .map_or(false, |active| active.has_signature(&sig))
+            || self.has_signature_merged(sig)
     }
+
     /// add a signature
     pub fn add(&mut self, sig: &Signature) {
-        self.signatures.add(&sig)
+        if let Some(active) = self.active.as_mut() {
+            active.add(&sig);
+        }
     }
+
     /// Save an error status for a signature
     pub fn save_failure_status(&mut self, sig: &Signature, err: T) {
-        assert!(self.has_signature(sig), "sig not found");
-        self.failures.insert(*sig, err);
+        assert!(
+            self.active
+                .as_ref()
+                .map_or(false, |active| active.has_signature(sig)),
+            "sig not found"
+        );
+
+        self.active
+            .as_mut()
+            .map(|active| active.failures.insert(*sig, err));
     }
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear(&mut self) {
-        self.failures.clear();
-        self.signatures.clear();
+        if let Some(active) = self.active.as_mut() {
+            active.clear();
+        }
         self.merges = VecDeque::new();
     }
+
     fn get_signature_status_merged(&self, sig: &Signature) -> Option<Result<(), T>> {
         for c in &self.merges {
             if c.has_signature(sig) {
@@ -75,32 +128,30 @@ impl<T: Clone> StatusCache<T> {
         None
     }
     pub fn get_signature_status(&self, sig: &Signature) -> Option<Result<(), T>> {
-        if let Some(res) = self.failures.get(sig) {
-            return Some(Err(res.clone()));
-        } else if self.signatures.contains(sig) {
-            return Some(Ok(()));
-        }
-        self.get_signature_status_merged(sig)
+        self.active
+            .as_ref()
+            .and_then(|active| active.get_signature_status(sig))
+            .or_else(|| self.get_signature_status_merged(sig))
     }
 
     fn squash_parent_is_full(&mut self, parent: &Self) -> bool {
         // flatten and squash the parent and its merges into self.merges,
         //  returns true if self is full
-
-        self.merges.push_back(StatusCache {
-            signatures: parent.signatures.clone(),
-            failures: parent.failures.clone(),
-            merges: VecDeque::new(),
-        });
-        for merge in &parent.merges {
-            self.merges.push_back(StatusCache {
-                signatures: merge.signatures.clone(),
-                failures: merge.failures.clone(),
-                merges: VecDeque::new(),
-            });
+        if parent.active.is_some() {
+            warn!("=========== FIXME: squash() on an active parent! ================");
         }
-        self.merges.truncate(MAX_CACHE_ENTRIES);
+        // TODO: put this assert back in
+        //assert!(parent.active.is_none());
 
+        if self.merges.len() < MAX_CACHE_ENTRIES {
+            for merge in parent
+                .merges
+                .iter()
+                .take(MAX_CACHE_ENTRIES - self.merges.len())
+            {
+                self.merges.push_back(merge.clone());
+            }
+        }
         self.merges.len() == MAX_CACHE_ENTRIES
     }
 
@@ -119,15 +170,21 @@ impl<T: Clone> StatusCache<T> {
 
     /// Crate a new cache, pushing the old cache into the merged queue
     pub fn new_cache(&mut self, blockhash: &Hash) {
-        let mut old = Self::new(blockhash);
-        std::mem::swap(&mut old.signatures, &mut self.signatures);
-        std::mem::swap(&mut old.failures, &mut self.failures);
-        assert!(old.merges.is_empty());
-        self.merges.push_front(old);
+        assert!(self.active.is_some());
+        let merge = self.active.replace(Status::new(blockhash));
+
+        self.merges.push_front(Arc::new(merge.unwrap()));
         if self.merges.len() > MAX_CACHE_ENTRIES {
             self.merges.pop_back();
         }
     }
+
+    pub fn freeze(&mut self) {
+        if let Some(active) = self.active.take() {
+            self.merges.push_front(Arc::new(active));
+        }
+    }
+
     pub fn get_signature_status_all<U>(
         checkpoints: &[U],
         signature: &Signature,
@@ -246,7 +303,7 @@ mod tests {
 
         let blockhash = hash(blockhash.as_ref());
         let mut second = BankStatusCache::new(&blockhash);
-
+        first.freeze();
         second.squash(&[&first]);
 
         assert_eq!(second.get_signature_status(&sig), Some(Ok(())));
@@ -254,7 +311,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // takes a lot of time or RAM or both..
     fn test_status_cache_squash_overflow() {
         let mut blockhash = hash(Hash::default().as_ref());
         let mut cache = BankStatusCache::new(&blockhash);
@@ -263,7 +319,9 @@ mod tests {
             .map(|_| {
                 blockhash = hash(blockhash.as_ref());
 
-                BankStatusCache::new(&blockhash)
+                let mut p = BankStatusCache::new(&blockhash);
+                p.freeze();
+                p
             })
             .collect();
 
@@ -332,4 +390,18 @@ mod tests {
             false
         );
     }
+
+    #[test]
+    fn test_status_cache_freeze() {
+        let sig = Signature::default();
+        let blockhash = hash(Hash::default().as_ref());
+        let mut cache: StatusCache<()> = StatusCache::new(&blockhash);
+
+        cache.freeze();
+        cache.freeze();
+
+        cache.add(&sig);
+        assert_eq!(cache.has_signature(&sig), false);
+    }
+
 }

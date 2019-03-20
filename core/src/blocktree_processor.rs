@@ -130,14 +130,13 @@ pub fn process_blocktree(
                 warn!("entry0 not present");
                 return Err(BlocktreeProcessorError::LedgerVerificationFailed);
             }
-            let entry0 = &entries[0];
+            let entry0 = entries.remove(0);
             if !(entry0.is_tick() && entry0.verify(&last_entry_hash)) {
                 warn!("Ledger proof of history failed at entry0");
                 return Err(BlocktreeProcessorError::LedgerVerificationFailed);
             }
             last_entry_hash = entry0.hash;
             entry_height += 1;
-            entries = entries.drain(1..).collect();
         }
 
         if !entries.is_empty() {
