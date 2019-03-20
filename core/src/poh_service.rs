@@ -117,7 +117,7 @@ mod tests {
             bank.slot(),
             Some(4),
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let exit = Arc::new(AtomicBool::new(false));
