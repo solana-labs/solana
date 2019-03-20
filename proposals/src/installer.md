@@ -41,8 +41,6 @@ $ solana-keygen -o update-manifest.json  # <-- only generated once, the public k
 $ solana-install deploy http://example.com/path/to/solana-release.tar.bz2 update-manifest.json
 ```
 
-Note: Supporting IPFS download URLs in the future would be attractive.
-
 #### Run a validator node that auto updates itself
 
 ```bash
@@ -52,12 +50,12 @@ $ solana-keygen ...  # <-- runs the latest solana-keygen
 $ solana-install run solana-fullnode ...  # <-- runs a fullnode, restarting it as necesary when an update is applied
 ```
 
-### Update Manifest on-chain program
-The Update Manifest program is used to advertise the deployment of new release tarballs
-on a solana cluster.  Each instance of this program describes a logical update
-channel for a given target triple (eg, `x86_64-apple-darwin`).  The public key
-of each program instance is well-known between the entity deploying new updates
-and users consuming those updates.
+### On-chain Update Manifest
+An update manifest is used to advertise the deployment of new release tarballs
+on a solana cluster.  The update manifest is stored using the `config` program,
+and each update manifest account describes a logical update channel for a given
+target triple (eg, `x86_64-apple-darwin`).  The account public key is well-known
+between the entity deploying new updates and users consuming those updates.
 
 The update tarball itself is hosted elsewhere, off-chain and can be fetched from
 the specified `download_url`.
