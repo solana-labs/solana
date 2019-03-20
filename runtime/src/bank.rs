@@ -27,7 +27,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
-/// Reasons a transaction might be rejected.
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct EpochSchedule {
     /// The maximum number of slots in each epoch.
