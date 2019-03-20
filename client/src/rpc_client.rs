@@ -448,7 +448,7 @@ impl RpcClient {
         let mut now = Instant::now();
         let mut confirmed_blocks = 0;
         loop {
-            let response = self.get_signature_confirmations(signature);
+            let response = self.get_num_blocks_since_signature_confirmation(signature);
             match response {
                 Ok(count) => {
                     if confirmed_blocks != count {
@@ -476,7 +476,10 @@ impl RpcClient {
         Ok(())
     }
 
-    pub fn get_signature_confirmations(&self, sig: &Signature) -> io::Result<usize> {
+    pub fn get_num_blocks_since_signature_confirmation(
+        &self,
+        sig: &Signature,
+    ) -> io::Result<usize> {
         let params = json!([format!("{}", sig)]);
         let response = self
             .client
@@ -486,17 +489,23 @@ impl RpcClient {
                 1,
             )
             .map_err(|error| {
-                debug!("Response get_signature_confirmations: {}", error);
+                debug!(
+                    "Response get_num_blocks_since_signature_confirmation: {}",
+                    error
+                );
                 io::Error::new(
                     io::ErrorKind::Other,
-                    "GetSignatureConfirmations request failure",
+                    "GetNumBlocksSinceSignatureConfirmation request failure",
                 )
             })?;
         serde_json::from_value(response).map_err(|error| {
-            debug!("ParseError: get_signature_confirmations: {}", error);
+            debug!(
+                "ParseError: get_num_blocks_since_signature_confirmation: {}",
+                error
+            );
             io::Error::new(
                 io::ErrorKind::Other,
-                "GetSignatureConfirmations parse failure",
+                "GetNumBlocksSinceSignatureConfirmation parse failure",
             )
         })
     }

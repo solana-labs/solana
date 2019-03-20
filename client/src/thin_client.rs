@@ -189,8 +189,12 @@ impl ThinClient {
     pub fn fullnode_exit(&self) -> io::Result<bool> {
         self.rpc_client.fullnode_exit()
     }
-    pub fn get_signature_confirmations(&mut self, sig: &Signature) -> io::Result<usize> {
-        self.rpc_client.get_signature_confirmations(sig)
+    pub fn get_num_blocks_since_signature_confirmation(
+        &mut self,
+        sig: &Signature,
+    ) -> io::Result<usize> {
+        self.rpc_client
+            .get_num_blocks_since_signature_confirmation(sig)
     }
 }
 

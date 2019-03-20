@@ -282,10 +282,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         id: String,
     ) -> Result<(usize, RpcSignatureStatus)> {
-        info!(
-            "get_signature_confirmation_status rpc request received: {:?}",
-            id
-        );
+        info!("get_signature_confirmation rpc request received: {:?}", id);
         let signature = verify_signature(&id)?;
         let res = meta
             .request_processor
@@ -315,7 +312,7 @@ impl RpcSol for RpcSolImpl {
             }
         };
         info!(
-            "get_signature_confirmation_status rpc request status: {:?}",
+            "get_signature_confirmation rpc request status: {:?}",
             status
         );
         Ok(status)
