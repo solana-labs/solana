@@ -1796,11 +1796,16 @@ mod tests {
     #[test]
     fn new_with_external_ip_test_gossip() {
         let ip = IpAddr::V4(Ipv4Addr::from(0));
-        let node = Node::new_with_external_ip(&Keypair::new().pubkey(), &socketaddr!(0, 8050));
+        let port = {
+            bind_in_range(FULLNODE_PORT_RANGE)
+                .expect("Failed to bind")
+                .0
+        };
+        let node = Node::new_with_external_ip(&Keypair::new().pubkey(), &socketaddr!(0, port));
 
         check_node_sockets(&node, ip, FULLNODE_PORT_RANGE);
 
-        assert_eq!(node.sockets.gossip.local_addr().unwrap().port(), 8050);
+        assert_eq!(node.sockets.gossip.local_addr().unwrap().port(), port);
     }
 
     #[test]
