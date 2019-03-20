@@ -216,11 +216,15 @@ pub trait RpcSol {
     #[rpc(meta, name = "fullnodeExit")]
     fn fullnode_exit(&self, _: Self::Metadata) -> Result<bool>;
 
-    #[rpc(meta, name = "getSignatureConfirmations")]
-    fn get_signature_confirmations(&self, _: Self::Metadata, _: String) -> Result<usize>;
+    #[rpc(meta, name = "getNumBlocksSinceSignatureConfirmation")]
+    fn get_num_blocks_since_signature_confirmation(
+        &self,
+        _: Self::Metadata,
+        _: String,
+    ) -> Result<usize>;
 
-    #[rpc(meta, name = "getSignatureConfirmationStatus")]
-    fn get_signature_confirmation_status(
+    #[rpc(meta, name = "getSignatureConfirmation")]
+    fn get_signature_confirmation(
         &self,
         _: Self::Metadata,
         _: String,
@@ -262,16 +266,18 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus> {
-        self.get_signature_confirmation_status(meta, id)
-            .map(|x| x.1)
+        self.get_signature_confirmation(meta, id).map(|x| x.1)
     }
 
-    fn get_signature_confirmations(&self, meta: Self::Metadata, id: String) -> Result<usize> {
-        self.get_signature_confirmation_status(meta, id)
-            .map(|x| x.0)
+    fn get_num_blocks_since_signature_confirmation(
+        &self,
+        meta: Self::Metadata,
+        id: String,
+    ) -> Result<usize> {
+        self.get_signature_confirmation(meta, id).map(|x| x.0)
     }
 
-    fn get_signature_confirmation_status(
+    fn get_signature_confirmation(
         &self,
         meta: Self::Metadata,
         id: String,

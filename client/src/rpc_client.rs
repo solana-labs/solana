@@ -481,7 +481,7 @@ impl RpcClient {
         let response = self
             .client
             .send(
-                &RpcRequest::GetSignatureConfirmations,
+                &RpcRequest::GetNumBlocksSinceSignatureConfirmation,
                 Some(params.clone()),
                 1,
             )
