@@ -41,7 +41,7 @@ impl RpcRequest {
             RpcRequest::GetStoragePubkeysForEntryHeight => "getStoragePubkeysForEntryHeight",
             RpcRequest::FullnodeExit => "fullnodeExit",
             RpcRequest::GetNumBlocksSinceSignatureConfirmation => {
-                "getNumBlocksSinceSignatureConfirmation "
+                "getNumBlocksSinceSignatureConfirmation"
             }
         };
         let mut request = json!({
