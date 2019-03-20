@@ -2,6 +2,7 @@ use clap::{
     crate_description, crate_name, crate_version, App, AppSettings, Arg, ArgGroup, ArgMatches,
     SubCommand,
 };
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
 use solana_wallet::wallet::{parse_command, process_command, WalletConfig, WalletError};
 use std::error;
@@ -77,6 +78,14 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         rpc_port,
         rpc_tls: matches.is_present("rpc_tls"),
     })
+}
+
+// Return an error if a pubkey cannot be parsed.
+fn is_pubkey(string: String) -> Result<(), String> {
+    match string.parse::<Pubkey>() {
+        Ok(_) => Ok(()),
+        Err(err) => Err(format!("{:?}", err)),
+    }
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -170,6 +179,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("PROCESS_ID")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_pubkey)
                         .help("The process id of the transfer to cancel"),
                 ),
         )
@@ -199,6 +209,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("delegate-account")
                         .value_name("PUBKEY")
                         .takes_value(true)
+                        .validator(is_pubkey)
                         .help("Address to delegate this vote account to"),
                 )
                 .arg(
@@ -206,6 +217,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("authorize-voter")
                         .value_name("PUBKEY")
                         .takes_value(true)
+                        .validator(is_pubkey)
                         .help("Vote signer to authorize"),
                 ),
         )
@@ -218,6 +230,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_pubkey)
                         .help("Staking account address to fund"),
                 )
                 .arg(
@@ -253,6 +266,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_pubkey)
                         .help("The pubkey of recipient"),
                 )
                 .arg(
@@ -276,6 +290,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .requires("timestamp")
+                        .validator(is_pubkey)
                         .help("Require timestamp from this third party"),
                 )
                 .arg(
@@ -285,6 +300,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .multiple(true)
                         .use_delimiter(true)
+                        .validator(is_pubkey)
                         .help("Any third party signatures required to unlock the lamports"),
                 )
                 .arg(
@@ -302,6 +318,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_pubkey)
                         .help("The pubkey of recipient"),
                 )
                 .arg(
@@ -322,6 +339,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
+                        .validator(is_pubkey)
                         .help("The pubkey of recipient"),
                 )
                 .arg(
