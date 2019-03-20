@@ -11,10 +11,13 @@ fi
 
 eval "$(ci/channel-info.sh)"
 
+TAG=
 if [[ -n "$BUILDKITE_TAG" ]]; then
   CHANNEL_OR_TAG=$BUILDKITE_TAG
+  TAG="$BUILDKITE_TAG"
 elif [[ -n "$TRIGGERED_BUILDKITE_TAG" ]]; then
   CHANNEL_OR_TAG=$TRIGGERED_BUILDKITE_TAG
+  TAG="$TRIGGERED_BUILDKITE_TAG"
 else
   CHANNEL_OR_TAG=$CHANNEL
 fi
@@ -90,6 +93,10 @@ for file in solana-release-$TARGET.tar.bz2 solana-install-$TARGET; do
     echo Published to:
     $DRYRUN ci/format-url.sh http://solana-release.s3.amazonaws.com/"$CHANNEL_OR_TAG"/"$file"
   )
+
+  if [[ -n $TAG ]]; then
+    ci/upload-github-release-asset.sh $file
+  fi
 done
 
 echo --- ok
