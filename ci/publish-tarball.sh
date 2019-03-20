@@ -64,7 +64,7 @@ echo --- Creating tarball
 
   tar jvcf solana-release.tar-$TARGET.bz2 solana-release/
 
-  cp solana-release/bin/solana-install-$TARGET .
+  cp solana-release/bin/solana-install solana-install-$TARGET
 )
 
 echo --- Saving build artifacts
