@@ -11,10 +11,13 @@ fi
 
 eval "$(ci/channel-info.sh)"
 
+TAG=
 if [[ -n "$BUILDKITE_TAG" ]]; then
   CHANNEL_OR_TAG=$BUILDKITE_TAG
+  TAG="$BUILDKITE_TAG"
 elif [[ -n "$TRIGGERED_BUILDKITE_TAG" ]]; then
   CHANNEL_OR_TAG=$TRIGGERED_BUILDKITE_TAG
+  TAG="$TRIGGERED_BUILDKITE_TAG"
 else
   CHANNEL_OR_TAG=$CHANNEL
 fi
@@ -24,6 +27,17 @@ if [[ -z $CHANNEL_OR_TAG ]]; then
   exit 1
 fi
 
+case "$(uname)" in
+Darwin)
+  TARGET=x86_64-apple-darwin
+  ;;
+Linux)
+  TARGET=x86_64-unknown-linux-gnu
+  ;;
+*)
+  TARGET=unknown-unknown-unknown
+  ;;
+esac
 
 echo --- Creating tarball
 (
@@ -31,17 +45,6 @@ echo --- Creating tarball
   rm -rf solana-release/
   mkdir solana-release/
 
-  case "$(uname)" in
-  Darwin)
-    TARGET=x86_64-apple-darwin
-    ;;
-  Linux)
-    TARGET=x86_64-unknown-linux-gnu
-    ;;
-  *)
-    TARGET=unknown-unknown-unknown
-    ;;
-  esac
   COMMIT="$(git rev-parse HEAD)"
 
   (
@@ -62,19 +65,21 @@ echo --- Creating tarball
   )
   cp solana-release-cuda/bin/solana-fullnode solana-release/bin/solana-fullnode-cuda
 
-  tar jvcf solana-release.tar.bz2 solana-release/
+  tar jvcf solana-release-$TARGET.tar.bz2 solana-release/
+  cp solana-release/bin/solana-install solana-install-$TARGET
 )
 
 echo --- Saving build artifacts
 source ci/upload-ci-artifact.sh
-upload-ci-artifact solana-release.tar.bz2
+upload-ci-artifact solana-release-$TARGET.tar.bz2
 
 if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
   echo Skipped due to DO_NOT_PUBLISH_TAR
   exit 0
 fi
 
-echo --- AWS S3 Store
+file=solana-release-$TARGET.tar.bz2
+echo --- AWS S3 Store: $file
 (
   set -x
   $DRYRUN docker run \
@@ -83,11 +88,14 @@ echo --- AWS S3 Store
     --env AWS_SECRET_ACCESS_KEY \
     --volume "$PWD:/solana" \
     eremite/aws-cli:2018.12.18 \
-    /usr/bin/s3cmd --acl-public put /solana/solana-release.tar.bz2 \
-    s3://solana-release/"$CHANNEL_OR_TAG"/solana-release.tar.bz2
+    /usr/bin/s3cmd --acl-public put /solana/"$file" s3://solana-release/"$CHANNEL_OR_TAG"/"$file"
 
   echo Published to:
-  $DRYRUN ci/format-url.sh http://solana-release.s3.amazonaws.com/"$CHANNEL_OR_TAG"/solana-release.tar.bz2
+  $DRYRUN ci/format-url.sh http://solana-release.s3.amazonaws.com/"$CHANNEL_OR_TAG"/"$file"
 )
+
+if [[ -n $TAG ]]; then
+  ci/upload-github-release-asset.sh $file
+fi
 
 echo --- ok
