@@ -249,7 +249,7 @@ impl PohRecorder {
         start_slot: u64,
         my_leader_slot_index: Option<u64>,
         ticks_per_slot: u64,
-        id: Pubkey,
+        id: &Pubkey,
     ) -> (Self, Receiver<WorkingBankEntries>) {
         let poh = Poh::new(last_entry_hash, tick_height);
         let (sender, receiver) = channel();
@@ -271,7 +271,7 @@ impl PohRecorder {
                     })
                     .unwrap_or(None),
                 max_last_leader_grace_ticks: ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR,
-                id,
+                id: *id,
             },
             receiver,
         )
@@ -330,7 +330,7 @@ mod tests {
             0,
             Some(4),
             DEFAULT_TICKS_PER_SLOT,
-            Pubkey::default(),
+            &Pubkey::default(),
         );
         poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 1);
@@ -347,7 +347,7 @@ mod tests {
             0,
             Some(4),
             DEFAULT_TICKS_PER_SLOT,
-            Pubkey::default(),
+            &Pubkey::default(),
         );
         poh_recorder.tick();
         poh_recorder.tick();
@@ -364,7 +364,7 @@ mod tests {
             0,
             Some(4),
             DEFAULT_TICKS_PER_SLOT,
-            Pubkey::default(),
+            &Pubkey::default(),
         );
         poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 1);
@@ -383,7 +383,7 @@ mod tests {
             0,
             Some(4),
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
 
         let working_bank = WorkingBank {
@@ -408,7 +408,7 @@ mod tests {
             0,
             Some(4),
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
 
         let working_bank = WorkingBank {
@@ -445,7 +445,7 @@ mod tests {
             0,
             Some(4),
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
 
         poh_recorder.tick();
@@ -480,7 +480,7 @@ mod tests {
             0,
             Some(4),
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
 
         let working_bank = WorkingBank {
@@ -507,7 +507,7 @@ mod tests {
             0,
             Some(4),
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
 
         let working_bank = WorkingBank {
@@ -543,7 +543,7 @@ mod tests {
             0,
             Some(4),
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
 
         let working_bank = WorkingBank {
@@ -576,7 +576,7 @@ mod tests {
             0,
             Some(4),
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
 
         let working_bank = WorkingBank {
@@ -602,7 +602,7 @@ mod tests {
             0,
             Some(4),
             DEFAULT_TICKS_PER_SLOT,
-            Pubkey::default(),
+            &Pubkey::default(),
         );
         poh_recorder.tick();
         poh_recorder.tick();
@@ -625,7 +625,7 @@ mod tests {
             0,
             Some(4),
             DEFAULT_TICKS_PER_SLOT,
-            Pubkey::default(),
+            &Pubkey::default(),
         );
         poh_recorder.tick();
         poh_recorder.tick();
@@ -648,7 +648,7 @@ mod tests {
             0,
             Some(4),
             DEFAULT_TICKS_PER_SLOT,
-            Pubkey::default(),
+            &Pubkey::default(),
         );
         poh_recorder.tick();
         poh_recorder.tick();
@@ -671,7 +671,7 @@ mod tests {
             0,
             Some(4),
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
         let ticks_per_slot = bank.ticks_per_slot();
         let working_bank = WorkingBank {
@@ -694,7 +694,7 @@ mod tests {
             0,
             None,
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
         let (sender, receiver) = sync_channel(1);
         poh_recorder.set_bank(&bank);
@@ -717,7 +717,7 @@ mod tests {
             0,
             Some(4),
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
 
         let end_slot = 3;
@@ -752,7 +752,7 @@ mod tests {
             0,
             None,
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
 
         // Test that with no leader slot, we don't reach the leader tick

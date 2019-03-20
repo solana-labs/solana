@@ -440,7 +440,7 @@ pub fn create_test_recorder(
         bank.slot(),
         Some(4),
         bank.ticks_per_slot(),
-        Pubkey::default(),
+        &Pubkey::default(),
     );
     let poh_recorder = Arc::new(Mutex::new(poh_recorder));
     let poh_service = PohService::new(poh_recorder.clone(), &PohServiceConfig::default(), &exit);
@@ -655,7 +655,7 @@ mod tests {
             bank.slot(),
             None,
             bank.ticks_per_slot(),
-            Pubkey::default(),
+            &Pubkey::default(),
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
@@ -714,7 +714,7 @@ mod tests {
             bank.slot(),
             Some(4),
             bank.ticks_per_slot(),
-            pubkey,
+            &pubkey,
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
