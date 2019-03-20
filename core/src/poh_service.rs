@@ -104,6 +104,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
+    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_poh_service() {
@@ -116,6 +117,7 @@ mod tests {
             bank.slot(),
             Some(4),
             bank.ticks_per_slot(),
+            Pubkey::default(),
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let exit = Arc::new(AtomicBool::new(false));

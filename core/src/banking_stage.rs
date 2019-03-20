@@ -18,6 +18,7 @@ use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{self, Bank};
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Transaction, TransactionError};
 use std::net::UdpSocket;
@@ -459,6 +460,7 @@ pub fn create_test_recorder(
         bank.slot(),
         Some(4),
         bank.ticks_per_slot(),
+        Pubkey::default(),
     );
     poh_recorder.set_bank(&bank);
 
@@ -699,6 +701,7 @@ mod tests {
             bank.slot(),
             None,
             bank.ticks_per_slot(),
+            Pubkey::default(),
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
@@ -757,6 +760,7 @@ mod tests {
             bank.slot(),
             Some(4),
             bank.ticks_per_slot(),
+            pubkey,
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
