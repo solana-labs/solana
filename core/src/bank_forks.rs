@@ -68,6 +68,7 @@ impl BankForks {
             .map(|(k, _v)| *k)
             .collect()
     }
+
     pub fn get(&self, bank_slot: u64) -> Option<&Arc<Bank>> {
         self.banks.get(&bank_slot)
     }
