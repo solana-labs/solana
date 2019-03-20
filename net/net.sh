@@ -278,7 +278,8 @@ start() {
       rm -f "$SOLANA_ROOT"/solana-release.tar.bz2
       (
         set -x
-        curl -o "$SOLANA_ROOT"/solana-release.tar.bz2 http://solana-release.s3.amazonaws.com/"$releaseChannel"/solana-release.tar.bz2
+        curl -o "$SOLANA_ROOT"/solana-release.tar.bz2 \
+          http://solana-release.s3.amazonaws.com/"$releaseChannel"/solana-release-x86_64-unknown-linux-gnu.tar.bz2
       )
       tarballFilename="$SOLANA_ROOT"/solana-release.tar.bz2
     fi
