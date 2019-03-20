@@ -315,7 +315,7 @@ impl Replicator {
         'outer: loop {
             while let Ok(meta) = blocktree.meta(current_slot) {
                 if let Some(meta) = meta {
-                    if meta.is_rooted {
+                    if meta.is_connected {
                         current_slot += 1;
                         warn!("current slot: {}", current_slot);
                         if current_slot >= start_slot + ENTRIES_PER_SEGMENT {

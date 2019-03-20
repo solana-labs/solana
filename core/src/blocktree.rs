@@ -101,8 +101,8 @@ pub struct SlotMeta {
     // from this one.
     pub next_slots: Vec<u64>,
     // True if this slot is full (consumed == last_index + 1) and if every
-    // slot that is a parent of this slot is also rooted.
-    pub is_rooted: bool,
+    // slot that is a parent of this slot is also connected.
+    pub is_connected: bool,
 }
 
 impl SlotMeta {
@@ -125,7 +125,7 @@ impl SlotMeta {
             received: 0,
             parent_slot,
             next_slots: vec![],
-            is_rooted: slot == 0,
+            is_connected: slot == 0,
             last_index: std::u64::MAX,
         }
     }
@@ -636,7 +636,7 @@ impl Blocktree {
         // from block 0, which is true iff:
         // 1) The block with index prev_block_index is itself part of the trunk of consecutive blocks
         // starting from block 0,
-        slot_meta.is_rooted &&
+        slot_meta.is_connected &&
         // AND either:
         // 1) The slot didn't exist in the database before, and now we have a consecutive
         // block for that slot
@@ -696,7 +696,7 @@ impl Blocktree {
 
                     // This is a newly inserted slot so:
                     // 1) Chain to the previous slot, and also
-                    // 2) Determine whether to set the is_rooted flag
+                    // 2) Determine whether to set the is_connected flag
                     self.chain_new_slot_to_prev_slot(
                         &mut prev_slot.borrow_mut(),
                         slot,
@@ -707,15 +707,15 @@ impl Blocktree {
         }
 
         if self.is_newly_completed_slot(&RefCell::borrow(&*meta_copy), meta_backup)
-            && RefCell::borrow(&*meta_copy).is_rooted
+            && RefCell::borrow(&*meta_copy).is_connected
         {
-            // This is a newly inserted slot and slot.is_rooted is true, so go through
-            // and update all child slots with is_rooted if applicable
+            // This is a newly inserted slot and slot.is_connected is true, so go through
+            // and update all child slots with is_connected if applicable
             let mut next_slots: Vec<(u64, Rc<RefCell<(SlotMeta)>>)> =
                 vec![(slot, meta_copy.clone())];
             while !next_slots.is_empty() {
                 let (_, current_slot) = next_slots.pop().unwrap();
-                current_slot.borrow_mut().is_rooted = true;
+                current_slot.borrow_mut().is_connected = true;
 
                 let current_slot = &RefCell::borrow(&*current_slot);
                 if current_slot.is_full() {
@@ -741,7 +741,7 @@ impl Blocktree {
         current_slot_meta: &mut SlotMeta,
     ) {
         prev_slot_meta.next_slots.push(current_slot);
-        current_slot_meta.is_rooted = prev_slot_meta.is_rooted && prev_slot_meta.is_full();
+        current_slot_meta.is_connected = prev_slot_meta.is_connected && prev_slot_meta.is_full();
     }
 
     fn is_newly_completed_slot(
@@ -915,7 +915,7 @@ impl Blocktree {
 
         bootstrap_meta.consumed = last.index() + 1;
         bootstrap_meta.received = last.index() + 1;
-        bootstrap_meta.is_rooted = true;
+        bootstrap_meta.is_connected = true;
 
         let mut batch = self.db.batch()?;
         batch.put_cf(
@@ -1319,7 +1319,7 @@ pub mod tests {
         assert_eq!(meta.parent_slot, 0);
         assert_eq!(meta.last_index, num_entries - 1);
         assert!(meta.next_slots.is_empty());
-        assert!(meta.is_rooted);
+        assert!(meta.is_connected);
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
@@ -1755,7 +1755,7 @@ pub mod tests {
             let s1 = blocktree.meta(1).unwrap().unwrap();
             assert!(s1.next_slots.is_empty());
             // Slot 1 is not trunk because slot 0 hasn't been inserted yet
-            assert!(!s1.is_rooted);
+            assert!(!s1.is_connected);
             assert_eq!(s1.parent_slot, 0);
             assert_eq!(s1.last_index, entries_per_slot - 1);
 
@@ -1766,7 +1766,7 @@ pub mod tests {
             let s2 = blocktree.meta(2).unwrap().unwrap();
             assert!(s2.next_slots.is_empty());
             // Slot 2 is not trunk because slot 0 hasn't been inserted yet
-            assert!(!s2.is_rooted);
+            assert!(!s2.is_connected);
             assert_eq!(s2.parent_slot, 1);
             assert_eq!(s2.last_index, entries_per_slot - 1);
 
@@ -1774,7 +1774,7 @@ pub mod tests {
             // but still isn't part of the trunk
             let s1 = blocktree.meta(1).unwrap().unwrap();
             assert_eq!(s1.next_slots, vec![2]);
-            assert!(!s1.is_rooted);
+            assert!(!s1.is_connected);
             assert_eq!(s1.parent_slot, 0);
             assert_eq!(s1.last_index, entries_per_slot - 1);
 
@@ -1795,7 +1795,7 @@ pub mod tests {
                     assert_eq!(s.parent_slot, i - 1);
                 }
                 assert_eq!(s.last_index, entries_per_slot - 1);
-                assert!(s.is_rooted);
+                assert!(s.is_connected);
             }
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
@@ -1849,9 +1849,9 @@ pub mod tests {
                 }
 
                 if i == 0 {
-                    assert!(s.is_rooted);
+                    assert!(s.is_connected);
                 } else {
-                    assert!(!s.is_rooted);
+                    assert!(!s.is_connected);
                 }
             }
 
@@ -1874,7 +1874,7 @@ pub mod tests {
                     assert_eq!(s.parent_slot, i - 1);
                 }
                 assert_eq!(s.last_index, entries_per_slot - 1);
-                assert!(s.is_rooted);
+                assert!(s.is_connected);
             }
         }
 
@@ -1882,8 +1882,8 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_forward_chaining_is_rooted() {
-        let blocktree_path = get_tmp_ledger_path("test_forward_chaining_is_rooted");
+    pub fn test_forward_chaining_is_connected() {
+        let blocktree_path = get_tmp_ledger_path("test_forward_chaining_is_connected");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_slots = 15;
@@ -1925,9 +1925,9 @@ pub mod tests {
 
                 // Other than slot 0, no slots should be part of the trunk
                 if i != 0 {
-                    assert!(!s.is_rooted);
+                    assert!(!s.is_connected);
                 } else {
-                    assert!(s.is_rooted);
+                    assert!(s.is_connected);
                 }
             }
 
@@ -1945,9 +1945,9 @@ pub mod tests {
                             assert!(s.next_slots.is_empty());
                         }
                         if i <= slot_index as u64 + 3 {
-                            assert!(s.is_rooted);
+                            assert!(s.is_connected);
                         } else {
-                            assert!(!s.is_rooted);
+                            assert!(!s.is_connected);
                         }
 
                         if i == 0 {
