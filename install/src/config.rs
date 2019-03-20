@@ -1,24 +1,36 @@
-use crate::update_manifest::SignedUpdateManifest;
+use crate::update_manifest::UpdateManifest;
 use serde_derive::{Deserialize, Serialize};
-use serde_yaml;
 use solana_sdk::pubkey::Pubkey;
 use std::fs::{create_dir_all, File};
-use std::io::{Error, ErrorKind, Write};
-use std::path::Path;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 pub struct Config {
-    pub data_dir: String,
     pub json_rpc_url: String,
-    pub update_pubkey: Pubkey,
-    pub current_install: Option<SignedUpdateManifest>,
+    pub update_manifest_pubkey: Pubkey,
+    pub current_update_manifest: Option<UpdateManifest>,
+    pub update_poll_secs: u64,
+    releases_dir: PathBuf,
+    bin_dir: PathBuf,
 }
 
 impl Config {
-    fn _load(config_file: &str) -> Result<Self, Error> {
+    pub fn new(data_dir: &str, json_rpc_url: &str, update_manifest_pubkey: &Pubkey) -> Self {
+        Self {
+            json_rpc_url: json_rpc_url.to_string(),
+            update_manifest_pubkey: *update_manifest_pubkey,
+            current_update_manifest: None,
+            update_poll_secs: 60, // check for updates once a minute
+            releases_dir: PathBuf::from(data_dir).join("releases"),
+            bin_dir: PathBuf::from(data_dir).join("bin"),
+        }
+    }
+
+    fn _load(config_file: &str) -> Result<Self, io::Error> {
         let file = File::open(config_file.to_string())?;
         let config = serde_yaml::from_reader(file)
-            .map_err(|err| Error::new(ErrorKind::Other, format!("{:?}", err)))?;
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
         Ok(config)
     }
 
@@ -26,9 +38,9 @@ impl Config {
         Self::_load(config_file).map_err(|err| format!("Unable to load {}: {:?}", config_file, err))
     }
 
-    fn _save(&self, config_file: &str) -> Result<(), Error> {
+    fn _save(&self, config_file: &str) -> Result<(), io::Error> {
         let serialized = serde_yaml::to_string(self)
-            .map_err(|err| Error::new(ErrorKind::Other, format!("{:?}", err)))?;
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
 
         if let Some(outdir) = Path::new(&config_file).parent() {
             create_dir_all(outdir)?;
@@ -42,5 +54,13 @@ impl Config {
     pub fn save(&self, config_file: &str) -> Result<(), String> {
         self._save(config_file)
             .map_err(|err| format!("Unable to save {}: {:?}", config_file, err))
+    }
+
+    pub fn bin_dir(&self) -> &PathBuf {
+        &self.bin_dir
+    }
+
+    pub fn release_dir(&self, release_sha256: &str) -> PathBuf {
+        self.releases_dir.join(release_sha256)
     }
 }

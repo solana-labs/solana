@@ -10,6 +10,20 @@ mod config;
 mod defaults;
 mod update_manifest;
 
+fn url_validator(url: String) -> Result<(), String> {
+    match url::Url::parse(&url) {
+        Ok(_) => Ok(()),
+        Err(err) => Err(format!("{:?}", err)),
+    }
+}
+
+fn pubkey_validator(pubkey: String) -> Result<(), String> {
+    match pubkey.parse::<Pubkey>() {
+        Ok(_) => Ok(()),
+        Err(err) => Err(format!("{:?}", err)),
+    }
+}
+
 fn main() -> Result<(), String> {
     solana_logger::setup();
 
@@ -39,10 +53,11 @@ fn main() -> Result<(), String> {
                         .long("data_dir")
                         .value_name("PATH")
                         .takes_value(true)
+                        .required(true)
                         .help("Directory to store install data");
                     match *defaults::DATA_DIR {
                         Some(ref data_dir) => arg.default_value(&data_dir),
-                        None => arg.required(true),
+                        None => arg,
                     }
                 })
                 .arg(
@@ -52,23 +67,22 @@ fn main() -> Result<(), String> {
                         .value_name("URL")
                         .takes_value(true)
                         .default_value(defaults::JSON_RPC_URL)
+                        .validator(url_validator)
                         .help("JSON RPC URL for the solana cluster"),
                 )
                 .arg({
-                    let arg = Arg::with_name("update_pubkey")
+                    let arg = Arg::with_name("update_manifest_pubkey")
                         .short("p")
                         .long("pubkey")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(|value| match value.parse::<Pubkey>() {
-                            Ok(_) => Ok(()),
-                            Err(err) => Err(format!("{:?}", err)),
-                        })
+                        .required(true)
+                        .validator(pubkey_validator)
                         .help("Public key of the update manifest");
 
-                    match defaults::update_pubkey(build_env::TARGET) {
+                    match defaults::update_manifest_pubkey(build_env::TARGET) {
                         Some(default_value) => arg.default_value(default_value),
-                        None => arg.required(true),
+                        None => arg,
                     }
                 }),
         )
@@ -89,14 +103,38 @@ fn main() -> Result<(), String> {
             SubCommand::with_name("deploy")
                 .about("deploys a new update")
                 .setting(AppSettings::DisableVersion)
+                .arg({
+                    let arg = Arg::with_name("from_keypair_file")
+                        .short("k")
+                        .long("keypair")
+                        .value_name("PATH")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Keypair file of the account that funds the deployment");
+                    match *defaults::USER_KEYPAIR {
+                        Some(ref config_file) => arg.default_value(&config_file),
+                        None => arg,
+                    }
+                })
+                .arg(
+                    Arg::with_name("json_rpc_url")
+                        .short("u")
+                        .long("url")
+                        .value_name("URL")
+                        .takes_value(true)
+                        .default_value(defaults::JSON_RPC_URL)
+                        .validator(url_validator)
+                        .help("JSON RPC URL for the solana cluster"),
+                )
                 .arg(
                     Arg::with_name("download_url")
                         .index(1)
                         .required(true)
+                        .validator(url_validator)
                         .help("URL to the solana release archive"),
                 )
                 .arg(
-                    Arg::with_name("update_manifest_keypair")
+                    Arg::with_name("update_manifest_keypair_file")
                         .index(2)
                         .required(true)
                         .help("Keypair file for the update manifest (/path/to/keypair.json)"),
@@ -132,24 +170,32 @@ fn main() -> Result<(), String> {
     match matches.subcommand() {
         ("init", Some(matches)) => {
             let json_rpc_url = matches.value_of("json_rpc_url").unwrap();
-            let update_pubkey = matches
-                .value_of("update_pubkey")
+            let update_manifest_pubkey = matches
+                .value_of("update_manifest_pubkey")
                 .unwrap()
                 .parse::<Pubkey>()
                 .unwrap();
             let data_dir = matches.value_of("data_dir").unwrap();
-            command::init(config_file, data_dir, json_rpc_url, &update_pubkey)
+            command::init(config_file, data_dir, json_rpc_url, &update_manifest_pubkey)
         }
         ("info", Some(matches)) => {
             let local_info_only = matches.is_present("local_info_only");
-            command::info(config_file, local_info_only)
+            command::info(config_file, local_info_only).map(|_| ())
         }
         ("deploy", Some(matches)) => {
+            let from_keypair_file = matches.value_of("from_keypair_file").unwrap();
+            let json_rpc_url = matches.value_of("json_rpc_url").unwrap();
             let download_url = matches.value_of("download_url").unwrap();
-            let update_manifest_keypair = matches.value_of("update_manifest_keypair").unwrap();
-            command::deploy(config_file, download_url, update_manifest_keypair)
+            let update_manifest_keypair_file =
+                matches.value_of("update_manifest_keypair_file").unwrap();
+            command::deploy(
+                json_rpc_url,
+                from_keypair_file,
+                download_url,
+                update_manifest_keypair_file,
+            )
         }
-        ("update", Some(_matches)) => command::update(config_file),
+        ("update", Some(_matches)) => command::update(config_file).map(|_| ()),
         ("run", Some(matches)) => {
             let program_name = matches.value_of("program_name").unwrap();
             let program_arguments = matches
