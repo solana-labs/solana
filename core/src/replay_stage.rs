@@ -199,6 +199,7 @@ impl ReplayStage {
                             );
                             if let Some(new_root) = locktower.record_vote(bank.slot()) {
                                 bank_forks.write().unwrap().set_root(new_root);
+                                Self::handle_new_root(&bank_forks, &mut progress);
                             }
                             locktower.update_epoch(&bank);
                             cluster_info.write().unwrap().push_vote(vote);
@@ -404,6 +405,14 @@ impl ReplayStage {
         blocktree_processor::process_entries(bank, entries)?;
 
         Ok(())
+    }
+
+    fn handle_new_root(
+        bank_forks: &Arc<RwLock<BankForks>>,
+        progress: &mut HashMap<u64, (Hash, usize)>,
+    ) {
+        let r_bank_forks = bank_forks.read().unwrap();
+        progress.retain(|k, _| r_bank_forks.get(*k).is_some());
     }
 
     fn process_completed_bank(
@@ -635,5 +644,15 @@ mod test {
         }
 
         let _ignored = remove_dir_all(&ledger_path);
+    }
+
+    #[test]
+    fn test_handle_new_root() {
+        let bank0 = Bank::default();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
+        let mut progress = HashMap::new();
+        progress.insert(5, (Hash::default(), 0));
+        ReplayStage::handle_new_root(&bank_forks, &mut progress);
+        assert!(progress.is_empty());
     }
 }
