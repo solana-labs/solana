@@ -48,6 +48,7 @@ pub struct PohRecorder {
     working_bank: Option<WorkingBank>,
     sender: Sender<WorkingBankEntries>,
     start_leader_at_tick: Option<u64>,
+    last_leader_tick: Option<u64>,
     max_last_leader_grace_ticks: u64,
     id: Pubkey,
 }
@@ -58,9 +59,13 @@ impl PohRecorder {
             let bank = working_bank.bank;
             let next_leader_slot =
                 leader_schedule_utils::next_leader_slot(&self.id, bank.slot(), &bank);
-            self.start_leader_at_tick = next_leader_slot
-                .map(|slot| Some(slot * bank.ticks_per_slot() + self.max_last_leader_grace_ticks))
-                .unwrap_or(None);
+            let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
+                &next_leader_slot,
+                bank.ticks_per_slot(),
+                self.max_last_leader_grace_ticks,
+            );
+            self.start_leader_at_tick = start_leader_at_tick;
+            self.last_leader_tick = last_leader_tick;
         }
         if let Some(ref signal) = self.clear_bank_signal {
             let _ = signal.try_send(true);
@@ -103,7 +108,7 @@ impl PohRecorder {
                 // Is the current tick in the same slot as the target tick?
                 // Check if either grace period has expired,
                 // or target tick is = grace period (i.e. poh recorder was just reset)
-                if self.tick_height().saturating_sub(target_tick) < self.max_last_leader_grace_ticks
+                if self.tick_height() <= self.last_leader_tick.unwrap_or(0)
                     && (self.tick_height() >= target_tick
                         || self.max_last_leader_grace_ticks
                             >= target_tick.saturating_sub(self.start_tick))
@@ -117,6 +122,21 @@ impl PohRecorder {
                 (false, 0)
             })
             .unwrap_or((false, 0))
+    }
+
+    fn compute_leader_slot_ticks(
+        next_leader_slot: &Option<u64>,
+        ticks_per_slot: u64,
+        grace_ticks: u64,
+    ) -> (Option<u64>, Option<u64>) {
+        next_leader_slot
+            .map(|slot| {
+                (
+                    Some(slot * ticks_per_slot + grace_ticks),
+                    Some((slot + 1) * ticks_per_slot - 1),
+                )
+            })
+            .unwrap_or((None, None))
     }
 
     // synchronize PoH with a bank
@@ -139,9 +159,13 @@ impl PohRecorder {
         self.start_tick = tick_height + 1;
         self.poh = Poh::new(blockhash, tick_height);
         self.max_last_leader_grace_ticks = ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR;
-        self.start_leader_at_tick = my_next_leader_slot
-            .map(|slot| Some(slot * ticks_per_slot + self.max_last_leader_grace_ticks))
-            .unwrap_or(None);
+        let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
+            &my_next_leader_slot,
+            ticks_per_slot,
+            self.max_last_leader_grace_ticks,
+        );
+        self.start_leader_at_tick = start_leader_at_tick;
+        self.last_leader_tick = last_leader_tick;
     }
 
     pub fn set_working_bank(&mut self, working_bank: WorkingBank) {
@@ -251,6 +275,12 @@ impl PohRecorder {
     ) -> (Self, Receiver<WorkingBankEntries>) {
         let poh = Poh::new(last_entry_hash, tick_height);
         let (sender, receiver) = channel();
+        let max_last_leader_grace_ticks = ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR;
+        let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
+            &my_leader_slot_index,
+            ticks_per_slot,
+            max_last_leader_grace_ticks,
+        );
         (
             PohRecorder {
                 poh,
@@ -260,15 +290,9 @@ impl PohRecorder {
                 clear_bank_signal: None,
                 start_slot,
                 start_tick: tick_height + 1,
-                start_leader_at_tick: my_leader_slot_index
-                    .map(|slot| {
-                        Some(
-                            slot * ticks_per_slot
-                                + ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR,
-                        )
-                    })
-                    .unwrap_or(None),
-                max_last_leader_grace_ticks: ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR,
+                start_leader_at_tick,
+                last_leader_tick,
+                max_last_leader_grace_ticks,
                 id: *id,
             },
             receiver,
