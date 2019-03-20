@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::io_utils::{FillExt, MemMap};
+use crate::io_utils::{Fill, MemMap};
 
 use byteorder::{BigEndian, ByteOrder};
 
@@ -319,8 +319,6 @@ where
             // Don't produce deleted records
             if val.val.is_some() {
                 return Some((key, val));
-            } else {
-                continue;
             }
         }
 

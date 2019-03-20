@@ -44,7 +44,7 @@ pub struct CRCReader<R: Read> {
 }
 
 /// Helper trait to make zeroing buffers easier
-pub trait FillExt<T> {
+pub trait Fill<T> {
     fn fill(&mut self, v: T);
 }
 
@@ -151,7 +151,7 @@ impl<R: Read> CRCReader<R> {
     }
 }
 
-impl<T> FillExt<T> for [T]
+impl<T> Fill<T> for [T]
 where
     T: Clone,
 {
