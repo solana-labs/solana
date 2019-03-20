@@ -109,7 +109,7 @@ impl Fullnode {
             bank.slot(),
             leader_schedule_utils::next_leader_slot(&id, bank.slot(), &bank),
             bank.ticks_per_slot(),
-            id,
+            &id,
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, &exit);
