@@ -16,6 +16,7 @@ use std::time::Duration;
 pub const MAX_REPAIR_LENGTH: usize = 16;
 pub const REPAIR_MS: u64 = 100;
 pub const MAX_REPAIR_TRIES: u64 = 128;
+pub const NUM_FORKS_TO_REPAIR: usize = 5;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepairType {
@@ -27,8 +28,6 @@ pub enum RepairType {
 struct RepairInfo {
     max_slot: u64,
     repair_tries: u64,
-    // List of (slot, weight) representing weighted forks
-    forks: Vec<(u64, u64)>,
 }
 
 impl RepairInfo {
@@ -36,13 +35,7 @@ impl RepairInfo {
         RepairInfo {
             max_slot: 0,
             repair_tries: 0,
-            forks: vec![],
         }
-    }
-
-    fn set_forks(&mut self, mut forks: Vec<(u64, u64)>) {
-        forks.sort_by(|a, b| b.1.cmp(&a.1));
-        self.forks = forks;
     }
 }
 
@@ -186,8 +179,19 @@ impl RepairService {
         // Slot height and blob indexes for blobs we want to repair
         let mut repairs: Vec<RepairType> = vec![];
 
+        // Find the first NUM_FORKS_TO_REPAIR forks we're interested in
+        let slots_of_interest: Vec<_> = {
+            let r_slots_of_interest = blocktree.slots_of_interest.read().unwrap();
+
+            r_slots_of_interest
+                .iter()
+                .take(NUM_FORKS_TO_REPAIR)
+                .cloned()
+                .collect()
+        };
+
         // Iterate through the possible forks in order (they are weighted by lockout)
-        for (slot, _) in &repair_info.forks {
+        for (_, slot) in &slots_of_interest {
             Self::repair_forks_at_slot(blocktree, &mut repairs, max_repairs, *slot);
             if repairs.len() >= max_repairs {
                 break;

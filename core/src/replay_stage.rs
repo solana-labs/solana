@@ -153,12 +153,17 @@ impl ReplayStage {
                         })
                         .collect();
 
-                    votable.sort_by_key(|b| b.0);
+                    votable.sort_by(|a, b| a.0.cmp(&b.0).reverse());
+                    let slots_of_interest: Vec<_> =
+                        votable.iter().map(|(w, b)| (*w, b.slot())).collect();
+                    if !slots_of_interest.is_empty() {
+                        blocktree.set_slots_of_interest(slots_of_interest);
+                    }
                     let ms = timing::duration_as_ms(&locktower_start.elapsed());
                     info!("@{:?} locktower duration: {:?}", timing::timestamp(), ms,);
                     inc_new_counter_info!("replay_stage-locktower_duration", ms as usize);
 
-                    if let Some((_, bank)) = votable.last() {
+                    if let Some((_, bank)) = votable.first() {
                         subscriptions.notify_subscribers(&bank);
 
                         if let Some(ref voting_keypair) = voting_keypair {

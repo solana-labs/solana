@@ -17,7 +17,7 @@ use std::collections::VecDeque;
 use std::fs;
 use std::io;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use super::db::{
     Cursor, Database, IDataCf, IErasureCf, IMetaCf, IWriteBatch, LedgerColumnFamily,
@@ -112,6 +112,7 @@ impl Blocktree {
             data_cf,
             erasure_cf,
             new_blobs_signals: vec![],
+            slots_of_interest: RwLock::new(vec![]),
         })
     }
 

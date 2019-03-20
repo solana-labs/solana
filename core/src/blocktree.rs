@@ -28,7 +28,7 @@ use std::fs;
 use std::io;
 use std::rc::Rc;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 mod db;
 #[cfg(feature = "kvstore")]
@@ -142,6 +142,7 @@ pub struct Blocktree {
     data_cf: DataCf,
     erasure_cf: ErasureCf,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
+    pub slots_of_interest: RwLock<Vec<(u128, u64)>>,
 }
 
 // Column family for metadata about a leader slot
@@ -610,6 +611,10 @@ impl Blocktree {
             .collect();
 
         Ok(result)
+    }
+
+    pub fn set_slots_of_interest(&self, slots_of_interest: Vec<(u128, u64)>) {
+        *self.slots_of_interest.write().unwrap() = slots_of_interest;
     }
 
     fn deserialize_blobs<I>(blob_datas: &[I]) -> Vec<Entry>
