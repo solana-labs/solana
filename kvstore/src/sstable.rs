@@ -457,7 +457,7 @@ mod test {
         let meta = IndexMeta {
             start,
             end,
-            data_size: data_size,
+            data_size,
             level: 0,
         };
 

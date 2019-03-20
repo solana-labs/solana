@@ -2,11 +2,10 @@ use crate::error::Result;
 use crate::io_utils::{CRCReader, CRCWriter};
 use crate::sstable::Value;
 use crate::Key;
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use memmap::Mmap;
 use std::collections::BTreeMap;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 // RocksDb's log uses this size.
@@ -162,7 +161,8 @@ impl LogWriter for CRCWriter<File> {
 
 fn log(logger: &mut Logger, key: &Key, commit: i64, data: Option<&[u8]>) -> Result<()> {
     let writer = &mut logger.writer;
-    write_value(writer, key, commit, data)?;
+
+    bincode::serialize_into(writer, &(key, commit, data))?;
 
     Ok(())
 }
@@ -184,72 +184,14 @@ fn file_opts() -> fs::OpenOptions {
 
 fn read_log(log_buf: &[u8]) -> Result<BTreeMap<Key, Value>> {
     let mut map = BTreeMap::new();
-    if log_buf.len() <= 8 + 24 + 8 + 1 {
-        return Ok(map);
-    }
 
     let mut reader = CRCReader::new(log_buf, BLOCK_SIZE);
 
-    while let Ok((key, val)) = read_value(&mut reader) {
-        map.insert(key, val);
+    while let Ok((key, commit, opt_bytes)) = bincode::deserialize_from(&mut reader) {
+        map.insert(key, Value::new(commit, opt_bytes));
     }
 
     Ok(map)
-}
-
-#[inline]
-fn write_value<W: Write>(
-    writer: &mut W,
-    key: &Key,
-    commit: i64,
-    data: Option<&[u8]>,
-) -> Result<()> {
-    let len = 24 + 8 + 1 + data.map(<[u8]>::len).unwrap_or(0);
-
-    writer.write_u64::<BigEndian>(len as u64)?;
-    writer.write_all(&key.0)?;
-    writer.write_i64::<BigEndian>(commit)?;
-
-    match data {
-        Some(data) => {
-            writer.write_u8(1)?;
-            writer.write_all(data)?;
-        }
-        None => {
-            writer.write_u8(0)?;
-        }
-    }
-
-    Ok(())
-}
-
-#[inline]
-fn read_value<R: Read>(reader: &mut R) -> Result<(Key, Value)> {
-    let len = reader.read_u64::<BigEndian>()?;
-    let data_len = len as usize - (24 + 8 + 1);
-
-    let mut reader = reader.by_ref().take(len);
-
-    let mut key_buf = [0; 24];
-    reader.read_exact(&mut key_buf)?;
-    let key = Key(key_buf);
-
-    let commit = reader.read_i64::<BigEndian>()?;
-    let exists = reader.read_u8()? != 0;
-
-    let data = if exists {
-        let mut buf = Vec::with_capacity(data_len);
-        reader.read_to_end(&mut buf)?;
-        Some(buf)
-    } else {
-        None
-    };
-
-    let val = Value {
-        ts: commit,
-        val: data,
-    };
-    Ok((key, val))
 }
 
 #[cfg(test)]
@@ -258,16 +200,17 @@ mod test {
 
     #[test]
     fn test_log_serialization() {
-        let (key, commit, data) = (&Key::from((1, 2, 3)), 4, vec![0; 1024]);
+        let (key, commit, data) = (Key::from((1, 2, 3)), 4, Some(vec![0; 1024]));
 
         let mut buf = vec![];
 
-        write_value(&mut buf, key, commit, Some(&data)).unwrap();
+        bincode::serialize_into(&mut buf, &(&key, commit, &data)).unwrap();
+        buf.extend(std::iter::repeat(0).take(buf.len()));
 
-        let (stored_key, stored_val) = read_value(&mut &buf[..]).unwrap();
-        assert_eq!(&stored_key, key);
-        assert_eq!(stored_val.val.as_ref().unwrap(), &data);
-        assert_eq!(stored_val.ts, commit);
+        let log_record: (Key, i64, Option<Vec<u8>>) = bincode::deserialize_from(&buf[..]).unwrap();
+        assert_eq!(log_record.0, key);
+        assert_eq!(log_record.1, commit);
+        assert_eq!(log_record.2, data);
     }
 
     #[test]
