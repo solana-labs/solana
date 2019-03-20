@@ -1805,10 +1805,11 @@ mod tests {
 
     #[test]
     fn new_replicator_external_ip_test() {
-        let ip = IpAddr::V4(Ipv4Addr::from(0));
+        let ip = Ipv4Addr::from(0);
         let node =
-            Node::new_replicator_with_external_ip(&Keypair::new().pubkey(), &socketaddr!(0, 8050));
+            Node::new_replicator_with_external_ip(&Keypair::new().pubkey(), &socketaddr!(ip, 0));
 
+        let ip = IpAddr::V4(ip);
         check_socket(&node.sockets.storage.unwrap(), ip, FULLNODE_PORT_RANGE);
         check_socket(&node.sockets.gossip, ip, FULLNODE_PORT_RANGE);
         check_socket(&node.sockets.repair, ip, FULLNODE_PORT_RANGE);
