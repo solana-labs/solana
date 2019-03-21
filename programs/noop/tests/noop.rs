@@ -1,8 +1,8 @@
 use solana_runtime::bank::Bank;
-use solana_runtime::loader_utils::load_program;
+use solana_runtime::bank_client::BankClient;
+use solana_runtime::loader_utils::{create_invoke_instruction, load_program};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::native_loader;
-use solana_sdk::transaction::Transaction;
 
 #[test]
 fn test_program_native_noop() {
@@ -10,19 +10,12 @@ fn test_program_native_noop() {
 
     let (genesis_block, mint_keypair) = GenesisBlock::new(50);
     let bank = Bank::new(&genesis_block);
+    let alice_client = BankClient::new(&bank, mint_keypair);
 
     let program = "noop".as_bytes().to_vec();
-    let program_id = load_program(&bank, &mint_keypair, &native_loader::id(), program);
+    let program_id = load_program(&bank, &alice_client, &native_loader::id(), program);
 
     // Call user program
-    let tx = Transaction::new_signed(
-        &mint_keypair,
-        &[],
-        &program_id,
-        &1u8,
-        bank.last_blockhash(),
-        0,
-    );
-    bank.process_transaction(&tx).unwrap();
-    assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
+    let instruction = create_invoke_instruction(alice_client.pubkey(), program_id, &1u8);
+    alice_client.process_instruction(instruction).unwrap();
 }
