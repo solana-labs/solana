@@ -32,6 +32,9 @@ edge|beta)
 stable)
   URL=https://api.testnet.solana.com
   ;;
+localhost)
+  URL=http://localhost:8899
+  ;;
 *)
   echo "Error: unknown channel: $CHANNEL"
   exit 1
