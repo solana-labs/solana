@@ -27,7 +27,6 @@ Methods
 * [getRecentBlockhash](#getrecentblockhash)
 * [getSignatureStatus](#getsignaturestatus)
 * [getTransactionCount](#gettransactioncount)
-* [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
 * [startSubscriptionChannel](#startsubscriptionchannel)
 
@@ -205,26 +204,6 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ---
 
-### requestAirdrop
-Requests an airdrop of lamports to a Pubkey
-
-##### Parameters:
-* `string` - Pubkey of account to receive lamports, as base-58 encoded string
-* `integer` - lamports, as a signed 64-bit integer
-
-##### Results:
-* `string` - Transaction Signature of airdrop, as base-58 encoded string
-
-##### Example:
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"requestAirdrop", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri", 50]}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":"5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW","id":1}
-```
-
----
 
 ### sendTransaction
 Creates new transaction

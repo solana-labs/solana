@@ -9,7 +9,6 @@ pub enum RpcRequest {
     GetRecentBlockhash,
     GetSignatureStatus,
     GetTransactionCount,
-    RequestAirdrop,
     SendTransaction,
     RegisterNode,
     SignVote,
@@ -30,7 +29,6 @@ impl RpcRequest {
             RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
             RpcRequest::GetSignatureStatus => "getSignatureStatus",
             RpcRequest::GetTransactionCount => "getTransactionCount",
-            RpcRequest::RequestAirdrop => "requestAirdrop",
             RpcRequest::SendTransaction => "sendTransaction",
             RpcRequest::RegisterNode => "registerNode",
             RpcRequest::SignVote => "signVote",
@@ -97,10 +95,6 @@ mod tests {
         let test_request = RpcRequest::GetTransactionCount;
         let request = test_request.build_request_json(1, None);
         assert_eq!(request["method"], "getTransactionCount");
-
-        let test_request = RpcRequest::RequestAirdrop;
-        let request = test_request.build_request_json(1, None);
-        assert_eq!(request["method"], "requestAirdrop");
 
         let test_request = RpcRequest::SendTransaction;
         let request = test_request.build_request_json(1, None);

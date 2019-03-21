@@ -96,13 +96,6 @@ fn main() {
                 .help("Enable the JSON RPC 'fullnodeExit' API.  Only enable in a debug environment"),
         )
         .arg(
-            Arg::with_name("rpc_drone_address")
-                .long("rpc-drone-address")
-                .value_name("HOST:PORT")
-                .takes_value(true)
-                .help("Enable the JSON RPC 'requestAirdrop' API with this drone address."),
-        )
-        .arg(
             Arg::with_name("signer")
                 .short("s")
                 .long("signer")
@@ -166,9 +159,6 @@ fn main() {
     if matches.is_present("enable_rpc_exit") {
         fullnode_config.rpc_config.enable_fullnode_exit = true;
     }
-    fullnode_config.rpc_config.drone_addr = matches
-        .value_of("rpc_drone_address")
-        .map(|address| address.parse().expect("failed to parse drone address"));
 
     let gossip_addr = {
         let mut addr = solana_netutil::parse_port_or_addr(
