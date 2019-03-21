@@ -44,10 +44,9 @@ pub fn slot_leader_at(slot: u64, bank: &Bank) -> Option<Pubkey> {
 }
 
 /// Return the next slot after the given current_slot that the given node will be leader
-pub fn next_leader_slot(pubkey: &Pubkey, current_slot: u64, bank: &Bank) -> Option<u64> {
-    let (epoch, slot_index) = bank.get_epoch_and_slot_index(current_slot + 1);
-
-    if let Some(leader_schedule) = leader_schedule(epoch, bank) {
+pub fn next_leader_slot(pubkey: &Pubkey, mut current_slot: u64, bank: &Bank) -> Option<u64> {
+    let (mut epoch, mut start_index) = bank.get_epoch_and_slot_index(current_slot + 1);
+    while let Some(leader_schedule) = leader_schedule(epoch, bank) {
         // clippy thinks I should do this:
         //  for (i, <item>) in leader_schedule
         //                           .iter()
@@ -57,11 +56,15 @@ pub fn next_leader_slot(pubkey: &Pubkey, current_slot: u64, bank: &Bank) -> Opti
         //
         //  but leader_schedule doesn't implement Iter...
         #[allow(clippy::needless_range_loop)]
-        for i in slot_index..bank.get_slots_in_epoch(epoch) {
+        for i in start_index..bank.get_slots_in_epoch(epoch) {
+            current_slot += 1;
             if *pubkey == leader_schedule[i] {
-                return Some(current_slot + 1 + (i - slot_index) as u64);
+                return Some(current_slot);
             }
         }
+
+        epoch += 1;
+        start_index = 0;
     }
     None
 }

@@ -27,12 +27,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
-use sys_info;
 
 pub type UnprocessedPackets = Vec<(SharedPackets, usize)>; // `usize` is the index of the first unprocessed packet in `SharedPackets`
-
-// number of threads is 1 until mt bank is ready
-pub const NUM_THREADS: u32 = 10;
 
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
@@ -57,7 +53,7 @@ impl BankingStage {
         // Single thread to compute confirmation
         let lcs_handle = LeaderConfirmationService::start(&poh_recorder, exit.clone());
         // Many banks that process transactions in parallel.
-        let mut bank_thread_hdls: Vec<JoinHandle<()>> = (0..Self::num_threads())
+        let mut bank_thread_hdls: Vec<JoinHandle<()>> = (0..4)
             .map(|_| {
                 let verified_receiver = verified_receiver.clone();
                 let poh_recorder = poh_recorder.clone();
@@ -187,10 +183,6 @@ impl BankingStage {
                 }
             }
         }
-    }
-
-    pub fn num_threads() -> u32 {
-        sys_info::cpu_num().unwrap_or(NUM_THREADS)
     }
 
     /// Convert the transactions from a blob of binary data to a vector of transactions
