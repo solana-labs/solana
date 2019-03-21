@@ -62,18 +62,16 @@ impl Mapper for Memory {
     }
 
     fn rotate_tables(&self) -> Result<()> {
-        use std::mem::swap;
-
-        let (mut active, mut compact, mut garbage) = (
+        let (mut active, mut compaction, mut garbage) = (
             self.tables.write().expect(BACKING_ERR_MSG),
             self.compaction.write().expect(BACKING_ERR_MSG),
             self.garbage.write().expect(BACKING_ERR_MSG),
         );
 
-        // compacted tables => active set
-        swap(&mut active, &mut compact);
         // old active set => garbage
-        garbage.extend(compact.drain());
+        garbage.extend(active.drain());
+        // compacted tables => new active set
+        active.extend(compaction.drain());
 
         Ok(())
     }
@@ -141,4 +139,88 @@ fn get_table(id: Id, map: &TableMap) -> Result<SSTable> {
 #[inline]
 fn next_id() -> Id {
     rand::thread_rng().gen()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::mapper::Kind;
+    use crate::sstable::{Key, Value};
+    use crate::test::gen;
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+    use std::thread;
+
+    const DATA_SIZE: usize = 128;
+
+    #[test]
+    fn test_table_management() {
+        let mapper = Arc::new(Memory::new());
+        let records: BTreeMap<_, _> = gen_records().take(1024).collect();
+
+        let mut threads = vec![];
+        let mut number_of_tables = 4;
+
+        for kind in [Kind::Active, Kind::Garbage, Kind::Compaction].iter() {
+            let records = records.clone();
+            let mapper = Arc::clone(&mapper);
+
+            let child = thread::spawn(move || {
+                for _ in 0..number_of_tables {
+                    mapper
+                        .make_table(*kind, &mut |mut data_writer, mut index_writer| {
+                            SSTable::create(
+                                &mut records.iter(),
+                                0,
+                                &mut data_writer,
+                                &mut index_writer,
+                            );
+                        })
+                        .unwrap();
+                }
+            });
+
+            number_of_tables *= 2;
+            threads.push(child);
+        }
+
+        threads.into_iter().for_each(|child| child.join().unwrap());
+        assert_eq!(mapper.tables.read().unwrap().len(), 4);
+        assert_eq!(mapper.garbage.read().unwrap().len(), 8);
+        assert_eq!(mapper.compaction.read().unwrap().len(), 16);
+
+        mapper.empty_trash().unwrap();
+        assert_eq!(mapper.garbage.read().unwrap().len(), 0);
+
+        mapper.rotate_tables().unwrap();
+        assert_eq!(mapper.tables.read().unwrap().len(), 16);
+        assert_eq!(mapper.garbage.read().unwrap().len(), 4);
+        assert!(mapper.compaction.read().unwrap().is_empty());
+
+        let active_set = mapper.active_set().unwrap();
+        assert_eq!(active_set.len(), 16);
+    }
+
+    #[test]
+    fn test_no_state() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mapper = Arc::new(Memory::new());
+        let records: BTreeMap<_, _> = gen_records().take(1024).collect();
+
+        mapper
+            .make_table(Kind::Active, &mut |mut data_writer, mut index_writer| {
+                SSTable::create(&mut records.iter(), 0, &mut data_writer, &mut index_writer);
+            })
+            .unwrap();
+
+        let state_path = tempdir.path().join("state");
+        mapper.serialize_state_to(&state_path).unwrap();
+        mapper.load_state_from(&state_path).unwrap();
+        assert!(!state_path.exists());
+    }
+
+    fn gen_records() -> impl Iterator<Item = (Key, Value)> {
+        gen::pairs(DATA_SIZE).map(|(key, data)| (key, Value::new(0, Some(data))))
+    }
+
 }

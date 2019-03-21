@@ -369,7 +369,6 @@ fn is_lvl0_full(tables: &[BTreeMap<Key, SSTable>], config: &Config) -> bool {
     }
 }
 
-#[cfg(any(test, debug_assertions))]
 pub mod test {
     pub mod gen {
         use crate::Key;

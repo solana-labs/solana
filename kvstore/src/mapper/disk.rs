@@ -50,7 +50,7 @@ impl Disk {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct PathInfo {
     pub data: PathBuf,
     pub index: PathBuf,
@@ -212,4 +212,125 @@ fn next_id(kind: Kind) -> Id {
         id: rand::thread_rng().gen(),
         kind,
     }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::mapper::Kind;
+    use crate::sstable::{Key, Value};
+    use crate::test::gen;
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+    use std::thread;
+    use tempfile::tempdir;
+
+    const DATA_SIZE: usize = 128;
+
+    #[test]
+    fn test_table_management() {
+        let tempdir = tempdir().unwrap();
+        let mapper = Arc::new(Disk::single(tempdir.path()));
+        let records: BTreeMap<_, _> = gen_records().take(1024).collect();
+
+        let mut threads = vec![];
+        let mut number_of_tables = 4;
+
+        for kind in [Kind::Active, Kind::Garbage, Kind::Compaction].iter() {
+            let records = records.clone();
+            let mapper = Arc::clone(&mapper);
+
+            let child = thread::spawn(move || {
+                for _ in 0..number_of_tables {
+                    mapper
+                        .make_table(*kind, &mut |mut data_writer, mut index_writer| {
+                            SSTable::create(
+                                &mut records.iter(),
+                                0,
+                                &mut data_writer,
+                                &mut index_writer,
+                            );
+                        })
+                        .unwrap();
+                }
+            });
+
+            number_of_tables *= 2;
+            threads.push(child);
+        }
+
+        threads.into_iter().for_each(|child| child.join().unwrap());
+        let count_kind = |kind, mapper: &Disk| {
+            mapper
+                .mappings
+                .read()
+                .unwrap()
+                .keys()
+                .filter(|id| id.kind == kind)
+                .count()
+        };
+        assert_eq!(count_kind(Kind::Active, &mapper), 4);
+        assert_eq!(count_kind(Kind::Garbage, &mapper), 8);
+        assert_eq!(count_kind(Kind::Compaction, &mapper), 16);
+
+        mapper.empty_trash().unwrap();
+        assert_eq!(count_kind(Kind::Garbage, &mapper), 0);
+
+        mapper.rotate_tables().unwrap();
+        assert_eq!(count_kind(Kind::Active, &mapper), 16);
+        assert_eq!(count_kind(Kind::Garbage, &mapper), 4);
+        assert_eq!(count_kind(Kind::Compaction, &mapper), 0);
+
+        let active_set = mapper.active_set().unwrap();
+        assert_eq!(active_set.len(), 16);
+    }
+
+    #[test]
+    fn test_state() {
+        let tempdir = tempdir().unwrap();
+        let dirs_1: Vec<_> = (0..4).map(|i| tempdir.path().join(i.to_string())).collect();
+        let dirs_2: Vec<_> = (4..8).map(|i| tempdir.path().join(i.to_string())).collect();
+
+        let mapper_1 = Arc::new(Disk::new(&dirs_1));
+        let records: BTreeMap<_, _> = gen_records().take(1024).collect();
+
+        for (i, &kind) in [Kind::Active, Kind::Compaction, Kind::Garbage]
+            .iter()
+            .enumerate()
+        {
+            for _ in 0..(i * 3) {
+                mapper_1
+                    .make_table(kind, &mut |mut data_writer, mut index_writer| {
+                        SSTable::create(
+                            &mut records.iter(),
+                            0,
+                            &mut data_writer,
+                            &mut index_writer,
+                        );
+                    })
+                    .unwrap();
+            }
+        }
+
+        let state_path = tempdir.path().join("state");
+        mapper_1.serialize_state_to(&state_path).unwrap();
+        assert!(state_path.exists());
+
+        let mapper_2 = Arc::new(Disk::new(&dirs_2));
+        mapper_2.load_state_from(&state_path).unwrap();
+
+        assert_eq!(
+            &*mapper_1.mappings.read().unwrap(),
+            &*mapper_2.mappings.read().unwrap()
+        );
+        assert_eq!(
+            &*mapper_1.storage_dirs.read().unwrap(),
+            &*mapper_2.storage_dirs.read().unwrap()
+        );
+    }
+
+    fn gen_records() -> impl Iterator<Item = (Key, Value)> {
+        gen::pairs(DATA_SIZE).map(|(key, data)| (key, Value::new(0, Some(data))))
+    }
+
 }
