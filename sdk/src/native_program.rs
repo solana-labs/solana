@@ -49,3 +49,25 @@ macro_rules! process_instruction_entrypoint(
         }
     )
 );
+
+// Macro to define an entrypoint for a processor module
+#[macro_export]
+macro_rules! processor_entrypoint(
+    ($processor:ident) => (
+        mod $processor;
+
+        solana_sdk::solana_entrypoint!(process_instruction_entrypoint);
+        fn process_instruction_entrypoint(
+            program_id: &solana_sdk::pubkey::Pubkey,
+            keyed_accounts: &mut [solana_sdk::account::KeyedAccount],
+            data: &[u8],
+            tick_height: u64,
+        ) -> Result<(), solana_sdk::transaction::InstructionError> {
+            solana_logger::setup();
+
+            log::trace!("process_instruction: {:?}", data);
+            log::trace!("keyed_accounts: {:?}", keyed_accounts);
+            crate::$processor::process_instruction(program_id, keyed_accounts, data, tick_height)
+        }
+    )
+);
