@@ -54,6 +54,17 @@ impl SystemInstruction {
         )
     }
 
+    pub fn new_assign(from_id: &Pubkey, program_id: &Pubkey) -> Instruction {
+        let account_metas = vec![AccountMeta::new(*from_id, true)];
+        Instruction::new(
+            system_program::id(),
+            &SystemInstruction::Assign {
+                program_id: *program_id,
+            },
+            account_metas,
+        )
+    }
+
     pub fn new_move(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction {
         let account_metas = vec![
             AccountMeta::new(*from_id, true),

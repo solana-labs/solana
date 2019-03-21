@@ -2,10 +2,10 @@
 
 use crate::hash::Hash;
 use crate::pubkey::Pubkey;
-use crate::signature::Keypair;
+use crate::signature::{Keypair, KeypairUtil};
 use crate::system_instruction::SystemInstruction;
 use crate::system_program;
-use crate::transaction::{CompiledInstruction, Transaction};
+use crate::transaction::Transaction;
 
 pub struct SystemTransaction {}
 
@@ -20,19 +20,11 @@ impl SystemTransaction {
         program_id: &Pubkey,
         fee: u64,
     ) -> Transaction {
-        let create = SystemInstruction::CreateAccount {
-            lamports, //TODO, the lamports to allocate might need to be higher then 0 in the future
-            space,
-            program_id: *program_id,
-        };
-        Transaction::new_signed(
-            from_keypair,
-            &[*to],
-            &system_program::id(),
-            &create,
-            recent_blockhash,
-            fee,
-        )
+        let from_pubkey = from_keypair.pubkey();
+        let create_instruction =
+            SystemInstruction::new_program_account(&from_pubkey, to, lamports, space, program_id);
+        let instructions = vec![create_instruction];
+        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash, fee)
     }
 
     /// Create and sign a transaction to create a system account
@@ -54,6 +46,7 @@ impl SystemTransaction {
             fee,
         )
     }
+
     /// Create and sign new SystemInstruction::Assign transaction
     pub fn new_assign(
         from_keypair: &Keypair,
@@ -61,18 +54,12 @@ impl SystemTransaction {
         program_id: &Pubkey,
         fee: u64,
     ) -> Transaction {
-        let assign = SystemInstruction::Assign {
-            program_id: *program_id,
-        };
-        Transaction::new_signed(
-            from_keypair,
-            &[],
-            &system_program::id(),
-            &assign,
-            recent_blockhash,
-            fee,
-        )
+        let from_pubkey = from_keypair.pubkey();
+        let assign_instruction = SystemInstruction::new_assign(&from_pubkey, program_id);
+        let instructions = vec![assign_instruction];
+        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash, fee)
     }
+
     /// Create and sign new SystemInstruction::Move transaction
     pub fn new_move(
         from_keypair: &Keypair,
@@ -81,41 +68,25 @@ impl SystemTransaction {
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
-        let move_lamports = SystemInstruction::Move { lamports };
-        Transaction::new_signed(
-            from_keypair,
-            &[*to],
-            &system_program::id(),
-            &move_lamports,
-            recent_blockhash,
-            fee,
-        )
+        let from_pubkey = from_keypair.pubkey();
+        let move_instruction = SystemInstruction::new_move(&from_pubkey, to, lamports);
+        let instructions = vec![move_instruction];
+        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash, fee)
     }
+
     /// Create and sign new SystemInstruction::Move transaction to many destinations
     pub fn new_move_many(
-        from: &Keypair,
-        moves: &[(Pubkey, u64)],
+        from_keypair: &Keypair,
+        to_lamports: &[(Pubkey, u64)],
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
-        let instructions: Vec<_> = moves
+        let from_pubkey = from_keypair.pubkey();
+        let instructions: Vec<_> = to_lamports
             .iter()
-            .enumerate()
-            .map(|(i, (_, amount))| {
-                let spend = SystemInstruction::Move { lamports: *amount };
-                CompiledInstruction::new(0, &spend, vec![0, i as u8 + 1])
-            })
+            .map(|(pubkey, lamports)| SystemInstruction::new_move(&from_pubkey, pubkey, *lamports))
             .collect();
-        let to_keys: Vec<_> = moves.iter().map(|(to_key, _)| *to_key).collect();
-
-        Transaction::new_with_compiled_instructions(
-            &[from],
-            &to_keys,
-            recent_blockhash,
-            fee,
-            vec![system_program::id()],
-            instructions,
-        )
+        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash, fee)
     }
 }
 
