@@ -40,7 +40,19 @@ dataDir=$PWD/target/"$(basename "$0" .sh)"
 
 set -x
 solana-keygen -o "$dataDir"/config/leader-keypair.json
+solana-keygen -o "$dataDir"/config/leader-staking-account-keypair.json
 solana-keygen -o "$dataDir"/config/drone-keypair.json
+
+leaderPubkey=$(\
+  solana-wallet \
+    --keypair "$dataDir"/config/leader-keypair.json  \
+    address \
+)
+leaderStakingAccountPubkey=$(\
+  solana-wallet \
+    --keypair "$dataDir"/config/leader-staking-account-keypair.json  \
+    address \
+)
 
 solana-genesis \
   --lamports 1000000000 \
@@ -53,6 +65,8 @@ drone=$!
 
 args=(
   --identity "$dataDir"/config/leader-keypair.json
+  --voting-keypair "$dataDir"/config/leader-staking-account-keypair.json
+  --staking-account "$leaderStakingAccountPubkey"
   --ledger "$dataDir"/ledger/
   --rpc-port 8899
   --rpc-drone-address 127.0.0.1:9900
@@ -64,9 +78,20 @@ solana-fullnode "${args[@]}" &
 fullnode=$!
 
 abort() {
+  set +e
   kill "$drone" "$fullnode"
 }
+trap abort INT TERM EXIT
 
-trap abort SIGINT SIGTERM
+solana-wallet --keypair "$dataDir"/config/leader-keypair.json airdrop 42
+solana-wallet \
+  --keypair "$dataDir"/config/leader-keypair.json  \
+  create-staking-account "$leaderStakingAccountPubkey" 42
+solana-wallet \
+  --keypair "$dataDir"/config/leader-staking-account-keypair.json  \
+  configure-staking-account \
+  --delegate-account "$leaderPubkey" \
+  --authorize-voter "$leaderStakingAccountPubkey"
+solana-wallet --keypair "$dataDir"/config/leader-keypair.json balance
+
 wait "$fullnode"
-kill "$drone" "$fullnode"
