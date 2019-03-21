@@ -42,7 +42,7 @@ MAJOR=0
 MINOR=0
 PATCH=0
 SPECIAL=""
-semverParseInto "$(readCargoVariable version ./Cargo.toml)" MAJOR MINOR PATCH SPECIAL
+semverParseInto "$(readCargoVariable version "${Cargo_tomls[0]}")" MAJOR MINOR PATCH SPECIAL
 [[ -n $MAJOR ]] || usage
 
 currentVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"

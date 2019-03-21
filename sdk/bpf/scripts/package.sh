@@ -8,7 +8,7 @@ mkdir bpf-sdk/
 cp LICENSE bpf-sdk/
 
 (
-  ci/crate-version.sh
+  ci/crate-version.sh sdk/Cargo.toml
   git rev-parse HEAD
 ) > bpf-sdk/version.txt
 
