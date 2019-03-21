@@ -17,6 +17,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 #[test]
+#[ignore]
 fn test_thin_client_basic() {
     solana_logger::setup();
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
@@ -147,6 +148,7 @@ fn test_transaction_count() {
 }
 
 #[test]
+#[ignore]
 fn test_zero_balance_after_nonzero() {
     solana_logger::setup();
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
