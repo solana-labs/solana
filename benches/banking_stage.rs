@@ -45,7 +45,7 @@ fn check_txs(receiver: &Receiver<WorkingBankEntries>, ref_tx_count: usize) {
 #[bench]
 #[ignore]
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
-    let num_threads = BankingStage::num_threads() as usize;
+    let num_threads = 4;
     //   a multiple of packet chunk  2X duplicates to avoid races
     let txes = 192 * 50 * num_threads * 2;
     let mint_total = 1_000_000_000_000;
@@ -137,7 +137,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 #[ignore]
 fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let progs = 4;
-    let num_threads = BankingStage::num_threads() as usize;
+    let num_threads = 4;
     //   a multiple of packet chunk  2X duplicates to avoid races
     let txes = 96 * 100 * num_threads * 2;
     let mint_total = 1_000_000_000_000;
