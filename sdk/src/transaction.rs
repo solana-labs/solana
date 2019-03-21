@@ -218,6 +218,18 @@ impl Transaction {
         Script::new(instructions).compile()
     }
 
+    pub fn new_signed_instructions<T: KeypairUtil>(
+        from_keypairs: &[&T],
+        instructions: Vec<Instruction>,
+        recent_blockhash: Hash,
+        fee: u64,
+    ) -> Transaction {
+        let mut tx = Self::new(instructions);
+        tx.fee = fee;
+        tx.sign(from_keypairs, recent_blockhash);
+        tx
+    }
+
     pub fn new_with_blockhash_and_fee<T: Serialize>(
         from_pubkey: &Pubkey,
         transaction_keys: &[Pubkey],
