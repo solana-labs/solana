@@ -14,7 +14,7 @@ use solana_drone::drone::DRONE_PORT;
 use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::bpf_loader;
 use solana_sdk::hash::Hash;
-use solana_sdk::loader_transaction::LoaderTransaction;
+use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::rpc_port::DEFAULT_RPC_PORT;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
@@ -408,20 +408,21 @@ fn process_deploy(
         .chunks(USERDATA_CHUNK_SIZE)
         .zip(0..)
         .map(|(chunk, i)| {
-            LoaderTransaction::new_write(
-                &program_id,
+            let instruction = LoaderInstruction::new_write(
+                &program_id.pubkey(),
                 &bpf_loader::id(),
                 (i * USERDATA_CHUNK_SIZE) as u32,
                 chunk.to_vec(),
-                blockhash,
-                0,
-            )
+            );
+            Transaction::new_signed_instructions(&[&program_id], vec![instruction], blockhash, 0)
         })
         .collect();
     rpc_client.send_and_confirm_transactions(write_transactions, &program_id)?;
 
     trace!("Finalizing program account");
-    let mut tx = LoaderTransaction::new_finalize(&program_id, &bpf_loader::id(), blockhash, 0);
+    let instruction = LoaderInstruction::new_finalize(&program_id.pubkey(), &bpf_loader::id());
+    let mut tx =
+        Transaction::new_signed_instructions(&[&program_id], vec![instruction], blockhash, 0);
     rpc_client
         .send_and_confirm_transaction(&mut tx, &program_id)
         .map_err(|_| {

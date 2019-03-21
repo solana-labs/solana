@@ -1,10 +1,10 @@
 #[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 mod bpf {
     use solana_runtime::bank::Bank;
-    use solana_runtime::loader_utils::load_program;
+    use solana_runtime::bank_client::BankClient;
+    use solana_runtime::loader_utils::{create_invoke_instruction, load_program};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::native_loader;
-    use solana_sdk::transaction::Transaction;
     use std::env;
     use std::fs::File;
     use std::path::PathBuf;
@@ -40,19 +40,12 @@ mod bpf {
 
             let (genesis_block, mint_keypair) = GenesisBlock::new(50);
             let bank = Bank::new(&genesis_block);
+            let alice_client = BankClient::new(&bank, mint_keypair);
 
             // Call user program
-            let program_id = load_program(&bank, &mint_keypair, &bpf_loader::id(), elf);
-            let tx = Transaction::new_signed(
-                &mint_keypair,
-                &[],
-                &program_id,
-                &vec![1u8],
-                bank.last_blockhash(),
-                0,
-            );
-            bank.process_transaction(&tx).unwrap();
-            assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
+            let program_id = load_program(&bank, &alice_client, &bpf_loader::id(), elf);
+            let instruction = create_invoke_instruction(alice_client.pubkey(), program_id, &1u8);
+            alice_client.process_instruction(instruction).unwrap();
         }
 
         #[test]
@@ -76,26 +69,20 @@ mod bpf {
 
                 let (genesis_block, mint_keypair) = GenesisBlock::new(50);
                 let bank = Bank::new(&genesis_block);
+                let alice_client = BankClient::new(&bank, mint_keypair);
 
                 let loader_id = load_program(
                     &bank,
-                    &mint_keypair,
+                    &alice_client,
                     &native_loader::id(),
                     "solana_bpf_loader".as_bytes().to_vec(),
                 );
 
                 // Call user program
-                let program_id = load_program(&bank, &mint_keypair, &loader_id, elf);
-                let tx = Transaction::new_signed(
-                    &mint_keypair,
-                    &[],
-                    &program_id,
-                    &vec![1u8],
-                    bank.last_blockhash(),
-                    0,
-                );
-                bank.process_transaction(&tx).unwrap();
-                assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
+                let program_id = load_program(&bank, &alice_client, &loader_id, elf);
+                let instruction =
+                    create_invoke_instruction(alice_client.pubkey(), program_id, &1u8);
+                alice_client.process_instruction(instruction).unwrap();
             }
         }
     }
@@ -123,25 +110,20 @@ mod bpf {
 
                 let (genesis_block, mint_keypair) = GenesisBlock::new(50);
                 let bank = Bank::new(&genesis_block);
+                let alice_client = BankClient::new(&bank, mint_keypair);
+
                 let loader_id = load_program(
                     &bank,
-                    &mint_keypair,
+                    &alice_client,
                     &native_loader::id(),
                     "solana_bpf_loader".as_bytes().to_vec(),
                 );
 
                 // Call user program
-                let program_id = load_program(&bank, &mint_keypair, &loader_id, elf);
-                let tx = Transaction::new_signed(
-                    &mint_keypair,
-                    &[],
-                    &program_id,
-                    &vec![1u8],
-                    bank.last_blockhash(),
-                    0,
-                );
-                bank.process_transaction(&tx).unwrap();
-                assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
+                let program_id = load_program(&bank, &alice_client, &loader_id, elf);
+                let instruction =
+                    create_invoke_instruction(alice_client.pubkey(), program_id, &1u8);
+                alice_client.process_instruction(instruction).unwrap();
             }
         }
     }
