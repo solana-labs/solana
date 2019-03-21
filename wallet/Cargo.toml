@@ -25,7 +25,7 @@ solana-vote-api = { path = "../programs/vote_api", version = "0.13.0" }
 solana-vote-signer = { path = "../vote-signer", version = "0.13.0" }
 
 [dev-dependencies]
-solana-budget-program = { path = "../programs/budget", version = "0.13.0" }
+solana-budget-program = { path = "../programs/budget_program", version = "0.13.0" }
 solana = { path = "../core", version = "0.13.0" }
 
 [features]

@@ -66,8 +66,8 @@ untrusted = "0.6.2"
 [dev-dependencies]
 hex-literal = "0.1.4"
 matches = "0.1.6"
-solana-vote-program = { path = "../programs/vote", version = "0.13.0" }
-solana-budget-program = { path = "../programs/budget", version = "0.13.0" }
+solana-vote-program = { path = "../programs/vote_program", version = "0.13.0" }
+solana-budget-program = { path = "../programs/budget_program", version = "0.13.0" }
 
 [[bench]]
 name = "banking_stage"
