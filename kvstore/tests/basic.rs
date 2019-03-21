@@ -1,8 +1,7 @@
-use rand::{thread_rng, Rng};
-
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use solana_kvstore::test::gen;
 use solana_kvstore::{Config, Key, KvStore};
 
 const KB: usize = 1024;
@@ -20,7 +19,7 @@ fn test_put_get() {
     };
 
     let lsm = KvStore::open(&path, cfg).unwrap();
-    let (key, bytes) = gen_pairs(HALF_KB).take(1).next().unwrap();
+    let (key, bytes) = gen::pairs(HALF_KB).take(1).next().unwrap();
 
     lsm.put(&key, &bytes).expect("put fail");
     let out_bytes = lsm.get(&key).expect("get fail").expect("missing");
@@ -42,7 +41,7 @@ fn test_put_get_many() {
     };
     let lsm = KvStore::open(&path, cfg).unwrap();
 
-    let mut pairs: Vec<_> = gen_pairs(HALF_KB).take(1024).collect();
+    let mut pairs: Vec<_> = gen::pairs(HALF_KB).take(1024).collect();
     pairs.sort_unstable_by_key(|(k, _)| *k);
 
     lsm.put_many(pairs.clone().drain(..))
@@ -70,7 +69,7 @@ fn test_delete() {
     };
     let lsm = KvStore::open(&path, cfg).unwrap();
 
-    let mut pairs: Vec<_> = gen_pairs(HALF_KB).take(64 * 6).collect();
+    let mut pairs: Vec<_> = gen::pairs(HALF_KB).take(64 * 6).collect();
     pairs.sort_unstable_by_key(|(k, _)| *k);
 
     for (k, i) in pairs.iter() {
@@ -104,7 +103,7 @@ fn test_delete_many() {
     };
     let lsm = KvStore::open(&path, cfg).unwrap();
 
-    let mut pairs: Vec<_> = gen_pairs(HALF_KB).take(64 * 6).collect();
+    let mut pairs: Vec<_> = gen::pairs(HALF_KB).take(64 * 6).collect();
     pairs.sort_unstable_by_key(|(k, _)| *k);
 
     for (k, i) in pairs.iter() {
@@ -132,7 +131,7 @@ fn test_close_reopen() {
     let cfg = Config::default();
     let lsm = KvStore::open(&path, cfg).unwrap();
 
-    let mut pairs: Vec<_> = gen_pairs(KB).take(1024).collect();
+    let mut pairs: Vec<_> = gen::pairs(KB).take(1024).collect();
     pairs.sort_unstable_by_key(|(k, _)| *k);
 
     for (k, i) in pairs.iter() {
@@ -174,7 +173,7 @@ fn test_partitioned() {
 
     let lsm = KvStore::partitioned(&path, &storage_dirs, cfg).unwrap();
 
-    let mut pairs: Vec<_> = gen_pairs(HALF_KB).take(64 * 12).collect();
+    let mut pairs: Vec<_> = gen::pairs(HALF_KB).take(64 * 12).collect();
     pairs.sort_unstable_by_key(|(k, _)| *k);
 
     lsm.put_many(pairs.iter()).expect("put_many fail");
@@ -207,7 +206,7 @@ fn test_in_memory() {
     };
     let lsm = KvStore::open(&path, cfg).unwrap();
 
-    let mut pairs: Vec<_> = gen_pairs(HALF_KB).take(64 * 12).collect();
+    let mut pairs: Vec<_> = gen::pairs(HALF_KB).take(64 * 12).collect();
     pairs.sort_unstable_by_key(|(k, _)| *k);
 
     lsm.put_many(pairs.iter()).expect("put_many fail");
@@ -238,15 +237,4 @@ fn setup(test_name: &str) -> PathBuf {
 
 fn teardown(p: &Path) {
     KvStore::destroy(p).expect("Expect successful store destruction");
-}
-
-fn gen_pairs(data_size: usize) -> impl Iterator<Item = (Key, Vec<u8>)> {
-    let mut rng = thread_rng();
-
-    std::iter::repeat_with(move || {
-        let data = vec![0u8; data_size];
-        let buf = rng.gen();
-
-        (Key(buf), data)
-    })
 }

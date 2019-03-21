@@ -368,3 +368,41 @@ fn is_lvl0_full(tables: &[BTreeMap<Key, SSTable>], config: &Config) -> bool {
         tables[0].len() > config.max_tables
     }
 }
+
+#[cfg(any(test, debug_assertions))]
+pub mod test {
+    pub mod gen {
+        use crate::Key;
+        use rand::distributions::Uniform;
+        use rand::{rngs::SmallRng, FromEntropy, Rng};
+        use std::iter;
+        use std::ops::Range;
+
+        pub fn keys() -> impl Iterator<Item = Key> {
+            let mut rng = SmallRng::from_entropy();
+            iter::repeat_with(move || Key(rng.gen()))
+        }
+
+        pub fn data(size: usize) -> impl Iterator<Item = Vec<u8>> {
+            iter::repeat(vec![0; size])
+        }
+
+        pub fn data_vary(range: Range<u64>) -> impl Iterator<Item = Vec<u8>> {
+            let dist = Uniform::from(range);
+            let mut rng = SmallRng::from_entropy();
+
+            iter::repeat_with(move || {
+                let size: u64 = rng.sample(dist);
+                vec![0; size as usize]
+            })
+        }
+
+        pub fn pairs(size: usize) -> impl Iterator<Item = (Key, Vec<u8>)> {
+            keys().zip(data(size))
+        }
+
+        pub fn pairs_vary(range: Range<u64>) -> impl Iterator<Item = (Key, Vec<u8>)> {
+            keys().zip(data_vary(range))
+        }
+    }
+}

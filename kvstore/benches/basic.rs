@@ -4,11 +4,11 @@ extern crate test;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use rand::{self, thread_rng, Rng};
+use rand::{self, Rng};
 
 use test::Bencher;
 
-use solana_kvstore::{Config, Key, KvStore};
+use solana_kvstore::{test::gen, Config, Key, KvStore};
 
 const SMALL_SIZE: usize = 512;
 const LARGE_SIZE: usize = 32 * 1024;
@@ -44,7 +44,7 @@ fn bench_write_partitioned(bench: &mut Bencher, rows: &[(Key, Vec<u8>)], ledger_
 fn bench_write_small(bench: &mut Bencher) {
     let ledger_path = setup("bench_write_small");
     let num_entries = 32 * 1024;
-    let rows = gen_pairs(SMALL_SIZE).take(num_entries).collect::<Vec<_>>();
+    let rows = gen::pairs(SMALL_SIZE).take(num_entries).collect::<Vec<_>>();
     bench_write(bench, &rows, &ledger_path.to_string_lossy());
 }
 
@@ -53,7 +53,7 @@ fn bench_write_small(bench: &mut Bencher) {
 fn bench_write_small_partitioned(bench: &mut Bencher) {
     let ledger_path = setup("bench_write_small_partitioned");
     let num_entries = 32 * 1024;
-    let rows = gen_pairs(SMALL_SIZE).take(num_entries).collect::<Vec<_>>();
+    let rows = gen::pairs(SMALL_SIZE).take(num_entries).collect::<Vec<_>>();
     bench_write_partitioned(bench, &rows, &ledger_path.to_string_lossy());
 }
 
@@ -62,7 +62,7 @@ fn bench_write_small_partitioned(bench: &mut Bencher) {
 fn bench_write_large(bench: &mut Bencher) {
     let ledger_path = setup("bench_write_large");
     let num_entries = 32 * 1024;
-    let rows = gen_pairs(LARGE_SIZE).take(num_entries).collect::<Vec<_>>();
+    let rows = gen::pairs(LARGE_SIZE).take(num_entries).collect::<Vec<_>>();
     bench_write(bench, &rows, &ledger_path.to_string_lossy());
 }
 
@@ -71,7 +71,7 @@ fn bench_write_large(bench: &mut Bencher) {
 fn bench_write_huge(bench: &mut Bencher) {
     let ledger_path = setup("bench_write_huge");
     let num_entries = 32 * 1024;
-    let rows = gen_pairs(HUGE_SIZE).take(num_entries).collect::<Vec<_>>();
+    let rows = gen::pairs(HUGE_SIZE).take(num_entries).collect::<Vec<_>>();
     bench_write(bench, &rows, &ledger_path.to_string_lossy());
 }
 
@@ -86,8 +86,8 @@ fn bench_read_sequential(bench: &mut Bencher) {
     let num_large_blobs = 32 * 1024;
     let total_blobs = num_small_blobs + num_large_blobs;
 
-    let small = gen_data(SMALL_SIZE).take(num_small_blobs);
-    let large = gen_data(LARGE_SIZE).take(num_large_blobs);
+    let small = gen::data(SMALL_SIZE).take(num_small_blobs);
+    let large = gen::data(LARGE_SIZE).take(num_large_blobs);
     let rows = gen_seq_keys().zip(small.chain(large));
 
     let _ = store.put_many(rows);
@@ -119,8 +119,8 @@ fn bench_read_random(bench: &mut Bencher) {
     let num_large_blobs = 32 * 1024;
     let total_blobs = num_small_blobs + num_large_blobs;
 
-    let small = gen_data(SMALL_SIZE).take(num_small_blobs);
-    let large = gen_data(LARGE_SIZE).take(num_large_blobs);
+    let small = gen::data(SMALL_SIZE).take(num_small_blobs);
+    let large = gen::data(LARGE_SIZE).take(num_large_blobs);
     let rows = gen_seq_keys().zip(small.chain(large));
 
     let _ = store.put_many(rows);
@@ -163,24 +163,6 @@ fn gen_seq_keys() -> impl Iterator<Item = Key> {
 
         key
     })
-}
-
-fn gen_keys() -> impl Iterator<Item = Key> {
-    let mut rng = thread_rng();
-
-    std::iter::repeat_with(move || {
-        let buf = rng.gen();
-
-        Key(buf)
-    })
-}
-
-fn gen_data(size: usize) -> impl Iterator<Item = Vec<u8>> {
-    std::iter::repeat(vec![1u8; size])
-}
-
-fn gen_pairs(data_size: usize) -> impl Iterator<Item = (Key, Vec<u8>)> {
-    gen_keys().zip(gen_data(data_size))
 }
 
 fn teardown<P: AsRef<Path>>(p: P) {

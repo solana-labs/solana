@@ -158,7 +158,7 @@ fn opt_bytes_memory(bytes: &Option<Vec<u8>>) -> usize {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rand::{self, thread_rng, Rng};
+    use crate::test::gen;
 
     const COMMIT: i64 = -1;
 
@@ -168,7 +168,7 @@ mod test {
 
         let mut table = MemTable::default();
 
-        for (key, data) in gen_pairs(DATA_SIZE).take(1024) {
+        for (key, data) in gen::pairs(DATA_SIZE).take(1024) {
             table.put(&key, COMMIT, &data);
         }
 
@@ -181,7 +181,7 @@ mod test {
         const DATA_SIZE: usize = 32;
 
         let mut table = MemTable::default();
-        let input = gen_pairs(DATA_SIZE).take(1024).collect::<Vec<_>>();
+        let input = gen::pairs(DATA_SIZE).take(1024).collect::<Vec<_>>();
 
         for (key, data) in &input {
             table.put(key, COMMIT, data);
@@ -196,7 +196,7 @@ mod test {
         assert_eq!(table.mem_size, expected_size);
 
         // Deletes of things not in the memory table must be recorded
-        for key in gen_keys().take(512) {
+        for key in gen::keys().take(512) {
             table.delete(&key, COMMIT);
         }
 
@@ -207,8 +207,8 @@ mod test {
     #[test]
     fn test_put_order_irrelevant() {
         let (mut table_1, mut table_2) = (MemTable::default(), MemTable::default());
-        let big_input: Vec<_> = gen_pairs(1024).take(128).collect();
-        let small_input: Vec<_> = gen_pairs(16).take(128).collect();
+        let big_input: Vec<_> = gen::pairs(1024).take(128).collect();
+        let small_input: Vec<_> = gen::pairs(16).take(128).collect();
 
         for (key, data) in big_input.iter().chain(small_input.iter()) {
             table_1.put(key, COMMIT, data);
@@ -237,8 +237,8 @@ mod test {
     #[test]
     fn test_delete_order_irrelevant() {
         let (mut table_1, mut table_2) = (MemTable::default(), MemTable::default());
-        let big_input: Vec<_> = gen_pairs(1024).take(128).collect();
-        let small_input: Vec<_> = gen_pairs(16).take(128).collect();
+        let big_input: Vec<_> = gen::pairs(1024).take(128).collect();
+        let small_input: Vec<_> = gen::pairs(16).take(128).collect();
 
         for (key, data) in big_input.iter().chain(small_input.iter()) {
             table_1.put(key, COMMIT, data);
@@ -276,23 +276,5 @@ mod test {
 
         assert_eq!(table_1.mem_size, table_2.mem_size);
         assert_eq!(table_1.values, table_2.values);
-    }
-
-    fn gen_keys() -> impl Iterator<Item = Key> {
-        let mut rng = thread_rng();
-
-        std::iter::repeat_with(move || {
-            let buf = rng.gen();
-
-            Key(buf)
-        })
-    }
-
-    fn gen_data(size: usize) -> impl Iterator<Item = Vec<u8>> {
-        std::iter::repeat(vec![1u8; size])
-    }
-
-    fn gen_pairs(data_size: usize) -> impl Iterator<Item = (Key, Vec<u8>)> {
-        gen_keys().zip(gen_data(data_size))
     }
 }
