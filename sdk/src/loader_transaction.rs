@@ -3,7 +3,7 @@
 use crate::hash::Hash;
 use crate::loader_instruction::LoaderInstruction;
 use crate::pubkey::Pubkey;
-use crate::signature::Keypair;
+use crate::signature::{Keypair, KeypairUtil};
 use crate::transaction::Transaction;
 
 pub struct LoaderTransaction {}
@@ -17,15 +17,10 @@ impl LoaderTransaction {
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
-        let instruction = LoaderInstruction::Write { offset, bytes };
-        Transaction::new_signed(
-            from_keypair,
-            &[],
-            loader,
-            &instruction,
-            recent_blockhash,
-            fee,
-        )
+        let write_instruction =
+            LoaderInstruction::new_write(&from_keypair.pubkey(), loader, offset, bytes);
+        let instructions = vec![write_instruction];
+        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash, fee)
     }
 
     pub fn new_finalize(
@@ -34,14 +29,8 @@ impl LoaderTransaction {
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
-        let instruction = LoaderInstruction::Finalize;
-        Transaction::new_signed(
-            from_keypair,
-            &[],
-            loader,
-            &instruction,
-            recent_blockhash,
-            fee,
-        )
+        let finalize_instruction = LoaderInstruction::new_finalize(&from_keypair.pubkey(), loader);
+        let instructions = vec![finalize_instruction];
+        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash, fee)
     }
 }
