@@ -3,8 +3,10 @@
 
 use crate::blocktree::{Blocktree, SlotMeta};
 use crate::cluster_info::ClusterInfo;
+use crate::leader_schedule_utils;
 use crate::result::Result;
 use crate::service::Service;
+use crate::poh_recorder;
 use solana_metrics::{influxdb, submit};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -66,6 +68,7 @@ impl RepairService {
         repair_socket: &Arc<UdpSocket>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         repair_slot_range: RepairSlotRange,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) {
         let mut repair_info = RepairInfo::new();
         let id = cluster_info.read().unwrap().id();
@@ -74,7 +77,12 @@ impl RepairService {
                 break;
             }
 
-            let repairs = Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH, &mut repair_info);
+            let repairs = Self::generate_repairs(
+                blocktree,
+                MAX_REPAIR_LENGTH,
+                &mut repair_info,
+                poh_recorder,
+            );
 
             if let Ok(repairs) = repairs {
                 let reqs: Vec<_> = repairs
@@ -177,6 +185,7 @@ impl RepairService {
         blocktree: &Blocktree,
         max_repairs: usize,
         repair_info: &mut RepairInfo,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Result<(Vec<RepairType>)> {
         // Slot height and blob indexes for blobs we want to repair
         let mut repairs: Vec<RepairType> = vec![];
@@ -200,6 +209,14 @@ impl RepairService {
             }
         }
 
+        // Ask for all missing slots from last vote up to the current Poh - grace period
+        let (tick_height, start_slot) = {
+            let r_poh = poh_recorder.read().unwrap();
+            (r_poh.tick_height(), r_poh.start_slot()) ;
+        };
+
+        let slot = leader_schedule_utils::tick_height_to_slot(tick_height);
+
         Ok(repairs)
     }
 
@@ -209,7 +226,7 @@ impl RepairService {
         repairs: &mut Vec<RepairType>,
         max_repairs: usize,
         slot: u64,
-    ) {
+    ) -> {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
             let slot = pending_slots.pop().unwrap();
