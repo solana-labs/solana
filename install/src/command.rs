@@ -275,10 +275,100 @@ pub fn init(
     data_dir: &str,
     json_rpc_url: &str,
     update_manifest_pubkey: &Pubkey,
+    no_modify_path: bool,
 ) -> Result<(), String> {
     let config = Config::new(data_dir, json_rpc_url, update_manifest_pubkey);
     config.save(config_file)?;
     update(config_file)?;
+
+    let mut modified_rcfiles = false;
+    let shell_export_string = format!(
+        r#"export PATH="{}:$PATH""#,
+        config.bin_dir().to_str().unwrap()
+    );
+
+    if !no_modify_path {
+        // Look for sh, bash, and zsh rc files
+        let mut rcfiles = vec![dirs::home_dir().map(|p| p.join(".profile"))];
+        if let Ok(shell) = std::env::var("SHELL") {
+            if shell.contains("zsh") {
+                let zdotdir = std::env::var("ZDOTDIR")
+                    .ok()
+                    .map(PathBuf::from)
+                    .or_else(dirs::home_dir);
+                let zprofile = zdotdir.map(|p| p.join(".zprofile"));
+                rcfiles.push(zprofile);
+            }
+        }
+
+        if let Some(bash_profile) = dirs::home_dir().map(|p| p.join(".bash_profile")) {
+            // Only update .bash_profile if it exists because creating .bash_profile
+            // will cause .profile to not be read
+            if bash_profile.exists() {
+                rcfiles.push(Some(bash_profile));
+            }
+        }
+        let rcfiles = rcfiles.into_iter().filter_map(|f| f.filter(|f| f.exists()));
+
+        // For each rc file, append a PATH entry if not already present
+        for rcfile in rcfiles {
+            if !rcfile.exists() {
+                continue;
+            }
+
+            fn read_file(path: &Path) -> io::Result<String> {
+                let mut file = fs::OpenOptions::new().read(true).open(path)?;
+                let mut contents = String::new();
+                io::Read::read_to_string(&mut file, &mut contents)?;
+                Ok(contents)
+            }
+
+            match read_file(&rcfile) {
+                Err(err) => {
+                    println!("Unable to read {:?}: {}", rcfile, err);
+                }
+                Ok(contents) => {
+                    if !contents.contains(&shell_export_string) {
+                        println!(
+                            "Adding {} to {}",
+                            style(&shell_export_string).italic(),
+                            style(rcfile.to_str().unwrap()).bold()
+                        );
+
+                        fn append_file(dest: &Path, line: &str) -> io::Result<()> {
+                            use std::io::Write;
+                            let mut dest_file = fs::OpenOptions::new()
+                                .write(true)
+                                .append(true)
+                                .create(true)
+                                .open(dest)?;
+
+                            writeln!(&mut dest_file, "{}", line)?;
+
+                            dest_file.sync_data()?;
+
+                            Ok(())
+                        }
+                        append_file(&rcfile, &shell_export_string).unwrap_or_else(|err| {
+                            format!("Unable to append to {:?}: {}", rcfile, err);
+                        });
+                        modified_rcfiles = true;
+                    }
+                }
+            }
+        }
+    }
+
+    if modified_rcfiles {
+        println!(
+            "\n{}\n  {}\n",
+            style("Close and reopen your terminal to apply the PATH changes or run the following to use it now:").bold().blue(),
+            shell_export_string
+       );
+    } else {
+        check_env_path_for_bin_dir(&config);
+    }
+
     Ok(())
 }
 
@@ -473,7 +563,6 @@ pub fn update(config_file: &str) -> Result<bool, String> {
     config.current_update_manifest = Some(update_manifest);
     config.save(config_file)?;
 
-    check_env_path_for_bin_dir(&config);
     println!("  {}{}", SPARKLE, style("Update successful").bold());
     Ok(true)
 }

@@ -70,6 +70,11 @@ fn main() -> Result<(), String> {
                         .validator(url_validator)
                         .help("JSON RPC URL for the solana cluster"),
                 )
+                .arg(
+                    Arg::with_name("no_modify_path")
+                        .long("no-modify-path")
+                        .help("Don't configure the PATH environment variable"),
+                )
                 .arg({
                     let arg = Arg::with_name("update_manifest_pubkey")
                         .short("p")
@@ -176,7 +181,15 @@ fn main() -> Result<(), String> {
                 .parse::<Pubkey>()
                 .unwrap();
             let data_dir = matches.value_of("data_dir").unwrap();
-            command::init(config_file, data_dir, json_rpc_url, &update_manifest_pubkey)
+            let no_modify_path = matches.is_present("no_modify_path");
+
+            command::init(
+                config_file,
+                data_dir,
+                json_rpc_url,
+                &update_manifest_pubkey,
+                no_modify_path,
+            )
         }
         ("info", Some(matches)) => {
             let local_info_only = matches.is_present("local_info_only");
