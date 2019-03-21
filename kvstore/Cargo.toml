@@ -18,3 +18,5 @@ rand = "0.6.5"
 serde = "1.0.89"
 serde_derive = "1.0.88"
 
+[dev-dependencies]
+tempfile = "3.0.7"
