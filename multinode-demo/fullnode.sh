@@ -167,14 +167,13 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
 
 rsync_leader_url=$(rsync_url "$leader")
 set -ex
-if [[ ! -d "$ledger_config_dir" ]]; then
-  $rsync -vPr "$rsync_leader_url"/config/ledger/ "$ledger_config_dir"
-  [[ -d $ledger_config_dir ]] || {
-    echo "Unable to retrieve ledger from $rsync_leader_url"
-    exit 1
-  }
-  $solana_ledger_tool --ledger "$ledger_config_dir" verify
+if [[ ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
+  $rsync -vPr "$rsync_leader_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"/ledger
+fi
 
+if [[ ! -d "$ledger_config_dir" ]]; then
+  cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"
+  $solana_ledger_tool --ledger "$ledger_config_dir" verify
 fi
 
 trap 'kill "$pid" && wait "$pid"' INT TERM ERR
