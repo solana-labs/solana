@@ -433,6 +433,23 @@ pub fn deploy(
     let update_manifest_keypair = read_keypair(update_manifest_keypair_file)
         .map_err(|err| format!("Unable to read {}: {}", update_manifest_keypair_file, err))?;
 
+    // Confirm the `json_rpc_url` is good and that `from_keypair` is a valid account
+    let rpc_client = RpcClient::new(json_rpc_url.to_string());
+    let progress_bar = new_spinner_progress_bar();
+    progress_bar.set_message(&format!("{}Checking cluster...", LOOKING_GLASS));
+    let balance = rpc_client
+        .retry_get_balance(&from_keypair.pubkey(), 5)
+        .map_err(|err| {
+            format!(
+                "Unable to get the account balance of {}: {}",
+                from_keypair_file, err
+            )
+        })?;
+    progress_bar.finish_and_clear();
+    if balance.unwrap_or(0) == 0 {
+        Err(format!("{} account balance is empty", from_keypair_file))?;
+    }
+
     // Download the release
     let (temp_dir, temp_archive, temp_archive_sha256) =
         download_to_temp_archive(download_url, None)
@@ -478,8 +495,6 @@ pub fn deploy(
     assert!(update_manifest.verify());
 
     // Store the new update manifest on the cluster
-    let rpc_client = RpcClient::new(json_rpc_url.to_string());
-
     new_update_manifest(&rpc_client, &from_keypair, &update_manifest_keypair)
         .map_err(|err| format!("Unable to create update manifest: {}", err))?;
     store_update_manifest(
