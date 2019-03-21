@@ -172,9 +172,8 @@ if [[ ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
 fi
 
 if [[ ! -d "$ledger_config_dir" ]]; then
-  cp -ra "$SOLANA_RSYNC_CONFIG_DIR"/ledger "$ledger_config_dir"
+  cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"
   $solana_ledger_tool --ledger "$ledger_config_dir" verify
-
 fi
 
 trap 'kill "$pid" && wait "$pid"' INT TERM ERR
