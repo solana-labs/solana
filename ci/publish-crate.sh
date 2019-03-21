@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 cd "$(dirname "$0")/.."
-
+source ci/semver_bash/semver.sh
 
 # List of internal crates to publish
 #
@@ -38,6 +38,9 @@ CRATES=(
   exit 0
 }
 
+semverParseInto "$TRIGGERED_BUILDKITE_TAG" MAJOR MINOR PATCH SPECIAL
+expectedCrateVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
+
 [[ -n "$CRATES_IO_TOKEN" ]] || {
   echo CRATES_IO_TOKEN undefined
   exit 1
@@ -51,8 +54,11 @@ for crate in "${CRATES[@]}"; do
     exit 1
   fi
   echo "-- $crate"
-  # TODO: Ensure the published version matches the contents of
-  # TRIGGERED_BUILDKITE_TAG
+  grep -q "^version = \"$expectedCrateVersion\"$" Cargo.toml || {
+    echo "Error: $crate/Cargo.toml version is not $expectedCrateVersion"
+    exit 1
+  }
+
   (
     set -x
     # TODO: the rocksdb package does not build with the stock rust docker image,
