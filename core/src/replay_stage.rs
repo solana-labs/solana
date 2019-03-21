@@ -328,7 +328,7 @@ impl ReplayStage {
                     }
                 })
                 .or_else(|| {
-                    error!("{} No next leader found", my_id);
+                    warn!("{} No next leader found", my_id);
                     None
                 });
         }
