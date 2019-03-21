@@ -74,6 +74,36 @@ impl ThinClient {
     }
 
     /// Retry a sending a signed Transaction to the server for processing.
+    pub fn retry_transfer_until_confirmed(
+        &self,
+        keypair: &Keypair,
+        transaction: &mut Transaction,
+        tries: usize,
+        min_confirmed_blocks: usize,
+    ) -> io::Result<Signature> {
+        for x in 0..tries {
+            transaction.sign(&[keypair], self.get_recent_blockhash()?);
+            let mut buf = vec![0; transaction.serialized_size().unwrap() as usize];
+            let mut wr = std::io::Cursor::new(&mut buf[..]);
+            serialize_into(&mut wr, &transaction)
+                .expect("serialize Transaction in pub fn transfer_signed");
+            self.transactions_socket
+                .send_to(&buf[..], &self.transactions_addr)?;
+            if self
+                .poll_for_signature_confirmation(&transaction.signatures[0], min_confirmed_blocks)
+                .is_ok()
+            {
+                return Ok(transaction.signatures[0]);
+            }
+            info!("{} tries failed transfer to {}", x, self.transactions_addr);
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "retry_transfer failed",
+        ))
+    }
+
+    /// Retry a sending a signed Transaction to the server for processing.
     pub fn retry_transfer(
         &self,
         keypair: &Keypair,
@@ -140,13 +170,31 @@ impl ThinClient {
     pub fn poll_for_signature(&self, signature: &Signature) -> io::Result<()> {
         self.rpc_client.poll_for_signature(signature)
     }
+    /// Poll the server until the signature has been confirmed by at least `min_confirmed_blocks`
+    pub fn poll_for_signature_confirmation(
+        &self,
+        signature: &Signature,
+        min_confirmed_blocks: usize,
+    ) -> io::Result<()> {
+        self.rpc_client
+            .poll_for_signature_confirmation(signature, min_confirmed_blocks)
+    }
 
+    /// Check a signature in the bank. This method blocks
+    /// until the server sends a response.
     pub fn check_signature(&self, signature: &Signature) -> bool {
         self.rpc_client.check_signature(signature)
     }
 
     pub fn fullnode_exit(&self) -> io::Result<bool> {
         self.rpc_client.fullnode_exit()
+    }
+    pub fn get_num_blocks_since_signature_confirmation(
+        &mut self,
+        sig: &Signature,
+    ) -> io::Result<usize> {
+        self.rpc_client
+            .get_num_blocks_since_signature_confirmation(sig)
     }
 }
 

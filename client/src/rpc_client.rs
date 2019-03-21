@@ -438,6 +438,78 @@ impl RpcClient {
             };
         }
     }
+
+    /// Poll the server to confirm a transaction.
+    pub fn poll_for_signature_confirmation(
+        &self,
+        signature: &Signature,
+        min_confirmed_blocks: usize,
+    ) -> io::Result<()> {
+        let mut now = Instant::now();
+        let mut confirmed_blocks = 0;
+        loop {
+            let response = self.get_num_blocks_since_signature_confirmation(signature);
+            match response {
+                Ok(count) => {
+                    if confirmed_blocks != count {
+                        info!(
+                            "signature {} confirmed {} out of {}",
+                            signature, count, min_confirmed_blocks
+                        );
+                        now = Instant::now();
+                        confirmed_blocks = count;
+                    }
+                    if count >= min_confirmed_blocks {
+                        break;
+                    }
+                }
+                Err(err) => {
+                    debug!("check_confirmations request failed: {:?}", err);
+                }
+            };
+            if now.elapsed().as_secs() > 15 {
+                // TODO: Return a better error.
+                return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
+            }
+            sleep(Duration::from_millis(250));
+        }
+        Ok(())
+    }
+
+    pub fn get_num_blocks_since_signature_confirmation(
+        &self,
+        sig: &Signature,
+    ) -> io::Result<usize> {
+        let params = json!([format!("{}", sig)]);
+        let response = self
+            .client
+            .send(
+                &RpcRequest::GetNumBlocksSinceSignatureConfirmation,
+                Some(params.clone()),
+                1,
+            )
+            .map_err(|error| {
+                debug!(
+                    "Response get_num_blocks_since_signature_confirmation: {}",
+                    error
+                );
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    "GetNumBlocksSinceSignatureConfirmation request failure",
+                )
+            })?;
+        serde_json::from_value(response).map_err(|error| {
+            debug!(
+                "ParseError: get_num_blocks_since_signature_confirmation: {}",
+                error
+            );
+            io::Error::new(
+                io::ErrorKind::Other,
+                "GetNumBlocksSinceSignatureConfirmation parse failure",
+            )
+        })
+    }
+
     pub fn fullnode_exit(&self) -> io::Result<bool> {
         let response = self
             .client

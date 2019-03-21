@@ -790,11 +790,19 @@ impl Bank {
         self.accounts.transaction_count(self.accounts_id)
     }
 
-    pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
+    pub fn get_signature_confirmation_status(
+        &self,
+        signature: &Signature,
+    ) -> Option<(usize, Result<()>)> {
         let parents = self.parents();
         let mut caches = vec![self.status_cache.read().unwrap()];
         caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
         StatusCache::get_signature_status_all(&caches, signature)
+    }
+
+    pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
+        self.get_signature_confirmation_status(signature)
+            .map(|v| v.1)
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {

@@ -44,10 +44,9 @@ pub fn slot_leader_at(slot: u64, bank: &Bank) -> Option<Pubkey> {
 }
 
 /// Return the next slot after the given current_slot that the given node will be leader
-pub fn next_leader_slot(pubkey: &Pubkey, current_slot: u64, bank: &Bank) -> Option<u64> {
-    let (epoch, slot_index) = bank.get_epoch_and_slot_index(current_slot + 1);
-
-    if let Some(leader_schedule) = leader_schedule(epoch, bank) {
+pub fn next_leader_slot(pubkey: &Pubkey, mut current_slot: u64, bank: &Bank) -> Option<u64> {
+    let (mut epoch, mut start_index) = bank.get_epoch_and_slot_index(current_slot + 1);
+    while let Some(leader_schedule) = leader_schedule(epoch, bank) {
         // clippy thinks I should do this:
         //  for (i, <item>) in leader_schedule
         //                           .iter()
@@ -57,11 +56,15 @@ pub fn next_leader_slot(pubkey: &Pubkey, current_slot: u64, bank: &Bank) -> Opti
         //
         //  but leader_schedule doesn't implement Iter...
         #[allow(clippy::needless_range_loop)]
-        for i in slot_index..bank.get_slots_in_epoch(epoch) {
+        for i in start_index..bank.get_slots_in_epoch(epoch) {
+            current_slot += 1;
             if *pubkey == leader_schedule[i] {
-                return Some(current_slot + 1 + (i - slot_index) as u64);
+                return Some(current_slot);
             }
         }
+
+        epoch += 1;
+        start_index = 0;
     }
     None
 }
@@ -80,8 +83,10 @@ pub fn tick_height_to_slot(ticks_per_slot: u64, tick_height: u64) -> u64 {
 mod tests {
     use super::*;
     use crate::staking_utils;
+    use crate::voting_keypair::tests::new_vote_account_with_delegate;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::sync::Arc;
 
     #[test]
     fn test_next_leader_slot() {
@@ -114,6 +119,58 @@ mod tests {
                 &bank
             ),
             None
+        );
+    }
+
+    #[test]
+    fn test_next_leader_slot_next_epoch() {
+        let pubkey = Keypair::new().pubkey();
+        let (mut genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
+            2 * BOOTSTRAP_LEADER_LAMPORTS,
+            &pubkey,
+            BOOTSTRAP_LEADER_LAMPORTS,
+        );
+        genesis_block.epoch_warmup = false;
+
+        let bank = Bank::new(&genesis_block);
+        let delegate_id = Keypair::new().pubkey();
+
+        // Create new vote account
+        let new_voting_keypair = Keypair::new();
+        new_vote_account_with_delegate(
+            &mint_keypair,
+            &new_voting_keypair,
+            &delegate_id,
+            &bank,
+            BOOTSTRAP_LEADER_LAMPORTS,
+        );
+
+        // Have to wait until the epoch at after the epoch stakes generated at genesis
+        // for the new votes to take effect.
+        let mut target_slot = 1;
+        let epoch = bank.get_stakers_epoch(0);
+        while bank.get_stakers_epoch(target_slot) == epoch {
+            target_slot += 1;
+        }
+
+        let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), target_slot);
+        let mut expected_slot = 0;
+        let epoch = bank.get_stakers_epoch(target_slot);
+        for i in 0..epoch {
+            expected_slot += bank.get_slots_in_epoch(i);
+        }
+
+        let schedule = leader_schedule(epoch, &bank).unwrap();
+        let mut index = 0;
+        while schedule[index] != delegate_id {
+            index += 1
+        }
+
+        expected_slot += index;
+
+        assert_eq!(
+            next_leader_slot(&delegate_id, 0, &bank),
+            Some(expected_slot)
         );
     }
 

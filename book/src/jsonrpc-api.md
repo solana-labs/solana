@@ -26,6 +26,7 @@ Methods
 * [getBalance](#getbalance)
 * [getRecentBlockhash](#getrecentblockhash)
 * [getSignatureStatus](#getsignaturestatus)
+* [getNumBlocksSinceSignatureConfirmation](#getnumblockssincesignatureconfirmation)
 * [getTransactionCount](#gettransactioncount)
 * [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
@@ -185,6 +186,27 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 ```
 
 ---
+
+### getNumBlocksSinceSignatureConfirmation
+Returns the current number of blocks since signature has been confirmed.
+
+##### Parameters:
+* `string` - Signature of Transaction to confirm, as base-58 encoded string
+
+##### Results:
+* `integer` - count, as unsigned 64-bit integer
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getNumBlocksSinceSignatureConfirmation", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":8,"id":1}
+```
+
+---
+
 ### getTransactionCount
 Returns the current Transaction count from the ledger
 

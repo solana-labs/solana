@@ -21,7 +21,6 @@ fn test_spend_and_verify_all_nodes_1() {
 }
 
 #[test]
-#[ignore] //TODO: confirmations are not useful: #3346
 fn test_spend_and_verify_all_nodes_2() {
     solana_logger::setup();
     let num_nodes = 2;
@@ -34,7 +33,6 @@ fn test_spend_and_verify_all_nodes_2() {
 }
 
 #[test]
-#[ignore] //TODO: confirmations are not useful: #3346
 fn test_spend_and_verify_all_nodes_3() {
     solana_logger::setup();
     let num_nodes = 3;
@@ -65,34 +63,20 @@ fn test_fullnode_exit_2() {
     cluster_tests::fullnode_exit(&local.entry_point_info, num_nodes);
 }
 
+// Cluster needs a supermajority to remain, so the minimum size for this test is 4
 #[test]
-#[ignore]
-fn test_leader_failure_2() {
-    let num_nodes = 2;
+fn test_leader_failure_4() {
+    solana_logger::setup();
+    let num_nodes = 4;
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.rpc_config.enable_fullnode_exit = true;
-    let local = LocalCluster::new_with_config(&[100; 2], 10_000, &fullnode_config);
+    let local = LocalCluster::new_with_config(&[100; 4], 10_000, &fullnode_config);
     cluster_tests::kill_entry_and_spend_and_verify_rest(
         &local.entry_point_info,
         &local.funding_keypair,
         num_nodes,
     );
 }
-
-#[test]
-#[ignore]
-fn test_leader_failure_3() {
-    let num_nodes = 3;
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.rpc_config.enable_fullnode_exit = true;
-    let local = LocalCluster::new_with_config(&[100; 3], 10_000, &fullnode_config);
-    cluster_tests::kill_entry_and_spend_and_verify_rest(
-        &local.entry_point_info,
-        &local.funding_keypair,
-        num_nodes,
-    );
-}
-
 #[test]
 fn test_two_unbalanced_stakes() {
     let mut fullnode_config = FullnodeConfig::default();

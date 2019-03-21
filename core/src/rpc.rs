@@ -80,7 +80,20 @@ impl JsonRpcRequestProcessor {
     }
 
     pub fn get_signature_status(&self, signature: Signature) -> Option<bank::Result<()>> {
-        self.bank().get_signature_status(&signature)
+        self.get_signature_confirmation_status(signature)
+            .map(|x| x.1)
+    }
+
+    pub fn get_signature_confirmations(&self, signature: Signature) -> Option<usize> {
+        self.get_signature_confirmation_status(signature)
+            .map(|x| x.0)
+    }
+
+    pub fn get_signature_confirmation_status(
+        &self,
+        signature: Signature,
+    ) -> Option<(usize, bank::Result<()>)> {
+        self.bank().get_signature_confirmation_status(&signature)
     }
 
     fn get_transaction_count(&self) -> Result<u64> {
@@ -202,6 +215,20 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "fullnodeExit")]
     fn fullnode_exit(&self, _: Self::Metadata) -> Result<bool>;
+
+    #[rpc(meta, name = "getNumBlocksSinceSignatureConfirmation")]
+    fn get_num_blocks_since_signature_confirmation(
+        &self,
+        _: Self::Metadata,
+        _: String,
+    ) -> Result<usize>;
+
+    #[rpc(meta, name = "getSignatureConfirmation")]
+    fn get_signature_confirmation(
+        &self,
+        _: Self::Metadata,
+        _: String,
+    ) -> Result<(usize, RpcSignatureStatus)>;
 }
 
 pub struct RpcSolImpl;
@@ -239,19 +266,33 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus> {
-        info!("get_signature_status rpc request received: {:?}", id);
+        self.get_signature_confirmation(meta, id).map(|x| x.1)
+    }
+
+    fn get_num_blocks_since_signature_confirmation(
+        &self,
+        meta: Self::Metadata,
+        id: String,
+    ) -> Result<usize> {
+        self.get_signature_confirmation(meta, id).map(|x| x.0)
+    }
+
+    fn get_signature_confirmation(
+        &self,
+        meta: Self::Metadata,
+        id: String,
+    ) -> Result<(usize, RpcSignatureStatus)> {
+        info!("get_signature_confirmation rpc request received: {:?}", id);
         let signature = verify_signature(&id)?;
         let res = meta
             .request_processor
             .read()
             .unwrap()
-            .get_signature_status(signature);
+            .get_signature_confirmation_status(signature);
 
         let status = {
-            if res.is_none() {
-                RpcSignatureStatus::SignatureNotFound
-            } else {
-                match res.unwrap() {
+            if let Some((count, res)) = res {
+                let res = match res {
                     Ok(_) => RpcSignatureStatus::Confirmed,
                     Err(TransactionError::AccountInUse) => RpcSignatureStatus::AccountInUse,
                     Err(TransactionError::AccountLoadedTwice) => {
@@ -264,10 +305,16 @@ impl RpcSol for RpcSolImpl {
                         trace!("mapping {:?} to GenericFailure", err);
                         RpcSignatureStatus::GenericFailure
                     }
-                }
+                };
+                (count, res)
+            } else {
+                (0, RpcSignatureStatus::SignatureNotFound)
             }
         };
-        info!("get_signature_status rpc request status: {:?}", status);
+        info!(
+            "get_signature_confirmation rpc request status: {:?}",
+            status
+        );
         Ok(status)
     }
 
