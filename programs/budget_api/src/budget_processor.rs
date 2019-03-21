@@ -1,10 +1,10 @@
 //! budget program
+use crate::budget_instruction::BudgetInstruction;
+use crate::budget_state::{BudgetError, BudgetState};
+use crate::payment_plan::Witness;
 use bincode::{deserialize, serialize};
 use chrono::prelude::{DateTime, Utc};
 use log::*;
-use solana_budget_api::budget_instruction::BudgetInstruction;
-use solana_budget_api::budget_state::{BudgetError, BudgetState};
-use solana_budget_api::payment_plan::Witness;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::InstructionError;
@@ -143,9 +143,9 @@ pub fn process_instruction(
 #[cfg(test)]
 mod test {
     use super::*;
-    use solana_budget_api::budget_instruction::BudgetInstruction;
-    use solana_budget_api::budget_script::BudgetScript;
-    use solana_budget_api::id;
+    use crate::budget_instruction::BudgetInstruction;
+    use crate::budget_script::BudgetScript;
+    use crate::id;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
