@@ -57,6 +57,7 @@ clientCommand="\
     --duration 7500 \
     --sustained \
     --threads $threadCount \
+    --tx_count 10000 \
 "
 
 tmux new -s solana-bench-tps -d "
