@@ -22,8 +22,6 @@ members = [
     "programs/token_api",
     "programs/failure",
     "programs/noop",
-    "programs/rewards",
-    "programs/rewards_api",
     "programs/storage",
     "programs/storage_api",
     "programs/vote",
