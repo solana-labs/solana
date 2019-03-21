@@ -72,7 +72,7 @@ local|tar)
   solana_keygen=solana-keygen
 
   ledger=config-local/bootstrap-leader-ledger
-  client_id=config/client-id.json
+  client_id=config-local/client-id.json
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
