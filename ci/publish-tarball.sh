@@ -66,7 +66,6 @@ echo --- Creating tarball
   cp solana-release-cuda/bin/solana-fullnode solana-release/bin/solana-fullnode-cuda
 
   tar jvcf solana-release-$TARGET.tar.bz2 solana-release/
-  cp solana-release/bin/solana-install solana-install-$TARGET
 )
 
 echo --- Saving build artifacts
