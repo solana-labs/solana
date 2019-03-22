@@ -138,7 +138,11 @@ mod tests {
                         // send some data
                         let h1 = hash(b"hello world!");
                         let tx = test_tx();
-                        poh_recorder.lock().unwrap().record(h1, vec![tx]).unwrap();
+                        poh_recorder
+                            .lock()
+                            .unwrap()
+                            .record(bank.slot(), h1, vec![tx])
+                            .unwrap();
 
                         if exit.load(Ordering::Relaxed) {
                             break Ok(());
