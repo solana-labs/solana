@@ -24,6 +24,7 @@ use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex, RwLock};
+use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
@@ -167,13 +168,16 @@ impl BankingStage {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = vec![];
         loop {
-            if Self::forward_buffered_packets(
-                &socket,
-                poh_recorder,
-                cluster_info,
-                &buffered_packets,
-            ) {
-                buffered_packets.clear();
+            while !buffered_packets.is_empty() {
+                if Self::forward_buffered_packets(
+                    &socket,
+                    poh_recorder,
+                    cluster_info,
+                    &buffered_packets,
+                ) {
+                    buffered_packets.clear();
+                }
+                sleep(Duration::from_millis(1));
             }
 
             match Self::process_packets(&verified_receiver, &poh_recorder) {
