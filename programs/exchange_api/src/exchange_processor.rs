@@ -125,8 +125,16 @@ impl ExchangeProcessor {
 
         // Update tokens/accounts
 
-        from_trade.tokens -= secondary_cost;
+        if to_trade.tokens < primary_cost {
+            error!("Not enough tokens in to account");
+            Err(InstructionError::InvalidArgument)?
+        }
+        if from_trade.tokens < secondary_cost {
+            error!("Not enough tokens in from account");
+            Err(InstructionError::InvalidArgument)?
+        }
         to_trade.tokens -= primary_cost;
+        from_trade.tokens -= secondary_cost;
 
         to_trade_account.tokens[secondary_token] += secondary_tokens;
         from_trade_account.tokens[primary_token] += primary_tokens;
@@ -227,7 +235,7 @@ impl ExchangeProcessor {
         }
 
         if let Err(e) = check_trade(info.direction, info.tokens, info.price) {
-            InstructionError::CustomError(bincode::serialize(&e).unwrap());
+            bincode::serialize(&e).unwrap();
         }
 
         // Trade holds the tokens in escrow
@@ -404,13 +412,12 @@ mod test {
         secondary_price: u64,
         primary_tokens_expect: u64,
         secondary_tokens_expect: u64,
-        primary_tokens: Tokens,
-        secondary_tokens: Tokens,
-        profit_tokens: Tokens,
+        primary_account_tokens: Tokens,
+        secondary_account_tokens: Tokens,
+        profit_account_tokens: Tokens,
     ) -> Result<(), InstructionError> {
         trace!(
-            "Swap {} {} for {} to {} for {}",
-            direction,
+            "Swap {} for {} to {} for {}",
             primary_tokens,
             primary_price,
             secondary_tokens,
@@ -432,8 +439,8 @@ mod test {
             &mut swap,
             &mut to_trade,
             &mut from_trade,
-            &mut to_trade_account,
-            &mut from_trade_account,
+            &mut to_account,
+            &mut from_account,
             &mut profit_account,
         )?;
 
@@ -443,19 +450,19 @@ mod test {
             primary_tokens_expect,
             from_trade.tokens,
             secondary_tokens_expect,
-            to_trade_account.tokens,
-            primary_tokens,
-            from_trade_account.tokens,
-            secondary_tokens,
+            to_account.tokens,
+            primary_account_tokens,
+            from_account.tokens,
+            secondary_account_tokens,
             profit_account.tokens,
-            profit_tokens
+            profit_account_tokens
         );
 
         assert_eq!(to_trade.tokens, primary_tokens_expect);
         assert_eq!(from_trade.tokens, secondary_tokens_expect);
-        assert_eq!(to_trade_account.tokens, primary_tokens);
-        assert_eq!(from_trade_account.tokens, secondary_tokens);
-        assert_eq!(profit_account.tokens, profit_tokens);
+        assert_eq!(to_account.tokens, primary_account_tokens);
+        assert_eq!(from_account.tokens, secondary_account_tokens);
+        assert_eq!(profit_account.tokens, profit_account_tokens);
         assert_eq!(swap.primary_tokens, primary_tokens - to_trade.tokens);
         assert_eq!(swap.primary_price, to_trade.price);
         assert_eq!(swap.secondary_tokens, secondary_tokens - from_trade.tokens);

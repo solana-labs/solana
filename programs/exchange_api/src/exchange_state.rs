@@ -260,3 +260,9 @@ pub enum ExchangeState {
     Swap(TradeSwapInfo),
     Invalid,
 }
+impl Default for ExchangeState {
+    fn default() -> ExchangeState {
+        ExchangeState::Unallocated
+    }
+}
+
