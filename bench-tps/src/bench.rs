@@ -630,19 +630,27 @@ fn airdrop_lamports(client: &ThinClient, drone_addr: &SocketAddr, id: &Keypair, 
             id.pubkey(),
         );
 
-        let blockhash = client.get_recent_blockhash().unwrap();
-        match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, blockhash) {
-            Ok(transaction) => {
-                let signature = client.transfer_signed(&transaction).unwrap();
-                client.poll_for_signature(&signature).unwrap();
-            }
-            Err(err) => {
-                panic!(
-                    "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
-                    err, drone_addr, airdrop_amount
-                );
-            }
-        };
+        for _ in 0..60 {
+            let blockhash = client.get_recent_blockhash().unwrap();
+            match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, blockhash)
+            {
+                Ok(transaction) => {
+                    println!("transferring..");
+                    let signature = client.transfer_signed(&transaction).unwrap();
+                    println!("polling for signature");
+                    if client.poll_for_signature(&signature).is_ok() {
+                        break;
+                    }
+                }
+                Err(err) => {
+                    panic!(
+                        "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
+                        err, drone_addr, airdrop_amount
+                    );
+                }
+            };
+            sleep(Duration::from_millis(200));
+        }
 
         let current_balance = client.poll_get_balance(&id.pubkey()).unwrap_or_else(|e| {
             println!("airdrop error {}", e);
@@ -713,13 +721,19 @@ fn compute_and_report_stats(
         );
     }
 
+    let total_tx_send_count = total_tx_send_count as u64;
+    let num_dropped = if total_tx_send_count > max_tx_count {
+        total_tx_send_count - max_tx_count
+    } else {
+        0
+    };
     println!(
         "\nHighest TPS: {:.2} sampling period {}s max transactions: {} clients: {} drop rate: {:.2}",
         max_of_maxes,
         sample_period,
         max_tx_count,
         maxes.read().unwrap().len(),
-        (total_tx_send_count as u64 - max_tx_count) as f64 / total_tx_send_count as f64,
+        num_dropped as f64 / total_tx_send_count as f64,
     );
     println!(
         "\tAverage TPS: {}",
