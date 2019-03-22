@@ -183,7 +183,7 @@ impl LocalCluster {
 
         // Send each validator some lamports to vote
         let validator_balance =
-            Self::transfer(&client, &self.funding_keypair, &validator_pubkey, stake);
+            Self::transfer_with_client(&client, &self.funding_keypair, &validator_pubkey, stake);
         info!(
             "validator {} balance {}",
             validator_pubkey, validator_balance
@@ -217,7 +217,7 @@ impl LocalCluster {
             FULLNODE_PORT_RANGE,
         );
 
-        Self::transfer(
+        Self::transfer_with_client(
             &client,
             &self.funding_keypair,
             &replicator_keypair.pubkey(),
@@ -252,7 +252,15 @@ impl LocalCluster {
         }
     }
 
-    fn transfer(
+    pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
+        let client = create_client(
+            self.entry_point_info.client_facing_addr(),
+            FULLNODE_PORT_RANGE,
+        );
+        Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
+    }
+
+    fn transfer_with_client(
         client: &ThinClient,
         source_keypair: &Keypair,
         dest_pubkey: &Pubkey,
