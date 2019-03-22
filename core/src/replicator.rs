@@ -22,7 +22,7 @@ use solana_client::thin_client::{create_client, ThinClient};
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_storage_api::StorageTransaction;
+use solana_storage_api::storage_transaction::StorageTransaction;
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
