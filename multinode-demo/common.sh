@@ -151,6 +151,11 @@ setup_fullnode_staking() {
   declare staker_id
   staker_id=$($solana_wallet --keypair "$staker_id_path" address)
 
+  if [[ -f "$staker_id_path".configured ]]; then
+    echo "Staking account has already been configured"
+    return 0
+  fi
+
   # A fullnode requires 43 lamports to function:
   # - one lamport to keep the node identity public key valid. TODO: really??
   # - 42 more for the staker account we fund
@@ -169,6 +174,8 @@ setup_fullnode_staking() {
                  --delegate-account "$fullnode_id" \
                  --authorize-voter "$staker_id"  || return $?
 
+
+  touch "$staker_id_path".configured
   return 0
 }
 
