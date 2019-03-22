@@ -280,27 +280,16 @@ stop)
   stop
   ;;
 update-or-restart)
-  if start "" update; then
-    echo Update successful
-  else
-    echo "+++ Update failed, restarting the network"
-    $metricsWriteDatapoint "testnet-manager update-failure=1"
-    start
-  fi
+  echo "+++ Restarting the network"
+  start
   ;;
 sanity-or-restart)
   if sanity; then
     echo Pass
   else
-    echo "+++ Sanity failed, updating the network"
+    echo "+++ Sanity failed, restarting the network"
     $metricsWriteDatapoint "testnet-manager sanity-failure=1"
-    if start "" update; then
-      echo Update successful
-    else
-      echo "+++ Update failed, restarting the network"
-      $metricsWriteDatapoint "testnet-manager update-failure=1"
-      start
-    fi
+    start
   fi
   ;;
 esac
