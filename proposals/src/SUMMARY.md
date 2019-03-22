@@ -29,3 +29,4 @@
   - [Leader-to-Leader Transition](leader-leader-transition.md)
   - [Leader-to-Validator Transition](leader-validator-transition.md)
   - [Cluster Software Installation and Updates](installer.md)
+  - [Testnet Participation](testnet-participation.md)
