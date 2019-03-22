@@ -704,7 +704,8 @@ mod test {
 
     #[test]
     fn test_handle_new_root() {
-        let bank0 = Bank::default();
+        let genesis_block = GenesisBlock::new(10_000).0;
+        let bank0 = Bank::new(&genesis_block);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
         let mut progress = HashMap::new();
         progress.insert(5, (Hash::default(), 0));

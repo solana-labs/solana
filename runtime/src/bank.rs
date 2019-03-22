@@ -912,6 +912,12 @@ impl Bank {
     }
 }
 
+impl Drop for Bank {
+    fn drop(&mut self) {
+        self.accounts.remove_accounts(self.accounts_id);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
