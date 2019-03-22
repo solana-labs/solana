@@ -242,7 +242,9 @@ impl BankingStage {
         if !processed_transactions.is_empty() {
             let hash = Transaction::hash(&processed_transactions);
             // record and unlock will unlock all the successfull transactions
-            poh.lock().unwrap().record(bank_slot, hash, processed_transactions)?;
+            poh.lock()
+                .unwrap()
+                .record(bank_slot, hash, processed_transactions)?;
         }
         Ok(())
     }
@@ -715,7 +717,8 @@ mod tests {
         ];
 
         let mut results = vec![Ok(()), Ok(())];
-        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
+            .unwrap();
         let (_, entries) = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
@@ -724,13 +727,15 @@ mod tests {
             1,
             InstructionError::new_result_with_negative_lamports(),
         ));
-        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
+            .unwrap();
         let (_, entries) = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
         // Other TransactionErrors should not be recorded
         results[0] = Err(TransactionError::AccountNotFound);
-        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
+            .unwrap();
         let (_, entries) = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
     }

@@ -257,9 +257,9 @@ impl PohRecorder {
         let _ = self.flush_cache(true);
     }
 
-    pub fn record(&mut self, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
+    pub fn record(&mut self, bank_slot: u64, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
         self.flush_cache(false)?;
-        self.record_and_send_txs(mixin, txs)
+        self.record_and_send_txs(bank_slot, mixin, txs)
     }
 
     /// A recorder to synchronize PoH with the following data structures
@@ -299,12 +299,17 @@ impl PohRecorder {
         )
     }
 
-    fn record_and_send_txs(&mut self, slot: u64, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
+    fn record_and_send_txs(
+        &mut self,
+        bank_slot: u64,
+        mixin: Hash,
+        txs: Vec<Transaction>,
+    ) -> Result<()> {
         let working_bank = self
             .working_bank
             .as_ref()
             .ok_or(Error::PohRecorderError(PohRecorderError::MaxHeightReached))?;
-        if slot != working_bank.bank.slot() {
+        if bank_slot != working_bank.bank.slot() {
             return Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached));
         }
         let poh_entry = self.poh.record(mixin);
@@ -509,7 +514,7 @@ mod tests {
         );
 
         let working_bank = WorkingBank {
-            bank,
+            bank: bank.clone(),
             min_tick_height: 2,
             max_tick_height: 3,
         };
@@ -517,7 +522,9 @@ mod tests {
         poh_recorder.tick();
         let tx = test_tx();
         let h1 = hash(b"hello world!");
-        assert!(poh_recorder.record(h1, vec![tx.clone()]).is_err());
+        assert!(poh_recorder
+            .record(bank.slot(), h1, vec![tx.clone()])
+            .is_err());
         assert!(entry_receiver.try_recv().is_err());
     }
 
@@ -536,7 +543,7 @@ mod tests {
         );
 
         let working_bank = WorkingBank {
-            bank,
+            bank: bank.clone(),
             min_tick_height: 1,
             max_tick_height: 2,
         };
@@ -546,7 +553,9 @@ mod tests {
         assert_eq!(poh_recorder.poh.tick_height, 1);
         let tx = test_tx();
         let h1 = hash(b"hello world!");
-        assert!(poh_recorder.record(h1, vec![tx.clone()]).is_ok());
+        assert!(poh_recorder
+            .record(bank.slot(), h1, vec![tx.clone()])
+            .is_ok());
         assert_eq!(poh_recorder.tick_cache.len(), 0);
 
         //tick in the cache + entry
@@ -572,7 +581,7 @@ mod tests {
         );
 
         let working_bank = WorkingBank {
-            bank,
+            bank: bank.clone(),
             min_tick_height: 1,
             max_tick_height: 2,
         };
@@ -582,7 +591,9 @@ mod tests {
         assert_eq!(poh_recorder.poh.tick_height, 2);
         let tx = test_tx();
         let h1 = hash(b"hello world!");
-        assert!(poh_recorder.record(h1, vec![tx.clone()]).is_err());
+        assert!(poh_recorder
+            .record(bank.slot(), h1, vec![tx.clone()])
+            .is_err());
 
         let (_bank, e) = entry_receiver.recv().expect("recv 1");
         assert_eq!(e.len(), 2);
@@ -748,7 +759,7 @@ mod tests {
         let end_slot = 3;
         let max_tick_height = (end_slot + 1) * ticks_per_slot - 1;
         let working_bank = WorkingBank {
-            bank,
+            bank: bank.clone(),
             min_tick_height: 1,
             max_tick_height,
         };
@@ -760,7 +771,9 @@ mod tests {
 
         let tx = test_tx();
         let h1 = hash(b"hello world!");
-        assert!(poh_recorder.record(h1, vec![tx.clone()]).is_err());
+        assert!(poh_recorder
+            .record(bank.slot(), h1, vec![tx.clone()])
+            .is_err());
         assert!(poh_recorder.working_bank.is_none());
         // Make sure the starting slot is updated
         assert_eq!(poh_recorder.start_slot(), end_slot);
