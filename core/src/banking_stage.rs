@@ -217,6 +217,7 @@ impl BankingStage {
     }
 
     fn record_transactions(
+        bank_slot: u64,
         txs: &[Transaction],
         results: &[bank::Result<()>],
         poh: &Arc<Mutex<PohRecorder>>,
@@ -241,7 +242,7 @@ impl BankingStage {
         if !processed_transactions.is_empty() {
             let hash = Transaction::hash(&processed_transactions);
             // record and unlock will unlock all the successfull transactions
-            poh.lock().unwrap().record(hash, processed_transactions)?;
+            poh.lock().unwrap().record(bank_slot, hash, processed_transactions)?;
         }
         Ok(())
     }
@@ -268,7 +269,7 @@ impl BankingStage {
 
         let record_time = {
             let now = Instant::now();
-            Self::record_transactions(txs, &results, poh)?;
+            Self::record_transactions(bank.slot(), txs, &results, poh)?;
             now.elapsed()
         };
 

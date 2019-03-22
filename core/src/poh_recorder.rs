@@ -299,11 +299,14 @@ impl PohRecorder {
         )
     }
 
-    fn record_and_send_txs(&mut self, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
+    fn record_and_send_txs(&mut self, slot: u64, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
         let working_bank = self
             .working_bank
             .as_ref()
             .ok_or(Error::PohRecorderError(PohRecorderError::MaxHeightReached))?;
+        if slot != working_bank.bank.slot() {
+            return Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached));
+        }
         let poh_entry = self.poh.record(mixin);
         assert!(!txs.is_empty(), "Entries without transactions are used to track real-time passing in the ledger and can only be generated with PohRecorder::tick function");
         let recorded_entry = Entry {
