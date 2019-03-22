@@ -69,6 +69,79 @@ impl LocalCluster {
         )
     }
 
+    pub fn new_partioned_cluster(
+        node_stakes: &[&[u64]],
+        cluster_lamports: u64,
+        fullnode_config: &FullnodeConfig,
+    ) -> (Self, Vec<Vec<ContactInfo>>) {
+        let leader_keypair = Arc::new(Keypair::new());
+        let leader_pubkey = leader_keypair.pubkey();
+        let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
+        let (mut genesis_block, mint_keypair) =
+            GenesisBlock::new_with_leader(cluster_lamports, &leader_pubkey, node_stakes[0][0]);
+        genesis_block.ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
+        genesis_block.slots_per_epoch = DEFAULT_SLOTS_PER_EPOCH;
+        let (genesis_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
+        let mut ledger_paths = vec![];
+        ledger_paths.push(genesis_ledger_path.clone());
+        ledger_paths.push(leader_ledger_path.clone());
+        let voting_keypair = Keypair::new();
+        let leader_contact_info = leader_node.info.clone();
+
+        let leader_server = Fullnode::new(
+            leader_node,
+            &leader_keypair,
+            &leader_ledger_path,
+            &voting_keypair.pubkey(),
+            voting_keypair,
+            None,
+            fullnode_config,
+        );
+
+        let fullnodes = vec![leader_server];
+        let mut partitions = vec![vec![]; node_stakes.len()];
+        partitions[0].push(leader_contact_info.clone());
+
+        let mut cluster = Self {
+            funding_keypair: mint_keypair,
+            entry_point_info: leader_contact_info,
+            fullnodes,
+            replicators: vec![],
+            ledger_paths,
+            genesis_ledger_path,
+            genesis_block,
+        };
+
+        for (i, partition_stakes) in node_stakes.iter().enumerate() {
+            let partition_contact_info = {
+                if i == 0 {
+                    // The contact for the first partition is the bootstrap leader we
+                    // alraedy initialized
+                    &partitions[0][0]
+                } else {
+                    let contact_info =
+                        cluster.add_validator(&fullnode_config, partition_stakes[0], None);
+                    partitions[i].push(contact_info);
+                    &partitions[i].last().unwrap()
+                }
+            }
+            .clone();
+
+            for stake in &partition_stakes[1..] {
+                let contact_info =
+                    cluster.add_validator(&fullnode_config, *stake, Some(&partition_contact_info));
+                partitions[i].push(contact_info);
+            }
+        }
+
+        for partition in &partitions {
+            discover(&partition[0].gossip, partition.len()).unwrap();
+        }
+
+        (cluster, partitions)
+    }
+
     pub fn new_with_config_replicators(
         node_stakes: &[u64],
         cluster_lamports: u64,
@@ -115,7 +188,11 @@ impl LocalCluster {
         };
 
         for stake in &node_stakes[1..] {
-            cluster.add_validator(&fullnode_config, *stake);
+            cluster.add_validator(
+                &fullnode_config,
+                *stake,
+                Some(&cluster.entry_point_info.clone()),
+            );
         }
 
         for _ in 0..num_replicators {
@@ -144,7 +221,12 @@ impl LocalCluster {
         }
     }
 
-    fn add_validator(&mut self, fullnode_config: &FullnodeConfig, stake: u64) {
+    fn add_validator(
+        &mut self,
+        fullnode_config: &FullnodeConfig,
+        stake: u64,
+        entry_point_info: Option<&ContactInfo>,
+    ) -> ContactInfo {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,
@@ -156,6 +238,7 @@ impl LocalCluster {
         let voting_keypair = Keypair::new();
         let validator_pubkey = validator_keypair.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
+        let validator_info = validator_node.info.clone();
         let ledger_path = tmp_copy_blocktree!(&self.genesis_ledger_path);
         self.ledger_paths.push(ledger_path.clone());
 
@@ -176,11 +259,12 @@ impl LocalCluster {
             &ledger_path,
             &voting_keypair.pubkey(),
             voting_keypair,
-            Some(&self.entry_point_info),
+            entry_point_info,
             fullnode_config,
         );
 
         self.fullnodes.push(validator_server);
+        validator_info
     }
 
     fn add_replicator(&mut self) {

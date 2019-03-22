@@ -51,6 +51,53 @@ impl GossipService {
     }
 }
 
+// Creates a node that will resolve a set of partitions
+pub fn make_bridge_partition_node(
+    partitions: &[Vec<ContactInfo>],
+) -> std::io::Result<(GossipService, Arc<RwLock<ClusterInfo>>, Arc<AtomicBool>)> {
+    let exit = Arc::new(AtomicBool::new(false));
+    let first_partition = &partitions[0][0];
+    let (gossip_service, spy_cluster_info) = make_spy_node(&first_partition.gossip, &exit);
+    let mut result = Ok(vec![]);
+    for partition in partitions {
+        println!("resolving partition");
+        let exit2 = Arc::new(AtomicBool::new(false));
+        let (gossip_service2, spy_cluster_info2) = make_spy_node(&partition[0].gossip, &exit2);
+        result = wait_for_converge(&spy_cluster_info, partition.len());
+        {
+            let mut wcluster_info = spy_cluster_info2.write().unwrap();
+            let contact_infos: Vec<_> = wcluster_info
+                .gossip
+                .crds
+                .table
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .filter(|(_, v)| v.value.contact_info().is_some())
+                .collect();
+
+            wcluster_info
+                .gossip
+                .crds
+                .table
+                .extend(contact_infos.into_iter());
+        }
+
+        if result.is_err() {
+            info!(
+                "Bridging partition failed...\n{}",
+                spy_cluster_info.read().unwrap().contact_info_trace()
+            );
+            break;
+        }
+
+        exit2.store(true, Ordering::Relaxed);
+        gossip_service2.join().unwrap();
+    }
+
+    result?;
+    Ok((gossip_service, spy_cluster_info, exit))
+}
+
 pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<Vec<ContactInfo>> {
     let exit = Arc::new(AtomicBool::new(false));
     let (gossip_service, spy_ref) = make_spy_node(gossip_addr, &exit);
@@ -61,26 +108,43 @@ pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<V
         num_nodes
     );
 
+    let result = wait_for_converge(&spy_ref, num_nodes);
+
+    exit.store(true, Ordering::Relaxed);
+    gossip_service.join().unwrap();
+
+    if result.is_err() {
+        info!(
+            "discover failed...\n{}",
+            spy_ref.read().unwrap().contact_info_trace()
+        );
+    }
+
+    Ok(result?)
+}
+
+fn wait_for_converge(
+    cluster_info: &Arc<RwLock<ClusterInfo>>,
+    num_nodes: usize,
+) -> std::io::Result<Vec<ContactInfo>> {
     // Wait for the cluster to converge
     let now = Instant::now();
     let mut i = 0;
     while now.elapsed() < Duration::from_secs(30) {
-        let tvu_peers = spy_ref.read().unwrap().tvu_peers();
+        let tvu_peers = cluster_info.read().unwrap().tvu_peers();
         if tvu_peers.len() >= num_nodes {
             info!(
                 "discover success in {}s...\n{}",
                 now.elapsed().as_secs(),
-                spy_ref.read().unwrap().contact_info_trace()
+                cluster_info.read().unwrap().contact_info_trace()
             );
 
-            exit.store(true, Ordering::Relaxed);
-            gossip_service.join().unwrap();
             return Ok(tvu_peers);
         }
         if i % 20 == 0 {
             info!(
                 "discovering...\n{}",
-                spy_ref.read().unwrap().contact_info_trace()
+                cluster_info.read().unwrap().contact_info_trace()
             );
         }
         sleep(Duration::from_millis(
@@ -89,12 +153,6 @@ pub fn discover(gossip_addr: &SocketAddr, num_nodes: usize) -> std::io::Result<V
         i += 1;
     }
 
-    exit.store(true, Ordering::Relaxed);
-    gossip_service.join().unwrap();
-    info!(
-        "discover failed...\n{}",
-        spy_ref.read().unwrap().contact_info_trace()
-    );
     Err(std::io::Error::new(
         std::io::ErrorKind::Other,
         "Failed to converge",
