@@ -1,6 +1,7 @@
 //! The `vote_transaction` module provides functionality for creating vote transactions.
 
 use crate::vote_instruction::{Vote, VoteInstruction};
+use crate::vote_script::VoteScript;
 use crate::vote_state::VoteState;
 use crate::{check_id, id};
 use bincode::deserialize;
@@ -37,11 +38,7 @@ impl VoteTransaction {
         fee: u64,
     ) -> Transaction {
         let from_id = from_keypair.pubkey();
-        let space = VoteState::max_size() as u64;
-        let create_ix =
-            SystemInstruction::new_program_account(&from_id, staker_id, lamports, space, &id());
-        let init_ix = VoteInstruction::new_initialize_account(staker_id);
-        let mut tx = Transaction::new(vec![create_ix, init_ix]);
+        let mut tx = VoteScript::new_account(&from_id, staker_id, lamports).compile();
         tx.fee = fee;
         tx.sign(&[from_keypair], recent_blockhash);
         tx
