@@ -49,6 +49,9 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = --no-voting ]]; then
     extra_fullnode_args+=("$1")
     shift
+  elif [[ $1 = --gossip-port ]]; then
+    gossip_port=$2
+    shift 2
   elif [[ $1 = --rpc-port ]]; then
     extra_fullnode_args+=("$1" "$2")
     shift 2

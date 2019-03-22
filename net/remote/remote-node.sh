@@ -109,6 +109,7 @@ local|tar)
     fi
 
     args+=(
+      --gossip-port 8001
       --rpc-port 8899
     )
 
