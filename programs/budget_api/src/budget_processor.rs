@@ -141,7 +141,7 @@ pub fn process_instruction(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::budget_instruction::BudgetInstruction;
     use crate::budget_script::BudgetScript;

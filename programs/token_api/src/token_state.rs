@@ -92,54 +92,54 @@ enum Command {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub enum TokenProgram {
+pub enum TokenState {
     Unallocated,
     Token(TokenInfo),
     Account(TokenAccountInfo),
     Invalid,
 }
-impl Default for TokenProgram {
-    fn default() -> TokenProgram {
-        TokenProgram::Unallocated
+impl Default for TokenState {
+    fn default() -> TokenState {
+        TokenState::Unallocated
     }
 }
 
-impl TokenProgram {
+impl TokenState {
     #[allow(clippy::needless_pass_by_value)]
     fn map_to_invalid_args(err: std::boxed::Box<bincode::ErrorKind>) -> Error {
         warn!("invalid argument: {:?}", err);
         Error::InvalidArgument
     }
 
-    pub fn deserialize(input: &[u8]) -> Result<TokenProgram> {
+    pub fn deserialize(input: &[u8]) -> Result<TokenState> {
         if input.is_empty() {
             Err(Error::InvalidArgument)?;
         }
         match input[0] {
-            0 => Ok(TokenProgram::Unallocated),
-            1 => Ok(TokenProgram::Token(
+            0 => Ok(TokenState::Unallocated),
+            1 => Ok(TokenState::Token(
                 bincode::deserialize(&input[1..]).map_err(Self::map_to_invalid_args)?,
             )),
-            2 => Ok(TokenProgram::Account(
+            2 => Ok(TokenState::Account(
                 bincode::deserialize(&input[1..]).map_err(Self::map_to_invalid_args)?,
             )),
             _ => Err(Error::InvalidArgument),
         }
     }
 
-    fn serialize(self: &TokenProgram, output: &mut [u8]) -> Result<()> {
+    fn serialize(self: &TokenState, output: &mut [u8]) -> Result<()> {
         if output.is_empty() {
             warn!("serialize fail: ouput.len is 0");
             Err(Error::InvalidArgument)?;
         }
         match self {
-            TokenProgram::Unallocated | TokenProgram::Invalid => Err(Error::InvalidArgument),
-            TokenProgram::Token(token_info) => {
+            TokenState::Unallocated | TokenState::Invalid => Err(Error::InvalidArgument),
+            TokenState::Token(token_info) => {
                 output[0] = 1;
                 let writer = std::io::BufWriter::new(&mut output[1..]);
                 bincode::serialize_into(writer, &token_info).map_err(Self::map_to_invalid_args)
             }
-            TokenProgram::Account(account_info) => {
+            TokenState::Account(account_info) => {
                 output[0] = 2;
                 let writer = std::io::BufWriter::new(&mut output[1..]);
                 bincode::serialize_into(writer, &account_info).map_err(Self::map_to_invalid_args)
@@ -149,7 +149,7 @@ impl TokenProgram {
 
     #[allow(dead_code)]
     pub fn amount(&self) -> Result<u64> {
-        if let TokenProgram::Account(account_info) = self {
+        if let TokenState::Account(account_info) = self {
             Ok(account_info.amount)
         } else {
             Err(Error::InvalidArgument)
@@ -159,28 +159,28 @@ impl TokenProgram {
     #[allow(dead_code)]
     pub fn only_owner(&self, key: &Pubkey) -> Result<()> {
         if *key != Pubkey::default() {
-            if let TokenProgram::Account(account_info) = self {
+            if let TokenState::Account(account_info) = self {
                 if account_info.owner == *key {
                     return Ok(());
                 }
             }
         }
-        warn!("TokenProgram: non-owner rejected");
+        warn!("TokenState: non-owner rejected");
         Err(Error::NotOwner)
     }
 
     pub fn process_command_newtoken(
         info: &mut [KeyedAccount],
         token_info: TokenInfo,
-        input_program_accounts: &[TokenProgram],
-        output_program_accounts: &mut Vec<(usize, TokenProgram)>,
+        input_program_accounts: &[TokenState],
+        output_program_accounts: &mut Vec<(usize, TokenState)>,
     ) -> Result<()> {
         if input_program_accounts.len() != 2 {
             error!("Expected 2 accounts");
             Err(Error::InvalidArgument)?;
         }
 
-        if let TokenProgram::Account(dest_account) = &input_program_accounts[1] {
+        if let TokenState::Account(dest_account) = &input_program_accounts[1] {
             if info[0].signer_key().unwrap() != &dest_account.token {
                 error!("account 1 token mismatch");
                 Err(Error::InvalidArgument)?;
@@ -193,24 +193,24 @@ impl TokenProgram {
 
             let mut output_dest_account = dest_account.clone();
             output_dest_account.amount = token_info.supply;
-            output_program_accounts.push((1, TokenProgram::Account(output_dest_account)));
+            output_program_accounts.push((1, TokenState::Account(output_dest_account)));
         } else {
             error!("account 1 invalid");
             Err(Error::InvalidArgument)?;
         }
 
-        if input_program_accounts[0] != TokenProgram::Unallocated {
+        if input_program_accounts[0] != TokenState::Unallocated {
             error!("account 0 not available");
             Err(Error::InvalidArgument)?;
         }
-        output_program_accounts.push((0, TokenProgram::Token(token_info)));
+        output_program_accounts.push((0, TokenState::Token(token_info)));
         Ok(())
     }
 
     pub fn process_command_newaccount(
         info: &mut [KeyedAccount],
-        input_program_accounts: &[TokenProgram],
-        output_program_accounts: &mut Vec<(usize, TokenProgram)>,
+        input_program_accounts: &[TokenState],
+        output_program_accounts: &mut Vec<(usize, TokenState)>,
     ) -> Result<()> {
         // key 0 - Destination new token account
         // key 1 - Owner of the account
@@ -220,7 +220,7 @@ impl TokenProgram {
             error!("Expected 3 accounts");
             Err(Error::InvalidArgument)?;
         }
-        if input_program_accounts[0] != TokenProgram::Unallocated {
+        if input_program_accounts[0] != TokenState::Unallocated {
             error!("account 0 is already allocated");
             Err(Error::InvalidArgument)?;
         }
@@ -236,22 +236,22 @@ impl TokenProgram {
                 original_amount: 0,
             });
         }
-        output_program_accounts.push((0, TokenProgram::Account(token_account_info)));
+        output_program_accounts.push((0, TokenState::Account(token_account_info)));
         Ok(())
     }
 
     pub fn process_command_transfer(
         info: &mut [KeyedAccount],
         amount: u64,
-        input_program_accounts: &[TokenProgram],
-        output_program_accounts: &mut Vec<(usize, TokenProgram)>,
+        input_program_accounts: &[TokenState],
+        output_program_accounts: &mut Vec<(usize, TokenState)>,
     ) -> Result<()> {
         if input_program_accounts.len() < 3 {
             error!("Expected 3 accounts");
             Err(Error::InvalidArgument)?;
         }
 
-        if let (TokenProgram::Account(source_account), TokenProgram::Account(dest_account)) =
+        if let (TokenState::Account(source_account), TokenState::Account(dest_account)) =
             (&input_program_accounts[1], &input_program_accounts[2])
         {
             if source_account.token != dest_account.token {
@@ -275,7 +275,7 @@ impl TokenProgram {
 
             let mut output_source_account = source_account.clone();
             output_source_account.amount -= amount;
-            output_program_accounts.push((1, TokenProgram::Account(output_source_account)));
+            output_program_accounts.push((1, TokenState::Account(output_source_account)));
 
             if let Some(ref delegate_info) = source_account.delegate {
                 if input_program_accounts.len() != 4 {
@@ -284,7 +284,7 @@ impl TokenProgram {
                 }
 
                 let delegate_account = source_account;
-                if let TokenProgram::Account(source_account) = &input_program_accounts[3] {
+                if let TokenState::Account(source_account) = &input_program_accounts[3] {
                     if source_account.token != delegate_account.token {
                         error!("account 1/3 token mismatch");
                         Err(Error::InvalidArgument)?;
@@ -300,7 +300,7 @@ impl TokenProgram {
 
                     let mut output_source_account = source_account.clone();
                     output_source_account.amount -= amount;
-                    output_program_accounts.push((3, TokenProgram::Account(output_source_account)));
+                    output_program_accounts.push((3, TokenState::Account(output_source_account)));
                 } else {
                     error!("account 3 is an invalid account");
                     Err(Error::InvalidArgument)?;
@@ -309,7 +309,7 @@ impl TokenProgram {
 
             let mut output_dest_account = dest_account.clone();
             output_dest_account.amount += amount;
-            output_program_accounts.push((2, TokenProgram::Account(output_dest_account)));
+            output_program_accounts.push((2, TokenState::Account(output_dest_account)));
         } else {
             error!("account 1 and/or 2 are invalid accounts");
             Err(Error::InvalidArgument)?;
@@ -320,15 +320,15 @@ impl TokenProgram {
     pub fn process_command_approve(
         info: &mut [KeyedAccount],
         amount: u64,
-        input_program_accounts: &[TokenProgram],
-        output_program_accounts: &mut Vec<(usize, TokenProgram)>,
+        input_program_accounts: &[TokenState],
+        output_program_accounts: &mut Vec<(usize, TokenState)>,
     ) -> Result<()> {
         if input_program_accounts.len() != 3 {
             error!("Expected 3 accounts");
             Err(Error::InvalidArgument)?;
         }
 
-        if let (TokenProgram::Account(source_account), TokenProgram::Account(delegate_account)) =
+        if let (TokenState::Account(source_account), TokenState::Account(delegate_account)) =
             (&input_program_accounts[1], &input_program_accounts[2])
         {
             if source_account.token != delegate_account.token {
@@ -363,8 +363,7 @@ impl TokenProgram {
                         source: delegate_info.source,
                         original_amount: amount,
                     });
-                    output_program_accounts
-                        .push((2, TokenProgram::Account(output_delegate_account)));
+                    output_program_accounts.push((2, TokenState::Account(output_delegate_account)));
                 }
             }
         } else {
@@ -376,15 +375,15 @@ impl TokenProgram {
 
     pub fn process_command_setowner(
         info: &mut [KeyedAccount],
-        input_program_accounts: &[TokenProgram],
-        output_program_accounts: &mut Vec<(usize, TokenProgram)>,
+        input_program_accounts: &[TokenState],
+        output_program_accounts: &mut Vec<(usize, TokenState)>,
     ) -> Result<()> {
         if input_program_accounts.len() < 3 {
             error!("Expected 3 accounts");
             Err(Error::InvalidArgument)?;
         }
 
-        if let TokenProgram::Account(source_account) = &input_program_accounts[1] {
+        if let TokenState::Account(source_account) = &input_program_accounts[1] {
             if info[0].signer_key().unwrap() != &source_account.owner {
                 info!("owner of account 1 not present");
                 Err(Error::InvalidArgument)?;
@@ -392,7 +391,7 @@ impl TokenProgram {
 
             let mut output_source_account = source_account.clone();
             output_source_account.owner = *info[2].unsigned_key();
-            output_program_accounts.push((1, TokenProgram::Account(output_source_account)));
+            output_program_accounts.push((1, TokenState::Account(output_source_account)));
         } else {
             info!("account 1 is invalid");
             Err(Error::InvalidArgument)?;
@@ -408,7 +407,7 @@ impl TokenProgram {
             Err(Error::InvalidArgument)?;
         }
 
-        let input_program_accounts: Vec<TokenProgram> = info
+        let input_program_accounts: Vec<TokenState> = info
             .iter()
             .map(|keyed_account| {
                 let account = &keyed_account.account;
@@ -417,11 +416,11 @@ impl TokenProgram {
                         Ok(token_program) => token_program,
                         Err(err) => {
                             error!("deserialize failed: {:?}", err);
-                            TokenProgram::Invalid
+                            TokenState::Invalid
                         }
                     }
                 } else {
-                    TokenProgram::Invalid
+                    TokenState::Invalid
                 }
             })
             .collect();
@@ -482,47 +481,47 @@ mod test {
     use super::*;
     #[test]
     pub fn serde() {
-        assert_eq!(TokenProgram::deserialize(&[0]), Ok(TokenProgram::default()));
+        assert_eq!(TokenState::deserialize(&[0]), Ok(TokenState::default()));
 
         let mut data = vec![0; 256];
 
-        let account = TokenProgram::Account(TokenAccountInfo {
+        let account = TokenState::Account(TokenAccountInfo {
             token: Pubkey::new(&[1; 32]),
             owner: Pubkey::new(&[2; 32]),
             amount: 123,
             delegate: None,
         });
         account.serialize(&mut data).unwrap();
-        assert_eq!(TokenProgram::deserialize(&data), Ok(account));
+        assert_eq!(TokenState::deserialize(&data), Ok(account));
 
-        let account = TokenProgram::Token(TokenInfo {
+        let account = TokenState::Token(TokenInfo {
             supply: 12345,
             decimals: 2,
             name: "A test token".to_string(),
             symbol: "TEST".to_string(),
         });
         account.serialize(&mut data).unwrap();
-        assert_eq!(TokenProgram::deserialize(&data), Ok(account));
+        assert_eq!(TokenState::deserialize(&data), Ok(account));
     }
 
     #[test]
     pub fn serde_expect_fail() {
         let mut data = vec![0; 256];
 
-        // Certain TokenProgram's may not be serialized
-        let account = TokenProgram::default();
-        assert_eq!(account, TokenProgram::Unallocated);
+        // Certain TokenState's may not be serialized
+        let account = TokenState::default();
+        assert_eq!(account, TokenState::Unallocated);
         assert!(account.serialize(&mut data).is_err());
         assert!(account.serialize(&mut data).is_err());
-        let account = TokenProgram::Invalid;
+        let account = TokenState::Invalid;
         assert!(account.serialize(&mut data).is_err());
 
         // Bad deserialize data
-        assert!(TokenProgram::deserialize(&[]).is_err());
-        assert!(TokenProgram::deserialize(&[1]).is_err());
-        assert!(TokenProgram::deserialize(&[1, 2]).is_err());
-        assert!(TokenProgram::deserialize(&[2, 2]).is_err());
-        assert!(TokenProgram::deserialize(&[3]).is_err());
+        assert!(TokenState::deserialize(&[]).is_err());
+        assert!(TokenState::deserialize(&[1]).is_err());
+        assert!(TokenState::deserialize(&[1, 2]).is_err());
+        assert!(TokenState::deserialize(&[2, 2]).is_err());
+        assert!(TokenState::deserialize(&[3]).is_err());
     }
 
     // Note: business logic tests are located in the @solana/web3.js test suite

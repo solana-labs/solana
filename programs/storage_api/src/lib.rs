@@ -1,3 +1,5 @@
+pub mod storage_processor;
+
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
