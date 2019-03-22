@@ -16,7 +16,8 @@ fi
 gossip_port=9000
 extra_fullnode_args=()
 self_setup=0
-setup_stakes=true
+setup_stakes=1
+poll_for_new_genesis_block=0
 
 while [[ ${1:0:1} = - ]]; do
   if [[ $1 = -X ]]; then
@@ -26,6 +27,9 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = -x ]]; then
     self_setup=1
     self_setup_label=$$
+    shift
+  elif [[ $1 = --poll-for-new-genesis-block ]]; then
+    poll_for_new_genesis_block=1
     shift
   elif [[ $1 = --blockstream ]]; then
     extra_fullnode_args+=("$1" "$2")
@@ -37,7 +41,7 @@ while [[ ${1:0:1} = - ]]; do
     extra_fullnode_args+=("$1" "$2")
     shift 2
   elif [[ $1 = --only-bootstrap-stake ]]; then
-    setup_stakes=false
+    setup_stakes=0
     shift
   elif [[ $1 = --public-address ]]; then
     extra_fullnode_args+=("$1")
@@ -63,7 +67,7 @@ find_leader() {
   declare shift=0
 
   if [[ -z $1 ]]; then
-    leader=${here}/..        # Default to local tree for rsync
+    leader=$PWD                   # Default to local tree for rsync
     leader_address=127.0.0.1:8001 # Default to local leader
   elif [[ -z $2 ]]; then
     leader=$1
@@ -166,33 +170,62 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
 
 
 rsync_leader_url=$(rsync_url "$leader")
-set -ex
-if [[ ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
-  $rsync -vPr "$rsync_leader_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
-fi
+set -e
 
-if [[ ! -d "$ledger_config_dir" ]]; then
-  cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"
-  $solana_ledger_tool --ledger "$ledger_config_dir" verify
-fi
+secs_to_next_genesis_poll=0
+PS4="$(basename "$0"): "
+while true; do
+  set -x
+  if [[ ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
+    $rsync -vPr "$rsync_leader_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
+  fi
 
-trap 'kill "$pid" && wait "$pid"' INT TERM ERR
-$program \
-  --gossip-port "$gossip_port" \
-  --identity "$fullnode_id_path" \
-  --voting-keypair "$fullnode_staker_id_path" \
-  --staking-account "$fullnode_staker_id" \
-  --network "$leader_address" \
-  --ledger "$ledger_config_dir" \
-  --accounts "$accounts_config_dir" \
-  --rpc-drone-address "${leader_address%:*}:9900" \
-  "${extra_fullnode_args[@]}" \
-  > >($fullnode_logger) 2>&1 &
-pid=$!
-oom_score_adj "$pid" 1000
+  if [[ ! -d "$ledger_config_dir" ]]; then
+    cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"
+    $solana_ledger_tool --ledger "$ledger_config_dir" verify
+  fi
 
-if [[ $setup_stakes = true ]]; then
-  setup_fullnode_staking "${leader_address%:*}" "$fullnode_id_path" "$fullnode_staker_id_path"
-fi
+  trap 'kill "$pid" && wait "$pid"' INT TERM ERR
+  $program \
+    --gossip-port "$gossip_port" \
+    --identity "$fullnode_id_path" \
+    --voting-keypair "$fullnode_staker_id_path" \
+    --staking-account "$fullnode_staker_id" \
+    --network "$leader_address" \
+    --ledger "$ledger_config_dir" \
+    --accounts "$accounts_config_dir" \
+    --rpc-drone-address "${leader_address%:*}:9900" \
+    "${extra_fullnode_args[@]}" \
+    > >($fullnode_logger) 2>&1 &
+  pid=$!
+  oom_score_adj "$pid" 1000
 
-wait "$pid"
+  if ((setup_stakes)); then
+    setup_fullnode_staking "${leader_address%:*}" "$fullnode_id_path" "$fullnode_staker_id_path"
+  fi
+  set +x
+
+  while true; do
+    if ! kill -0 "$pid"; then
+      wait "$pid"
+      exit 0
+    fi
+    sleep 1
+
+    if ((poll_for_new_genesis_block)); then
+      if ((!secs_to_next_genesis_poll)); then
+        secs_to_next_genesis_poll=60
+
+        $rsync -r "$rsync_leader_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR" || true
+        if [[ -n $(diff "$SOLANA_RSYNC_CONFIG_DIR"/ledger/genesis.json "$ledger_config_dir"/genesis.json 2>&1) ]]; then
+          echo "############## New genesis detected, restarting fullnode ##############"
+          rm -rf "$ledger_config_dir"
+          kill "$pid" || true
+          wait "$pid" || true
+          break
+        fi
+      fi
+      ((secs_to_next_genesis_poll--))
+    fi
+  done
+done
