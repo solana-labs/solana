@@ -1,18 +1,17 @@
-//! Exchange program
+//! Config processor
 
-use bincode;
+use crate::exchange_instruction::*;
+use crate::exchange_state::*;
+use crate::id;
 use log::*;
-use solana_exchange_api::exchange_instruction::*;
-use solana_exchange_api::exchange_state::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::solana_entrypoint;
 use solana_sdk::transaction::InstructionError;
 use std::cmp;
 
-pub struct ExchangeProgram {}
+pub struct ExchangeProcessor {}
 
-impl ExchangeProgram {
+impl ExchangeProcessor {
     #[allow(clippy::needless_pass_by_value)]
     fn map_to_invalid_arg(err: std::boxed::Box<bincode::ErrorKind>) -> InstructionError {
         warn!("Deserialze failed: {:?}", err);
@@ -80,10 +79,6 @@ impl ExchangeProgram {
             error!("Inactive Trade, price is zero");
             Err(InstructionError::InvalidArgument)?
         }
-        if to_trade.price > from_trade.price {
-            error!("From trade price greater then to price");
-            Err(InstructionError::InvalidArgument)?
-        }
 
         // Calc swap
 
@@ -125,8 +120,8 @@ impl ExchangeProgram {
 
         trace!("pp {} sp {}", primary_profit, secondary_profit);
 
-        let primary_token = from_trade.pair.0;
-        let secondary_token = from_trade.pair.1;
+        let primary_token = to_trade.pair.primary();
+        let secondary_token = to_trade.pair.secondary();
 
         // Update tokens/accounts
 
@@ -139,10 +134,9 @@ impl ExchangeProgram {
         profit_account.tokens[primary_token] += primary_profit;
         profit_account.tokens[secondary_token] += secondary_profit;
 
-        swap.primary_token = primary_token;
+        swap.pair = to_trade.pair;
         swap.primary_tokens = primary_cost;
         swap.primary_price = to_trade.price;
-        swap.secondary_token = secondary_token;
         swap.secondary_tokens = secondary_cost;
         swap.secondary_price = from_trade.price;
 
@@ -176,7 +170,7 @@ impl ExchangeProgram {
 
         let mut to_account = Self::deserialize_account(&ka[1].account.data[..])?;
 
-        if &solana_exchange_api::id() == ka[2].unsigned_key() {
+        if &id() == ka[2].unsigned_key() {
             to_account.tokens[token] += tokens;
         } else {
             let mut from_account = Self::deserialize_account(&ka[2].account.data[..])?;
@@ -219,21 +213,21 @@ impl ExchangeProgram {
 
         let mut account = Self::deserialize_account(&ka[2].account.data[..])?;
 
-        if info.primary_token == info.secondary_token {
-            error!("Cannot trade like tokens");
-            Err(InstructionError::GenericError)?
-        }
         if &account.owner != ka[0].unsigned_key() {
-            error!("Signer does not own To/From account");
+            error!("Signer does not own account");
             Err(InstructionError::GenericError)?
         }
         let from_token = match info.direction {
-            Direction::To => info.primary_token,
-            Direction::From => info.secondary_token,
+            Direction::To => info.pair.primary(),
+            Direction::From => info.pair.secondary(),
         };
         if account.tokens[from_token] < info.tokens {
             error!("From token balance is too low");
             Err(InstructionError::GenericError)?
+        }
+
+        if let Err(e) = check_trade(info.direction, info.tokens, info.price) {
+            InstructionError::CustomError(bincode::serialize(&e).unwrap());
         }
 
         // Trade holds the tokens in escrow
@@ -243,7 +237,7 @@ impl ExchangeProgram {
             &ExchangeState::Trade(TradeOrderInfo {
                 owner: *ka[0].unsigned_key(),
                 direction: info.direction,
-                pair: (info.primary_token, info.secondary_token),
+                pair: info.pair,
                 tokens: info.tokens,
                 price: info.price,
                 src_account: *ka[2].unsigned_key(),
@@ -276,8 +270,8 @@ impl ExchangeProgram {
         }
 
         let token = match trade.direction {
-            Direction::To => trade.pair.0,
-            Direction::From => trade.pair.1,
+            Direction::To => trade.pair.primary(),
+            Direction::From => trade.pair.secondary(),
         };
 
         // Outstanding tokens transferred back to account
@@ -333,7 +327,7 @@ impl ExchangeProgram {
         swap.to_trade_order = *ka[2].unsigned_key();
         swap.from_trade_order = *ka[3].unsigned_key();
 
-        if let Err(e) = ExchangeProgram::calculate_swap(
+        if let Err(e) = Self::calculate_swap(
             SCALER,
             &mut swap,
             &mut from_trade,
@@ -368,46 +362,34 @@ impl ExchangeProgram {
             &mut ka[6].account.data[..],
         )
     }
-
-    pub fn process_instruction(
-        _program_id: &Pubkey,
-        ka: &mut [KeyedAccount],
-        data: &[u8],
-    ) -> Result<(), InstructionError> {
-        let command =
-            bincode::deserialize::<ExchangeInstruction>(data).map_err(Self::map_to_invalid_arg)?;
-
-        match command {
-            ExchangeInstruction::AccountRequest => Self::do_account_request(ka),
-            ExchangeInstruction::TransferRequest(token, tokens) => {
-                Self::do_transfer_request(ka, token, tokens)
-            }
-            ExchangeInstruction::TradeRequest(info) => Self::do_trade_request(ka, info),
-            ExchangeInstruction::TradeCancellation => Self::do_trade_cancellation(ka),
-            ExchangeInstruction::SwapRequest => Self::do_swap_request(ka),
-        }
-    }
 }
 
-solana_entrypoint!(entrypoint);
-fn entrypoint(
-    program_id: &Pubkey,
+pub fn process_instruction(
+    _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), InstructionError> {
-    solana_logger::setup();
+    let command = bincode::deserialize::<ExchangeInstruction>(data).map_err(|err| {
+        info!("Invalid transaction data: {:?} {:?}", data, err);
+        InstructionError::InvalidInstructionData
+    })?;
 
-    // TODO swap does not require this, plus isn't this always enforced by
-    // the layers above?
-    // All exchange instructions require that accounts_keys[0] be a signer
-    if keyed_accounts[0].signer_key().is_none() {
-        error!("account[0] is unsigned");
-        Err(InstructionError::InvalidArgument)?;
+    match command {
+        ExchangeInstruction::AccountRequest => {
+            ExchangeProcessor::do_account_request(keyed_accounts)
+        }
+        ExchangeInstruction::TransferRequest(token, tokens) => {
+            ExchangeProcessor::do_transfer_request(keyed_accounts, token, tokens)
+        }
+        ExchangeInstruction::TradeRequest(info) => {
+            ExchangeProcessor::do_trade_request(keyed_accounts, info)
+        }
+        ExchangeInstruction::TradeCancellation => {
+            ExchangeProcessor::do_trade_cancellation(keyed_accounts)
+        }
+        ExchangeInstruction::SwapRequest => ExchangeProcessor::do_swap_request(keyed_accounts),
     }
-
-    ExchangeProgram::process_instruction(program_id, keyed_accounts, data)
-        .map_err(|_| InstructionError::GenericError)
 }
 
 #[cfg(test)]
@@ -445,7 +427,7 @@ mod test {
         to_trade.price = primary_price;
         from_trade.tokens = secondary_tokens;
         from_trade.price = secondary_price;
-        ExchangeProgram::calculate_swap(
+        ExchangeProcessor::calculate_swap(
             scaler,
             &mut swap,
             &mut to_trade,

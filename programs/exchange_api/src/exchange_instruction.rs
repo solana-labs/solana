@@ -8,12 +8,10 @@ use solana_sdk::transaction::{AccountMeta, Instruction};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct TradeRequestInfo {
-    /// Direction of this trade
+    /// Direction of trade
     pub direction: Direction,
-    /// Primary token type
-    pub primary_token: Token,
-    /// Secondary token type
-    pub secondary_token: Token,
+    /// Token pair to trade
+    pub pair: TokenPair,
     /// Number of tokens to exchange; refers to the primary or the secondary depending on the direction
     pub tokens: u64,
     /// The price ratio the primary price over the secondary price.  The primary price is fixed
@@ -86,8 +84,7 @@ impl ExchangeInstruction {
         owner: &Pubkey,
         trade: &Pubkey,
         direction: Direction,
-        primary_token: Token,
-        secondary_token: Token,
+        pair: TokenPair,
         tokens: u64,
         price: u64,
         src_account: &Pubkey,
@@ -102,8 +99,7 @@ impl ExchangeInstruction {
             id(),
             &ExchangeInstruction::TradeRequest(TradeRequestInfo {
                 direction,
-                primary_token,
-                secondary_token,
+                pair,
                 tokens,
                 price,
                 dst_account: *dst_account,

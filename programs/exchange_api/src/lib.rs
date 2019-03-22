@@ -1,10 +1,10 @@
 pub mod exchange_instruction;
+pub mod exchange_processor;
 pub mod exchange_state;
 pub mod exchange_transaction;
 
 use solana_sdk::pubkey::Pubkey;
 
-// TODO update id
 pub const EXCHANGE_PROGRAM_ID: [u8; 32] = [
     134, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0,

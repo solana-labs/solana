@@ -10,18 +10,6 @@ use std::mem;
 
 pub struct ExchangeTransaction {}
 
-// let from_id = from_keypair.pubkey();
-//         let voter_id = voter_keypair.pubkey();
-//         let space = VoteState::max_size() as u64;
-//         let create_ix =
-//             SystemInstruction::new_program_account(&from_id, &voter_id, lamports, space, &id());
-//         let init_ix = VoteInstruction::new_initialize_account(&voter_id);
-//         let delegate_ix = VoteInstruction::new_delegate_stake(&voter_id, &delegate_id);
-//         let mut tx = Transaction::new(vec![create_ix, init_ix, delegate_ix]);
-//         tx.fee = fee;
-//         tx.sign(&[from_keypair, voter_keypair], recent_blockhash);
-//         tx
-
 impl ExchangeTransaction {
     pub fn new_account_request(
         owner: &Keypair,
@@ -62,8 +50,7 @@ impl ExchangeTransaction {
         owner: &Keypair,
         trade: &Pubkey,
         direction: Direction,
-        primary_token: Token,
-        secondary_token: Token,
+        pair: TokenPair,
         tokens: u64,
         price: u64,
         src_account: &Pubkey,
@@ -78,8 +65,7 @@ impl ExchangeTransaction {
             owner_id,
             trade,
             direction,
-            primary_token,
-            secondary_token,
+            pair,
             tokens,
             price,
             src_account,

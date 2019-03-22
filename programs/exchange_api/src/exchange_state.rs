@@ -1,10 +1,23 @@
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
-use std::fmt;
+use std::{error, fmt};
 
 /// Fixed-point scaler, 10 = one base 10 digit to the right of the decimal, 100 = 2, ...
 /// Used by both price and amount in their fixed point representation
 pub const SCALER: u64 = 1000;
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum ExchangeError {
+    InvalidTrade(String),
+}
+impl error::Error for ExchangeError {}
+impl fmt::Display for ExchangeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ExchangeError::InvalidTrade(s) => write!(f, "{}", s),
+        }
+    }
+}
 
 /// Supported token types
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -61,6 +74,44 @@ impl std::ops::IndexMut<Token> for Tokens {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[allow(non_snake_case)]
+pub enum TokenPair {
+    AB,
+    AC,
+    AD,
+    BC,
+    BD,
+    CD,
+}
+impl Default for TokenPair {
+    fn default() -> TokenPair {
+        TokenPair::AB
+    }
+}
+impl TokenPair {
+    pub fn primary(self) -> Token {
+        match self {
+            TokenPair::AB => Token::A,
+            TokenPair::AC => Token::A,
+            TokenPair::AD => Token::A,
+            TokenPair::BC => Token::B,
+            TokenPair::BD => Token::B,
+            TokenPair::CD => Token::C,
+        }
+    }
+    pub fn secondary(self) -> Token {
+        match self {
+            TokenPair::AB => Token::B,
+            TokenPair::AC => Token::C,
+            TokenPair::AD => Token::D,
+            TokenPair::BC => Token::C,
+            TokenPair::BD => Token::D,
+            TokenPair::CD => Token::D,
+        }
+    }
+}
+
 /// Token accounts are populated with this structure
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TokenAccountInfo {
@@ -111,7 +162,7 @@ pub struct TradeOrderInfo {
     /// Direction of the exchange
     pub direction: Direction,
     /// Token pair indicating two tokens to exchange, first is primary
-    pub pair: (Token, Token),
+    pub pair: TokenPair,
     /// Number of tokens to exchange; primary or secondary depending on direction
     pub tokens: u64,
     /// Scaled price of the secondary token given the primary is equal to the scale value
@@ -127,7 +178,7 @@ impl Default for TradeOrderInfo {
     fn default() -> TradeOrderInfo {
         TradeOrderInfo {
             owner: Pubkey::default(),
-            pair: (Token::A, Token::B),
+            pair: TokenPair::AB,
             direction: Direction::To,
             tokens: 0,
             price: 0,
@@ -137,8 +188,8 @@ impl Default for TradeOrderInfo {
     }
 }
 impl TradeOrderInfo {
-    pub fn pair(mut self, primary: Token, secondary: Token) -> Self {
-        self.pair = (primary, secondary);
+    pub fn pair(mut self, pair: TokenPair) -> Self {
+        self.pair = pair;
         self
     }
     pub fn direction(mut self, direction: Direction) -> Self {
@@ -155,21 +206,41 @@ impl TradeOrderInfo {
     }
 }
 
+pub fn check_trade(direction: Direction, tokens: u64, price: u64) -> Result<(), ExchangeError> {
+    match direction {
+        Direction::To => {
+            if tokens * price / SCALER == 0 {
+                Err(ExchangeError::InvalidTrade(format!(
+                    "To trade of {} for {}/{} results in 0 tradeable tokens",
+                    tokens, SCALER, price
+                )))?
+            }
+        }
+        Direction::From => {
+            if tokens * SCALER / price == 0 {
+                Err(ExchangeError::InvalidTrade(format!(
+                    "From trade of {} for {}?{} results in 0 tradeable tokens",
+                    tokens, SCALER, price
+                )))?
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Swap accounts are populated with this structure
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TradeSwapInfo {
+    /// Pair swapped
+    pub pair: TokenPair,
     /// `To` trade order
     pub to_trade_order: Pubkey,
     /// `From` trade order
     pub from_trade_order: Pubkey,
-    /// Type of primary token
-    pub primary_token: Token,
     /// Number of primary tokens exchanged
     pub primary_tokens: u64,
     /// Price the primary tokens were exchanged for
     pub primary_price: u64,
-    /// Type of secondary token
-    pub secondary_token: Token,
     /// Number of secondary tokens exchanged
     pub secondary_tokens: u64,
     /// Price the secondary tokens were exchanged for
