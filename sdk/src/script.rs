@@ -48,6 +48,10 @@ impl Script {
         Self { instructions }
     }
 
+    pub fn push(&mut self, instruction: Instruction) {
+        self.instructions.push(instruction);
+    }
+
     /// Return pubkeys referenced by all instructions, with the ones needing signatures first.
     /// No duplicates and order is preserved.
     fn keys(&self) -> (Vec<Pubkey>, Vec<Pubkey>) {

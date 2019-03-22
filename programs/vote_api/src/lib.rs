@@ -1,5 +1,6 @@
 pub mod vote_instruction;
 pub mod vote_processor;
+pub mod vote_script;
 pub mod vote_state;
 pub mod vote_transaction;
 
