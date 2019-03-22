@@ -21,6 +21,7 @@ use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{self, Transaction, TransactionError};
+use std::mem;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -30,7 +31,7 @@ use std::time::Duration;
 use std::time::Instant;
 use sys_info;
 
-pub type UnprocessedPackets = Vec<(SharedPackets, usize)>; // `usize` is the index of the first unprocessed packet in `SharedPackets`
+pub type UnprocessedPackets = Vec<(SharedPackets, Vec<u8>, usize)>; // `usize` is the index of the first unprocessed packet in `SharedPackets`
 
 // number of threads is 1 until mt bank is ready
 pub const NUM_THREADS: u32 = 10;
@@ -97,11 +98,11 @@ impl BankingStage {
     fn forward_unprocessed_packets(
         socket: &std::net::UdpSocket,
         tpu_via_blobs: &std::net::SocketAddr,
-        unprocessed_packets: &[(SharedPackets, usize)],
+        unprocessed_packets: &[(SharedPackets, Vec<u8>, usize)],
     ) -> std::io::Result<()> {
         let locked_packets: Vec<_> = unprocessed_packets
             .iter()
-            .map(|(p, start_index)| (p.read().unwrap(), start_index))
+            .map(|(p, _, start_index)| (p.read().unwrap(), start_index))
             .collect();
         let packets: Vec<&Packet> = locked_packets
             .iter()
@@ -120,7 +121,7 @@ impl BankingStage {
         socket: &std::net::UdpSocket,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        buffered_packets: &[(SharedPackets, usize)],
+        buffered_packets: &[(SharedPackets, Vec<u8>, usize)],
     ) -> bool {
         if buffered_packets.is_empty() {
             return false;
@@ -131,7 +132,12 @@ impl BankingStage {
         // If there's a bank, and leader is available, forward the buffered packets
         // or, if the current node is not the leader, forward the buffered packets
         let forward = match poh_recorder.lock().unwrap().bank() {
-            Some(_) => rcluster_info.leader_data().is_some(),
+            Some(_) => {
+                if let Some(leader_data) = rcluster_info.leader_data() {
+                    return leader_data.id != rcluster_info.id();
+                }
+                false
+            }
             None => rcluster_info
                 .leader_data()
                 .map(|x| x.id != rcluster_info.id())
@@ -170,6 +176,60 @@ impl BankingStage {
         leader_id == rcluster_info.id()
     }
 
+    // return true if the main process loop should exit
+    fn handle_buffered_packets(
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
+        buffered_packets: &mut Vec<(SharedPackets, Vec<u8>, usize)>,
+        socket: &UdpSocket,
+        recv_start: &mut Instant,
+    ) -> bool {
+        while !buffered_packets.is_empty() {
+            if Self::forward_buffered_packets(&socket, poh_recorder, cluster_info, buffered_packets)
+            {
+                buffered_packets.clear();
+            }
+
+            if poh_recorder.lock().unwrap().bank().is_some() {
+                let mut new_buffered = vec![];
+                mem::swap(buffered_packets, &mut new_buffered);
+                if let Ok(unprocessed) =
+                    Self::process_packets(poh_recorder, new_buffered, recv_start)
+                {
+                    buffered_packets.extend_from_slice(&unprocessed);
+                }
+            }
+
+            {
+                let mms = verified_receiver
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_millis(1));
+                match mms {
+                    Err(RecvTimeoutError::Timeout) => (),
+                    Ok(packets) => {
+                        let packets: Vec<_> = Self::make_zeroed_packets(packets);
+                        buffered_packets.extend(packets);
+                    }
+                    Err(err) => {
+                        debug!("Error in banking-stage thread: {:?}", err);
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    // set the start packet to 0 to hand to the processing function
+    fn make_zeroed_packets(packets: VerifiedPackets) -> UnprocessedPackets {
+        packets
+            .into_iter()
+            .map(|(packets, vers)| (packets, vers, 0))
+            .collect()
+    }
+
     pub fn process_loop(
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -179,16 +239,18 @@ impl BankingStage {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = vec![];
         loop {
-            if Self::forward_buffered_packets(
-                &socket,
+            if Self::handle_buffered_packets(
                 poh_recorder,
                 cluster_info,
-                &buffered_packets,
+                verified_receiver,
+                &mut buffered_packets,
+                &socket,
+                recv_start,
             ) {
-                buffered_packets.clear();
+                break;
             }
 
-            match Self::process_packets(&verified_receiver, &poh_recorder, recv_start) {
+            match Self::recv_and_process_packets(&verified_receiver, &poh_recorder, recv_start) {
                 Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                 Ok(unprocessed_packets) => {
                     if Self::should_buffer_packets(poh_recorder, cluster_info) {
@@ -363,17 +425,11 @@ impl BankingStage {
         Ok(chunk_start)
     }
 
-    /// Process the incoming packets
-    pub fn process_packets(
-        verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
+    fn process_packets(
         poh: &Arc<Mutex<PohRecorder>>,
+        mms: Vec<(SharedPackets, Vec<u8>, usize)>,
         recv_start: &mut Instant,
     ) -> Result<UnprocessedPackets> {
-        let mms = verified_receiver
-            .lock()
-            .unwrap()
-            .recv_timeout(Duration::from_millis(100))?;
-
         let mms_len = mms.len();
         let count = mms.iter().map(|x| x.1.len()).sum();
         debug!(
@@ -388,15 +444,15 @@ impl BankingStage {
 
         let mut unprocessed_packets = vec![];
         let mut bank_shutdown = false;
-        for (msgs, vers) in mms {
+        for (msgs, vers, start) in mms {
             if bank_shutdown {
-                unprocessed_packets.push((msgs, 0));
+                unprocessed_packets.push((msgs, vers, start));
                 continue;
             }
 
             let bank = poh.lock().unwrap().bank();
             if bank.is_none() {
-                unprocessed_packets.push((msgs, 0));
+                unprocessed_packets.push((msgs, vers, start));
                 continue;
             }
             let bank = bank.unwrap();
@@ -412,12 +468,12 @@ impl BankingStage {
             let (verified_transactions, verified_transaction_index): (Vec<_>, Vec<_>) =
                 transactions
                     .into_iter()
-                    .zip(vers)
+                    .zip(&vers)
                     .zip(0..)
                     .filter_map(|((tx, ver), index)| match tx {
                         None => None,
                         Some(tx) => {
-                            if ver != 0 {
+                            if index >= start && *ver != 0 {
                                 Some((tx, index))
                             } else {
                                 None
@@ -436,7 +492,7 @@ impl BankingStage {
             if processed < verified_transactions.len() {
                 bank_shutdown = true;
                 // Collect any unprocessed transactions in this batch for forwarding
-                unprocessed_packets.push((msgs, verified_transaction_index[processed]));
+                unprocessed_packets.push((msgs, vers, verified_transaction_index[processed]));
             }
             new_tx_count += processed;
         }
@@ -461,6 +517,22 @@ impl BankingStage {
         *recv_start = Instant::now();
 
         Ok(unprocessed_packets)
+    }
+
+    /// Process the incoming packets
+    fn recv_and_process_packets(
+        verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
+        poh: &Arc<Mutex<PohRecorder>>,
+        recv_start: &mut Instant,
+    ) -> Result<UnprocessedPackets> {
+        let packets = verified_receiver
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::from_millis(100))?;
+
+        let packets: Vec<_> = Self::make_zeroed_packets(packets);
+
+        Self::process_packets(poh, packets, recv_start)
     }
 }
 
