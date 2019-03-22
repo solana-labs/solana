@@ -273,7 +273,7 @@ pub fn run_local_drone(mint_keypair: Keypair, sender: Sender<SocketAddr>) {
                         .unwrap()
                         .process_drone_request(&bytes)
                         .unwrap();
-                    info!("Airdrop response_bytes: {:?}", response_bytes.to_vec());
+                    trace!("Airdrop response_bytes: {:?}", response_bytes.to_vec());
                     Ok(response_bytes)
                 });
                 let server = writer
