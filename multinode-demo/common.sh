@@ -21,7 +21,8 @@ if [[ $(uname) != Linux ]]; then
   fi
 fi
 
-if [[ -n $USE_INSTALL ]]; then # Assume |./scripts/cargo-install-all.sh| was run
+
+if [[ -n $USE_INSTALL || ! -f "$(dirname "${BASH_SOURCE[0]}")"/../Cargo.toml ]]; then
   solana_program() {
     declare program="$1"
     printf "solana-%s" "$program"
