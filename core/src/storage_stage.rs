@@ -17,7 +17,8 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::transaction::Transaction;
-use solana_storage_api::{self, StorageProgram, StorageTransaction};
+use solana_storage_api::storage_instruction::StorageInstruction;
+use solana_storage_api::storage_transaction::StorageTransaction;
 use std::collections::HashSet;
 use std::io;
 use std::mem::size_of;
@@ -374,7 +375,7 @@ impl StorageStage {
                 for (i, program_id) in tx.program_ids.iter().enumerate() {
                     if solana_storage_api::check_id(&program_id) {
                         match deserialize(&tx.instructions[i].data) {
-                            Ok(StorageProgram::SubmitMiningProof {
+                            Ok(StorageInstruction::SubmitMiningProof {
                                 entry_height: proof_entry_height,
                                 signature,
                                 ..
@@ -453,23 +454,17 @@ impl Service for StorageStage {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::blocktree::{create_new_tmp_ledger, Blocktree};
     use crate::cluster_info::ClusterInfo;
     use crate::contact_info::ContactInfo;
     use crate::entry::{make_tiny_test_entries, Entry};
     use crate::service::Service;
-    use crate::storage_stage::StorageState;
-    use crate::storage_stage::NUM_IDENTITIES;
-    use crate::storage_stage::{
-        get_identity_index_from_signature, StorageStage, STORAGE_ROTATE_TEST_COUNT,
-    };
     use rayon::prelude::*;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::hash::Hasher;
+    use solana_sdk::hash::{Hash, Hasher};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_storage_api::StorageTransaction;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

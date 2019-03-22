@@ -2,7 +2,9 @@
 //!  Receive mining proofs from miners, validate the answers
 //!  and give reward for good proofs.
 
-use crate::*;
+use crate::storage_instruction::StorageInstruction;
+use crate::storage_state::{ProofInfo, ProofStatus, StorageState, ValidationInfo};
+use crate::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
@@ -47,7 +49,7 @@ pub fn process_instruction(
         {
             storage_account_state
         } else {
-            StorageProgramState::default()
+            StorageState::default()
         };
 
         debug!(
@@ -55,7 +57,7 @@ pub fn process_instruction(
             storage_account_state.entry_height
         );
         match syscall {
-            StorageProgram::SubmitMiningProof {
+            StorageInstruction::SubmitMiningProof {
                 sha_state,
                 entry_height,
                 signature,
@@ -79,7 +81,7 @@ pub fn process_instruction(
                 };
                 storage_account_state.proofs[segment_index].push(proof_info);
             }
-            StorageProgram::AdvertiseStorageRecentBlockhash { hash, entry_height } => {
+            StorageInstruction::AdvertiseStorageRecentBlockhash { hash, entry_height } => {
                 let original_segments = storage_account_state.entry_height / ENTRIES_PER_SEGMENT;
                 let segments = entry_height / ENTRIES_PER_SEGMENT;
                 debug!(
@@ -108,7 +110,7 @@ pub fn process_instruction(
                     .lockout_validations
                     .resize(segments as usize, Vec::new());
             }
-            StorageProgram::ProofValidation {
+            StorageInstruction::ProofValidation {
                 entry_height,
                 proof_mask,
             } => {
@@ -134,7 +136,7 @@ pub fn process_instruction(
                 };
                 storage_account_state.lockout_validations[segment_index].push(info);
             }
-            StorageProgram::ClaimStorageReward { entry_height } => {
+            StorageInstruction::ClaimStorageReward { entry_height } => {
                 let claims_index = get_segment_from_entry(entry_height);
                 let account_key = keyed_accounts[0].signer_key().unwrap();
                 let mut num_validations = 0;
@@ -173,7 +175,10 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ProofStatus, StorageTransaction, ENTRIES_PER_SEGMENT};
+    use crate::id;
+    use crate::storage_state::ProofStatus;
+    use crate::storage_transaction::StorageTransaction;
+    use crate::ENTRIES_PER_SEGMENT;
     use bincode::deserialize;
     use solana_runtime::bank::Bank;
     use solana_sdk::account::{create_keyed_accounts, Account};
@@ -370,7 +375,7 @@ mod tests {
             Some(storage_system_account) => {
                 let state = deserialize(&storage_system_account.data);
                 if let Ok(state) = state {
-                    let state: StorageProgramState = state;
+                    let state: StorageState = state;
                     return state.entry_height;
                 }
             }
@@ -385,7 +390,7 @@ mod tests {
         if let Some(storage_system_account) = bank.get_account(&account) {
             let state = deserialize(&storage_system_account.data);
             if let Ok(state) = state {
-                let state: StorageProgramState = state;
+                let state: StorageState = state;
                 return state.hash;
             }
         }
