@@ -265,4 +265,3 @@ impl Default for ExchangeState {
         ExchangeState::Unallocated
     }
 }
-
