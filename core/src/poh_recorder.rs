@@ -529,6 +529,37 @@ mod tests {
     }
 
     #[test]
+    fn test_poh_recorder_record_bad_slot() {
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let prev_hash = bank.last_blockhash();
+        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+            0,
+            prev_hash,
+            0,
+            Some(4),
+            bank.ticks_per_slot(),
+            &Pubkey::default(),
+        );
+
+        let working_bank = WorkingBank {
+            bank: bank.clone(),
+            min_tick_height: 1,
+            max_tick_height: 2,
+        };
+        poh_recorder.set_working_bank(working_bank);
+        poh_recorder.tick();
+        assert_eq!(poh_recorder.tick_cache.len(), 1);
+        assert_eq!(poh_recorder.poh.tick_height, 1);
+        let tx = test_tx();
+        let h1 = hash(b"hello world!");
+        assert_matches!(
+            poh_recorder.record(bank.slot() + 1, h1, vec![tx.clone()]),
+            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
+        );
+    }
+
+    #[test]
     fn test_poh_recorder_record_at_min_passes() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
