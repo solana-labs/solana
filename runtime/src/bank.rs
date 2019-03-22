@@ -247,7 +247,6 @@ impl Bank {
             //  freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
         }
-        self.status_cache.write().unwrap().freeze();
     }
 
     /// squash the parent's state up into this Bank,
@@ -262,7 +261,11 @@ impl Bank {
 
         let parent_caches: Vec<_> = parents
             .iter()
-            .map(|b| b.status_cache.read().unwrap())
+            .map(|p| {
+                let mut parent = p.status_cache.write().unwrap();
+                parent.freeze();
+                parent
+            })
             .collect();
         self.status_cache.write().unwrap().squash(&parent_caches);
     }
