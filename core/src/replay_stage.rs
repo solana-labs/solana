@@ -481,7 +481,7 @@ impl ReplayStage {
         info!("bank frozen {}", bank.slot());
         progress.remove(&bank.slot());
         if let Err(e) = slot_full_sender.send((bank.slot(), bank.collector_id())) {
-            info!("{} slot_full alert failed: {:?}", my_id, e);
+            trace!("{} slot_full alert failed: {:?}", my_id, e);
         }
     }
 
