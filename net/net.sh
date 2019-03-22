@@ -411,7 +411,7 @@ stopNode() {
         pgid=\$(ps opgid= \$(cat \$pid) | tr -d '[:space:]')
         sudo kill -- -\$pgid
       done
-      for pattern in solana- remote-; do
+      for pattern in node solana- remote-; do
         pkill -9 \$pattern
       done
     "
