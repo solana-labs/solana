@@ -168,7 +168,7 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
 rsync_leader_url=$(rsync_url "$leader")
 set -ex
 if [[ ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
-  $rsync -vPr "$rsync_leader_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"/ledger
+  $rsync -vPr "$rsync_leader_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
 fi
 
 if [[ ! -d "$ledger_config_dir" ]]; then
