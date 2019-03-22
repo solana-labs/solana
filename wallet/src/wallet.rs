@@ -788,7 +788,7 @@ fn get_next_blockhash(
     rpc_client: &RpcClient,
     previous_blockhash: &Hash,
 ) -> Result<Hash, Box<dyn error::Error>> {
-    let mut next_blockhash_retries = 3;
+    let mut next_blockhash_retries = 10;
     loop {
         let next_blockhash = get_recent_blockhash(rpc_client)?;
         if cfg!(not(test)) {
