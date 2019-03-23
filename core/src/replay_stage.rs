@@ -201,10 +201,12 @@ impl ReplayStage {
                 let _ = bank_forks.read().unwrap().get(poh_slot).map(|bank| {
                     let next_leader_slot =
                         leader_schedule_utils::next_leader_slot(&my_id, bank.slot(), &bank);
-                    poh_recorder.lock().unwrap().reset(
+                    let mut poh = poh_recorder.lock().unwrap();
+                    let start_slot = poh.start_slot();
+                    poh.reset(
                         bank.tick_height(),
                         bank.last_blockhash(),
-                        bank.slot(),
+                        start_slot,
                         next_leader_slot,
                         bank.ticks_per_slot(),
                     );
