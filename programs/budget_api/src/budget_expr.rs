@@ -70,16 +70,20 @@ impl BudgetExpr {
         witness: &Pubkey,
         lamports: u64,
         to: &Pubkey,
-        from: &Pubkey,
+        from: Option<Pubkey>,
     ) -> Self {
+        if from.is_none() {
+            return Self::new_authorized_payment(witness, lamports, to);
+        }
+        let from = from.unwrap();
         BudgetExpr::Or(
             (
                 Condition::Signature(*witness),
                 Box::new(BudgetExpr::new_payment(lamports, to)),
             ),
             (
-                Condition::Signature(*from),
-                Box::new(BudgetExpr::new_payment(lamports, from)),
+                Condition::Signature(from),
+                Box::new(BudgetExpr::new_payment(lamports, &from)),
             ),
         )
     }
@@ -119,16 +123,20 @@ impl BudgetExpr {
         dt_pubkey: &Pubkey,
         lamports: u64,
         to: &Pubkey,
-        from: &Pubkey,
+        from: Option<Pubkey>,
     ) -> Self {
+        if from.is_none() {
+            return Self::new_future_payment(dt, dt_pubkey, lamports, to);
+        }
+        let from = from.unwrap();
         BudgetExpr::Or(
             (
                 Condition::Timestamp(dt, *dt_pubkey),
                 Box::new(Self::new_payment(lamports, to)),
             ),
             (
-                Condition::Signature(*from),
-                Box::new(Self::new_payment(lamports, from)),
+                Condition::Signature(from),
+                Box::new(Self::new_payment(lamports, &from)),
             ),
         )
     }
@@ -213,7 +221,9 @@ mod tests {
         assert!(BudgetExpr::new_payment(42, &to).verify(42));
         assert!(BudgetExpr::new_authorized_payment(&from, 42, &to).verify(42));
         assert!(BudgetExpr::new_future_payment(dt, &from, 42, &to).verify(42));
-        assert!(BudgetExpr::new_cancelable_future_payment(dt, &from, 42, &to, &from).verify(42));
+        assert!(
+            BudgetExpr::new_cancelable_future_payment(dt, &from, 42, &to, Some(from)).verify(42)
+        );
     }
 
     #[test]
@@ -257,11 +267,11 @@ mod tests {
         let from = Pubkey::default();
         let to = Pubkey::default();
 
-        let mut expr = BudgetExpr::new_cancelable_future_payment(dt, &from, 42, &to, &from);
+        let mut expr = BudgetExpr::new_cancelable_future_payment(dt, &from, 42, &to, Some(from));
         expr.apply_witness(&Witness::Timestamp(dt), &from);
         assert_eq!(expr, BudgetExpr::new_payment(42, &to));
 
-        let mut expr = BudgetExpr::new_cancelable_future_payment(dt, &from, 42, &to, &from);
+        let mut expr = BudgetExpr::new_cancelable_future_payment(dt, &from, 42, &to, Some(from));
         expr.apply_witness(&Witness::Signature, &from);
         assert_eq!(expr, BudgetExpr::new_payment(42, &from));
     }

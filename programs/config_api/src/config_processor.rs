@@ -34,9 +34,9 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::script::Script;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
+    use solana_sdk::transaction::Transaction;
 
     #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
     struct MyConfig {
@@ -131,8 +131,7 @@ mod tests {
         let instruction = ConfigInstruction::new_store(&from_pubkey, &config_pubkey, &my_config);
 
         // Replace instruction data with a vector that's too large
-        let script = Script::new(vec![instruction]);
-        let mut transaction = script.compile();
+        let mut transaction = Transaction::new(vec![instruction]);
         transaction.instructions[0].data = vec![0; 123];
         config_client.process_transaction(transaction).unwrap_err();
     }
@@ -154,8 +153,7 @@ mod tests {
             ConfigInstruction::new_store(&from_pubkey, &config_pubkey, &my_config);
 
         // Don't sign the transaction with `config_client`
-        let script = Script::new(vec![move_instruction, store_instruction]);
-        let mut transaction = script.compile();
+        let mut transaction = Transaction::new(vec![move_instruction, store_instruction]);
         transaction.sign_unchecked(&[&system_keypair], bank.last_blockhash());
         let system_client = BankClient::new(&bank, system_keypair);
         system_client.process_transaction(transaction).unwrap_err();

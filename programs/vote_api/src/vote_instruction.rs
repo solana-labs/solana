@@ -1,7 +1,10 @@
 use crate::id;
+use crate::vote_state::VoteState;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::transaction::{AccountMeta, Instruction};
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
@@ -32,6 +35,13 @@ pub enum VoteInstruction {
 }
 
 impl VoteInstruction {
+    pub fn new_account(from_id: &Pubkey, staker_id: &Pubkey, lamports: u64) -> Vec<Instruction> {
+        let space = VoteState::max_size() as u64;
+        let create_ix =
+            SystemInstruction::new_program_account(&from_id, staker_id, lamports, space, &id());
+        let init_ix = VoteInstruction::new_initialize_account(staker_id);
+        vec![create_ix, init_ix]
+    }
     pub fn new_clear_credits(vote_id: &Pubkey) -> Instruction {
         let account_metas = vec![AccountMeta::new(*vote_id, true)];
         Instruction::new(id(), &VoteInstruction::ClearCredits, account_metas)

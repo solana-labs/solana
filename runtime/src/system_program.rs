@@ -109,7 +109,6 @@ mod tests {
     use solana_sdk::account::Account;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
-    use solana_sdk::script::Script;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
@@ -296,13 +295,13 @@ mod tests {
             AccountMeta::new(alice_pubkey, false),
             AccountMeta::new(mallory_pubkey, true),
         ];
-        let malicious_script = Script::new(vec![Instruction::new(
+        let malicious_instruction = Instruction::new(
             system_program::id(),
             &SystemInstruction::Move { lamports: 10 },
             account_metas,
-        )]);
+        );
         assert_eq!(
-            mallory_client.process_script(malicious_script),
+            mallory_client.process_instruction(malicious_instruction),
             Err(TransactionError::InstructionError(
                 0,
                 InstructionError::MissingRequiredSignature

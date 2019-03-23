@@ -46,7 +46,6 @@ mod tests {
     use super::*;
     use crate::id;
     use crate::vote_instruction::{Vote, VoteInstruction};
-    use crate::vote_script::VoteScript;
     use crate::vote_state::VoteState;
     use solana_runtime::bank::{Bank, Result};
     use solana_runtime::bank_client::BankClient;
@@ -69,8 +68,8 @@ mod tests {
         vote_id: &Pubkey,
         lamports: u64,
     ) -> Result<()> {
-        let script = VoteScript::new_account(&bank_client.pubkey(), vote_id, lamports);
-        bank_client.process_script(script)
+        let ixs = VoteInstruction::new_account(&bank_client.pubkey(), vote_id, lamports);
+        bank_client.process_instructions(ixs)
     }
 
     fn create_vote_account_with_delegate(
@@ -79,10 +78,10 @@ mod tests {
         lamports: u64,
     ) -> Result<()> {
         let vote_id = bank_client.pubkeys()[1];
-        let mut script = VoteScript::new_account(&bank_client.pubkey(), &vote_id, lamports);
+        let mut ixs = VoteInstruction::new_account(&bank_client.pubkey(), &vote_id, lamports);
         let delegate_ix = VoteInstruction::new_delegate_stake(&vote_id, delegate_id);
-        script.push(delegate_ix);
-        bank_client.process_script(script)
+        ixs.push(delegate_ix);
+        bank_client.process_instructions(ixs)
     }
 
     fn submit_vote(

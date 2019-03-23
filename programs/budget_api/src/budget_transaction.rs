@@ -1,29 +1,15 @@
 //! The `budget_transaction` module provides functionality for creating Budget transactions.
 
 use crate::budget_instruction::BudgetInstruction;
-use crate::budget_script::BudgetScript;
 use chrono::prelude::*;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::script::Script;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 
 pub struct BudgetTransaction {}
 
 impl BudgetTransaction {
-    fn new_signed(
-        from_keypair: &Keypair,
-        script: Script,
-        recent_blockhash: Hash,
-        fee: u64,
-    ) -> Transaction {
-        let mut tx = script.compile();
-        tx.fee = fee;
-        tx.sign(&[from_keypair], recent_blockhash);
-        tx
-    }
-
     /// Create and sign a new Transaction. Used for unit-testing.
     pub fn new_payment(
         from_keypair: &Keypair,
@@ -32,8 +18,8 @@ impl BudgetTransaction {
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
-        let script = BudgetScript::pay(&from_keypair.pubkey(), to, lamports);
-        Self::new_signed(from_keypair, script, recent_blockhash, fee)
+        let ixs = BudgetInstruction::new_payment(&from_keypair.pubkey(), to, lamports);
+        Transaction::new_signed_instructions(&[from_keypair], ixs, recent_blockhash, fee)
     }
 
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
@@ -46,9 +32,7 @@ impl BudgetTransaction {
     ) -> Transaction {
         let from = from_keypair.pubkey();
         let ix = BudgetInstruction::new_apply_timestamp(&from, contract, to, dt);
-        let mut tx = Transaction::new(vec![ix]);
-        tx.sign(&[from_keypair], recent_blockhash);
-        tx
+        Transaction::new_signed_instructions(&[from_keypair], vec![ix], recent_blockhash, 0)
     }
 
     /// Create and sign a new Witness Signature. Used for unit-testing.
@@ -60,9 +44,7 @@ impl BudgetTransaction {
     ) -> Transaction {
         let from = from_keypair.pubkey();
         let ix = BudgetInstruction::new_apply_signature(&from, contract, to);
-        let mut tx = Transaction::new(vec![ix]);
-        tx.sign(&[from_keypair], recent_blockhash);
-        tx
+        Transaction::new_signed_instructions(&[from_keypair], vec![ix], recent_blockhash, 0)
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.
@@ -76,7 +58,7 @@ impl BudgetTransaction {
         lamports: u64,
         recent_blockhash: Hash,
     ) -> Transaction {
-        let script = BudgetScript::pay_on_date(
+        let ixs = BudgetInstruction::new_on_date(
             &from_keypair.pubkey(),
             to,
             contract,
@@ -85,7 +67,7 @@ impl BudgetTransaction {
             cancelable,
             lamports,
         );
-        Self::new_signed(from_keypair, script, recent_blockhash, 0)
+        Transaction::new_signed_instructions(&[from_keypair], ixs, recent_blockhash, 0)
     }
 
     /// Create and sign a multisig Transaction.
@@ -98,7 +80,7 @@ impl BudgetTransaction {
         lamports: u64,
         recent_blockhash: Hash,
     ) -> Transaction {
-        let script = BudgetScript::pay_on_signature(
+        let ixs = BudgetInstruction::new_when_signed(
             &from_keypair.pubkey(),
             to,
             contract,
@@ -106,6 +88,6 @@ impl BudgetTransaction {
             cancelable,
             lamports,
         );
-        Self::new_signed(from_keypair, script, recent_blockhash, 0)
+        Transaction::new_signed_instructions(&[from_keypair], ixs, recent_blockhash, 0)
     }
 }
