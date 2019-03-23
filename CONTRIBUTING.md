@@ -92,13 +92,16 @@ understood. Avoid introducing new 3-letter terms, which can be confused with 3-l
 Design Proposals
 ---
 
-Solana's design proposals are part of a book generated from markdown files in
-the `proposals/src/` directory. To add a design proposal:
+Solana's architecture is described by a book generated from markdown files in
+the `book/src/` directory, maintained by an *editor* (currently @garious). To
+add a design proposal, you'll need to at least propose a change the content
+under the [Accepted Design
+Proposals](https://solana-labs.github.io/book-edge/proposals.html) chapter.
+Here's the full process:
 
 1. Propose a design by creating a PR that adds a markdown document to the
-   directory `proposals/src/` and references it from the [table of
-   contents](proposals/src/SUMMARY.md). Add any relevant *maintainers* to the PR
-   review.
+   directory `book/src/` and references it from the [table of
+   contents](book/src/SUMMARY.md). Add any relevant *maintainers* to the PR review.
 2. The PR being merged indicates your proposed change was accepted and that the
    maintainers support your plan of attack.
 3. Submit PRs that implement the proposal. When the implementation reveals the
