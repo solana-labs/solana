@@ -139,7 +139,7 @@ impl LocalCluster {
             fullnodes.insert(validator_keypair.pubkey(), validator_server);
             fullnode_infos.insert(
                 validator_keypair.pubkey(),
-                FullnodeInfo::new(leader_keypair.clone(), ledger_path),
+                FullnodeInfo::new(validator_keypair.clone(), ledger_path),
             );
         }
         discover(&leader_contact_info.gossip, node_stakes.len()).unwrap();
