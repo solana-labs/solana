@@ -2,8 +2,8 @@
 //!  Receive mining proofs from miners, validate the answers
 //!  and give reward for good proofs.
 
+use crate::storage_contract::{ProofInfo, ProofStatus, StorageContract, ValidationInfo};
 use crate::storage_instruction::StorageInstruction;
-use crate::storage_state::{ProofInfo, ProofStatus, StorageState, ValidationInfo};
 use crate::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use log::*;
 use solana_sdk::account::KeyedAccount;
@@ -44,17 +44,16 @@ pub fn process_instruction(
     }
 
     if let Ok(syscall) = bincode::deserialize(data) {
-        let mut storage_account_state = if let Ok(storage_account_state) =
-            bincode::deserialize(&keyed_accounts[0].account.data)
-        {
-            storage_account_state
-        } else {
-            StorageState::default()
-        };
+        let mut storage_contract =
+            if let Ok(storage_contract) = bincode::deserialize(&keyed_accounts[0].account.data) {
+                storage_contract
+            } else {
+                StorageContract::default()
+            };
 
         debug!(
-            "deserialized state height: {}",
-            storage_account_state.entry_height
+            "deserialized contract height: {}",
+            storage_contract.entry_height
         );
         match syscall {
             StorageInstruction::SubmitMiningProof {
@@ -63,14 +62,13 @@ pub fn process_instruction(
                 signature,
             } => {
                 let segment_index = get_segment_from_entry(entry_height);
-                let current_segment_index =
-                    get_segment_from_entry(storage_account_state.entry_height);
+                let current_segment_index = get_segment_from_entry(storage_contract.entry_height);
                 if segment_index >= current_segment_index {
                     return Err(InstructionError::InvalidArgument);
                 }
 
                 debug!(
-                    "Mining proof submitted with state {:?} entry_height: {}",
+                    "Mining proof submitted with contract {:?} entry_height: {}",
                     sha_state, entry_height
                 );
 
@@ -79,10 +77,10 @@ pub fn process_instruction(
                     sha_state,
                     signature,
                 };
-                storage_account_state.proofs[segment_index].push(proof_info);
+                storage_contract.proofs[segment_index].push(proof_info);
             }
             StorageInstruction::AdvertiseStorageRecentBlockhash { hash, entry_height } => {
-                let original_segments = storage_account_state.entry_height / ENTRIES_PER_SEGMENT;
+                let original_segments = storage_contract.entry_height / ENTRIES_PER_SEGMENT;
                 let segments = entry_height / ENTRIES_PER_SEGMENT;
                 debug!(
                     "advertise new last id segments: {} orig: {}",
@@ -92,21 +90,20 @@ pub fn process_instruction(
                     return Err(InstructionError::InvalidArgument);
                 }
 
-                storage_account_state.entry_height = entry_height;
-                storage_account_state.hash = hash;
+                storage_contract.entry_height = entry_height;
+                storage_contract.hash = hash;
 
                 // move the proofs to previous_proofs
-                storage_account_state.previous_proofs = storage_account_state.proofs.clone();
-                storage_account_state.proofs.clear();
-                storage_account_state
+                storage_contract.previous_proofs = storage_contract.proofs.clone();
+                storage_contract.proofs.clear();
+                storage_contract
                     .proofs
                     .resize(segments as usize, Vec::new());
 
                 // move lockout_validations to reward_validations
-                storage_account_state.reward_validations =
-                    storage_account_state.lockout_validations.clone();
-                storage_account_state.lockout_validations.clear();
-                storage_account_state
+                storage_contract.reward_validations = storage_contract.lockout_validations.clone();
+                storage_contract.lockout_validations.clear();
+                storage_contract
                     .lockout_validations
                     .resize(segments as usize, Vec::new());
             }
@@ -114,18 +111,18 @@ pub fn process_instruction(
                 entry_height,
                 proof_mask,
             } => {
-                if entry_height >= storage_account_state.entry_height {
+                if entry_height >= storage_contract.entry_height {
                     return Err(InstructionError::InvalidArgument);
                 }
 
                 let segment_index = get_segment_from_entry(entry_height);
-                if storage_account_state.previous_proofs[segment_index].len() != proof_mask.len() {
+                if storage_contract.previous_proofs[segment_index].len() != proof_mask.len() {
                     return Err(InstructionError::InvalidArgument);
                 }
 
                 // TODO: Check that each proof mask matches the signature
                 /*for (i, entry) in proof_mask.iter().enumerate() {
-                    if storage_account_state.previous_proofs[segment_index][i] != signature.as_ref[0] {
+                    if storage_contract.previous_proofs[segment_index][i] != signature.as_ref[0] {
                         return Err(InstructionError::InvalidArgument);
                     }
                 }*/
@@ -134,14 +131,14 @@ pub fn process_instruction(
                     id: *keyed_accounts[0].signer_key().unwrap(),
                     proof_mask,
                 };
-                storage_account_state.lockout_validations[segment_index].push(info);
+                storage_contract.lockout_validations[segment_index].push(info);
             }
             StorageInstruction::ClaimStorageReward { entry_height } => {
                 let claims_index = get_segment_from_entry(entry_height);
                 let account_key = keyed_accounts[0].signer_key().unwrap();
                 let mut num_validations = 0;
                 let mut total_validations = 0;
-                for validation in &storage_account_state.reward_validations[claims_index] {
+                for validation in &storage_contract.reward_validations[claims_index] {
                     if *account_key == validation.id {
                         num_validations += count_valid_proofs(&validation.proof_mask);
                     } else {
@@ -156,11 +153,8 @@ pub fn process_instruction(
             }
         }
 
-        if bincode::serialize_into(
-            &mut keyed_accounts[0].account.data[..],
-            &storage_account_state,
-        )
-        .is_err()
+        if bincode::serialize_into(&mut keyed_accounts[0].account.data[..], &storage_contract)
+            .is_err()
         {
             return Err(InstructionError::AccountDataTooSmall);
         }
@@ -176,7 +170,7 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use crate::id;
-    use crate::storage_state::ProofStatus;
+    use crate::storage_contract::ProofStatus;
     use crate::storage_transaction::StorageTransaction;
     use crate::ENTRIES_PER_SEGMENT;
     use bincode::deserialize;
@@ -373,10 +367,10 @@ mod tests {
     fn get_storage_entry_height(bank: &Bank, account: &Pubkey) -> u64 {
         match bank.get_account(&account) {
             Some(storage_system_account) => {
-                let state = deserialize(&storage_system_account.data);
-                if let Ok(state) = state {
-                    let state: StorageState = state;
-                    return state.entry_height;
+                let contract = deserialize(&storage_system_account.data);
+                if let Ok(contract) = contract {
+                    let contract: StorageContract = contract;
+                    return contract.entry_height;
                 }
             }
             None => {
@@ -388,10 +382,10 @@ mod tests {
 
     fn get_storage_blockhash(bank: &Bank, account: &Pubkey) -> Hash {
         if let Some(storage_system_account) = bank.get_account(&account) {
-            let state = deserialize(&storage_system_account.data);
-            if let Ok(state) = state {
-                let state: StorageState = state;
-                return state.hash;
+            let contract = deserialize(&storage_system_account.data);
+            if let Ok(contract) = contract {
+                let contract: StorageContract = contract;
+                return contract.hash;
             }
         }
         Hash::default()
