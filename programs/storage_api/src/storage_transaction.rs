@@ -1,6 +1,6 @@
 use crate::id;
+use crate::storage_contract::ProofStatus;
 use crate::storage_instruction::StorageInstruction;
-use crate::storage_state::ProofStatus;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::transaction::Transaction;

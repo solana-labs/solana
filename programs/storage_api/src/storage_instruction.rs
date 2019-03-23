@@ -1,4 +1,4 @@
-use crate::storage_state::ProofStatus;
+use crate::storage_contract::ProofStatus;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;

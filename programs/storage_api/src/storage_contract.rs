@@ -24,7 +24,7 @@ pub struct ValidationInfo {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
-pub struct StorageState {
+pub struct StorageContract {
     pub entry_height: u64,
     pub hash: Hash,
 
