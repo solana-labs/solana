@@ -227,7 +227,7 @@ mod tests {
     use jsonrpc_core::Response;
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use solana_budget_api;
-    use solana_budget_api::budget_transaction::BudgetTransaction;
+    use solana_budget_api::budget_instruction::BudgetInstruction;
     use solana_runtime::bank::{self, Bank};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::pubkey::Pubkey;
@@ -357,15 +357,15 @@ mod tests {
         let tx = SystemTransaction::new_account(&alice, &contract_funds.pubkey(), 51, blockhash, 0);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
 
-        let tx = BudgetTransaction::new_when_signed(
-            &contract_funds,
+        let ixs = BudgetInstruction::new_when_signed(
+            &contract_funds.pubkey(),
             &bob_pubkey,
             &contract_state.pubkey(),
             &witness.pubkey(),
             None,
             51,
-            blockhash,
         );
+        let tx = Transaction::new_signed_instructions(&[&contract_funds], ixs, blockhash, 0);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
@@ -393,12 +393,12 @@ mod tests {
         let tx = SystemTransaction::new_account(&alice, &witness.pubkey(), 1, blockhash, 0);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
-        let tx = BudgetTransaction::new_signature(
-            &witness,
+        let ix = BudgetInstruction::new_apply_signature(
+            &witness.pubkey(),
             &contract_state.pubkey(),
             &bob_pubkey,
-            blockhash,
         );
+        let tx = Transaction::new_signed_instructions(&[&witness], vec![ix], blockhash, 0);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 

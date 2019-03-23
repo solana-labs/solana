@@ -2,7 +2,6 @@ pub mod budget_expr;
 pub mod budget_instruction;
 pub mod budget_processor;
 pub mod budget_state;
-pub mod budget_transaction;
 pub mod payment_plan;
 
 use solana_sdk::pubkey::Pubkey;

@@ -8,7 +8,7 @@ use crate::result::Result;
 use bincode::{deserialize, serialized_size};
 use chrono::prelude::Utc;
 use rayon::prelude::*;
-use solana_budget_api::budget_transaction::BudgetTransaction;
+use solana_budget_api::budget_instruction::BudgetInstruction;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -378,22 +378,15 @@ pub fn create_ticks(num_ticks: u64, mut hash: Hash) -> Vec<Entry> {
 
 pub fn make_tiny_test_entries_from_hash(start: &Hash, num: usize) -> Vec<Entry> {
     let keypair = Keypair::new();
+    let pubkey = keypair.pubkey();
 
     let mut hash = *start;
     let mut num_hashes = 0;
     (0..num)
         .map(|_| {
-            Entry::new_mut(
-                &mut hash,
-                &mut num_hashes,
-                vec![BudgetTransaction::new_timestamp(
-                    &keypair,
-                    &keypair.pubkey(),
-                    &keypair.pubkey(),
-                    Utc::now(),
-                    *start,
-                )],
-            )
+            let ix = BudgetInstruction::new_apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
+            let tx = Transaction::new_signed_instructions(&[&keypair], vec![ix], *start, 0);
+            Entry::new_mut(&mut hash, &mut num_hashes, vec![tx])
         })
         .collect()
 }
@@ -408,14 +401,10 @@ pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
     let zero = Hash::default();
     let one = solana_sdk::hash::hash(&zero.as_ref());
     let keypair = Keypair::new();
+    let pubkey = keypair.pubkey();
 
-    let tx = BudgetTransaction::new_timestamp(
-        &keypair,
-        &keypair.pubkey(),
-        &keypair.pubkey(),
-        Utc::now(),
-        one,
-    );
+    let ix = BudgetInstruction::new_apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
+    let tx = Transaction::new_signed_instructions(&[&keypair], vec![ix], one, 0);
 
     let serialized_size = tx.serialized_size().unwrap();
     let num_txs = BLOB_DATA_SIZE / serialized_size as usize;
@@ -468,6 +457,24 @@ mod tests {
     use solana_sdk::system_transaction::SystemTransaction;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
+    fn create_sample_payment(keypair: &Keypair, hash: Hash) -> Transaction {
+        let pubkey = keypair.pubkey();
+        let ixs = BudgetInstruction::new_payment(&pubkey, &pubkey, 1);
+        Transaction::new_signed_instructions(&[keypair], ixs, hash, 0)
+    }
+
+    fn create_sample_timestamp(keypair: &Keypair, hash: Hash) -> Transaction {
+        let pubkey = keypair.pubkey();
+        let ix = BudgetInstruction::new_apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
+        Transaction::new_signed_instructions(&[keypair], vec![ix], hash, 0)
+    }
+
+    fn create_sample_signature(keypair: &Keypair, hash: Hash) -> Transaction {
+        let pubkey = keypair.pubkey();
+        let ix = BudgetInstruction::new_apply_signature(&pubkey, &pubkey, &pubkey);
+        Transaction::new_signed_instructions(&[keypair], vec![ix], hash, 0)
+    }
+
     #[test]
     fn test_entry_verify() {
         let zero = Hash::default();
@@ -501,15 +508,8 @@ mod tests {
 
         // First, verify entries
         let keypair = Keypair::new();
-        let tx0 = BudgetTransaction::new_timestamp(
-            &keypair,
-            &keypair.pubkey(),
-            &keypair.pubkey(),
-            Utc::now(),
-            zero,
-        );
-        let tx1 =
-            BudgetTransaction::new_signature(&keypair, &keypair.pubkey(), &keypair.pubkey(), zero);
+        let tx0 = create_sample_timestamp(&keypair, zero);
+        let tx1 = create_sample_signature(&keypair, zero);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
@@ -531,13 +531,7 @@ mod tests {
         assert_eq!(tick.hash, zero);
 
         let keypair = Keypair::new();
-        let tx0 = BudgetTransaction::new_timestamp(
-            &keypair,
-            &keypair.pubkey(),
-            &keypair.pubkey(),
-            Utc::now(),
-            zero,
-        );
+        let tx0 = create_sample_timestamp(&keypair, zero);
         let entry0 = next_entry(&zero, 1, vec![tx0.clone()]);
         assert_eq!(entry0.num_hashes, 1);
         assert_eq!(entry0.hash, next_hash(&zero, 1, &vec![tx0]));
@@ -585,13 +579,7 @@ mod tests {
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
         let tx0 = VoteTransaction::new_vote(&vote_account.pubkey(), &vote_account, 1, one, 1);
-        let tx1 = BudgetTransaction::new_timestamp(
-            &keypair,
-            &keypair.pubkey(),
-            &keypair.pubkey(),
-            Utc::now(),
-            one,
-        );
+        let tx1 = create_sample_timestamp(&keypair, one);
         //
         // TODO: this magic number and the mix of transaction types
         //       is designed to fill up a Blob more or less exactly,
@@ -651,7 +639,7 @@ mod tests {
         let vote_account = Keypair::new();
         let tx_small =
             VoteTransaction::new_vote(&vote_account.pubkey(), &vote_account, 1, next_hash, 2);
-        let tx_large = BudgetTransaction::new_payment(&keypair, &keypair.pubkey(), 1, next_hash, 0);
+        let tx_large = create_sample_payment(&keypair, next_hash);
 
         let tx_small_size = tx_small.serialized_size().unwrap() as usize;
         let tx_large_size = tx_large.serialized_size().unwrap() as usize;
