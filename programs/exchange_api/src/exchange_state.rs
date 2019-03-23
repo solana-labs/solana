@@ -121,8 +121,8 @@ pub struct TokenAccountInfo {
     pub tokens: Tokens,
 }
 impl TokenAccountInfo {
-    pub fn owner(mut self, owner: Pubkey) -> Self {
-        self.owner = owner;
+    pub fn owner(mut self, owner: &Pubkey) -> Self {
+        self.owner = *owner;
         self
     }
     pub fn tokens(mut self, a: u64, b: u64, c: u64, d: u64) -> Self {

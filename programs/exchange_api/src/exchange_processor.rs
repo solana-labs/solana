@@ -82,12 +82,15 @@ impl ExchangeProcessor {
 
         // Calc swap
 
-        let max_from_primary = from_trade.tokens * scaler / from_trade.price;
+        trace!("tt {} ft {}", to_trade.tokens, from_trade.tokens);
+        trace!("tp {} fp {}", to_trade.price, from_trade.price);
+
         let max_to_secondary = to_trade.tokens * to_trade.price / scaler;
+        let max_to_primary = from_trade.tokens * scaler / from_trade.price;
 
-        trace!("mfp {} mts {}", max_from_primary, max_to_secondary);
+        trace!("mtp {} mts {}", max_to_primary, max_to_secondary);
 
-        let max_primary = cmp::min(max_from_primary, to_trade.tokens);
+        let max_primary = cmp::min(max_to_primary, to_trade.tokens);
         let max_secondary = cmp::min(max_to_secondary, from_trade.tokens);
 
         trace!("mp {} ms {}", max_primary, max_secondary);
@@ -121,7 +124,7 @@ impl ExchangeProcessor {
         trace!("pp {} sp {}", primary_profit, secondary_profit);
 
         let primary_token = to_trade.pair.primary();
-        let secondary_token = to_trade.pair.secondary();
+        let secondary_token = from_trade.pair.secondary();
 
         // Update tokens/accounts
 
@@ -159,9 +162,7 @@ impl ExchangeProcessor {
 
         Self::is_account_unallocated(&ka[1].account.data[..])?;
         Self::serialize(
-            &ExchangeState::Account(
-                TokenAccountInfo::default().owner(ka[0].unsigned_key().clone()),
-            ),
+            &ExchangeState::Account(TokenAccountInfo::default().owner(&ka[0].unsigned_key())),
             &mut ka[1].account.data[..],
         )
     }
@@ -338,10 +339,10 @@ impl ExchangeProcessor {
         if let Err(e) = Self::calculate_swap(
             SCALER,
             &mut swap,
-            &mut from_trade,
             &mut to_trade,
-            &mut from_trade_account,
+            &mut from_trade,
             &mut to_trade_account,
+            &mut from_trade_account,
             &mut profit_account,
         ) {
             error!(
@@ -383,6 +384,8 @@ pub fn process_instruction(
         InstructionError::InvalidInstructionData
     })?;
 
+    trace!("{:?}", command);
+
     match command {
         ExchangeInstruction::AccountRequest => {
             ExchangeProcessor::do_account_request(keyed_accounts)
@@ -403,6 +406,12 @@ pub fn process_instruction(
 #[cfg(test)]
 mod test {
     use super::*;
+    use solana_runtime::bank::Bank;
+    use solana_runtime::bank_client::BankClient;
+    use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::system_instruction::SystemInstruction;
+    use std::mem;
 
     fn try_calc(
         scaler: u64,
@@ -491,5 +500,325 @@ mod test {
         try_calc(1,       3,    2,    7,    3,  1, 1, Tokens::new(0,   4, 0, 0), Tokens::new(   2, 0, 0, 0), Tokens::new(   0, 2, 0, 0)).unwrap();
         try_calc(1000, 3000,  333, 1000,  500,  0, 1, Tokens::new(0, 999, 0, 0), Tokens::new(1998, 0, 0, 0), Tokens::new(1002, 0, 0, 0)).unwrap();
         try_calc(1000,   50,  100,   50,  101,  0,45, Tokens::new(0,   5, 0, 0), Tokens::new(  49, 0, 0, 0), Tokens::new(   1, 0, 0, 0)).unwrap();
+    }
+
+    fn create_bank(lamports: u64) -> (Bank, Keypair) {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(lamports);
+        let mut bank = Bank::new(&genesis_block);
+        bank.add_instruction_processor(id(), process_instruction);
+        (bank, mint_keypair)
+    }
+
+    fn create_client(bank: &Bank, mint_keypair: Keypair) -> (BankClient, Pubkey) {
+        let owner = Keypair::new();
+        let pubkey = owner.pubkey();
+        let mint_client = BankClient::new(&bank, mint_keypair);
+        mint_client
+            .process_instruction(SystemInstruction::new_move(
+                &mint_client.pubkey(),
+                &owner.pubkey(),
+                42,
+            ))
+            .expect("new_move");
+
+        let client = BankClient::new(&bank, owner);
+
+        (client, pubkey)
+    }
+
+    fn create_account(client: &BankClient, owner: &Pubkey) -> Pubkey {
+        let new = Keypair::new().pubkey();
+        let instruction = SystemInstruction::new_program_account(
+            &owner,
+            &new,
+            1,
+            mem::size_of::<ExchangeState>() as u64,
+            &id(),
+        );
+        client
+            .process_instruction(instruction)
+            .expect(&format!("{}:{}", line!(), file!()));
+        new
+    }
+
+    fn create_token_account(client: &BankClient, owner: &Pubkey) -> Pubkey {
+        let new = Keypair::new().pubkey();
+        let instruction = SystemInstruction::new_program_account(
+            &owner,
+            &new,
+            1,
+            mem::size_of::<ExchangeState>() as u64,
+            &id(),
+        );
+        client
+            .process_instruction(instruction)
+            .expect(&format!("{}:{}", line!(), file!()));
+        let instruction = ExchangeInstruction::new_account_request(&owner, &new);
+        client
+            .process_instruction(instruction)
+            .expect(&format!("{}:{}", line!(), file!()));
+        new
+    }
+
+    fn transfer(client: &BankClient, owner: &Pubkey, to: &Pubkey, token: Token, tokens: u64) {
+        let instruction =
+            ExchangeInstruction::new_transfer_request(owner, to, &id(), token, tokens);
+        client
+            .process_instruction(instruction)
+            .expect(&format!("{}:{}", line!(), file!()));
+    }
+
+    fn trade(
+        client: &BankClient,
+        owner: &Pubkey,
+        direction: Direction,
+        pair: TokenPair,
+        from_token: Token,
+        src_tokens: u64,
+        trade_tokens: u64,
+        price: u64,
+    ) -> (Pubkey, Pubkey, Pubkey) {
+        let trade = create_account(&client, &owner);
+        let src = create_token_account(&client, &owner);
+        let dst = create_token_account(&client, &owner);
+        transfer(&client, &owner, &src, from_token, src_tokens);
+
+        let instruction = ExchangeInstruction::new_trade_request(
+            owner,
+            &trade,
+            direction,
+            pair,
+            trade_tokens,
+            price,
+            &src,
+            &dst,
+        );
+        client
+            .process_instruction(instruction)
+            .expect(&format!("{}:{}", line!(), file!()));
+        (trade, src, dst)
+    }
+
+    fn deserialize_swap(data: &[u8]) -> TradeSwapInfo {
+        let state: ExchangeState =
+            bincode::deserialize(data).expect(&format!("{}:{}", line!(), file!()));
+        match state {
+            ExchangeState::Swap(info) => info,
+            _ => panic!("Not a valid swap"),
+        }
+    }
+
+    #[test]
+    fn test_exchange_new_account() {
+        solana_logger::setup();
+        let (bank, mint_keypair) = create_bank(10_000);
+        let (client, owner) = create_client(&bank, mint_keypair);
+
+        let new = create_token_account(&client, &owner);
+        let new_account = bank.get_account(&new).unwrap();
+
+        // Check results
+
+        assert_eq!(
+            TokenAccountInfo::default().owner(&owner),
+            ExchangeProcessor::deserialize_account(&new_account.data[..]).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_exchange_new_account_not_unallocated() {
+        solana_logger::setup();
+        let (bank, mint_keypair) = create_bank(10_000);
+        let (client, owner) = create_client(&bank, mint_keypair);
+
+        let new = create_token_account(&client, &owner);
+        let instruction = ExchangeInstruction::new_account_request(&owner, &new);
+        client
+            .process_instruction(instruction)
+            .expect_err(&format!("{}:{}", line!(), file!()));
+    }
+
+    #[test]
+    fn test_exchange_new_transfer_request() {
+        solana_logger::setup();
+        let (bank, mint_keypair) = create_bank(10_000);
+        let (client, owner) = create_client(&bank, mint_keypair);
+
+        let new = create_token_account(&client, &owner);
+
+        let instruction =
+            ExchangeInstruction::new_transfer_request(&owner, &new, &id(), Token::A, 42);
+        client
+            .process_instruction(instruction)
+            .expect(&format!("{}:{}", line!(), file!()));
+
+        let new_account = bank.get_account(&new).unwrap();
+
+        // Check results
+
+        assert_eq!(
+            TokenAccountInfo::default()
+                .owner(&owner)
+                .tokens(42, 0, 0, 0),
+            ExchangeProcessor::deserialize_account(&new_account.data[..]).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_exchange_new_trade_request() {
+        solana_logger::setup();
+        let (bank, mint_keypair) = create_bank(10_000);
+        let (client, owner) = create_client(&bank, mint_keypair);
+
+        let (trade, src, dst) = trade(
+            &client,
+            &owner,
+            Direction::To,
+            TokenPair::AB,
+            Token::A,
+            42,
+            2,
+            1000,
+        );
+
+        let trade_account = bank.get_account(&trade).unwrap();
+        let src_account = bank.get_account(&src).unwrap();
+        let dst_account = bank.get_account(&dst).unwrap();
+
+        // check results
+
+        assert_eq!(
+            TradeOrderInfo {
+                owner: owner,
+                direction: Direction::To,
+                pair: TokenPair::AB,
+                tokens: 2,
+                price: 1000,
+                src_account: src,
+                dst_account: dst
+            },
+            ExchangeProcessor::deserialize_trade(&trade_account.data[..]).unwrap()
+        );
+        assert_eq!(
+            TokenAccountInfo::default()
+                .owner(&owner)
+                .tokens(40, 0, 0, 0),
+            ExchangeProcessor::deserialize_account(&src_account.data[..]).unwrap()
+        );
+        assert_eq!(
+            TokenAccountInfo::default().owner(&owner).tokens(0, 0, 0, 0),
+            ExchangeProcessor::deserialize_account(&dst_account.data[..]).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_exchange_new_swap_request() {
+        solana_logger::setup();
+        let (bank, mint_keypair) = create_bank(10_000);
+        let (client, owner) = create_client(&bank, mint_keypair);
+
+        let swap = create_account(&client, &owner);
+        let profit = create_token_account(&client, &owner);
+        let (to_trade, to_src, to_dst) = trade(
+            &client,
+            &owner,
+            Direction::To,
+            TokenPair::AB,
+            Token::A,
+            2,
+            2,
+            2000,
+        );
+        let (from_trade, from_src, from_dst) = trade(
+            &client,
+            &owner,
+            Direction::From,
+            TokenPair::AB,
+            Token::B,
+            3,
+            3,
+            3000,
+        );
+
+        let instruction = ExchangeInstruction::new_swap_request(
+            &owner,
+            &swap,
+            &to_trade,
+            &from_trade,
+            &to_dst,
+            &from_dst,
+            &profit,
+        );
+        client
+            .process_instruction(instruction)
+            .expect(&format!("{}:{}", line!(), file!()));
+
+        let to_trade_account = bank.get_account(&to_trade).unwrap();
+        let to_src_account = bank.get_account(&to_src).unwrap();
+        let to_dst_account = bank.get_account(&to_dst).unwrap();
+        let from_trade_account = bank.get_account(&from_trade).unwrap();
+        let from_src_account = bank.get_account(&from_src).unwrap();
+        let from_dst_account = bank.get_account(&from_dst).unwrap();
+        let profit_account = bank.get_account(&profit).unwrap();
+        let swap_account = bank.get_account(&swap).unwrap();
+
+        // check results
+
+        assert_eq!(
+            TradeOrderInfo {
+                owner: owner,
+                direction: Direction::To,
+                pair: TokenPair::AB,
+                tokens: 1,
+                price: 2000,
+                src_account: to_src,
+                dst_account: to_dst
+            },
+            ExchangeProcessor::deserialize_trade(&to_trade_account.data[..]).unwrap()
+        );
+        assert_eq!(
+            TokenAccountInfo::default().owner(&owner).tokens(0, 0, 0, 0),
+            ExchangeProcessor::deserialize_account(&to_src_account.data[..]).unwrap()
+        );
+        assert_eq!(
+            TokenAccountInfo::default().owner(&owner).tokens(0, 2, 0, 0),
+            ExchangeProcessor::deserialize_account(&to_dst_account.data[..]).unwrap()
+        );
+        assert_eq!(
+            TradeOrderInfo {
+                owner: owner,
+                direction: Direction::From,
+                pair: TokenPair::AB,
+                tokens: 0,
+                price: 3000,
+                src_account: from_src,
+                dst_account: from_dst
+            },
+            ExchangeProcessor::deserialize_trade(&from_trade_account.data[..]).unwrap()
+        );
+        assert_eq!(
+            TokenAccountInfo::default().owner(&owner).tokens(0, 0, 0, 0),
+            ExchangeProcessor::deserialize_account(&from_src_account.data[..]).unwrap()
+        );
+        assert_eq!(
+            TokenAccountInfo::default().owner(&owner).tokens(1, 0, 0, 0),
+            ExchangeProcessor::deserialize_account(&from_dst_account.data[..]).unwrap()
+        );
+        assert_eq!(
+            TokenAccountInfo::default().owner(&owner).tokens(0, 1, 0, 0),
+            ExchangeProcessor::deserialize_account(&profit_account.data[..]).unwrap()
+        );
+        assert_eq!(
+            TradeSwapInfo {
+                pair: TokenPair::AB,
+                to_trade_order: to_trade,
+                from_trade_order: from_trade,
+                primary_tokens: 1,
+                primary_price: 2000,
+                secondary_tokens: 3,
+                secondary_price: 3000,
+            },
+            deserialize_swap(&swap_account.data[..])
+        );
     }
 }

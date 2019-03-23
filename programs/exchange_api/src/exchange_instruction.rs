@@ -28,9 +28,9 @@ pub enum ExchangeInstruction {
     /// key 1 - New token account
     AccountRequest,
     /// Transfer tokens between two accounts
-    /// key 0 - Account to transfer tokens from.  This can be the exchange program itself,
+    /// key 0 - Account to transfer tokens to
+    /// key 1 - Account to transfer tokens from.  This can be the exchange program itself,
     ///         the exchange has a limitless number of tokens it can transfer.
-    /// key 1 - Account to transfer tokens to
     TransferRequest(Token, u64),
     /// Trade request
     /// key 0 - Signer
@@ -44,14 +44,13 @@ pub enum ExchangeInstruction {
     /// Trade swap request
     /// key 0 - Signer
     /// key 1 - Account in which to record the swap
-    /// key 2 - `From` trade order
-    /// key 3 - 'To' trade order
-    /// key 4 - Token account associated with From trade
-    /// key 5 - Token account associated with the To Trade
+    /// key 2 - 'To' trade order
+    /// key 3 - `From` trade order
+    /// key 4 - Token account associated with the To Trade
+    /// key 5 - Token account associated with From trade
     /// key 6 - Token account in which to deposit the brokers profit from the swap.
     SwapRequest,
 }
-
 impl ExchangeInstruction {
     pub fn new_account_request(owner: &Pubkey, new: &Pubkey) -> Instruction {
         let account_metas = vec![
