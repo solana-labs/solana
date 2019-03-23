@@ -15,10 +15,9 @@ use rand_chacha::ChaChaRng;
 use solana_client::thin_client::create_client_with_timeout;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::transaction::Transaction;
 use solana_storage_api::storage_instruction::StorageInstruction;
-use solana_storage_api::storage_transaction::StorageTransaction;
 use std::collections::HashSet;
 use std::io;
 use std::mem::size_of;
@@ -278,7 +277,7 @@ impl StorageStage {
         Err(io::Error::new(io::ErrorKind::Other, "other failure"))
     }
 
-    pub fn process_entry_crossing(
+    fn process_entry_crossing(
         state: &Arc<RwLock<StorageStateInner>>,
         keypair: &Arc<Keypair>,
         _blocktree: &Arc<Blocktree>,
@@ -289,12 +288,12 @@ impl StorageStage {
         let mut seed = [0u8; 32];
         let signature = keypair.sign(&entry_id.as_ref());
 
-        let tx = StorageTransaction::new_advertise_recent_blockhash(
-            keypair,
+        let ix = StorageInstruction::new_advertise_recent_blockhash(
+            &keypair.pubkey(),
             entry_id,
-            Hash::default(),
             entry_height,
         );
+        let tx = Transaction::new(vec![ix]);
         tx_sender.send(tx)?;
 
         seed.copy_from_slice(&signature.as_ref()[..32]);
@@ -355,7 +354,7 @@ impl StorageStage {
         Ok(())
     }
 
-    pub fn process_entries(
+    fn process_entries(
         keypair: &Arc<Keypair>,
         storage_state: &Arc<RwLock<StorageStateInner>>,
         entry_receiver: &EntryReceiver,
@@ -604,16 +603,17 @@ mod tests {
             reference_keys = vec![0; keys.len()];
             reference_keys.copy_from_slice(keys);
         }
-        let mut mining_txs: Vec<_> = Vec::new();
+
         let keypair = Keypair::new();
-        let mining_proof_tx = StorageTransaction::new_mining_proof(
-            &keypair,
-            Hash::default(),
+        let mining_proof_ix = StorageInstruction::new_mining_proof(
+            &keypair.pubkey(),
             Hash::default(),
             0,
             keypair.sign_message(b"test"),
         );
-        mining_txs.push(mining_proof_tx);
+        let mining_proof_tx = Transaction::new(vec![mining_proof_ix]);
+        let mining_txs = vec![mining_proof_tx];
+
         let proof_entries = vec![Entry::new(&Hash::default(), 1, mining_txs)];
         storage_entry_sender.send(proof_entries).unwrap();
 

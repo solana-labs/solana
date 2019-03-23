@@ -171,195 +171,160 @@ mod tests {
     use super::*;
     use crate::id;
     use crate::storage_contract::ProofStatus;
-    use crate::storage_transaction::StorageTransaction;
     use crate::ENTRIES_PER_SEGMENT;
     use bincode::deserialize;
     use solana_runtime::bank::Bank;
+    use solana_runtime::bank_client::BankClient;
     use solana_sdk::account::{create_keyed_accounts, Account};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::{hash, Hash};
-    use solana_sdk::instruction::CompiledInstruction;
+    use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-    use solana_sdk::system_transaction::SystemTransaction;
-    use solana_sdk::transaction::Transaction;
+    use solana_sdk::system_instruction::SystemInstruction;
 
-    fn test_transaction(
-        tx: &Transaction,
+    fn test_instruction(
+        ix: &Instruction,
         program_accounts: &mut [Account],
     ) -> Result<(), InstructionError> {
-        assert_eq!(tx.instructions.len(), 1);
-        let CompiledInstruction {
-            ref accounts,
-            ref data,
-            ..
-        } = tx.instructions[0];
-
-        info!("accounts: {:?}", accounts);
-
-        let mut keyed_accounts: Vec<_> = accounts
+        let mut keyed_accounts: Vec<_> = ix
+            .accounts
             .iter()
-            .map(|&index| {
-                let index = index as usize;
-                let key = &tx.account_keys[index];
-                (key, index < tx.signatures.len())
-            })
             .zip(program_accounts.iter_mut())
-            .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
+            .map(|(account_meta, account)| {
+                KeyedAccount::new(&account_meta.pubkey, account_meta.is_signer, account)
+            })
             .collect();
 
-        let ret = process_instruction(&id(), &mut keyed_accounts, &data, 42);
+        let ret = process_instruction(&id(), &mut keyed_accounts, &ix.data, 42);
         info!("ret: {:?}", ret);
         ret
     }
 
     #[test]
     fn test_storage_tx() {
-        let keypair = Keypair::new();
-        let mut accounts = [(keypair.pubkey(), Account::default())];
+        let pubkey = Keypair::new().pubkey();
+        let mut accounts = [(pubkey, Account::default())];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
         assert!(process_instruction(&id(), &mut keyed_accounts, &[], 42).is_err());
     }
 
     #[test]
     fn test_serialize_overflow() {
-        let keypair = Keypair::new();
+        let pubkey = Keypair::new().pubkey();
         let mut keyed_accounts = Vec::new();
         let mut user_account = Account::default();
-        let pubkey = keypair.pubkey();
         keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
 
-        let tx = StorageTransaction::new_advertise_recent_blockhash(
-            &keypair,
-            Hash::default(),
+        let ix = StorageInstruction::new_advertise_recent_blockhash(
+            &pubkey,
             Hash::default(),
             ENTRIES_PER_SEGMENT,
         );
 
         assert_eq!(
-            process_instruction(&id(), &mut keyed_accounts, &tx.instructions[0].data, 42),
+            process_instruction(&id(), &mut keyed_accounts, &ix.data, 42),
             Err(InstructionError::AccountDataTooSmall)
         );
     }
 
     #[test]
     fn test_invalid_accounts_len() {
-        let keypair = Keypair::new();
+        let pubkey = Keypair::new().pubkey();
         let mut accounts = [Account::default()];
 
-        let tx = StorageTransaction::new_mining_proof(
-            &keypair,
-            Hash::default(),
-            Hash::default(),
-            0,
-            Signature::default(),
-        );
-        assert!(test_transaction(&tx, &mut accounts).is_err());
+        let ix =
+            StorageInstruction::new_mining_proof(&pubkey, Hash::default(), 0, Signature::default());
+        assert!(test_instruction(&ix, &mut accounts).is_err());
 
         let mut accounts = [Account::default(), Account::default(), Account::default()];
 
-        assert!(test_transaction(&tx, &mut accounts).is_err());
+        assert!(test_instruction(&ix, &mut accounts).is_err());
     }
 
     #[test]
     fn test_submit_mining_invalid_entry_height() {
         solana_logger::setup();
-        let keypair = Keypair::new();
+        let pubkey = Keypair::new().pubkey();
         let mut accounts = [Account::default(), Account::default()];
         accounts[1].data.resize(16 * 1024, 0);
 
-        let tx = StorageTransaction::new_mining_proof(
-            &keypair,
-            Hash::default(),
-            Hash::default(),
-            0,
-            Signature::default(),
-        );
+        let ix =
+            StorageInstruction::new_mining_proof(&pubkey, Hash::default(), 0, Signature::default());
 
         // Haven't seen a transaction to roll over the epoch, so this should fail
-        assert!(test_transaction(&tx, &mut accounts).is_err());
+        assert!(test_instruction(&ix, &mut accounts).is_err());
     }
 
     #[test]
     fn test_submit_mining_ok() {
         solana_logger::setup();
-        let keypair = Keypair::new();
+        let pubkey = Keypair::new().pubkey();
         let mut accounts = [Account::default(), Account::default()];
         accounts[0].data.resize(16 * 1024, 0);
 
-        let tx = StorageTransaction::new_advertise_recent_blockhash(
-            &keypair,
-            Hash::default(),
+        let ix = StorageInstruction::new_advertise_recent_blockhash(
+            &pubkey,
             Hash::default(),
             ENTRIES_PER_SEGMENT,
         );
 
-        test_transaction(&tx, &mut accounts).unwrap();
+        test_instruction(&ix, &mut accounts).unwrap();
 
-        let tx = StorageTransaction::new_mining_proof(
-            &keypair,
-            Hash::default(),
-            Hash::default(),
-            0,
-            Signature::default(),
-        );
+        let ix =
+            StorageInstruction::new_mining_proof(&pubkey, Hash::default(), 0, Signature::default());
 
-        test_transaction(&tx, &mut accounts).unwrap();
+        test_instruction(&ix, &mut accounts).unwrap();
     }
 
     #[test]
     fn test_validate_mining() {
         solana_logger::setup();
-        let keypair = Keypair::new();
+        let pubkey = Keypair::new().pubkey();
         let mut accounts = [Account::default(), Account::default()];
         accounts[0].data.resize(16 * 1024, 0);
 
         let entry_height = 0;
 
-        let tx = StorageTransaction::new_advertise_recent_blockhash(
-            &keypair,
-            Hash::default(),
+        let ix = StorageInstruction::new_advertise_recent_blockhash(
+            &pubkey,
             Hash::default(),
             ENTRIES_PER_SEGMENT,
         );
 
-        test_transaction(&tx, &mut accounts).unwrap();
+        test_instruction(&ix, &mut accounts).unwrap();
 
-        let tx = StorageTransaction::new_mining_proof(
-            &keypair,
-            Hash::default(),
+        let ix = StorageInstruction::new_mining_proof(
+            &pubkey,
             Hash::default(),
             entry_height,
             Signature::default(),
         );
-        test_transaction(&tx, &mut accounts).unwrap();
+        test_instruction(&ix, &mut accounts).unwrap();
 
-        let tx = StorageTransaction::new_advertise_recent_blockhash(
-            &keypair,
-            Hash::default(),
+        let ix = StorageInstruction::new_advertise_recent_blockhash(
+            &pubkey,
             Hash::default(),
             ENTRIES_PER_SEGMENT * 2,
         );
-        test_transaction(&tx, &mut accounts).unwrap();
+        test_instruction(&ix, &mut accounts).unwrap();
 
-        let tx = StorageTransaction::new_proof_validation(
-            &keypair,
-            Hash::default(),
+        let ix = StorageInstruction::new_proof_validation(
+            &pubkey,
             entry_height,
             vec![ProofStatus::Valid],
         );
-        test_transaction(&tx, &mut accounts).unwrap();
+        test_instruction(&ix, &mut accounts).unwrap();
 
-        let tx = StorageTransaction::new_advertise_recent_blockhash(
-            &keypair,
-            Hash::default(),
+        let ix = StorageInstruction::new_advertise_recent_blockhash(
+            &pubkey,
             Hash::default(),
             ENTRIES_PER_SEGMENT * 3,
         );
-        test_transaction(&tx, &mut accounts).unwrap();
+        test_instruction(&ix, &mut accounts).unwrap();
 
-        let tx = StorageTransaction::new_reward_claim(&keypair, Hash::default(), entry_height);
-        test_transaction(&tx, &mut accounts).unwrap();
+        let ix = StorageInstruction::new_reward_claim(&pubkey, entry_height);
+        test_instruction(&ix, &mut accounts).unwrap();
 
         assert!(accounts[0].lamports == TOTAL_VALIDATOR_REWARDS);
     }
@@ -393,15 +358,18 @@ mod tests {
 
     #[test]
     fn test_bank_storage() {
-        let (mut genesis_block, alice) = GenesisBlock::new(1000);
+        let (mut genesis_block, mint_keypair) = GenesisBlock::new(1000);
         genesis_block
             .native_programs
             .push(("solana_storage_program".to_string(), id()));
         let bank = Bank::new(&genesis_block);
-
-        let bob = Keypair::new();
-        let jack = Keypair::new();
-        let jill = Keypair::new();
+        let alice_client = BankClient::new(&bank, mint_keypair);
+        let alice_pubkey = alice_client.pubkey();
+        let bob_keypair = Keypair::new();
+        let bob_client = BankClient::new(&bank, bob_keypair);
+        let bob_pubkey = bob_client.pubkey();
+        let jack_pubkey = Keypair::new().pubkey();
+        let jill_pubkey = Keypair::new().pubkey();
 
         let x = 42;
         let blockhash = genesis_block.hash();
@@ -410,51 +378,36 @@ mod tests {
 
         bank.register_tick(&blockhash);
 
-        bank.transfer(10, &alice, &jill.pubkey(), blockhash)
-            .unwrap();
+        alice_client.transfer(10, &jill_pubkey).unwrap();
+        alice_client.transfer(10, &bob_pubkey).unwrap();
+        alice_client.transfer(10, &jack_pubkey).unwrap();
 
-        bank.transfer(10, &alice, &bob.pubkey(), blockhash).unwrap();
-        bank.transfer(10, &alice, &jack.pubkey(), blockhash)
-            .unwrap();
+        let ix =
+            SystemInstruction::new_program_account(&alice_pubkey, &bob_pubkey, 1, 4 * 1024, &id());
 
-        let tx = SystemTransaction::new_program_account(
-            &alice,
-            &bob.pubkey(),
-            blockhash,
-            1,
-            4 * 1024,
-            &id(),
-            0,
-        );
+        alice_client.process_instruction(ix).unwrap();
 
-        bank.process_transaction(&tx).unwrap();
-
-        let tx = StorageTransaction::new_advertise_recent_blockhash(
-            &bob,
+        let ix = StorageInstruction::new_advertise_recent_blockhash(
+            &bob_pubkey,
             storage_blockhash,
-            blockhash,
             ENTRIES_PER_SEGMENT,
         );
 
-        bank.process_transaction(&tx).unwrap();
+        bob_client.process_instruction(ix).unwrap();
 
         let entry_height = 0;
-        let tx = StorageTransaction::new_mining_proof(
-            &bob,
+        let ix = StorageInstruction::new_mining_proof(
+            &bob_pubkey,
             Hash::default(),
-            blockhash,
             entry_height,
             Signature::default(),
         );
-        let _result = bank.process_transaction(&tx).unwrap();
+        let _result = bob_client.process_instruction(ix).unwrap();
 
         assert_eq!(
-            get_storage_entry_height(&bank, &bob.pubkey()),
+            get_storage_entry_height(&bank, &bob_pubkey),
             ENTRIES_PER_SEGMENT
         );
-        assert_eq!(
-            get_storage_blockhash(&bank, &bob.pubkey()),
-            storage_blockhash
-        );
+        assert_eq!(get_storage_blockhash(&bank, &bob_pubkey), storage_blockhash);
     }
 }

@@ -22,7 +22,8 @@ use solana_client::thin_client::{create_client, ThinClient};
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_storage_api::storage_transaction::StorageTransaction;
+use solana_sdk::transaction::Transaction;
+use solana_storage_api::storage_instruction::StorageInstruction;
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
@@ -403,14 +404,13 @@ impl Replicator {
         );
         Self::get_airdrop_lamports(&client, &self.keypair, &self.cluster_entrypoint);
 
-        let blockhash = client.get_recent_blockhash().expect("blockhash");
-        let mut tx = StorageTransaction::new_mining_proof(
-            &self.keypair,
+        let ix = StorageInstruction::new_mining_proof(
+            &self.keypair.pubkey(),
             self.hash,
-            blockhash,
             self.slot,
             Signature::new(self.signature.as_ref()),
         );
+        let mut tx = Transaction::new(vec![ix]);
         client
             .retry_transfer(&self.keypair, &mut tx, 10)
             .expect("transfer didn't work!");
