@@ -4,7 +4,6 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::transaction::{AccountMeta, Instruction};
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
