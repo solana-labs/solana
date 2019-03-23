@@ -79,6 +79,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         ),
         ("solana_token_program".to_string(), solana_token_api::id()),
         ("solana_config_program".to_string(), solana_config_api::id()),
+        (
+            "solana_exchange_program".to_string(),
+            solana_exchange_api::id(),
+        ),
     ]);
 
     create_new_ledger(ledger_path, &genesis_block)?;
@@ -124,6 +128,10 @@ mod tests {
             133, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0,
         ]);
+        let exchange = Pubkey::new(&[
+            134, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0,
+        ]);
 
         assert_eq!(solana_sdk::system_program::id(), system);
         assert_eq!(solana_sdk::native_loader::id(), native);
@@ -133,6 +141,7 @@ mod tests {
         assert_eq!(solana_token_api::id(), token);
         assert_eq!(solana_vote_api::id(), vote);
         assert_eq!(solana_config_api::id(), config);
+        assert_eq!(solana_exchange_api::id(), exchange);
     }
 
     #[test]
@@ -147,6 +156,7 @@ mod tests {
             solana_token_api::id(),
             solana_vote_api::id(),
             solana_config_api::id(),
+            solana_exchange_api::id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
     }
