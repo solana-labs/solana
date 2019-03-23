@@ -4,15 +4,10 @@ set -e
 cd "$(dirname "$0")/.."
 
 book/build.sh
-proposals/build.sh
 
 echo --- create book repo
 (
   set -x
-
-  test ! -d book/html/proposals
-  mv proposals/html book/html/proposals/
-
   cd book/html/
   git init .
   git config user.email "maintainers@solana.com"
