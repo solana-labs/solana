@@ -167,7 +167,7 @@ impl LocalCluster {
 
     fn close(&mut self) {
         self.close_preserve_ledgers();
-        for (_, info) in &self.fullnode_infos {
+        for info in self.fullnode_infos.values() {
             remove_dir_all(&info.ledger_path)
                 .unwrap_or_else(|_| panic!("Unable to remove {}", info.ledger_path));
         }
