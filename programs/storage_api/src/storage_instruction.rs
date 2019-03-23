@@ -2,9 +2,9 @@ use crate::id;
 use crate::storage_contract::ProofStatus;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::hash::Hash;
+use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use solana_sdk::transaction::{AccountMeta, Instruction};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageInstruction {

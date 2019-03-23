@@ -1,7 +1,6 @@
 pub mod storage_contract;
 pub mod storage_instruction;
 pub mod storage_processor;
-pub mod storage_transaction;
 
 use solana_sdk::pubkey::Pubkey;
 
