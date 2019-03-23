@@ -144,7 +144,6 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use crate::budget_instruction::BudgetInstruction;
-    use crate::budget_script::BudgetScript;
     use crate::id;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
@@ -166,8 +165,8 @@ mod tests {
         let alice_client = BankClient::new(&bank, mint_keypair);
         let alice_pubkey = alice_client.pubkey();
         let bob_pubkey = Keypair::new().pubkey();
-        let script = BudgetScript::pay(&alice_pubkey, &bob_pubkey, 100);
-        alice_client.process_script(script).unwrap();
+        let instructions = BudgetInstruction::new_payment(&alice_pubkey, &bob_pubkey, 100);
+        alice_client.process_instructions(instructions).unwrap();
         assert_eq!(bank.get_balance(&bob_pubkey), 100);
     }
 
@@ -181,7 +180,7 @@ mod tests {
         let budget_pubkey = Keypair::new().pubkey();
         let bob_pubkey = Keypair::new().pubkey();
         let witness = Keypair::new().pubkey();
-        let script = BudgetScript::pay_on_signature(
+        let instructions = BudgetInstruction::new_when_signed(
             &alice_pubkey,
             &bob_pubkey,
             &budget_pubkey,
@@ -189,7 +188,7 @@ mod tests {
             None,
             1,
         );
-        alice_client.process_script(script).unwrap();
+        alice_client.process_instructions(instructions).unwrap();
 
         // Attack! Part 1: Sign a witness transaction with a random key.
         let mallory_client = BankClient::new(&bank, Keypair::new());
@@ -223,7 +222,7 @@ mod tests {
         let budget_pubkey = Keypair::new().pubkey();
         let bob_pubkey = Keypair::new().pubkey();
         let dt = Utc::now();
-        let script = BudgetScript::pay_on_date(
+        let instructions = BudgetInstruction::new_on_date(
             &alice_pubkey,
             &bob_pubkey,
             &budget_pubkey,
@@ -232,7 +231,7 @@ mod tests {
             None,
             1,
         );
-        alice_client.process_script(script).unwrap();
+        alice_client.process_instructions(instructions).unwrap();
 
         // Attack! Part 1: Sign a timestamp transaction with a random key.
         let mallory_client = BankClient::new(&bank, Keypair::new());
@@ -269,7 +268,7 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let mallory_pubkey = Keypair::new().pubkey();
         let dt = Utc::now();
-        let script = BudgetScript::pay_on_date(
+        let instructions = BudgetInstruction::new_on_date(
             &alice_pubkey,
             &bob_pubkey,
             &budget_pubkey,
@@ -278,7 +277,7 @@ mod tests {
             None,
             1,
         );
-        alice_client.process_script(script).unwrap();
+        alice_client.process_instructions(instructions).unwrap();
         assert_eq!(bank.get_balance(&alice_pubkey), 1);
         assert_eq!(bank.get_balance(&budget_pubkey), 1);
 
@@ -328,7 +327,7 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let dt = Utc::now();
 
-        let script = BudgetScript::pay_on_date(
+        let instructions = BudgetInstruction::new_on_date(
             &alice_pubkey,
             &bob_pubkey,
             &budget_pubkey,
@@ -337,7 +336,7 @@ mod tests {
             Some(alice_pubkey),
             1,
         );
-        alice_client.process_script(script).unwrap();
+        alice_client.process_instructions(instructions).unwrap();
         assert_eq!(bank.get_balance(&alice_pubkey), 2);
         assert_eq!(bank.get_balance(&budget_pubkey), 1);
 

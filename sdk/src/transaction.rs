@@ -2,9 +2,9 @@
 
 use crate::hash::{Hash, Hasher};
 use crate::instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError};
+use crate::instruction_compiler::InstructionCompiler;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::pubkey::Pubkey;
-use crate::script::Script;
 use crate::shortvec::{deserialize_vec_with, encode_len, serialize_vec_with};
 use crate::signature::{KeypairUtil, Signature};
 use bincode::Error;
@@ -73,7 +73,7 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn new(instructions: Vec<Instruction>) -> Self {
-        Script::new(instructions).compile()
+        InstructionCompiler::new(instructions).compile()
     }
 
     pub fn new_signed_instructions<T: KeypairUtil>(

@@ -1,7 +1,6 @@
 use crate::bank::Bank;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::script::Script;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::transaction::{Transaction, TransactionError};
@@ -39,17 +38,12 @@ impl<'a> BankClient<'a> {
         self.bank.process_transaction(&tx)
     }
 
-    /// Create and process a transaction.
-    pub fn process_script(&self, script: Script) -> Result<(), TransactionError> {
-        self.process_transaction(script.compile())
-    }
-
     /// Create and process a transaction from a list of instructions.
     pub fn process_instructions(
         &self,
         instructions: Vec<Instruction>,
     ) -> Result<(), TransactionError> {
-        self.process_script(Script::new(instructions))
+        self.process_transaction(Transaction::new(instructions))
     }
 
     /// Create and process a transaction from a single instruction.
