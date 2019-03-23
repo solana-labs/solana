@@ -13,6 +13,7 @@
 # install solana-install. It just does platform detection, downloads the installer
 # and runs it.
 
+{ # this ensures the entire script is downloaded #
 
 if [ -z "$SOLANA_DOWNLOAD_ROOT" ]; then
     SOLANA_DOWNLOAD_ROOT="https://github.com/solana-labs/solana/releases/download/"
@@ -171,3 +172,5 @@ downloader() {
 }
 
 main "$@"
+
+} # this ensures the entire script is downloaded #
