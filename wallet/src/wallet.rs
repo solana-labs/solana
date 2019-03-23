@@ -5,7 +5,7 @@ use log::*;
 use serde_json;
 use serde_json::json;
 use solana_budget_api;
-use solana_budget_api::budget_transaction::BudgetTransaction;
+use solana_budget_api::budget_instruction::BudgetInstruction;
 use solana_client::rpc_client::{get_rpc_request_str, RpcClient};
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
@@ -466,16 +466,16 @@ fn process_pay(
         let contract_state = Keypair::new();
 
         // Initializing contract
-        let mut tx = BudgetTransaction::new_on_date(
-            &config.id,
+        let ixs = BudgetInstruction::new_on_date(
+            &config.id.pubkey(),
             to,
             &contract_state.pubkey(),
             dt,
             &dt_pubkey,
             cancelable,
             lamports,
-            blockhash,
         );
+        let mut tx = Transaction::new_signed_instructions(&[&config.id], ixs, blockhash, 0);
         let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
 
         Ok(json!({
@@ -497,15 +497,15 @@ fn process_pay(
         let contract_state = Keypair::new();
 
         // Initializing contract
-        let mut tx = BudgetTransaction::new_when_signed(
-            &config.id,
+        let ixs = BudgetInstruction::new_when_signed(
+            &config.id.pubkey(),
             to,
             &contract_state.pubkey(),
             &witness,
             cancelable,
             lamports,
-            blockhash,
         );
+        let mut tx = Transaction::new_signed_instructions(&[&config.id], ixs, blockhash, 0);
         let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
 
         Ok(json!({
@@ -520,8 +520,9 @@ fn process_pay(
 
 fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey) -> ProcessResult {
     let blockhash = rpc_client.get_recent_blockhash()?;
-    let mut tx =
-        BudgetTransaction::new_signature(&config.id, pubkey, &config.id.pubkey(), blockhash);
+    let ix =
+        BudgetInstruction::new_apply_signature(&config.id.pubkey(), pubkey, &config.id.pubkey());
+    let mut tx = Transaction::new_signed_instructions(&[&config.id], vec![ix], blockhash, 0);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
     Ok(signature_str.to_string())
 }
@@ -547,7 +548,8 @@ fn process_time_elapsed(
 
     let blockhash = rpc_client.get_recent_blockhash()?;
 
-    let mut tx = BudgetTransaction::new_timestamp(&config.id, pubkey, to, dt, blockhash);
+    let ix = BudgetInstruction::new_apply_timestamp(&config.id.pubkey(), pubkey, to, dt);
+    let mut tx = Transaction::new_signed_instructions(&[&config.id], vec![ix], blockhash, 0);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
 
     Ok(signature_str.to_string())
@@ -567,7 +569,8 @@ fn process_witness(
     }
 
     let blockhash = rpc_client.get_recent_blockhash()?;
-    let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, to, blockhash);
+    let ix = BudgetInstruction::new_apply_signature(&config.id.pubkey(), pubkey, to);
+    let mut tx = Transaction::new_signed_instructions(&[&config.id], vec![ix], blockhash, 0);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
 
     Ok(signature_str.to_string())
