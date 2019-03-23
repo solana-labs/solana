@@ -5,9 +5,6 @@
 /book/html/
 /book/src/img/
 /book/src/tests.ok
-/proposals/html/
-/proposals/src/img/
-/proposals/src/tests.ok
 
 **/*.rs.bk
 .cargo
