@@ -22,11 +22,11 @@ However ensure the machine used is not behind a residential NAT to avoid NAT
 traversal issues.  A cloud-hosted machine works best.  Ensure that IP ports
 8000 through 10000 are not blocked for Internet traffic.
 
-Prebuilt binaries are available for Linux x86_64 (Ubuntu 18.04 has been tested
-the most). MacOS or WSL users may build from source.
+Prebuilt binaries are available for Linux x86_64 (Ubuntu 18.04 recommended).
+MacOS or WSL users may build from source.
 
 ### Validator Setup
-The shell commands in the section assume the following environment variables are
+The shell commands in this section assume the following environment variables are
 set:
 ```bash
 $ export release=0.12.1
