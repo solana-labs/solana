@@ -27,7 +27,6 @@ pub mod blocktree;
 pub mod blockstream;
 pub mod blockstream_service;
 pub mod blocktree_processor;
-pub mod cluster;
 pub mod cluster_info;
 pub mod cluster_tests;
 pub mod db_window;

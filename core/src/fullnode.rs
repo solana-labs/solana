@@ -37,7 +37,6 @@ use std::thread::JoinHandle;
 use std::thread::{spawn, Result};
 use std::time::Duration;
 
-#[derive(Clone)]
 pub struct FullnodeConfig {
     pub sigverify_disabled: bool,
     pub voting_disabled: bool,
@@ -266,6 +265,15 @@ impl Fullnode {
     // Used for notifying many nodes in parallel to exit
     pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
+
+        // Need to force the poh_recorder to drop the WorkingBank,
+        // which contains the channel to BroadcastStage. This should be
+        // sufficient as long as no other rotations are happening that
+        // can cause the Tpu to restart a BankingStage and reset a
+        // WorkingBank in poh_recorder. It follows no other rotations can be
+        // in motion because exit()/close() are only called by the run() loop
+        // which is the sole initiator of rotations.
+        self.poh_recorder.lock().unwrap().clear_bank();
     }
 
     pub fn close(self) -> Result<()> {
