@@ -8,12 +8,13 @@ use crate::contact_info::ContactInfo;
 use crate::entry::{Entry, EntrySlice};
 use crate::gossip_service::discover;
 use crate::locktower::VOTE_THRESHOLD_DEPTH;
+use crate::poh_service::PohServiceConfig;
 use solana_client::thin_client::create_client;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{
-    DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS, NUM_TICKS_PER_SECOND,
+    duration_as_ms, DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS, NUM_TICKS_PER_SECOND,
 };
 use std::io;
 use std::thread::sleep;
@@ -120,6 +121,25 @@ pub fn verify_ledger_ticks(ledger_path: &str, ticks_per_slot: usize) {
                 .map(|child_slot| (child_slot, slot, last_id)),
         );
     }
+}
+
+pub fn sleep_n_epochs(
+    num_epochs: f64,
+    config: &PohServiceConfig,
+    ticks_per_slot: u64,
+    slots_per_epoch: u64,
+) {
+    let num_ticks_per_second = {
+        match config {
+            PohServiceConfig::Sleep(d) => (1000 / duration_as_ms(d)) as f64,
+            _ => panic!("Unsuppported tick config for testing"),
+        }
+    };
+
+    let num_ticks_to_sleep = num_epochs * ticks_per_slot as f64 * slots_per_epoch as f64;
+    sleep(Duration::from_secs(
+        ((num_ticks_to_sleep + num_ticks_per_second - 1.0) / num_ticks_per_second) as u64,
+    ));
 }
 
 pub fn kill_entry_and_spend_and_verify_rest(
