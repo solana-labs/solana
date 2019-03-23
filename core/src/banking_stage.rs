@@ -249,24 +249,22 @@ impl BankingStage {
         Ok(())
     }
 
-    pub fn process_and_record_transactions(
+    fn process_and_record_transactions_locked(
         bank: &Bank,
         txs: &[Transaction],
         poh: &Arc<Mutex<PohRecorder>>,
+        lock_results: &[bank::Result<()>],
     ) -> Result<()> {
-        let now = Instant::now();
-        // Once accounts are locked, other threads cannot encode transactions that will modify the
-        // same account state
-        let lock_results = bank.lock_accounts(txs);
-        let lock_time = now.elapsed();
-
         let now = Instant::now();
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
         // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
-        let (loaded_accounts, results) =
-            bank.load_and_execute_transactions(txs, lock_results, MAX_RECENT_BLOCKHASHES / 2);
+        let (loaded_accounts, results) = bank.load_and_execute_transactions(
+            txs,
+            lock_results.to_vec(),
+            MAX_RECENT_BLOCKHASHES / 2,
+        );
         let load_execute_time = now.elapsed();
 
         let record_time = {
@@ -281,21 +279,45 @@ impl BankingStage {
             now.elapsed()
         };
 
-        let now = Instant::now();
-        // Once the accounts are new transactions can enter the pipeline to process them
-        bank.unlock_accounts(&txs, &results);
-        let unlock_time = now.elapsed();
         debug!(
-            "bank: {} lock: {}us load_execute: {}us record: {}us commit: {}us unlock: {}us txs_len: {}",
+            "bank: {} load_execute: {}us record: {}us commit: {}us txs_len: {}",
             bank.slot(),
-            duration_as_us(&lock_time),
             duration_as_us(&load_execute_time),
             duration_as_us(&record_time),
             duration_as_us(&commit_time),
+            txs.len(),
+        );
+
+        Ok(())
+    }
+
+    pub fn process_and_record_transactions(
+        bank: &Bank,
+        txs: &[Transaction],
+        poh: &Arc<Mutex<PohRecorder>>,
+    ) -> Result<()> {
+        let now = Instant::now();
+        // Once accounts are locked, other threads cannot encode transactions that will modify the
+        // same account state
+        let lock_results = bank.lock_accounts(txs);
+        let lock_time = now.elapsed();
+
+        let results = Self::process_and_record_transactions_locked(bank, txs, poh, &lock_results);
+
+        let now = Instant::now();
+        // Once the accounts are new transactions can enter the pipeline to process them
+        bank.unlock_accounts(&txs, &lock_results);
+        let unlock_time = now.elapsed();
+
+        debug!(
+            "bank: {} lock: {}us unlock: {}us txs_len: {}",
+            bank.slot(),
+            duration_as_us(&lock_time),
             duration_as_us(&unlock_time),
             txs.len(),
         );
-        Ok(())
+
+        results
     }
 
     /// Sends transactions to the bank.
