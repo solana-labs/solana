@@ -29,7 +29,7 @@ the most). MacOS or WSL users may build from source.
 The shell commands in the section assume the following environment variables are
 set:
 ```bash
-$ export release=0.12.1-pre2
+$ export release=0.12.1
 $ export ip=$(dig +short beta.testnet.solana.com)
 ```
 
