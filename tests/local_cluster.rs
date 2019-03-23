@@ -111,7 +111,7 @@ fn test_two_unbalanced_stakes() {
         num_slots_per_epoch,
     );
     cluster_tests::sleep_n_epochs(
-        10,
+        10.0,
         &fullnode_config.tick_config,
         num_ticks_per_slot,
         num_slots_per_epoch,
@@ -154,14 +154,14 @@ fn test_restart_node() {
     );
     let nodes = cluster.get_node_ids();
     cluster_tests::sleep_n_epochs(
-        1,
+        1.0,
         &fullnode_config.tick_config,
         timing::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );
     cluster.restart_node(nodes[0]);
     cluster_tests::sleep_n_epochs(
-        1,
+        0.5,
         &fullnode_config.tick_config,
         timing::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
