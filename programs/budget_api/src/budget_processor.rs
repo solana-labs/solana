@@ -1,7 +1,7 @@
 //! budget program
+use crate::budget_expr::Witness;
 use crate::budget_instruction::BudgetInstruction;
 use crate::budget_state::{BudgetError, BudgetState};
-use crate::payment_plan::Witness;
 use bincode::{deserialize, serialize};
 use chrono::prelude::{DateTime, Utc};
 use log::*;
