@@ -194,6 +194,25 @@ impl ReplayStage {
         trace!("{} checking poh slot {}", my_id, poh_slot);
         if blocktree.meta(poh_slot).unwrap().is_some() {
             // We've already broadcasted entries for this slot, skip it
+
+            // Since we are skipping our leader slot, let's tell poh recorder when we should be
+            // leader again
+            if reached_leader_tick {
+                let _ = bank_forks.read().unwrap().get(poh_slot).map(|bank| {
+                    let next_leader_slot =
+                        leader_schedule_utils::next_leader_slot(&my_id, bank.slot(), &bank);
+                    let mut poh = poh_recorder.lock().unwrap();
+                    let start_slot = poh.start_slot();
+                    poh.reset(
+                        bank.tick_height(),
+                        bank.last_blockhash(),
+                        start_slot,
+                        next_leader_slot,
+                        bank.ticks_per_slot(),
+                    );
+                });
+            }
+
             return;
         }
         if bank_forks.read().unwrap().get(poh_slot).is_none() {
