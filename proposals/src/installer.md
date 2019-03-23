@@ -9,22 +9,34 @@ use binaries supplied by Solana or any other party they trust.  Deployment of
 updates is managed using an on-chain update manifest program.
 
 ### Motivating Examples
-#### Fetch and run a pre-built installer
+#### Fetch and run a pre-built installer using a bootstrap curl/shell script
+The easiest install method for supported platforms:
+```bash
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.13.0/install/solana-install-init.sh | sh
+```
 
+This script will check github for the latest tagged release and download and run the
+`solana-install` binary from there.
+
+
+If additional arguments need to be specified during the installation, the
+following shell syntax is used:
+```bash
+$ init_args=.... # arguments for `solana-installer init ...`
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.13.0/install/solana-install-init.sh | sh -s - ${init_args}
+```
+
+#### Fetch and run a pre-built installer from a Github release
 With a well-known release URL, a pre-built binary can be obtained for supported
 platforms:
 
 ```bash
-$ curl -o solana-install https://github.com/solana-labs/solana/releases/download/v1.2.3/solana-install-x86_64-apple-darwin
+$ curl -o solana-install https://github.com/solana-labs/solana/releases/download/v0.13.0/solana-install-x86_64-apple-darwin
 $ chmod +x ./solana-install
 $ ./solana-install --help
 ```
 
-Note: future enhancements should include building wrapper in the style of
-https://rustup.rs/ to make bootstrapping an install even easier.
-
 #### Build and run the installer from source
-
 If a pre-built binary is not available for a given platform, building the
 installer from source is always an option:
 ```bash
@@ -42,7 +54,6 @@ $ solana-install deploy http://example.com/path/to/solana-release.tar.bz2 update
 ```
 
 #### Run a validator node that auto updates itself
-
 ```bash
 $ solana-install init --pubkey 92DMonmBYXwEMHJ99c9ceRSpAmk9v6i3RdvDdXaVcrfj  # <-- pubkey is obtained from whoever is deploying the updates
 $ export PATH=~/.local/share/solana-install/bin:$PATH
@@ -99,7 +110,6 @@ bzip2 with the following internal structure:
 * `...` -- any additional files and directories are permitted
 
 ### solana-install Tool
-
 The `solana-install` tool is used by the user to install and update their cluster software.
 
 It manages the following files and directories in the user's home directory:
@@ -108,7 +118,6 @@ It manages the following files and directories in the user's home directory:
 * `~/.local/share/solana/install/releases/<download_sha256>/` - contents of a release
 
 #### Command-line Interface
-
 ```manpage
 solana-install 0.13.0
 The solana cluster software installer
