@@ -30,9 +30,6 @@ Before you jump into the code, review the online book [Solana: Blockchain Rebuil
 
 (The _latest_ development version of the online book is also [available here](https://solana-labs.github.io/book-edge/).)
 
-Design proposals that have not yet been integrated into the online book can be
-viewed [here](https://solana-labs.github.io/book-edge/proposals/index.html).
-
 Developing
 ===
 
