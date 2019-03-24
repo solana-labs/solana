@@ -152,9 +152,5 @@ fn test_restart_node() {
         timing::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );
-    cluster_tests::spend_and_verify_all_nodes(
-        &cluster.entry_point_info,
-        &cluster.funding_keypair,
-        1,
-    );
+    cluster_tests::send_many_transactions(&cluster.entry_point_info, &cluster.funding_keypair, 1);
 }

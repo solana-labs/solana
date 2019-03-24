@@ -232,6 +232,7 @@ impl PohRecorder {
                 working_bank.bank.slot()
             );
             self.start_slot = working_bank.max_tick_height / working_bank.bank.ticks_per_slot();
+            self.start_tick = (self.start_slot + 1) * working_bank.bank.ticks_per_slot();
             self.clear_bank();
         }
         if e.is_err() {
