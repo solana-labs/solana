@@ -5,8 +5,8 @@
 use crate::*;
 use log::*;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::transaction::InstructionError;
 
 pub const TOTAL_VALIDATOR_REWARDS: u64 = 1000;
 pub const TOTAL_REPLICATOR_REWARDS: u64 = 1000;
@@ -179,10 +179,11 @@ mod tests {
     use solana_sdk::account::{create_keyed_accounts, Account};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::{hash, Hash};
+    use solana_sdk::instruction::CompiledInstruction;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
     use solana_sdk::system_transaction::SystemTransaction;
-    use solana_sdk::transaction::{CompiledInstruction, Transaction};
+    use solana_sdk::transaction::Transaction;
 
     fn test_transaction(
         tx: &Transaction,

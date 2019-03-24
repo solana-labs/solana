@@ -1,5 +1,5 @@
+use crate::instruction::{AccountMeta, Instruction};
 use crate::pubkey::Pubkey;
-use crate::transaction::{AccountMeta, Instruction};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum LoaderInstruction {

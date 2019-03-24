@@ -1,9 +1,10 @@
 use crate::bank::Bank;
+use solana_sdk::instruction::Instruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::script::Script;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::transaction::{Instruction, Transaction, TransactionError};
+use solana_sdk::transaction::{Transaction, TransactionError};
 
 pub struct BankClient<'a> {
     bank: &'a Bank,
@@ -67,7 +68,7 @@ impl<'a> BankClient<'a> {
 mod tests {
     use super::*;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::transaction::AccountMeta;
+    use solana_sdk::instruction::AccountMeta;
 
     #[test]
     fn test_bank_client_new_with_keypairs() {

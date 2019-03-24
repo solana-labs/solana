@@ -1,7 +1,7 @@
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
-use solana_sdk::transaction::InstructionError;
 
 solana_entrypoint!(entrypoint);
 fn entrypoint(

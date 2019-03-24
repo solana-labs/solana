@@ -1,11 +1,11 @@
 use crate::bank::Bank;
 use crate::bank_client::BankClient;
 use serde::Serialize;
+use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::transaction::{AccountMeta, Instruction};
 
 pub fn load_program(
     bank: &Bank,

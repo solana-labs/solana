@@ -1,6 +1,6 @@
 use crate::account::KeyedAccount;
+use crate::instruction::InstructionError;
 use crate::pubkey::Pubkey;
-use crate::transaction::InstructionError;
 
 // All native programs export a symbol named process()
 pub const ENTRYPOINT: &str = "process";
@@ -24,7 +24,7 @@ macro_rules! solana_entrypoint(
             keyed_accounts: &mut [solana_sdk::account::KeyedAccount],
             data: &[u8],
             tick_height: u64
-        ) -> Result<(), solana_sdk::transaction::InstructionError> {
+        ) -> Result<(), solana_sdk::instruction::InstructionError> {
             $entrypoint(program_id, keyed_accounts, data, tick_height)
         }
     )
@@ -40,7 +40,7 @@ macro_rules! process_instruction_entrypoint(
             keyed_accounts: &mut [solana_sdk::account::KeyedAccount],
             data: &[u8],
             tick_height: u64,
-        ) -> Result<(), solana_sdk::transaction::InstructionError> {
+        ) -> Result<(), solana_sdk::instruction::InstructionError> {
             solana_logger::setup();
 
             log::trace!("process_instruction: {:?}", data);

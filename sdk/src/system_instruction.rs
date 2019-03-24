@@ -1,6 +1,6 @@
+use crate::instruction::{AccountMeta, Instruction};
 use crate::pubkey::Pubkey;
 use crate::system_program;
-use crate::transaction::{AccountMeta, Instruction};
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub enum SystemError {

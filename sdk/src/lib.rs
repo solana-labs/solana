@@ -2,6 +2,7 @@ pub mod account;
 pub mod bpf_loader;
 pub mod genesis_block;
 pub mod hash;
+pub mod instruction;
 pub mod loader_instruction;
 pub mod native_loader;
 pub mod native_program;
