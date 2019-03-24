@@ -1,11 +1,12 @@
 extern crate solana;
 
+use solana::cluster::Cluster;
 use solana::cluster_tests;
 use solana::fullnode::FullnodeConfig;
 use solana::gossip_service::discover;
 use solana::local_cluster::LocalCluster;
 use solana::poh_service::PohServiceConfig;
-use std::thread::sleep;
+use solana_sdk::timing;
 use std::time::Duration;
 
 #[test]
@@ -93,14 +94,16 @@ fn test_two_unbalanced_stakes() {
         num_ticks_per_slot,
         num_slots_per_epoch,
     );
-    let num_epochs_to_sleep = 10;
-    let num_ticks_to_sleep = num_epochs_to_sleep * num_ticks_per_slot * num_slots_per_epoch;
-    sleep(Duration::from_millis(
-        num_ticks_to_sleep / num_ticks_per_second as u64 * 100,
-    ));
+    cluster_tests::sleep_n_epochs(
+        10.0,
+        &fullnode_config.tick_config,
+        num_ticks_per_slot,
+        num_slots_per_epoch,
+    );
 
     cluster.close_preserve_ledgers();
-    let leader_ledger = cluster.ledger_paths[1].clone();
+    let leader_id = cluster.entry_point_info.id;
+    let leader_ledger = cluster.fullnode_infos[&leader_id].ledger_path.clone();
     cluster_tests::verify_ledger_ticks(&leader_ledger, num_ticks_per_slot as usize);
 }
 
@@ -121,4 +124,33 @@ fn test_forwarding() {
 
     // Confirm that transactions were forwarded to and processed by the leader.
     cluster_tests::send_many_transactions(&validator_info, &cluster.funding_keypair, 20);
+}
+
+#[test]
+fn test_restart_node() {
+    let fullnode_config = FullnodeConfig::default();
+    let slots_per_epoch = 8;
+    let ticks_per_slot = 16;
+    let mut cluster = LocalCluster::new_with_tick_config(
+        &[3],
+        100,
+        &fullnode_config,
+        ticks_per_slot,
+        slots_per_epoch,
+    );
+    let nodes = cluster.get_node_ids();
+    cluster_tests::sleep_n_epochs(
+        1.0,
+        &fullnode_config.tick_config,
+        timing::DEFAULT_TICKS_PER_SLOT,
+        slots_per_epoch,
+    );
+    cluster.restart_node(nodes[0]);
+    cluster_tests::sleep_n_epochs(
+        0.5,
+        &fullnode_config.tick_config,
+        timing::DEFAULT_TICKS_PER_SLOT,
+        slots_per_epoch,
+    );
+    cluster_tests::send_many_transactions(&cluster.entry_point_info, &cluster.funding_keypair, 1);
 }

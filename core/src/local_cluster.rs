@@ -1,4 +1,5 @@
 use crate::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree};
+use crate::cluster::Cluster;
 use crate::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::fullnode::{Fullnode, FullnodeConfig};
@@ -15,20 +16,37 @@ use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use solana_vote_api::vote_state::VoteState;
 use solana_vote_api::vote_transaction::VoteTransaction;
+use std::collections::HashMap;
 use std::fs::remove_dir_all;
 use std::io::{Error, ErrorKind, Result};
 use std::sync::Arc;
 
+pub struct FullnodeInfo {
+    pub keypair: Arc<Keypair>,
+    pub ledger_path: String,
+}
+
+impl FullnodeInfo {
+    fn new(keypair: Arc<Keypair>, ledger_path: String) -> Self {
+        Self {
+            keypair,
+            ledger_path,
+        }
+    }
+}
+
 pub struct LocalCluster {
     /// Keypair with funding to particpiate in the network
     pub funding_keypair: Keypair,
+    pub fullnode_config: FullnodeConfig,
     /// Entry point from which the rest of the network can be discovered
     pub entry_point_info: ContactInfo,
-    pub ledger_paths: Vec<String>,
-    fullnodes: Vec<Fullnode>,
-    replicators: Vec<Replicator>,
+    pub fullnode_infos: HashMap<Pubkey, FullnodeInfo>,
+    fullnodes: HashMap<Pubkey, Fullnode>,
     genesis_ledger_path: String,
     genesis_block: GenesisBlock,
+    replicators: Vec<Replicator>,
+    pub replicator_ledger_paths: Vec<String>,
 }
 
 impl LocalCluster {
@@ -86,9 +104,6 @@ impl LocalCluster {
         genesis_block.slots_per_epoch = slots_per_epoch;
         let (genesis_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
-        let mut ledger_paths = vec![];
-        ledger_paths.push(genesis_ledger_path.clone());
-        ledger_paths.push(leader_ledger_path.clone());
         let voting_keypair = Keypair::new();
         let leader_contact_info = leader_node.info.clone();
 
@@ -102,16 +117,24 @@ impl LocalCluster {
             fullnode_config,
         );
 
-        let fullnodes = vec![leader_server];
+        let mut fullnodes = HashMap::new();
+        let mut fullnode_infos = HashMap::new();
+        fullnodes.insert(leader_pubkey, leader_server);
+        fullnode_infos.insert(
+            leader_pubkey,
+            FullnodeInfo::new(leader_keypair.clone(), leader_ledger_path),
+        );
 
         let mut cluster = Self {
             funding_keypair: mint_keypair,
             entry_point_info: leader_contact_info,
             fullnodes,
             replicators: vec![],
-            ledger_paths,
+            replicator_ledger_paths: vec![],
             genesis_ledger_path,
             genesis_block,
+            fullnode_infos,
+            fullnode_config: fullnode_config.clone(),
         };
 
         for stake in &node_stakes[1..] {
@@ -128,14 +151,14 @@ impl LocalCluster {
     }
 
     pub fn exit(&self) {
-        for node in &self.fullnodes {
+        for node in self.fullnodes.values() {
             node.exit();
         }
     }
 
     pub fn close_preserve_ledgers(&mut self) {
         self.exit();
-        while let Some(node) = self.fullnodes.pop() {
+        for (_, node) in self.fullnodes.drain() {
             node.join().unwrap();
         }
 
@@ -157,7 +180,6 @@ impl LocalCluster {
         let validator_pubkey = validator_keypair.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let ledger_path = tmp_copy_blocktree!(&self.genesis_ledger_path);
-        self.ledger_paths.push(ledger_path.clone());
 
         // Send each validator some lamports to vote
         let validator_balance =
@@ -180,7 +202,12 @@ impl LocalCluster {
             fullnode_config,
         );
 
-        self.fullnodes.push(validator_server);
+        self.fullnodes
+            .insert(validator_keypair.pubkey(), validator_server);
+        self.fullnode_infos.insert(
+            validator_keypair.pubkey(),
+            FullnodeInfo::new(validator_keypair.clone(), ledger_path),
+        );
     }
 
     fn add_replicator(&mut self) {
@@ -208,15 +235,20 @@ impl LocalCluster {
         )
         .unwrap();
 
-        self.ledger_paths.push(replicator_ledger_path);
-
+        self.replicator_ledger_paths.push(replicator_ledger_path);
         self.replicators.push(replicator);
     }
 
     fn close(&mut self) {
         self.close_preserve_ledgers();
-        for path in &self.ledger_paths {
-            remove_dir_all(path).unwrap_or_else(|_| panic!("Unable to remove {}", path));
+        for ledger_path in self
+            .fullnode_infos
+            .values()
+            .map(|f| &f.ledger_path)
+            .chain(self.replicator_ledger_paths.iter())
+        {
+            remove_dir_all(&ledger_path)
+                .unwrap_or_else(|_| panic!("Unable to remove {}", ledger_path));
         }
     }
 
@@ -297,6 +329,38 @@ impl LocalCluster {
             ErrorKind::Other,
             "expected successful vote account registration",
         ))
+    }
+}
+
+impl Cluster for LocalCluster {
+    fn restart_node(&mut self, pubkey: Pubkey) {
+        // Shut down the fullnode
+        let node = self.fullnodes.remove(&pubkey).unwrap();
+        node.exit();
+        node.join().unwrap();
+
+        // Restart the node
+        let fullnode_info = &self.fullnode_infos[&pubkey];
+        let node = Node::new_localhost_with_pubkey(&fullnode_info.keypair.pubkey());
+        if pubkey == self.entry_point_info.id {
+            self.entry_point_info = node.info.clone();
+        }
+        let new_voting_keypair = Keypair::new();
+        let restarted_node = Fullnode::new(
+            node,
+            &fullnode_info.keypair,
+            &fullnode_info.ledger_path,
+            &new_voting_keypair.pubkey(),
+            new_voting_keypair,
+            None,
+            &self.fullnode_config,
+        );
+
+        self.fullnodes.insert(pubkey, restarted_node);
+    }
+
+    fn get_node_ids(&self) -> Vec<Pubkey> {
+        self.fullnodes.keys().cloned().collect()
     }
 }
 
