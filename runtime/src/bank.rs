@@ -928,11 +928,11 @@ mod tests {
     use bincode::serialize;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::hash;
+    use solana_sdk::instruction::{CompiledInstruction, InstructionError};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
     use solana_sdk::system_transaction::SystemTransaction;
-    use solana_sdk::transaction::{CompiledInstruction, InstructionError};
 
     #[test]
     fn test_bank_new() {

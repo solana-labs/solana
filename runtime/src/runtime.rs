@@ -1,8 +1,9 @@
 use crate::native_loader;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
+use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
-use solana_sdk::transaction::{InstructionError, Transaction, TransactionError};
+use solana_sdk::transaction::{Transaction, TransactionError};
 
 /// Return true if the slice has any duplicate elements
 pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {

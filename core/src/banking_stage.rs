@@ -503,9 +503,9 @@ mod tests {
     use crate::packet::to_packets;
     use crate::poh_recorder::WorkingBank;
     use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
-    use solana_sdk::transaction::InstructionError;
     use std::sync::mpsc::channel;
     use std::thread::sleep;
 

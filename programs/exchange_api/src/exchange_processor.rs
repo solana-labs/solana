@@ -5,8 +5,8 @@ use crate::exchange_state::*;
 use crate::id;
 use log::*;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::transaction::InstructionError;
 use std::cmp;
 
 pub struct ExchangeProcessor {}

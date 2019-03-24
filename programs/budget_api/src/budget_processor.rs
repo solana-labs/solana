@@ -6,8 +6,8 @@ use bincode::{deserialize, serialize};
 use chrono::prelude::{DateTime, Utc};
 use log::*;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::transaction::InstructionError;
 
 /// Process a Witness Signature. Any payment plans waiting on this signature
 /// will progress one step.
@@ -149,8 +149,9 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::transaction::{InstructionError, Transaction, TransactionError};
+    use solana_sdk::transaction::{Transaction, TransactionError};
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_block, mint_keypair) = GenesisBlock::new(lamports);

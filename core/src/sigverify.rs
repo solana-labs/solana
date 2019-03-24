@@ -337,10 +337,11 @@ mod tests {
     use bincode::{deserialize, serialize};
     use solana_budget_api;
     use solana_sdk::hash::Hash;
+    use solana_sdk::instruction::CompiledInstruction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
-    use solana_sdk::transaction::{CompiledInstruction, Transaction};
+    use solana_sdk::transaction::Transaction;
 
     const SIG_OFFSET: usize = std::mem::size_of::<u64>() + 1;
 

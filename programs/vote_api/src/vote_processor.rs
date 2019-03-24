@@ -6,8 +6,8 @@ use crate::vote_state;
 use bincode::deserialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::transaction::InstructionError;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -51,10 +51,11 @@ mod tests {
     use solana_runtime::bank::{Bank, Result};
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
-    use solana_sdk::transaction::{AccountMeta, Instruction, InstructionError, TransactionError};
+    use solana_sdk::transaction::TransactionError;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_block, mint_keypair) = GenesisBlock::new(lamports);

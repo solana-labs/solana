@@ -991,9 +991,8 @@ mod tests {
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
-    use solana_sdk::signature::Keypair;
-    use solana_sdk::signature::KeypairUtil;
-    use solana_sdk::transaction::CompiledInstruction;
+    use solana_sdk::instruction::CompiledInstruction;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
 
     fn cleanup_paths(paths: &str) {

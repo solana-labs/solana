@@ -1,8 +1,9 @@
 //! A library for building scripts and compiling them into transactions.
 
 use crate::hash::Hash;
+use crate::instruction::{CompiledInstruction, Instruction};
 use crate::pubkey::Pubkey;
-use crate::transaction::{CompiledInstruction, Instruction, Transaction};
+use crate::transaction::Transaction;
 use itertools::Itertools;
 
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
@@ -104,8 +105,8 @@ impl Script {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::instruction::AccountMeta;
     use crate::signature::{Keypair, KeypairUtil};
-    use crate::transaction::AccountMeta;
 
     #[test]
     fn test_transaction_builder_unique_program_ids() {

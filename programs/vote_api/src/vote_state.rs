@@ -7,8 +7,8 @@ use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::{Account, KeyedAccount};
+use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::transaction::InstructionError;
 use std::collections::VecDeque;
 
 // Maximum number of votes to keep around
