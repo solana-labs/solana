@@ -1,12 +1,9 @@
 //! The `vote_transaction` module provides functionality for creating vote transactions.
 
-use crate::id;
 use crate::vote_instruction::{Vote, VoteInstruction};
-use crate::vote_state::VoteState;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::transaction::Transaction;
 
 pub struct VoteTransaction {}
@@ -19,12 +16,13 @@ impl VoteTransaction {
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
-        let vote = Vote { slot };
-        let ix = VoteInstruction::new_vote(staking_account, vote);
-        let mut tx = Transaction::new(vec![ix]);
-        tx.fee = fee;
-        tx.sign(&[authorized_voter_keypair], recent_blockhash);
-        tx
+        let ix = VoteInstruction::new_vote(staking_account, Vote { slot });
+        Transaction::new_signed_instructions(
+            &[authorized_voter_keypair],
+            vec![ix],
+            recent_blockhash,
+            fee,
+        )
     }
 
     /// Fund or create the staking account with lamports
@@ -37,10 +35,7 @@ impl VoteTransaction {
     ) -> Transaction {
         let from_id = from_keypair.pubkey();
         let ixs = VoteInstruction::new_account(&from_id, staker_id, lamports);
-        let mut tx = Transaction::new(ixs);
-        tx.fee = fee;
-        tx.sign(&[from_keypair], recent_blockhash);
-        tx
+        Transaction::new_signed_instructions(&[from_keypair], ixs, recent_blockhash, fee)
     }
 
     /// Fund or create the staking account with lamports
@@ -54,15 +49,17 @@ impl VoteTransaction {
     ) -> Transaction {
         let from_id = from_keypair.pubkey();
         let voter_id = voter_keypair.pubkey();
-        let space = VoteState::max_size() as u64;
-        let create_ix =
-            SystemInstruction::new_program_account(&from_id, &voter_id, lamports, space, &id());
-        let init_ix = VoteInstruction::new_initialize_account(&voter_id);
+
+        let mut ixs = VoteInstruction::new_account(&from_id, &voter_id, lamports);
         let delegate_ix = VoteInstruction::new_delegate_stake(&voter_id, &delegate_id);
-        let mut tx = Transaction::new(vec![create_ix, init_ix, delegate_ix]);
-        tx.fee = fee;
-        tx.sign(&[from_keypair, voter_keypair], recent_blockhash);
-        tx
+        ixs.push(delegate_ix);
+
+        Transaction::new_signed_instructions(
+            &[from_keypair, voter_keypair],
+            ixs,
+            recent_blockhash,
+            fee,
+        )
     }
 
     /// Choose a voter id to accept signed votes from
@@ -73,10 +70,7 @@ impl VoteTransaction {
         fee: u64,
     ) -> Transaction {
         let ix = VoteInstruction::new_authorize_voter(&vote_keypair.pubkey(), authorized_voter_id);
-        let mut tx = Transaction::new(vec![ix]);
-        tx.fee = fee;
-        tx.sign(&[vote_keypair], recent_blockhash);
-        tx
+        Transaction::new_signed_instructions(&[vote_keypair], vec![ix], recent_blockhash, fee)
     }
 
     /// Choose a node id to `delegate` or `assign` this vote account to
@@ -87,9 +81,6 @@ impl VoteTransaction {
         fee: u64,
     ) -> Transaction {
         let ix = VoteInstruction::new_delegate_stake(&vote_keypair.pubkey(), node_id);
-        let mut tx = Transaction::new(vec![ix]);
-        tx.fee = fee;
-        tx.sign(&[vote_keypair], recent_blockhash);
-        tx
+        Transaction::new_signed_instructions(&[vote_keypair], vec![ix], recent_blockhash, fee)
     }
 }
