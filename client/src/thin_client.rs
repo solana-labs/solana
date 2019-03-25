@@ -224,7 +224,7 @@ impl ThinClient {
 
             match response {
                 Ok(value) => {
-                    let ((latest, latest_slot), (root, root_slot)) =
+                    let ((latest, latest_slot), (root, root_slot)): ((String, u64), (String, u64)) =
                         serde_json::from_value(value).unwrap();
                     let latest = bs58::decode(latest).into_vec().unwrap();
                     let latest = Hash::new(&latest);
@@ -250,7 +250,7 @@ impl ThinClient {
             trace!("get_recent_blockhash send_to {}", &self.rpc_addr);
             if let Some(((hash, slot), (root, root_slot))) = self.try_get_recent_blockhash(10) {
                 trace!(
-                    "get_recent_blockhash returned {}",
+                    "get_recent_blockhash returned recent: {},{} root: {},{}",
                     hash,
                     slot,
                     root,

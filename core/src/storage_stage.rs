@@ -252,7 +252,7 @@ impl StorageStage {
             }
         }
 
-        if let Some(blockhash) = blockhash {
+        if let Some(((blockhash, _), _)) = blockhash {
             transaction.sign(&[keypair.as_ref()], blockhash);
 
             if exit.load(Ordering::Relaxed) {
