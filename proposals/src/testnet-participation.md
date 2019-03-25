@@ -31,6 +31,7 @@ set:
 ```bash
 $ export release=0.12.1
 $ export ip=$(dig +short beta.testnet.solana.com)
+$ export USE_INSTALL=1
 ```
 
 #### Obtaining The Software
