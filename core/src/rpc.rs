@@ -90,7 +90,7 @@ impl JsonRpcRequestProcessor {
         let current = Self::bank_blockhash_and_slot(self.bank()?);
         let root = self
             .bank()?
-            .parents
+            .parents()
             .last()
             .map(|b| Self::bank_blockhash_and_slot(b))
             .unwrap_or(current.clone());
