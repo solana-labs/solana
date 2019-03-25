@@ -95,8 +95,8 @@ impl JsonRpcRequestProcessor {
             .map(|b| Self::bank_blockhash_and_slot(b))
             .unwrap_or(current.clone());
         info!(
-            "get_recent_blockhash response current: {:?} root: {:?}",
-            current, root
+            "get_recent_blockhash response current: {:?} root: {:?} length: {}",
+            current, root, self.bank()?.parents().len()
         );
         Ok((current, root))
     }

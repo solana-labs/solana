@@ -8,7 +8,6 @@
 set -e
 
 # Prefer possible `cargo build --all` binaries over PATH binaries
-PATH=$PWD/target/debug:$PATH
 
 ok=true
 for program in solana-{genesis,keygen,fullnode}; do
