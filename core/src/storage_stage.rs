@@ -13,6 +13,7 @@ use bincode::deserialize;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_client::client::create_client_with_timeout;
+use solana_client::thin_client::ThinClient;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
@@ -242,7 +243,8 @@ impl StorageStage {
 
         let mut blockhash = None;
         for _ in 0..10 {
-            if let Some(new_blockhash) = client.try_get_recent_blockhash(1) {
+            if let Some(new_blockhash) = ThinClient::try_get_recent_blockhash(&client.rpc_client, 1)
+            {
                 blockhash = Some(new_blockhash);
                 break;
             }

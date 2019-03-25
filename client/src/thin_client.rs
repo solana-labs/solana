@@ -29,7 +29,7 @@ pub struct ThinClient {
     rpc_addr: SocketAddr,
     transactions_addr: SocketAddr,
     transactions_socket: UdpSocket,
-    rpc_client: RpcClient,
+    pub rpc_client: RpcClient,
 }
 
 impl ThinClient {
@@ -211,12 +211,13 @@ impl ThinClient {
 
     /// Request the last Entry ID from the server without blocking.
     /// Returns the blockhash Hash or None if there was no response from the server.
-    pub fn try_get_recent_blockhash(&mut self, mut num_retries: u64) -> Option<BlockhashInfo> {
+    pub fn try_get_recent_blockhash(
+        rpc_client: &RpcClient,
+        mut num_retries: u64,
+    ) -> Option<BlockhashInfo> {
         loop {
-            trace!("try_get_recent_blockhash send_to {}", &self.rpc_addr);
-            let response =
-                self.rpc_client
-                    .make_rpc_request(1, RpcRequest::GetRecentBlockhash, None);
+            trace!("try_get_recent_blockhash");
+            let response = rpc_client.make_rpc_request(1, RpcRequest::GetRecentBlockhash, None);
 
             match response {
                 Ok(value) => {
@@ -239,7 +240,7 @@ impl ThinClient {
     pub fn get_recent_blockhash(&mut self) -> Hash {
         loop {
             trace!("get_recent_blockhash send_to {}", &self.rpc_addr);
-            if let Some(blockhash_info) = self.try_get_recent_blockhash(10) {
+            if let Some(blockhash_info) = Self::try_get_recent_blockhash(&self.rpc_client, 10) {
                 trace!("get_recent_blockhash returned: {:?}", blockhash_info,);
                 return blockhash_info.recent_hash();
             }

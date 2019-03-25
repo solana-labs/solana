@@ -14,6 +14,7 @@ use solana_client::rpc_mock::{request_airdrop_transaction, MockRpcClient as RpcC
 #[cfg(not(test))]
 use solana_client::rpc_request::RpcClient;
 use solana_client::rpc_request::{get_rpc_request_str, RpcRequest};
+use solana_client::thin_client::ThinClient;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone::DRONE_PORT;
@@ -771,17 +772,13 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
 }
 
 fn get_recent_blockhash(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
-    let result = rpc_client.retry_make_rpc_request(1, &RpcRequest::GetRecentBlockhash, None, 5)?;
-    if result.as_str().is_none() {
+    let result = ThinClient::try_get_recent_blockhash(rpc_client, 5);
+    if result.is_none() {
         Err(WalletError::RpcRequestError(
             "Received bad blockhash".to_string(),
         ))?
     }
-    let blockhash_str = result.as_str().unwrap();
-    let blockhash_vec = bs58::decode(blockhash_str)
-        .into_vec()
-        .map_err(|_| WalletError::RpcRequestError("Received bad blockhash".to_string()))?;
-    Ok(Hash::new(&blockhash_vec))
+    Ok(result.unwrap().recent_hash())
 }
 
 fn get_next_blockhash(
