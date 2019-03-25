@@ -727,7 +727,6 @@ impl AccountsDB {
             .map_or(0, |fork_info| fork_info.transaction_count)
     }
 
-    #[allow(dead_code)]
     fn remove_parents(&self, fork: Fork) -> Vec<Fork> {
         let mut info = self.fork_infos.write().unwrap();
         let fork_info = info.get_mut(&fork).unwrap();
@@ -744,7 +743,6 @@ impl AccountsDB {
             .is_empty()
     }
 
-    #[allow(dead_code)]
     fn get_merged_account_map(
         &self,
         fork: Fork,
@@ -765,7 +763,6 @@ impl AccountsDB {
     }
 
     /// make fork a root, i.e. forget its heritage
-    #[allow(dead_code)]
     fn squash(&self, fork: Fork) {
         let parents = self.remove_parents(fork);
 
@@ -994,7 +991,6 @@ impl Accounts {
 
     /// accounts starts with an empty data structure for every child/fork
     ///   this function squashes all the parents into this instance
-    #[allow(dead_code)]
     pub fn squash(&self, fork: Fork) {
         assert!(!self.account_locks.lock().unwrap().contains_key(&fork));
         self.accounts_db.squash(fork);
