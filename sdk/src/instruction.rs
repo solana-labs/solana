@@ -1,6 +1,7 @@
 //! Defines a composable Instruction type and a memory-efficient CompiledInstruction.
 
 use crate::pubkey::Pubkey;
+use crate::short_vec;
 use crate::system_instruction::SystemError;
 use bincode::serialize;
 use serde::Serialize;
@@ -92,7 +93,7 @@ impl Instruction {
 }
 
 /// Account metadata used to define Instructions
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct AccountMeta {
     /// An account's public key
     pub pubkey: Pubkey,
@@ -112,8 +113,10 @@ pub struct CompiledInstruction {
     /// Index into the transaction program ids array indicating the program account that executes this instruction
     pub program_ids_index: u8,
     /// Ordered indices into the transaction keys array indicating which accounts to pass to the program
+    #[serde(with = "short_vec")]
     pub accounts: Vec<u8>,
     /// The program input data
+    #[serde(with = "short_vec")]
     pub data: Vec<u8>,
 }
 
