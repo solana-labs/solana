@@ -40,6 +40,10 @@ fi
 BENCH_FILE=bench_output.log
 BENCH_ARTIFACT=current_bench_results.log
 
+# Run runtime benches
+_ cargo +$rust_nightly bench --manifest-path runtime/Cargo.toml ${V:+--verbose} \
+  -- -Z unstable-options --format=json | tee "$BENCH_FILE"
+
 # Run core benches
 _ cargo +$rust_nightly bench --manifest-path core/Cargo.toml ${V:+--verbose} \
   -- -Z unstable-options --format=json | tee "$BENCH_FILE"
