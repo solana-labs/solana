@@ -1,6 +1,7 @@
 use crate::bank_forks::BankForks;
 use crate::staking_utils;
 use hashbrown::{HashMap, HashSet};
+use solana_metrics::influxdb;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
@@ -156,6 +157,19 @@ impl Locktower {
     pub fn record_vote(&mut self, slot: u64) -> Option<u64> {
         let root_slot = self.lockouts.root_slot;
         self.lockouts.process_vote(Vote { slot });
+        solana_metrics::submit(
+            influxdb::Point::new("counter-locktower-convergence")
+                .add_field(
+                    "root_slot",
+                    influxdb::Value::Integer(self.lockouts.root_slot.unwrap() as i64),
+                )
+                .add_field("vote", influxdb::Value::Integer(slot as i64))
+                .add_field(
+                    "distance_to_root_slot",
+                    influxdb::Value::Integer((slot - self.lockouts.root_slot.unwrap_or(0)) as i64),
+                )
+                .to_owned(),
+        );
         if root_slot != self.lockouts.root_slot {
             Some(self.lockouts.root_slot.unwrap())
         } else {
