@@ -5,7 +5,6 @@
 
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use bincode::serialize_into;
-use bs58;
 use log::*;
 use serde_json::json;
 use solana_metrics;
@@ -227,8 +226,8 @@ impl ThinClient {
                 Ok(value) => {
                     let ((latest, latest_slot), (root, root_slot)): ((String, u64), (String, u64)) =
                         serde_json::from_value(value).unwrap();
-                    let latest = Hash::from_str(latest).unwrap();
-                    let root = Hash::from_str(root).unwrap();
+                    let latest = Hash::from_str(&latest).unwrap();
+                    let root = Hash::from_str(&root).unwrap();
                     return Some(((latest, latest_slot), (root, root_slot)));
                 }
                 Err(error) => {
