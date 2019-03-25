@@ -197,9 +197,9 @@ impl Locktower {
         self.lockouts.process_vote(Vote { slot });
         solana_metrics::submit(
             influxdb::Point::new("counter-locktower-vote")
-                .add_field("root", influxdb::Value::Integer(slot as i64))
+                .add_field("latest", influxdb::Value::Integer(slot as i64))
                 .add_field(
-                    "latest",
+                    "root",
                     influxdb::Value::Integer(self.lockouts.root_slot.unwrap_or(0) as i64),
                 )
                 .to_owned(),
