@@ -37,7 +37,7 @@ $ export USE_INSTALL=1
 #### Obtaining The Software
 Prebuilt binaries are available for Linux x86_64 systems.  Download and install by running:
 ```bash
-$ wget https://github.com/solana-labs/solana/releases/download/v${release:?}/solana-release-x86_64-unknown-linux-gnu.tar.bz2 -O solana-release.tar.gz
+$ wget https://github.com/solana-labs/solana/releases/download/v${release:?}/solana-release-x86_64-unknown-linux-gnu.tar.bz2 -O solana-release.tar.bz2
 $ tar jxf solana-release.tar.bz2
 $ cd solana-release/
 $ export PATH=$PWD/bin:$PATH
