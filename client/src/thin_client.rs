@@ -226,10 +226,8 @@ impl ThinClient {
                 Ok(value) => {
                     let ((latest, latest_slot), (root, root_slot)): ((String, u64), (String, u64)) =
                         serde_json::from_value(value).unwrap();
-                    let latest = bs58::decode(latest).into_vec().unwrap();
-                    let latest = Hash::new(&latest);
-                    let root = bs58::decode(root).into_vec().unwrap();
-                    let root = Hash::new(&root);
+                    let latest = Hash::from_str(latest).unwrap();
+                    let root = Hash::from_str(root).unwrap();
                     return Some(((latest, latest_slot), (root, root_slot)));
                 }
                 Err(error) => {

@@ -5,6 +5,8 @@ use generic_array::typenum::U32;
 use generic_array::GenericArray;
 use sha2::{Digest, Sha256};
 use std::fmt;
+use std::mem;
+use std::str::FromStr;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Hash(GenericArray<u8, U32>);
@@ -29,6 +31,27 @@ impl Hasher {
         Hash(GenericArray::clone_from_slice(
             self.hasher.result().as_slice(),
         ))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParseHashError {
+    WrongSize,
+    Invalid,
+}
+
+impl FromStr for Hash {
+    type Err = ParseHashError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = bs58::decode(s)
+            .into_vec()
+            .map_err(|_| ParseHashError::Invalid)?;
+        if bytes.len() != mem::size_of::<Self>() {
+            Err(ParseHashError::WrongSize)
+        } else {
+            Ok(Self::new(&bytes))
+        }
     }
 }
 
