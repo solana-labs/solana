@@ -2,7 +2,7 @@
 
 extern crate test;
 
-use solana_runtime::*;
+use solana_runtime::runtime::*;
 use test::Bencher;
 
 #[bench]

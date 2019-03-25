@@ -6,7 +6,7 @@ mod blockhash_queue;
 pub mod bloom;
 pub mod loader_utils;
 mod native_loader;
-mod runtime;
+pub mod runtime;
 mod status_cache;
 mod system_program;
 
