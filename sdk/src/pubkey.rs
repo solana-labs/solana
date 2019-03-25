@@ -65,8 +65,6 @@ mod tests {
         let pubkey = Keypair::new().pubkey();
         let mut pubkey_base58_str = bs58::encode(pubkey.0).into_string();
 
-        dbg!(&pubkey_base58_str);
-
         assert_eq!(pubkey_base58_str.parse::<Pubkey>(), Ok(pubkey));
 
         pubkey_base58_str.push_str(&bs58::encode(pubkey.0).into_string());
