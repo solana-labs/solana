@@ -386,6 +386,11 @@ impl ReplayStage {
                 is_votable
             })
             .filter(|b| {
+                let is_recent_epoch = locktower.is_recent_epoch(b);
+                trace!("bank is is_recent_epoch: {} {}", b.slot(), is_recent_epoch);
+                is_recent_epoch
+            })
+            .filter(|b| {
                 let has_voted = locktower.has_voted(b.slot());
                 trace!("bank is has_voted: {} {}", b.slot(), has_voted);
                 !has_voted

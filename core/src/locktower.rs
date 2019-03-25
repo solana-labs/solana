@@ -142,12 +142,27 @@ impl Locktower {
         stake_lockouts
     }
 
+    pub fn is_recent_epoch(&self, bank: &Bank) -> bool {
+        let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
+        bank_epoch >= self.epoch_stakes.slot
+    }
+
     pub fn update_epoch(&mut self, bank: &Bank) {
+        trace!(
+            "updating bank epoch {} {}",
+            bank.slot(),
+            self.epoch_stakes.slot
+        );
         let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
         if bank_epoch != self.epoch_stakes.slot {
             assert!(
-                bank_epoch > self.epoch_stakes.slot,
+                self.is_recent_epoch(bank),
                 "epoch_stakes cannot move backwards"
+            );
+            info!(
+                "Locktower updated epoch bank {} {}",
+                bank.slot(),
+                self.epoch_stakes.slot
             );
             self.epoch_stakes = EpochStakes::new_from_bank(bank);
         }
