@@ -27,7 +27,8 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::timestamp;
-use solana_vote_api::vote_transaction::VoteTransaction;
+use solana_sdk::transaction::Transaction;
+use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
@@ -325,23 +326,23 @@ pub fn make_active_set_entries(
     let voting_keypair = Keypair::new();
     let vote_account_id = voting_keypair.pubkey();
 
-    let new_vote_account_tx = VoteTransaction::new_account(
-        active_keypair,
+    let new_vote_account_ixs = VoteInstruction::new_account(
+        &active_keypair.pubkey(),
         &vote_account_id,
-        *blockhash,
         stake.saturating_sub(2),
+    );
+    let new_vote_account_tx = Transaction::new_signed_instructions(
+        &[active_keypair.as_ref()],
+        new_vote_account_ixs,
+        *blockhash,
         1,
     );
     let new_vote_account_entry = next_entry_mut(&mut last_entry_hash, 1, vec![new_vote_account_tx]);
 
     // 3) Create vote entry
-    let vote_tx = VoteTransaction::new_vote(
-        &voting_keypair.pubkey(),
-        &voting_keypair,
-        slot_to_vote_on,
-        *blockhash,
-        0,
-    );
+    let vote_ix = VoteInstruction::new_vote(&voting_keypair.pubkey(), Vote::new(slot_to_vote_on));
+    let vote_tx =
+        Transaction::new_signed_instructions(&[&voting_keypair], vec![vote_ix], *blockhash, 0);
     let vote_entry = next_entry_mut(&mut last_entry_hash, 1, vec![vote_tx]);
 
     // 4) Create `num_ending_ticks` empty ticks

@@ -21,7 +21,6 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction::VoteInstruction;
-use solana_vote_api::vote_transaction::VoteTransaction;
 use std::fs::File;
 use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -345,8 +344,7 @@ fn process_configure_staking(
             &authorized_voter_id,
         ));
     }
-    let mut tx = Transaction::new(ixs);
-    tx.sign(&[&config.id], recent_blockhash);
+    let mut tx = Transaction::new_signed_instructions(&[&config.id], ixs, recent_blockhash, 0);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
     Ok(signature_str.to_string())
 }
@@ -358,8 +356,8 @@ fn process_create_staking(
     lamports: u64,
 ) -> ProcessResult {
     let recent_blockhash = rpc_client.get_recent_blockhash()?;
-    let mut tx =
-        VoteTransaction::new_account(&config.id, voting_account_id, recent_blockhash, lamports, 0);
+    let ixs = VoteInstruction::new_account(&config.id.pubkey(), voting_account_id, lamports);
+    let mut tx = Transaction::new_signed_instructions(&[&config.id], ixs, recent_blockhash, 0);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
     Ok(signature_str.to_string())
 }

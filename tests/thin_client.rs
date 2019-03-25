@@ -11,8 +11,8 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_transaction::SystemTransaction;
+use solana_vote_api::vote_instruction::VoteInstruction;
 use solana_vote_api::vote_state::VoteState;
-use solana_vote_api::vote_transaction::VoteTransaction;
 use std::fs::remove_dir_all;
 use std::net::UdpSocket;
 use std::thread::sleep;
@@ -124,8 +124,10 @@ fn test_register_vote_account() {
     let vote_account_id = validator_vote_account_keypair.pubkey();
     let blockhash = client.get_recent_blockhash().unwrap();
 
+    let instructions =
+        VoteInstruction::new_account(&validator_keypair.pubkey(), &vote_account_id, 1);
     let transaction =
-        VoteTransaction::new_account(&validator_keypair, &vote_account_id, blockhash, 1, 1);
+        Transaction::new_signed_instructions(&[&validator_keypair], instructions, blockhash, 1);
     let signature = client.transfer_signed(&transaction).unwrap();
     client.poll_for_signature(&signature).unwrap();
 
