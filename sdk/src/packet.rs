@@ -1,2 +1,3 @@
 /// Maximum over-the-wire size of a Transaction
-pub const PACKET_DATA_SIZE: usize = 512;
+// TODO: Set this back to 512 after shortvec optimization is reinstated.
+pub const PACKET_DATA_SIZE: usize = 522;
