@@ -1,9 +1,8 @@
 //! The `vote_transaction` module provides functionality for creating vote transactions.
 
+use crate::id;
 use crate::vote_instruction::{Vote, VoteInstruction};
 use crate::vote_state::VoteState;
-use crate::{check_id, id};
-use bincode::deserialize;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -92,41 +91,5 @@ impl VoteTransaction {
         tx.fee = fee;
         tx.sign(&[vote_keypair], recent_blockhash);
         tx
-    }
-
-    fn get_vote(tx: &Transaction, ix_index: usize) -> Option<(Pubkey, Vote, Hash)> {
-        if !check_id(&tx.program_id(ix_index)) {
-            return None;
-        }
-        let instruction = deserialize(&tx.data(ix_index)).unwrap();
-        if let VoteInstruction::Vote(vote) = instruction {
-            Some((tx.account_keys[0], vote, tx.recent_blockhash))
-        } else {
-            None
-        }
-    }
-
-    pub fn get_votes(tx: &Transaction) -> Vec<(Pubkey, Vote, Hash)> {
-        (0..tx.instructions.len())
-            .filter_map(|i| Self::get_vote(tx, i))
-            .collect()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_votes() {
-        let keypair = Keypair::new();
-        let slot = 1;
-        let recent_blockhash = Hash::default();
-        let transaction =
-            VoteTransaction::new_vote(&keypair.pubkey(), &keypair, slot, recent_blockhash, 0);
-        assert_eq!(
-            VoteTransaction::get_votes(&transaction),
-            vec![(keypair.pubkey(), Vote::new(slot), recent_blockhash)]
-        );
     }
 }
