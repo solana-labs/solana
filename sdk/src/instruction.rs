@@ -1,6 +1,7 @@
 //! Defines a composable Instruction type and a memory-efficient CompiledInstruction.
 
 use crate::pubkey::Pubkey;
+use crate::shortvec;
 use crate::system_instruction::SystemError;
 use bincode::serialize;
 use serde::Serialize;
@@ -68,16 +69,20 @@ impl InstructionError {
 
 /// An instruction to execute a program
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct GenericInstruction<P, Q> {
+pub struct GenericInstruction<P, Q: Serialize> {
     /// Index into the transaction program ids array indicating the program account that executes this instruction
     pub program_ids_index: P,
+
     /// Ordered indices into the transaction keys array indicating which accounts to pass to the program
+    #[serde(with = "shortvec")]
     pub accounts: Vec<Q>,
+
     /// The program input data
+    #[serde(with = "shortvec")]
     pub data: Vec<u8>,
 }
 
-impl<P, Q> GenericInstruction<P, Q> {
+impl<P, Q: Serialize> GenericInstruction<P, Q> {
     pub fn new<T: Serialize>(program_ids_index: P, data: &T, accounts: Vec<Q>) -> Self {
         let data = serialize(data).unwrap();
         Self {
@@ -89,7 +94,7 @@ impl<P, Q> GenericInstruction<P, Q> {
 }
 
 /// Account metadata used to define Instructions
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AccountMeta {
     /// An account's public key
     pub pubkey: Pubkey,
