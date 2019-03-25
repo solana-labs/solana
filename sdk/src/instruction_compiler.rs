@@ -2,8 +2,8 @@
 
 use crate::hash::Hash;
 use crate::instruction::{CompiledInstruction, Instruction};
+use crate::message::Message;
 use crate::pubkey::Pubkey;
-use crate::transaction::Transaction;
 use itertools::Itertools;
 
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
@@ -81,14 +81,14 @@ impl InstructionCompiler {
     }
 
     /// Return an unsigned transaction with space for requires signatures.
-    pub fn compile(&self) -> Transaction {
+    pub fn compile(&self) -> Message {
         let program_ids = self.program_ids();
         let (mut signed_keys, unsigned_keys) = self.keys();
-        let signed_len = signed_keys.len();
+        let num_signatures = signed_keys.len() as u8;
         signed_keys.extend(&unsigned_keys);
         let instructions = compile_instructions(&self.instructions, &signed_keys, &program_ids);
-        Transaction {
-            signatures: Vec::with_capacity(signed_len),
+        Message {
+            num_signatures,
             account_keys: signed_keys,
             recent_blockhash: Hash::default(),
             fee: 0,
@@ -211,12 +211,12 @@ mod tests {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]);
-        let tx = InstructionCompiler::new(vec![ix]).compile();
-        assert_eq!(tx.signatures.capacity(), 0);
+        let message = InstructionCompiler::new(vec![ix]).compile();
+        assert_eq!(message.num_signatures, 0);
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
-        let tx = InstructionCompiler::new(vec![ix]).compile();
-        assert_eq!(tx.signatures.capacity(), 1);
+        let message = InstructionCompiler::new(vec![ix]).compile();
+        assert_eq!(message.num_signatures, 1);
     }
 
     #[test]
