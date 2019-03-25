@@ -106,9 +106,17 @@ impl VotingKeypair {
 #[cfg(test)]
 pub mod tests {
     use solana_runtime::bank::Bank;
+    use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_api::vote_transaction::VoteTransaction;
+    use solana_sdk::transaction::Transaction;
+    use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
+
+    fn process_instructions<T: KeypairUtil>(bank: &Bank, keypairs: &[&T], ixs: Vec<Instruction>) {
+        let blockhash = bank.last_blockhash();
+        let tx = Transaction::new_signed_instructions(keypairs, ixs, blockhash, 0);
+        bank.process_transaction(&tx).unwrap();
+    }
 
     pub fn new_vote_account(
         from_keypair: &Keypair,
@@ -116,9 +124,8 @@ pub mod tests {
         bank: &Bank,
         lamports: u64,
     ) {
-        let blockhash = bank.last_blockhash();
-        let tx = VoteTransaction::new_account(from_keypair, voting_pubkey, blockhash, lamports, 0);
-        bank.process_transaction(&tx).unwrap();
+        let ixs = VoteInstruction::new_account(&from_keypair.pubkey(), voting_pubkey, lamports);
+        process_instructions(bank, &[from_keypair], ixs);
     }
 
     pub fn new_vote_account_with_delegate(
@@ -128,33 +135,32 @@ pub mod tests {
         bank: &Bank,
         lamports: u64,
     ) {
-        let blockhash = bank.last_blockhash();
-        let tx = VoteTransaction::new_account_with_delegate(
-            from_keypair,
-            voting_keypair,
+        let voting_pubkey = voting_keypair.pubkey();
+        let mut ixs =
+            VoteInstruction::new_account(&from_keypair.pubkey(), &voting_pubkey, lamports);
+        ixs.push(VoteInstruction::new_delegate_stake(
+            &voting_pubkey,
             delegate,
-            blockhash,
-            lamports,
-            0,
-        );
-        bank.process_transaction(&tx).unwrap();
+        ));
+        process_instructions(bank, &[from_keypair, voting_keypair], ixs);
     }
 
     pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot: u64) {
-        let blockhash = bank.last_blockhash();
-        let tx =
-            VoteTransaction::new_vote(&voting_keypair.pubkey(), voting_keypair, slot, blockhash, 0);
-        bank.process_transaction(&tx).unwrap();
+        let ix = VoteInstruction::new_vote(&voting_keypair.pubkey(), Vote::new(slot));
+        process_instructions(bank, &[voting_keypair], vec![ix]);
     }
 
     pub fn new_vote_account_with_vote<T: KeypairUtil>(
-        from_keypair: &Keypair,
+        from_keypair: &T,
         voting_keypair: &T,
         bank: &Bank,
         lamports: u64,
         slot: u64,
     ) {
-        new_vote_account(from_keypair, &voting_keypair.pubkey(), bank, lamports);
-        push_vote(voting_keypair, bank, slot);
+        let voting_pubkey = voting_keypair.pubkey();
+        let mut ixs =
+            VoteInstruction::new_account(&from_keypair.pubkey(), &voting_pubkey, lamports);
+        ixs.push(VoteInstruction::new_vote(&voting_pubkey, Vote::new(slot)));
+        process_instructions(bank, &[from_keypair, voting_keypair], ixs);
     }
 }

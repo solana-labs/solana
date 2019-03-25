@@ -14,8 +14,9 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
+use solana_sdk::transaction::Transaction;
+use solana_vote_api::vote_instruction::VoteInstruction;
 use solana_vote_api::vote_state::VoteState;
-use solana_vote_api::vote_transaction::VoteTransaction;
 use std::collections::HashMap;
 use std::fs::remove_dir_all;
 use std::io::{Error, ErrorKind, Result};
@@ -295,11 +296,12 @@ impl LocalCluster {
         // Create the vote account if necessary
         if client.poll_get_balance(&vote_account_pubkey).unwrap_or(0) == 0 {
             // 1) Create vote account
-            let mut transaction = VoteTransaction::new_account(
-                from_account,
-                &vote_account_pubkey,
+            let instructions =
+                VoteInstruction::new_account(&from_account.pubkey(), &vote_account_pubkey, amount);
+            let mut transaction = Transaction::new_signed_instructions(
+                &[from_account.as_ref()],
+                instructions,
                 client.get_recent_blockhash().unwrap(),
-                amount,
                 1,
             );
 
@@ -311,11 +313,14 @@ impl LocalCluster {
                 .expect("get balance");
 
             // 2) Set delegate for new vote account
-            let mut transaction = VoteTransaction::delegate_vote_account(
-                vote_account,
+            let vote_instruction =
+                VoteInstruction::new_delegate_stake(&vote_account_pubkey, &delegate_id);
+
+            let mut transaction = Transaction::new_signed_instructions(
+                &[vote_account],
+                vec![vote_instruction],
                 client.get_recent_blockhash().unwrap(),
-                &delegate_id,
-                0,
+                1,
             );
 
             client

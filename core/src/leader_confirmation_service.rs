@@ -119,7 +119,8 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::timing::MAX_RECENT_BLOCKHASHES;
-    use solana_vote_api::vote_transaction::VoteTransaction;
+    use solana_sdk::transaction::Transaction;
+    use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
     use std::sync::Arc;
 
     #[test]
@@ -177,13 +178,10 @@ mod tests {
 
         // Get another validator to vote, so we now have 2/3 consensus
         let voting_keypair = &vote_accounts[7].0;
-        let vote_tx = VoteTransaction::new_vote(
-            &voting_keypair.pubkey(),
-            voting_keypair,
-            MAX_RECENT_BLOCKHASHES as u64,
-            blockhash,
-            0,
-        );
+        let vote = Vote::new(MAX_RECENT_BLOCKHASHES as u64);
+        let vote_ix = VoteInstruction::new_vote(&voting_keypair.pubkey(), vote);
+        let vote_tx =
+            Transaction::new_signed_instructions(&[voting_keypair], vec![vote_ix], blockhash, 0);
         bank.process_transaction(&vote_tx).unwrap();
 
         LeaderConfirmationService::compute_confirmation(&bank, &mut last_confirmation_time);

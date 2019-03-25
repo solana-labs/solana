@@ -440,7 +440,7 @@ mod tests {
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
-    use solana_vote_api::vote_transaction::VoteTransaction;
+    use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     fn create_sample_payment(keypair: &Keypair, hash: Hash) -> Transaction {
@@ -458,6 +458,12 @@ mod tests {
     fn create_sample_signature(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
         let ix = BudgetInstruction::new_apply_signature(&pubkey, &pubkey, &pubkey);
+        Transaction::new_signed_instructions(&[keypair], vec![ix], hash, 0)
+    }
+
+    fn create_sample_vote(keypair: &Keypair, hash: Hash) -> Transaction {
+        let pubkey = keypair.pubkey();
+        let ix = VoteInstruction::new_vote(&pubkey, Vote::new(1));
         Transaction::new_signed_instructions(&[keypair], vec![ix], hash, 0)
     }
 
@@ -564,7 +570,7 @@ mod tests {
         let one = hash(&zero.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
-        let tx0 = VoteTransaction::new_vote(&vote_account.pubkey(), &vote_account, 1, one, 1);
+        let tx0 = create_sample_vote(&vote_account, one);
         let tx1 = create_sample_timestamp(&keypair, one);
         //
         // TODO: this magic number and the mix of transaction types
@@ -623,8 +629,7 @@ mod tests {
         let next_hash = solana_sdk::hash::hash(&hash.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
-        let tx_small =
-            VoteTransaction::new_vote(&vote_account.pubkey(), &vote_account, 1, next_hash, 2);
+        let tx_small = create_sample_vote(&vote_account, next_hash);
         let tx_large = create_sample_payment(&keypair, next_hash);
 
         let tx_small_size = tx_small.serialized_size().unwrap() as usize;

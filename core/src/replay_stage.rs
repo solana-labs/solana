@@ -19,7 +19,8 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::KeypairUtil;
 use solana_sdk::timing::{self, duration_as_ms};
-use solana_vote_api::vote_transaction::VoteTransaction;
+use solana_sdk::transaction::Transaction;
+use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
@@ -297,11 +298,10 @@ impl ReplayStage {
         T: 'static + KeypairUtil + Send + Sync,
     {
         if let Some(ref voting_keypair) = voting_keypair {
-            let keypair = voting_keypair.as_ref();
-            let vote = VoteTransaction::new_vote(
-                &vote_account,
-                keypair,
-                bank.slot(),
+            let vote_ix = VoteInstruction::new_vote(&vote_account, Vote::new(bank.slot()));
+            let vote_tx = Transaction::new_signed_instructions(
+                &[voting_keypair.as_ref()],
+                vec![vote_ix],
                 bank.last_blockhash(),
                 0,
             );
@@ -310,7 +310,7 @@ impl ReplayStage {
                 Self::handle_new_root(&bank_forks, progress);
             }
             locktower.update_epoch(&bank);
-            cluster_info.write().unwrap().push_vote(vote);
+            cluster_info.write().unwrap().push_vote(vote_tx);
         }
     }
 
@@ -606,10 +606,14 @@ mod test {
                 &poh_recorder,
             );
 
-            let keypair = voting_keypair.as_ref();
-            let vote =
-                VoteTransaction::new_vote(&keypair.pubkey(), keypair, 0, bank.last_blockhash(), 0);
-            cluster_info_me.write().unwrap().push_vote(vote);
+            let vote_ix = VoteInstruction::new_vote(&voting_keypair.pubkey(), Vote::new(0));
+            let vote_tx = Transaction::new_signed_instructions(
+                &[voting_keypair.as_ref()],
+                vec![vote_ix],
+                bank.last_blockhash(),
+                0,
+            );
+            cluster_info_me.write().unwrap().push_vote(vote_tx);
 
             info!("Send ReplayStage an entry, should see it on the ledger writer receiver");
             let next_tick = create_ticks(1, bank.last_blockhash());
