@@ -81,9 +81,20 @@ impl JsonRpcRequestProcessor {
         Ok(val)
     }
 
-    fn get_recent_blockhash(&self) -> Result<String> {
-        let id = self.bank()?.last_blockhash();
-        Ok(bs58::encode(id).into_string())
+    fn bank_blockhash_and_slot(bank: &Bank) -> (String, u64) {
+        let id = bank.last_blockhash();
+        (bs58::encode(id).into_string(), bank.slot())
+    }
+
+    fn get_recent_blockhash(&self) -> Result<((String, u64), (String, u64))> {
+        let current = Self::bank_blockhash_and_slot(self.bank()?);
+        let root = self
+            .bank()?
+            .parents
+            .last()
+            .map(|b| Self::bank_blockhash_and_slot(b))
+            .unwrap_or(current.clone());
+        Ok((current, root))
     }
 
     pub fn get_signature_status(&self, signature: Signature) -> Option<bank::Result<()>> {
@@ -182,7 +193,7 @@ pub trait RpcSol {
     fn get_balance(&self, _: Self::Metadata, _: String) -> Result<u64>;
 
     #[rpc(meta, name = "getRecentBlockhash")]
-    fn get_recent_blockhash(&self, _: Self::Metadata) -> Result<String>;
+    fn get_recent_blockhash(&self, _: Self::Metadata) -> Result<((String, u64), (String, u64))>;
 
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(&self, _: Self::Metadata, _: String) -> Result<RpcSignatureStatus>;
@@ -238,20 +249,12 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.read().unwrap().get_balance(&pubkey)
     }
 
-    fn blockhash(bank: &Bank) -> (String, u64) {
-        let id = self.bank().last_blockhash();
-        (bs58::encode(id).into_string(), bank.slot())
-    }
-
     fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<((String, u64), (String, u64))> {
-        let current = Self::blockhash(self.bank());
-        let root = self
-            .bank()
-            .parents
-            .last()
-            .map(|b| Self::blockhash(b))
-            .unwrap_or(current.clone());
-        (current, root)
+        info!("get_recent_blockhash request received");
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_recent_blockhash()
     }
 
     fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus> {
