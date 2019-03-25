@@ -212,7 +212,10 @@ impl ThinClient {
 
     /// Request the last Entry ID from the server without blocking.
     /// Returns the blockhash Hash or None if there was no response from the server.
-    pub fn try_get_recent_blockhash(&mut self, mut num_retries: u64) -> Option<Hash> {
+    pub fn try_get_recent_blockhash(
+        &mut self,
+        mut num_retries: u64,
+    ) -> Option<((Hash, u64), (Hash, u64))> {
         loop {
             trace!("try_get_recent_blockhash send_to {}", &self.rpc_addr);
             let response =
@@ -221,9 +224,13 @@ impl ThinClient {
 
             match response {
                 Ok(value) => {
-                    let blockhash_str = value.as_str().unwrap();
-                    let blockhash_vec = bs58::decode(blockhash_str).into_vec().unwrap();
-                    return Some(Hash::new(&blockhash_vec));
+                    let ((latest, latest_slot), (root, root_slot)) =
+                        serde_json::from_value(value).unwrap();
+                    let latest = bs58::decode(latest).into_vec().unwrap();
+                    let latest = Hash::new(&latest);
+                    let root = bs58::decode(root).into_vec().unwrap();
+                    let root = Hash::new(&root);
+                    return Some(((latest, latest_slot), (root, root_slot)));
                 }
                 Err(error) => {
                     debug!("thin_client get_recent_blockhash error: {:?}", error);
@@ -241,7 +248,14 @@ impl ThinClient {
     pub fn get_recent_blockhash(&mut self) -> Hash {
         loop {
             trace!("get_recent_blockhash send_to {}", &self.rpc_addr);
-            if let Some(hash) = self.try_get_recent_blockhash(10) {
+            if let Some(((hash, slot), (root, root_slot))) = self.try_get_recent_blockhash(10) {
+                trace!(
+                    "get_recent_blockhash returned {}",
+                    hash,
+                    slot,
+                    root,
+                    root_slot
+                );
                 return hash;
             }
         }
