@@ -10,11 +10,8 @@ use chrono::prelude::Utc;
 use rayon::prelude::*;
 use solana_budget_api::budget_instruction::BudgetInstruction;
 use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
-use solana_vote_api::vote_instruction::Vote;
-use solana_vote_api::vote_transaction::VoteTransaction;
 use std::borrow::Borrow;
 use std::mem::size_of;
 use std::sync::mpsc::{Receiver, Sender};
@@ -209,7 +206,6 @@ pub trait EntrySlice {
     fn to_blobs(&self) -> Vec<Blob>;
     fn to_single_entry_blobs(&self) -> Vec<Blob>;
     fn to_single_entry_shared_blobs(&self) -> Vec<SharedBlob>;
-    fn votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
 impl EntrySlice for [Entry] {
@@ -259,17 +255,6 @@ impl EntrySlice for [Entry] {
 
     fn to_single_entry_blobs(&self) -> Vec<Blob> {
         self.iter().map(|entry| entry.to_blob()).collect()
-    }
-
-    fn votes(&self) -> Vec<(Pubkey, Vote, Hash)> {
-        self.iter()
-            .flat_map(|entry| {
-                entry
-                    .transactions
-                    .iter()
-                    .flat_map(VoteTransaction::get_votes)
-            })
-            .collect()
     }
 }
 
@@ -415,7 +400,7 @@ pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
 
 #[cfg(test)]
 pub fn make_consecutive_blobs(
-    id: &Pubkey,
+    id: &solana_sdk::pubkey::Pubkey,
     num_blobs_to_make: u64,
     start_height: u64,
     start_hash: Hash,
@@ -455,6 +440,7 @@ mod tests {
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
+    use solana_vote_api::vote_transaction::VoteTransaction;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     fn create_sample_payment(keypair: &Keypair, hash: Hash) -> Transaction {
