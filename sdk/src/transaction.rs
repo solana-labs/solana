@@ -2,7 +2,6 @@
 
 use crate::hash::{Hash, Hasher};
 use crate::instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError};
-use crate::instruction_compiler::InstructionCompiler;
 use crate::message::Message;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::pubkey::Pubkey;
@@ -73,7 +72,7 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn new_message(message: Message) -> Self {
+    fn new_with_message(message: Message) -> Self {
         Self {
             signatures: Vec::with_capacity(message.num_signatures as usize),
             account_keys: message.account_keys,
@@ -85,8 +84,8 @@ impl Transaction {
     }
 
     pub fn new(instructions: Vec<Instruction>) -> Self {
-        let message = InstructionCompiler::new(instructions).compile();
-        Self::new_message(message)
+        let message = Message::new(instructions);
+        Self::new_with_message(message)
     }
 
     pub fn new_signed_instructions<T: KeypairUtil>(
