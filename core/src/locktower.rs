@@ -1,6 +1,7 @@
 use crate::bank_forks::BankForks;
 use crate::staking_utils;
 use hashbrown::{HashMap, HashSet};
+use solana_metrics::influxdb;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
@@ -14,6 +15,7 @@ pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
 pub struct EpochStakes {
     slot: u64,
     stakes: HashMap<Pubkey, u64>,
+    self_staked: u64,
     total_staked: u64,
 }
 
@@ -32,16 +34,22 @@ pub struct Locktower {
 }
 
 impl EpochStakes {
-    pub fn new(slot: u64, stakes: HashMap<Pubkey, u64>) -> Self {
+    pub fn new(slot: u64, stakes: HashMap<Pubkey, u64>, self_id: Pubkey) -> Self {
         let total_staked = stakes.values().sum();
+        let self_staked = *stakes.get(self_id).unwrap_or(&0);
         Self {
             slot,
             stakes,
             total_staked,
+            self_staked,
         }
     }
     pub fn new_for_tests(lamports: u64) -> Self {
-        Self::new(0, vec![(Pubkey::default(), lamports)].into_iter().collect())
+        Self::new(
+            0,
+            vec![(Pubkey::default(), lamports)].into_iter().collect(),
+            Pubkey::default(),
+        )
     }
     pub fn new_from_stake_accounts(slot: u64, accounts: &[(Pubkey, Account)]) -> Self {
         let stakes = accounts.iter().map(|(k, v)| (*k, v.lamports)).collect();
@@ -51,7 +59,7 @@ impl EpochStakes {
         let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
         let stakes = staking_utils::vote_account_balances_at_epoch(bank, bank_epoch)
             .expect("voting require a bank with stakes");
-        Self::new(bank_epoch, stakes)
+        Self::new(bank_epoch, stakes, bank.collector_id())
     }
 }
 
@@ -165,12 +173,37 @@ impl Locktower {
                 self.epoch_stakes.slot
             );
             self.epoch_stakes = EpochStakes::new_from_bank(bank);
+            solana_metrics::submit(
+                influxdb::Point::new("counter-locktower-epoch")
+                    .add_field(
+                        "slot",
+                        influxdb::Value::Integer(self.epoch_stakes.slot as i64),
+                    )
+                    .add_field(
+                        "self_staked",
+                        influxdb::Value::Integer(self.epoch_stakes.self_staked as i64),
+                    )
+                    .add_field(
+                        "total_staked",
+                        influxdb::Value::Integer(self.epoch_stakes.total_staked as i64),
+                    )
+                    .to_owned(),
+            );
         }
     }
 
     pub fn record_vote(&mut self, slot: u64) -> Option<u64> {
         let root_slot = self.lockouts.root_slot;
         self.lockouts.process_vote(Vote { slot });
+        solana_metrics::submit(
+            influxdb::Point::new("counter-locktower-vote")
+                .add_field("root", influxdb::Value::Integer(slot as i64))
+                .add_field(
+                    "latest",
+                    influxdb::Value::Integer(self.lockouts.root_slot.unwrap_or(0) as i64),
+                )
+                .to_owned(),
+        );
         if root_slot != self.lockouts.root_slot {
             Some(self.lockouts.root_slot.unwrap())
         } else {
