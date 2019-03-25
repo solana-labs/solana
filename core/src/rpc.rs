@@ -238,12 +238,20 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.read().unwrap().get_balance(&pubkey)
     }
 
-    fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<String> {
-        info!("get_recent_blockhash rpc request received");
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_recent_blockhash()
+    fn blockhash(bank: &Bank) -> (String, u64) {
+        let id = self.bank().last_blockhash();
+        (bs58::encode(id).into_string(), bank.slot())
+    }
+
+    fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<((String, u64), (String, u64))> {
+        let current = Self::blockhash(self.bank());
+        let root = self
+            .bank()
+            .parents
+            .last()
+            .map(|b| Self::blockhash(b))
+            .unwrap_or(current.clone());
+        (current, root)
     }
 
     fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus> {
