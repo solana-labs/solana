@@ -34,9 +34,9 @@ pub struct Locktower {
 }
 
 impl EpochStakes {
-    pub fn new(slot: u64, stakes: HashMap<Pubkey, u64>, self_id: Pubkey) -> Self {
+    pub fn new(slot: u64, stakes: HashMap<Pubkey, u64>, self_id: &Pubkey) -> Self {
         let total_staked = stakes.values().sum();
-        let self_staked = *stakes.get(self_id).unwrap_or(&0);
+        let self_staked = *stakes.get(&self_id).unwrap_or(&0);
         Self {
             slot,
             stakes,
@@ -48,18 +48,18 @@ impl EpochStakes {
         Self::new(
             0,
             vec![(Pubkey::default(), lamports)].into_iter().collect(),
-            Pubkey::default(),
+            &Pubkey::default(),
         )
     }
     pub fn new_from_stake_accounts(slot: u64, accounts: &[(Pubkey, Account)]) -> Self {
         let stakes = accounts.iter().map(|(k, v)| (*k, v.lamports)).collect();
-        Self::new(slot, stakes)
+        Self::new(slot, stakes, &accounts[0].0)
     }
     pub fn new_from_bank(bank: &Bank) -> Self {
         let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
         let stakes = staking_utils::vote_account_balances_at_epoch(bank, bank_epoch)
             .expect("voting require a bank with stakes");
-        Self::new(bank_epoch, stakes, bank.collector_id())
+        Self::new(bank_epoch, stakes, &bank.collector_id())
     }
 }
 
