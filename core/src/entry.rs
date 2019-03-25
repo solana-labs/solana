@@ -105,7 +105,7 @@ impl Entry {
     pub fn serialized_size(transactions: &[Transaction]) -> u64 {
         let txs_size: u64 = transactions
             .iter()
-            .map(|tx| tx.serialized_size().unwrap())
+            .map(|tx| serialized_size(tx).unwrap())
             .sum();
         // num_hashes   +    hash  +              txs
         (2 * size_of::<u64>() + size_of::<Hash>()) as u64 + txs_size
@@ -402,7 +402,7 @@ pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
     let ix = BudgetInstruction::new_apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
     let tx = Transaction::new_signed_instructions(&[&keypair], vec![ix], one, 0);
 
-    let serialized_size = tx.serialized_size().unwrap();
+    let serialized_size = serialized_size(&tx).unwrap();
     let num_txs = BLOB_DATA_SIZE / serialized_size as usize;
     let txs = vec![tx; num_txs];
     let entry = next_entries(&one, 1, txs)[0].clone();
@@ -643,8 +643,8 @@ mod tests {
         let tx_small = create_sample_vote(&vote_account, next_hash);
         let tx_large = create_sample_payment(&keypair, next_hash);
 
-        let tx_small_size = tx_small.serialized_size().unwrap() as usize;
-        let tx_large_size = tx_large.serialized_size().unwrap() as usize;
+        let tx_small_size = serialized_size(&tx_small).unwrap() as usize;
+        let tx_large_size = serialized_size(&tx_large).unwrap() as usize;
         let entry_size = serialized_size(&Entry {
             num_hashes: 0,
             hash: Hash::default(),

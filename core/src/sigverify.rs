@@ -6,9 +6,9 @@
 
 use crate::packet::{Packet, SharedPackets};
 use crate::result::Result;
+use byteorder::{LittleEndian, ReadBytesExt};
 use solana_metrics::counter::Counter;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::shortvec::decode_len;
 use solana_sdk::signature::Signature;
 #[cfg(test)]
 use solana_sdk::transaction::Transaction;
@@ -124,25 +124,17 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
 }
 
 pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u32, u32) {
-    // Read in the size of signatures array
-    let start_offset = TX_OFFSET + size_of::<u64>();
-    let mut rd = Cursor::new(&packet.data[start_offset..]);
-    let sig_len = decode_len(&mut rd).unwrap();
-    let sig_size = rd.position() as usize;
-    let msg_start_offset = start_offset + sig_size + sig_len * size_of::<Signature>();
-    let mut rd = Cursor::new(&packet.data[msg_start_offset..]);
-    let _ = decode_len(&mut rd).unwrap();
-    let pubkey_size = rd.position() as usize;
-    let pubkey_offset = current_offset as usize + msg_start_offset + pubkey_size;
+    // Read in u64 as the size of signatures array
+    let mut rdr = Cursor::new(&packet.data[TX_OFFSET..size_of::<u64>()]);
+    let sig_len = rdr.read_u64::<LittleEndian>().unwrap() as u32;
 
-    let sig_start = start_offset + current_offset as usize + sig_size;
+    let msg_start_offset =
+        current_offset + size_of::<u64>() as u32 + sig_len * size_of::<Signature>() as u32;
+    let pubkey_offset = msg_start_offset + size_of::<u64>() as u32;
 
-    (
-        sig_len as u32,
-        sig_start as u32,
-        current_offset + msg_start_offset as u32,
-        pubkey_offset as u32,
-    )
+    let sig_start = TX_OFFSET as u32 + size_of::<u64>() as u32;
+
+    (sig_len, sig_start, msg_start_offset, pubkey_offset)
 }
 
 pub fn generate_offsets(batches: &[SharedPackets]) -> Result<TxOffsets> {
@@ -157,14 +149,14 @@ pub fn generate_offsets(batches: &[SharedPackets]) -> Result<TxOffsets> {
         p.read().unwrap().packets.iter().for_each(|packet| {
             let current_offset = current_packet as u32 * size_of::<Packet>() as u32;
 
-            let (sig_len, sig_start, msg_start_offset, pubkey_offset) =
+            let (sig_len, _sig_start, msg_start_offset, pubkey_offset) =
                 get_packet_offsets(packet, current_offset);
             let mut pubkey_offset = pubkey_offset;
 
             sig_lens.push(sig_len);
 
             trace!("pubkey_offset: {}", pubkey_offset);
-            let mut sig_offset = sig_start;
+            let mut sig_offset = current_offset + size_of::<u64>() as u32;
             for _ in 0..sig_len {
                 signature_offsets.push(sig_offset);
                 sig_offset += size_of::<Signature>() as u32;
@@ -337,7 +329,7 @@ mod tests {
     use bincode::{deserialize, serialize};
     use solana_sdk::transaction::Transaction;
 
-    const SIG_OFFSET: usize = std::mem::size_of::<u64>() + 1;
+    const SIG_OFFSET: usize = std::mem::size_of::<u64>();
 
     pub fn memfind<A: Eq>(a: &[A], b: &[A]) -> Option<usize> {
         assert!(a.len() >= b.len());
@@ -424,11 +416,11 @@ mod tests {
 
     #[test]
     fn test_get_packet_offsets() {
-        assert_eq!(get_packet_offsets_from_tx(test_tx(), 0), (1, 9, 64, 1));
-        assert_eq!(get_packet_offsets_from_tx(test_tx(), 100), (1, 9, 64, 1));
+        assert_eq!(get_packet_offsets_from_tx(test_tx(), 0), (1, 8, 64, 8));
+        assert_eq!(get_packet_offsets_from_tx(test_tx(), 100), (1, 8, 64, 8));
         assert_eq!(
             get_packet_offsets_from_tx(test_multisig_tx(), 0),
-            (2, 9, 128, 1)
+            (2, 8, 128, 8)
         );
     }
 
