@@ -1,9 +1,12 @@
 use log::*;
 use reqwest;
 use reqwest::header::CONTENT_TYPE;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use solana_sdk::hash::Hash;
 use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND};
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt};
@@ -14,6 +17,21 @@ use solana_sdk::pubkey::Pubkey;
 pub struct RpcClient {
     pub client: reqwest::Client,
     pub addr: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlockhashInfo {
+    pub recent: String,
+    pub recent_slot: u64,
+    pub root: String,
+    pub root_slot: u64,
+    pub root_distance: u64,
+}
+
+impl BlockhashInfo {
+    pub fn recent_hash(&self) -> Hash {
+        Hash::from_str(&self.recent).unwrap()
+    }
 }
 
 impl RpcClient {

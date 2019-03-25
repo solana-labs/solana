@@ -8,6 +8,7 @@ use bincode::{deserialize, serialize};
 use bs58;
 use jsonrpc_core::{Error, ErrorCode, Metadata, Result};
 use jsonrpc_derive::rpc;
+use solana_client::rpc_request::BlockhashInfo;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_runtime::bank::{self, Bank, BankError};
 use solana_sdk::account::Account;
@@ -86,19 +87,24 @@ impl JsonRpcRequestProcessor {
         (bs58::encode(id).into_string(), bank.slot())
     }
 
-    fn get_recent_blockhash(&self) -> Result<((String, u64), (String, u64))> {
-        let current = Self::bank_blockhash_and_slot(self.bank()?);
+    fn get_recent_blockhash(&self) -> Result<BlockhashInfo> {
+        let recent = Self::bank_blockhash_and_slot(self.bank()?);
         let root = self
             .bank()?
             .parents()
             .last()
             .map(|b| Self::bank_blockhash_and_slot(b))
-            .unwrap_or(current.clone());
-        info!(
-            "get_recent_blockhash response current: {:?} root: {:?} length: {}",
-            current, root, self.bank()?.parents().len()
-        );
-        Ok((current, root))
+            .unwrap_or(recent.clone());
+        let info = BlockhashInfo {
+            recent: recent.0,
+            recent_slot: recent.1,
+            root: root.0,
+            root_slot: root.1,
+            root_distance: self.bank()?.parents().len() as u64,
+        };
+
+        info!("get_recent_blockhash response recent: {:?}", info,);
+        Ok(info)
     }
 
     pub fn get_signature_status(&self, signature: Signature) -> Option<bank::Result<()>> {
@@ -197,7 +203,7 @@ pub trait RpcSol {
     fn get_balance(&self, _: Self::Metadata, _: String) -> Result<u64>;
 
     #[rpc(meta, name = "getRecentBlockhash")]
-    fn get_recent_blockhash(&self, _: Self::Metadata) -> Result<((String, u64), (String, u64))>;
+    fn get_recent_blockhash(&self, _: Self::Metadata) -> Result<BlockhashInfo>;
 
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(&self, _: Self::Metadata, _: String) -> Result<RpcSignatureStatus>;
@@ -253,7 +259,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.read().unwrap().get_balance(&pubkey)
     }
 
-    fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<((String, u64), (String, u64))> {
+    fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<BlockhashInfo> {
         info!("get_recent_blockhash request received");
         meta.request_processor
             .read()

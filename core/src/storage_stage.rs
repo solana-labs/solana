@@ -252,8 +252,8 @@ impl StorageStage {
             }
         }
 
-        if let Some(((blockhash, _), _)) = blockhash {
-            transaction.sign(&[keypair.as_ref()], blockhash);
+        if let Some(blockhash) = blockhash {
+            transaction.sign(&[keypair.as_ref()], blockhash.recent_hash());
 
             if exit.load(Ordering::Relaxed) {
                 Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;

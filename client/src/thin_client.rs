@@ -3,7 +3,7 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
+use crate::rpc_request::{BlockhashInfo, RpcClient, RpcRequest, RpcRequestHandler};
 use bincode::serialize_into;
 use log::*;
 use serde_json::json;
@@ -20,7 +20,6 @@ use solana_sdk::transaction::Transaction;
 use std;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
-use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
@@ -212,10 +211,7 @@ impl ThinClient {
 
     /// Request the last Entry ID from the server without blocking.
     /// Returns the blockhash Hash or None if there was no response from the server.
-    pub fn try_get_recent_blockhash(
-        &mut self,
-        mut num_retries: u64,
-    ) -> Option<((Hash, u64), (Hash, u64))> {
+    pub fn try_get_recent_blockhash(&mut self, mut num_retries: u64) -> Option<BlockhashInfo> {
         loop {
             trace!("try_get_recent_blockhash send_to {}", &self.rpc_addr);
             let response =
@@ -224,11 +220,8 @@ impl ThinClient {
 
             match response {
                 Ok(value) => {
-                    let ((latest, latest_slot), (root, root_slot)): ((String, u64), (String, u64)) =
-                        serde_json::from_value(value).unwrap();
-                    let latest = Hash::from_str(&latest).unwrap();
-                    let root = Hash::from_str(&root).unwrap();
-                    return Some(((latest, latest_slot), (root, root_slot)));
+                    let blockhash_info: BlockhashInfo = serde_json::from_value(value).unwrap();
+                    return Some(blockhash_info);
                 }
                 Err(error) => {
                     debug!("thin_client get_recent_blockhash error: {:?}", error);
@@ -246,15 +239,9 @@ impl ThinClient {
     pub fn get_recent_blockhash(&mut self) -> Hash {
         loop {
             trace!("get_recent_blockhash send_to {}", &self.rpc_addr);
-            if let Some(((hash, slot), (root, root_slot))) = self.try_get_recent_blockhash(10) {
-                trace!(
-                    "get_recent_blockhash returned recent: {},{} root: {},{}",
-                    hash,
-                    slot,
-                    root,
-                    root_slot
-                );
-                return hash;
+            if let Some(blockhash_info) = self.try_get_recent_blockhash(10) {
+                trace!("get_recent_blockhash returned: {:?}", blockhash_info,);
+                return blockhash_info.recent_hash();
             }
         }
     }
