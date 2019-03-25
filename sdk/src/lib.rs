@@ -3,7 +3,6 @@ pub mod bpf_loader;
 pub mod genesis_block;
 pub mod hash;
 pub mod instruction;
-mod instruction_compiler;
 pub mod loader_instruction;
 mod message;
 pub mod native_loader;
