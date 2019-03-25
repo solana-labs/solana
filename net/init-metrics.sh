@@ -12,11 +12,12 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [-e] [-d] [username]
+usage: $0 [-e] [-d] [-c] [username]
 
 Creates a testnet dev metrics database
 
   username        InfluxDB user with access to create a new database
+  -c              Use Influx Cloud instance
   -d              Delete the database instead of creating it
   -e              Assume database already exists and SOLANA_METRICS_CONFIG is
                   defined in the environment already
@@ -29,11 +30,15 @@ loadConfigFile
 
 useEnv=false
 delete=false
-while getopts "hde" opt; do
+host="https://metrics.solana.com:8086"
+while getopts "hcde" opt; do
   case $opt in
   h|\?)
     usage
     exit 0
+    ;;
+  c)
+    host="https://clocktower-f1d56615.influxcloud.net:8086"
     ;;
   d)
     delete=true
@@ -62,7 +67,7 @@ else
   query() {
     echo "$*"
     curl -XPOST \
-      "https://metrics.solana.com:8086/query?u=${username}&p=${password}" \
+      "$host/query?u=${username}&p=${password}" \
       --data-urlencode "q=$*"
   }
 
@@ -73,7 +78,7 @@ else
   query "GRANT READ ON \"$netBasename\" TO \"ro\""
   query "GRANT WRITE ON \"$netBasename\" TO \"scratch_writer\""
 
-  SOLANA_METRICS_CONFIG="db=$netBasename,u=scratch_writer,p=topsecret"
+  SOLANA_METRICS_CONFIG="host=$host,db=$netBasename,u=scratch_writer,p=topsecret"
 fi
 
 echo "export SOLANA_METRICS_CONFIG=\"$SOLANA_METRICS_CONFIG\"" >> "$configFile"
