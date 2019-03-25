@@ -5,6 +5,7 @@ pub mod hash;
 pub mod instruction;
 mod instruction_compiler;
 pub mod loader_instruction;
+mod message;
 pub mod native_loader;
 pub mod native_program;
 pub mod packet;
