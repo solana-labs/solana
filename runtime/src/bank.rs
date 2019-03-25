@@ -892,7 +892,7 @@ impl Bank {
 
     pub fn is_votable(&self) -> bool {
         let max_tick_height = (self.slot + 1) * self.ticks_per_slot - 1;
-        self.is_delta.load(Ordering::Relaxed) && self.tick_height() == max_tick_height
+        self.is_delta.load(Ordering::Relaxed) && self.tick_height() == max_tick_height || (self.slot() == 0 && self.is_frozen())
     }
 
     pub fn is_in_subtree_of(&self, parent: u64) -> bool {
