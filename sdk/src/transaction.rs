@@ -4,9 +4,9 @@ use crate::hash::Hash;
 use crate::instruction::{CompiledInstruction, Instruction, InstructionError};
 use crate::message::Message;
 use crate::pubkey::Pubkey;
+use crate::short_vec;
 use crate::signature::{KeypairUtil, Signature};
 use bincode::serialize;
-use serde::Serialize;
 
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -51,17 +51,26 @@ pub enum TransactionError {
 pub struct Transaction {
     /// A set of digital signatures of `account_keys`, `program_ids`, `recent_blockhash`, `fee` and `instructions`, signed by the first
     /// signatures.len() keys of account_keys
+    #[serde(with = "short_vec")]
     pub signatures: Vec<Signature>,
     /// All the account keys used by this transaction
+
+    #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
+
     /// The id of a recent ledger entry.
     pub recent_blockhash: Hash,
+
     /// The number of lamports paid for processing and storing of this transaction.
     pub fee: u64,
+
     /// All the program id keys used to execute this transaction's instructions
+    #[serde(with = "short_vec")]
     pub program_ids: Vec<Pubkey>,
+
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
+    #[serde(with = "short_vec")]
     pub instructions: Vec<CompiledInstruction>,
 }
 
@@ -167,16 +176,15 @@ impl Transaction {
     }
     /// Get the transaction data to sign.
     pub fn message(&self) -> Vec<u8> {
-        let mut data = serialize(&self.account_keys).expect("serialize account_keys");
-        let blockhash = serialize(&self.recent_blockhash).expect("serialize recent_blockhash");
-        data.extend_from_slice(&blockhash);
-        let fee_data = serialize(&self.fee).expect("serialize fee");
-        data.extend_from_slice(&fee_data);
-        let program_ids = serialize(&self.program_ids).expect("serialize program_ids");
-        data.extend_from_slice(&program_ids);
-        let instructions = serialize(&self.instructions).expect("serialize instructions");
-        data.extend_from_slice(&instructions);
-        data
+        let message = Message {
+            num_signatures: self.signatures.len() as u8,
+            account_keys: self.account_keys.clone(),
+            recent_blockhash: self.recent_blockhash,
+            fee: self.fee,
+            program_ids: self.program_ids.clone(),
+            instructions: self.instructions.clone(),
+        };
+        serialize(&message).unwrap()
     }
 
     /// Sign this transaction.
@@ -224,6 +232,7 @@ mod tests {
     use crate::signature::Keypair;
     use crate::system_instruction::SystemInstruction;
     use bincode::{deserialize, serialize, serialized_size};
+    use std::mem::size_of;
 
     #[test]
     fn test_refs() {
@@ -356,16 +365,8 @@ mod tests {
         let message = Message::new(vec![ix]);
         assert_eq!(
             serialized_size(&message.instructions[0]).unwrap() as usize,
-            expected_instruction_size + size_of::<u64>() + 6, // TODO: Don't use serialize_bytes().
+            expected_instruction_size,
             "unexpected Instruction::serialized_size"
-        );
-
-        // These two ways of calculating serialized size should return the same value, but
-        // currently don't.
-        assert_eq!(
-            message.instructions[0].serialized_size().unwrap() as usize + size_of::<u64>() + 6,
-            serialized_size(&message.instructions[0]).unwrap() as usize,
-            "serialized_size mismatch"
         );
 
         let tx = Transaction::new(&[&alice_keypair], message, Hash::default());
@@ -384,13 +385,8 @@ mod tests {
 
         assert_eq!(
             serialized_size(&tx).unwrap() as usize,
-            expected_transaction_size + size_of::<u64>(), // TODO: Don't use serialize_bytes()
+            expected_transaction_size,
             "unexpected serialized transaction size"
-        );
-        assert_eq!(
-            tx.serialized_size().unwrap() as usize,
-            serialized_size(&tx).unwrap() as usize,
-            "unexpected Transaction::serialized_size"
         );
     }
 
@@ -401,18 +397,16 @@ mod tests {
         assert_eq!(
             serialize(&create_sample_transaction()).unwrap(),
             vec![
-                1, 0, 0, 0, 0, 0, 0, 0, 60, 2, 97, 229, 100, 48, 42, 208, 222, 192, 129, 29, 142,
-                187, 4, 174, 210, 77, 78, 162, 101, 146, 144, 241, 159, 44, 89, 89, 10, 103, 229,
-                94, 92, 240, 124, 0, 83, 22, 216, 2, 112, 193, 158, 93, 210, 144, 222, 144, 13,
-                138, 209, 246, 89, 156, 195, 234, 186, 215, 92, 250, 125, 210, 24, 10, 2, 0, 0, 0,
-                0, 0, 0, 0, 36, 100, 158, 252, 33, 161, 97, 185, 62, 89, 99, 195, 250, 249, 187,
-                189, 171, 118, 241, 90, 248, 14, 68, 219, 231, 62, 157, 5, 142, 27, 210, 117, 1, 1,
-                1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1,
-                1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 4, 5,
-                6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 1,
-                0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2,
-                3
+                1, 107, 231, 179, 42, 11, 220, 153, 173, 229, 29, 51, 218, 98, 26, 46, 164, 248,
+                228, 118, 244, 191, 192, 198, 228, 190, 119, 21, 52, 66, 25, 124, 247, 192, 73, 48,
+                231, 2, 70, 34, 82, 133, 137, 148, 66, 73, 231, 72, 195, 100, 133, 214, 2, 168,
+                108, 252, 200, 83, 99, 105, 51, 216, 145, 30, 14, 2, 36, 100, 158, 252, 33, 161,
+                97, 185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219,
+                231, 62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9,
+                9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 0,
+                0, 1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7,
+                6, 5, 4, 2, 2, 2, 1, 0, 2, 0, 1, 3, 1, 2, 3
             ]
         );
     }

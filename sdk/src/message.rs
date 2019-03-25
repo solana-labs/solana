@@ -3,6 +3,7 @@
 use crate::hash::Hash;
 use crate::instruction::{CompiledInstruction, Instruction};
 use crate::pubkey::Pubkey;
+use crate::short_vec;
 use itertools::Itertools;
 
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
@@ -67,13 +68,17 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
         .collect()
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Message {
+    #[serde(skip)]
     pub num_signatures: u8,
+    #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
     pub recent_blockhash: Hash,
     pub fee: u64,
+    #[serde(with = "short_vec")]
     pub program_ids: Vec<Pubkey>,
+    #[serde(with = "short_vec")]
     pub instructions: Vec<CompiledInstruction>,
 }
 
