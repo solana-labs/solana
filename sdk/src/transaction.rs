@@ -4,9 +4,9 @@ use crate::hash::{Hash, Hasher};
 use crate::instruction::{CompiledInstruction, Instruction, InstructionError};
 use crate::message::Message;
 use crate::pubkey::Pubkey;
+use crate::short_vec;
 use crate::signature::{KeypairUtil, Signature};
 use bincode::serialize;
-use serde::Serialize;
 
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -51,17 +51,26 @@ pub enum TransactionError {
 pub struct Transaction {
     /// A set of digital signatures of `account_keys`, `program_ids`, `recent_blockhash`, `fee` and `instructions`, signed by the first
     /// signatures.len() keys of account_keys
+    #[serde(with = "short_vec")]
     pub signatures: Vec<Signature>,
     /// All the account keys used by this transaction
+
+    #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
+
     /// The id of a recent ledger entry.
     pub recent_blockhash: Hash,
+
     /// The number of lamports paid for processing and storing of this transaction.
     pub fee: u64,
+
     /// All the program id keys used to execute this transaction's instructions
+    #[serde(with = "short_vec")]
     pub program_ids: Vec<Pubkey>,
+
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
+    #[serde(with = "short_vec")]
     pub instructions: Vec<CompiledInstruction>,
 }
 
@@ -246,6 +255,7 @@ mod tests {
     use crate::signature::Keypair;
     use crate::system_instruction::SystemInstruction;
     use bincode::{deserialize, serialize, serialized_size};
+    use std::mem::size_of;
 
     #[test]
     fn test_refs() {
@@ -378,16 +388,8 @@ mod tests {
         let message = Message::new(vec![ix]);
         assert_eq!(
             serialized_size(&message.instructions[0]).unwrap() as usize,
-            expected_instruction_size + size_of::<u64>() + 6, // TODO: Don't use serialize_bytes().
+            expected_instruction_size,
             "unexpected Instruction::serialized_size"
-        );
-
-        // These two ways of calculating serialized size should return the same value, but
-        // currently don't.
-        assert_eq!(
-            message.instructions[0].serialized_size().unwrap() as usize + size_of::<u64>() + 6,
-            serialized_size(&message.instructions[0]).unwrap() as usize,
-            "serialized_size mismatch"
         );
 
         let tx = Transaction::new(&[&alice_keypair], message, Hash::default());
@@ -406,13 +408,8 @@ mod tests {
 
         assert_eq!(
             serialized_size(&tx).unwrap() as usize,
-            expected_transaction_size + size_of::<u64>(), // TODO: Don't use serialize_bytes()
+            expected_transaction_size,
             "unexpected serialized transaction size"
-        );
-        assert_eq!(
-            tx.serialized_size().unwrap() as usize,
-            serialized_size(&tx).unwrap() as usize,
-            "unexpected Transaction::serialized_size"
         );
     }
 
@@ -423,18 +420,16 @@ mod tests {
         assert_eq!(
             serialize(&create_sample_transaction()).unwrap(),
             vec![
-                1, 0, 0, 0, 0, 0, 0, 0, 60, 2, 97, 229, 100, 48, 42, 208, 222, 192, 129, 29, 142,
-                187, 4, 174, 210, 77, 78, 162, 101, 146, 144, 241, 159, 44, 89, 89, 10, 103, 229,
-                94, 92, 240, 124, 0, 83, 22, 216, 2, 112, 193, 158, 93, 210, 144, 222, 144, 13,
-                138, 209, 246, 89, 156, 195, 234, 186, 215, 92, 250, 125, 210, 24, 10, 2, 0, 0, 0,
-                0, 0, 0, 0, 36, 100, 158, 252, 33, 161, 97, 185, 62, 89, 99, 195, 250, 249, 187,
-                189, 171, 118, 241, 90, 248, 14, 68, 219, 231, 62, 157, 5, 142, 27, 210, 117, 1, 1,
-                1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1,
-                1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 4, 5,
-                6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 1,
-                0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2,
-                3
+                1, 157, 120, 21, 197, 167, 2, 163, 85, 2, 45, 214, 7, 63, 151, 236, 162, 187, 131,
+                30, 6, 30, 199, 246, 160, 191, 23, 160, 73, 185, 92, 77, 105, 96, 181, 206, 39, 6,
+                59, 151, 50, 123, 164, 166, 84, 178, 66, 46, 236, 170, 254, 123, 115, 151, 207,
+                122, 208, 246, 147, 124, 235, 59, 12, 157, 8, 2, 36, 100, 158, 252, 33, 161, 97,
+                185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231,
+                62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+                9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 0, 0,
+                1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6,
+                5, 4, 2, 2, 2, 1, 0, 2, 0, 1, 3, 1, 2, 3
             ]
         );
     }
