@@ -4,7 +4,7 @@
 //! unstable and may change in future releases.
 
 use crate::rpc_client::RpcClient;
-use bincode::serialize_into;
+use bincode::{serialize_into, serialized_size};
 use log::*;
 use solana_sdk::hash::Hash;
 use solana_sdk::packet::PACKET_DATA_SIZE;
@@ -63,7 +63,7 @@ impl ThinClient {
     /// Send a signed Transaction to the server for processing. This method
     /// does not wait for a response.
     pub fn transfer_signed(&self, transaction: &Transaction) -> io::Result<Signature> {
-        let mut buf = vec![0; transaction.serialized_size().unwrap() as usize];
+        let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
         let mut wr = std::io::Cursor::new(&mut buf[..]);
         serialize_into(&mut wr, &transaction)
             .expect("serialize Transaction in pub fn transfer_signed");
@@ -83,7 +83,7 @@ impl ThinClient {
     ) -> io::Result<Signature> {
         for x in 0..tries {
             transaction.sign(&[keypair], self.get_recent_blockhash()?);
-            let mut buf = vec![0; transaction.serialized_size().unwrap() as usize];
+            let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
             serialize_into(&mut wr, &transaction)
                 .expect("serialize Transaction in pub fn transfer_signed");
@@ -112,7 +112,7 @@ impl ThinClient {
     ) -> io::Result<Signature> {
         for x in 0..tries {
             transaction.sign(&[keypair], self.get_recent_blockhash()?);
-            let mut buf = vec![0; transaction.serialized_size().unwrap() as usize];
+            let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
             serialize_into(&mut wr, &transaction)
                 .expect("serialize Transaction in pub fn transfer_signed");
