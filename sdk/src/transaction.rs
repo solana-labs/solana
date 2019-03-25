@@ -273,7 +273,8 @@ impl Transaction {
 mod tests {
     use super::*;
     use crate::signature::Keypair;
-    use bincode::{deserialize, serialize};
+    use crate::system_instruction::SystemInstruction;
+    use bincode::{deserialize, serialize, serialized_size};
 
     #[test]
     fn test_refs() {
@@ -364,6 +365,34 @@ mod tests {
         let ser = serialize(&tx).unwrap();
         let deser = deserialize(&ser).unwrap();
         assert_eq!(tx, deser);
+    }
+
+    /// Detect changes to the serialized size of payment transactions, which affects TPS.
+    #[test]
+    fn test_transaction_serialized_size() {
+        let alice_keypair = Keypair::new();
+        let alice_pubkey = alice_keypair.pubkey();
+        let bob_pubkey = Keypair::new().pubkey();
+        let ix = SystemInstruction::new_move(&alice_pubkey, &bob_pubkey, 42);
+        let tx =
+            Transaction::new_signed_instructions(&[&alice_keypair], vec![ix], Hash::default(), 0);
+
+        // Note: With the shortvec optimization, this should drop to 17 bytes.
+        // program_ids_index=1, accounts=1+2, data=1+12
+        let expected_instruction_size = 31;
+        assert_eq!(
+            serialized_size(&tx.instructions[0]).unwrap(),
+            expected_instruction_size,
+            "unexpected serialized instruction size"
+        );
+
+        // Note: With the shortvec optimization, this should drop to 204 bytes above instruction size.
+        // signatures=1+64, account_keys=1+64, recent_blockhash=32, fee=8, program_ids=1+32, instructions=1+instruction_size
+        assert_eq!(
+            serialized_size(&tx).unwrap(),
+            232 + expected_instruction_size,
+            "unexpected serialized transaction size"
+        );
     }
 
     /// Detect binary changes in the serialized transaction data, which could have a downstream
