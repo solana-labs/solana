@@ -142,7 +142,7 @@ impl Locktower {
                         )
                         .to_owned(),
                 );
-            } 
+            }
             let start_root = vote_state.root_slot;
             vote_state.process_vote(Vote { slot: bank_slot });
             for vote in &vote_state.votes {
@@ -167,7 +167,6 @@ impl Locktower {
             }
             // each account hash a stake for all the forks in the active tree for this bank
             Self::update_ancestor_stakes(&mut stake_lockouts, bank_slot, lamports, ancestors);
-
         }
         stake_lockouts
     }
