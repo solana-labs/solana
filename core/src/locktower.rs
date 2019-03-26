@@ -127,7 +127,9 @@ impl Locktower {
             }
             let mut vote_state: VoteState = VoteState::deserialize(&account.data)
                 .expect("bank should always have valid VoteState data");
-            if key == self.epoch_stakes.delegate_id {
+            if key == self.epoch_stakes.delegate_id
+                || vote_state.delegate_id == self.epoch_stakes.delegate_id
+            {
                 solana_metrics::submit(
                     influxdb::Point::new("counter-locktower-observed")
                         .add_field(
