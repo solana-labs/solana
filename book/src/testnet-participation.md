@@ -101,7 +101,6 @@ source scripts/configure-metrics.sh
 ```
 Inspect for your contributions to our [metrics dashboard](https://metrics.solana.com:3000/d/U9-26Cqmk/testnet-monitor-cloud?refresh=60s&orgId=2&var-hostid=All).
 
-
 #### Metrics Server Maintenance
 Sometimes the dashboard becomes unresponsive. This happens due to glitch in the metrics server. 
 The current solution is to reset the metrics server. Use the following steps.
