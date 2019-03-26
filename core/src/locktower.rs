@@ -7,6 +7,7 @@ use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState, MAX_LOCKOUT_HISTORY};
+use std::sync::Arc;
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
@@ -65,30 +66,32 @@ impl EpochStakes {
 
 impl Locktower {
     pub fn new_from_forks(bank_forks: &BankForks) -> Self {
-        //TODO: which bank to start with?
         let mut frozen_banks: Vec<_> = bank_forks.frozen_banks().values().cloned().collect();
         frozen_banks.sort_by_key(|b| (b.parents().len(), b.slot()));
-        if let Some(bank) = frozen_banks.last() {
-            Self::new_from_bank(bank)
-        } else {
-            Self::default()
-        }
+        let epoch_stakes = {
+            if let Some(bank) = frozen_banks.last() {
+                EpochStakes::new_from_bank(bank)
+            } else {
+                return Self::default();
+            }
+        };
+
+        let mut locktower = Self {
+            epoch_stakes,
+            threshold_depth: VOTE_THRESHOLD_DEPTH,
+            threshold_size: VOTE_THRESHOLD_SIZE,
+            lockouts: VoteState::default(),
+        };
+
+        let bank = locktower.find_heaviest_bank(bank_forks).unwrap();
+        locktower.lockouts =
+            Self::initialize_lockouts_from_bank(&bank, locktower.epoch_stakes.slot);
+        locktower
     }
 
     pub fn new_from_bank(bank: &Bank) -> Self {
         let current_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
-        let mut lockouts = VoteState::default();
-        if let Some(iter) = staking_utils::node_staked_accounts_at_epoch(bank, current_epoch) {
-            for (delegate_id, _, account) in iter {
-                if *delegate_id == bank.collector_id() {
-                    let state = VoteState::deserialize(&account.data).expect("votes");
-                    if lockouts.votes.len() < state.votes.len() {
-                        //TODO: which state to init with?
-                        lockouts = state;
-                    }
-                }
-            }
-        }
+        let lockouts = Self::initialize_lockouts_from_bank(&bank, current_epoch);
         let epoch_stakes = EpochStakes::new_from_bank(bank);
         Self {
             epoch_stakes,
@@ -298,6 +301,44 @@ impl Locktower {
             let entry = &mut stake_lockouts.entry(slot).or_default();
             entry.stake += lamports;
         }
+    }
+
+    fn bank_weight(&self, bank: &Bank, ancestors: &HashMap<u64, HashSet<u64>>) -> u128 {
+        let stake_lockouts =
+            self.collect_vote_lockouts(bank.slot(), bank.vote_accounts(), ancestors);
+        self.calculate_weight(&stake_lockouts)
+    }
+
+    fn find_heaviest_bank(&self, bank_forks: &BankForks) -> Option<Arc<Bank>> {
+        let ancestors = bank_forks.ancestors();
+        let mut bank_weights: Vec<_> = bank_forks
+            .frozen_banks()
+            .values()
+            .map(|b| {
+                (
+                    self.bank_weight(b, &ancestors),
+                    b.parents().len(),
+                    b.clone(),
+                )
+            })
+            .collect();
+        bank_weights.sort_by_key(|b| (b.0, b.1));
+        bank_weights.pop().map(|b| b.2)
+    }
+
+    fn initialize_lockouts_from_bank(bank: &Bank, current_epoch: u64) -> VoteState {
+        let mut lockouts = VoteState::default();
+        if let Some(iter) = staking_utils::node_staked_accounts_at_epoch(&bank, current_epoch) {
+            for (delegate_id, _, account) in iter {
+                if *delegate_id == bank.collector_id() {
+                    let state = VoteState::deserialize(&account.data).expect("votes");
+                    if lockouts.votes.len() < state.votes.len() {
+                        lockouts = state;
+                    }
+                }
+            }
+        };
+        lockouts
     }
 }
 
