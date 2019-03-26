@@ -73,41 +73,4 @@ impl SystemTransaction {
         let instructions = vec![move_instruction];
         Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash, fee)
     }
-
-    /// Create and sign new SystemInstruction::Move transaction to many destinations
-    pub fn new_move_many(
-        from_keypair: &Keypair,
-        to_lamports: &[(Pubkey, u64)],
-        recent_blockhash: Hash,
-        fee: u64,
-    ) -> Transaction {
-        let from_pubkey = from_keypair.pubkey();
-        let instructions: Vec<_> = to_lamports
-            .iter()
-            .map(|(pubkey, lamports)| SystemInstruction::new_move(&from_pubkey, pubkey, *lamports))
-            .collect();
-        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash, fee)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::signature::KeypairUtil;
-
-    #[test]
-    fn test_move_many() {
-        let from = Keypair::new();
-        let t1 = Keypair::new();
-        let t2 = Keypair::new();
-        let moves = vec![(t1.pubkey(), 1), (t2.pubkey(), 2)];
-
-        let tx = SystemTransaction::new_move_many(&from, &moves, Hash::default(), 0);
-        assert_eq!(tx.account_keys[0], from.pubkey());
-        assert_eq!(tx.account_keys[1], t1.pubkey());
-        assert_eq!(tx.account_keys[2], t2.pubkey());
-        assert_eq!(tx.instructions.len(), 2);
-        assert_eq!(tx.instructions[0].accounts, vec![0, 1]);
-        assert_eq!(tx.instructions[1].accounts, vec![0, 2]);
-    }
 }

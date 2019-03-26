@@ -925,10 +925,9 @@ impl Drop for Bank {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bincode::serialize;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::hash;
-    use solana_sdk::instruction::{CompiledInstruction, InstructionError};
+    use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
@@ -1010,40 +1009,24 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
-        let spend = SystemInstruction::Move { lamports: 1 };
-        let instructions = vec![
-            CompiledInstruction {
-                program_ids_index: 0,
-                data: serialize(&spend).unwrap(),
-                accounts: vec![0, 1],
-            },
-            CompiledInstruction {
-                program_ids_index: 0,
-                data: serialize(&spend).unwrap(),
-                accounts: vec![0, 2],
-            },
-        ];
-
-        let t1 = Transaction::new_with_compiled_instructions(
+        let instructions =
+            SystemInstruction::new_move_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
+        let tx = Transaction::new_signed_instructions(
             &[&mint_keypair],
-            &[key1, key2],
+            instructions,
             genesis_block.hash(),
             0,
-            vec![system_program::id()],
-            instructions,
         );
-        let res = bank.process_transactions(&vec![t1.clone()]);
-        assert_eq!(res.len(), 1);
+        assert_eq!(
+            bank.process_transaction(&tx).unwrap_err(),
+            TransactionError::InstructionError(
+                1,
+                InstructionError::new_result_with_negative_lamports(),
+            )
+        );
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 1);
         assert_eq!(bank.get_balance(&key1), 0);
         assert_eq!(bank.get_balance(&key2), 0);
-        assert_eq!(
-            bank.get_signature_status(&t1.signatures[0]),
-            Some(Err(TransactionError::InstructionError(
-                1,
-                InstructionError::new_result_with_negative_lamports(),
-            )))
-        );
     }
 
     #[test]
@@ -1052,19 +1035,18 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
-        let t1 = SystemTransaction::new_move_many(
-            &mint_keypair,
-            &[(key1, 1), (key2, 1)],
+        let instructions =
+            SystemInstruction::new_move_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
+        let tx = Transaction::new_signed_instructions(
+            &[&mint_keypair],
+            instructions,
             genesis_block.hash(),
             0,
         );
-        let res = bank.process_transactions(&vec![t1.clone()]);
-        assert_eq!(res.len(), 1);
-        assert_eq!(res[0], Ok(()));
+        bank.process_transaction(&tx).unwrap();
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
         assert_eq!(bank.get_balance(&key1), 1);
         assert_eq!(bank.get_balance(&key2), 1);
-        assert_eq!(bank.get_signature_status(&t1.signatures[0]), Some(Ok(())));
     }
 
     // This test demonstrates that fees are paid even when a program fails.

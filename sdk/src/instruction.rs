@@ -92,7 +92,7 @@ impl<P, Q> GenericInstruction<P, Q> {
 }
 
 /// Account metadata used to define Instructions
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct AccountMeta {
     /// An account's public key
     pub pubkey: Pubkey,
