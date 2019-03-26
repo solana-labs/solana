@@ -56,6 +56,9 @@
     - [References](ed_references.md)
   - [Cluster Test Framework](cluster-test-framework.md)
   - [Testing Programs](testing-programs.md)
+  - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
+  - [Solana Installer](installer.md)
+  - [Testnet Participation](testnet-participation.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
   - [Leader-to-Leader Transition](leader-leader-transition.md)

@@ -1,4 +1,4 @@
-# Credit-Only/Credit-Debit Transaction Accounts
+# Credit-Only Accounts
 
 This design covers the handling of credit-only and credit-debit accounts in the
 [runtime](runtime.md).  Accounts already distinguish themselves as credit-only or
