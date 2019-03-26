@@ -8,7 +8,7 @@ pub mod loader_utils;
 mod native_loader;
 pub mod runtime;
 mod status_cache;
-mod sync_client;
+pub mod sync_client;
 mod system_program;
 
 #[macro_use]

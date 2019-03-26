@@ -105,7 +105,7 @@ pub fn entrypoint(
 mod tests {
     use super::*;
     use crate::bank::Bank;
-    use crate::bank_client::BankClient;
+    use crate::sync_client::SyncClient;
     use solana_sdk::account::Account;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
@@ -277,17 +277,15 @@ mod tests {
 
     #[test]
     fn test_system_unsigned_transaction() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(100);
+        let (genesis_block, alice_keypair) = GenesisBlock::new(100);
         let bank = Bank::new(&genesis_block);
+        let alice_pubkey = alice_keypair.pubkey();
 
-        let alice_client = BankClient::new(&bank, mint_keypair);
-        let alice_pubkey = alice_client.pubkey();
-
-        let mallory_client = BankClient::new(&bank, Keypair::new());
-        let mallory_pubkey = mallory_client.pubkey();
+        let mallory_keypair = Keypair::new();
+        let mallory_pubkey = mallory_keypair.pubkey();
 
         // Fund to account to bypass AccountNotFound error
-        alice_client.transfer(50, &mallory_pubkey).unwrap();
+        bank.pay(&alice_keypair, &mallory_pubkey, 50).unwrap();
 
         // Erroneously sign transaction with recipient account key
         // No signature case is tested by bank `test_zero_signatures()`
@@ -301,7 +299,7 @@ mod tests {
             account_metas,
         );
         assert_eq!(
-            mallory_client.process_instruction(malicious_instruction),
+            bank.send_instruction(&[&mallory_keypair], malicious_instruction),
             Err(TransactionError::InstructionError(
                 0,
                 InstructionError::MissingRequiredSignature

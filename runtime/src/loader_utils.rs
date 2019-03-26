@@ -1,5 +1,5 @@
 use crate::bank::Bank;
-use crate::bank_client::BankClient;
+use crate::sync_client::SyncClient;
 use serde::Serialize;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::loader_instruction::LoaderInstruction;
@@ -9,7 +9,7 @@ use solana_sdk::system_instruction::SystemInstruction;
 
 pub fn load_program(
     bank: &Bank,
-    from_client: &BankClient,
+    from_keypair: &Keypair,
     loader_id: &Pubkey,
     program: Vec<u8>,
 ) -> Pubkey {
@@ -17,27 +17,27 @@ pub fn load_program(
     let program_pubkey = program_keypair.pubkey();
 
     let instruction = SystemInstruction::new_program_account(
-        &from_client.pubkey(),
+        &from_keypair.pubkey(),
         &program_pubkey,
         1,
         program.len() as u64,
         loader_id,
     );
-    from_client.process_instruction(instruction).unwrap();
-
-    let program_client = BankClient::new(bank, program_keypair);
+    bank.send_instruction(&[from_keypair], instruction).unwrap();
 
     let chunk_size = 256; // Size of chunk just needs to fit into tx
     let mut offset = 0;
     for chunk in program.chunks(chunk_size) {
         let instruction =
             LoaderInstruction::new_write(&program_pubkey, loader_id, offset, chunk.to_vec());
-        program_client.process_instruction(instruction).unwrap();
+        bank.send_instruction(&[&program_keypair], instruction)
+            .unwrap();
         offset += chunk_size as u32;
     }
 
     let instruction = LoaderInstruction::new_finalize(&program_pubkey, loader_id);
-    program_client.process_instruction(instruction).unwrap();
+    bank.send_instruction(&[&program_keypair], instruction)
+        .unwrap();
 
     program_pubkey
 }
