@@ -115,3 +115,28 @@ The current solution is to reset the metrics server. Use the following steps.
     7. Type in ```FORCE_START=true``` in ```Environment Variables``` text box.
     8. Click ```Create Build```
     9. This will restart the metrics services, and the dashboards should be accessible afterwards.
+
+#### Debugging Testnet
+Testnet may exhibit different symptoms of failures. Primary statistics to check are
+1. Rise in Confirmation Time
+2. Nodes are not voting
+3. Panics, and OOM notifications
+
+Check the following if there are any signs of failure.
+1. Did testnet deployment fail?
+    1. View buildkite logs for the last deployment: https://buildkite.com/solana-labs/testnet-management
+    2. Use the relevant branch
+    3. If the deployment failed, look at the build logs. The build artifacts for each remote node is uploaded.
+       It's a good first step to triage from these logs.
+2. You may have to log into remote node if the deployment succeeded, but something failed during runtime.
+    1. Get the private key for the testnet deployment from ```metrics-solana-com``` GCP instance.
+    2. SSH into ```metrics-solana-com``` using GCP console and do the following.
+    ```
+    sudo bash
+    cd ~buildkite-agent/.ssh
+    ls
+    ```
+    3. Copy the relevant private key to your local machine
+    4. Find the public IP address of the AWS instance for the remote node using AWS console
+    5. ```ssh -i <private key file> ubuntu@<ip address of remote node>```
+    6. The logs are in ```~solana\solana``` folder
