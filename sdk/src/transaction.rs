@@ -88,16 +88,25 @@ impl Transaction {
         Self::new_unsigned_message(message)
     }
 
+    pub fn new<T: KeypairUtil>(
+        from_keypairs: &[&T],
+        message: Message,
+        recent_blockhash: Hash,
+    ) -> Transaction {
+        let mut tx = Self::new_unsigned_message(message);
+        tx.sign(from_keypairs, recent_blockhash);
+        tx
+    }
+
     pub fn new_signed_instructions<T: KeypairUtil>(
         from_keypairs: &[&T],
         instructions: Vec<Instruction>,
         recent_blockhash: Hash,
         fee: u64,
     ) -> Transaction {
-        let mut tx = Self::new(instructions);
-        tx.fee = fee;
-        tx.sign(from_keypairs, recent_blockhash);
-        tx
+        let mut message = Message::new(instructions);
+        message.fee = fee;
+        Self::new(from_keypairs, message, recent_blockhash)
     }
 
     pub fn new_signed<S: Serialize, T: KeypairUtil>(
@@ -113,11 +122,7 @@ impl Transaction {
             account_metas.push(AccountMeta::new(*pubkey, false));
         }
         let instruction = Instruction::new(*program_id, data, account_metas);
-        let mut transaction = Self::new(vec![instruction]);
-        transaction.fee = fee;
-        transaction.recent_blockhash = recent_blockhash;
-        transaction.sign(&[from_keypair], recent_blockhash);
-        transaction
+        Self::new_signed_instructions(&[from_keypair], vec![instruction], recent_blockhash, fee)
     }
 
     /// Create a signed transaction
