@@ -4,7 +4,7 @@ pub mod genesis_block;
 pub mod hash;
 pub mod instruction;
 pub mod loader_instruction;
-mod message;
+pub mod message;
 pub mod native_loader;
 pub mod native_program;
 pub mod packet;
