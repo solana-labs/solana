@@ -106,6 +106,7 @@ steps:
       env:
         TESTNET: "$TESTNET"
         TESTNET_OP: "$TESTNET_OP"
+        TESTNET_DB_HOST: "$TESTNET_DB_HOST"
 EOF
   ) | buildkite-agent pipeline upload
   exit 0
