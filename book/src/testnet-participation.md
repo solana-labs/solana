@@ -100,3 +100,19 @@ export SOLANA_METRICS_CONFIG="db=testnet-beta,u=${u:?},p=${p:?}"
 source scripts/configure-metrics.sh
 ```
 Inspect for your contributions to our [metrics dashboard](https://metrics.solana.com:3000/d/testnet-beta/testnet-monitor-beta?refresh=60s&orgId=2&var-testnet=testnet-beta&var-hostid=All).
+
+
+#### Metrics Server Maintenance
+Sometimes the dashboard becomes unresponsive. This happens due to glitch in the metrics server. 
+The current solution is to reset the metrics server. Use the following steps.
+
+1. The server is hosted in a GCP VM instance. Check if the VM instance is down by trying to SSH
+ into it from the GCP console. The name of the VM is ```metrics-solana-com```.
+2. If the VM is inaccessible, reset it from the GCP console.
+3. Once VM is up (or, was already up), the metrics services can be restarted from build automation.
+    4. Navigate to https://buildkite.com/solana-labs/metrics-dot-solana-dot-com in your web browser
+    5. Click on ```New Build```
+    6. This will show a pop up dialog. Click on ```options``` drop down.
+    7. Type in ```FORCE_START=true``` in ```Environment Variables``` text box.
+    8. Click ```Create Build```
+    9. This will restart the metrics services, and the dashboards should be accessible afterwards.
