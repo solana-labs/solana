@@ -10,13 +10,17 @@ use solana_sdk::pubkey::Pubkey;
 pub struct TradeRequestInfo {
     /// Direction of trade
     pub direction: Direction,
+
     /// Token pair to trade
     pub pair: TokenPair,
+
     /// Number of tokens to exchange; refers to the primary or the secondary depending on the direction
     pub tokens: u64,
+
     /// The price ratio the primary price over the secondary price.  The primary price is fixed
     /// and equal to the variable `SCALER`.
     pub price: u64,
+
     /// Token account to deposit tokens on successful swap
     pub dst_account: Pubkey,
 }
@@ -27,20 +31,24 @@ pub enum ExchangeInstruction {
     /// key 0 - Signer
     /// key 1 - New token account
     AccountRequest,
+
     /// Transfer tokens between two accounts
     /// key 0 - Account to transfer tokens to
     /// key 1 - Account to transfer tokens from.  This can be the exchange program itself,
     ///         the exchange has a limitless number of tokens it can transfer.
     TransferRequest(Token, u64),
+
     /// Trade request
     /// key 0 - Signer
     /// key 1 - Account in which to record the swap
     /// key 2 - Token account associated with this trade
     TradeRequest(TradeRequestInfo),
+
     /// Trade cancellation
     /// key 0 - Signer
     /// key 1 -Ttrade order to cancel
     TradeCancellation,
+
     /// Trade swap request
     /// key 0 - Signer
     /// key 1 - Account in which to record the swap
