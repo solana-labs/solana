@@ -131,7 +131,7 @@ Check the following if there are any signs of failure.
 2. You may have to log into remote node if the deployment succeeded, but something failed during runtime.
     1. Get the private key for the testnet deployment from ```metrics-solana-com``` GCP instance.
     2. SSH into ```metrics-solana-com``` using GCP console and do the following.
-    ```
+    ```bash
     sudo bash
     cd ~buildkite-agent/.ssh
     ls
