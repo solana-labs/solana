@@ -32,40 +32,13 @@ pub enum BudgetInstruction {
 }
 
 impl BudgetInstruction {
-    pub fn new_initialize_account(contract: &Pubkey, expr: BudgetExpr) -> Instruction {
+    fn new_initialize_account(contract: &Pubkey, expr: BudgetExpr) -> Instruction {
         let mut keys = vec![];
         if let BudgetExpr::Pay(payment) = &expr {
             keys.push(AccountMeta::new(payment.to, false));
         }
         keys.push(AccountMeta::new(*contract, false));
         Instruction::new(id(), &BudgetInstruction::InitializeAccount(expr), keys)
-    }
-
-    pub fn new_apply_timestamp(
-        from: &Pubkey,
-        contract: &Pubkey,
-        to: &Pubkey,
-        dt: DateTime<Utc>,
-    ) -> Instruction {
-        let mut account_metas = vec![
-            AccountMeta::new(*from, true),
-            AccountMeta::new(*contract, false),
-        ];
-        if from != to {
-            account_metas.push(AccountMeta::new(*to, false));
-        }
-        Instruction::new(id(), &BudgetInstruction::ApplyTimestamp(dt), account_metas)
-    }
-
-    pub fn new_apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
-        let mut account_metas = vec![
-            AccountMeta::new(*from, true),
-            AccountMeta::new(*contract, false),
-        ];
-        if from != to {
-            account_metas.push(AccountMeta::new(*to, false));
-        }
-        Instruction::new(id(), &BudgetInstruction::ApplySignature, account_metas)
     }
 
     pub fn new_account(
@@ -117,6 +90,33 @@ impl BudgetInstruction {
     ) -> Vec<Instruction> {
         let expr = BudgetExpr::new_cancelable_authorized_payment(witness, lamports, to, cancelable);
         Self::new_account(from, contract, lamports, expr)
+    }
+
+    pub fn new_apply_timestamp(
+        from: &Pubkey,
+        contract: &Pubkey,
+        to: &Pubkey,
+        dt: DateTime<Utc>,
+    ) -> Instruction {
+        let mut account_metas = vec![
+            AccountMeta::new(*from, true),
+            AccountMeta::new(*contract, false),
+        ];
+        if from != to {
+            account_metas.push(AccountMeta::new(*to, false));
+        }
+        Instruction::new(id(), &BudgetInstruction::ApplyTimestamp(dt), account_metas)
+    }
+
+    pub fn new_apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruction {
+        let mut account_metas = vec![
+            AccountMeta::new(*from, true),
+            AccountMeta::new(*contract, false),
+        ];
+        if from != to {
+            account_metas.push(AccountMeta::new(*to, false));
+        }
+        Instruction::new(id(), &BudgetInstruction::ApplySignature, account_metas)
     }
 }
 

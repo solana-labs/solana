@@ -54,6 +54,12 @@ impl SystemInstruction {
         )
     }
 
+    /// Create and sign a transaction to create a system account
+    pub fn new_account(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction {
+        let program_id = system_program::id();
+        Self::new_program_account(from_id, to_id, lamports, 0, &program_id)
+    }
+
     pub fn new_assign(from_id: &Pubkey, program_id: &Pubkey) -> Instruction {
         let account_metas = vec![AccountMeta::new(*from_id, true)];
         Instruction::new(
