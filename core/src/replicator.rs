@@ -410,7 +410,7 @@ impl Replicator {
             self.slot,
             Signature::new(self.signature.as_ref()),
         );
-        let mut tx = Transaction::new(vec![ix]);
+        let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
         client
             .retry_transfer(&self.keypair, &mut tx, 10)
             .expect("transfer didn't work!");

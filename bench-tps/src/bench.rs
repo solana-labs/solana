@@ -564,7 +564,10 @@ fn fund_keys(client: &ThinClient, source: &Keypair, dests: &[Keypair], lamports:
                 .map(|(k, m)| {
                     (
                         k.clone(),
-                        Transaction::new(SystemInstruction::new_move_many(&k.pubkey(), &m)),
+                        Transaction::new_unsigned_instructions(SystemInstruction::new_move_many(
+                            &k.pubkey(),
+                            &m,
+                        )),
                     )
                 })
                 .collect();

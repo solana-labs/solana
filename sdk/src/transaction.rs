@@ -83,7 +83,7 @@ impl Transaction {
         }
     }
 
-    pub fn new(instructions: Vec<Instruction>) -> Self {
+    pub fn new_unsigned_instructions(instructions: Vec<Instruction>) -> Self {
         let message = Message::new(instructions);
         Self::new_unsigned_message(message)
     }
@@ -576,7 +576,7 @@ mod tests {
     #[should_panic]
     fn test_transaction_missing_key() {
         let keypair = Keypair::new();
-        Transaction::new(vec![]).sign(&[&keypair], Hash::default());
+        Transaction::new_unsigned_instructions(vec![]).sign(&[&keypair], Hash::default());
     }
 
     #[test]
@@ -586,7 +586,8 @@ mod tests {
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
-        Transaction::new(vec![ix]).sign(&Vec::<&Keypair>::new(), Hash::default());
+        Transaction::new_unsigned_instructions(vec![ix])
+            .sign(&Vec::<&Keypair>::new(), Hash::default());
     }
 
     #[test]
@@ -596,7 +597,7 @@ mod tests {
         let keypair0 = Keypair::new();
         let wrong_id = Pubkey::default();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(wrong_id, true)]);
-        Transaction::new(vec![ix]).sign(&[&keypair0], Hash::default());
+        Transaction::new_unsigned_instructions(vec![ix]).sign(&[&keypair0], Hash::default());
     }
 
     #[test]
@@ -605,7 +606,7 @@ mod tests {
         let keypair0 = Keypair::new();
         let id0 = keypair0.pubkey();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
-        let mut tx = Transaction::new(vec![ix]);
+        let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
         tx.sign(&[&keypair0], Hash::default());
         assert_eq!(tx.instructions[0], CompiledInstruction::new(0, &0, vec![0]));
     }

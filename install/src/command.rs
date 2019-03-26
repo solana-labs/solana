@@ -203,7 +203,7 @@ fn new_update_manifest(
             &update_manifest_keypair.pubkey(),
             1, // lamports
         );
-        let mut transaction = Transaction::new(vec![new_account]);
+        let mut transaction = Transaction::new_unsigned_instructions(vec![new_account]);
         transaction.sign(&[from_keypair], recect_blockhash);
 
         rpc_client.send_and_confirm_transaction(&mut transaction, from_keypair)?;
@@ -225,7 +225,7 @@ fn store_update_manifest(
         &update_manifest_keypair.pubkey(),
         update_manifest,
     );
-    let mut transaction = Transaction::new(vec![new_store]);
+    let mut transaction = Transaction::new_unsigned_instructions(vec![new_store]);
     transaction.sign(&[from_keypair, update_manifest_keypair], recect_blockhash);
     rpc_client.send_and_confirm_transaction(&mut transaction, from_keypair)?;
     Ok(())

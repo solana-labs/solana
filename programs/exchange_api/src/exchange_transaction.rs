@@ -21,7 +21,7 @@ impl ExchangeTransaction {
         let space = mem::size_of::<ExchangeState>() as u64;
         let create_ix = SystemInstruction::new_program_account(owner_id, new, 1, space, &id());
         let request_ix = ExchangeInstruction::new_account_request(owner_id, new);
-        let mut tx = Transaction::new(vec![create_ix, request_ix]);
+        let mut tx = Transaction::new_unsigned_instructions(vec![create_ix, request_ix]);
         tx.fee = fee;
         tx.sign(&[owner], recent_blockhash);
         tx
@@ -39,7 +39,7 @@ impl ExchangeTransaction {
         let owner_id = &owner.pubkey();
         let request_ix =
             ExchangeInstruction::new_transfer_request(owner_id, to, from, token, tokens);
-        let mut tx = Transaction::new(vec![request_ix]);
+        let mut tx = Transaction::new_unsigned_instructions(vec![request_ix]);
         tx.fee = fee;
         tx.sign(&[owner], recent_blockhash);
         tx
@@ -71,7 +71,7 @@ impl ExchangeTransaction {
             src_account,
             dst_account,
         );
-        let mut tx = Transaction::new(vec![create_ix, request_ix]);
+        let mut tx = Transaction::new_unsigned_instructions(vec![create_ix, request_ix]);
         tx.fee = fee;
         tx.sign(&[owner], recent_blockhash);
         tx
@@ -86,7 +86,7 @@ impl ExchangeTransaction {
     ) -> Transaction {
         let owner_id = &owner.pubkey();
         let request_ix = ExchangeInstruction::new_trade_cancellation(owner_id, trade, account);
-        let mut tx = Transaction::new(vec![request_ix]);
+        let mut tx = Transaction::new_unsigned_instructions(vec![request_ix]);
         tx.fee = fee;
         tx.sign(&[owner], recent_blockhash);
         tx
@@ -115,7 +115,7 @@ impl ExchangeTransaction {
             from_trade_account,
             profit_account,
         );
-        let mut tx = Transaction::new(vec![create_ix, request_ix]);
+        let mut tx = Transaction::new_unsigned_instructions(vec![create_ix, request_ix]);
         tx.fee = fee;
         tx.sign(&[owner], recent_blockhash);
         tx

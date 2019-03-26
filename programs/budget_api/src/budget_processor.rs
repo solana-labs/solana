@@ -196,7 +196,7 @@ mod tests {
         alice_client.transfer(1, &mallory_pubkey).unwrap();
         let instruction =
             BudgetInstruction::new_apply_signature(&mallory_pubkey, &budget_pubkey, &bob_pubkey);
-        let mut transaction = Transaction::new(vec![instruction]);
+        let mut transaction = Transaction::new_unsigned_instructions(vec![instruction]);
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
         transaction.account_keys.push(alice_pubkey);
@@ -243,7 +243,7 @@ mod tests {
             &bob_pubkey,
             dt,
         );
-        let mut transaction = Transaction::new(vec![instruction]);
+        let mut transaction = Transaction::new_unsigned_instructions(vec![instruction]);
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
         transaction.account_keys.push(alice_pubkey);
