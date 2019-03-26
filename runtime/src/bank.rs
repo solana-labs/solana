@@ -930,7 +930,6 @@ mod tests {
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
-    use solana_sdk::system_program;
     use solana_sdk::system_transaction::SystemTransaction;
 
     #[test]
@@ -1578,13 +1577,13 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let key = Keypair::new();
 
-        let move_lamports = SystemInstruction::Move { lamports: 1 };
+        let mut move_instruction =
+            SystemInstruction::new_move(&mint_keypair.pubkey(), &key.pubkey(), 1);
+        move_instruction.accounts[0].is_signer = false;
 
-        let mut tx = Transaction::new_with_blockhash_and_fee(
-            &mint_keypair.pubkey(),
-            &[key.pubkey()],
-            &system_program::id(),
-            &move_lamports,
+        let mut tx = Transaction::new_signed_instructions(
+            &Vec::<&Keypair>::new(),
+            vec![move_instruction],
             bank.last_blockhash(),
             2,
         );

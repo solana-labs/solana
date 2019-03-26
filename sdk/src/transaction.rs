@@ -72,7 +72,7 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    fn new_with_message(message: Message) -> Self {
+    fn new_unsigned_message(message: Message) -> Self {
         Self {
             signatures: Vec::with_capacity(message.num_signatures as usize),
             account_keys: message.account_keys,
@@ -85,7 +85,7 @@ impl Transaction {
 
     pub fn new(instructions: Vec<Instruction>) -> Self {
         let message = Message::new(instructions);
-        Self::new_with_message(message)
+        Self::new_unsigned_message(message)
     }
 
     pub fn new_signed_instructions<T: KeypairUtil>(
@@ -100,25 +100,6 @@ impl Transaction {
         tx
     }
 
-    pub fn new_with_blockhash_and_fee<T: Serialize>(
-        from_pubkey: &Pubkey,
-        transaction_keys: &[Pubkey],
-        program_id: &Pubkey,
-        data: &T,
-        recent_blockhash: Hash,
-        fee: u64,
-    ) -> Self {
-        let mut account_metas = vec![AccountMeta::new(*from_pubkey, true)];
-        for pubkey in transaction_keys {
-            account_metas.push(AccountMeta::new(*pubkey, false));
-        }
-        let instruction = Instruction::new(*program_id, data, account_metas);
-        let mut transaction = Self::new(vec![instruction]);
-        transaction.fee = fee;
-        transaction.recent_blockhash = recent_blockhash;
-        transaction
-    }
-
     pub fn new_signed<S: Serialize, T: KeypairUtil>(
         from_keypair: &T,
         transaction_keys: &[Pubkey],
@@ -127,14 +108,14 @@ impl Transaction {
         recent_blockhash: Hash,
         fee: u64,
     ) -> Self {
-        let mut transaction = Self::new_with_blockhash_and_fee(
-            &from_keypair.pubkey(),
-            transaction_keys,
-            program_id,
-            data,
-            Hash::default(),
-            fee,
-        );
+        let mut account_metas = vec![AccountMeta::new(from_keypair.pubkey(), true)];
+        for pubkey in transaction_keys {
+            account_metas.push(AccountMeta::new(*pubkey, false));
+        }
+        let instruction = Instruction::new(*program_id, data, account_metas);
+        let mut transaction = Self::new(vec![instruction]);
+        transaction.fee = fee;
+        transaction.recent_blockhash = recent_blockhash;
         transaction.sign(&[from_keypair], recent_blockhash);
         transaction
     }
