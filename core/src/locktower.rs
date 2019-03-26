@@ -18,6 +18,7 @@ pub struct EpochStakes {
     stakes: HashMap<Pubkey, u64>,
     self_staked: u64,
     total_staked: u64,
+    delegate_id: Pubkey,
 }
 
 #[derive(Default)]
@@ -35,14 +36,15 @@ pub struct Locktower {
 }
 
 impl EpochStakes {
-    pub fn new(slot: u64, stakes: HashMap<Pubkey, u64>, self_id: &Pubkey) -> Self {
+    pub fn new(slot: u64, stakes: HashMap<Pubkey, u64>, delegate_id: &Pubkey) -> Self {
         let total_staked = stakes.values().sum();
-        let self_staked = *stakes.get(&self_id).unwrap_or(&0);
+        let self_staked = *stakes.get(&delegate_id).unwrap_or(&0);
         Self {
             slot,
             stakes,
             total_staked,
             self_staked,
+            delegate_id: *delegate_id,
         }
     }
     pub fn new_for_tests(lamports: u64) -> Self {
@@ -125,6 +127,22 @@ impl Locktower {
             }
             let mut vote_state: VoteState = VoteState::deserialize(&account.data)
                 .expect("bank should always have valid VoteState data");
+            if key == self.epoch_stakes.delegate_id {
+                solana_metrics::submit(
+                    influxdb::Point::new("counter-locktower-observed")
+                        .add_field(
+                            "slot",
+                            influxdb::Value::Integer(
+                                vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0) as i64,
+                            ),
+                        )
+                        .add_field(
+                            "root",
+                            influxdb::Value::Integer(vote_state.root_slot.unwrap_or(0) as i64),
+                        )
+                        .to_owned(),
+                );
+            }
             let start_root = vote_state.root_slot;
             vote_state.process_vote(Vote { slot: bank_slot });
             for vote in &vote_state.votes {
