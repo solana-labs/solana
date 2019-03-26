@@ -135,11 +135,13 @@ impl Tvu {
             None
         };
 
+        let storage_keypair = Arc::new(Keypair::new());
         let storage_stage = StorageStage::new(
             storage_state,
             storage_entry_receiver,
             Some(blocktree),
             &keypair,
+            &storage_keypair,
             &exit,
             bank_forks_info[0].entry_height, // TODO: StorageStage needs to deal with BankForks somehow still
             storage_rotate_count,
