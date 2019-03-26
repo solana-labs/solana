@@ -72,7 +72,7 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    fn new_unsigned_message(message: Message) -> Self {
+    pub fn new_unsigned(message: Message) -> Self {
         Self {
             signatures: Vec::with_capacity(message.num_signatures as usize),
             account_keys: message.account_keys,
@@ -85,7 +85,7 @@ impl Transaction {
 
     pub fn new_unsigned_instructions(instructions: Vec<Instruction>) -> Self {
         let message = Message::new(instructions);
-        Self::new_unsigned_message(message)
+        Self::new_unsigned(message)
     }
 
     pub fn new<T: KeypairUtil>(
@@ -93,7 +93,7 @@ impl Transaction {
         message: Message,
         recent_blockhash: Hash,
     ) -> Transaction {
-        let mut tx = Self::new_unsigned_message(message);
+        let mut tx = Self::new_unsigned(message);
         tx.sign(from_keypairs, recent_blockhash);
         tx
     }
