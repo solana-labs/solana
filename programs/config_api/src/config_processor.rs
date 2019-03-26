@@ -131,7 +131,7 @@ mod tests {
         let instruction = ConfigInstruction::new_store(&from_pubkey, &config_pubkey, &my_config);
 
         // Replace instruction data with a vector that's too large
-        let mut transaction = Transaction::new(vec![instruction]);
+        let mut transaction = Transaction::new_unsigned_instructions(vec![instruction]);
         transaction.instructions[0].data = vec![0; 123];
         config_client.process_transaction(transaction).unwrap_err();
     }
@@ -153,7 +153,8 @@ mod tests {
             ConfigInstruction::new_store(&from_pubkey, &config_pubkey, &my_config);
 
         // Don't sign the transaction with `config_client`
-        let mut transaction = Transaction::new(vec![move_instruction, store_instruction]);
+        let mut transaction =
+            Transaction::new_unsigned_instructions(vec![move_instruction, store_instruction]);
         transaction.sign_unchecked(&[&system_keypair], bank.last_blockhash());
         let system_client = BankClient::new(&bank, system_keypair);
         system_client.process_transaction(transaction).unwrap_err();

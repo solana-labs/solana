@@ -293,7 +293,7 @@ impl StorageStage {
             entry_id,
             entry_height,
         );
-        let tx = Transaction::new(vec![ix]);
+        let tx = Transaction::new_unsigned_instructions(vec![ix]);
         tx_sender.send(tx)?;
 
         seed.copy_from_slice(&signature.as_ref()[..32]);
@@ -611,7 +611,7 @@ mod tests {
             0,
             keypair.sign_message(b"test"),
         );
-        let mining_proof_tx = Transaction::new(vec![mining_proof_ix]);
+        let mining_proof_tx = Transaction::new_unsigned_instructions(vec![mining_proof_ix]);
         let mining_txs = vec![mining_proof_tx];
 
         let proof_entries = vec![Entry::new(&Hash::default(), 1, mining_txs)];

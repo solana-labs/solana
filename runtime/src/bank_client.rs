@@ -43,7 +43,7 @@ impl<'a> BankClient<'a> {
         &self,
         instructions: Vec<Instruction>,
     ) -> Result<(), TransactionError> {
-        self.process_transaction(Transaction::new(instructions))
+        self.process_transaction(Transaction::new_unsigned_instructions(instructions))
     }
 
     /// Create and process a transaction from a single instruction.
