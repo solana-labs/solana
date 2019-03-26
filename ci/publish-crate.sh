@@ -21,7 +21,7 @@ CRATES=(
   drone
   programs/{budget_api,config_api,storage_api,token_api,vote_api}
   runtime
-  programs/{budget,bpf_loader,config,vote,rewards,storage,token,vote}
+  programs/{budget,bpf_loader,config,vote,storage,token,vote}
   vote-signer
   core
   fullnode
