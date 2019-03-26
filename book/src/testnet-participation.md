@@ -99,7 +99,7 @@ export p="password obtained from the Solana maintainers"
 export SOLANA_METRICS_CONFIG="db=testnet-beta,u=${u:?},p=${p:?}"
 source scripts/configure-metrics.sh
 ```
-Inspect for your contributions to our [metrics dashboard](https://metrics.solana.com:3000/d/testnet-beta/testnet-monitor-beta?refresh=60s&orgId=2&var-testnet=testnet-beta&var-hostid=All).
+Inspect for your contributions to our [metrics dashboard](https://metrics.solana.com:3000/d/U9-26Cqmk/testnet-monitor-cloud?refresh=60s&orgId=2&var-hostid=All).
 
 
 #### Metrics Server Maintenance
