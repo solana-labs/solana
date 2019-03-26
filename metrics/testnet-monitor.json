@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 251,
-  "iteration": 1549301870214,
+  "id": 399,
+  "iteration": 1553559957575,
   "links": [
     {
       "asDropdown": true,
@@ -3811,7 +3811,7 @@
         "x": 0,
         "y": 49
       },
-      "id": 42,
+      "id": 34,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4001,7 +4001,7 @@
         "x": 12,
         "y": 49
       },
-      "id": 41,
+      "id": 35,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4156,7 +4156,7 @@
         "x": 0,
         "y": 54
       },
-      "id": 34,
+      "id": 36,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4496,7 +4496,7 @@
         "x": 12,
         "y": 54
       },
-      "id": 40,
+      "id": 37,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4727,7 +4727,7 @@
         "x": 0,
         "y": 60
       },
-      "id": 35,
+      "id": 38,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4997,7 +4997,7 @@
         "x": 12,
         "y": 60
       },
-      "id": 43,
+      "id": 39,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5101,6 +5101,249 @@
       }
     },
     {
+      "aliasColors": {
+        "cluster-info.repair": "#ba43a9",
+        "counter-replay_stage-new_leader.last": "#00ffbb",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Solana Metrics (read-only)",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 66
+      },
+      "id": 44,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 2,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "counter-cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT last(\"latest\") - last(\"root\") FROM \"$testnet\".\"autogen\".\"counter-locktower-vote\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Locktower Distance in Latest and Root Slot ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {
+        "cluster-info.repair": "#ba43a9",
+        "counter-locktower-vote.last": "#00ffbb",
+        "counter-replay_stage-new_leader.last": "#00ffbb",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Solana Metrics (read-only)",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 66
+      },
+      "id": 45,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 2,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "counter-cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT last(\"root\") FROM \"$testnet\".\"autogen\".\"counter-locktower-vote\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Locktower Root Slot ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,
@@ -5111,9 +5354,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 66
+        "y": 72
       },
-      "id": 36,
+      "id": 40,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5343,9 +5586,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 66
+        "y": 72
       },
-      "id": 38,
+      "id": 41,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5496,9 +5739,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 71
+        "y": 77
       },
-      "id": 44,
+      "id": 42,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -5514,9 +5757,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 72
+        "y": 78
       },
-      "id": 45,
+      "id": 43,
       "legend": {
         "avg": false,
         "current": false,
@@ -5701,5 +5944,5 @@
   "timezone": "",
   "title": "Testnet Monitor (edge)",
   "uid": "testnet-edge",
-  "version": 116
+  "version": 117
 }
