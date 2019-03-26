@@ -76,6 +76,34 @@ pub trait IDataCf<D: Database>: LedgerColumnFamilyRaw<D> {
     fn index_from_key(key: &D::KeyRef) -> Result<u64>;
 }
 
+#[cfg(feature = "erasure")]
+pub trait IErasureMetaCf<D: Database>:
+    LedgerColumnFamily<D, ValueType = super::ErasureMeta>
+{
+    fn new(db: Arc<D>) -> Self;
+
+    fn get_by_slot(&self, slot: u64) -> Result<Option<super::ErasureMeta>> {
+        let key = Self::key(slot);
+        self.get(key.borrow())
+    }
+
+    fn delete_by_slot(&self, slot: u64) -> Result<()> {
+        let key = Self::key(slot);
+        self.delete(key.borrow())
+    }
+
+    fn put_by_slot(&self, slot: u64, erasure_meta: &super::ErasureMeta) -> Result<()> {
+        let key = Self::key(slot);
+        self.put(key.borrow(), &erasure_meta)
+    }
+
+    /// converts from slot to a key
+    fn key(slot: u64) -> D::Key;
+
+    /// inverse of the `key` method
+    fn slot(key: &D::KeyRef) -> Result<u64>;
+}
+
 pub trait IErasureCf<D: Database>: LedgerColumnFamilyRaw<D> {
     fn new(db: Arc<D>) -> Self;
 

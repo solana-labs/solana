@@ -19,6 +19,8 @@ use std::io;
 use std::path::Path;
 use std::sync::Arc;
 
+#[cfg(feature = "erasure")]
+use super::db::IErasureMetaCf;
 use super::db::{
     Cursor, Database, IDataCf, IErasureCf, IMetaCf, IWriteBatch, LedgerColumnFamily,
     LedgerColumnFamilyRaw,
@@ -50,6 +52,13 @@ pub struct ErasureCf {
     db: Arc<Rocks>,
 }
 
+/// The erasure meta column family
+#[cfg(feature = "erasure")]
+#[derive(Debug)]
+pub struct ErasureMetaCf {
+    db: Arc<Rocks>,
+}
+
 /// TODO: all this goes away with Blocktree
 pub struct EntryIterator {
     db_iterator: DBRawIterator,
@@ -70,6 +79,7 @@ pub struct EntryIterator {
 
 impl Blocktree {
     /// Opens a Ledger in directory, provides "infinite" window of blobs
+    #[cfg(not(feature = "erasure"))]
     pub fn open(ledger_path: &str) -> Result<Blocktree> {
         fs::create_dir_all(&ledger_path)?;
         let ledger_path = Path::new(ledger_path).join(super::BLOCKTREE_DIRECTORY);
@@ -111,6 +121,59 @@ impl Blocktree {
             meta_cf,
             data_cf,
             erasure_cf,
+            new_blobs_signals: vec![],
+        })
+    }
+
+    #[cfg(feature = "erasure")]
+    pub fn open(ledger_path: &str) -> Result<Blocktree> {
+        fs::create_dir_all(&ledger_path)?;
+        let ledger_path = Path::new(ledger_path).join(super::BLOCKTREE_DIRECTORY);
+
+        // Use default database options
+        let db_options = Blocktree::get_db_options();
+
+        // Column family names
+        let meta_cf_descriptor =
+            ColumnFamilyDescriptor::new(super::META_CF, Blocktree::get_cf_options());
+        let data_cf_descriptor =
+            ColumnFamilyDescriptor::new(super::DATA_CF, Blocktree::get_cf_options());
+        let erasure_cf_descriptor =
+            ColumnFamilyDescriptor::new(super::ERASURE_CF, Blocktree::get_cf_options());
+        let erasure_meta_cf_descriptor =
+            ColumnFamilyDescriptor::new(super::ERASURE_META_CF, Blocktree::get_cf_options());
+        let cfs = vec![
+            meta_cf_descriptor,
+            data_cf_descriptor,
+            erasure_cf_descriptor,
+            erasure_meta_cf_descriptor,
+        ];
+
+        // Open the database
+        let db = Arc::new(Rocks(DB::open_cf_descriptors(
+            &db_options,
+            ledger_path,
+            cfs,
+        )?));
+
+        // Create the metadata column family
+        let meta_cf = MetaCf::new(db.clone());
+
+        // Create the data column family
+        let data_cf = DataCf::new(db.clone());
+
+        // Create the erasure column family
+        let erasure_cf = ErasureCf::new(db.clone());
+
+        // Create the erasure meta column family
+        let erasure_meta_cf = ErasureMetaCf::new(db.clone());
+
+        Ok(Blocktree {
+            db,
+            meta_cf,
+            data_cf,
+            erasure_cf,
+            erasure_meta_cf,
             new_blobs_signals: vec![],
         })
     }
@@ -338,6 +401,25 @@ impl IMetaCf<Rocks> for MetaCf {
     }
 }
 
+#[cfg(feature = "erasure")]
+impl IErasureMetaCf<Rocks> for ErasureMetaCf {
+    fn new(db: Arc<Rocks>) -> ErasureMetaCf {
+        ErasureMetaCf { db }
+    }
+
+    fn key(slot: u64) -> Vec<u8> {
+        let mut key = vec![0u8; 16];
+        BigEndian::write_u64(&mut key[0..8], slot);
+        key
+    }
+
+    fn slot(key: &[u8]) -> Result<u64> {
+        let slot = BigEndian::read_u64(&key[..8]);
+
+        Ok(slot)
+    }
+}
+
 impl LedgerColumnFamilyRaw<Rocks> for DataCf {
     fn db(&self) -> &Arc<Rocks> {
         &self.db
@@ -367,6 +449,19 @@ impl LedgerColumnFamily<Rocks> for MetaCf {
 
     fn handle(&self) -> ColumnFamily {
         self.db.cf_handle(super::META_CF).unwrap()
+    }
+}
+
+#[cfg(feature = "erasure")]
+impl LedgerColumnFamily<Rocks> for ErasureMetaCf {
+    type ValueType = super::ErasureMeta;
+
+    fn db(&self) -> &Arc<Rocks> {
+        &self.db
+    }
+
+    fn handle(&self) -> ColumnFamily {
+        self.db.cf_handle(super::ERASURE_META_CF).unwrap()
     }
 }
 

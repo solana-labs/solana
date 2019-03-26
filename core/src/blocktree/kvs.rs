@@ -5,6 +5,8 @@ use solana_kvstore::{self as kvstore, Key, KvStore};
 
 use std::sync::Arc;
 
+#[cfg(feature = "erasure")]
+use super::db::IErasureMetaCf;
 use super::db::{
     Cursor, Database, IDataCf, IErasureCf, IMetaCf, IWriteBatch, LedgerColumnFamily,
     LedgerColumnFamilyRaw,
@@ -30,6 +32,13 @@ pub struct DataCf {
 #[derive(Debug)]
 pub struct ErasureCf {
     db: Arc<Kvs>,
+}
+
+/// The erasure meta column family
+#[cfg(feature = "erasure")]
+#[derive(Debug)]
+pub struct ErasureMetaCf {
+    db: Arc<Rocks>,
 }
 
 /// Dummy struct to get things compiling
@@ -213,6 +222,17 @@ impl IMetaCf<Kvs> for MetaCf {
     }
 
     fn index_from_key(_key: &Key) -> Result<u64> {
+        unimplemented!()
+    }
+}
+
+#[cfg(feature = "erasure")]
+impl IErasureMetaCf<Kvs> for ErasureMetaCf {
+    fn key(&self, slot: u64, chunk: u64) -> Vec<u8> {
+        unimplemented!()
+    }
+
+    fn indexes(&self, key: &[u8]) -> Result<(u64, u64)> {
         unimplemented!()
     }
 }

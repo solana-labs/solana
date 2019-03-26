@@ -362,7 +362,7 @@ impl CodingGenerator {
 // Recover the missing data and coding blobs from the input ledger. Returns a vector
 // of the recovered missing data blobs and a vector of the recovered coding blobs
 pub fn recover(
-    blocktree: &Arc<Blocktree>,
+    blocktree: &Blocktree,
     slot: u64,
     start_idx: u64,
 ) -> Result<(Vec<SharedBlob>, Vec<SharedBlob>)> {
