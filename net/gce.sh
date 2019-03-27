@@ -164,7 +164,7 @@ while getopts "h?p:Pn:c:z:gG:a:d:bu" opt; do
 done
 shift $((OPTIND - 1))
 
-[[ ${#zones[@]} -gt 0 ]] || zones+=($(cloud_DefaultZone))
+[[ ${#zones[@]} -gt 0 ]] || zones+=("$(cloud_DefaultZone)")
 
 [[ -z $1 ]] || usage "Unexpected argument: $1"
 if [[ $cloudProvider = ec2 ]]; then
