@@ -466,7 +466,7 @@ impl ReplayStage {
             {
                 prog.supermajority_confirmed_ms = timing::timestamp();
                 let duration = prog.supermajority_confirmed_ms - prog.started_ms;
-                info!("fork confirmed {} {}", *slot, duration);
+                info!("validator fork confirmed {} {}", *slot, duration);
                 solana_metrics::submit(
                     influxdb::Point::new(&"validator-confirmation")
                         .add_field("duration_ms", influxdb::Value::Integer(duration as i64))
