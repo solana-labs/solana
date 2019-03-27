@@ -96,7 +96,7 @@ impl ReplayStage {
         let my_id = *my_id;
         let vote_account = *vote_account;
         let mut ticks_per_slot = 0;
-        let mut locktower = Locktower::new_from_forks(&bank_forks.read().unwrap());
+        let mut locktower = Locktower::new_from_forks(&bank_forks.read().unwrap(), &my_id);
 
         // Start the replay stage loop
         let t_replay = Builder::new()
