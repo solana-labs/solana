@@ -209,7 +209,7 @@ cloud_ForEachInstance() {
   declare count=1
   for info in "${instances[@]}"; do
     declare name publicIp privateIp
-    IFS=: read -r name publicIp privateIp < <(echo "$info")
+    IFS=: read -r name publicIp privateIp zone < <(echo "$info")
 
     eval "$cmd" "$name" "$publicIp" "$privateIp" "$count" "$@"
     count=$((count + 1))
