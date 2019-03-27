@@ -69,19 +69,22 @@ impl InstructionError {
     }
 }
 
-/// An instruction to execute a program
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct GenericInstruction<P, Q> {
-    /// Index into the transaction program ids array indicating the program account that executes this instruction
-    pub program_ids_index: P,
-    /// Ordered indices into the transaction keys array indicating which accounts to pass to the program
-    pub accounts: Vec<Q>,
-    /// The program input data
+#[derive(Debug, PartialEq)]
+pub struct Instruction {
+    /// Pubkey of the instruction processor that executes this instruction
+    pub program_ids_index: Pubkey,
+    /// Metadata for what accounts should be passed to the instruction processor
+    pub accounts: Vec<AccountMeta>,
+    /// Opaque data passed to the instruction processor
     pub data: Vec<u8>,
 }
 
-impl<P, Q> GenericInstruction<P, Q> {
-    pub fn new<T: Serialize>(program_ids_index: P, data: &T, accounts: Vec<Q>) -> Self {
+impl Instruction {
+    pub fn new<T: Serialize>(
+        program_ids_index: Pubkey,
+        data: &T,
+        accounts: Vec<AccountMeta>,
+    ) -> Self {
         let data = serialize(data).unwrap();
         Self {
             program_ids_index,
@@ -106,10 +109,27 @@ impl AccountMeta {
     }
 }
 
-pub type Instruction = GenericInstruction<Pubkey, AccountMeta>;
-pub type CompiledInstruction = GenericInstruction<u8, u8>;
+/// An instruction to execute a program
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct CompiledInstruction {
+    /// Index into the transaction program ids array indicating the program account that executes this instruction
+    pub program_ids_index: u8,
+    /// Ordered indices into the transaction keys array indicating which accounts to pass to the program
+    pub accounts: Vec<u8>,
+    /// The program input data
+    pub data: Vec<u8>,
+}
 
 impl CompiledInstruction {
+    pub fn new<T: Serialize>(program_ids_index: u8, data: &T, accounts: Vec<u8>) -> Self {
+        let data = serialize(data).unwrap();
+        Self {
+            program_ids_index,
+            data,
+            accounts,
+        }
+    }
+
     pub fn serialize_with(mut writer: &mut Cursor<&mut [u8]>, ix: &Self) -> Result<(), Error> {
         writer.write_all(&[ix.program_ids_index])?;
         serialize_vec_bytes(&mut writer, &ix.accounts[..])?;
