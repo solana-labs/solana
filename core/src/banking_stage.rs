@@ -5,7 +5,6 @@
 use crate::cluster_info::ClusterInfo;
 use crate::entry;
 use crate::entry::Entry;
-use crate::leader_confirmation_service::LeaderConfirmationService;
 use crate::leader_schedule_utils;
 use crate::packet;
 use crate::packet::SharedPackets;
@@ -69,10 +68,8 @@ impl BankingStage {
         // Once an entry has been recorded, its blockhash is registered with the bank.
         let exit = Arc::new(AtomicBool::new(false));
 
-        // Single thread to compute confirmation
-        let lcs_handle = LeaderConfirmationService::start(&poh_recorder, exit.clone());
         // Many banks that process transactions in parallel.
-        let mut bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
+        let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|_| {
                 let verified_receiver = verified_receiver.clone();
                 let poh_recorder = poh_recorder.clone();
@@ -87,7 +84,6 @@ impl BankingStage {
                     .unwrap()
             })
             .collect();
-        bank_thread_hdls.push(lcs_handle);
         Self { bank_thread_hdls }
     }
 
