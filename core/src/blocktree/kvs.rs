@@ -1,13 +1,12 @@
 use crate::entry::Entry;
 use crate::packet::Blob;
 use crate::result::{Error, Result};
+use byteorder::{BigEndian, ByteOrder};
 use solana_kvstore::{self as kvstore, Key, KvStore};
-
 use std::sync::Arc;
 
 use super::db::{
-    Cursor, Database, IDataCf, IErasureCf, IMetaCf, IWriteBatch, LedgerColumnFamily,
-    LedgerColumnFamilyRaw,
+    Cursor, Database, IWriteBatch, IndexColumn, LedgerColumnFamily, LedgerColumnFamilyRaw,
 };
 use super::{Blocktree, BlocktreeError};
 
@@ -68,7 +67,7 @@ impl Blocktree {
 impl Database for Kvs {
     type Error = kvstore::Error;
     type Key = Key;
-    type KeyRef = Key;
+    type OwnedKey = Key;
     type ColumnFamily = ColumnFamily;
     type Cursor = KvsCursor;
     type EntryIter = EntryIterator;
@@ -135,88 +134,6 @@ impl IWriteBatch<Kvs> for KvsWriteBatch {
     }
 }
 
-impl IDataCf<Kvs> for DataCf {
-    fn new(db: Arc<Kvs>) -> Self {
-        DataCf { db }
-    }
-
-    fn get_by_slot_index(&self, _slot: u64, _index: u64) -> Result<Option<Vec<u8>>> {
-        unimplemented!()
-    }
-
-    fn delete_by_slot_index(&self, _slot: u64, _index: u64) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn put_by_slot_index(&self, _slot: u64, _index: u64, _serialized_value: &[u8]) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn key(_slot: u64, _index: u64) -> Key {
-        unimplemented!()
-    }
-
-    fn slot_from_key(_key: &Key) -> Result<u64> {
-        unimplemented!()
-    }
-
-    fn index_from_key(_key: &Key) -> Result<u64> {
-        unimplemented!()
-    }
-}
-
-impl IErasureCf<Kvs> for ErasureCf {
-    fn new(db: Arc<Kvs>) -> Self {
-        ErasureCf { db }
-    }
-
-    fn delete_by_slot_index(&self, _slot: u64, _index: u64) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn get_by_slot_index(&self, _slot: u64, _index: u64) -> Result<Option<Vec<u8>>> {
-        unimplemented!()
-    }
-
-    fn put_by_slot_index(&self, _slot: u64, _index: u64, _serialized_value: &[u8]) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn key(slot: u64, index: u64) -> Key {
-        DataCf::key(slot, index)
-    }
-
-    fn slot_from_key(key: &Key) -> Result<u64> {
-        DataCf::slot_from_key(key)
-    }
-
-    fn index_from_key(key: &Key) -> Result<u64> {
-        DataCf::index_from_key(key)
-    }
-}
-
-impl IMetaCf<Kvs> for MetaCf {
-    fn new(db: Arc<Kvs>) -> Self {
-        MetaCf { db }
-    }
-
-    fn key(_slot: u64) -> Key {
-        unimplemented!()
-    }
-
-    fn get_slot_meta(&self, _slot: u64) -> Result<Option<super::SlotMeta>> {
-        unimplemented!()
-    }
-
-    fn put_slot_meta(&self, _slot: u64, _slot_meta: &super::SlotMeta) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn index_from_key(_key: &Key) -> Result<u64> {
-        unimplemented!()
-    }
-}
-
 impl LedgerColumnFamilyRaw<Kvs> for DataCf {
     fn db(&self) -> &Arc<Kvs> {
         &self.db
@@ -224,6 +141,20 @@ impl LedgerColumnFamilyRaw<Kvs> for DataCf {
 
     fn handle(&self) -> ColumnFamily {
         self.db.cf_handle(super::DATA_CF).unwrap()
+    }
+}
+
+impl IndexColumn<Kvs> for DataCf {
+    type Index = (u64, u64);
+
+    fn index(key: &Key) -> (u64, u64) {
+        let slot = BigEndian::read_u64(&key.0[8..16]);
+        let index = BigEndian::read_u64(&key.0[16..24]);
+        (slot, index)
+    }
+
+    fn key(idx: &(u64, u64)) -> Key {
+        Key::from((0, idx.0, idx.1))
     }
 }
 
@@ -237,15 +168,43 @@ impl LedgerColumnFamilyRaw<Kvs> for ErasureCf {
     }
 }
 
-impl LedgerColumnFamily<Kvs> for MetaCf {
-    type ValueType = super::SlotMeta;
+impl IndexColumn<Kvs> for ErasureCf {
+    type Index = (u64, u64);
 
+    fn index(key: &Key) -> (u64, u64) {
+        DataCf::index(key)
+    }
+
+    fn key(idx: &(u64, u64)) -> Key {
+        DataCf::key(idx)
+    }
+}
+
+impl LedgerColumnFamilyRaw<Kvs> for MetaCf {
     fn db(&self) -> &Arc<Kvs> {
         &self.db
     }
 
     fn handle(&self) -> ColumnFamily {
         self.db.cf_handle(super::META_CF).unwrap()
+    }
+}
+
+impl LedgerColumnFamily<Kvs> for MetaCf {
+    type ValueType = super::SlotMeta;
+}
+
+impl IndexColumn<Kvs> for MetaCf {
+    type Index = u64;
+
+    fn index(key: &Key) -> u64 {
+        BigEndian::read_u64(&key.0[8..16])
+    }
+
+    fn key(slot: &u64) -> Key {
+        let mut key = Key::default();
+        BigEndian::write_u64(&mut key.0[8..16], *slot);
+        key
     }
 }
 

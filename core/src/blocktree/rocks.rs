@@ -4,7 +4,7 @@ use crate::result::{Error, Result};
 
 use bincode::deserialize;
 
-use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 
 use rocksdb::{
     self, ColumnFamily, ColumnFamilyDescriptor, DBRawIterator, IteratorMode, Options,
@@ -15,13 +15,11 @@ use solana_sdk::hash::Hash;
 
 use std::collections::VecDeque;
 use std::fs;
-use std::io;
 use std::path::Path;
 use std::sync::Arc;
 
 use super::db::{
-    Cursor, Database, IDataCf, IErasureCf, IMetaCf, IWriteBatch, LedgerColumnFamily,
-    LedgerColumnFamilyRaw,
+    Cursor, Database, IWriteBatch, IndexColumn, LedgerColumnFamily, LedgerColumnFamilyRaw,
 };
 use super::{Blocktree, BlocktreeError};
 
@@ -98,13 +96,13 @@ impl Blocktree {
         )?));
 
         // Create the metadata column family
-        let meta_cf = MetaCf::new(db.clone());
+        let meta_cf = MetaCf { db: db.clone() };
 
         // Create the data column family
-        let data_cf = DataCf::new(db.clone());
+        let data_cf = DataCf { db: db.clone() };
 
         // Create the erasure column family
-        let erasure_cf = ErasureCf::new(db.clone());
+        let erasure_cf = ErasureCf { db: db.clone() };
 
         Ok(Blocktree {
             db,
@@ -167,8 +165,8 @@ impl Blocktree {
 
 impl Database for Rocks {
     type Error = rocksdb::Error;
-    type Key = Vec<u8>;
-    type KeyRef = [u8];
+    type Key = [u8];
+    type OwnedKey = Vec<u8>;
     type ColumnFamily = ColumnFamily;
     type Cursor = DBRawIterator;
     type EntryIter = EntryIterator;
@@ -238,106 +236,6 @@ impl IWriteBatch<Rocks> for RWriteBatch {
     }
 }
 
-impl IDataCf<Rocks> for DataCf {
-    fn new(db: Arc<Rocks>) -> Self {
-        DataCf { db }
-    }
-
-    fn get_by_slot_index(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
-        let key = Self::key(slot, index);
-        self.get(&key)
-    }
-
-    fn delete_by_slot_index(&self, slot: u64, index: u64) -> Result<()> {
-        let key = Self::key(slot, index);
-        self.delete(&key)
-    }
-
-    fn put_by_slot_index(&self, slot: u64, index: u64, serialized_value: &[u8]) -> Result<()> {
-        let key = Self::key(slot, index);
-        self.put(&key, serialized_value)
-    }
-
-    fn key(slot: u64, index: u64) -> Vec<u8> {
-        let mut key = vec![0u8; 16];
-        BigEndian::write_u64(&mut key[0..8], slot);
-        BigEndian::write_u64(&mut key[8..16], index);
-        key
-    }
-
-    fn slot_from_key(key: &[u8]) -> Result<u64> {
-        let mut rdr = io::Cursor::new(&key[0..8]);
-        let height = rdr.read_u64::<BigEndian>()?;
-        Ok(height)
-    }
-
-    fn index_from_key(key: &[u8]) -> Result<u64> {
-        let mut rdr = io::Cursor::new(&key[8..16]);
-        let index = rdr.read_u64::<BigEndian>()?;
-        Ok(index)
-    }
-}
-
-impl IErasureCf<Rocks> for ErasureCf {
-    fn new(db: Arc<Rocks>) -> Self {
-        ErasureCf { db }
-    }
-    fn delete_by_slot_index(&self, slot: u64, index: u64) -> Result<()> {
-        let key = Self::key(slot, index);
-        self.delete(&key)
-    }
-
-    fn get_by_slot_index(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
-        let key = Self::key(slot, index);
-        self.get(&key)
-    }
-
-    fn put_by_slot_index(&self, slot: u64, index: u64, serialized_value: &[u8]) -> Result<()> {
-        let key = Self::key(slot, index);
-        self.put(&key, serialized_value)
-    }
-
-    fn key(slot: u64, index: u64) -> Vec<u8> {
-        DataCf::key(slot, index)
-    }
-
-    fn slot_from_key(key: &[u8]) -> Result<u64> {
-        DataCf::slot_from_key(key)
-    }
-
-    fn index_from_key(key: &[u8]) -> Result<u64> {
-        DataCf::index_from_key(key)
-    }
-}
-
-impl IMetaCf<Rocks> for MetaCf {
-    fn new(db: Arc<Rocks>) -> Self {
-        MetaCf { db }
-    }
-
-    fn key(slot: u64) -> Vec<u8> {
-        let mut key = vec![0u8; 8];
-        BigEndian::write_u64(&mut key[0..8], slot);
-        key
-    }
-
-    fn get_slot_meta(&self, slot: u64) -> Result<Option<super::SlotMeta>> {
-        let key = Self::key(slot);
-        self.get(&key)
-    }
-
-    fn put_slot_meta(&self, slot: u64, slot_meta: &super::SlotMeta) -> Result<()> {
-        let key = Self::key(slot);
-        self.put(&key, slot_meta)
-    }
-
-    fn index_from_key(key: &[u8]) -> Result<u64> {
-        let mut rdr = io::Cursor::new(&key[..]);
-        let index = rdr.read_u64::<BigEndian>()?;
-        Ok(index)
-    }
-}
-
 impl LedgerColumnFamilyRaw<Rocks> for DataCf {
     fn db(&self) -> &Arc<Rocks> {
         &self.db
@@ -345,6 +243,23 @@ impl LedgerColumnFamilyRaw<Rocks> for DataCf {
 
     fn handle(&self) -> ColumnFamily {
         self.db.cf_handle(super::DATA_CF).unwrap()
+    }
+}
+
+impl IndexColumn<Rocks> for DataCf {
+    type Index = (u64, u64);
+
+    fn index(key: &[u8]) -> (u64, u64) {
+        let slot = BigEndian::read_u64(&key[..8]);
+        let index = BigEndian::read_u64(&key[8..16]);
+        (slot, index)
+    }
+
+    fn key(idx: &(u64, u64)) -> Vec<u8> {
+        let mut key = vec![0u8; 16];
+        BigEndian::write_u64(&mut key[0..8], idx.0);
+        BigEndian::write_u64(&mut key[8..16], idx.1);
+        key
     }
 }
 
@@ -358,15 +273,43 @@ impl LedgerColumnFamilyRaw<Rocks> for ErasureCf {
     }
 }
 
-impl LedgerColumnFamily<Rocks> for MetaCf {
-    type ValueType = super::SlotMeta;
+impl IndexColumn<Rocks> for ErasureCf {
+    type Index = (u64, u64);
 
+    fn index(key: &[u8]) -> (u64, u64) {
+        DataCf::index(key)
+    }
+
+    fn key(idx: &(u64, u64)) -> Vec<u8> {
+        DataCf::key(idx)
+    }
+}
+
+impl LedgerColumnFamilyRaw<Rocks> for MetaCf {
     fn db(&self) -> &Arc<Rocks> {
         &self.db
     }
 
     fn handle(&self) -> ColumnFamily {
         self.db.cf_handle(super::META_CF).unwrap()
+    }
+}
+
+impl LedgerColumnFamily<Rocks> for MetaCf {
+    type ValueType = super::SlotMeta;
+}
+
+impl IndexColumn<Rocks> for MetaCf {
+    type Index = u64;
+
+    fn index(key: &[u8]) -> u64 {
+        BigEndian::read_u64(&key[..8])
+    }
+
+    fn key(slot: &u64) -> Vec<u8> {
+        let mut key = vec![0; 8];
+        BigEndian::write_u64(&mut key[..], *slot);
+        key
     }
 }
 
