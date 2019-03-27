@@ -568,14 +568,8 @@ mod tests {
         let keypair3 = Keypair::new();
 
         // fund: put 4 in each of 1 and 2
-        assert_matches!(
-            bank.transfer(4, &mint_keypair, &keypair1.pubkey(), bank.last_blockhash()),
-            Ok(_)
-        );
-        assert_matches!(
-            bank.transfer(4, &mint_keypair, &keypair2.pubkey(), bank.last_blockhash()),
-            Ok(_)
-        );
+        assert_matches!(bank.transfer(4, &mint_keypair, &keypair1.pubkey()), Ok(_));
+        assert_matches!(bank.transfer(4, &mint_keypair, &keypair2.pubkey()), Ok(_));
 
         // construct an Entry whose 2nd transaction would cause a lock conflict with previous entry
         let entry_1_to_mint = next_entry(
