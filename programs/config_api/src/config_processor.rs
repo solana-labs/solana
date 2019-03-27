@@ -34,9 +34,9 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
-    use solana_sdk::transaction::Transaction;
 
     #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
     struct MyConfig {
@@ -131,9 +131,9 @@ mod tests {
         let instruction = ConfigInstruction::new_store(&from_pubkey, &config_pubkey, &my_config);
 
         // Replace instruction data with a vector that's too large
-        let mut transaction = Transaction::new_unsigned_instructions(vec![instruction]);
-        transaction.instructions[0].data = vec![0; 123];
-        config_client.process_transaction(transaction).unwrap_err();
+        let mut message = Message::new(vec![instruction]);
+        message.instructions[0].data = vec![0; 123];
+        config_client.process_message(message).unwrap_err();
     }
 
     #[test]
@@ -149,14 +149,14 @@ mod tests {
 
         let move_instruction = SystemInstruction::new_move(&system_pubkey, &Pubkey::default(), 42);
         let my_config = MyConfig::new(42);
-        let store_instruction =
+        let mut store_instruction =
             ConfigInstruction::new_store(&from_pubkey, &config_pubkey, &my_config);
+        store_instruction.accounts[0].is_signer = false;
+        store_instruction.accounts[1].is_signer = false;
 
         // Don't sign the transaction with `config_client`
-        let mut transaction =
-            Transaction::new_unsigned_instructions(vec![move_instruction, store_instruction]);
-        transaction.sign_unchecked(&[&system_keypair], bank.last_blockhash());
+        let message = Message::new(vec![move_instruction, store_instruction]);
         let system_client = BankClient::new(&bank, system_keypair);
-        system_client.process_transaction(transaction).unwrap_err();
+        system_client.process_message(message).unwrap_err();
     }
 }

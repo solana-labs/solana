@@ -1,5 +1,6 @@
 use crate::bank::Bank;
 use solana_sdk::instruction::Instruction;
+use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
@@ -28,14 +29,11 @@ impl<'a> BankClient<'a> {
         self.keypairs.iter().map(|x| x.pubkey()).collect()
     }
 
-    fn sign(&self, tx: &mut Transaction) {
+    pub fn process_message(&self, message: Message) -> Result<(), TransactionError> {
         let keypairs: Vec<_> = self.keypairs.iter().collect();
-        tx.sign(&keypairs, self.bank.last_blockhash());
-    }
-
-    pub fn process_transaction(&self, mut tx: Transaction) -> Result<(), TransactionError> {
-        self.sign(&mut tx);
-        self.bank.process_transaction(&tx)
+        let blockhash = self.bank.last_blockhash();
+        let transaction = Transaction::new(&keypairs, message, blockhash);
+        self.bank.process_transaction(&transaction)
     }
 
     /// Create and process a transaction from a list of instructions.
@@ -43,7 +41,7 @@ impl<'a> BankClient<'a> {
         &self,
         instructions: Vec<Instruction>,
     ) -> Result<(), TransactionError> {
-        self.process_transaction(Transaction::new_unsigned_instructions(instructions))
+        self.process_message(Message::new(instructions))
     }
 
     /// Create and process a transaction from a single instruction.
