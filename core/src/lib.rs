@@ -38,7 +38,6 @@ pub mod fetch_stage;
 pub mod fullnode;
 pub mod gen_keys;
 pub mod gossip_service;
-pub mod leader_confirmation_service;
 pub mod leader_schedule;
 pub mod leader_schedule_utils;
 pub mod local_cluster;
