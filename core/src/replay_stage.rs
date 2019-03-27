@@ -6,12 +6,13 @@ use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
 use crate::leader_schedule_utils;
-use crate::locktower::Locktower;
+use crate::locktower::{Locktower, StakeLockout};
 use crate::packet::BlobError;
 use crate::poh_recorder::PohRecorder;
 use crate::result;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
+use hashbrown::HashMap;
 use solana_metrics::counter::Counter;
 use solana_metrics::influxdb;
 use solana_runtime::bank::Bank;
@@ -50,6 +51,24 @@ impl Drop for Finalizer {
 
 pub struct ReplayStage {
     t_replay: JoinHandle<result::Result<()>>,
+}
+
+#[derive(Default)]
+struct ForkProgress {
+    last_entry: Hash,
+    num_blobs: usize,
+    started_ms: u64,
+    supermajority_confirmed_ms: u64,
+}
+impl ForkProgress {
+    pub fn new(last_entry: Hash) -> Self {
+        Self {
+            last_entry,
+            num_blobs: 0,
+            started_ms: timing::timestamp(),
+            supermajority_confirmed_ms: 0,
+        }
+    }
 }
 
 impl ReplayStage {
@@ -125,65 +144,8 @@ impl ReplayStage {
                         ticks_per_slot = bank.ticks_per_slot();
                     }
 
-                    let locktower_start = Instant::now();
-                    // Locktower voting
-                    let descendants = bank_forks.read().unwrap().descendants();
-                    let ancestors = bank_forks.read().unwrap().ancestors();
-                    let frozen_banks = bank_forks.read().unwrap().frozen_banks();
-
-                    trace!("frozen_banks {}", frozen_banks.len());
-                    let mut votable: Vec<(u128, Arc<Bank>)> = frozen_banks
-                        .values()
-                        .filter(|b| {
-                            let is_votable = b.is_votable();
-                            trace!("bank is votable: {} {}", b.slot(), is_votable);
-                            is_votable
-                        })
-                        .filter(|b| {
-                            let has_voted = locktower.has_voted(b.slot());
-                            trace!("bank is has_voted: {} {}", b.slot(), has_voted);
-                            !has_voted
-                        })
-                        .filter(|b| {
-                            let is_locked_out = locktower.is_locked_out(b.slot(), &descendants);
-                            trace!("bank is is_locked_out: {} {}", b.slot(), is_locked_out);
-                            !is_locked_out
-                        })
-                        .map(|bank| {
-                            (
-                                bank,
-                                locktower.collect_vote_lockouts(
-                                    bank.slot(),
-                                    bank.vote_accounts(),
-                                    &ancestors,
-                                ),
-                            )
-                        })
-                        .filter(|(b, stake_lockouts)| {
-                            let vote_threshold =
-                                locktower.check_vote_stake_threshold(b.slot(), &stake_lockouts);
-                            trace!("bank vote_threshold: {} {}", b.slot(), vote_threshold);
-                            vote_threshold
-                        })
-                        .map(|(b, stake_lockouts)| {
-                            (locktower.calculate_weight(&stake_lockouts), b.clone())
-                        })
-                        .collect();
-
-                    votable.sort_by_key(|b| b.0);
-                    trace!("votable_banks {}", votable.len());
-                    let ms = timing::duration_as_ms(&locktower_start.elapsed());
-                    if !votable.is_empty() {
-                        let weights: Vec<u128> = votable.iter().map(|x| x.0).collect();
-                        info!(
-                            "@{:?} locktower duration: {:?} len: {} weights: {:?}",
-                            timing::timestamp(),
-                            ms,
-                            votable.len(),
-                            weights
-                        );
-                    }
-                    inc_new_counter_info!("replay_stage-locktower_duration", ms as usize);
+                    let votable =
+                        Self::generate_votable_banks(&bank_forks, &locktower, &mut progress);
 
                     if let Some((_, bank)) = votable.last() {
                         subscriptions.notify_subscribers(&bank);
@@ -352,10 +314,10 @@ impl ReplayStage {
                 });
         }
     }
-    pub fn replay_blocktree_into_bank(
+    fn replay_blocktree_into_bank(
         bank: &Bank,
         blocktree: &Blocktree,
-        progress: &mut HashMap<u64, (Hash, usize)>,
+        progress: &mut HashMap<u64, ForkProgress>,
         forward_entry_sender: &EntrySender,
     ) -> result::Result<()> {
         let (entries, num) = Self::load_blocktree_entries(bank, blocktree, progress)?;
@@ -373,32 +335,122 @@ impl ReplayStage {
         Ok(())
     }
 
-    pub fn load_blocktree_entries(
+    fn generate_votable_banks(
+        bank_forks: &Arc<RwLock<BankForks>>,
+        locktower: &Locktower,
+        progress: &mut HashMap<u64, ForkProgress>,
+    ) -> Vec<(u128, Arc<Bank>)> {
+        let locktower_start = Instant::now();
+        // Locktower voting
+        let descendants = bank_forks.read().unwrap().descendants();
+        let ancestors = bank_forks.read().unwrap().ancestors();
+        let frozen_banks = bank_forks.read().unwrap().frozen_banks();
+
+        trace!("frozen_banks {}", frozen_banks.len());
+        let mut votable: Vec<(u128, Arc<Bank>)> = frozen_banks
+            .values()
+            .filter(|b| {
+                let is_votable = b.is_votable();
+                trace!("bank is votable: {} {}", b.slot(), is_votable);
+                is_votable
+            })
+            .filter(|b| {
+                let is_recent_epoch = locktower.is_recent_epoch(b);
+                trace!("bank is is_recent_epoch: {} {}", b.slot(), is_recent_epoch);
+                is_recent_epoch
+            })
+            .filter(|b| {
+                let has_voted = locktower.has_voted(b.slot());
+                trace!("bank is has_voted: {} {}", b.slot(), has_voted);
+                !has_voted
+            })
+            .filter(|b| {
+                let is_locked_out = locktower.is_locked_out(b.slot(), &descendants);
+                trace!("bank is is_locked_out: {} {}", b.slot(), is_locked_out);
+                !is_locked_out
+            })
+            .map(|bank| {
+                (
+                    bank,
+                    locktower.collect_vote_lockouts(bank.slot(), bank.vote_accounts(), &ancestors),
+                )
+            })
+            .filter(|(b, stake_lockouts)| {
+                let vote_threshold =
+                    locktower.check_vote_stake_threshold(b.slot(), &stake_lockouts);
+                Self::confirm_forks(locktower, stake_lockouts, progress);
+                debug!("bank vote_threshold: {} {}", b.slot(), vote_threshold);
+                vote_threshold
+            })
+            .map(|(b, stake_lockouts)| (locktower.calculate_weight(&stake_lockouts), b.clone()))
+            .collect();
+
+        votable.sort_by_key(|b| b.0);
+        let ms = timing::duration_as_ms(&locktower_start.elapsed());
+
+        trace!("votable_banks {}", votable.len());
+        if !votable.is_empty() {
+            let weights: Vec<u128> = votable.iter().map(|x| x.0).collect();
+            info!(
+                "@{:?} locktower duration: {:?} len: {} weights: {:?}",
+                timing::timestamp(),
+                ms,
+                votable.len(),
+                weights
+            );
+        }
+        inc_new_counter_info!("replay_stage-locktower_duration", ms as usize);
+
+        votable
+    }
+
+    fn confirm_forks(
+        locktower: &Locktower,
+        stake_lockouts: &HashMap<u64, StakeLockout>,
+        progress: &mut HashMap<u64, ForkProgress>,
+    ) {
+        for (slot, prog) in progress.iter_mut() {
+            if prog.supermajority_confirmed_ms == 0
+                && locktower.is_slot_confirmed(*slot, stake_lockouts)
+            {
+                prog.supermajority_confirmed_ms = timing::timestamp();
+                let duration = prog.supermajority_confirmed_ms - prog.started_ms;
+                info!("fork confirmed {} {}", *slot, duration);
+                solana_metrics::submit(
+                    influxdb::Point::new(&"validator-confirmation")
+                        .add_field("duration_ms", influxdb::Value::Integer(duration as i64))
+                        .to_owned(),
+                );
+            }
+        }
+    }
+
+    fn load_blocktree_entries(
         bank: &Bank,
         blocktree: &Blocktree,
-        progress: &mut HashMap<u64, (Hash, usize)>,
+        progress: &mut HashMap<u64, ForkProgress>,
     ) -> result::Result<(Vec<Entry>, usize)> {
         let bank_slot = bank.slot();
         let bank_progress = &mut progress
             .entry(bank_slot)
-            .or_insert((bank.last_blockhash(), 0));
-        blocktree.get_slot_entries_with_blob_count(bank_slot, bank_progress.1 as u64, None)
+            .or_insert(ForkProgress::new(bank.last_blockhash()));
+        blocktree.get_slot_entries_with_blob_count(bank_slot, bank_progress.num_blobs as u64, None)
     }
 
-    pub fn replay_entries_into_bank(
+    fn replay_entries_into_bank(
         bank: &Bank,
         entries: Vec<Entry>,
-        progress: &mut HashMap<u64, (Hash, usize)>,
+        progress: &mut HashMap<u64, ForkProgress>,
         forward_entry_sender: &EntrySender,
         num: usize,
     ) -> result::Result<()> {
         let bank_progress = &mut progress
             .entry(bank.slot())
-            .or_insert((bank.last_blockhash(), 0));
-        let result = Self::verify_and_process_entries(&bank, &entries, &bank_progress.0);
-        bank_progress.1 += num;
+            .or_insert(ForkProgress::new(bank.last_blockhash()));
+        let result = Self::verify_and_process_entries(&bank, &entries, &bank_progress.last_entry);
+        bank_progress.num_blobs += num;
         if let Some(last_entry) = entries.last() {
-            bank_progress.0 = last_entry.hash;
+            bank_progress.last_entry = last_entry.hash;
         }
         if result.is_ok() {
             forward_entry_sender.send(entries)?;
@@ -428,7 +480,7 @@ impl ReplayStage {
 
     fn handle_new_root(
         bank_forks: &Arc<RwLock<BankForks>>,
-        progress: &mut HashMap<u64, (Hash, usize)>,
+        progress: &mut HashMap<u64, ForkProgress>,
     ) {
         let r_bank_forks = bank_forks.read().unwrap();
         progress.retain(|k, _| r_bank_forks.get(*k).is_some());
@@ -437,7 +489,7 @@ impl ReplayStage {
     fn process_completed_bank(
         my_id: &Pubkey,
         bank: Arc<Bank>,
-        progress: &mut HashMap<u64, (Hash, usize)>,
+        progress: &mut HashMap<u64, ForkProgress>,
         slot_full_sender: &Sender<(u64, Pubkey)>,
     ) {
         bank.freeze();
@@ -668,7 +720,7 @@ mod test {
         let bank0 = Bank::default();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
         let mut progress = HashMap::new();
-        progress.insert(5, (Hash::default(), 0));
+        progress.insert(5, ForkProgress::new(Hash::default()));
         ReplayStage::handle_new_root(&bank_forks, &mut progress);
         assert!(progress.is_empty());
     }
