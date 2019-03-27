@@ -36,17 +36,10 @@ impl<'a> BankClient<'a> {
         self.bank.process_transaction(&transaction)
     }
 
-    /// Create and process a transaction from a list of instructions.
-    pub fn process_instructions(
-        &self,
-        instructions: Vec<Instruction>,
-    ) -> Result<(), TransactionError> {
-        self.process_message(Message::new(instructions))
-    }
-
     /// Create and process a transaction from a single instruction.
     pub fn process_instruction(&self, instruction: Instruction) -> Result<(), TransactionError> {
-        self.process_instructions(vec![instruction])
+        let message = Message::new(vec![instruction]);
+        self.process_message(message)
     }
 
     /// Transfer lamports to pubkey

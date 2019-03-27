@@ -51,6 +51,7 @@ mod tests {
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
+    use solana_sdk::message::Message;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
@@ -69,7 +70,8 @@ mod tests {
         lamports: u64,
     ) -> Result<()> {
         let ixs = VoteInstruction::new_account(&bank_client.pubkey(), vote_id, lamports);
-        bank_client.process_instructions(ixs)
+        let message = Message::new(ixs);
+        bank_client.process_message(message)
     }
 
     fn create_vote_account_with_delegate(
@@ -81,7 +83,8 @@ mod tests {
         let mut ixs = VoteInstruction::new_account(&bank_client.pubkey(), &vote_id, lamports);
         let delegate_ix = VoteInstruction::new_delegate_stake(&vote_id, delegate_id);
         ixs.push(delegate_ix);
-        bank_client.process_instructions(ixs)
+        let message = Message::new(ixs);
+        bank_client.process_message(message)
     }
 
     fn submit_vote(
@@ -142,7 +145,8 @@ mod tests {
         // the 0th account in the second instruction is not! The program
         // needs to check that it's signed.
         let move_ix = SystemInstruction::new_move(&mallory_id, &vote_id, 1);
-        let result = mallory_client.process_instructions(vec![move_ix, vote_ix]);
+        let message = Message::new(vec![move_ix, vote_ix]);
+        let result = mallory_client.process_message(message);
 
         // And ensure there's no vote.
         let vote_account = bank.get_account(&vote_id).unwrap();
