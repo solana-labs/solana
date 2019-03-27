@@ -2,13 +2,6 @@ use crate::instruction::{AccountMeta, Instruction};
 use crate::pubkey::Pubkey;
 use crate::system_program;
 
-#[derive(Serialize, Debug, Clone, PartialEq)]
-pub enum SystemError {
-    AccountAlreadyInUse,
-    ResultWithNegativeLamports,
-    SourceNotSystemAccount,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum SystemInstruction {
     /// Create a new account

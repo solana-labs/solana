@@ -499,7 +499,7 @@ mod tests {
     use crate::packet::to_packets;
     use crate::poh_recorder::WorkingBank;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::instruction::InstructionError;
+    use solana_sdk::instruction_error::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use std::sync::mpsc::channel;

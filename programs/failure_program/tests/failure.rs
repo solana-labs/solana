@@ -2,7 +2,7 @@ use solana_runtime::bank::Bank;
 use solana_runtime::bank_client::BankClient;
 use solana_runtime::loader_utils::{create_invoke_instruction, load_program};
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_error::InstructionError;
 use solana_sdk::native_loader;
 use solana_sdk::signature::KeypairUtil;
 use solana_sdk::transaction::TransactionError;

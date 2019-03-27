@@ -922,7 +922,7 @@ mod tests {
     use super::*;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::hash;
-    use solana_sdk::instruction::InstructionError;
+    use solana_sdk::instruction_error::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_transaction::SystemTransaction;

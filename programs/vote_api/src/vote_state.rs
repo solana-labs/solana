@@ -7,7 +7,7 @@ use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::{Account, KeyedAccount};
-use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_error::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::VecDeque;
 

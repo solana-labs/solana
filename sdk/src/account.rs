@@ -1,4 +1,8 @@
+use crate::instruction_error::InstructionError;
 use crate::pubkey::Pubkey;
+use bincode::{deserialize, serialize_into, ErrorKind};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::{cmp, fmt};
 
 /// An Account with data that is stored on chain
@@ -45,6 +49,17 @@ impl Account {
             executable: false,
         }
     }
+
+    pub fn state<T: DeserializeOwned>(&self) -> Result<T, InstructionError> {
+        deserialize(&self.data).map_err(|_| InstructionError::InvalidAccountData)
+    }
+
+    pub fn set_state<T: Serialize>(&mut self, state: &T) -> Result<(), InstructionError> {
+        serialize_into(&mut self.data, state).map_err(|err| match *err {
+            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
+            _ => InstructionError::GenericError,
+        })
+    }
 }
 
 #[repr(C)]
@@ -74,6 +89,12 @@ impl<'a> KeyedAccount<'a> {
             is_signer,
             account,
         }
+    }
+    pub fn state<F: DeserializeOwned>(&self) -> Result<F, InstructionError> {
+        self.account.state()
+    }
+    pub fn set_state<T: Serialize>(&mut self, state: &T) -> Result<(), InstructionError> {
+        self.account.set_state(state)
     }
 }
 

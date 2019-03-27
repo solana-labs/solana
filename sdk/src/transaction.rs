@@ -1,7 +1,8 @@
 //! Defines a Transaction type to package an atomic sequence of instructions.
 
 use crate::hash::{Hash, Hasher};
-use crate::instruction::{CompiledInstruction, Instruction, InstructionError};
+use crate::instruction::{CompiledInstruction, Instruction};
+use crate::instruction_error::InstructionError;
 use crate::message::Message;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::pubkey::Pubkey;

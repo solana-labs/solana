@@ -7,7 +7,7 @@ use crate::storage_instruction::StorageInstruction;
 use crate::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use log::*;
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_error::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 
 pub const TOTAL_VALIDATOR_REWARDS: u64 = 1000;
