@@ -50,7 +50,7 @@ impl BankingStage {
         let exit = Arc::new(AtomicBool::new(false));
 
         // Many banks that process transactions in parallel.
-        let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
+        let bank_thread_hdls: Vec<JoinHandle<()>> = (0..4)
             .map(|_| {
                 let verified_receiver = verified_receiver.clone();
                 let poh_recorder = poh_recorder.clone();

@@ -21,7 +21,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::KeypairUtil;
 use solana_sdk::timing::{self, duration_as_ms};
 use solana_vote_api::vote_transaction::VoteTransaction;
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, RwLock};
@@ -130,7 +129,6 @@ impl ReplayStage {
                             Self::process_completed_bank(
                                 &my_id,
                                 bank,
-                                &mut progress,
                                 &slot_full_sender,
                             );
                         }
