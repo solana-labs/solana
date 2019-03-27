@@ -142,11 +142,11 @@ impl LocalCluster {
             cluster.add_validator(&fullnode_config, *stake);
         }
 
+        discover(&cluster.entry_point_info.gossip, node_stakes.len()).unwrap();
+
         for _ in 0..num_replicators {
             cluster.add_replicator();
         }
-
-        discover(&cluster.entry_point_info.gossip, node_stakes.len()).unwrap();
 
         cluster
     }

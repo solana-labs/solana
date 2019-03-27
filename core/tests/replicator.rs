@@ -98,17 +98,14 @@ fn download_from_replicator(replicator_info: &ContactInfo) {
     assert!(received_blob);
 }
 
-#[test]
-fn test_replicator_startup_basic() {
+fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     solana_logger::setup();
     info!("starting replicator test");
 
-    const NUM_NODES: usize = 2;
-    let num_replicators = 1;
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let cluster = LocalCluster::new_with_config_replicators(
-        &[100; NUM_NODES],
+        &vec![100; num_nodes],
         10_000,
         &fullnode_config,
         num_replicators,
@@ -118,10 +115,10 @@ fn test_replicator_startup_basic() {
 
     let cluster_nodes = discover(
         &cluster.entry_point_info.gossip,
-        NUM_NODES + num_replicators,
+        num_nodes + num_replicators,
     )
     .unwrap();
-    assert_eq!(cluster_nodes.len(), NUM_NODES + num_replicators);
+    assert_eq!(cluster_nodes.len(), num_nodes + num_replicators);
     let mut replicator_count = 0;
     let mut replicator_info = ContactInfo::default();
     for node in &cluster_nodes {
@@ -134,6 +131,12 @@ fn test_replicator_startup_basic() {
     assert_eq!(replicator_count, num_replicators);
 
     download_from_replicator(&replicator_info);
+}
+
+#[test]
+fn test_replicator_startup_basic() {
+    run_replicator_startup_basic(1, 1);
+    run_replicator_startup_basic(2, 1);
 }
 
 #[test]

@@ -2,7 +2,7 @@
 //!
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT};
-use crate::entry::EntrySlice;
+use crate::entry::{EntrySender, EntrySlice};
 #[cfg(feature = "erasure")]
 use crate::erasure::CodingGenerator;
 use crate::packet::index_blobs;
@@ -41,6 +41,7 @@ impl Broadcast {
         receiver: &Receiver<WorkingBankEntries>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
+        storage_entry_sender: &EntrySender,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let (mut bank, entries) = receiver.recv_timeout(timer)?;
@@ -87,10 +88,13 @@ impl Broadcast {
 
         let blobs: Vec<_> = ventries
             .into_par_iter()
-            .flat_map(|p| {
+            .map_with(storage_entry_sender.clone(), |s, p| {
                 let entries: Vec<_> = p.into_iter().map(|e| e.0).collect();
-                entries.to_shared_blobs()
+                let blobs = entries.to_shared_blobs();
+                let _ignored = s.send(entries);
+                blobs
             })
+            .flatten()
             .collect();
 
         let blob_index = blocktree
@@ -186,6 +190,7 @@ impl BroadcastStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         receiver: &Receiver<WorkingBankEntries>,
         blocktree: &Arc<Blocktree>,
+        storage_entry_sender: EntrySender,
     ) -> BroadcastStageReturnType {
         let me = cluster_info.read().unwrap().my_data().clone();
 
@@ -196,7 +201,13 @@ impl BroadcastStage {
         };
 
         loop {
-            if let Err(e) = broadcast.run(&cluster_info, receiver, sock, blocktree) {
+            if let Err(e) = broadcast.run(
+                &cluster_info,
+                receiver,
+                sock,
+                blocktree,
+                &storage_entry_sender,
+            ) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
                         return BroadcastStageReturnType::ChannelDisconnected;
@@ -234,6 +245,7 @@ impl BroadcastStage {
         receiver: Receiver<WorkingBankEntries>,
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
+        storage_entry_sender: EntrySender,
     ) -> Self {
         let blocktree = blocktree.clone();
         let exit_sender = exit_sender.clone();
@@ -241,7 +253,13 @@ impl BroadcastStage {
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _finalizer = Finalizer::new(exit_sender);
-                Self::run(&sock, &cluster_info, &receiver, &blocktree)
+                Self::run(
+                    &sock,
+                    &cluster_info,
+                    &receiver,
+                    &blocktree,
+                    storage_entry_sender,
+                )
             })
             .unwrap();
 
@@ -301,6 +319,7 @@ mod test {
         let cluster_info = Arc::new(RwLock::new(cluster_info));
 
         let exit_sender = Arc::new(AtomicBool::new(false));
+        let (storage_sender, _receiver) = channel();
         let bank = Arc::new(Bank::default());
 
         // Start up the broadcast stage
@@ -310,6 +329,7 @@ mod test {
             entry_receiver,
             &exit_sender,
             &blocktree,
+            storage_sender,
         );
 
         MockBroadcastStage {

@@ -101,6 +101,7 @@ fn test_replay() {
     let voting_keypair = Keypair::new();
     let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
         create_test_recorder(&bank);
+    let (storage_sender, storage_receiver) = channel();
     let tvu = Tvu::new(
         &voting_keypair.pubkey(),
         Some(Arc::new(voting_keypair)),
@@ -121,6 +122,8 @@ fn test_replay() {
         ledger_signal_receiver,
         &Arc::new(RpcSubscriptions::default()),
         &poh_recorder,
+        storage_sender,
+        storage_receiver,
         &exit,
     );
 

@@ -4,7 +4,7 @@ use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
-use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
+use crate::entry::{Entry, EntrySender, EntrySlice};
 use crate::leader_schedule_utils;
 use crate::locktower::{Locktower, StakeLockout};
 use crate::packet::BlobError;
@@ -82,11 +82,11 @@ impl ReplayStage {
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-    ) -> (Self, Receiver<(u64, Pubkey)>, EntryReceiver)
+        storage_entry_sender: EntrySender,
+    ) -> (Self, Receiver<(u64, Pubkey)>)
     where
         T: 'static + KeypairUtil + Send + Sync,
     {
-        let (forward_entry_sender, forward_entry_receiver) = channel();
         let (slot_full_sender, slot_full_receiver) = channel();
         trace!("replay stage");
         let exit_ = exit.clone();
@@ -121,7 +121,7 @@ impl ReplayStage {
                         &my_id,
                         &mut ticks_per_slot,
                         &mut progress,
-                        &forward_entry_sender,
+                        &storage_entry_sender,
                         &slot_full_sender,
                     )?;
 
@@ -193,11 +193,7 @@ impl ReplayStage {
                 Ok(())
             })
             .unwrap();
-        (
-            Self { t_replay },
-            slot_full_receiver,
-            forward_entry_receiver,
-        )
+        (Self { t_replay }, slot_full_receiver)
     }
     pub fn start_leader(
         my_id: &Pubkey,
@@ -637,7 +633,8 @@ mod test {
 
             let blocktree = Arc::new(blocktree);
             let (exit, poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
-            let (replay_stage, _slot_full_receiver, ledger_writer_recv) = ReplayStage::new(
+            let (ledger_writer_sender, ledger_writer_receiver) = channel();
+            let (replay_stage, _slot_full_receiver) = ReplayStage::new(
                 &my_keypair.pubkey(),
                 &voting_keypair.pubkey(),
                 Some(voting_keypair.clone()),
@@ -648,6 +645,7 @@ mod test {
                 l_receiver,
                 &Arc::new(RpcSubscriptions::default()),
                 &poh_recorder,
+                ledger_writer_sender,
             );
 
             let vote_ix = VoteInstruction::new_vote(&voting_keypair.pubkey(), Vote::new(0));
@@ -665,7 +663,7 @@ mod test {
                 .write_entries(1, 0, 0, genesis_block.ticks_per_slot, next_tick.clone())
                 .unwrap();
 
-            let received_tick = ledger_writer_recv
+            let received_tick = ledger_writer_receiver
                 .recv()
                 .expect("Expected to receive an entry on the ledger writer receiver");
 
