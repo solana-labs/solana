@@ -98,6 +98,8 @@ fn download_from_replicator(replicator_info: &ContactInfo) {
     assert!(received_blob);
 }
 
+/// Start the cluster with the given configuration and wait till the replicators are discovered
+/// Then download blobs from one of them.
 fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     solana_logger::setup();
     info!("starting replicator test");
@@ -134,8 +136,12 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
 }
 
 #[test]
-fn test_replicator_startup_basic() {
+fn test_replicator_startup_1_node() {
     run_replicator_startup_basic(1, 1);
+}
+
+#[test]
+fn test_replicator_startup_2_nodes() {
     run_replicator_startup_basic(2, 1);
 }
 
