@@ -81,9 +81,16 @@ fn main() {
         .unwrap();
 
     let leader_info = ContactInfo::new_gossip_entry_point(&network_addr);
-
-    let mut replicator =
-        Replicator::new(ledger_path, node, leader_info, Arc::new(keypair), None).unwrap();
+    let storage_keypair = Arc::new(Keypair::new());
+    let mut replicator = Replicator::new(
+        ledger_path,
+        node,
+        leader_info,
+        Arc::new(keypair),
+        storage_keypair,
+        None,
+    )
+    .unwrap();
 
     replicator.run();
 

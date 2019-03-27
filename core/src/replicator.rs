@@ -185,6 +185,7 @@ impl Replicator {
         node: Node,
         cluster_entrypoint: ContactInfo,
         keypair: Arc<Keypair>,
+        storage_keypair: Arc<Keypair>,
         _timeout: Option<Duration>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
@@ -220,7 +221,6 @@ impl Replicator {
             Self::poll_for_blockhash_and_entry_height(&cluster_info)?;
 
         let node_info = node.info.clone();
-        let storage_keypair = Arc::new(Keypair::new());
         let signature = storage_keypair.sign(storage_blockhash.as_ref());
         let slot = get_entry_heights_from_blockhash(&signature, storage_entry_height);
         info!("replicating slot: {}", slot);
