@@ -167,7 +167,8 @@ mod tests {
         let alice_pubkey = alice_client.pubkey();
         let bob_pubkey = Keypair::new().pubkey();
         let instructions = BudgetInstruction::new_payment(&alice_pubkey, &bob_pubkey, 100);
-        alice_client.process_instructions(instructions).unwrap();
+        let message = Message::new(instructions);
+        alice_client.process_message(message).unwrap();
         assert_eq!(bank.get_balance(&bob_pubkey), 100);
     }
 
@@ -189,7 +190,8 @@ mod tests {
             None,
             1,
         );
-        alice_client.process_instructions(instructions).unwrap();
+        let message = Message::new(instructions);
+        alice_client.process_message(message).unwrap();
 
         // Attack! Part 1: Sign a witness transaction with a random key.
         let mallory_client = BankClient::new(&bank, Keypair::new());
@@ -232,7 +234,8 @@ mod tests {
             None,
             1,
         );
-        alice_client.process_instructions(instructions).unwrap();
+        let message = Message::new(instructions);
+        alice_client.process_message(message).unwrap();
 
         // Attack! Part 1: Sign a timestamp transaction with a random key.
         let mallory_client = BankClient::new(&bank, Keypair::new());
@@ -278,7 +281,8 @@ mod tests {
             None,
             1,
         );
-        alice_client.process_instructions(instructions).unwrap();
+        let message = Message::new(instructions);
+        alice_client.process_message(message).unwrap();
         assert_eq!(bank.get_balance(&alice_pubkey), 1);
         assert_eq!(bank.get_balance(&budget_pubkey), 1);
 
@@ -337,7 +341,8 @@ mod tests {
             Some(alice_pubkey),
             1,
         );
-        alice_client.process_instructions(instructions).unwrap();
+        let message = Message::new(instructions);
+        alice_client.process_message(message).unwrap();
         assert_eq!(bank.get_balance(&alice_pubkey), 2);
         assert_eq!(bank.get_balance(&budget_pubkey), 1);
 
