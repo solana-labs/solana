@@ -509,68 +509,61 @@ mod test {
         (bank, mint_keypair)
     }
 
-    fn create_client(bank: &Bank, mint_keypair: Keypair) -> (BankClient, Pubkey) {
+    fn create_client(bank: &Bank, mint_keypair: Keypair) -> (BankClient, Keypair) {
         let owner = Keypair::new();
-        let pubkey = owner.pubkey();
-        let mint_client = BankClient::new(&bank, mint_keypair);
-        mint_client
-            .process_instruction(SystemInstruction::new_move(
-                &mint_client.pubkey(),
-                &owner.pubkey(),
-                42,
-            ))
-            .expect("new_move");
+        let bank_client = BankClient::new(&bank);
+        bank_client
+            .transfer(42, &mint_keypair, &owner.pubkey())
+            .unwrap();
 
-        let client = BankClient::new(&bank, owner);
-
-        (client, pubkey)
+        (bank_client, owner)
     }
 
-    fn create_account(client: &BankClient, owner: &Pubkey) -> Pubkey {
+    fn create_account(client: &BankClient, owner: &Keypair) -> Pubkey {
         let new = Keypair::new().pubkey();
         let instruction = SystemInstruction::new_program_account(
-            &owner,
+            &owner.pubkey(),
             &new,
             1,
             mem::size_of::<ExchangeState>() as u64,
             &id(),
         );
         client
-            .process_instruction(instruction)
+            .process_instruction(&owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
         new
     }
 
-    fn create_token_account(client: &BankClient, owner: &Pubkey) -> Pubkey {
+    fn create_token_account(client: &BankClient, owner: &Keypair) -> Pubkey {
         let new = Keypair::new().pubkey();
         let instruction = SystemInstruction::new_program_account(
-            &owner,
+            &owner.pubkey(),
             &new,
             1,
             mem::size_of::<ExchangeState>() as u64,
             &id(),
         );
         client
-            .process_instruction(instruction)
+            .process_instruction(owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
-        let instruction = ExchangeInstruction::new_account_request(&owner, &new);
+        let instruction = ExchangeInstruction::new_account_request(&owner.pubkey(), &new);
         client
-            .process_instruction(instruction)
+            .process_instruction(owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
         new
     }
 
-    fn transfer(client: &BankClient, owner: &Pubkey, to: &Pubkey, token: Token, tokens: u64) {
+    fn transfer(client: &BankClient, owner: &Keypair, to: &Pubkey, token: Token, tokens: u64) {
         let instruction =
-            ExchangeInstruction::new_transfer_request(owner, to, &id(), token, tokens);
+            ExchangeInstruction::new_transfer_request(&owner.pubkey(), to, &id(), token, tokens);
         client
-            .process_instruction(instruction)
+            .process_instruction(owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
     }
 
     fn trade(
         client: &BankClient,
-        owner: &Pubkey,
+        owner: &Keypair,
         direction: Direction,
         pair: TokenPair,
         from_token: Token,
@@ -584,7 +577,7 @@ mod test {
         transfer(&client, &owner, &src, from_token, src_tokens);
 
         let instruction = ExchangeInstruction::new_trade_request(
-            owner,
+            &owner.pubkey(),
             &trade,
             direction,
             pair,
@@ -594,7 +587,7 @@ mod test {
             &dst,
         );
         client
-            .process_instruction(instruction)
+            .process_instruction(owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
         (trade, src, dst)
     }
@@ -620,7 +613,7 @@ mod test {
         // Check results
 
         assert_eq!(
-            TokenAccountInfo::default().owner(&owner),
+            TokenAccountInfo::default().owner(&owner.pubkey()),
             ExchangeProcessor::deserialize_account(&new_account.data[..]).unwrap()
         );
     }
@@ -632,9 +625,9 @@ mod test {
         let (client, owner) = create_client(&bank, mint_keypair);
 
         let new = create_token_account(&client, &owner);
-        let instruction = ExchangeInstruction::new_account_request(&owner, &new);
+        let instruction = ExchangeInstruction::new_account_request(&owner.pubkey(), &new);
         client
-            .process_instruction(instruction)
+            .process_instruction(&owner, instruction)
             .expect_err(&format!("{}:{}", line!(), file!()));
     }
 
@@ -647,9 +640,9 @@ mod test {
         let new = create_token_account(&client, &owner);
 
         let instruction =
-            ExchangeInstruction::new_transfer_request(&owner, &new, &id(), Token::A, 42);
+            ExchangeInstruction::new_transfer_request(&owner.pubkey(), &new, &id(), Token::A, 42);
         client
-            .process_instruction(instruction)
+            .process_instruction(&owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
 
         let new_account = bank.get_account(&new).unwrap();
@@ -658,7 +651,7 @@ mod test {
 
         assert_eq!(
             TokenAccountInfo::default()
-                .owner(&owner)
+                .owner(&owner.pubkey())
                 .tokens(42, 0, 0, 0),
             ExchangeProcessor::deserialize_account(&new_account.data[..]).unwrap()
         );
@@ -689,7 +682,7 @@ mod test {
 
         assert_eq!(
             TradeOrderInfo {
-                owner: owner,
+                owner: owner.pubkey(),
                 direction: Direction::To,
                 pair: TokenPair::AB,
                 tokens: 2,
@@ -701,12 +694,14 @@ mod test {
         );
         assert_eq!(
             TokenAccountInfo::default()
-                .owner(&owner)
+                .owner(&owner.pubkey())
                 .tokens(40, 0, 0, 0),
             ExchangeProcessor::deserialize_account(&src_account.data[..]).unwrap()
         );
         assert_eq!(
-            TokenAccountInfo::default().owner(&owner).tokens(0, 0, 0, 0),
+            TokenAccountInfo::default()
+                .owner(&owner.pubkey())
+                .tokens(0, 0, 0, 0),
             ExchangeProcessor::deserialize_account(&dst_account.data[..]).unwrap()
         );
     }
@@ -741,7 +736,7 @@ mod test {
         );
 
         let instruction = ExchangeInstruction::new_swap_request(
-            &owner,
+            &owner.pubkey(),
             &swap,
             &to_trade,
             &from_trade,
@@ -750,7 +745,7 @@ mod test {
             &profit,
         );
         client
-            .process_instruction(instruction)
+            .process_instruction(&owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
 
         let to_trade_account = bank.get_account(&to_trade).unwrap();
@@ -766,7 +761,7 @@ mod test {
 
         assert_eq!(
             TradeOrderInfo {
-                owner: owner,
+                owner: owner.pubkey(),
                 direction: Direction::To,
                 pair: TokenPair::AB,
                 tokens: 1,
@@ -777,16 +772,20 @@ mod test {
             ExchangeProcessor::deserialize_trade(&to_trade_account.data[..]).unwrap()
         );
         assert_eq!(
-            TokenAccountInfo::default().owner(&owner).tokens(0, 0, 0, 0),
+            TokenAccountInfo::default()
+                .owner(&owner.pubkey())
+                .tokens(0, 0, 0, 0),
             ExchangeProcessor::deserialize_account(&to_src_account.data[..]).unwrap()
         );
         assert_eq!(
-            TokenAccountInfo::default().owner(&owner).tokens(0, 2, 0, 0),
+            TokenAccountInfo::default()
+                .owner(&owner.pubkey())
+                .tokens(0, 2, 0, 0),
             ExchangeProcessor::deserialize_account(&to_dst_account.data[..]).unwrap()
         );
         assert_eq!(
             TradeOrderInfo {
-                owner: owner,
+                owner: owner.pubkey(),
                 direction: Direction::From,
                 pair: TokenPair::AB,
                 tokens: 0,
@@ -797,15 +796,21 @@ mod test {
             ExchangeProcessor::deserialize_trade(&from_trade_account.data[..]).unwrap()
         );
         assert_eq!(
-            TokenAccountInfo::default().owner(&owner).tokens(0, 0, 0, 0),
+            TokenAccountInfo::default()
+                .owner(&owner.pubkey())
+                .tokens(0, 0, 0, 0),
             ExchangeProcessor::deserialize_account(&from_src_account.data[..]).unwrap()
         );
         assert_eq!(
-            TokenAccountInfo::default().owner(&owner).tokens(1, 0, 0, 0),
+            TokenAccountInfo::default()
+                .owner(&owner.pubkey())
+                .tokens(1, 0, 0, 0),
             ExchangeProcessor::deserialize_account(&from_dst_account.data[..]).unwrap()
         );
         assert_eq!(
-            TokenAccountInfo::default().owner(&owner).tokens(0, 1, 0, 0),
+            TokenAccountInfo::default()
+                .owner(&owner.pubkey())
+                .tokens(0, 1, 0, 0),
             ExchangeProcessor::deserialize_account(&profit_account.data[..]).unwrap()
         );
         assert_eq!(

@@ -50,7 +50,7 @@ mod tests {
     use solana_runtime::bank::{Bank, Result};
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
+    use solana_sdk::instruction::InstructionError;
     use solana_sdk::message::Message;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -66,49 +66,51 @@ mod tests {
 
     fn create_vote_account(
         bank_client: &BankClient,
+        from_keypair: &Keypair,
         vote_id: &Pubkey,
         lamports: u64,
     ) -> Result<()> {
-        let ixs = VoteInstruction::new_account(&bank_client.pubkey(), vote_id, lamports);
+        let ixs = VoteInstruction::new_account(&from_keypair.pubkey(), vote_id, lamports);
         let message = Message::new(ixs);
-        bank_client.process_message(message)
+        bank_client.process_message(&[from_keypair], message)
     }
 
     fn create_vote_account_with_delegate(
         bank_client: &BankClient,
+        from_keypair: &Keypair,
+        vote_keypair: &Keypair,
         delegate_id: &Pubkey,
         lamports: u64,
     ) -> Result<()> {
-        let vote_id = bank_client.pubkeys()[1];
-        let mut ixs = VoteInstruction::new_account(&bank_client.pubkey(), &vote_id, lamports);
+        let vote_id = vote_keypair.pubkey();
+        let mut ixs = VoteInstruction::new_account(&from_keypair.pubkey(), &vote_id, lamports);
         let delegate_ix = VoteInstruction::new_delegate_stake(&vote_id, delegate_id);
         ixs.push(delegate_ix);
         let message = Message::new(ixs);
-        bank_client.process_message(message)
+        bank_client.process_message(&[&from_keypair, vote_keypair], message)
     }
 
     fn submit_vote(
         bank_client: &BankClient,
-        staking_account: &Pubkey,
+        vote_keypair: &Keypair,
         tick_height: u64,
     ) -> Result<()> {
-        let vote_ix = VoteInstruction::new_vote(staking_account, Vote::new(tick_height));
-        bank_client.process_instruction(vote_ix)
+        let vote_ix = VoteInstruction::new_vote(&vote_keypair.pubkey(), Vote::new(tick_height));
+        bank_client.process_instruction(&vote_keypair, vote_ix)
     }
 
     #[test]
     fn test_vote_bank_basic() {
         let (bank, from_keypair) = create_bank(10_000);
-        let alice_client = BankClient::new(&bank, from_keypair);
+        let bank_client = BankClient::new(&bank);
 
         let vote_keypair = Keypair::new();
-        let vote_client = BankClient::new(&bank, vote_keypair);
-        let vote_id = vote_client.pubkey();
+        let vote_id = vote_keypair.pubkey();
 
-        create_vote_account(&alice_client, &vote_id, 100).unwrap();
-        submit_vote(&vote_client, &vote_id, 0).unwrap();
+        create_vote_account(&bank_client, &from_keypair, &vote_id, 100).unwrap();
+        submit_vote(&bank_client, &vote_keypair, 0).unwrap();
 
-        let vote_account = bank.get_account(&vote_client.pubkey()).unwrap();
+        let vote_account = bank.get_account(&vote_id).unwrap();
         let vote_state = VoteState::deserialize(&vote_account.data).unwrap();
         assert_eq!(vote_state.votes.len(), 1);
     }
@@ -117,36 +119,38 @@ mod tests {
     fn test_vote_bank_delegate() {
         let (bank, from_keypair) = create_bank(10_000);
         let vote_keypair = Keypair::new();
-        let alice_and_vote_client =
-            BankClient::new_with_keypairs(&bank, vec![from_keypair, vote_keypair]);
+        let bank_client = BankClient::new(&bank);
         let delegate_id = Keypair::new().pubkey();
-        create_vote_account_with_delegate(&alice_and_vote_client, &delegate_id, 100).unwrap();
+        create_vote_account_with_delegate(
+            &bank_client,
+            &from_keypair,
+            &vote_keypair,
+            &delegate_id,
+            100,
+        )
+        .unwrap();
     }
 
     #[test]
     fn test_vote_via_bank_with_no_signature() {
-        let (bank, from_keypair) = create_bank(10_000);
-        let mallory_client = BankClient::new(&bank, from_keypair);
+        let (bank, mallory_keypair) = create_bank(10_000);
+        let bank_client = BankClient::new(&bank);
 
         let vote_keypair = Keypair::new();
-        let vote_client = BankClient::new(&bank, vote_keypair);
-        let vote_id = vote_client.pubkey();
+        let vote_id = vote_keypair.pubkey();
 
-        create_vote_account(&mallory_client, &vote_id, 100).unwrap();
+        create_vote_account(&bank_client, &mallory_keypair, &vote_id, 100).unwrap();
 
-        let mallory_id = mallory_client.pubkey();
-        let vote_ix = Instruction::new(
-            id(),
-            &VoteInstruction::Vote(Vote::new(0)),
-            vec![AccountMeta::new(vote_id, false)], // <--- attack!! No signer required.
-        );
+        let mallory_id = mallory_keypair.pubkey();
+        let mut vote_ix = VoteInstruction::new_vote(&vote_id, Vote::new(0));
+        vote_ix.accounts[0].is_signer = false; // <--- attack!! No signer required.
 
         // Sneak in an instruction so that the transaction is signed but
         // the 0th account in the second instruction is not! The program
         // needs to check that it's signed.
         let move_ix = SystemInstruction::new_move(&mallory_id, &vote_id, 1);
         let message = Message::new(vec![move_ix, vote_ix]);
-        let result = mallory_client.process_message(message);
+        let result = bank_client.process_message(&[&mallory_keypair], message);
 
         // And ensure there's no vote.
         let vote_account = bank.get_account(&vote_id).unwrap();
