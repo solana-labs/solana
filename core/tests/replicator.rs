@@ -285,8 +285,7 @@ fn test_account_setup() {
         cluster.entry_point_info.client_facing_addr(),
         FULLNODE_PORT_RANGE,
     );
-    cluster.replicator_infos.iter().for_each(|(key, value)| {
-        assert_eq!(client.poll_get_balance(key).unwrap(), 1);
+    cluster.replicator_infos.iter().for_each(|(_, value)| {
         assert_eq!(
             client
                 .poll_get_balance(&value.replicator_storage_id)
