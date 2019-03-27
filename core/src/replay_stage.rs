@@ -126,11 +126,7 @@ impl ReplayStage {
                         }
                         let max_tick_height = (*bank_slot + 1) * bank.ticks_per_slot() - 1;
                         if bank.tick_height() == max_tick_height {
-                            Self::process_completed_bank(
-                                &my_id,
-                                bank,
-                                &slot_full_sender,
-                            );
+                            Self::process_completed_bank(&my_id, bank, &slot_full_sender);
                         }
                     }
 
