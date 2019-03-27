@@ -12,11 +12,11 @@ use serde_derive::{Deserialize, Serialize};
 use solana_metrics;
 use solana_metrics::influxdb;
 use solana_sdk::hash::Hash;
+use solana_sdk::message::Message;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Keypair;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
 use std::io;
 use std::io::{Error, ErrorKind};
@@ -127,22 +127,10 @@ impl Drone {
 
                     info!("Requesting airdrop of {} to {:?}", lamports, to);
 
-                    let create_instruction = SystemInstruction::CreateAccount {
-                        lamports,
-                        space: 0,
-                        program_id: system_program::id(),
-                    };
-                    let mut transaction = Transaction::new_signed(
-                        &self.mint_keypair,
-                        &[to],
-                        &system_program::id(),
-                        &create_instruction,
-                        blockhash,
-                        0, /*fee*/
-                    );
-
-                    transaction.sign(&[&self.mint_keypair], blockhash);
-                    Ok(transaction)
+                    let create_instruction =
+                        SystemInstruction::new_account(&self.mint_keypair.pubkey(), &to, lamports);
+                    let message = Message::new(vec![create_instruction]);
+                    Ok(Transaction::new(&[&self.mint_keypair], message, blockhash))
                 } else {
                     Err(Error::new(ErrorKind::Other, "token limit reached"))
                 }
@@ -294,7 +282,6 @@ pub fn run_local_drone(mint_keypair: Keypair, sender: Sender<SocketAddr>) {
 mod tests {
     use super::*;
     use bytes::BufMut;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::time::Duration;
 
     #[test]
@@ -369,7 +356,6 @@ mod tests {
         assert_eq!(tx.signatures.len(), 1);
         assert_eq!(tx.account_keys, vec![mint_pubkey, to]);
         assert_eq!(tx.recent_blockhash, blockhash);
-        assert_eq!(tx.program_ids, vec![system_program::id()]);
 
         assert_eq!(tx.instructions.len(), 1);
         let instruction: SystemInstruction = deserialize(&tx.instructions[0].data).unwrap();
@@ -403,20 +389,9 @@ mod tests {
         bytes.put(&req[..]);
 
         let keypair = Keypair::new();
-        let expected_instruction = SystemInstruction::CreateAccount {
-            lamports,
-            space: 0,
-            program_id: system_program::id(),
-        };
-        let mut expected_tx = Transaction::new_signed(
-            &keypair,
-            &[to],
-            &system_program::id(),
-            &expected_instruction,
-            blockhash,
-            0,
-        );
-        expected_tx.sign(&[&keypair], blockhash);
+        let expected_instruction = SystemInstruction::new_account(&keypair.pubkey(), &to, lamports);
+        let message = Message::new(vec![expected_instruction]);
+        let expected_tx = Transaction::new(&[&keypair], message, blockhash);
         let expected_bytes = serialize(&expected_tx).unwrap();
         let mut expected_vec_with_length = vec![0; 2];
         LittleEndian::write_u16(&mut expected_vec_with_length, expected_bytes.len() as u16);
