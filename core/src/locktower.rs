@@ -173,6 +173,15 @@ impl Locktower {
         stake_lockouts
     }
 
+    pub fn is_slot_confirmed(&self, slot: u64, lockouts: &HashMap<u64, StakeLockout>) -> bool {
+        lockouts
+            .get(&slot)
+            .map(|lockout| {
+                (lockout.stake as f64 / self.epoch_stakes.total_staked as f64) > self.threshold_size
+            })
+            .unwrap_or(false)
+    }
+
     pub fn is_recent_epoch(&self, bank: &Bank) -> bool {
         let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
         bank_epoch >= self.epoch_stakes.slot
@@ -489,6 +498,43 @@ mod test {
         .into_iter()
         .collect();
         assert!(locktower.check_vote_stake_threshold(0, &stakes));
+    }
+
+    #[test]
+    fn test_is_slot_confirmed_not_enough_stake_failure() {
+        let locktower = Locktower::new(EpochStakes::new_for_tests(2), 1, 0.67);
+        let stakes = vec![(
+            0,
+            StakeLockout {
+                stake: 1,
+                lockout: 8,
+            },
+        )]
+        .into_iter()
+        .collect();
+        assert!(!locktower.is_slot_confirmed(0, &stakes));
+    }
+
+    #[test]
+    fn test_is_slot_confirmed_unknown_slot() {
+        let locktower = Locktower::new(EpochStakes::new_for_tests(2), 1, 0.67);
+        let stakes = HashMap::new();
+        assert!(!locktower.is_slot_confirmed(0, &stakes));
+    }
+
+    #[test]
+    fn test_is_slot_confirmed_pass() {
+        let locktower = Locktower::new(EpochStakes::new_for_tests(2), 1, 0.67);
+        let stakes = vec![(
+            0,
+            StakeLockout {
+                stake: 2,
+                lockout: 8,
+            },
+        )]
+        .into_iter()
+        .collect();
+        assert!(locktower.is_slot_confirmed(0, &stakes));
     }
 
     #[test]
