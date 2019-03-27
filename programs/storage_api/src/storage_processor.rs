@@ -358,17 +358,15 @@ mod tests {
 
     #[test]
     fn test_bank_storage() {
-        let (mut genesis_block, alice_keypair) = GenesisBlock::new(1000);
-        genesis_block
-            .native_programs
-            .push(("solana_storage_program".to_string(), id()));
+        let (genesis_block, alice_keypair) = GenesisBlock::new(1000);
         let alice_pubkey = alice_keypair.pubkey();
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
         let jack_pubkey = Keypair::new().pubkey();
         let jill_pubkey = Keypair::new().pubkey();
 
-        let bank = Bank::new(&genesis_block);
+        let mut bank = Bank::new(&genesis_block);
+        bank.add_instruction_processor(id(), process_instruction);
         let bank_client = BankClient::new(&bank);
 
         let x = 42;
