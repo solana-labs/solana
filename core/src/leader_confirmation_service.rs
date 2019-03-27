@@ -144,8 +144,6 @@ mod tests {
             bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
         }
 
-        let blockhash = bank.last_blockhash();
-
         // Create a total of 10 vote accounts, each will have a balance of 1 (after giving 1 to
         // their vote account), for a total staking pool of 10 lamports.
         let vote_accounts: Vec<_> = (0..10)
@@ -156,7 +154,7 @@ mod tests {
                 let voting_pubkey = voting_keypair.pubkey();
 
                 // Give the validator some lamports
-                bank.transfer(2, &mint_keypair, &validator_keypair.pubkey(), blockhash)
+                bank.transfer(2, &mint_keypair, &validator_keypair.pubkey())
                     .unwrap();
                 new_vote_account(&validator_keypair, &voting_pubkey, &bank, 1);
 
@@ -177,6 +175,7 @@ mod tests {
         assert_eq!(last_confirmation_time, 0);
 
         // Get another validator to vote, so we now have 2/3 consensus
+        let blockhash = bank.last_blockhash();
         let voting_keypair = &vote_accounts[7].0;
         let vote = Vote::new(MAX_RECENT_BLOCKHASHES as u64);
         let vote_ix = VoteInstruction::new_vote(&voting_keypair.pubkey(), vote);

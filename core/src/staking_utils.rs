@@ -193,7 +193,7 @@ mod tests {
         // Give the validator some stake but don't setup a staking account
         // Validator has no lamports staked, so they get filtered out. Only the bootstrap leader
         // created by the genesis block will get included
-        bank.transfer(1, &mint_keypair, &validator.pubkey(), genesis_block.hash())
+        bank.transfer(1, &mint_keypair, &validator.pubkey())
             .unwrap();
 
         // Make a mint vote account. Because the mint has nonzero stake, this

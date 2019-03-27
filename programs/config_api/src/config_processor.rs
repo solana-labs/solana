@@ -142,8 +142,7 @@ mod tests {
         let (bank, mint_keypair) = create_bank(10_000);
         let system_keypair = Keypair::new();
         let system_pubkey = system_keypair.pubkey();
-        bank.transfer(42, &mint_keypair, &system_pubkey, bank.last_blockhash())
-            .unwrap();
+        bank.transfer(42, &mint_keypair, &system_pubkey).unwrap();
         let (_config_client, from_pubkey, config_pubkey) =
             create_config_client(&bank, mint_keypair);
 
