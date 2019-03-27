@@ -31,7 +31,7 @@ use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::Result;
 
@@ -203,7 +203,9 @@ impl Fullnode {
             Some(Arc::new(voting_keypair))
         };
 
-        // Setup channel for rotation indications
+        // Setup channel for sending entries to storage stage
+        let (sender, receiver) = channel();
+
         let tvu = Tvu::new(
             vote_account,
             voting_keypair,
@@ -218,6 +220,8 @@ impl Fullnode {
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,
+            sender.clone(),
+            receiver,
             &exit,
         );
         let tpu = Tpu::new(
@@ -230,6 +234,7 @@ impl Fullnode {
             node.sockets.broadcast,
             config.sigverify_disabled,
             &blocktree,
+            sender,
             &exit,
         );
 
