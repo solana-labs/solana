@@ -41,7 +41,7 @@ macro_rules! db_imports {
             LedgerColumnFamilyRaw,
         };
 
-        pub use $mod::{$db, ErasureCf, MetaCf, DataCf};
+        pub use $mod::{$db, ErasureCf, MetaCf, DataCf, DetachedHeadsCf};
         pub type BlocktreeRawIterator = <$db as Database>::Cursor;
         pub type WriteBatch = <$db as Database>::WriteBatch;
         pub type OwnedKey = <$db as Database>::OwnedKey;
@@ -128,6 +128,7 @@ pub struct Blocktree {
     meta_cf: MetaCf,
     data_cf: DataCf,
     erasure_cf: ErasureCf,
+    detached_heads_cf: DetachedHeadsCf,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
 }
 
@@ -137,6 +138,8 @@ pub const META_CF: &str = "meta";
 pub const DATA_CF: &str = "data";
 // Column family for erasure data
 pub const ERASURE_CF: &str = "erasure";
+// Column family for detached heads data
+pub const DETACHED_HEADS_CF: &str = "detached_heads";
 
 impl Blocktree {
     pub fn open_with_signal(ledger_path: &str) -> Result<(Self, Receiver<bool>)> {
@@ -149,6 +152,10 @@ impl Blocktree {
 
     pub fn meta(&self, slot: u64) -> Result<Option<SlotMeta>> {
         self.meta_cf.get(&MetaCf::key(&slot))
+    }
+
+    pub fn detached_head(&self, slot: u64) -> Result<Option<bool>> {
+        self.detached_heads_cf.get(&DetachedHeadsCf::key(&slot))
     }
 
     pub fn reset_slot_consumed(&self, slot: u64) -> Result<()> {
@@ -281,11 +288,11 @@ impl Blocktree {
                     .expect("Expect database get to succeed")
                 {
                     let backup = Some(meta.clone());
-                    // If parent_slot == std::u64::MAX, then this is one of the dummy metadatas inserted
+                    // If parent_slot == std::u64::MAX, then this is one of the detached heads inserted
                     // during the chaining process, see the function find_slot_meta_in_cached_state()
-                    // for details. `Detached head` slots are missing a parent_slot, so we should fill
-                    // in the parent now that we know it.
-                    if meta.parent_slot == std::u64::MAX {
+                    // for details. Slots that are detached heads are missing a parent_slot, so we should
+                    // fill in the parent now that we know it.
+                    if Self::is_detached_head(&meta) {
                         meta.parent_slot = parent_slot;
                     }
 
@@ -638,7 +645,7 @@ impl Blocktree {
         let mut new_chained_slots = HashMap::new();
         let working_set_slots: Vec<_> = working_set.iter().map(|s| *s.0).collect();
         for slot in working_set_slots {
-            self.handle_chaining_for_slot(working_set, &mut new_chained_slots, slot)?;
+            self.handle_chaining_for_slot(write_batch, working_set, &mut new_chained_slots, slot)?;
         }
 
         // Write all the newly changed slots in new_chained_slots to the write_batch
@@ -651,6 +658,7 @@ impl Blocktree {
 
     fn handle_chaining_for_slot(
         &self,
+        write_batch: &mut WriteBatch,
         working_set: &HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
         new_chained_slots: &mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
         slot: u64,
@@ -660,6 +668,9 @@ impl Blocktree {
             .expect("Slot must exist in the working_set hashmap");
 
         {
+            let is_detached_head =
+                meta_backup.is_some() && Self::is_detached_head(meta_backup.as_ref().unwrap());
+
             let mut meta_mut = meta.borrow_mut();
 
             // If:
@@ -672,16 +683,30 @@ impl Blocktree {
                 // Check if the slot represented by meta_mut is either a new slot or a detached head.
                 // In both cases we need to run the chaining logic b/c the parent on the slot was
                 // previously unknown.
-                if meta_backup.is_none() || Self::is_detached_head(meta_backup.as_ref().unwrap()) {
-                    let prev_slot =
+                if meta_backup.is_none() || is_detached_head {
+                    let prev_slot_meta =
                         self.find_slot_meta_else_create(working_set, new_chained_slots, prev_slot)?;
 
                     // This is a newly inserted slot so run the chaining logic
                     self.chain_new_slot_to_prev_slot(
-                        &mut prev_slot.borrow_mut(),
+                        &mut prev_slot_meta.borrow_mut(),
                         slot,
                         &mut meta_mut,
                     );
+
+                    if is_detached_head {
+                        write_batch.delete_cf(
+                            self.detached_heads_cf.handle(),
+                            &DetachedHeadsCf::key(&slot),
+                        )?;
+                        if Self::is_detached_head(&RefCell::borrow(&*prev_slot_meta)) {
+                            write_batch.put_cf(
+                                self.detached_heads_cf.handle(),
+                                &DetachedHeadsCf::key(&prev_slot),
+                                &serialize(&true)?,
+                            )?;
+                        }
+                    }
                 }
             }
         }
@@ -766,7 +791,7 @@ impl Blocktree {
     fn is_detached_head(meta: &SlotMeta) -> bool {
         // If we have children, but no parent, then this is the head of a detached chain of
         // slots
-        !meta.borrow().next_slots.is_empty() && meta.parent_slot == std::u64::MAX
+        meta.parent_slot == std::u64::MAX
     }
 
     // 1) Chain current_slot to the previous slot defined by prev_slot_meta
