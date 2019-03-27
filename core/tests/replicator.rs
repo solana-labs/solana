@@ -5,10 +5,10 @@ extern crate log;
 extern crate solana;
 
 use bincode::{deserialize, serialize};
-use solana::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree, Blocktree};
+use solana::blocktree::{create_new_tmp_ledger, Blocktree};
 use solana::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
-use solana::fullnode::{Fullnode, FullnodeConfig};
+use solana::fullnode::FullnodeConfig;
 use solana::gossip_service::discover;
 use solana::local_cluster::LocalCluster;
 use solana::replicator::Replicator;
