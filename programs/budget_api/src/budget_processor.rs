@@ -149,8 +149,9 @@ mod tests {
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::instruction::InstructionError;
+    use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::transaction::{Transaction, TransactionError};
+    use solana_sdk::transaction::TransactionError;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_block, mint_keypair) = GenesisBlock::new(lamports);
@@ -196,15 +197,15 @@ mod tests {
         alice_client.transfer(1, &mallory_pubkey).unwrap();
         let instruction =
             BudgetInstruction::new_apply_signature(&mallory_pubkey, &budget_pubkey, &bob_pubkey);
-        let mut transaction = Transaction::new_unsigned_instructions(vec![instruction]);
+        let mut message = Message::new(vec![instruction]);
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
-        transaction.account_keys.push(alice_pubkey);
-        transaction.instructions[0].accounts[0] = 3;
+        message.account_keys.push(alice_pubkey);
+        message.instructions[0].accounts[0] = 3;
 
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
-            mallory_client.process_transaction(transaction),
+            mallory_client.process_message(message),
             Err(TransactionError::InstructionError(
                 0,
                 InstructionError::MissingRequiredSignature
@@ -243,15 +244,15 @@ mod tests {
             &bob_pubkey,
             dt,
         );
-        let mut transaction = Transaction::new_unsigned_instructions(vec![instruction]);
+        let mut message = Message::new(vec![instruction]);
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
-        transaction.account_keys.push(alice_pubkey);
-        transaction.instructions[0].accounts[0] = 3;
+        message.account_keys.push(alice_pubkey);
+        message.instructions[0].accounts[0] = 3;
 
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
-            mallory_client.process_transaction(transaction),
+            mallory_client.process_message(message),
             Err(TransactionError::InstructionError(
                 0,
                 InstructionError::MissingRequiredSignature
