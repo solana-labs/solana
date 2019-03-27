@@ -20,7 +20,7 @@ pub struct EpochStakes {
     delegate_id: Pubkey,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct StakeLockout {
     lockout: u64,
     stake: u64,
