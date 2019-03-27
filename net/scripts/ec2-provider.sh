@@ -116,7 +116,8 @@ cloud_FindInstance() {
 cloud_Initialize() {
   declare networkName="$1"
   declare zone="$2"
-  declare region=$(__cloud_GetRegion "$zone")
+  declare region=
+  region=$(__cloud_GetRegion "$zone")
 
   __cloud_SshPrivateKeyCheck
   (
@@ -164,7 +165,8 @@ cloud_CreateInstances() {
   declare optionalBootDiskSize="$7"
   declare optionalStartupScript="$8"
   declare optionalAddress="$9"
-  declare region=$(__cloud_GetRegion "$zone")
+  declare region=
+  region=$(__cloud_GetRegion "$zone")
 
   if $enableGpu; then
     #
@@ -274,7 +276,8 @@ cloud_DeleteInstances() {
 
   declare names=("${instances[@]/:*/}")
   declare zones=("${instances[@]/*:/}")
-  declare region=$(__cloud_GetRegion "${zones[0]}")
+  declare region=
+  region=$(__cloud_GetRegion "${zones[0]}")
 
   (
     set -x
