@@ -36,6 +36,20 @@ impl FullnodeInfo {
     }
 }
 
+pub struct ReplicatorInfo {
+    pub replicator_storage_id: Pubkey,
+    pub ledger_path: String,
+}
+
+impl ReplicatorInfo {
+    fn new(storage_id: Pubkey, ledger_path: String) -> Self {
+        Self {
+            replicator_storage_id: storage_id,
+            ledger_path,
+        }
+    }
+}
+
 pub struct LocalCluster {
     /// Keypair with funding to particpiate in the network
     pub funding_keypair: Keypair,
@@ -47,7 +61,7 @@ pub struct LocalCluster {
     genesis_ledger_path: String,
     genesis_block: GenesisBlock,
     replicators: Vec<Replicator>,
-    pub replicator_ledger_paths: Vec<String>,
+    pub replicator_infos: HashMap<Pubkey, ReplicatorInfo>,
 }
 
 impl LocalCluster {
@@ -131,10 +145,10 @@ impl LocalCluster {
             entry_point_info: leader_contact_info,
             fullnodes,
             replicators: vec![],
-            replicator_ledger_paths: vec![],
             genesis_ledger_path,
             genesis_block,
             fullnode_infos,
+            replicator_infos: HashMap::new(),
             fullnode_config: fullnode_config.clone(),
         };
 
@@ -147,6 +161,12 @@ impl LocalCluster {
         for _ in 0..num_replicators {
             cluster.add_replicator();
         }
+
+        discover(
+            &cluster.entry_point_info.gossip,
+            node_stakes.len() + num_replicators,
+        )
+        .unwrap();
 
         cluster
     }
@@ -163,8 +183,8 @@ impl LocalCluster {
             node.join().unwrap();
         }
 
-        while let Some(node) = self.replicators.pop() {
-            node.close();
+        while let Some(replicator) = self.replicators.pop() {
+            replicator.close();
         }
     }
 
@@ -213,6 +233,9 @@ impl LocalCluster {
 
     fn add_replicator(&mut self) {
         let replicator_keypair = Arc::new(Keypair::new());
+        let replicator_id = replicator_keypair.pubkey();
+        let storage_keypair = Arc::new(Keypair::new());
+        let storage_id = storage_keypair.pubkey();
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,
@@ -224,7 +247,7 @@ impl LocalCluster {
             &replicator_keypair.pubkey(),
             1,
         );
-        let replicator_node = Node::new_localhost_replicator(&replicator_keypair.pubkey());
+        let replicator_node = Node::new_localhost_replicator(&replicator_id);
 
         let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_block);
         let replicator = Replicator::new(
@@ -232,12 +255,16 @@ impl LocalCluster {
             replicator_node,
             self.entry_point_info.clone(),
             replicator_keypair,
+            storage_keypair,
             None,
         )
         .unwrap();
 
-        self.replicator_ledger_paths.push(replicator_ledger_path);
         self.replicators.push(replicator);
+        self.replicator_infos.insert(
+            replicator_id,
+            ReplicatorInfo::new(storage_id, replicator_ledger_path),
+        );
     }
 
     fn close(&mut self) {
@@ -246,7 +273,7 @@ impl LocalCluster {
             .fullnode_infos
             .values()
             .map(|f| &f.ledger_path)
-            .chain(self.replicator_ledger_paths.iter())
+            .chain(self.replicator_infos.values().map(|info| &info.ledger_path))
         {
             remove_dir_all(&ledger_path)
                 .unwrap_or_else(|_| panic!("Unable to remove {}", ledger_path));

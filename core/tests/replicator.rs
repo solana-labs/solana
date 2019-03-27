@@ -6,7 +6,7 @@ extern crate solana;
 
 use bincode::{deserialize, serialize};
 use solana::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree, Blocktree};
-use solana::cluster_info::{ClusterInfo, Node};
+use solana::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::gossip_service::discover;
@@ -15,6 +15,7 @@ use solana::replicator::Replicator;
 use solana::replicator::ReplicatorRequest;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer::blob_receiver;
+use solana_client::thin_client::create_client;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -159,6 +160,7 @@ fn test_replicator_startup_leader_hang() {
 
     {
         let replicator_keypair = Arc::new(Keypair::new());
+        let storage_keypair = Arc::new(Keypair::new());
 
         info!("starting replicator node");
         let replicator_node = Node::new_localhost_with_pubkey(&replicator_keypair.pubkey());
@@ -171,6 +173,7 @@ fn test_replicator_startup_leader_hang() {
             replicator_node,
             leader_info,
             replicator_keypair,
+            storage_keypair,
             Some(Duration::from_secs(3)),
         );
 
@@ -231,6 +234,7 @@ fn test_replicator_startup_ledger_hang() {
 
         info!("starting replicator node");
         let bad_keys = Arc::new(Keypair::new());
+        let storage_keypair = Arc::new(Keypair::new());
         let mut replicator_node = Node::new_localhost_with_pubkey(&bad_keys.pubkey());
 
         // Pass bad TVU sockets to prevent successful ledger download
@@ -243,6 +247,7 @@ fn test_replicator_startup_ledger_hang() {
             replicator_node,
             leader_info,
             bad_keys,
+            storage_keypair,
             Some(Duration::from_secs(3)),
         );
 
@@ -253,4 +258,39 @@ fn test_replicator_startup_ledger_hang() {
     let _ignored = Blocktree::destroy(&replicator_ledger_path);
     let _ignored = remove_dir_all(&leader_ledger_path);
     let _ignored = remove_dir_all(&replicator_ledger_path);
+}
+
+#[test]
+fn test_account_setup() {
+    let num_nodes = 1;
+    let num_replicators = 1;
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+    let cluster = LocalCluster::new_with_config_replicators(
+        &vec![100; num_nodes],
+        10_000,
+        &fullnode_config,
+        num_replicators,
+        DEFAULT_TICKS_PER_SLOT,
+        DEFAULT_SLOTS_PER_EPOCH,
+    );
+
+    let _ = discover(
+        &cluster.entry_point_info.gossip,
+        num_nodes + num_replicators,
+    )
+    .unwrap();
+    // now check that the cluster actually has accounts for the replicator.
+    let client = create_client(
+        cluster.entry_point_info.client_facing_addr(),
+        FULLNODE_PORT_RANGE,
+    );
+    cluster.replicator_infos.iter().for_each(|(_, value)| {
+        assert_eq!(
+            client
+                .poll_get_balance(&value.replicator_storage_id)
+                .unwrap(),
+            1
+        );
+    });
 }

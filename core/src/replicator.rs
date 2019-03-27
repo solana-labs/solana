@@ -22,6 +22,7 @@ use solana_client::thin_client::{create_client, ThinClient};
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use solana_storage_api::storage_instruction::StorageInstruction;
 use std::fs::File;
@@ -58,6 +59,7 @@ pub struct Replicator {
     slot: u64,
     ledger_path: String,
     keypair: Arc<Keypair>,
+    storage_keypair: Arc<Keypair>,
     signature: ring::signature::Signature,
     cluster_entrypoint: ContactInfo,
     ledger_data_file_encrypted: PathBuf,
@@ -183,6 +185,7 @@ impl Replicator {
         node: Node,
         cluster_entrypoint: ContactInfo,
         keypair: Arc<Keypair>,
+        storage_keypair: Arc<Keypair>,
         _timeout: Option<Duration>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
@@ -218,7 +221,7 @@ impl Replicator {
             Self::poll_for_blockhash_and_entry_height(&cluster_info)?;
 
         let node_info = node.info.clone();
-        let signature = keypair.sign(storage_blockhash.as_ref());
+        let signature = storage_keypair.sign(storage_blockhash.as_ref());
         let slot = get_entry_heights_from_blockhash(&signature, storage_entry_height);
         info!("replicating slot: {}", slot);
 
@@ -260,10 +263,27 @@ impl Replicator {
 
         let exit3 = exit.clone();
         let blocktree1 = blocktree.clone();
-        let t_replicate = spawn(move || loop {
-            Self::wait_for_ledger_download(slot, &blocktree1, &exit3, &node_info, &cluster_info);
-            if exit3.load(Ordering::Relaxed) {
-                break;
+        let keypair1 = keypair.clone();
+        let storage_keypair1 = storage_keypair.clone();
+        let cluster_entrypoint1 = cluster_entrypoint.clone();
+        let t_replicate = spawn(move || {
+            let client = create_client(
+                cluster_entrypoint1.client_facing_addr(),
+                FULLNODE_PORT_RANGE,
+            );
+            Self::setup_mining_account(&client, &keypair1, &storage_keypair1, &cluster_entrypoint1);
+
+            loop {
+                Self::wait_for_ledger_download(
+                    slot,
+                    &blocktree1,
+                    &exit3,
+                    &node_info,
+                    &cluster_info,
+                );
+                if exit3.load(Ordering::Relaxed) {
+                    break;
+                }
             }
         });
         thread_handles.push(t_replicate);
@@ -277,6 +297,7 @@ impl Replicator {
             slot,
             ledger_path: ledger_path.to_string(),
             keypair: keypair.clone(),
+            storage_keypair,
             signature,
             cluster_entrypoint,
             ledger_data_file_encrypted: PathBuf::default(),
@@ -397,6 +418,36 @@ impl Replicator {
         Ok(())
     }
 
+    fn setup_mining_account(
+        client: &ThinClient,
+        keypair: &Keypair,
+        storage_keypair: &Keypair,
+        entrypoint: &ContactInfo,
+    ) {
+        // make sure replicator has some balance
+        Self::get_airdrop_lamports(client, keypair, entrypoint);
+
+        // check if the account exists
+        if client
+            .wait_for_balance(&storage_keypair.pubkey(), None)
+            .is_none()
+        {
+            let blockhash = client.get_recent_blockhash().expect("blockhash");
+            //TODO the account space needs to be well defined somewhere
+            let tx = SystemTransaction::new_program_account(
+                keypair,
+                &storage_keypair.pubkey(),
+                blockhash,
+                1,
+                1024 * 4,
+                &solana_storage_api::id(),
+                0,
+            );
+            let signature = client.transfer_signed(&tx).unwrap();
+            client.poll_for_signature(&signature).unwrap();
+        }
+    }
+
     fn submit_mining_proof(&self) {
         let client = create_client(
             self.cluster_entrypoint.client_facing_addr(),
@@ -405,14 +456,14 @@ impl Replicator {
         Self::get_airdrop_lamports(&client, &self.keypair, &self.cluster_entrypoint);
 
         let ix = StorageInstruction::new_mining_proof(
-            &self.keypair.pubkey(),
+            &self.storage_keypair.pubkey(),
             self.hash,
             self.slot,
             Signature::new(self.signature.as_ref()),
         );
         let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
         client
-            .retry_transfer(&self.keypair, &mut tx, 10)
+            .retry_transfer(&self.storage_keypair, &mut tx, 10)
             .expect("transfer didn't work!");
     }
 
