@@ -261,7 +261,7 @@ fn test_replicator_startup_ledger_hang() {
 }
 
 #[test]
-fn test_acccount_setup() {
+fn test_account_setup() {
     let num_nodes = 1;
     let num_replicators = 1;
     let mut fullnode_config = FullnodeConfig::default();

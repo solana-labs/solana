@@ -263,10 +263,27 @@ impl Replicator {
 
         let exit3 = exit.clone();
         let blocktree1 = blocktree.clone();
-        let t_replicate = spawn(move || loop {
-            Self::wait_for_ledger_download(slot, &blocktree1, &exit3, &node_info, &cluster_info);
-            if exit3.load(Ordering::Relaxed) {
-                break;
+        let keypair1 = keypair.clone();
+        let storage_keypair1 = storage_keypair.clone();
+        let cluster_entrypoint1 = cluster_entrypoint.clone();
+        let t_replicate = spawn(move || {
+            let client = create_client(
+                cluster_entrypoint1.client_facing_addr(),
+                FULLNODE_PORT_RANGE,
+            );
+            Self::setup_mining_account(&client, &keypair1, &storage_keypair1, &cluster_entrypoint1);
+
+            loop {
+                Self::wait_for_ledger_download(
+                    slot,
+                    &blocktree1,
+                    &exit3,
+                    &node_info,
+                    &cluster_info,
+                );
+                if exit3.load(Ordering::Relaxed) {
+                    break;
+                }
             }
         });
         thread_handles.push(t_replicate);
@@ -296,17 +313,6 @@ impl Replicator {
     pub fn run(&mut self) {
         self.encrypt_ledger()
             .expect("ledger encrypt not successful");
-        let client = create_client(
-            self.cluster_entrypoint.client_facing_addr(),
-            FULLNODE_PORT_RANGE,
-        );
-        Self::setup_mining_account(
-            &client,
-            &self.keypair,
-            &self.storage_keypair,
-            &self.cluster_entrypoint,
-        );
-
         loop {
             self.create_sampling_offsets();
             if self.sample_file_to_create_mining_hash().is_err() {

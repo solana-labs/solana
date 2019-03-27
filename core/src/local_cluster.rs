@@ -229,7 +229,7 @@ impl LocalCluster {
         let replicator_keypair = Arc::new(Keypair::new());
         let replicator_id = replicator_keypair.pubkey();
         let storage_keypair = Arc::new(Keypair::new());
-        let storage_id = replicator_keypair.pubkey();
+        let storage_id = storage_keypair.pubkey();
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,
