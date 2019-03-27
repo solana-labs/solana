@@ -3,17 +3,17 @@
 # Utilities for working with EC2 instances
 #
 
-zone=
-region=
-
-cloud_SetZone() {
-  zone="$1"
-  # AWS region is zone with the last character removed
-  region="${zone:0:$((${#zone} - 1))}"
+cloud_DefaultZone() {
+  echo "us-east-1b"
 }
 
-# Set the default zone
-cloud_SetZone "us-east-1b"
+# AWS region is zone with the last character removed
+__cloud_GetRegion() {
+  declare zone="$1"
+  # AWS region is zone with the last character removed
+  declare region="${zone:0:$((${#zone} - 1))}"
+  echo "$region"
+}
 
 # sshPrivateKey should be globally defined whenever this function is called.
 #
@@ -49,18 +49,22 @@ __cloud_FindInstances() {
   declare filter="$1"
 
   instances=()
-  declare name publicIp privateIp
-  while read -r name publicIp privateIp; do
-    printf "%-30s | publicIp=%-16s privateIp=%s\n" "$name" "$publicIp" "$privateIp"
-    instances+=("$name:$publicIp:$privateIp")
-  done < <(aws ec2 describe-instances \
-             --region "$region" \
-             --filters \
-               "Name=tag:name,Values=$filter" \
-               "Name=instance-state-name,Values=pending,running" \
-             --query "Reservations[].Instances[].[InstanceId,PublicIpAddress,PrivateIpAddress]" \
-             --output text \
-    )
+  declare -a regions=("us-east-1" "us-west-1" "us-west-2")
+  for region in "${regions[@]}"
+  do
+    declare name publicIp privateIp
+    while read -r name publicIp privateIp zone; do
+      printf "%-30s | publicIp=%-16s privateIp=%s zone=%s\n" "$name" "$publicIp" "$privateIp" "$zone"
+      instances+=("$name:$publicIp:$privateIp:$zone")
+    done < <(aws ec2 describe-instances \
+              --region "$region" \
+              --filters \
+                "Name=tag:name,Values=$filter" \
+                "Name=instance-state-name,Values=pending,running" \
+              --query "Reservations[].Instances[].[InstanceId,PublicIpAddress,PrivateIpAddress,Placement.AvailabilityZone]" \
+              --output text \
+      )
+  done
 }
 
 #
@@ -111,6 +115,8 @@ cloud_FindInstance() {
 # This function will be called before |cloud_CreateInstances|
 cloud_Initialize() {
   declare networkName="$1"
+  declare zone="$2"
+  declare region=$(__cloud_GetRegion "$zone")
 
   __cloud_SshPrivateKeyCheck
   (
@@ -152,11 +158,53 @@ cloud_CreateInstances() {
   declare networkName="$1"
   declare namePrefix="$2"
   declare numNodes="$3"
-  declare imageName="$4"
+  declare enableGpu="$4"
   declare machineType="$5"
-  declare optionalBootDiskSize="$6"
-  declare optionalStartupScript="$7"
-  declare optionalAddress="$8"
+  declare zone="$6"
+  declare optionalBootDiskSize="$7"
+  declare optionalStartupScript="$8"
+  declare optionalAddress="$9"
+  declare region=$(__cloud_GetRegion "$zone")
+
+  if $enableGpu; then
+    #
+    # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
+    #
+    # TODO: Unfortunately these AMIs are not public.  When this becomes an issue,
+    # use the stock Ubuntu 18.04 image and programmatically install CUDA after the
+    # instance boots
+    #
+    case $region in
+    us-east-1)
+      imageName="ami-0a8bd6fb204473f78"
+      ;;
+    us-west-1)
+      imageName="ami-07011f0795513c59d"
+      ;;
+    us-west-2)
+      imageName="ami-0a11ef42b62b82b68"
+      ;;
+    *)
+      usage "Unsupported region: $region"
+      ;;
+    esac
+  else
+    # Select an upstream Ubuntu 18.04 AMI from https://cloud-images.ubuntu.com/locator/ec2/
+    case $region in
+    us-east-1)
+      imageName="ami-0a313d6098716f372"
+      ;;
+    us-west-1)
+      imageName="ami-06397100adf427136"
+      ;;
+    us-west-2)
+      imageName="ami-0dc34f4b016c9ce49"
+      ;;
+    *)
+      usage "Unsupported region: $region"
+      ;;
+    esac
+  fi
 
   declare -a args
   args=(
@@ -225,6 +273,8 @@ cloud_DeleteInstances() {
   fi
 
   declare names=("${instances[@]/:*/}")
+  declare zones=("${instances[@]/*:/}")
+  declare region=$(__cloud_GetRegion "${zones[0]}")
 
   (
     set -x

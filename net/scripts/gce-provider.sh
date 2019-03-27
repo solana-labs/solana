@@ -4,11 +4,9 @@
 #
 
 # Default zone
-zone="us-west1-b"
-cloud_SetZone() {
-  zone="$1"
+cloud_DefaultZone() {
+  echo "us-west1-b"
 }
-
 
 #
 # __cloud_FindInstances
@@ -30,13 +28,13 @@ __cloud_FindInstances() {
   instances=()
 
   declare name zone publicIp privateIp status
-  while read -r name publicIp privateIp status; do
-    printf "%-30s | publicIp=%-16s privateIp=%s status=%s\n" "$name" "$publicIp" "$privateIp" "$status"
+  while read -r name publicIp privateIp status zone; do
+    printf "%-30s | publicIp=%-16s privateIp=%s status=%s zone=%s\n" "$name" "$publicIp" "$privateIp" "$status" "$zone"
 
-    instances+=("$name:$publicIp:$privateIp")
+    instances+=("$name:$publicIp:$privateIp:$zone")
   done < <(gcloud compute instances list \
              --filter "$filter" \
-             --format 'value(name,networkInterfaces[0].accessConfigs[0].natIP,networkInterfaces[0].networkIP,status)')
+             --format 'value(name,networkInterfaces[0].accessConfigs[0].natIP,networkInterfaces[0].networkIP,status,zone)')
 }
 #
 # cloud_FindInstances [namePrefix]
@@ -119,12 +117,26 @@ cloud_CreateInstances() {
   declare networkName="$1"
   declare namePrefix="$2"
   declare numNodes="$3"
-  declare imageName="$4"
+  declare enableGpu="$4"
   declare machineType="$5"
-  declare optionalBootDiskSize="$6"
-  declare optionalStartupScript="$7"
-  declare optionalAddress="$8"
-  declare optionalBootDiskType="$9"
+  declare zone="$6"
+  declare optionalBootDiskSize="$7"
+  declare optionalStartupScript="$8"
+  declare optionalAddress="$9"
+  declare optionalBootDiskType="${10}"
+
+  if $enableGpu; then
+    # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
+    #
+    # TODO: Unfortunately this image is not public.  When this becomes an issue,
+    # use the stock Ubuntu 18.04 image and programmatically install CUDA after the
+    # instance boots
+    #
+    imageName="ubuntu-1804-bionic-v20181029-with-cuda-10-and-cuda-9-2"
+  else
+    # Upstream Ubuntu 18.04 LTS image
+    imageName="ubuntu-1804-bionic-v20181029 --image-project ubuntu-os-cloud"
+  fi
 
   declare -a nodes
   if [[ $numNodes = 1 ]]; then
@@ -192,11 +204,13 @@ cloud_DeleteInstances() {
     echo No instances to delete
     return
   fi
+
   declare names=("${instances[@]/:*/}")
+  declare zones=("${instances[@]/*:/}")
 
   (
     set -x
-    gcloud beta compute instances delete --zone "$zone" --quiet "${names[@]}"
+    gcloud beta compute instances delete --zone "${zones[0]}" --quiet "${names[@]}"
   )
 }
 
@@ -213,6 +227,7 @@ cloud_FetchFile() {
   declare publicIp="$2"
   declare remoteFile="$3"
   declare localFile="$4"
+  declare zone="$5"
 
   (
     set -x

@@ -47,6 +47,14 @@ publicNetwork=false
 enableGpu=false
 customAddress=
 leaderRotation=true
+zones=()
+
+containsZone() {
+  local e match="$1"
+  shift
+  for e; do [[ "$e" == "$match" ]] && return 0; done
+  return 1
+}
 
 usage() {
   exitcode=0
@@ -125,7 +133,7 @@ while getopts "h?p:Pn:c:z:gG:a:d:bu" opt; do
     clientNodeCount=$OPTARG
     ;;
   z)
-    cloud_SetZone "$OPTARG"
+    containsZone "$OPTARG" "${zones[@]}" || zones+=("$OPTARG")
     ;;
   b)
     leaderRotation=false
@@ -156,6 +164,8 @@ while getopts "h?p:Pn:c:z:gG:a:d:bu" opt; do
 done
 shift $((OPTIND - 1))
 
+[[ ${#zones[@]} -gt 0 ]] || zones+=($(cloud_DefaultZone))
+
 [[ -z $1 ]] || usage "Unexpected argument: $1"
 if [[ $cloudProvider = ec2 ]]; then
   # EC2 keys can't be retrieved from running instances like GCE keys can so save
@@ -168,59 +178,8 @@ fi
 
 case $cloudProvider in
 gce)
-  if $enableGpu; then
-    # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
-    #
-    # TODO: Unfortunately this image is not public.  When this becomes an issue,
-    # use the stock Ubuntu 18.04 image and programmatically install CUDA after the
-    # instance boots
-    #
-    imageName="ubuntu-1804-bionic-v20181029-with-cuda-10-and-cuda-9-2"
-  else
-    # Upstream Ubuntu 18.04 LTS image
-    imageName="ubuntu-1804-bionic-v20181029 --image-project ubuntu-os-cloud"
-  fi
   ;;
 ec2)
-  if $enableGpu; then
-    #
-    # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
-    #
-    # TODO: Unfortunately these AMIs are not public.  When this becomes an issue,
-    # use the stock Ubuntu 18.04 image and programmatically install CUDA after the
-    # instance boots
-    #
-    case $region in
-    us-east-1)
-      imageName="ami-0a8bd6fb204473f78"
-      ;;
-    us-west-1)
-      imageName="ami-07011f0795513c59d"
-      ;;
-    us-west-2)
-      imageName="ami-0a11ef42b62b82b68"
-      ;;
-    *)
-      usage "Unsupported region: $region"
-      ;;
-    esac
-  else
-    # Select an upstream Ubuntu 18.04 AMI from https://cloud-images.ubuntu.com/locator/ec2/
-    case $region in
-    us-east-1)
-      imageName="ami-0a313d6098716f372"
-      ;;
-    us-west-1)
-      imageName="ami-06397100adf427136"
-      ;;
-    us-west-2)
-      imageName="ami-0dc34f4b016c9ce49"
-      ;;
-    *)
-      usage "Unsupported region: $region"
-      ;;
-    esac
-  fi
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
@@ -313,7 +272,8 @@ EOF
   (
     declare nodeName
     declare nodeIp
-    IFS=: read -r nodeName nodeIp _ < <(echo "${instances[0]}")
+    declare nodeZone
+    IFS=: read -r nodeName nodeIp _ nodeZone < <(echo "${instances[0]}")
 
     # Try to ping the machine first.
     timeout 90s bash -c "set -o pipefail; until ping -c 3 $nodeIp | tr - _; do echo .; done"
@@ -325,7 +285,7 @@ EOF
       # machine can be pinged...
       set -x -o pipefail
       for i in $(seq 1 30); do
-        if cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa "$sshPrivateKey"; then
+        if cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa "$sshPrivateKey" "$nodeZone"; then
           break
         fi
 
@@ -344,13 +304,15 @@ EOF
   cloud_ForEachInstance waitForStartupComplete
 
   echo "Looking for additional fullnode instances..."
-  cloud_FindInstances "$prefix-fullnode"
-  [[ ${#instances[@]} -gt 0 ]] || {
-    echo "Unable to find additional fullnodes"
-    exit 1
-  }
-  cloud_ForEachInstance recordInstanceIp fullnodeIpList
-  cloud_ForEachInstance waitForStartupComplete
+  for zone in "${zones[@]}"; do
+    cloud_FindInstances "$prefix-$zone-fullnode"
+    [[ ${#instances[@]} -gt 0 ]] || {
+      echo "Unable to find additional fullnodes"
+      exit 1
+    }
+    cloud_ForEachInstance recordInstanceIp fullnodeIpList
+    cloud_ForEachInstance waitForStartupComplete
+  done
 
   echo "clientIpList=()" >> "$configFile"
   echo "clientIpListPrivate=()" >> "$configFile"
@@ -381,7 +343,14 @@ delete() {
   # during shutdown (only applicable when leader rotation is disabled).
   # TODO: It would be better to fully cut-off metrics reporting before any
   # instances are deleted.
-  for filter in "$prefix-bootstrap-leader" "$prefix-"; do
+  filters=("$prefix-bootstrap-leader")
+  for zone in "${zones[@]}"; do
+    filters+=("$prefix-$zone")
+  done
+  # Filter for all other nodes (client, blockstreamer)
+  filters+=("$prefix-")
+
+  for filter in  "${filters[@]}"; do
     echo "Searching for instances: $filter"
     cloud_FindInstances "$filter"
 
@@ -501,25 +470,37 @@ EOF
     bootstrapLeaderAddress=$customAddress
   fi
 
-  cloud_Initialize "$prefix"
+  for zone in "${zones[@]}"; do
+    cloud_Initialize "$prefix" "$zone"
+  done
 
   cloud_CreateInstances "$prefix" "$prefix-bootstrap-leader" 1 \
-    "$imageName" "$bootstrapLeaderMachineType" "$fullNodeBootDiskSizeInGb" \
+    "$enableGpu" "$bootstrapLeaderMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
     "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType"
 
-  cloud_CreateInstances "$prefix" "$prefix-fullnode" "$additionalFullNodeCount" \
-    "$imageName" "$fullNodeMachineType" "$fullNodeBootDiskSizeInGb" \
-    "$startupScript" "" "$bootDiskType"
+  num_zones=${#zones[@]}
+  numNodesPerZone=$((additionalFullNodeCount / num_zones))
+  numLeftOverNodes=$((additionalFullNodeCount % num_zones))
+  count=0
+  for zone in "${zones[@]}"; do
+    count=$((count + 1))
+    if [[ $count -eq $num_zones ]]; then
+      numNodesPerZone=$((numNodesPerZone + numLeftOverNodes))
+    fi
+    cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
+      "$enableGpu" "$fullNodeMachineType" "$zone" "$fullNodeBootDiskSizeInGb" \
+      "$startupScript" "" "$bootDiskType"
+  done
 
   if [[ $clientNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
-      "$imageName" "$clientMachineType" "$clientBootDiskSizeInGb" \
+      "$enableGpu" "$clientMachineType" "${zones[0]}" "$clientBootDiskSizeInGb" \
       "$startupScript" "" "$bootDiskType"
   fi
 
   if $blockstreamer; then
     cloud_CreateInstances "$prefix" "$prefix-blockstreamer" "1" \
-      "$imageName" "$blockstreamerMachineType" "$fullNodeBootDiskSizeInGb" \
+      "$enableGpu" "$blockstreamerMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
       "$startupScript" "$blockstreamerAddress" "$bootDiskType"
   fi
 
