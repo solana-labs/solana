@@ -358,18 +358,18 @@ mod tests {
 
     #[test]
     fn test_bank_storage() {
-        let (mut genesis_block, mint_keypair) = GenesisBlock::new(1000);
+        let (mut genesis_block, alice_keypair) = GenesisBlock::new(1000);
         genesis_block
             .native_programs
             .push(("solana_storage_program".to_string(), id()));
-        let bank = Bank::new(&genesis_block);
-        let alice_client = BankClient::new(&bank, mint_keypair);
-        let alice_pubkey = alice_client.pubkey();
+        let alice_pubkey = alice_keypair.pubkey();
         let bob_keypair = Keypair::new();
-        let bob_client = BankClient::new(&bank, bob_keypair);
-        let bob_pubkey = bob_client.pubkey();
+        let bob_pubkey = bob_keypair.pubkey();
         let jack_pubkey = Keypair::new().pubkey();
         let jill_pubkey = Keypair::new().pubkey();
+
+        let bank = Bank::new(&genesis_block);
+        let bank_client = BankClient::new(&bank);
 
         let x = 42;
         let blockhash = genesis_block.hash();
@@ -378,14 +378,20 @@ mod tests {
 
         bank.register_tick(&blockhash);
 
-        alice_client.transfer(10, &jill_pubkey).unwrap();
-        alice_client.transfer(10, &bob_pubkey).unwrap();
-        alice_client.transfer(10, &jack_pubkey).unwrap();
+        bank_client
+            .transfer(10, &alice_keypair, &jill_pubkey)
+            .unwrap();
+        bank_client
+            .transfer(10, &alice_keypair, &bob_pubkey)
+            .unwrap();
+        bank_client
+            .transfer(10, &alice_keypair, &jack_pubkey)
+            .unwrap();
 
         let ix =
             SystemInstruction::new_program_account(&alice_pubkey, &bob_pubkey, 1, 4 * 1024, &id());
 
-        alice_client.process_instruction(ix).unwrap();
+        bank_client.process_instruction(&alice_keypair, ix).unwrap();
 
         let ix = StorageInstruction::new_advertise_recent_blockhash(
             &bob_pubkey,
@@ -393,7 +399,7 @@ mod tests {
             ENTRIES_PER_SEGMENT,
         );
 
-        bob_client.process_instruction(ix).unwrap();
+        bank_client.process_instruction(&bob_keypair, ix).unwrap();
 
         let entry_height = 0;
         let ix = StorageInstruction::new_mining_proof(
@@ -402,7 +408,7 @@ mod tests {
             entry_height,
             Signature::default(),
         );
-        let _result = bob_client.process_instruction(ix).unwrap();
+        let _result = bank_client.process_instruction(&bob_keypair, ix).unwrap();
 
         assert_eq!(
             get_storage_entry_height(&bank, &bob_pubkey),

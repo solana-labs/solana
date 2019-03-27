@@ -277,17 +277,17 @@ mod tests {
 
     #[test]
     fn test_system_unsigned_transaction() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(100);
-        let bank = Bank::new(&genesis_block);
-
-        let alice_client = BankClient::new(&bank, mint_keypair);
-        let alice_pubkey = alice_client.pubkey();
-
-        let mallory_client = BankClient::new(&bank, Keypair::new());
-        let mallory_pubkey = mallory_client.pubkey();
+        let (genesis_block, alice_keypair) = GenesisBlock::new(100);
+        let alice_pubkey = alice_keypair.pubkey();
+        let mallory_keypair = Keypair::new();
+        let mallory_pubkey = mallory_keypair.pubkey();
 
         // Fund to account to bypass AccountNotFound error
-        alice_client.transfer(50, &mallory_pubkey).unwrap();
+        let bank = Bank::new(&genesis_block);
+        let bank_client = BankClient::new(&bank);
+        bank_client
+            .transfer(50, &alice_keypair, &mallory_pubkey)
+            .unwrap();
 
         // Erroneously sign transaction with recipient account key
         // No signature case is tested by bank `test_zero_signatures()`
@@ -301,7 +301,7 @@ mod tests {
             account_metas,
         );
         assert_eq!(
-            mallory_client.process_instruction(malicious_instruction),
+            bank_client.process_instruction(&mallory_keypair, malicious_instruction),
             Err(TransactionError::InstructionError(
                 0,
                 InstructionError::MissingRequiredSignature
