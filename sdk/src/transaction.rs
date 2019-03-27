@@ -393,7 +393,8 @@ mod tests {
     use super::*;
     use crate::instruction::AccountMeta;
     use crate::signature::Keypair;
-    use bincode::{deserialize, serialize};
+    use crate::system_instruction::SystemInstruction;
+    use bincode::{deserialize, serialize, serialized_size};
 
     #[test]
     fn test_refs() {
@@ -504,11 +505,43 @@ mod tests {
         assert_eq!(tx, deser);
     }
 
+    /// Detect changes to the serialized size of payment transactions, which affects TPS.
     #[test]
-    fn test_transaction_serialized_size() {
-        let tx = create_sample_transaction();
-        let req_size = size_of::<u64>()
-            + 1
+    fn test_transaction_minimum_serialized_size() {
+        let alice_keypair = Keypair::new();
+        let alice_pubkey = alice_keypair.pubkey();
+        let bob_pubkey = Keypair::new().pubkey();
+        let ix = SystemInstruction::new_move(&alice_pubkey, &bob_pubkey, 42);
+
+        let expected_data_size = size_of::<u32>() + size_of::<u64>();
+        assert_eq!(expected_data_size, 12);
+        assert_eq!(
+            ix.data.len(),
+            expected_data_size,
+            "unexpected system instruction size"
+        );
+
+        let expected_instruction_size = 1 + 1 + ix.accounts.len() + 1 + expected_data_size;
+        assert_eq!(expected_instruction_size, 17);
+
+        let message = Message::new(vec![ix]);
+        assert_eq!(
+            serialized_size(&message.instructions[0]).unwrap() as usize,
+            expected_instruction_size + size_of::<u64>() + 6, // TODO: Don't use serialize_bytes().
+            "unexpected Instruction::serialized_size"
+        );
+
+        // These two ways of calculating serialized size should return the same value, but
+        // currently don't.
+        assert_eq!(
+            message.instructions[0].serialized_size().unwrap() as usize + size_of::<u64>() + 6,
+            serialized_size(&message.instructions[0]).unwrap() as usize,
+            "serialized_size mismatch"
+        );
+
+        let tx = Transaction::new(&[&alice_keypair], message, Hash::default());
+
+        let expected_transaction_size = 1
             + (tx.signatures.len() * size_of::<Signature>())
             + 1
             + (tx.account_keys.len() * size_of::<Pubkey>())
@@ -517,9 +550,19 @@ mod tests {
             + 1
             + (tx.program_ids.len() * size_of::<Pubkey>())
             + 1
-            + tx.instructions[0].serialized_size().unwrap() as usize;
-        let size = tx.serialized_size().unwrap() as usize;
-        assert_eq!(req_size, size);
+            + expected_instruction_size;
+        assert_eq!(expected_transaction_size, 221);
+
+        assert_eq!(
+            serialized_size(&tx).unwrap() as usize,
+            expected_transaction_size + size_of::<u64>(), // TODO: Don't use serialize_bytes()
+            "unexpected serialized transaction size"
+        );
+        assert_eq!(
+            tx.serialized_size().unwrap() as usize,
+            serialized_size(&tx).unwrap() as usize,
+            "unexpected Transaction::serialized_size"
+        );
     }
 
     /// Detect binary changes in the serialized transaction data, which could have a downstream
