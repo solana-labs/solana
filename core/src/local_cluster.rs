@@ -45,7 +45,7 @@ impl ReplicatorInfo {
     fn new(storage_id: Pubkey, ledger_path: String) -> Self {
         Self {
             replicator_storage_id: storage_id,
-            ledger_path: ledger_path,
+            ledger_path,
         }
     }
 }
