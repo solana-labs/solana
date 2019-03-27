@@ -109,12 +109,12 @@ The current solution is to reset the metrics server. Use the following steps.
  into it from the GCP console. The name of the VM is ```metrics-solana-com```.
 2. If the VM is inaccessible, reset it from the GCP console.
 3. Once VM is up (or, was already up), the metrics services can be restarted from build automation.
-    4. Navigate to https://buildkite.com/solana-labs/metrics-dot-solana-dot-com in your web browser
-    5. Click on ```New Build```
-    6. This will show a pop up dialog. Click on ```options``` drop down.
-    7. Type in ```FORCE_START=true``` in ```Environment Variables``` text box.
-    8. Click ```Create Build```
-    9. This will restart the metrics services, and the dashboards should be accessible afterwards.
+    1. Navigate to https://buildkite.com/solana-labs/metrics-dot-solana-dot-com in your web browser
+    2. Click on ```New Build```
+    3. This will show a pop up dialog. Click on ```options``` drop down.
+    4. Type in ```FORCE_START=true``` in ```Environment Variables``` text box.
+    5. Click ```Create Build```
+    6. This will restart the metrics services, and the dashboards should be accessible afterwards.
 
 #### Debugging Testnet
 Testnet may exhibit different symptoms of failures. Primary statistics to check are
