@@ -6,7 +6,7 @@ use libloading::os::unix::*;
 use libloading::os::windows::*;
 use log::*;
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_error::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::native_program;
 use solana_sdk::pubkey::Pubkey;

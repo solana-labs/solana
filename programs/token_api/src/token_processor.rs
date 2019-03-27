@@ -2,7 +2,7 @@ use crate::token_state::TokenState;
 use bincode::serialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_error::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 
 pub fn process_instruction(

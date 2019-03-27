@@ -1,7 +1,8 @@
 //! Defines a Transaction type to package an atomic sequence of instructions.
 
 use crate::hash::Hash;
-use crate::instruction::{CompiledInstruction, Instruction, InstructionError};
+use crate::instruction::{CompiledInstruction, Instruction};
+use crate::instruction_error::InstructionError;
 use crate::message::Message;
 use crate::pubkey::Pubkey;
 use crate::short_vec;
@@ -228,7 +229,7 @@ impl Transaction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::instruction::AccountMeta;
+    use crate::instruction::{AccountMeta, CompiledInstruction};
     use crate::signature::Keypair;
     use crate::system_instruction::SystemInstruction;
     use bincode::{deserialize, serialize, serialized_size};

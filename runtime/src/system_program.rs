@@ -1,9 +1,10 @@
 use bincode::serialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_error::InstructionError;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::system_instruction::{SystemError, SystemInstruction};
+use solana_sdk::system_error::SystemError;
+use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
 
 const FROM_ACCOUNT_INDEX: usize = 0;
@@ -108,7 +109,8 @@ mod tests {
     use crate::bank_client::BankClient;
     use solana_sdk::account::Account;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
+    use solana_sdk::instruction::{AccountMeta, Instruction};
+    use solana_sdk::instruction_error::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;

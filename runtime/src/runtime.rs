@@ -1,6 +1,6 @@
 use crate::native_loader;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
-use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_error::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
 use solana_sdk::transaction::{Transaction, TransactionError};

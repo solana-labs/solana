@@ -6,7 +6,7 @@ use crate::vote_state;
 use bincode::deserialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
-use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_error::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 
 pub fn process_instruction(
@@ -50,7 +50,7 @@ mod tests {
     use solana_runtime::bank::{Bank, Result};
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::instruction::InstructionError;
+    use solana_sdk::instruction_error::InstructionError;
     use solana_sdk::message::Message;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};

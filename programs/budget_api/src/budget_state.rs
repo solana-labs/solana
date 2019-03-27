@@ -2,7 +2,7 @@
 use crate::budget_expr::BudgetExpr;
 use bincode::{self, deserialize, serialize_into};
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_error::InstructionError;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum BudgetError {
