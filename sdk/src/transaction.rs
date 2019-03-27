@@ -1,7 +1,7 @@
 //! Defines a Transaction type to package an atomic sequence of instructions.
 
 use crate::hash::{Hash, Hasher};
-use crate::instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError};
+use crate::instruction::{CompiledInstruction, Instruction, InstructionError};
 use crate::message::Message;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::pubkey::Pubkey;
@@ -107,22 +107,6 @@ impl Transaction {
         let mut message = Message::new(instructions);
         message.fee = fee;
         Self::new(from_keypairs, message, recent_blockhash)
-    }
-
-    pub fn new_signed<S: Serialize, T: KeypairUtil>(
-        from_keypair: &T,
-        transaction_keys: &[Pubkey],
-        program_id: &Pubkey,
-        data: &S,
-        recent_blockhash: Hash,
-        fee: u64,
-    ) -> Self {
-        let mut account_metas = vec![AccountMeta::new(from_keypair.pubkey(), true)];
-        for pubkey in transaction_keys {
-            account_metas.push(AccountMeta::new(*pubkey, false));
-        }
-        let instruction = Instruction::new(*program_id, data, account_metas);
-        Self::new_signed_instructions(&[from_keypair], vec![instruction], recent_blockhash, fee)
     }
 
     /// Create a signed transaction
@@ -407,6 +391,7 @@ impl<'de> Deserialize<'de> for Transaction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::instruction::AccountMeta;
     use crate::signature::Keypair;
     use bincode::{deserialize, serialize};
 
@@ -482,20 +467,38 @@ mod tests {
         assert!(!tx.verify_refs());
     }
 
+    fn create_sample_transaction() -> Transaction {
+        use untrusted::Input;
+        let keypair = Keypair::from_pkcs8(Input::from(&[
+            48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 255, 101, 36, 24, 124, 23,
+            167, 21, 132, 204, 155, 5, 185, 58, 121, 75, 156, 227, 116, 193, 215, 38, 142, 22, 8,
+            14, 229, 239, 119, 93, 5, 218, 161, 35, 3, 33, 0, 36, 100, 158, 252, 33, 161, 97, 185,
+            62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231, 62, 157,
+            5, 142, 27, 210, 117,
+        ]))
+        .unwrap();
+        let to = Pubkey::new(&[
+            1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4,
+            1, 1, 1,
+        ]);
+
+        let program_id = Pubkey::new(&[
+            2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4,
+            2, 2, 2,
+        ]);
+        let account_metas = vec![
+            AccountMeta::new(keypair.pubkey(), true),
+            AccountMeta::new(to, false),
+        ];
+        let instruction = Instruction::new(program_id, &(1u8, 2u8, 3u8), account_metas);
+        let mut message = Message::new(vec![instruction]);
+        message.fee = 99;
+        Transaction::new(&[&keypair], message, Hash::default())
+    }
+
     #[test]
     fn test_transaction_serialize() {
-        let keypair = Keypair::new();
-        let program_id = Pubkey::new(&[4; 32]);
-        let to = Pubkey::new(&[5; 32]);
-        let tx = Transaction::new_signed(
-            &keypair,
-            &[keypair.pubkey(), to],
-            &program_id,
-            &(1u8, 2u8, 3u8),
-            Hash::default(),
-            99,
-        );
-
+        let tx = create_sample_transaction();
         let ser = serialize(&tx).unwrap();
         let deser = deserialize(&ser).unwrap();
         assert_eq!(tx, deser);
@@ -503,17 +506,7 @@ mod tests {
 
     #[test]
     fn test_transaction_serialized_size() {
-        let keypair = Keypair::new();
-        let program_id = Pubkey::new(&[4; 32]);
-        let to = Pubkey::new(&[5; 32]);
-        let tx = Transaction::new_signed(
-            &keypair,
-            &[keypair.pubkey(), to],
-            &program_id,
-            &(1u8, 2u8, 3u8),
-            Hash::default(),
-            99,
-        );
+        let tx = create_sample_transaction();
         let req_size = size_of::<u64>()
             + 1
             + (tx.signatures.len() * size_of::<Signature>())
@@ -533,35 +526,8 @@ mod tests {
     /// affect on SDKs and DApps
     #[test]
     fn test_sdk_serialize() {
-        use untrusted::Input;
-        let keypair = Keypair::from_pkcs8(Input::from(&[
-            48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 255, 101, 36, 24, 124, 23,
-            167, 21, 132, 204, 155, 5, 185, 58, 121, 75, 156, 227, 116, 193, 215, 38, 142, 22, 8,
-            14, 229, 239, 119, 93, 5, 218, 161, 35, 3, 33, 0, 36, 100, 158, 252, 33, 161, 97, 185,
-            62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231, 62, 157,
-            5, 142, 27, 210, 117,
-        ]))
-        .unwrap();
-        let to = Pubkey::new(&[
-            1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4,
-            1, 1, 1,
-        ]);
-
-        let program_id = Pubkey::new(&[
-            2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4,
-            2, 2, 2,
-        ]);
-
-        let tx = Transaction::new_signed(
-            &keypair,
-            &[to],
-            &program_id,
-            &(1u8, 2u8, 3u8),
-            Hash::default(),
-            99,
-        );
         assert_eq!(
-            serialize(&tx).unwrap(),
+            serialize(&create_sample_transaction()).unwrap(),
             vec![
                 212, 0, 0, 0, 0, 0, 0, 0, 1, 107, 231, 179, 42, 11, 220, 153, 173, 229, 29, 51,
                 218, 98, 26, 46, 164, 248, 228, 118, 244, 191, 192, 198, 228, 190, 119, 21, 52, 66,
