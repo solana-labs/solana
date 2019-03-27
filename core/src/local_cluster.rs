@@ -162,6 +162,12 @@ impl LocalCluster {
             cluster.add_replicator();
         }
 
+        discover(
+            &cluster.entry_point_info.gossip,
+            node_stakes.len() + num_replicators,
+        )
+        .unwrap();
+
         cluster
     }
 
