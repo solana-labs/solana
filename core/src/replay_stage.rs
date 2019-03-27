@@ -58,7 +58,6 @@ struct ForkProgress {
     last_entry: Hash,
     num_blobs: usize,
     started_ms: u64,
-    supermajority_confirmed_ms: u64,
 }
 impl ForkProgress {
     pub fn new(last_entry: Hash) -> Self {
@@ -66,7 +65,6 @@ impl ForkProgress {
             last_entry,
             num_blobs: 0,
             started_ms: timing::timestamp(),
-            supermajority_confirmed_ms: 0,
         }
     }
 }
@@ -380,7 +378,7 @@ impl ReplayStage {
             }
             let max_tick_height = (*bank_slot + 1) * bank.ticks_per_slot() - 1;
             if bank.tick_height() == max_tick_height {
-                Self::process_completed_bank(my_id, bank, progress, slot_full_sender);
+                Self::process_completed_bank(my_id, bank, slot_full_sender);
             }
         }
         Ok(())
@@ -460,20 +458,26 @@ impl ReplayStage {
         stake_lockouts: &HashMap<u64, StakeLockout>,
         progress: &mut HashMap<u64, ForkProgress>,
     ) {
-        for (slot, prog) in progress.iter_mut() {
-            if prog.supermajority_confirmed_ms == 0
-                && locktower.is_slot_confirmed(*slot, stake_lockouts)
-            {
-                prog.supermajority_confirmed_ms = timing::timestamp();
-                let duration = prog.supermajority_confirmed_ms - prog.started_ms;
+        progress.retain(|slot, prog| {
+            let duration = timing::timestamp() - prog.started_ms;
+            if locktower.is_slot_confirmed(*slot, stake_lockouts) {
                 info!("validator fork confirmed {} {}", *slot, duration);
                 solana_metrics::submit(
                     influxdb::Point::new(&"validator-confirmation")
                         .add_field("duration_ms", influxdb::Value::Integer(duration as i64))
                         .to_owned(),
                 );
+                false
+            } else {
+                debug!(
+                    "validator fork not confirmed {} {} {:?}",
+                    *slot,
+                    duration,
+                    stake_lockouts.get(slot)
+                );
+                true
             }
-        }
+        });
     }
 
     fn load_blocktree_entries(
@@ -540,12 +544,10 @@ impl ReplayStage {
     fn process_completed_bank(
         my_id: &Pubkey,
         bank: Arc<Bank>,
-        progress: &mut HashMap<u64, ForkProgress>,
         slot_full_sender: &Sender<(u64, Pubkey)>,
     ) {
         bank.freeze();
         info!("bank frozen {}", bank.slot());
-        progress.remove(&bank.slot());
         if let Err(e) = slot_full_sender.send((bank.slot(), bank.collector_id())) {
             trace!("{} slot_full alert failed: {:?}", my_id, e);
         }
