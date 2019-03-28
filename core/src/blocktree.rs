@@ -2264,6 +2264,36 @@ pub mod tests {
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
+    #[test]
+    pub fn test_no_missing_blob_indexes() {
+        let slot = 0;
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+        // Write entries
+        let num_entries = 10;
+        let shared_blobs = make_tiny_test_entries(num_entries).to_single_entry_shared_blobs();
+
+        crate::packet::index_blobs(&shared_blobs, &Keypair::new().pubkey(), 0, slot, 0);
+
+        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
+        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
+        blocktree.write_blobs(blobs).unwrap();
+
+        let empty: Vec<u64> = vec![];
+        for i in 0..num_entries as u64 {
+            for j in 0..i {
+                assert_eq!(
+                    blocktree.find_missing_data_indexes(slot, j, i, (i - j) as usize),
+                    empty
+                );
+            }
+        }
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
     pub fn entries_to_blobs(
         entries: &Vec<Entry>,
         slot: u64,
