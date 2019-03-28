@@ -379,6 +379,8 @@ pub fn process_instruction(
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), InstructionError> {
+    solana_logger::setup();
+
     let command = bincode::deserialize::<ExchangeInstruction>(data).map_err(|err| {
         info!("Invalid transaction data: {:?} {:?}", data, err);
         InstructionError::InvalidInstructionData
