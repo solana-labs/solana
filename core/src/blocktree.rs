@@ -87,8 +87,6 @@ pub struct SlotMeta {
     // True if this slot is full (consumed == last_index + 1) and if every
     // slot that is a parent of this slot is also connected.
     pub is_connected: bool,
-    // True if it's possible to follow the chain of parent_slots back to root
-    pub has_complete_parents: bool,
 }
 
 impl SlotMeta {
@@ -113,7 +111,6 @@ impl SlotMeta {
             next_slots: vec![],
             is_connected: slot == 0,
             last_index: std::u64::MAX,
-            has_complete_parents: slot == 0,
         }
     }
 }
@@ -711,36 +708,21 @@ impl Blocktree {
             }
         }
 
-        // Detached head slots may have children, so if this slot is now attached,
-        // then update all child slots so that their `has_complete_parents` = true
-        let should_propagate_has_complete_parents =
-            Self::is_newly_attached_head(&RefCell::borrow(&*meta), &meta_backup);
-
         // This is a newly inserted slot and slot.is_connected is true, so update all
         // child slots so that their `is_connected` = true
         let should_propagate_is_connected =
             Self::is_newly_completed_slot(&RefCell::borrow(&*meta), meta_backup)
                 && RefCell::borrow(&*meta).is_connected;
 
-        if should_propagate_has_complete_parents || should_propagate_is_connected {
+        if should_propagate_is_connected {
             // slot_function returns a boolean indicating whether to explore the children
             // of the input slot
             let slot_function = |slot: &mut SlotMeta| {
-                if should_propagate_is_connected {
-                    slot.is_connected = true;
-                }
+                slot.is_connected = true;
 
-                if should_propagate_has_complete_parents {
-                    slot.has_complete_parents = true;
-                } else {
-                    // If we don't need to set the `has_complete_parents` flag on children,
-                    // then we are only interested in setting the `is_connected` flag. This
-                    // means we don't want to explore the children whenever of a non-full
-                    // child slot.
-                    return slot.is_full();
-                }
-
-                true
+                // We don't want to set the is_connected flag on the children of non-full
+                // slots
+                slot.is_full()
             };
 
             self.traverse_children_mut(slot, &meta, working_set, new_chained_slots, slot_function)?;
@@ -780,14 +762,6 @@ impl Blocktree {
         Ok(())
     }
 
-    fn is_newly_attached_head(meta: &SlotMeta, meta_backup: &Option<SlotMeta>) -> bool {
-        if meta_backup.is_none() {
-            false
-        } else {
-            Self::is_detached_head(meta_backup.as_ref().unwrap()) && meta.has_complete_parents
-        }
-    }
-
     fn is_detached_head(meta: &SlotMeta) -> bool {
         // If we have children, but no parent, then this is the head of a detached chain of
         // slots
@@ -796,7 +770,6 @@ impl Blocktree {
 
     // 1) Chain current_slot to the previous slot defined by prev_slot_meta
     // 2) Determine whether to set the is_connected flag
-    // 3) Determine whether to set the has_complete_parents flag
     fn chain_new_slot_to_prev_slot(
         &self,
         prev_slot_meta: &mut SlotMeta,
@@ -805,7 +778,6 @@ impl Blocktree {
     ) {
         prev_slot_meta.next_slots.push(current_slot);
         current_slot_meta.is_connected = prev_slot_meta.is_connected && prev_slot_meta.is_full();
-        current_slot_meta.has_complete_parents = prev_slot_meta.has_complete_parents;
     }
 
     fn is_newly_completed_slot(slot_meta: &SlotMeta, backup_slot_meta: &Option<SlotMeta>) -> bool {
@@ -1938,7 +1910,6 @@ pub mod tests {
                 }
                 assert_eq!(s.last_index, entries_per_slot - 1);
                 assert!(s.is_connected);
-                assert!(s.has_complete_parents);
             }
         }
 
@@ -2075,7 +2046,6 @@ pub mod tests {
                 assert_eq!(slot_meta.consumed, entries_per_slot);
                 assert_eq!(slot_meta.received, entries_per_slot);
                 assert!(slot_meta.is_connected);
-                assert!(slot_meta.has_complete_parents);
                 let slot_parent = {
                     if slot == 0 {
                         0
@@ -2192,59 +2162,6 @@ pub mod tests {
                     .expect("Expect database get to succeed")
                     .unwrap();
                 assert!(!Blocktree::is_detached_head(&meta));
-            }
-        }
-        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
-    }
-
-    #[test]
-    fn test_has_complete_parents() {
-        let blocktree_path = get_tmp_ledger_path("test_has_complete_parents");
-        {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
-
-            // Create blobs and entries
-            let num_slots = 5;
-            let entries_per_slot = 1;
-            let (blobs, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
-
-            // Write the blobs for the second slot onwards, has_complete_parents false
-            // because we're missing the first two slots
-            for b in &blobs[2..] {
-                blocktree.write_blobs(once(b)).unwrap();
-            }
-
-            for i in 2..num_slots {
-                let meta = blocktree
-                    .meta(i)
-                    .expect("Expect database get to succeed")
-                    .unwrap();
-
-                assert!(!meta.has_complete_parents);
-            }
-
-            // Write the zeroth slot, has_complete_parents is still false
-            blocktree.write_blobs(once(&blobs[0])).unwrap();
-
-            for i in 2..num_slots {
-                let meta = blocktree
-                    .meta(i)
-                    .expect("Expect database get to succeed")
-                    .unwrap();
-
-                assert!(!meta.has_complete_parents);
-            }
-
-            // We fill in the detached head, so has_complete_parents = true for all slots
-            blocktree.write_blobs(once(&blobs[1])).unwrap();
-
-            for i in 0..num_slots {
-                let meta = blocktree
-                    .meta(i)
-                    .expect("Expect database get to succeed")
-                    .unwrap();
-
-                assert!(meta.has_complete_parents);
             }
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
