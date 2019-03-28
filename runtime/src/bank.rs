@@ -117,7 +117,7 @@ pub struct Bank {
     accounts_id: u64,
 
     /// A cache of signature statuses
-    status_cache: RwLock<BankStatusCache>,
+    status_cache: Arc<RwLock<BankStatusCache>>,
 
     /// FIFO queue of `recent_blockhash` items
     blockhash_queue: RwLock<BlockhashQueue>,
@@ -191,6 +191,7 @@ impl Bank {
 
         let mut bank = Self::default();
         bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
+        bank.status_cache = parent.status_cache.clone();
         bank.tick_height
             .store(parent.tick_height.load(Ordering::SeqCst), Ordering::SeqCst);
         bank.ticks_per_slot = parent.ticks_per_slot;
