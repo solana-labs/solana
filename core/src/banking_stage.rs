@@ -4,7 +4,7 @@
 
 use crate::cluster_info::ClusterInfo;
 use crate::entry;
-use crate::entry::Entry;
+use crate::entry::{hash_transactions, Entry};
 use crate::leader_schedule_utils;
 use crate::packet;
 use crate::packet::SharedPackets;
@@ -236,7 +236,7 @@ impl BankingStage {
         debug!("processed: {} ", processed_transactions.len());
         // unlock all the accounts with errors which are filtered by the above `filter_map`
         if !processed_transactions.is_empty() {
-            let hash = Transaction::hash(&processed_transactions);
+            let hash = hash_transactions(&processed_transactions);
             // record and unlock will unlock all the successfull transactions
             poh.lock()
                 .unwrap()

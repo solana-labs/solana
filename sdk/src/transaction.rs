@@ -1,6 +1,6 @@
 //! Defines a Transaction type to package an atomic sequence of instructions.
 
-use crate::hash::{Hash, Hasher};
+use crate::hash::Hash;
 use crate::instruction::{CompiledInstruction, Instruction, InstructionError};
 use crate::message::Message;
 use crate::packet::PACKET_DATA_SIZE;
@@ -215,13 +215,6 @@ impl Transaction {
         self.sign_unchecked(keypairs, recent_blockhash);
     }
 
-    /// Verify only the transaction signature.
-    pub fn verify_signature(&self) -> bool {
-        self.signatures
-            .iter()
-            .all(|s| s.verify(&self.from().as_ref(), &self.message()))
-    }
-
     /// Verify that references in the instructions are valid
     pub fn verify_refs(&self) -> bool {
         for instruction in &self.instructions {
@@ -235,21 +228,6 @@ impl Transaction {
             }
         }
         true
-    }
-
-    pub fn from(&self) -> &Pubkey {
-        &self.account_keys[0]
-    }
-
-    // a hash of a slice of transactions only needs to hash the signatures
-    pub fn hash(transactions: &[Transaction]) -> Hash {
-        let mut hasher = Hasher::default();
-        transactions.iter().for_each(|tx| {
-            if !tx.signatures.is_empty() {
-                hasher.hash(&tx.signatures[0].as_ref());
-            }
-        });
-        hasher.result()
     }
 
     pub fn serialized_size(&self) -> Result<u64, Error> {

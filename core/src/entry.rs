@@ -9,7 +9,7 @@ use bincode::{deserialize, serialized_size};
 use chrono::prelude::Utc;
 use rayon::prelude::*;
 use solana_budget_api::budget_instruction::BudgetInstruction;
-use solana_sdk::hash::Hash;
+use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use std::borrow::Borrow;
@@ -155,6 +155,17 @@ impl Entry {
     }
 }
 
+pub fn hash_transactions(transactions: &[Transaction]) -> Hash {
+    // a hash of a slice of transactions only needs to hash the signatures
+    let mut hasher = Hasher::default();
+    transactions.iter().for_each(|tx| {
+        if !tx.signatures.is_empty() {
+            hasher.hash(&tx.signatures[0].as_ref());
+        }
+    });
+    hasher.result()
+}
+
 /// Creates the hash `num_hashes` after `start_hash`. If the transaction contains
 /// a signature, the final hash will be a hash of both the previous ID and
 /// the signature.  If num_hashes is zero and there's no transaction data,
@@ -173,7 +184,7 @@ fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -
     if transactions.is_empty() {
         poh.tick().hash
     } else {
-        poh.record(Transaction::hash(transactions)).hash
+        poh.record(hash_transactions(transactions)).hash
     }
 }
 
