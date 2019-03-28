@@ -236,13 +236,13 @@ impl RpcSol for RpcSolImpl {
     type Metadata = Meta;
 
     fn confirm_transaction(&self, meta: Self::Metadata, id: String) -> Result<bool> {
-        info!("confirm_transaction rpc request received: {:?}", id);
+        debug!("confirm_transaction rpc request received: {:?}", id);
         self.get_signature_status(meta, id)
             .map(|status| status == RpcSignatureStatus::Confirmed)
     }
 
     fn get_account_info(&self, meta: Self::Metadata, id: String) -> Result<Account> {
-        info!("get_account_info rpc request received: {:?}", id);
+        debug!("get_account_info rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
         meta.request_processor
             .read()
@@ -251,13 +251,13 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<u64> {
-        info!("get_balance rpc request received: {:?}", id);
+        debug!("get_balance rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
         Ok(meta.request_processor.read().unwrap().get_balance(&pubkey))
     }
 
     fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<String> {
-        info!("get_recent_blockhash rpc request received");
+        debug!("get_recent_blockhash rpc request received");
         Ok(meta
             .request_processor
             .read()
@@ -282,7 +282,7 @@ impl RpcSol for RpcSolImpl {
         meta: Self::Metadata,
         id: String,
     ) -> Result<(usize, RpcSignatureStatus)> {
-        info!("get_signature_confirmation rpc request received: {:?}", id);
+        debug!("get_signature_confirmation rpc request received: {:?}", id);
         let signature = verify_signature(&id)?;
         let res = meta
             .request_processor
@@ -311,7 +311,7 @@ impl RpcSol for RpcSolImpl {
                 (0, RpcSignatureStatus::SignatureNotFound)
             }
         };
-        info!(
+        debug!(
             "get_signature_confirmation rpc request status: {:?}",
             status
         );
@@ -319,7 +319,7 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
-        info!("get_transaction_count rpc request received");
+        debug!("get_transaction_count rpc request received");
         meta.request_processor
             .read()
             .unwrap()

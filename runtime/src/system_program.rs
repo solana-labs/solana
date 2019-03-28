@@ -16,21 +16,21 @@ fn create_system_account(
     program_id: &Pubkey,
 ) -> Result<(), SystemError> {
     if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].account.owner) {
-        info!("CreateAccount: invalid account[from] owner");
+        debug!("CreateAccount: invalid account[from] owner");
         Err(SystemError::SourceNotSystemAccount)?;
     }
 
     if !keyed_accounts[TO_ACCOUNT_INDEX].account.data.is_empty()
         || !system_program::check_id(&keyed_accounts[TO_ACCOUNT_INDEX].account.owner)
     {
-        info!(
+        debug!(
             "CreateAccount: invalid argument; account {} already in use",
             keyed_accounts[TO_ACCOUNT_INDEX].unsigned_key()
         );
         Err(SystemError::AccountAlreadyInUse)?;
     }
     if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports {
-        info!(
+        debug!(
             "CreateAccount: insufficient lamports ({}, need {})",
             keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports, lamports
         );
@@ -53,7 +53,7 @@ fn assign_account_to_program(
 }
 fn move_lamports(keyed_accounts: &mut [KeyedAccount], lamports: u64) -> Result<(), SystemError> {
     if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports {
-        info!(
+        debug!(
             "Move: insufficient lamports ({}, need {})",
             keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports, lamports
         );
@@ -76,7 +76,7 @@ pub fn entrypoint(
 
         // All system instructions require that accounts_keys[0] be a signer
         if keyed_accounts[FROM_ACCOUNT_INDEX].signer_key().is_none() {
-            info!("account[from] is unsigned");
+            debug!("account[from] is unsigned");
             Err(InstructionError::MissingRequiredSignature)?;
         }
 
@@ -96,7 +96,7 @@ pub fn entrypoint(
         }
         .map_err(|e| InstructionError::CustomError(serialize(&e).unwrap()))
     } else {
-        info!("Invalid instruction data: {:?}", data);
+        debug!("Invalid instruction data: {:?}", data);
         Err(InstructionError::InvalidInstructionData)
     }
 }
