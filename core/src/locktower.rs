@@ -20,7 +20,7 @@ pub struct EpochStakes {
     delegate_id: Pubkey,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct StakeLockout {
     lockout: u64,
     stake: u64,
@@ -57,32 +57,32 @@ impl EpochStakes {
         let stakes = accounts.iter().map(|(k, v)| (*k, v.lamports)).collect();
         Self::new(slot, stakes, &accounts[0].0)
     }
-    pub fn new_from_bank(bank: &Bank) -> Self {
+    pub fn new_from_bank(bank: &Bank, my_id: &Pubkey) -> Self {
         let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
         let stakes = staking_utils::vote_account_balances_at_epoch(bank, bank_epoch)
             .expect("voting require a bank with stakes");
-        Self::new(bank_epoch, stakes, &bank.collector_id())
+        Self::new(bank_epoch, stakes, my_id)
     }
 }
 
 impl Locktower {
-    pub fn new_from_forks(bank_forks: &BankForks) -> Self {
+    pub fn new_from_forks(bank_forks: &BankForks, my_id: &Pubkey) -> Self {
         //TODO: which bank to start with?
         let mut frozen_banks: Vec<_> = bank_forks.frozen_banks().values().cloned().collect();
         frozen_banks.sort_by_key(|b| (b.parents().len(), b.slot()));
         if let Some(bank) = frozen_banks.last() {
-            Self::new_from_bank(bank)
+            Self::new_from_bank(bank, my_id)
         } else {
             Self::default()
         }
     }
 
-    pub fn new_from_bank(bank: &Bank) -> Self {
+    pub fn new_from_bank(bank: &Bank, my_id: &Pubkey) -> Self {
         let current_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
         let mut lockouts = VoteState::default();
         if let Some(iter) = staking_utils::node_staked_accounts_at_epoch(bank, current_epoch) {
             for (delegate_id, _, account) in iter {
-                if *delegate_id == bank.collector_id() {
+                if *delegate_id == *my_id {
                     let state = VoteState::deserialize(&account.data).expect("votes");
                     if lockouts.votes.len() < state.votes.len() {
                         //TODO: which state to init with?
@@ -91,7 +91,7 @@ impl Locktower {
                 }
             }
         }
-        let epoch_stakes = EpochStakes::new_from_bank(bank);
+        let epoch_stakes = EpochStakes::new_from_bank(bank, my_id);
         Self {
             epoch_stakes,
             threshold_depth: VOTE_THRESHOLD_DEPTH,
@@ -124,9 +124,16 @@ impl Locktower {
             }
             let mut vote_state: VoteState = VoteState::deserialize(&account.data)
                 .expect("bank should always have valid VoteState data");
+
             if key == self.epoch_stakes.delegate_id
                 || vote_state.delegate_id == self.epoch_stakes.delegate_id
             {
+                debug!("vote state {:?}", vote_state);
+                debug!(
+                    "observed slot {}",
+                    vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0) as i64
+                );
+                debug!("observed root {}", vote_state.root_slot.unwrap_or(0) as i64);
                 solana_metrics::submit(
                     influxdb::Point::new("counter-locktower-observed")
                         .add_field(
@@ -170,6 +177,20 @@ impl Locktower {
         stake_lockouts
     }
 
+    pub fn is_slot_confirmed(&self, slot: u64, lockouts: &HashMap<u64, StakeLockout>) -> bool {
+        lockouts
+            .get(&slot)
+            .map(|lockout| {
+                (lockout.stake as f64 / self.epoch_stakes.total_staked as f64) > self.threshold_size
+            })
+            .unwrap_or(false)
+    }
+
+    pub fn is_recent_epoch(&self, bank: &Bank) -> bool {
+        let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
+        bank_epoch >= self.epoch_stakes.slot
+    }
+
     pub fn update_epoch(&mut self, bank: &Bank) {
         let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
         if bank_epoch != self.epoch_stakes.slot {
@@ -177,7 +198,7 @@ impl Locktower {
                 bank_epoch > self.epoch_stakes.slot,
                 "epoch_stakes cannot move backwards"
             );
-            self.epoch_stakes = EpochStakes::new_from_bank(bank);
+            self.epoch_stakes = EpochStakes::new_from_bank(bank, &self.epoch_stakes.delegate_id);
             solana_metrics::submit(
                 influxdb::Point::new("counter-locktower-epoch")
                     .add_field(
@@ -433,6 +454,43 @@ mod test {
         .into_iter()
         .collect();
         assert!(locktower.check_vote_stake_threshold(0, &stakes));
+    }
+
+    #[test]
+    fn test_is_slot_confirmed_not_enough_stake_failure() {
+        let locktower = Locktower::new(EpochStakes::new_for_tests(2), 1, 0.67);
+        let stakes = vec![(
+            0,
+            StakeLockout {
+                stake: 1,
+                lockout: 8,
+            },
+        )]
+        .into_iter()
+        .collect();
+        assert!(!locktower.is_slot_confirmed(0, &stakes));
+    }
+
+    #[test]
+    fn test_is_slot_confirmed_unknown_slot() {
+        let locktower = Locktower::new(EpochStakes::new_for_tests(2), 1, 0.67);
+        let stakes = HashMap::new();
+        assert!(!locktower.is_slot_confirmed(0, &stakes));
+    }
+
+    #[test]
+    fn test_is_slot_confirmed_pass() {
+        let locktower = Locktower::new(EpochStakes::new_for_tests(2), 1, 0.67);
+        let stakes = vec![(
+            0,
+            StakeLockout {
+                stake: 2,
+                lockout: 8,
+            },
+        )]
+        .into_iter()
+        .collect();
+        assert!(locktower.is_slot_confirmed(0, &stakes));
     }
 
     #[test]

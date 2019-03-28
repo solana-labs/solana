@@ -1,6 +1,6 @@
 [package]
 name = "solana-drone"
-version = "0.12.2"
+version = "0.12.3"
 description = "Solana Drone"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -19,9 +19,9 @@ clap = "2.31"
 log = "0.4.2"
 serde = "1.0.89"
 serde_derive = "1.0.89"
-solana-logger = { path = "../logger", version = "0.12.2" }
-solana-sdk = { path = "../sdk", version = "0.12.2" }
-solana-metrics = { path = "../metrics", version = "0.12.2" }
+solana-logger = { path = "../logger", version = "0.12.3" }
+solana-sdk = { path = "../sdk", version = "0.12.3" }
+solana-metrics = { path = "../metrics", version = "0.12.3" }
 tokio = "0.1"
 tokio-codec = "0.1"
 
