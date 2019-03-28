@@ -42,7 +42,8 @@ else
     if [[ -n $NDEBUG ]]; then
       maybe_release=--release
     fi
-    printf "cargo run $maybe_release $maybe_package --bin solana-%s %s -- " "$program" "$features"
+    declare manifest_path="--manifest-path=$program/Cargo.toml"
+    printf "cargo run $manifest_path $maybe_release $maybe_package --bin solana-%s %s -- " "$program" "$features"
   }
   if [[ -n $SOLANA_CUDA ]]; then
     # shellcheck disable=2154 # 'here' is referenced but not assigned
