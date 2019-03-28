@@ -675,8 +675,6 @@ pub mod test {
                     let set_index = erasure_spec.set_index as u64;
                     let start_index = set_index * NUM_DATA as u64;
 
-                    println!("test: slot: {}, start_index: {}", slot, start_index);
-
                     for i in 0..erasure_spec.num_data as u64 {
                         let opt_bytes = blocktree
                             .get_data_blob_bytes(slot, start_index + i)
@@ -806,24 +804,12 @@ pub mod test {
                 let mut coding_generator = CodingGenerator::new();
                 let mut coding_blobs = coding_generator.next(&blobs).unwrap();
 
-                //let data_to_remove = NUM_DATA - std::cmp::min(NUM_DATA, erasure_spec.num_data);
-                //let coding_to_remove =
-                //NUM_CODING - std::cmp::min(NUM_CODING, erasure_spec.num_coding);
-                //println!(
-                //"data_to_remove: {}, coding_to_remove: {}",
-                //data_to_remove, coding_to_remove
-                //);
                 blobs.drain(erasure_spec.num_data..);
                 coding_blobs.drain(erasure_spec.num_coding..);
 
                 for shared_blob in blobs {
                     let blob = shared_blob.read().unwrap();
                     let size = blob.size() as usize + BLOB_HEADER_SIZE;
-                    println!(
-                        "generate: blob_slot: {}, blob_index: {}",
-                        blob.slot(),
-                        blob.index()
-                    );
                     blocktree
                         .put_data_blob_bytes(blob.slot(), blob.index(), &blob.data[..size])
                         .unwrap();
