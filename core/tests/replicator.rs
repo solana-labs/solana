@@ -5,10 +5,10 @@ extern crate log;
 extern crate solana;
 
 use bincode::{deserialize, serialize};
-use solana::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree, Blocktree};
+use solana::blocktree::{create_new_tmp_ledger, Blocktree};
 use solana::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
-use solana::fullnode::{Fullnode, FullnodeConfig};
+use solana::fullnode::FullnodeConfig;
 use solana::gossip_service::discover;
 use solana::local_cluster::LocalCluster;
 use solana::replicator::Replicator;
@@ -187,77 +187,32 @@ fn test_replicator_startup_leader_hang() {
 }
 
 #[test]
-#[ignore] //TODO: hangs, was passing because of bug in network code
 fn test_replicator_startup_ledger_hang() {
     solana_logger::setup();
     info!("starting replicator test");
-    let leader_keypair = Arc::new(Keypair::new());
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+    let cluster = LocalCluster::new(2, 10_000, 100);;
 
-    let (genesis_block, _mint_keypair) =
-        GenesisBlock::new_with_leader(100, &leader_keypair.pubkey(), 42);
-    let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
+    info!("starting replicator node");
+    let bad_keys = Arc::new(Keypair::new());
+    let storage_keypair = Arc::new(Keypair::new());
+    let mut replicator_node = Node::new_localhost_with_pubkey(&bad_keys.pubkey());
 
-    info!("starting leader node");
-    let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
-    let leader_info = leader_node.info.clone();
+    // Pass bad TVU sockets to prevent successful ledger download
+    replicator_node.sockets.tvu = vec![std::net::UdpSocket::bind("0.0.0.0:0").unwrap()];
+    let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&cluster.genesis_block);
 
-    let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
-    let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
+    let replicator_res = Replicator::new(
+        &replicator_ledger_path,
+        replicator_node,
+        cluster.entry_point_info.clone(),
+        bad_keys,
+        storage_keypair,
+        Some(Duration::from_secs(3)),
+    );
 
-    {
-        let voting_keypair = Keypair::new();
-
-        let fullnode_config = FullnodeConfig::default();
-        let _ = Fullnode::new(
-            leader_node,
-            &leader_keypair,
-            &leader_ledger_path,
-            &voting_keypair.pubkey(),
-            voting_keypair,
-            None,
-            &fullnode_config,
-        );
-
-        let validator_keypair = Arc::new(Keypair::new());
-        let voting_keypair = Keypair::new();
-        let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
-
-        let _ = Fullnode::new(
-            validator_node,
-            &validator_keypair,
-            &validator_ledger_path,
-            &voting_keypair.pubkey(),
-            voting_keypair,
-            Some(&leader_info),
-            &FullnodeConfig::default(),
-        );
-
-        info!("starting replicator node");
-        let bad_keys = Arc::new(Keypair::new());
-        let storage_keypair = Arc::new(Keypair::new());
-        let mut replicator_node = Node::new_localhost_with_pubkey(&bad_keys.pubkey());
-
-        // Pass bad TVU sockets to prevent successful ledger download
-        replicator_node.sockets.tvu = vec![std::net::UdpSocket::bind("0.0.0.0:0").unwrap()];
-
-        let leader_info = ContactInfo::new_gossip_entry_point(&leader_info.gossip);
-
-        let replicator_res = Replicator::new(
-            &replicator_ledger_path,
-            replicator_node,
-            leader_info,
-            bad_keys,
-            storage_keypair,
-            Some(Duration::from_secs(3)),
-        );
-
-        assert!(replicator_res.is_err());
-    }
-
-    let _ignored = Blocktree::destroy(&leader_ledger_path);
-    let _ignored = Blocktree::destroy(&replicator_ledger_path);
-    let _ignored = remove_dir_all(&leader_ledger_path);
-    let _ignored = remove_dir_all(&replicator_ledger_path);
+    assert!(replicator_res.is_err());
 }
 
 #[test]

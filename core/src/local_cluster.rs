@@ -59,7 +59,7 @@ pub struct LocalCluster {
     pub fullnode_infos: HashMap<Pubkey, FullnodeInfo>,
     fullnodes: HashMap<Pubkey, Fullnode>,
     genesis_ledger_path: String,
-    genesis_block: GenesisBlock,
+    pub genesis_block: GenesisBlock,
     replicators: Vec<Replicator>,
     pub replicator_infos: HashMap<Pubkey, ReplicatorInfo>,
 }
