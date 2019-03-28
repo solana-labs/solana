@@ -1,54 +1,65 @@
-use crate::bloom::{Bloom, BloomHashIndex};
-use hashbrown::HashMap;
-use log::*;
+use hashbrown::{HashMap, HashSet};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
-use std::collections::VecDeque;
-use std::ops::Deref;
-#[cfg(test)]
-use std::ops::DerefMut;
-use std::sync::Arc;
 
-// Blockhash found in the transaction
-type TransactionBlockHash = Hash
 // Store forks in a single chunk of memory to avoid another lookup.
-type ForkStatus<T> = Vec<(ForkId, T)>;
-type SignatureMap<T> = HashMap<Signature, ForkStatusMap<T>>;
-type StatusMap<T> = StatusMap<TransactionBlockHash, SignatureMap<T>>;
+pub type ForkId = u64;
+pub type ForkStatus<T> = Vec<(ForkId, T)>;
+type SignatureMap<T> = HashMap<Signature, ForkStatus<T>>;
+type StatusMap<T> = HashMap<Hash, SignatureMap<T>>;
 
-#[derive(Clone, Default)]
-struct StatusCache<T: Default + Clone> {
+pub struct StatusCache<T: Clone> {
     /// all signatures seen during a hash period
     cache: StatusMap<T>,
+}
 
+impl<T: Clone> Default for StatusCache<T> {
+    fn default() -> Self {
+        Self {
+            cache: HashMap::default(),
+        }
+    }
 }
 
 impl<T: Clone> StatusCache<T> {
     /// Check if the signature from a transaction is in any of the forks in the ancestors set.
-    pub fn get_signature_status(&self, sig: &Signature, blockhash: TransactionBlockHash, ancestors: &HashSet<u64>) -> Option<T> {
+    pub fn get_signature_status(
+        &self,
+        sig: &Signature,
+        transaction_blockhash: &Hash,
+        ancestors: &HashSet<ForkId>,
+    ) -> Option<(ForkId, T)> {
         self.cache
-            .get(blockhash)
-            .and_then(|sigmap| sigmap.get(signature))
-            .and_then(|stored_forks|
-                      stored_forks.iter().filter(|(f,r)| ancestors.contains(f)).map(|(_,r) r.clone()).first())
-    }
- 
-    /// Insert a new signature for a specific fork.
-    pub fn insert(&mut self, hash: &TransactionBlockHash, sig: &Signature, fork: u64, res: T) {
-        let sig_map = self.cache.entry(hash).or_insert(HashMap::new());
-        let sig_forks = sig_map.entry(sig).or_insert(vec![]);
-        sig_forks.push((fork, T));
+            .get(transaction_blockhash)
+            .and_then(|sigmap| sigmap.get(sig))
+            .and_then(|stored_forks| {
+                stored_forks
+                    .iter()
+                    .filter(|(f, r)| ancestors.contains(f))
+                    .nth(0)
+            })
+            .cloned()
     }
 
-    /// Remove an expired blockhash 
-    pub fn remove_blockhash(&mut self, hash: &TransactionBlockHash) {
+    /// Insert a new signature for a specific fork.
+    pub fn insert(&mut self, transaction_blockhash: &Hash, sig: &Signature, fork: ForkId, res: T) {
+        let sig_map = self
+            .cache
+            .entry(*transaction_blockhash)
+            .or_insert(HashMap::new());
+        let sig_forks = sig_map.entry(*sig).or_insert(vec![]);
+        sig_forks.push((fork, res));
+    }
+
+    /// Remove an expired blockhash
+    pub fn remove_expired_blockhash(&mut self, hash: &Hash) {
         self.cache.remove(hash);
     }
 
     /// Clear for testing
     pub fn clear(&mut self) {
         self.cache.clear();
-    } 
+    }
 }
 
 // #[cfg(test)]
@@ -56,9 +67,9 @@ impl<T: Clone> StatusCache<T> {
 //     use super::*;
 //     use solana_sdk::hash::hash;
 //     use solana_sdk::transaction::TransactionError;
-// 
+//
 //     type BankStatusCache = StatusCache<TransactionError>;
-// 
+//
 //     #[test]
 //     fn test_has_signature() {
 //         let sig = Signature::default();
@@ -70,7 +81,7 @@ impl<T: Clone> StatusCache<T> {
 //         assert_eq!(status_cache.has_signature(&sig), true);
 //         assert_eq!(status_cache.get_signature_status(&sig), Some(Ok(())));
 //     }
-// 
+//
 //     #[test]
 //     fn test_has_signature_checkpoint() {
 //         let sig = Signature::default();
@@ -87,7 +98,7 @@ impl<T: Clone> StatusCache<T> {
 //         );
 //         assert!(StatusCache::has_signature_all(&checkpoints, &sig));
 //     }
-// 
+//
 //     #[test]
 //     fn test_new_cache() {
 //         let sig = Signature::default();
@@ -103,7 +114,7 @@ impl<T: Clone> StatusCache<T> {
 //         assert_eq!(first.get_signature_status(&sig), None);
 //         assert!(!first.has_signature(&sig));
 //     }
-// 
+//
 //     #[test]
 //     fn test_new_cache_full() {
 //         let sig = Signature::default();
@@ -118,7 +129,7 @@ impl<T: Clone> StatusCache<T> {
 //         assert_eq!(first.get_signature_status(&sig), None);
 //         assert!(!first.has_signature(&sig));
 //     }
-// 
+//
 //     #[test]
 //     fn test_status_cache_squash_has_signature() {
 //         let sig = Signature::default();
@@ -126,55 +137,55 @@ impl<T: Clone> StatusCache<T> {
 //         let mut first = BankStatusCache::new(&blockhash);
 //         first.add(&sig);
 //         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
-// 
+//
 //         // give first a merge
 //         let blockhash = hash(blockhash.as_ref());
 //         first.new_cache(&blockhash);
-// 
+//
 //         let blockhash = hash(blockhash.as_ref());
 //         let mut second = BankStatusCache::new(&blockhash);
 //         first.freeze();
 //         second.squash(&[&first]);
-// 
+//
 //         assert_eq!(second.get_signature_status(&sig), Some(Ok(())));
 //         assert!(second.has_signature(&sig));
 //     }
-// 
+//
 //     #[test]
 //     fn test_status_cache_squash_overflow() {
 //         let mut blockhash = hash(Hash::default().as_ref());
 //         let mut cache = BankStatusCache::new(&blockhash);
-// 
+//
 //         let parents: Vec<_> = (0..MAX_CACHE_ENTRIES)
 //             .map(|_| {
 //                 blockhash = hash(blockhash.as_ref());
-// 
+//
 //                 let mut p = BankStatusCache::new(&blockhash);
 //                 p.freeze();
 //                 p
 //             })
 //             .collect();
-// 
+//
 //         let mut parents_refs: Vec<_> = parents.iter().collect();
-// 
+//
 //         blockhash = hash(Hash::default().as_ref());
 //         let mut root = BankStatusCache::new(&blockhash);
-// 
+//
 //         let sig = Signature::default();
 //         root.add(&sig);
-// 
+//
 //         parents_refs.push(&root);
-// 
+//
 //         assert_eq!(root.get_signature_status(&sig), Some(Ok(())));
 //         assert!(root.has_signature(&sig));
-// 
+//
 //         // will overflow
 //         cache.squash(&parents_refs);
-// 
+//
 //         assert_eq!(cache.get_signature_status(&sig), None);
 //         assert!(!cache.has_signature(&sig));
 //     }
-// 
+//
 //     #[test]
 //     fn test_failure_status() {
 //         let sig = Signature::default();
@@ -188,7 +199,7 @@ impl<T: Clone> StatusCache<T> {
 //             Some(Err(TransactionError::DuplicateSignature)),
 //         );
 //     }
-// 
+//
 //     #[test]
 //     fn test_clear_signatures() {
 //         let sig = Signature::default();
@@ -220,18 +231,18 @@ impl<T: Clone> StatusCache<T> {
 //             false
 //         );
 //     }
-// 
+//
 //     #[test]
 //     fn test_status_cache_freeze() {
 //         let sig = Signature::default();
 //         let blockhash = hash(Hash::default().as_ref());
 //         let mut cache: StatusCache<()> = StatusCache::new(&blockhash);
-// 
+//
 //         cache.freeze();
 //         cache.freeze();
-// 
+//
 //         cache.add(&sig);
 //         assert_eq!(cache.has_signature(&sig), false);
 //     }
-// 
+//
 // }

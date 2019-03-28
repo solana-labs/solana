@@ -21,6 +21,9 @@ pub struct BlockhashQueue {
 
     /// hashes older than `max_age` will be dropped from the queue
     max_age: usize,
+
+    /// expired hashes for clearing out the status queue
+    pub expired_hashes: Vec<Hash>,
 }
 
 impl BlockhashQueue {
@@ -30,6 +33,7 @@ impl BlockhashQueue {
             hash_height: 0,
             last_hash: None,
             max_age,
+            expired_hashes: Vec::new(),
         }
     }
 
@@ -69,6 +73,10 @@ impl BlockhashQueue {
         self.last_hash = Some(*hash);
     }
 
+    pub fn check_age(hash_height: u64, max_age: usize, age: &HashAge) -> bool {
+        hash_height - age.hash_height <= max_age as u64
+    }
+
     pub fn register_hash(&mut self, hash: &Hash) {
         self.hash_height += 1;
         let hash_height = self.hash_height;
@@ -77,8 +85,13 @@ impl BlockhashQueue {
         //  because we verify age.nth every place we check for validity
         let max_age = self.max_age;
         if self.ages.len() >= max_age {
+            self.expired_hashes.extend(
+                self.ages
+                    .iter()
+                    .filter(|(_,age)| !Self::check_age(hash_height, max_age, age)).map(|(hash,_)| hash)
+            );
             self.ages
-                .retain(|_, age| hash_height - age.hash_height <= max_age as u64);
+                .retain(|_, age| !Self::check_age(hash_height, max_age, age))
         }
         self.ages.insert(
             *hash,

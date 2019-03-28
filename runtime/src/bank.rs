@@ -105,7 +105,7 @@ impl EpochSchedule {
 
 pub type Result<T> = result::Result<T, TransactionError>;
 
-type BankStatusCache = StatusCache<TransactionError>;
+type BankStatusCache = StatusCache<Result<()>>;
 
 /// Manager for the state of all accounts and programs after processing its entries.
 #[derive(Default)]
@@ -259,15 +259,11 @@ impl Bank {
 
         self.accounts.squash(self.accounts_id);
 
-        let parent_caches: Vec<_> = parents
+        let wcache = self.status_cache.write().unwrap();
+        parents
             .iter()
-            .map(|p| {
-                let mut parent = p.status_cache.write().unwrap();
-                parent.freeze();
-                parent
-            })
-            .collect();
-        self.status_cache.write().unwrap().squash(&parent_caches);
+            .flat_map(|p| p.blockhash_queue.expired_hashes.iter())
+            .foreach(|hash| wcache.remove_expired_blockhash(hash))
     }
 
     /// Return the more recent checkpoint of this bank instance.
@@ -364,7 +360,7 @@ impl Bank {
             match &res[i] {
                 Ok(_) => {
                     if !tx.signatures.is_empty() {
-                        status_cache.add(&tx.signatures[0]);
+                        status_cache.insert(&tx.recent_blockhash, &tx.signatures[0], self.slot(), Ok(()));
                     }
                 }
                 Err(TransactionError::BlockhashNotFound) => (),
@@ -372,8 +368,7 @@ impl Bank {
                 Err(TransactionError::AccountNotFound) => (),
                 Err(e) => {
                     if !tx.signatures.is_empty() {
-                        status_cache.add(&tx.signatures[0]);
-                        status_cache.save_failure_status(&tx.signatures[0], e.clone());
+                        status_cache.insert(&tx.blockhash, &tx.signatures[0], self.slot(), Err(e.clone()));
                     }
                 }
             }
