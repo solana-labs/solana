@@ -176,16 +176,15 @@ impl Transaction {
     }
     /// Get the transaction data to sign.
     pub fn message(&self) -> Vec<u8> {
-        let mut data = serialize(&self.account_keys).expect("serialize account_keys");
-        let blockhash = serialize(&self.recent_blockhash).expect("serialize recent_blockhash");
-        data.extend_from_slice(&blockhash);
-        let fee_data = serialize(&self.fee).expect("serialize fee");
-        data.extend_from_slice(&fee_data);
-        let program_ids = serialize(&self.program_ids).expect("serialize program_ids");
-        data.extend_from_slice(&program_ids);
-        let instructions = serialize(&self.instructions).expect("serialize instructions");
-        data.extend_from_slice(&instructions);
-        data
+        let message = Message {
+            num_signatures: self.signatures.len() as u8,
+            account_keys: self.account_keys.clone(),
+            recent_blockhash: self.recent_blockhash.clone(),
+            fee: self.fee,
+            program_ids: self.program_ids.clone(),
+            instructions: self.instructions.clone(),
+        };
+        serialize(&message).unwrap()
     }
 
     /// Sign this transaction.
@@ -420,16 +419,16 @@ mod tests {
         assert_eq!(
             serialize(&create_sample_transaction()).unwrap(),
             vec![
-                1, 157, 120, 21, 197, 167, 2, 163, 85, 2, 45, 214, 7, 63, 151, 236, 162, 187, 131,
-                30, 6, 30, 199, 246, 160, 191, 23, 160, 73, 185, 92, 77, 105, 96, 181, 206, 39, 6,
-                59, 151, 50, 123, 164, 166, 84, 178, 66, 46, 236, 170, 254, 123, 115, 151, 207,
-                122, 208, 246, 147, 124, 235, 59, 12, 157, 8, 2, 36, 100, 158, 252, 33, 161, 97,
-                185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231,
-                62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9,
-                9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 0, 0,
-                1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6,
-                5, 4, 2, 2, 2, 1, 0, 2, 0, 1, 3, 1, 2, 3
+                1, 112, 209, 154, 84, 130, 140, 60, 39, 12, 237, 105, 205, 187, 130, 184, 255, 141,
+                22, 174, 102, 183, 217, 213, 252, 253, 174, 36, 168, 222, 140, 211, 68, 241, 137,
+                83, 138, 96, 252, 208, 200, 169, 202, 110, 49, 106, 160, 210, 207, 135, 115, 75,
+                124, 129, 239, 228, 62, 148, 81, 196, 35, 201, 229, 191, 0, 2, 36, 100, 158, 252,
+                33, 161, 97, 185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14,
+                68, 219, 231, 62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9,
+                9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0,
+                0, 0, 0, 0, 1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                9, 8, 7, 6, 5, 4, 2, 2, 2, 1, 0, 2, 0, 1, 3, 1, 2, 3
             ]
         );
     }
