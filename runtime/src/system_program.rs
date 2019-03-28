@@ -93,6 +93,7 @@ pub fn entrypoint(
                 assign_account_to_program(keyed_accounts, &program_id)
             }
             SystemInstruction::Move { lamports } => move_lamports(keyed_accounts, lamports),
+            SystemInstruction::CheckSignature => Ok(()),
         }
         .map_err(|e| InstructionError::CustomError(serialize(&e).unwrap()))
     } else {
@@ -309,5 +310,20 @@ mod tests {
         );
         assert_eq!(bank.get_balance(&alice_pubkey), 50);
         assert_eq!(bank.get_balance(&mallory_pubkey), 50);
+    }
+
+    #[test]
+    fn test_system_check_signature() {
+        let (genesis_block, alice_keypair) = GenesisBlock::new(100);
+        let alice_pubkey = alice_keypair.pubkey();
+
+        // Fund to account to bypass AccountNotFound error
+        let bank = Bank::new(&genesis_block);
+        let bank_client = BankClient::new(&bank);
+
+        let instruction = SystemInstruction::new_check_signature(&alice_pubkey);
+        bank_client
+            .process_instruction(&alice_keypair, instruction)
+            .unwrap();
     }
 }

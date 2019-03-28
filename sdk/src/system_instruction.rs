@@ -29,6 +29,8 @@ pub enum SystemInstruction {
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - destination
     Move { lamports: u64 },
+    /// Do nothing but require a signature
+    CheckSignature,
 }
 
 impl SystemInstruction {
@@ -89,6 +91,16 @@ impl SystemInstruction {
             .iter()
             .map(|(to_id, lamports)| SystemInstruction::new_move(from_id, to_id, *lamports))
             .collect()
+    }
+
+    /// Do nothing but require a signature
+    pub fn new_check_signature(from_id: &Pubkey) -> Instruction {
+        let account_metas = vec![AccountMeta::new(*from_id, true)];
+        Instruction::new(
+            system_program::id(),
+            &SystemInstruction::CheckSignature,
+            account_metas,
+        )
     }
 }
 
