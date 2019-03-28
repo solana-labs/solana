@@ -108,7 +108,7 @@ mod tests {
     fn test_empty_has_no_sigs() {
         let sig = Signature::default();
         let blockhash = hash(Hash::default().as_ref());
-        let mut status_cache = BankStatusCache::default();
+        let status_cache = BankStatusCache::default();
         assert_eq!(
             status_cache.get_signature_status(&sig, &blockhash, &HashMap::new()),
             None
