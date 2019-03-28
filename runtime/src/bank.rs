@@ -18,7 +18,7 @@ use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES, NUM_TICKS_PER_SECOND};
+use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Transaction, TransactionError};
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState};
@@ -262,8 +262,8 @@ impl Bank {
         let wcache = self.status_cache.write().unwrap();
         parents
             .iter()
-            .flat_map(|p| p.blockhash_queue.expired_hashes.iter())
-            .foreach(|hash| wcache.remove_expired_blockhash(hash))
+            .flat_map(|p| p.blockhash_queue.read().unwrap().expired_hashes.iter())
+            .for_each(|hash| wcache.remove_expired_blockhash(hash))
     }
 
     /// Return the more recent checkpoint of this bank instance.
@@ -360,7 +360,12 @@ impl Bank {
             match &res[i] {
                 Ok(_) => {
                     if !tx.signatures.is_empty() {
-                        status_cache.insert(&tx.recent_blockhash, &tx.signatures[0], self.slot(), Ok(()));
+                        status_cache.insert(
+                            &tx.recent_blockhash,
+                            &tx.signatures[0],
+                            self.slot(),
+                            Ok(()),
+                        );
                     }
                 }
                 Err(TransactionError::BlockhashNotFound) => (),
@@ -368,7 +373,12 @@ impl Bank {
                 Err(TransactionError::AccountNotFound) => (),
                 Err(e) => {
                     if !tx.signatures.is_empty() {
-                        status_cache.insert(&tx.blockhash, &tx.signatures[0], self.slot(), Err(e.clone()));
+                        status_cache.insert(
+                            &tx.recent_blockhash,
+                            &tx.signatures[0],
+                            self.slot(),
+                            Err(e.clone()),
+                        );
                     }
                 }
             }
@@ -427,10 +437,6 @@ impl Bank {
         if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
             let mut blockhash_queue = self.blockhash_queue.write().unwrap();
             blockhash_queue.register_hash(hash);
-        }
-
-        if current_tick_height % NUM_TICKS_PER_SECOND == 0 {
-            self.status_cache.write().unwrap().new_cache(hash);
         }
     }
 
@@ -510,16 +516,24 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let parents = self.parents();
-        let mut caches = vec![self.status_cache.read().unwrap()];
-        caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
+        let mut ancestors = HashMap::new();
+        ancestors.insert(self.slot(), 0);
+        self.parents().iter().enumerate().for_each(|(i, p)| {
+            ancestors.insert(p.slot(), i + 1);
+        });
+ 
+        let rcache = self.status_cache.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
                 if tx.signatures.is_empty() {
                     return lock_res;
                 }
-                if lock_res.is_ok() && StatusCache::has_signature_all(&caches, &tx.signatures[0]) {
+                if lock_res.is_ok()
+                    && rcache
+                        .get_signature_status(&tx.signatures[0], &tx.recent_blockhash, &ancestors)
+                        .is_some()
+                {
                     error_counters.duplicate_signature += 1;
                     Err(TransactionError::DuplicateSignature)
                 } else {
@@ -788,10 +802,13 @@ impl Bank {
         &self,
         signature: &Signature,
     ) -> Option<(usize, Result<()>)> {
-        let parents = self.parents();
-        let mut caches = vec![self.status_cache.read().unwrap()];
-        caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
-        StatusCache::get_signature_status_all(&caches, signature)
+        let mut ancestors = HashMap::new();
+        ancestors.insert(self.slot(), 0);
+        self.parents().iter().enumerate().for_each(|(i, p)| {
+            ancestors.insert(p.slot(), i + 1);
+        });
+        let rcache = self.status_cache.read().unwrap();
+        rcache.get_signature_status_slow(signature, &ancestors)
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
@@ -800,10 +817,7 @@ impl Bank {
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        let parents = self.parents();
-        let mut caches = vec![self.status_cache.read().unwrap()];
-        caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
-        StatusCache::has_signature_all(&caches, signature)
+        self.get_signature_confirmation_status(signature).is_some()
     }
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation

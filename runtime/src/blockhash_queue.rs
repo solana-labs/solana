@@ -88,7 +88,8 @@ impl BlockhashQueue {
             self.expired_hashes.extend(
                 self.ages
                     .iter()
-                    .filter(|(_,age)| !Self::check_age(hash_height, max_age, age)).map(|(hash,_)| hash)
+                    .filter(|(_, age)| !Self::check_age(hash_height, max_age, age))
+                    .map(|(hash, _)| hash),
             );
             self.ages
                 .retain(|_, age| !Self::check_age(hash_height, max_age, age))

@@ -1,4 +1,4 @@
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
 
@@ -27,7 +27,7 @@ impl<T: Clone> StatusCache<T> {
         &self,
         sig: &Signature,
         transaction_blockhash: &Hash,
-        ancestors: &HashSet<ForkId>,
+        ancestors: &HashMap<ForkId, usize>,
     ) -> Option<(ForkId, T)> {
         self.cache
             .get(transaction_blockhash)
@@ -35,10 +35,24 @@ impl<T: Clone> StatusCache<T> {
             .and_then(|stored_forks| {
                 stored_forks
                     .iter()
-                    .filter(|(f, r)| ancestors.contains(f))
+                    .filter(|(f, r)| ancestors.get(f).is_some())
                     .nth(0)
             })
             .cloned()
+    }
+
+    /// TODO: wallets should send the Transactions recent blockhash as well
+    pub fn get_signature_status_slow(
+        &self,
+        sig: &Signature,
+        ancestors: &HashMap<ForkId, usize>,
+    ) -> Option<(usize, T)> {
+        for blockhash in self.cache.keys() {
+            if let Some((forkid, res)) = self.get_signature_status(sig, blockhash, ancestors) {
+                return ancestors.get(&forkid).map(|id| (*id, res));
+            }
+        }
+        None
     }
 
     /// Insert a new signature for a specific fork.
