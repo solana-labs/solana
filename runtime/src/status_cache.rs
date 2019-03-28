@@ -60,7 +60,7 @@ impl<T: Clone> StatusCache<T> {
                 return ancestors
                     .get(&forkid)
                     .map(|id| (*id, res.clone()))
-                    .or(Some((ancestors.len(), res)));
+                    .or_else(|| Some((ancestors.len(), res)));
             }
         }
         None
