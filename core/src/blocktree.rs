@@ -691,20 +691,22 @@ impl Blocktree {
                         &mut meta_mut,
                     );
 
-                    if is_detached_head {
-                        write_batch.delete_cf(
+                    if Self::is_detached_head(&RefCell::borrow(&*prev_slot_meta)) {
+                        write_batch.put_cf(
                             self.detached_heads_cf.handle(),
-                            &DetachedHeadsCf::key(&slot),
+                            &DetachedHeadsCf::key(&prev_slot),
+                            &serialize(&true)?,
                         )?;
-                        if Self::is_detached_head(&RefCell::borrow(&*prev_slot_meta)) {
-                            write_batch.put_cf(
-                                self.detached_heads_cf.handle(),
-                                &DetachedHeadsCf::key(&prev_slot),
-                                &serialize(&true)?,
-                            )?;
-                        }
                     }
                 }
+            }
+
+            // At this point this slot has received a parent, so no longer a detached head
+            if is_detached_head {
+                write_batch.delete_cf(
+                    self.detached_heads_cf.handle(),
+                    &DetachedHeadsCf::key(&slot),
+                )?;
             }
         }
 
@@ -1075,6 +1077,7 @@ pub fn tmp_copy_blocktree(from: &str, name: &str) -> String {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::blocktree::db::Database;
     use crate::entry::{
         create_ticks, make_tiny_test_entries, make_tiny_test_entries_from_hash, Entry, EntrySlice,
     };
@@ -2073,6 +2076,9 @@ pub mod tests {
                 }
                 assert_eq!(expected_children, result);
             }
+
+            // Detached heads is empty
+            assert!(blocktree.detached_heads_cf.is_empty().unwrap())
         }
 
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
@@ -2122,7 +2128,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_is_detached_head() {
+    fn test_detached_head() {
         let blocktree_path = get_tmp_ledger_path("test_is_detached_head");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
@@ -2139,6 +2145,7 @@ pub mod tests {
                 .expect("Expect database get to succeed")
                 .unwrap();
             assert!(Blocktree::is_detached_head(&meta));
+            assert_eq!(get_detached_heads(&blocktree), vec![1]);
 
             // Write slot 1 which chains to slot 0, so now slot 0 is the
             // detached head, and slot 1 is no longer the detached head.
@@ -2153,8 +2160,16 @@ pub mod tests {
                 .expect("Expect database get to succeed")
                 .unwrap();
             assert!(Blocktree::is_detached_head(&meta));
+            assert_eq!(get_detached_heads(&blocktree), vec![0]);
 
-            // Write first slot, no more detached heads
+            // Write some slot that also chains to existing slots and detached head,
+            // nothing should change
+            let blob4 = &make_slot_entries(4, 0, 1).0[0];
+            let blob5 = &make_slot_entries(5, 1, 1).0[0];
+            blocktree.write_blobs(vec![blob4, blob5]).unwrap();
+            assert_eq!(get_detached_heads(&blocktree), vec![0]);
+
+            // Write zeroth slot, no more detached heads
             blocktree.write_blobs(once(&blobs[0])).unwrap();
             for i in 0..3 {
                 let meta = blocktree
@@ -2163,6 +2178,8 @@ pub mod tests {
                     .unwrap();
                 assert!(!Blocktree::is_detached_head(&meta));
             }
+            // Detached heads is empty
+            assert!(blocktree.detached_heads_cf.is_empty().unwrap())
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
@@ -2426,5 +2443,19 @@ pub mod tests {
         }
 
         (blobs, entries)
+    }
+
+    fn get_detached_heads(blocktree: &Blocktree) -> Vec<u64> {
+        let mut results = vec![];
+        let mut iter = blocktree
+            .db
+            .raw_iterator_cf(blocktree.detached_heads_cf.handle())
+            .unwrap();
+        iter.seek_to_first();
+        while iter.valid() {
+            results.push(DetachedHeadsCf::index(&iter.key().unwrap()));
+            iter.next();
+        }
+        results
     }
 }

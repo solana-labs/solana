@@ -72,6 +72,12 @@ pub trait LedgerColumnFamily<D: Database>: LedgerColumnFamilyRaw<D> {
         db.put_cf(self.handle(), key, &serialized)?;
         Ok(())
     }
+
+    fn is_empty(&self) -> Result<bool> {
+        let mut db_iterator = self.db().raw_iterator_cf(self.handle())?;
+        db_iterator.seek_to_first();
+        Ok(!db_iterator.valid())
+    }
 }
 
 pub trait LedgerColumnFamilyRaw<D: Database> {
