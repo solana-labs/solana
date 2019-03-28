@@ -85,14 +85,14 @@ impl BlockhashQueue {
         //  because we verify age.nth every place we check for validity
         let max_age = self.max_age;
         if self.ages.len() >= max_age {
-            self.expired_hashes.extend(
-                self.ages
-                    .iter()
-                    .filter(|(_, age)| !Self::check_age(hash_height, max_age, age))
-                    .map(|(hash, _)| hash),
-            );
+            let expired = self
+                .ages
+                .iter()
+                .filter(|(_, age)| !Self::check_age(hash_height, max_age, age))
+                .map(|(hash, _)| hash);
+            self.expired_hashes.extend(expired);
             self.ages
-                .retain(|_, age| !Self::check_age(hash_height, max_age, age))
+                .retain(|_, age| Self::check_age(hash_height, max_age, age));
         }
         self.ages.insert(
             *hash,
@@ -132,14 +132,25 @@ mod tests {
     }
     #[test]
     fn test_reject_old_last_hash() {
-        let last_hash = Hash::default();
         let mut hash_queue = BlockhashQueue::new(100);
-        for i in 0..100 {
-            let last_hash = hash(&serialize(&i).unwrap()); // Unique hash
+        let last_hash = hash(&serialize(&0).unwrap());
+        for i in 0..102 {
+            let last_hash = hash(&serialize(&i).unwrap());
             hash_queue.register_hash(&last_hash);
         }
         // Assert we're no longer able to use the oldest hash.
         assert!(!hash_queue.check_hash(last_hash));
+    }
+    #[test]
+    fn test_old_last_hash_is_expired() {
+        let last_hash = hash(&serialize(&0).unwrap());
+        let mut hash_queue = BlockhashQueue::new(100);
+        for i in 0..102 {
+            let last_hash = hash(&serialize(&i).unwrap());
+            hash_queue.register_hash(&last_hash);
+        }
+        // Assert the old hash is stored in the expired vec
+        assert_eq!(hash_queue.expired_hashes, vec![last_hash]);
     }
     /// test that when max age is 0, that a valid last_hash still passes the age check
     #[test]

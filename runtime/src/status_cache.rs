@@ -1,4 +1,5 @@
 use hashbrown::HashMap;
+use log::*;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
 
@@ -47,8 +48,11 @@ impl<T: Clone> StatusCache<T> {
         sig: &Signature,
         ancestors: &HashMap<ForkId, usize>,
     ) -> Option<(usize, T)> {
+        trace!("get_signature_status_slow");
         for blockhash in self.cache.keys() {
+            trace!("get_signature_status_slow: trying {}", blockhash);
             if let Some((forkid, res)) = self.get_signature_status(sig, blockhash, ancestors) {
+                trace!("get_signature_status_slow: got {}", forkid);
                 return ancestors.get(&forkid).map(|id| (*id, res));
             }
         }
@@ -67,6 +71,7 @@ impl<T: Clone> StatusCache<T> {
 
     /// Remove an expired blockhash
     pub fn remove_expired_blockhash(&mut self, hash: &Hash) {
+        trace!("remove_expired_blockhash {}", hash);
         self.cache.remove(hash);
     }
 

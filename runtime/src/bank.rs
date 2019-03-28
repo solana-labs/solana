@@ -247,7 +247,6 @@ impl Bank {
             //  freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
         }
-        //        self.status_cache.write().unwrap().freeze();
     }
 
     /// squash the parent's state up into this Bank,
@@ -1446,6 +1445,7 @@ mod tests {
     /// Verifies that last ids and accounts are correctly referenced from parent
     #[test]
     fn test_bank_squash() {
+        solana_logger::setup();
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let key1 = Keypair::new();
         let key2 = Keypair::new();
@@ -1455,8 +1455,17 @@ mod tests {
             SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
         assert_eq!(parent.transaction_count(), 1);
+        assert_eq!(
+            parent.get_signature_status(&tx_move_mint_to_1.signatures[0]),
+            Some(Ok(()))
+        );
 
         let bank = new_from_parent(&parent);
+        assert_eq!(
+            bank.get_signature_status(&tx_move_mint_to_1.signatures[0]),
+            Some(Ok(()))
+        );
+
         assert_eq!(bank.transaction_count(), parent.transaction_count());
         let tx_move_1_to_2 =
             SystemTransaction::new_move(&key1, &key2.pubkey(), 1, genesis_block.hash(), 0);
@@ -1473,6 +1482,7 @@ mod tests {
             assert_eq!(bank.get_balance(&key1.pubkey()), 0);
             assert_eq!(bank.get_account(&key1.pubkey()), None);
             assert_eq!(bank.get_balance(&key2.pubkey()), 1);
+            trace!("start");
             assert_eq!(
                 bank.get_signature_status(&tx_move_mint_to_1.signatures[0]),
                 Some(Ok(()))
@@ -1483,6 +1493,7 @@ mod tests {
             );
 
             // works iteration 0, no-ops on iteration 1 and 2
+            trace!("SQUASH");
             bank.squash();
 
             assert_eq!(parent.transaction_count(), 1);
