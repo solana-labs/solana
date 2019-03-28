@@ -249,12 +249,14 @@ cloud_CreateInstances() {
     fi
 
     declare instanceId
-    IFS=: read -r instanceId _ < <(echo "${instances[0]}")
+    IFS=: read -r instanceId publicIp privateIp zone < <(echo "${instances[0]}")
     (
       set -x
       # TODO: Poll that the instance has moved to the 'running' state instead of
       #       blindly sleeping for 30 seconds...
       sleep 30
+      declare region=
+      region=$(__cloud_GetRegion "$zone")
       aws ec2 associate-address \
         --instance-id "$instanceId" \
         --region "$region" \
