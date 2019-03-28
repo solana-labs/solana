@@ -296,22 +296,22 @@ impl ExchangeProcessor {
     }
 
     fn do_swap_request(ka: &mut [KeyedAccount]) -> Result<(), InstructionError> {
-        if ka.len() < 7 {
+        if ka.len() < 6 {
             error!("Not enough accounts");
             Err(InstructionError::InvalidArgument)?
         }
-        Self::is_account_unallocated(&ka[1].account.data[..])?;
-        let mut to_trade = Self::deserialize_trade(&ka[2].account.data[..])?;
-        let mut from_trade = Self::deserialize_trade(&ka[3].account.data[..])?;
-        let mut to_trade_account = Self::deserialize_account(&ka[4].account.data[..])?;
-        let mut from_trade_account = Self::deserialize_account(&ka[5].account.data[..])?;
-        let mut profit_account = Self::deserialize_account(&ka[6].account.data[..])?;
+        Self::is_account_unallocated(&ka[0].account.data[..])?;
+        let mut to_trade = Self::deserialize_trade(&ka[1].account.data[..])?;
+        let mut from_trade = Self::deserialize_trade(&ka[2].account.data[..])?;
+        let mut to_trade_account = Self::deserialize_account(&ka[3].account.data[..])?;
+        let mut from_trade_account = Self::deserialize_account(&ka[4].account.data[..])?;
+        let mut profit_account = Self::deserialize_account(&ka[5].account.data[..])?;
 
-        if &to_trade.dst_account != ka[4].unsigned_key() {
+        if &to_trade.dst_account != ka[3].unsigned_key() {
             error!("To trade account and to account differ");
             Err(InstructionError::InvalidArgument)?
         }
-        if &from_trade.dst_account != ka[5].unsigned_key() {
+        if &from_trade.dst_account != ka[4].unsigned_key() {
             error!("From trade account and from account differ");
             Err(InstructionError::InvalidArgument)?
         }
@@ -333,8 +333,8 @@ impl ExchangeProcessor {
         }
 
         let mut swap = TradeSwapInfo::default();
-        swap.to_trade_order = *ka[2].unsigned_key();
-        swap.from_trade_order = *ka[3].unsigned_key();
+        swap.to_trade_order = *ka[1].unsigned_key();
+        swap.from_trade_order = *ka[2].unsigned_key();
 
         if let Err(e) = Self::calculate_swap(
             SCALER,
@@ -352,23 +352,23 @@ impl ExchangeProcessor {
             Err(e)?
         }
 
-        Self::serialize(&ExchangeState::Swap(swap), &mut ka[1].account.data[..])?;
-        Self::serialize(&ExchangeState::Trade(to_trade), &mut ka[2].account.data[..])?;
+        Self::serialize(&ExchangeState::Swap(swap), &mut ka[0].account.data[..])?;
+        Self::serialize(&ExchangeState::Trade(to_trade), &mut ka[1].account.data[..])?;
         Self::serialize(
             &ExchangeState::Trade(from_trade),
-            &mut ka[3].account.data[..],
+            &mut ka[2].account.data[..],
         )?;
         Self::serialize(
             &ExchangeState::Account(to_trade_account),
-            &mut ka[4].account.data[..],
+            &mut ka[3].account.data[..],
         )?;
         Self::serialize(
             &ExchangeState::Account(from_trade_account),
-            &mut ka[5].account.data[..],
+            &mut ka[4].account.data[..],
         )?;
         Self::serialize(
             &ExchangeState::Account(profit_account),
-            &mut ka[6].account.data[..],
+            &mut ka[5].account.data[..],
         )
     }
 }

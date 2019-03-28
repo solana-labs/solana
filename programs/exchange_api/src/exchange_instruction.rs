@@ -125,7 +125,6 @@ impl ExchangeInstruction {
     }
 
     pub fn new_swap_request(
-        owner: &Pubkey,
         swap: &Pubkey,
         to_trade: &Pubkey,
         from_trade: &Pubkey,
@@ -134,7 +133,6 @@ impl ExchangeInstruction {
         profit_account: &Pubkey,
     ) -> Instruction {
         let account_metas = vec![
-            AccountMeta::new(*owner, true),
             AccountMeta::new(*swap, false),
             AccountMeta::new(*to_trade, false),
             AccountMeta::new(*from_trade, false),

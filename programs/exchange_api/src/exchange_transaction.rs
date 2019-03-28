@@ -107,7 +107,6 @@ impl ExchangeTransaction {
         let space = mem::size_of::<ExchangeState>() as u64;
         let create_ix = SystemInstruction::new_program_account(owner_id, swap, 1, space, &id());
         let request_ix = ExchangeInstruction::new_swap_request(
-            owner_id,
             swap,
             to_trade,
             from_trade,
