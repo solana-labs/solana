@@ -21,9 +21,6 @@ pub struct BlockhashQueue {
 
     /// hashes older than `max_age` will be dropped from the queue
     max_age: usize,
-
-    /// expired hashes for clearing out the status queue
-    pub expired_hashes: Vec<Hash>,
 }
 
 impl BlockhashQueue {
@@ -33,7 +30,6 @@ impl BlockhashQueue {
             hash_height: 0,
             last_hash: None,
             max_age,
-            expired_hashes: Vec::new(),
         }
     }
 
@@ -85,12 +81,6 @@ impl BlockhashQueue {
         //  because we verify age.nth every place we check for validity
         let max_age = self.max_age;
         if self.ages.len() >= max_age {
-            let expired = self
-                .ages
-                .iter()
-                .filter(|(_, age)| !Self::check_age(hash_height, max_age, age))
-                .map(|(hash, _)| hash);
-            self.expired_hashes.extend(expired);
             self.ages
                 .retain(|_, age| Self::check_age(hash_height, max_age, age));
         }
@@ -140,17 +130,6 @@ mod tests {
         }
         // Assert we're no longer able to use the oldest hash.
         assert!(!hash_queue.check_hash(last_hash));
-    }
-    #[test]
-    fn test_old_last_hash_is_expired() {
-        let last_hash = hash(&serialize(&0).unwrap());
-        let mut hash_queue = BlockhashQueue::new(100);
-        for i in 0..102 {
-            let last_hash = hash(&serialize(&i).unwrap());
-            hash_queue.register_hash(&last_hash);
-        }
-        // Assert the old hash is stored in the expired vec
-        assert_eq!(hash_queue.expired_hashes, vec![last_hash]);
     }
     /// test that when max age is 0, that a valid last_hash still passes the age check
     #[test]

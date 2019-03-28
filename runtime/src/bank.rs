@@ -173,14 +173,16 @@ impl Bank {
         let mut bank = Self::default();
         bank.accounts = Arc::new(Accounts::new(bank.slot, paths));
         bank.process_genesis_block(genesis_block);
-
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
         let vote_accounts: HashMap<_, _> = bank.vote_accounts().collect();
         for i in 0..=bank.get_stakers_epoch(bank.slot) {
             bank.epoch_vote_accounts.insert(i, vote_accounts.clone());
         }
-
+        bank.status_cache
+            .write()
+            .unwrap()
+            .register_hash(bank.last_blockhash(), bank.slot());
         bank
     }
 
@@ -192,6 +194,7 @@ impl Bank {
         let mut bank = Self::default();
         bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
         bank.status_cache = parent.status_cache.clone();
+
         bank.tick_height
             .store(parent.tick_height.load(Ordering::SeqCst), Ordering::SeqCst);
         bank.ticks_per_slot = parent.ticks_per_slot;
@@ -259,15 +262,9 @@ impl Bank {
 
         self.accounts.squash(self.accounts_id);
 
-        let mut wcache = self.status_cache.write().unwrap();
-        parents.iter().for_each(|p| {
-            p.blockhash_queue
-                .read()
-                .unwrap()
-                .expired_hashes
-                .iter()
-                .for_each(|hash| wcache.remove_expired_blockhash(hash))
-        })
+        parents
+            .iter()
+            .for_each(|p| self.status_cache.write().unwrap().add_root(p.slot()));
     }
 
     /// Return the more recent checkpoint of this bank instance.
@@ -439,8 +436,14 @@ impl Bank {
 
         // Register a new block hash if at the last tick in the slot
         if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
-            let mut blockhash_queue = self.blockhash_queue.write().unwrap();
-            blockhash_queue.register_hash(hash);
+            {
+                let mut blockhash_queue = self.blockhash_queue.write().unwrap();
+                blockhash_queue.register_hash(hash);
+            }
+            self.status_cache
+                .write()
+                .unwrap()
+                .register_hash(self.last_blockhash(), self.slot());
         }
     }
 
@@ -1453,14 +1456,18 @@ mod tests {
 
         let tx_move_mint_to_1 =
             SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        trace!("parent process tx ");
         assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
+        trace!("done parent process tx ");
         assert_eq!(parent.transaction_count(), 1);
         assert_eq!(
             parent.get_signature_status(&tx_move_mint_to_1.signatures[0]),
             Some(Ok(()))
         );
 
+        trace!("new form parent");
         let bank = new_from_parent(&parent);
+        trace!("done new form parent");
         assert_eq!(
             bank.get_signature_status(&tx_move_mint_to_1.signatures[0]),
             Some(Ok(()))
