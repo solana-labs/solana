@@ -861,7 +861,7 @@ impl Accounts {
         for k in keys {
             if locks.contains(k) {
                 error_counters.account_in_use += 1;
-                error!("Account in use: {:?}", k);
+                debug!("Account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
             }
         }

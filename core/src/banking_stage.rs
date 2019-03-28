@@ -224,7 +224,7 @@ impl BankingStage {
             .filter_map(|(r, x)| match r {
                 Ok(_) => Some(x.clone()),
                 Err(TransactionError::InstructionError(index, err)) => {
-                    info!("instruction error {:?}, {:?}", index, err);
+                    debug!("instruction error {:?}, {:?}", index, err);
                     Some(x.clone())
                 }
                 Err(ref e) => {
@@ -367,7 +367,7 @@ impl BankingStage {
 
         let mut reqs_len = 0;
         let mms_len = mms.len();
-        info!(
+        debug!(
             "@{:?} process start stalled for: {:?}ms batches: {}",
             timing::timestamp(),
             timing::duration_as_ms(&recv_start.elapsed()),
@@ -440,7 +440,7 @@ impl BankingStage {
         );
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
-        info!(
+        debug!(
             "@{:?} done processing transaction batches: {} time: {:?}ms reqs: {} reqs/s: {}",
             timing::timestamp(),
             mms_len,
