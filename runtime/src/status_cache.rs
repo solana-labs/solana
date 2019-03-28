@@ -67,8 +67,11 @@ impl<T: Clone> StatusCache<T> {
     }
 
     pub fn register_hash(&mut self, blockhash: Hash, fork: ForkId) {
-        let hash = self.cache.entry(blockhash).or_insert((fork, HashMap::new()));
-        hash.0 = std::cmp::max(fork, hash.0); 
+        let hash = self
+            .cache
+            .entry(blockhash)
+            .or_insert((fork, HashMap::new()));
+        hash.0 = std::cmp::max(fork, hash.0);
     }
 
     pub fn add_root(&mut self, fork: ForkId) {
@@ -169,7 +172,7 @@ mod tests {
             Some((0, ()))
         );
     }
- 
+
     #[test]
     fn test_find_sig_with_root_ancestor_fork_max_len() {
         let sig = Signature::default();
@@ -184,7 +187,7 @@ mod tests {
             Some((ancestors.len(), ()))
         );
     }
- 
+
     #[test]
     fn test_register_picks_latest() {
         let sig = Signature::default();
@@ -197,11 +200,11 @@ mod tests {
         for i in 0..(MAX_CACHE_ENTRIES + 1) {
             status_cache.add_root(i as u64);
         }
-        assert!(
-            status_cache.get_signature_status(&sig, &blockhash, &ancestors).is_some()
-        );
+        assert!(status_cache
+            .get_signature_status(&sig, &blockhash, &ancestors)
+            .is_some());
     }
- 
+
     #[test]
     fn test_root_expires() {
         let sig = Signature::default();
