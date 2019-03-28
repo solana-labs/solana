@@ -738,7 +738,6 @@ mod test {
         );
 
         let instruction = ExchangeInstruction::new_swap_request(
-            &owner.pubkey(),
             &swap,
             &to_trade,
             &from_trade,
