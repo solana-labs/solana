@@ -2121,6 +2121,165 @@ pub mod tests {
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
+    #[test]
+    fn test_find_missing_data_indexes() {
+        let slot = 0;
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+        // Write entries
+        let gap = 10;
+        assert!(gap > 3);
+        let num_entries = 10;
+        let mut blobs = make_tiny_test_entries(num_entries).to_single_entry_blobs();
+        for (i, b) in blobs.iter_mut().enumerate() {
+            b.set_index(i as u64 * gap);
+            b.set_slot(slot);
+        }
+        blocktree.write_blobs(&blobs).unwrap();
+
+        // Index of the first blob is 0
+        // Index of the second blob is "gap"
+        // Thus, the missing indexes should then be [1, gap - 1] for the input index
+        // range of [0, gap)
+        let expected: Vec<u64> = (1..gap).collect();
+        assert_eq!(
+            blocktree.find_missing_data_indexes(slot, 0, gap, gap as usize),
+            expected
+        );
+        assert_eq!(
+            blocktree.find_missing_data_indexes(slot, 1, gap, (gap - 1) as usize),
+            expected,
+        );
+        assert_eq!(
+            blocktree.find_missing_data_indexes(slot, 0, gap - 1, (gap - 1) as usize),
+            &expected[..expected.len() - 1],
+        );
+        assert_eq!(
+            blocktree.find_missing_data_indexes(slot, gap - 2, gap, gap as usize),
+            vec![gap - 2, gap - 1],
+        );
+        assert_eq!(
+            blocktree.find_missing_data_indexes(slot, gap - 2, gap, 1),
+            vec![gap - 2],
+        );
+        assert_eq!(
+            blocktree.find_missing_data_indexes(slot, 0, gap, 1),
+            vec![1],
+        );
+
+        // Test with end indexes that are greater than the last item in the ledger
+        let mut expected: Vec<u64> = (1..gap).collect();
+        expected.push(gap + 1);
+        assert_eq!(
+            blocktree.find_missing_data_indexes(slot, 0, gap + 2, (gap + 2) as usize),
+            expected,
+        );
+        assert_eq!(
+            blocktree.find_missing_data_indexes(slot, 0, gap + 2, (gap - 1) as usize),
+            &expected[..expected.len() - 1],
+        );
+
+        for i in 0..num_entries as u64 {
+            for j in 0..i {
+                let expected: Vec<u64> = (j..i)
+                    .flat_map(|k| {
+                        let begin = k * gap + 1;
+                        let end = (k + 1) * gap;
+                        (begin..end)
+                    })
+                    .collect();
+                assert_eq!(
+                    blocktree.find_missing_data_indexes(
+                        slot,
+                        j * gap,
+                        i * gap,
+                        ((i - j) * gap) as usize
+                    ),
+                    expected,
+                );
+            }
+        }
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_find_missing_data_indexes_sanity() {
+        let slot = 0;
+
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+        // Early exit conditions
+        let empty: Vec<u64> = vec![];
+        assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 0, 1), empty);
+        assert_eq!(blocktree.find_missing_data_indexes(slot, 5, 5, 1), empty);
+        assert_eq!(blocktree.find_missing_data_indexes(slot, 4, 3, 1), empty);
+        assert_eq!(blocktree.find_missing_data_indexes(slot, 1, 2, 0), empty);
+
+        let mut blobs = make_tiny_test_entries(2).to_single_entry_blobs();
+
+        const ONE: u64 = 1;
+        const OTHER: u64 = 4;
+
+        blobs[0].set_index(ONE);
+        blobs[1].set_index(OTHER);
+
+        // Insert one blob at index = first_index
+        blocktree.write_blobs(&blobs).unwrap();
+
+        const STARTS: u64 = OTHER * 2;
+        const END: u64 = OTHER * 3;
+        const MAX: usize = 10;
+        // The first blob has index = first_index. Thus, for i < first_index,
+        // given the input range of [i, first_index], the missing indexes should be
+        // [i, first_index - 1]
+        for start in 0..STARTS {
+            let result = blocktree.find_missing_data_indexes(
+                slot, start, // start
+                END,   //end
+                MAX,   //max
+            );
+            let expected: Vec<u64> = (start..END).filter(|i| *i != ONE && *i != OTHER).collect();
+            assert_eq!(result, expected);
+        }
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    pub fn test_no_missing_blob_indexes() {
+        let slot = 0;
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+        // Write entries
+        let num_entries = 10;
+        let shared_blobs = make_tiny_test_entries(num_entries).to_single_entry_shared_blobs();
+
+        crate::packet::index_blobs(&shared_blobs, &Keypair::new().pubkey(), 0, slot, 0);
+
+        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
+        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
+        blocktree.write_blobs(blobs).unwrap();
+
+        let empty: Vec<u64> = vec![];
+        for i in 0..num_entries as u64 {
+            for j in 0..i {
+                assert_eq!(
+                    blocktree.find_missing_data_indexes(slot, j, i, (i - j) as usize),
+                    empty
+                );
+            }
+        }
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
     pub fn entries_to_blobs(
         entries: &Vec<Entry>,
         slot: u64,
