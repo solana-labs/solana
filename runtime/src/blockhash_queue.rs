@@ -73,7 +73,7 @@ impl BlockhashQueue {
         self.last_hash = Some(*hash);
     }
 
-    pub fn check_age(hash_height: u64, max_age: usize, age: &HashAge) -> bool {
+    fn check_age(hash_height: u64, max_age: usize, age: &HashAge) -> bool {
         hash_height - age.hash_height <= max_age as u64
     }
 
