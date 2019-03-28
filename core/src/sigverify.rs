@@ -392,7 +392,6 @@ mod tests {
             Some(sig_start as usize)
         );
         assert_eq!(sig_len, 1);
-        assert!(tx.verify_signature());
     }
 
     #[test]
