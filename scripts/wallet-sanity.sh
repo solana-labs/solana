@@ -62,13 +62,13 @@ if ! "$node_readiness"; then
 fi
 
 $solana_wallet "${entrypoint[@]}" address
-check_balance_output "No account found" "Your balance is: 0"
+check_balance_output "0 lamports"
 $solana_wallet "${entrypoint[@]}" airdrop 60
-check_balance_output "Your balance is: 60"
+check_balance_output "60 lamports"
 $solana_wallet "${entrypoint[@]}" airdrop 40
-check_balance_output "Your balance is: 100"
+check_balance_output "100 lamports"
 pay_and_confirm $garbage_address 99
-check_balance_output "Your balance is: 1"
+check_balance_output "1 lamport"
 
 echo PASS
 exit 0
