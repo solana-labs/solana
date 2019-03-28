@@ -67,8 +67,8 @@ impl<T: Clone> StatusCache<T> {
     }
 
     pub fn register_hash(&mut self, blockhash: Hash, fork: ForkId) {
-        let prev = self.cache.insert(blockhash, (fork, HashMap::new()));
-        assert!(prev.is_none(), "expecting new blockhash");
+        let hash = self.cache.entry(blockhash).or_insert((fork, HashMap::new()));
+        hash.0 = std::cmp::max(fork, hash.0); 
     }
 
     pub fn add_root(&mut self, fork: ForkId) {
@@ -160,7 +160,7 @@ mod tests {
         let sig = Signature::default();
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
-        let ancestors = vec![(2, 2)].into_iter().collect();
+        let ancestors = HashMap::new();
         status_cache.register_hash(blockhash, 0);
         status_cache.insert(&blockhash, &sig, 0, ());
         status_cache.add_root(0);
@@ -168,12 +168,40 @@ mod tests {
             status_cache.get_signature_status(&sig, &blockhash, &ancestors),
             Some((0, ()))
         );
+    }
+ 
+    #[test]
+    fn test_find_sig_with_root_ancestor_fork_max_len() {
+        let sig = Signature::default();
+        let mut status_cache = BankStatusCache::default();
+        let blockhash = hash(Hash::default().as_ref());
+        let ancestors = vec![(2, 2)].into_iter().collect();
+        status_cache.register_hash(blockhash, 0);
+        status_cache.insert(&blockhash, &sig, 0, ());
+        status_cache.add_root(0);
         assert_eq!(
             status_cache.get_signature_status_slow(&sig, &ancestors),
-            Some((1, ()))
+            Some((ancestors.len(), ()))
         );
     }
-
+ 
+    #[test]
+    fn test_register_picks_latest() {
+        let sig = Signature::default();
+        let mut status_cache = BankStatusCache::default();
+        let blockhash = hash(Hash::default().as_ref());
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        status_cache.register_hash(blockhash, 0);
+        status_cache.register_hash(blockhash, 1);
+        status_cache.insert(&blockhash, &sig, 0, ());
+        for i in 0..(MAX_CACHE_ENTRIES + 1) {
+            status_cache.add_root(i as u64);
+        }
+        assert!(
+            status_cache.get_signature_status(&sig, &blockhash, &ancestors).is_some()
+        );
+    }
+ 
     #[test]
     fn test_root_expires() {
         let sig = Signature::default();
