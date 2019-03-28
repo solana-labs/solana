@@ -259,11 +259,15 @@ impl Bank {
 
         self.accounts.squash(self.accounts_id);
 
-        let wcache = self.status_cache.write().unwrap();
-        parents
-            .iter()
-            .flat_map(|p| p.blockhash_queue.read().unwrap().expired_hashes.iter())
-            .for_each(|hash| wcache.remove_expired_blockhash(hash))
+        let mut wcache = self.status_cache.write().unwrap();
+        parents.iter().for_each(|p| {
+            p.blockhash_queue
+                .read()
+                .unwrap()
+                .expired_hashes
+                .iter()
+                .for_each(|hash| wcache.remove_expired_blockhash(hash))
+        })
     }
 
     /// Return the more recent checkpoint of this bank instance.
@@ -521,7 +525,7 @@ impl Bank {
         self.parents().iter().enumerate().for_each(|(i, p)| {
             ancestors.insert(p.slot(), i + 1);
         });
- 
+
         let rcache = self.status_cache.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())

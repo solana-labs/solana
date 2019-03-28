@@ -35,7 +35,7 @@ impl<T: Clone> StatusCache<T> {
             .and_then(|stored_forks| {
                 stored_forks
                     .iter()
-                    .filter(|(f, r)| ancestors.get(f).is_some())
+                    .filter(|(f, _)| ancestors.get(f).is_some())
                     .nth(0)
             })
             .cloned()
