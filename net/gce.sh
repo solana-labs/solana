@@ -481,10 +481,9 @@ EOF
   num_zones=${#zones[@]}
   numNodesPerZone=$((additionalFullNodeCount / num_zones))
   numLeftOverNodes=$((additionalFullNodeCount % num_zones))
-  count=0
-  for zone in "${zones[@]}"; do
-    count=$((count + 1))
-    if [[ $count -eq $num_zones ]]; then
+  for ((i=0; i < $num_zones; i++)); do
+    zone=${zones[i]}
+    if [[ $i -eq $((num_zones - 1)) ]]; then
       numNodesPerZone=$((numNodesPerZone + numLeftOverNodes))
     fi
     cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
