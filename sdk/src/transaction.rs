@@ -146,27 +146,6 @@ impl Transaction {
         &self.instructions[instruction_index].data
     }
 
-    fn key_index(&self, instruction_index: usize, accounts_index: usize) -> Option<usize> {
-        self.instructions
-            .get(instruction_index)
-            .and_then(|instruction| instruction.accounts.get(accounts_index))
-            .map(|&account_keys_index| account_keys_index as usize)
-    }
-    pub fn key(&self, instruction_index: usize, accounts_index: usize) -> Option<&Pubkey> {
-        self.key_index(instruction_index, accounts_index)
-            .and_then(|account_keys_index| self.account_keys.get(account_keys_index))
-    }
-    pub fn signer_key(&self, instruction_index: usize, accounts_index: usize) -> Option<&Pubkey> {
-        match self.key_index(instruction_index, accounts_index) {
-            None => None,
-            Some(signature_index) => {
-                if signature_index >= self.signatures.len() {
-                    return None;
-                }
-                self.account_keys.get(signature_index)
-            }
-        }
-    }
     pub fn program_id(&self, instruction_index: usize) -> &Pubkey {
         let program_ids_index = self.instructions[instruction_index].program_ids_index;
         &self.program_ids[program_ids_index as usize]
@@ -394,27 +373,6 @@ mod tests {
             instructions,
         );
         assert!(tx.verify_refs());
-
-        assert_eq!(tx.key(0, 0), Some(&key.pubkey()));
-        assert_eq!(tx.signer_key(0, 0), Some(&key.pubkey()));
-
-        assert_eq!(tx.key(1, 0), Some(&key.pubkey()));
-        assert_eq!(tx.signer_key(1, 0), Some(&key.pubkey()));
-
-        assert_eq!(tx.key(0, 1), Some(&key1));
-        assert_eq!(tx.signer_key(0, 1), None);
-
-        assert_eq!(tx.key(1, 1), Some(&key2));
-        assert_eq!(tx.signer_key(1, 1), None);
-
-        assert_eq!(tx.key(2, 0), None);
-        assert_eq!(tx.signer_key(2, 0), None);
-
-        assert_eq!(tx.key(0, 2), None);
-        assert_eq!(tx.signer_key(0, 2), None);
-
-        assert_eq!(*tx.program_id(0), prog1);
-        assert_eq!(*tx.program_id(1), prog2);
     }
     #[test]
     fn test_refs_invalid_program_id() {
@@ -442,7 +400,6 @@ mod tests {
             vec![Pubkey::default()],
             instructions,
         );
-        assert_eq!(*tx.program_id(0), Pubkey::default());
         assert!(!tx.verify_refs());
     }
 
