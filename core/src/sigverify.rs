@@ -356,7 +356,7 @@ mod tests {
     fn test_system_transaction_layout() {
         let tx = test_tx();
         let tx_bytes = serialize(&tx).unwrap();
-        let message = tx.message();
+        let message_data = tx.message_data();
         let packet = sigverify::make_packet_from_transaction(tx.clone());
 
         let (sig_len, sig_start, msg_start_offset, pubkey_offset) =
@@ -371,7 +371,7 @@ mod tests {
             Some(pubkey_offset as usize)
         );
         assert_eq!(
-            memfind(&tx_bytes, &message),
+            memfind(&tx_bytes, &message_data),
             Some(msg_start_offset as usize)
         );
         assert_eq!(
@@ -386,7 +386,7 @@ mod tests {
         use crate::packet::PACKET_DATA_SIZE;
         let mut tx0 = test_tx();
         tx0.instructions[0].data = vec![1, 2, 3];
-        let message0a = tx0.message();
+        let message0a = tx0.message_data();
         let tx_bytes = serialize(&tx0).unwrap();
         assert!(tx_bytes.len() < PACKET_DATA_SIZE);
         assert_eq!(
@@ -398,7 +398,7 @@ mod tests {
         assert_eq!(tx1.instructions[0].data, vec![1, 2, 3]);
 
         tx0.instructions[0].data = vec![1, 2, 4];
-        let message0b = tx0.message();
+        let message0b = tx0.message_data();
         assert_ne!(message0a, message0b);
     }
 

@@ -174,26 +174,31 @@ impl Transaction {
         let program_ids_index = self.instructions[instruction_index].program_ids_index;
         &self.program_ids[program_ids_index as usize]
     }
-    /// Get the transaction data to sign.
-    pub fn message(&self) -> Vec<u8> {
-        let message = Message {
+
+    /// Return a message containing all data that should be signed.
+    pub fn message(&self) -> Message {
+        Message {
             num_signatures: self.signatures.len() as u8,
             account_keys: self.account_keys.clone(),
             recent_blockhash: self.recent_blockhash,
             fee: self.fee,
             program_ids: self.program_ids.clone(),
             instructions: self.instructions.clone(),
-        };
-        serialize(&message).unwrap()
+        }
+    }
+
+    /// Return the serialized message data to sign.
+    pub fn message_data(&self) -> Vec<u8> {
+        serialize(&self.message()).unwrap()
     }
 
     /// Sign this transaction.
     pub fn sign_unchecked<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
         self.recent_blockhash = recent_blockhash;
-        let message = self.message();
+        let message_data = self.message_data();
         self.signatures = keypairs
             .iter()
-            .map(|keypair| keypair.sign_message(&message))
+            .map(|keypair| keypair.sign_message(&message_data))
             .collect();
     }
 
