@@ -61,7 +61,7 @@ pub struct Transaction {
 impl Transaction {
     pub fn new_unsigned(message: Message) -> Self {
         Self {
-            signatures: Vec::with_capacity(message.num_signatures as usize),
+            signatures: Vec::with_capacity(message.num_required_signatures as usize),
             message,
         }
     }
@@ -176,7 +176,8 @@ impl Transaction {
 
     /// Check keys and keypair lengths, then sign this transaction.
     pub fn sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
-        let signed_keys = &self.message.account_keys[0..self.message.num_signatures as usize];
+        let signed_keys =
+            &self.message.account_keys[0..self.message.num_required_signatures as usize];
         for (i, keypair) in keypairs.iter().enumerate() {
             assert_eq!(keypair.pubkey(), signed_keys[i], "keypair-pubkey mismatch");
         }
@@ -348,16 +349,20 @@ mod tests {
 
         let tx = Transaction::new(&[&alice_keypair], message, Hash::default());
 
-        let expected_transaction_size = 1
+        let len_size = 1;
+        let num_required_sigs_size = 1;
+        let blockhash_size = size_of::<Hash>();
+        let fee_size = size_of::<u64>();
+        let expected_transaction_size = len_size
             + (tx.signatures.len() * size_of::<Signature>())
-            + 1
-            + 1
+            + num_required_sigs_size
+            + len_size
             + (tx.message.account_keys.len() * size_of::<Pubkey>())
-            + size_of::<Hash>()
-            + size_of::<u64>()
-            + 1
+            + blockhash_size
+            + fee_size
+            + len_size
             + (tx.message.program_ids.len() * size_of::<Pubkey>())
-            + 1
+            + len_size
             + expected_instruction_size;
         assert_eq!(expected_transaction_size, 222);
 

@@ -16,6 +16,9 @@ use std::mem::size_of;
 
 type TxOffsets = (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<Vec<u32>>);
 
+// The serialized size of Message::num_required_signatures.
+const NUM_REQUIRED_SIGNATURES_SIZE: usize = 1;
+
 #[cfg(feature = "cuda")]
 #[repr(C)]
 struct Elems {
@@ -128,7 +131,7 @@ pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u3
 
     let sig_start = current_offset as usize + sig_size;
     let msg_start = current_offset as usize + msg_start_offset;
-    let pubkey_start = msg_start + 1 + pubkey_size;
+    let pubkey_start = msg_start + NUM_REQUIRED_SIGNATURES_SIZE + pubkey_size;
 
     (
         sig_len as u32,
