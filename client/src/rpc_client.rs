@@ -528,6 +528,24 @@ impl RpcClient {
         })
     }
 
+    pub fn fullnode_exit(&self) -> io::Result<u64> {
+        let response = self
+            .client
+            .send(&RpcRequest::ClusterExit, None, 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("ClusterExit request failure: {:?}", err),
+                )
+            })?;
+        serde_json::from_value(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("ClusterExit parse failure: {:?}", err),
+            )
+        })
+    }
+
     // TODO: Remove
     pub fn retry_make_rpc_request(
         &self,

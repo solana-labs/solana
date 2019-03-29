@@ -2,6 +2,7 @@
 
 use crate::bank_forks::BankForks;
 use crate::cluster_info::ClusterInfo;
+use crate::cluster_info::FULLNODE_PORT_RANGE;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::storage_stage::StorageState;
 use bincode::{deserialize, serialize};
@@ -9,6 +10,7 @@ use bs58;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_signature_status::RpcSignatureStatus;
+use solana_client::thin_client::create_client;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_runtime::bank;
 use solana_sdk::account::Account;
@@ -25,6 +27,7 @@ use std::time::{Duration, Instant};
 #[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
     pub enable_fullnode_exit: bool, // Enable the 'fullnodeExit' command
+    pub enable_cluster_exit: bool,  // Enable the 'clusterExit' command
     pub drone_addr: Option<SocketAddr>,
 }
 
@@ -124,6 +127,23 @@ impl JsonRpcRequestProcessor {
         } else {
             debug!("fullnode_exit ignored");
             Ok(false)
+        }
+    }
+    pub fn cluster_exit(&self, cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<u64> {
+        if self.config.enable_cluster_exit {
+            warn!("cluster_exit request...");
+            let peers = cluster_info.read().unwrap().rpc_peers();
+            let mut errors = 0;
+            for nodes in peers {
+                let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
+                let e = client.fullnode_exit();
+                errors += (e.is_err() || !e.unwrap()) as u64;
+            }
+            self.fullnode_exit.store(true, Ordering::Relaxed);
+            Ok(errors)
+        } else {
+            debug!("cluster_exit ignored");
+            Ok(0)
         }
     }
 }
@@ -229,6 +249,9 @@ pub trait RpcSol {
         _: Self::Metadata,
         _: String,
     ) -> Result<(usize, RpcSignatureStatus)>;
+
+    #[rpc(meta, name = "clusterExit")]
+    fn cluster_exit(&self, _: Self::Metadata) -> Result<u64>;
 }
 
 pub struct RpcSolImpl;
@@ -443,6 +466,13 @@ impl RpcSol for RpcSolImpl {
 
     fn fullnode_exit(&self, meta: Self::Metadata) -> Result<bool> {
         meta.request_processor.read().unwrap().fullnode_exit()
+    }
+
+    fn cluster_exit(&self, meta: Self::Metadata) -> Result<u64> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .cluster_exit(&self.cluster_info)
     }
 }
 
