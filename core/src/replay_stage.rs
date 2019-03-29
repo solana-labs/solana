@@ -230,12 +230,16 @@ impl ReplayStage {
             return;
         }
         if bank_forks.read().unwrap().get(poh_slot).is_none() {
-            let frozen = bank_forks.read().unwrap().frozen_banks();
             let parent_slot = poh_recorder.lock().unwrap().start_slot();
-            assert!(frozen.contains_key(&parent_slot));
-            let parent = &frozen[&parent_slot];
+            let parent = {
+                let r_bf = bank_forks.read().unwrap();
+                r_bf.get(parent_slot)
+                    .expect("start slot doesn't exist in bank forks")
+                    .clone()
+            };
+            assert!(parent.is_frozen());
 
-            leader_schedule_utils::slot_leader_at(poh_slot, parent)
+            leader_schedule_utils::slot_leader_at(poh_slot, &parent)
                 .map(|next_leader| {
                     debug!(
                         "me: {} leader {} at poh slot {}",
@@ -255,7 +259,7 @@ impl ReplayStage {
                                     influxdb::Value::Integer(grace_ticks as i64),
                                 )
                                 .to_owned(),);
-                        let tpu_bank = Bank::new_from_parent(parent, my_id, poh_slot);
+                        let tpu_bank = Bank::new_from_parent(&parent, my_id, poh_slot);
                         bank_forks.write().unwrap().insert(tpu_bank);
                         if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
                             assert_eq!(
