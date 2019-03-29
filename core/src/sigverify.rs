@@ -128,7 +128,7 @@ pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u3
 
     let sig_start = current_offset as usize + sig_size;
     let msg_start = current_offset as usize + msg_start_offset;
-    let pubkey_start = msg_start + pubkey_size;
+    let pubkey_start = msg_start + 1 + pubkey_size;
 
     (
         sig_len as u32,
@@ -367,7 +367,7 @@ mod tests {
             Some(SIG_OFFSET)
         );
         assert_eq!(
-            memfind(&tx_bytes, &tx.account_keys[0].as_ref()),
+            memfind(&tx_bytes, &tx.message().account_keys[0].as_ref()),
             Some(pubkey_offset as usize)
         );
         assert_eq!(
@@ -385,7 +385,7 @@ mod tests {
     fn test_system_transaction_data_layout() {
         use crate::packet::PACKET_DATA_SIZE;
         let mut tx0 = test_tx();
-        tx0.instructions[0].data = vec![1, 2, 3];
+        tx0.message.instructions[0].data = vec![1, 2, 3];
         let message0a = tx0.message_data();
         let tx_bytes = serialize(&tx0).unwrap();
         assert!(tx_bytes.len() < PACKET_DATA_SIZE);
@@ -395,9 +395,9 @@ mod tests {
         );
         let tx1 = deserialize(&tx_bytes).unwrap();
         assert_eq!(tx0, tx1);
-        assert_eq!(tx1.instructions[0].data, vec![1, 2, 3]);
+        assert_eq!(tx1.message().instructions[0].data, vec![1, 2, 3]);
 
-        tx0.instructions[0].data = vec![1, 2, 4];
+        tx0.message.instructions[0].data = vec![1, 2, 4];
         let message0b = tx0.message_data();
         assert_ne!(message0a, message0b);
     }
@@ -417,19 +417,19 @@ mod tests {
 
     #[test]
     fn test_get_packet_offsets() {
-        assert_eq!(get_packet_offsets_from_tx(test_tx(), 0), (1, 1, 64, 1));
-        assert_eq!(get_packet_offsets_from_tx(test_tx(), 100), (1, 1, 64, 1));
+        assert_eq!(get_packet_offsets_from_tx(test_tx(), 0), (1, 1, 64, 2));
+        assert_eq!(get_packet_offsets_from_tx(test_tx(), 100), (1, 1, 64, 2));
 
         // Ensure we're not indexing packet by the `current_offset` parameter.
         assert_eq!(
             get_packet_offsets_from_tx(test_tx(), 1_000_000),
-            (1, 1, 64, 1)
+            (1, 1, 64, 2)
         );
 
         // Ensure we're returning sig_len, not sig_size.
         assert_eq!(
             get_packet_offsets_from_tx(test_multisig_tx(), 0),
-            (2, 1, 128, 1)
+            (2, 1, 128, 2)
         );
     }
 

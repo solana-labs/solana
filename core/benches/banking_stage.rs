@@ -67,8 +67,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             let from: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
             let to: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
             let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
-            new.account_keys[0] = Pubkey::new(&from[0..32]);
-            new.account_keys[1] = Pubkey::new(&to[0..32]);
+            new.message.account_keys[0] = Pubkey::new(&from[0..32]);
+            new.message.account_keys[1] = Pubkey::new(&to[0..32]);
             new.signatures = vec![Signature::new(&sig[0..64])];
             new
         })
@@ -77,7 +77,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     transactions.iter().for_each(|tx| {
         let fund = SystemTransaction::new_move(
             &mint_keypair,
-            &tx.account_keys[0],
+            &tx.message.account_keys[0],
             mint_total / txes as u64,
             genesis_block.hash(),
             0,
@@ -159,25 +159,25 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             let from: Vec<u8> = (0..32).map(|_| thread_rng().gen()).collect();
             let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
             let to: Vec<u8> = (0..32).map(|_| thread_rng().gen()).collect();
-            new.account_keys[0] = Pubkey::new(&from[0..32]);
-            new.account_keys[1] = Pubkey::new(&to[0..32]);
-            let prog = new.instructions[0].clone();
+            new.message.account_keys[0] = Pubkey::new(&from[0..32]);
+            new.message.account_keys[1] = Pubkey::new(&to[0..32]);
+            let prog = new.message.instructions[0].clone();
             for i in 1..progs {
                 //generate programs that spend to random keys
                 let to: Vec<u8> = (0..32).map(|_| thread_rng().gen()).collect();
                 let to_key = Pubkey::new(&to[0..32]);
-                new.account_keys.push(to_key);
-                assert_eq!(new.account_keys.len(), i + 2);
-                new.instructions.push(prog.clone());
-                assert_eq!(new.instructions.len(), i + 1);
-                new.instructions[i].accounts[1] = 1 + i as u8;
+                new.message.account_keys.push(to_key);
+                assert_eq!(new.message.account_keys.len(), i + 2);
+                new.message.instructions.push(prog.clone());
+                assert_eq!(new.message.instructions.len(), i + 1);
+                new.message.instructions[i].accounts[1] = 1 + i as u8;
                 assert_eq!(new.key(i, 1), Some(&to_key));
                 assert_eq!(
-                    new.account_keys[new.instructions[i].accounts[1] as usize],
+                    new.message.account_keys[new.message.instructions[i].accounts[1] as usize],
                     to_key
                 );
             }
-            assert_eq!(new.instructions.len(), progs);
+            assert_eq!(new.message.instructions.len(), progs);
             new.signatures = vec![Signature::new(&sig[0..64])];
             new
         })
@@ -185,7 +185,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     transactions.iter().for_each(|tx| {
         let fund = SystemTransaction::new_move(
             &mint_keypair,
-            &tx.account_keys[0],
+            &tx.message.account_keys[0],
             mint_total / txes as u64,
             genesis_block.hash(),
             0,

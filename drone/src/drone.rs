@@ -352,13 +352,14 @@ mod tests {
         let mut drone = Drone::new(mint, None, None);
 
         let tx = drone.build_airdrop_transaction(request).unwrap();
+        let message = tx.message();
 
         assert_eq!(tx.signatures.len(), 1);
-        assert_eq!(tx.account_keys, vec![mint_pubkey, to]);
-        assert_eq!(tx.recent_blockhash, blockhash);
+        assert_eq!(message.account_keys, vec![mint_pubkey, to]);
+        assert_eq!(message.recent_blockhash, blockhash);
 
-        assert_eq!(tx.instructions.len(), 1);
-        let instruction: SystemInstruction = deserialize(&tx.instructions[0].data).unwrap();
+        assert_eq!(message.instructions.len(), 1);
+        let instruction: SystemInstruction = deserialize(&message.instructions[0].data).unwrap();
         assert_eq!(
             instruction,
             SystemInstruction::CreateAccount {

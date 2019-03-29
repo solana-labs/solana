@@ -599,9 +599,9 @@ impl AccountsDB {
                 continue;
             }
 
-            let tx = &txs[i];
+            let message = &txs[i].message();
             let acc = raccs.as_ref().unwrap();
-            for (key, account) in tx.account_keys.iter().zip(acc.0.iter()) {
+            for (key, account) in message.account_keys.iter().zip(acc.0.iter()) {
                 self.store(fork, key, account);
             }
         }
@@ -614,11 +614,12 @@ impl AccountsDB {
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<Account>> {
         // Copy all the accounts
-        if tx.signatures.is_empty() && tx.fee != 0 {
+        let message = tx.message();
+        if tx.signatures.is_empty() && message.fee != 0 {
             Err(TransactionError::MissingSignatureForFee)
         } else {
             // Check for unique account keys
-            if has_duplicates(&tx.account_keys) {
+            if has_duplicates(&message.account_keys) {
                 error_counters.account_loaded_twice += 1;
                 return Err(TransactionError::AccountLoadedTwice);
             }
@@ -626,17 +627,17 @@ impl AccountsDB {
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let mut called_accounts: Vec<Account> = vec![];
-            for key in &tx.account_keys {
+            for key in &message.account_keys {
                 called_accounts.push(self.load(fork, key, true).unwrap_or_default());
             }
             if called_accounts.is_empty() || called_accounts[0].lamports == 0 {
                 error_counters.account_not_found += 1;
                 Err(TransactionError::AccountNotFound)
-            } else if called_accounts[0].lamports < tx.fee {
+            } else if called_accounts[0].lamports < message.fee {
                 error_counters.insufficient_funds += 1;
                 Err(TransactionError::InsufficientFundsForFee)
             } else {
-                called_accounts[0].lamports -= tx.fee;
+                called_accounts[0].lamports -= message.fee;
                 Ok(called_accounts)
             }
         }
@@ -690,14 +691,16 @@ impl AccountsDB {
         tx: &Transaction,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<Vec<(Pubkey, Account)>>> {
-        tx.instructions
+        let message = tx.message();
+        message
+            .instructions
             .iter()
             .map(|ix| {
-                if tx.program_ids.len() <= ix.program_ids_index as usize {
+                if message.program_ids.len() <= ix.program_ids_index as usize {
                     error_counters.account_not_found += 1;
                     return Err(TransactionError::AccountNotFound);
                 }
-                let program_id = tx.program_ids[ix.program_ids_index as usize];
+                let program_id = message.program_ids[ix.program_ids_index as usize];
                 self.load_executable_accounts(fork, &program_id, error_counters)
             })
             .collect()
@@ -881,7 +884,7 @@ impl Accounts {
             Err(TransactionError::AccountInUse) => (),
             _ => {
                 if let Some(locks) = account_locks.get_mut(&fork) {
-                    for k in &tx.account_keys {
+                    for k in &tx.message().account_keys {
                         locks.remove(k);
                     }
                     if locks.is_empty() {
@@ -908,7 +911,7 @@ impl Accounts {
                 Self::lock_account(
                     fork,
                     &mut account_locks,
-                    &tx.account_keys,
+                    &tx.message().account_keys,
                     &mut error_counters,
                 )
             })
