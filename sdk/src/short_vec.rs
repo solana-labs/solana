@@ -17,7 +17,9 @@ impl Serialize for ShortUsize {
     where
         S: Serializer,
     {
-        let mut seq = serializer.serialize_tuple(0)?;
+        // Pass a non-zero value to serialize_tuple() so that serde_json will
+        // generate an open bracket.
+        let mut seq = serializer.serialize_tuple(1)?;
 
         let mut rem_len = self.0;
         loop {
@@ -89,7 +91,9 @@ pub fn serialize<S: Serializer, T: Serialize>(
     elements: &[T],
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    let mut seq = serializer.serialize_tuple(0)?;
+    // Pass a non-zero value to serialize_tuple() so that serde_json will
+    // generate an open bracket.
+    let mut seq = serializer.serialize_tuple(1)?;
 
     let short_len = ShortUsize(elements.len());
     seq.serialize_element(&short_len)?;
@@ -220,5 +224,12 @@ mod tests {
 
         let vec1: ShortVec<u8> = deserialize(&bytes).unwrap();
         assert_eq!(vec.0, vec1.0);
+    }
+
+    #[test]
+    fn test_short_vec_json() {
+        let vec = ShortVec(vec![0u8]);
+        let s = serde_json::to_string(&vec).unwrap();
+        assert_eq!(s, "[[1],0]");
     }
 }
