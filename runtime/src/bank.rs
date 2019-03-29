@@ -179,10 +179,6 @@ impl Bank {
         for i in 0..=bank.get_stakers_epoch(bank.slot) {
             bank.epoch_vote_accounts.insert(i, vote_accounts.clone());
         }
-        bank.status_cache
-            .write()
-            .unwrap()
-            .register_hash(bank.last_blockhash(), bank.slot());
         bank
     }
 
@@ -437,10 +433,6 @@ impl Bank {
         // Register a new block hash if at the last tick in the slot
         if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
             self.blockhash_queue.write().unwrap().register_hash(hash);
-            self.status_cache
-                .write()
-                .unwrap()
-                .register_hash(self.last_blockhash(), self.slot());
         }
     }
 

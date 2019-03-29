@@ -66,14 +66,8 @@ impl<T: Clone> StatusCache<T> {
         None
     }
 
-    pub fn register_hash(&mut self, blockhash: Hash, fork: ForkId) {
-        let hash = self
-            .cache
-            .entry(blockhash)
-            .or_insert((fork, HashMap::new()));
-        hash.0 = std::cmp::max(fork, hash.0);
-    }
-
+    /// Add a known root fork.  Roots are always valid ancestors.
+    /// After MAX_CACHE_ENTRIES, roots are removed, and any old signatures are cleared.
     pub fn add_root(&mut self, fork: ForkId) {
         self.roots.insert(fork);
         if self.roots.len() > MAX_CACHE_ENTRIES {
@@ -88,8 +82,9 @@ impl<T: Clone> StatusCache<T> {
     pub fn insert(&mut self, transaction_blockhash: &Hash, sig: &Signature, fork: ForkId, res: T) {
         let sig_map = self
             .cache
-            .get_mut(transaction_blockhash)
-            .expect("new map should be created with register_hash");
+            .entry(*transaction_blockhash)
+            .or_insert((fork, HashMap::new()));
+        sig_map.0 = std::cmp::max(fork, sig_map.0);
         let sig_forks = sig_map.1.entry(*sig).or_insert(vec![]);
         sig_forks.push((fork, res));
     }
@@ -130,7 +125,6 @@ mod tests {
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = vec![(0, 1)].into_iter().collect();
-        status_cache.register_hash(blockhash, 0);
         status_cache.insert(&blockhash, &sig, 0, ());
         assert_eq!(
             status_cache.get_signature_status(&sig, &blockhash, &ancestors),
@@ -148,7 +142,6 @@ mod tests {
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = HashMap::new();
-        status_cache.register_hash(blockhash, 0);
         status_cache.insert(&blockhash, &sig, 0, ());
         assert_eq!(
             status_cache.get_signature_status(&sig, &blockhash, &ancestors),
@@ -166,7 +159,6 @@ mod tests {
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = HashMap::new();
-        status_cache.register_hash(blockhash, 0);
         status_cache.insert(&blockhash, &sig, 0, ());
         status_cache.add_root(0);
         assert_eq!(
@@ -181,7 +173,6 @@ mod tests {
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = vec![(2, 2)].into_iter().collect();
-        status_cache.register_hash(blockhash, 0);
         status_cache.insert(&blockhash, &sig, 0, ());
         status_cache.add_root(0);
         assert_eq!(
@@ -191,14 +182,13 @@ mod tests {
     }
 
     #[test]
-    fn test_register_picks_latest() {
+    fn test_insert_picks_latest_blockhash_fork() {
         let sig = Signature::default();
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = vec![(0, 0)].into_iter().collect();
-        status_cache.register_hash(blockhash, 0);
-        status_cache.register_hash(blockhash, 1);
         status_cache.insert(&blockhash, &sig, 0, ());
+        status_cache.insert(&blockhash, &sig, 1, ());
         for i in 0..(MAX_CACHE_ENTRIES + 1) {
             status_cache.add_root(i as u64);
         }
@@ -213,7 +203,6 @@ mod tests {
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = HashMap::new();
-        status_cache.register_hash(blockhash, 0);
         status_cache.insert(&blockhash, &sig, 0, ());
         for i in 0..(MAX_CACHE_ENTRIES + 1) {
             status_cache.add_root(i as u64);
@@ -234,7 +223,6 @@ mod tests {
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = HashMap::new();
-        status_cache.register_hash(blockhash, 0);
         status_cache.insert(&blockhash, &sig, 0, ());
         status_cache.add_root(0);
         status_cache.clear_signatures();
@@ -250,7 +238,6 @@ mod tests {
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         let ancestors = HashMap::new();
-        status_cache.register_hash(blockhash, 0);
         status_cache.add_root(0);
         status_cache.clear_signatures();
         status_cache.insert(&blockhash, &sig, 0, ());
