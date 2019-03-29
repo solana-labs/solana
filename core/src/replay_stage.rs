@@ -220,11 +220,8 @@ impl ReplayStage {
 
             assert!(start_slot_bank.is_frozen());
 
-            let next_leader_slot = leader_schedule_utils::next_leader_slot(
-                &my_id,
-                start_slot_bank.slot(),
-                &start_slot_bank,
-            );
+            let next_leader_slot =
+                leader_schedule_utils::next_leader_slot(&my_id, poh_slot, &start_slot_bank);
             trace!("poh slot skipped, reset start slot to: {}", start_slot);
             let mut poh = poh_recorder.lock().unwrap();
             poh.reset(
