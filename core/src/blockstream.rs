@@ -4,7 +4,9 @@
 
 use crate::entry::Entry;
 use crate::result::Result;
+use bincode::serialize;
 use chrono::{SecondsFormat, Utc};
+use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::cell::RefCell;
@@ -91,7 +93,17 @@ where
         leader_id: &Pubkey,
         entry: &Entry,
     ) -> Result<()> {
-        let json_entry = serde_json::to_string(&entry)?;
+        let transactions: Vec<Vec<u8>> = entry
+            .transactions
+            .iter()
+            .map(|tx| serialize(&tx).unwrap())
+            .collect();
+        let stream_entry = json!({
+            "num_hashes": entry.num_hashes,
+            "hash": entry.hash,
+            "transactions": transactions
+        });
+        let json_entry = serde_json::to_string(&stream_entry)?;
         let payload = format!(
             r#"{{"dt":"{}","t":"entry","s":{},"h":{},"l":"{:?}","entry":{}}}"#,
             Utc::now().to_rfc3339_opts(SecondsFormat::Nanos, true),
