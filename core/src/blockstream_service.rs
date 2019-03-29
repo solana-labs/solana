@@ -109,6 +109,7 @@ mod test {
     use super::*;
     use crate::blocktree::create_new_tmp_ledger;
     use crate::entry::{create_ticks, Entry};
+    use bincode::deserialize;
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
     use solana_sdk::genesis_block::GenesisBlock;
@@ -182,13 +183,28 @@ mod test {
             assert_eq!(height, expected_tick_heights[i]);
             let entry_obj = json["entry"].clone();
             let tx = entry_obj["transactions"].as_array().unwrap();
+            let entry: Entry;
             if tx.len() == 0 {
-                // TODO: There is a bug in Transaction deserialize methods such that
-                // `serde_json::from_str` does not work for populated Entries.
-                // Remove this `if` when fixed.
-                let entry: Entry = serde_json::from_value(entry_obj).unwrap();
-                assert_eq!(entry, expected_entries[i]);
+                entry = serde_json::from_value(entry_obj).unwrap();
+            } else {
+                let entry_json = entry_obj.as_object().unwrap();
+                entry = Entry {
+                    num_hashes: entry_json.get("num_hashes").unwrap().as_u64().unwrap(),
+                    hash: serde_json::from_value(entry_json.get("hash").unwrap().clone()).unwrap(),
+                    transactions: entry_json
+                        .get("transactions")
+                        .unwrap()
+                        .as_array()
+                        .unwrap()
+                        .into_iter()
+                        .map(|tx| {
+                            let tx_vec: Vec<u8> = serde_json::from_value(tx.clone()).unwrap();
+                            deserialize(&tx_vec).unwrap()
+                        })
+                        .collect(),
+                };
             }
+            assert_eq!(entry, expected_entries[i]);
         }
         for json in block_events {
             let slot = json["s"].as_u64().unwrap();
