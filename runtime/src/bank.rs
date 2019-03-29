@@ -358,7 +358,7 @@ impl Bank {
                 Ok(_) => {
                     if !tx.signatures.is_empty() {
                         status_cache.insert(
-                            &tx.recent_blockhash,
+                            &tx.message().recent_blockhash,
                             &tx.signatures[0],
                             self.slot(),
                             Ok(()),
@@ -371,7 +371,7 @@ impl Bank {
                 Err(e) => {
                     if !tx.signatures.is_empty() {
                         status_cache.insert(
-                            &tx.recent_blockhash,
+                            &tx.message().recent_blockhash,
                             &tx.signatures[0],
                             self.slot(),
                             Err(e.clone()),
@@ -529,7 +529,11 @@ impl Bank {
                 }
                 if lock_res.is_ok()
                     && rcache
-                        .get_signature_status(&tx.signatures[0], &tx.recent_blockhash, &ancestors)
+                        .get_signature_status(
+                            &tx.signatures[0],
+                            &tx.message().recent_blockhash,
+                            &ancestors,
+                        )
                         .is_some()
                 {
                     error_counters.duplicate_signature += 1;
