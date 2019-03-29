@@ -34,15 +34,12 @@ impl<T: Clone> StatusCache<T> {
         transaction_blockhash: &Hash,
         ancestors: &HashMap<ForkId, usize>,
     ) -> Option<(ForkId, T)> {
-        self.cache
-            .get(transaction_blockhash)
-            .and_then(|(_, sigmap)| sigmap.get(sig))
-            .and_then(|stored_forks| {
-                stored_forks
-                    .iter()
-                    .filter(|(f, _)| ancestors.get(f).is_some() || self.roots.get(f).is_some())
-                    .nth(0)
-            })
+        let (_, sigmap) = self.cache.get(transaction_blockhash)?;
+        let stored_forks = sigmap.get(sig)?;
+        stored_forks
+            .iter()
+            .filter(|(f, _)| ancestors.get(f).is_some() || self.roots.get(f).is_some())
+            .nth(0)
             .cloned()
     }
 
