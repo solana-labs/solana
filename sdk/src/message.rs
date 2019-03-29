@@ -70,7 +70,9 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Message {
-    pub num_signatures: u8,
+    /// The number of signatures required for this message to be considered valid. The
+    /// signatures must match the first `num_required_signatures` of `account_keys`.
+    pub num_required_signatures: u8,
 
     /// All the account keys used by this transaction
     #[serde(with = "short_vec")]
@@ -94,7 +96,7 @@ pub struct Message {
 
 impl Message {
     pub fn new_with_compiled_instructions(
-        num_signatures: u8,
+        num_required_signatures: u8,
         account_keys: Vec<Pubkey>,
         recent_blockhash: Hash,
         fee: u64,
@@ -102,7 +104,7 @@ impl Message {
         instructions: Vec<CompiledInstruction>,
     ) -> Self {
         Self {
-            num_signatures,
+            num_required_signatures,
             account_keys,
             recent_blockhash,
             fee,
@@ -111,15 +113,14 @@ impl Message {
         }
     }
 
-    /// Return an unsigned transaction with space for requires signatures.
     pub fn new(instructions: Vec<Instruction>) -> Self {
         let program_ids = get_program_ids(&instructions);
         let (mut signed_keys, unsigned_keys) = get_keys(&instructions);
-        let num_signatures = signed_keys.len() as u8;
+        let num_required_signatures = signed_keys.len() as u8;
         signed_keys.extend(&unsigned_keys);
         let instructions = compile_instructions(instructions, &signed_keys, &program_ids);
         Self::new_with_compiled_instructions(
-            num_signatures,
+            num_required_signatures,
             signed_keys,
             Hash::default(),
             0,
@@ -240,11 +241,11 @@ mod tests {
         let id0 = Pubkey::default();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]);
         let message = Message::new(vec![ix]);
-        assert_eq!(message.num_signatures, 0);
+        assert_eq!(message.num_required_signatures, 0);
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let message = Message::new(vec![ix]);
-        assert_eq!(message.num_signatures, 1);
+        assert_eq!(message.num_required_signatures, 1);
     }
 
     #[test]
