@@ -352,7 +352,7 @@ impl Bank {
 
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
-        self.status_cache.write().unwrap().clear();
+        self.status_cache.write().unwrap().clear_signatures();
     }
 
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
@@ -436,10 +436,7 @@ impl Bank {
 
         // Register a new block hash if at the last tick in the slot
         if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
-            {
-                let mut blockhash_queue = self.blockhash_queue.write().unwrap();
-                blockhash_queue.register_hash(hash);
-            }
+            self.blockhash_queue.write().unwrap().register_hash(hash);
             self.status_cache
                 .write()
                 .unwrap()

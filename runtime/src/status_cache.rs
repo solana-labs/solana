@@ -95,8 +95,10 @@ impl<T: Clone> StatusCache<T> {
     }
 
     /// Clear for testing
-    pub fn clear(&mut self) {
-        self.cache.clear();
+    pub fn clear_signatures(&mut self) {
+        for v in self.cache.values_mut() {
+            v.1 = HashMap::new();
+        }
     }
 }
 
@@ -227,7 +229,7 @@ mod tests {
     }
 
     #[test]
-    fn test_clear() {
+    fn test_clear_signatures_sigs_are_gone() {
         let sig = Signature::default();
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
@@ -235,14 +237,25 @@ mod tests {
         status_cache.register_hash(blockhash, 0);
         status_cache.insert(&blockhash, &sig, 0, ());
         status_cache.add_root(0);
-        status_cache.clear();
+        status_cache.clear_signatures();
         assert_eq!(
             status_cache.get_signature_status(&sig, &blockhash, &ancestors),
             None
         );
-        assert_eq!(
-            status_cache.get_signature_status_slow(&sig, &ancestors),
-            None
-        );
+    }
+
+    #[test]
+    fn test_clear_signatures_insert_works() {
+        let sig = Signature::default();
+        let mut status_cache = BankStatusCache::default();
+        let blockhash = hash(Hash::default().as_ref());
+        let ancestors = HashMap::new();
+        status_cache.register_hash(blockhash, 0);
+        status_cache.add_root(0);
+        status_cache.clear_signatures();
+        status_cache.insert(&blockhash, &sig, 0, ());
+        assert!(status_cache
+            .get_signature_status(&sig, &blockhash, &ancestors)
+            .is_some());
     }
 }
