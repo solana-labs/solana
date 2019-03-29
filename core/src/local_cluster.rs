@@ -329,7 +329,6 @@ impl LocalCluster {
                 &[from_account.as_ref()],
                 instructions,
                 client.get_recent_blockhash().unwrap(),
-                1,
             );
 
             client
@@ -347,7 +346,6 @@ impl LocalCluster {
                 &[vote_account],
                 vec![vote_instruction],
                 client.get_recent_blockhash().unwrap(),
-                1,
             );
 
             client

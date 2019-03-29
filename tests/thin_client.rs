@@ -127,7 +127,7 @@ fn test_register_vote_account() {
     let instructions =
         VoteInstruction::new_account(&validator_keypair.pubkey(), &vote_account_id, 1);
     let transaction =
-        Transaction::new_signed_instructions(&[&validator_keypair], instructions, blockhash, 1);
+        Transaction::new_signed_instructions(&[&validator_keypair], instructions, blockhash);
     let signature = client.transfer_signed(&transaction).unwrap();
     client.poll_for_signature(&signature).unwrap();
 

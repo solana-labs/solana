@@ -344,7 +344,7 @@ fn process_configure_staking(
             &authorized_voter_id,
         ));
     }
-    let mut tx = Transaction::new_signed_instructions(&[&config.id], ixs, recent_blockhash, 0);
+    let mut tx = Transaction::new_signed_instructions(&[&config.id], ixs, recent_blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
     Ok(signature_str.to_string())
 }
@@ -357,7 +357,7 @@ fn process_create_staking(
 ) -> ProcessResult {
     let recent_blockhash = rpc_client.get_recent_blockhash()?;
     let ixs = VoteInstruction::new_account(&config.id.pubkey(), voting_account_id, lamports);
-    let mut tx = Transaction::new_signed_instructions(&[&config.id], ixs, recent_blockhash, 0);
+    let mut tx = Transaction::new_signed_instructions(&[&config.id], ixs, recent_blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
     Ok(signature_str.to_string())
 }
@@ -417,15 +417,14 @@ fn process_deploy(
                 (i * USERDATA_CHUNK_SIZE) as u32,
                 chunk.to_vec(),
             );
-            Transaction::new_signed_instructions(&[&program_id], vec![instruction], blockhash, 0)
+            Transaction::new_signed_instructions(&[&program_id], vec![instruction], blockhash)
         })
         .collect();
     rpc_client.send_and_confirm_transactions(write_transactions, &program_id)?;
 
     trace!("Finalizing program account");
     let instruction = LoaderInstruction::new_finalize(&program_id.pubkey(), &bpf_loader::id());
-    let mut tx =
-        Transaction::new_signed_instructions(&[&program_id], vec![instruction], blockhash, 0);
+    let mut tx = Transaction::new_signed_instructions(&[&program_id], vec![instruction], blockhash);
     rpc_client
         .send_and_confirm_transaction(&mut tx, &program_id)
         .map_err(|_| {
@@ -473,7 +472,7 @@ fn process_pay(
             cancelable,
             lamports,
         );
-        let mut tx = Transaction::new_signed_instructions(&[&config.id], ixs, blockhash, 0);
+        let mut tx = Transaction::new_signed_instructions(&[&config.id], ixs, blockhash);
         let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
 
         Ok(json!({
@@ -503,7 +502,7 @@ fn process_pay(
             cancelable,
             lamports,
         );
-        let mut tx = Transaction::new_signed_instructions(&[&config.id], ixs, blockhash, 0);
+        let mut tx = Transaction::new_signed_instructions(&[&config.id], ixs, blockhash);
         let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
 
         Ok(json!({
@@ -520,7 +519,7 @@ fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey
     let blockhash = rpc_client.get_recent_blockhash()?;
     let ix =
         BudgetInstruction::new_apply_signature(&config.id.pubkey(), pubkey, &config.id.pubkey());
-    let mut tx = Transaction::new_signed_instructions(&[&config.id], vec![ix], blockhash, 0);
+    let mut tx = Transaction::new_signed_instructions(&[&config.id], vec![ix], blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
     Ok(signature_str.to_string())
 }
@@ -547,7 +546,7 @@ fn process_time_elapsed(
     let blockhash = rpc_client.get_recent_blockhash()?;
 
     let ix = BudgetInstruction::new_apply_timestamp(&config.id.pubkey(), pubkey, to, dt);
-    let mut tx = Transaction::new_signed_instructions(&[&config.id], vec![ix], blockhash, 0);
+    let mut tx = Transaction::new_signed_instructions(&[&config.id], vec![ix], blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
 
     Ok(signature_str.to_string())
@@ -568,7 +567,7 @@ fn process_witness(
 
     let blockhash = rpc_client.get_recent_blockhash()?;
     let ix = BudgetInstruction::new_apply_signature(&config.id.pubkey(), pubkey, to);
-    let mut tx = Transaction::new_signed_instructions(&[&config.id], vec![ix], blockhash, 0);
+    let mut tx = Transaction::new_signed_instructions(&[&config.id], vec![ix], blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.id)?;
 
     Ok(signature_str.to_string())

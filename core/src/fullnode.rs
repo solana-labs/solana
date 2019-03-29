@@ -340,14 +340,13 @@ pub fn make_active_set_entries(
         &[active_keypair.as_ref()],
         new_vote_account_ixs,
         *blockhash,
-        1,
     );
     let new_vote_account_entry = next_entry_mut(&mut last_entry_hash, 1, vec![new_vote_account_tx]);
 
     // 3) Create vote entry
     let vote_ix = VoteInstruction::new_vote(&voting_keypair.pubkey(), Vote::new(slot_to_vote_on));
     let vote_tx =
-        Transaction::new_signed_instructions(&[&voting_keypair], vec![vote_ix], *blockhash, 0);
+        Transaction::new_signed_instructions(&[&voting_keypair], vec![vote_ix], *blockhash);
     let vote_entry = next_entry_mut(&mut last_entry_hash, 1, vec![vote_tx]);
 
     // 4) Create `num_ending_ticks` empty ticks

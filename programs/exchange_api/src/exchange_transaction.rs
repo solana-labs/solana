@@ -15,7 +15,7 @@ impl ExchangeTransaction {
         owner: &Keypair,
         new: &Pubkey,
         recent_blockhash: Hash,
-        fee: u64,
+        _fee: u64,
     ) -> Transaction {
         let owner_id = &owner.pubkey();
         let space = mem::size_of::<ExchangeState>() as u64;
@@ -25,7 +25,6 @@ impl ExchangeTransaction {
             &[owner],
             vec![create_ix, request_ix],
             recent_blockhash,
-            fee,
         )
     }
 
@@ -36,12 +35,12 @@ impl ExchangeTransaction {
         token: Token,
         tokens: u64,
         recent_blockhash: Hash,
-        fee: u64,
+        _fee: u64,
     ) -> Transaction {
         let owner_id = &owner.pubkey();
         let request_ix =
             ExchangeInstruction::new_transfer_request(owner_id, to, from, token, tokens);
-        Transaction::new_signed_instructions(&[owner], vec![request_ix], recent_blockhash, fee)
+        Transaction::new_signed_instructions(&[owner], vec![request_ix], recent_blockhash)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -55,7 +54,7 @@ impl ExchangeTransaction {
         src_account: &Pubkey,
         dst_account: &Pubkey,
         recent_blockhash: Hash,
-        fee: u64,
+        _fee: u64,
     ) -> Transaction {
         let owner_id = &owner.pubkey();
         let space = mem::size_of::<ExchangeState>() as u64;
@@ -74,7 +73,6 @@ impl ExchangeTransaction {
             &[owner],
             vec![create_ix, request_ix],
             recent_blockhash,
-            fee,
         )
     }
 
@@ -83,11 +81,11 @@ impl ExchangeTransaction {
         trade: &Pubkey,
         account: &Pubkey,
         recent_blockhash: Hash,
-        fee: u64,
+        _fee: u64,
     ) -> Transaction {
         let owner_id = &owner.pubkey();
         let request_ix = ExchangeInstruction::new_trade_cancellation(owner_id, trade, account);
-        Transaction::new_signed_instructions(&[owner], vec![request_ix], recent_blockhash, fee)
+        Transaction::new_signed_instructions(&[owner], vec![request_ix], recent_blockhash)
     }
 
     pub fn new_swap_request(
@@ -99,7 +97,7 @@ impl ExchangeTransaction {
         from_trade_account: &Pubkey,
         profit_account: &Pubkey,
         recent_blockhash: Hash,
-        fee: u64,
+        _fee: u64,
     ) -> Transaction {
         let owner_id = &owner.pubkey();
         let space = mem::size_of::<ExchangeState>() as u64;
@@ -117,7 +115,6 @@ impl ExchangeTransaction {
             &[owner],
             vec![create_ix, request_ix],
             recent_blockhash,
-            fee,
         )
     }
 }

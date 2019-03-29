@@ -85,7 +85,6 @@ impl Transaction {
         from_keypairs: &[&T],
         instructions: Vec<Instruction>,
         recent_blockhash: Hash,
-        _fee: u64,
     ) -> Transaction {
         let message = Message::new(instructions);
         Self::new(from_keypairs, message, recent_blockhash)
@@ -93,17 +92,15 @@ impl Transaction {
 
     /// Create a signed transaction
     /// * `from_keypairs` - The keys used to sign the transaction.
-    /// * `account_keys` - The keys for the transaction.  These are the program state
+    /// * `keys` - The keys for the transaction.  These are the program state
     ///    instances or lamport recipient keys.
     /// * `recent_blockhash` - The PoH hash.
-    /// * `fee` - The transaction fee.
     /// * `program_ids` - The keys that identify programs used in the `instruction` vector.
     /// * `instructions` - Instructions that will be executed atomically.
     pub fn new_with_compiled_instructions<T: KeypairUtil>(
         from_keypairs: &[&T],
         keys: &[Pubkey],
         recent_blockhash: Hash,
-        _fee: u64,
         program_ids: Vec<Pubkey>,
         instructions: Vec<CompiledInstruction>,
     ) -> Self {
@@ -225,7 +222,6 @@ mod tests {
             &[&key],
             &[key1, key2],
             Hash::default(),
-            0,
             vec![prog1, prog2],
             instructions,
         );
@@ -260,7 +256,6 @@ mod tests {
             &[&key],
             &[],
             Hash::default(),
-            0,
             vec![],
             instructions,
         );
@@ -274,7 +269,6 @@ mod tests {
             &[&key],
             &[],
             Hash::default(),
-            0,
             vec![Pubkey::default()],
             instructions,
         );

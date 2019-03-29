@@ -1031,7 +1031,6 @@ mod tests {
             &[&mint_keypair],
             instructions,
             genesis_block.hash(),
-            0,
         );
         assert_eq!(
             bank.process_transaction(&tx).unwrap_err(),
@@ -1057,7 +1056,6 @@ mod tests {
             &[&mint_keypair],
             instructions,
             genesis_block.hash(),
-            0,
         );
         bank.process_transaction(&tx).unwrap();
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
@@ -1614,7 +1612,6 @@ mod tests {
             &Vec::<&Keypair>::new(),
             vec![move_instruction],
             bank.last_blockhash(),
-            0,
         );
 
         assert_eq!(bank.process_transaction(&tx), Ok(()));

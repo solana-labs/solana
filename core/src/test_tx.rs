@@ -18,7 +18,6 @@ pub fn test_multisig_tx() -> Transaction {
     let keypair1 = Keypair::new();
     let keypairs = vec![&keypair0, &keypair1];
     let lamports = 5;
-    let fee = 2;
     let blockhash = Hash::default();
 
     let system_instruction = SystemInstruction::Move { lamports };
@@ -31,7 +30,6 @@ pub fn test_multisig_tx() -> Transaction {
         &keypairs,
         &[],
         blockhash,
-        fee,
         program_ids,
         instructions,
     )

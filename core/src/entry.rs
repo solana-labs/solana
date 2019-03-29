@@ -381,7 +381,7 @@ pub fn make_tiny_test_entries_from_hash(start: &Hash, num: usize) -> Vec<Entry> 
     (0..num)
         .map(|_| {
             let ix = BudgetInstruction::new_apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
-            let tx = Transaction::new_signed_instructions(&[&keypair], vec![ix], *start, 0);
+            let tx = Transaction::new_signed_instructions(&[&keypair], vec![ix], *start);
             Entry::new_mut(&mut hash, &mut num_hashes, vec![tx])
         })
         .collect()
@@ -400,7 +400,7 @@ pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
     let pubkey = keypair.pubkey();
 
     let ix = BudgetInstruction::new_apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
-    let tx = Transaction::new_signed_instructions(&[&keypair], vec![ix], one, 0);
+    let tx = Transaction::new_signed_instructions(&[&keypair], vec![ix], one);
 
     let serialized_size = serialized_size(&tx).unwrap();
     let num_txs = BLOB_DATA_SIZE / serialized_size as usize;
@@ -457,25 +457,25 @@ mod tests {
     fn create_sample_payment(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
         let ixs = BudgetInstruction::new_payment(&pubkey, &pubkey, 1);
-        Transaction::new_signed_instructions(&[keypair], ixs, hash, 0)
+        Transaction::new_signed_instructions(&[keypair], ixs, hash)
     }
 
     fn create_sample_timestamp(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
         let ix = BudgetInstruction::new_apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
-        Transaction::new_signed_instructions(&[keypair], vec![ix], hash, 0)
+        Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
     }
 
     fn create_sample_signature(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
         let ix = BudgetInstruction::new_apply_signature(&pubkey, &pubkey, &pubkey);
-        Transaction::new_signed_instructions(&[keypair], vec![ix], hash, 0)
+        Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
     }
 
     fn create_sample_vote(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
         let ix = VoteInstruction::new_vote(&pubkey, Vote::new(1));
-        Transaction::new_signed_instructions(&[keypair], vec![ix], hash, 0)
+        Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
     }
 
     #[test]
