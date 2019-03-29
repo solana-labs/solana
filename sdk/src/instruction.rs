@@ -67,7 +67,7 @@ impl InstructionError {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Instruction {
     /// Pubkey of the instruction processor that executes this instruction
     pub program_ids_index: Pubkey,
@@ -93,7 +93,7 @@ impl Instruction {
 }
 
 /// Account metadata used to define Instructions
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AccountMeta {
     /// An account's public key
     pub pubkey: Pubkey,

@@ -7,6 +7,7 @@ use log::*;
 use rand::{thread_rng, Rng};
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
@@ -611,11 +612,12 @@ impl AccountsDB {
         &self,
         fork: Fork,
         tx: &Transaction,
+        fee: u64,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<Account>> {
         // Copy all the accounts
         let message = tx.message();
-        if tx.signatures.is_empty() && message.fee != 0 {
+        if tx.signatures.is_empty() && fee != 0 {
             Err(TransactionError::MissingSignatureForFee)
         } else {
             // Check for unique account keys
@@ -633,11 +635,11 @@ impl AccountsDB {
             if called_accounts.is_empty() || called_accounts[0].lamports == 0 {
                 error_counters.account_not_found += 1;
                 Err(TransactionError::AccountNotFound)
-            } else if called_accounts[0].lamports < message.fee {
+            } else if called_accounts[0].lamports < fee {
                 error_counters.insufficient_funds += 1;
                 Err(TransactionError::InsufficientFundsForFee)
             } else {
-                called_accounts[0].lamports -= message.fee;
+                called_accounts[0].lamports -= fee;
                 Ok(called_accounts)
             }
         }
@@ -711,13 +713,15 @@ impl AccountsDB {
         fork: Fork,
         txs: &[Transaction],
         lock_results: Vec<Result<()>>,
+        fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 (tx, Ok(())) => {
-                    let accounts = self.load_tx_accounts(fork, tx, error_counters)?;
+                    let fee = fee_calculator.calculate_fee(tx.message());
+                    let accounts = self.load_tx_accounts(fork, tx, fee, error_counters)?;
                     let loaders = self.load_loaders(fork, tx, error_counters)?;
                     Ok((accounts, loaders))
                 }
@@ -943,10 +947,11 @@ impl Accounts {
         fork: Fork,
         txs: &[Transaction],
         results: Vec<Result<()>>,
+        fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         self.accounts_db
-            .load_accounts(fork, txs, results, error_counters)
+            .load_accounts(fork, txs, results, fee_calculator, error_counters)
     }
 
     /// Store the accounts into the DB
@@ -1006,9 +1011,10 @@ mod tests {
         });
     }
 
-    fn load_accounts(
+    fn load_accounts_with_fee(
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
+        fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         let accounts = Accounts::new(0, None);
@@ -1016,8 +1022,17 @@ mod tests {
             accounts.store_slow(0, &ka.0, &ka.1);
         }
 
-        let res = accounts.load_accounts(0, &[tx], vec![Ok(())], error_counters);
+        let res = accounts.load_accounts(0, &[tx], vec![Ok(())], &fee_calculator, error_counters);
         res
+    }
+
+    fn load_accounts(
+        tx: Transaction,
+        ka: &Vec<(Pubkey, Account)>,
+        error_counters: &mut ErrorCounters,
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+        let fee_calculator = FeeCalculator::default();
+        load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
     }
 
     #[test]
@@ -1119,7 +1134,11 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+        let fee_calculator = FeeCalculator::new(10);
+        assert_eq!(fee_calculator.calculate_fee(tx.message()), 10);
+
+        let loaded_accounts =
+            load_accounts_with_fee(tx, &accounts, &fee_calculator, &mut error_counters);
 
         assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);

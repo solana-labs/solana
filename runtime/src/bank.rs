@@ -12,6 +12,7 @@ use hashbrown::HashMap;
 use log::*;
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{extend_and_hash, Hash};
 use solana_sdk::native_loader;
@@ -142,6 +143,9 @@ pub struct Bank {
 
     /// The pubkey to send transactions fees to.
     collector_id: Pubkey,
+
+    /// An object to calculate transaction fees.
+    pub fee_calculator: FeeCalculator,
 
     /// initialized from genesis
     epoch_schedule: EpochSchedule,
@@ -465,8 +469,13 @@ impl Bank {
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        self.accounts
-            .load_accounts(self.accounts_id, txs, results, error_counters)
+        self.accounts.load_accounts(
+            self.accounts_id,
+            txs,
+            results,
+            &self.fee_calculator,
+            error_counters,
+        )
     }
     fn check_refs(
         &self,
@@ -659,16 +668,17 @@ impl Bank {
             .iter()
             .zip(executed.iter())
             .map(|(tx, res)| {
+                let fee = self.fee_calculator.calculate_fee(tx.message());
                 let message = tx.message();
                 match *res {
                     Err(TransactionError::InstructionError(_, _)) => {
                         // Charge the transaction fee even in case of InstructionError
-                        self.withdraw(&message.account_keys[0], message.fee)?;
-                        fees += message.fee;
+                        self.withdraw(&message.account_keys[0], fee)?;
+                        fees += fee;
                         Ok(())
                     }
                     Ok(()) => {
-                        fees += message.fee;
+                        fees += fee;
                         Ok(())
                     }
                     _ => res.clone(),
@@ -1059,7 +1069,9 @@ mod tests {
     #[test]
     fn test_detect_failed_duplicate_transactions() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
-        let bank = Bank::new(&genesis_block);
+        let mut bank = Bank::new(&genesis_block);
+        bank.fee_calculator.lamports_per_signature = 1;
+
         let dest = Keypair::new();
 
         // source with 0 program context
@@ -1068,7 +1080,7 @@ mod tests {
             &dest.pubkey(),
             2,
             genesis_block.hash(),
-            1,
+            0,
         );
         let signature = tx.signatures[0];
         assert!(!bank.has_signature(&signature));
@@ -1176,19 +1188,22 @@ mod tests {
     fn test_bank_tx_fee() {
         let leader = Keypair::new().pubkey();
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, &leader, 3);
-        let bank = Bank::new(&genesis_block);
+        let mut bank = Bank::new(&genesis_block);
+        bank.fee_calculator.lamports_per_signature = 3;
+
         let key1 = Keypair::new();
         let key2 = Keypair::new();
 
         let tx =
-            SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 2, genesis_block.hash(), 3);
+            SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 2, genesis_block.hash(), 0);
         let initial_balance = bank.get_balance(&leader);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(bank.get_balance(&leader), initial_balance + 3);
         assert_eq!(bank.get_balance(&key1.pubkey()), 2);
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5 - 3);
 
-        let tx = SystemTransaction::new_move(&key1, &key2.pubkey(), 1, genesis_block.hash(), 1);
+        bank.fee_calculator.lamports_per_signature = 1;
+        let tx = SystemTransaction::new_move(&key1, &key2.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(bank.get_balance(&leader), initial_balance + 4);
         assert_eq!(bank.get_balance(&key1.pubkey()), 0);
@@ -1200,13 +1215,13 @@ mod tests {
     fn test_filter_program_errors_and_collect_fee() {
         let leader = Keypair::new().pubkey();
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, &leader, 3);
-        let bank = Bank::new(&genesis_block);
+        let mut bank = Bank::new(&genesis_block);
 
         let key = Keypair::new();
         let tx1 =
-            SystemTransaction::new_move(&mint_keypair, &key.pubkey(), 2, genesis_block.hash(), 3);
+            SystemTransaction::new_move(&mint_keypair, &key.pubkey(), 2, genesis_block.hash(), 0);
         let tx2 =
-            SystemTransaction::new_move(&mint_keypair, &key.pubkey(), 5, genesis_block.hash(), 1);
+            SystemTransaction::new_move(&mint_keypair, &key.pubkey(), 5, genesis_block.hash(), 0);
 
         let results = vec![
             Ok(()),
@@ -1216,9 +1231,10 @@ mod tests {
             )),
         ];
 
+        bank.fee_calculator.lamports_per_signature = 2;
         let initial_balance = bank.get_balance(&leader);
         let results = bank.filter_program_errors_and_collect_fee(&vec![tx1, tx2], &results);
-        assert_eq!(bank.get_balance(&leader), initial_balance + 3 + 1);
+        assert_eq!(bank.get_balance(&leader), initial_balance + 2 + 2);
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Ok(()));
     }
@@ -1586,28 +1602,20 @@ mod tests {
     fn test_zero_signatures() {
         solana_logger::setup();
         let (genesis_block, mint_keypair) = GenesisBlock::new(500);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let mut bank = Bank::new(&genesis_block);
+        bank.fee_calculator.lamports_per_signature = 2;
         let key = Keypair::new();
 
         let mut move_instruction =
-            SystemInstruction::new_move(&mint_keypair.pubkey(), &key.pubkey(), 1);
+            SystemInstruction::new_move(&mint_keypair.pubkey(), &key.pubkey(), 0);
         move_instruction.accounts[0].is_signer = false;
 
-        let mut tx = Transaction::new_signed_instructions(
+        let tx = Transaction::new_signed_instructions(
             &Vec::<&Keypair>::new(),
             vec![move_instruction],
             bank.last_blockhash(),
-            2,
+            0,
         );
-
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(TransactionError::MissingSignatureForFee)
-        );
-
-        // Set the fee to 0, this should give an InstructionError
-        // but since no signature we cannot look up the error.
-        tx.message.fee = 0;
 
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(bank.get_balance(&key.pubkey()), 0);
