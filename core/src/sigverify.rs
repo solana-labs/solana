@@ -122,18 +122,19 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
 
 pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u32, u32) {
     let (sig_len, sig_size) = decode_len(&packet.data);
-    let msg_start_offset = current_offset as usize + sig_size + sig_len * size_of::<Signature>();
+    let msg_start_offset = sig_size + sig_len * size_of::<Signature>();
 
     let (_pubkey_len, pubkey_size) = decode_len(&packet.data[msg_start_offset..]);
-    let pubkey_offset = msg_start_offset + pubkey_size;
 
     let sig_start = current_offset as usize + sig_size;
+    let msg_start = current_offset as usize + msg_start_offset;
+    let pubkey_start = msg_start + pubkey_size;
 
     (
         sig_len as u32,
         sig_start as u32,
-        msg_start_offset as u32,
-        pubkey_offset as u32,
+        msg_start as u32,
+        pubkey_start as u32,
     )
 }
 
@@ -418,6 +419,14 @@ mod tests {
     fn test_get_packet_offsets() {
         assert_eq!(get_packet_offsets_from_tx(test_tx(), 0), (1, 1, 64, 1));
         assert_eq!(get_packet_offsets_from_tx(test_tx(), 100), (1, 1, 64, 1));
+
+        // Ensure we're not indexing packet by the `current_offset` parameter.
+        assert_eq!(
+            get_packet_offsets_from_tx(test_tx(), 1_000_000),
+            (1, 1, 64, 1)
+        );
+
+        // Ensure we're returning sig_len, not sig_size.
         assert_eq!(
             get_packet_offsets_from_tx(test_multisig_tx(), 0),
             (2, 1, 128, 1)
