@@ -18,7 +18,7 @@ use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES, NUM_TICKS_PER_SECOND};
+use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Transaction, TransactionError};
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState};
@@ -105,7 +105,7 @@ impl EpochSchedule {
 
 pub type Result<T> = result::Result<T, TransactionError>;
 
-type BankStatusCache = StatusCache<TransactionError>;
+type BankStatusCache = StatusCache<Result<()>>;
 
 /// Manager for the state of all accounts and programs after processing its entries.
 #[derive(Default)]
@@ -117,7 +117,7 @@ pub struct Bank {
     accounts_id: u64,
 
     /// A cache of signature statuses
-    status_cache: RwLock<BankStatusCache>,
+    status_cache: Arc<RwLock<BankStatusCache>>,
 
     /// FIFO queue of `recent_blockhash` items
     blockhash_queue: RwLock<BlockhashQueue>,
@@ -173,14 +173,12 @@ impl Bank {
         let mut bank = Self::default();
         bank.accounts = Arc::new(Accounts::new(bank.slot, paths));
         bank.process_genesis_block(genesis_block);
-
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
         let vote_accounts: HashMap<_, _> = bank.vote_accounts().collect();
         for i in 0..=bank.get_stakers_epoch(bank.slot) {
             bank.epoch_vote_accounts.insert(i, vote_accounts.clone());
         }
-
         bank
     }
 
@@ -191,6 +189,8 @@ impl Bank {
 
         let mut bank = Self::default();
         bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
+        bank.status_cache = parent.status_cache.clone();
+
         bank.tick_height
             .store(parent.tick_height.load(Ordering::SeqCst), Ordering::SeqCst);
         bank.ticks_per_slot = parent.ticks_per_slot;
@@ -246,7 +246,6 @@ impl Bank {
             //  freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
         }
-        //        self.status_cache.write().unwrap().freeze();
     }
 
     /// squash the parent's state up into this Bank,
@@ -259,15 +258,9 @@ impl Bank {
 
         self.accounts.squash(self.accounts_id);
 
-        let parent_caches: Vec<_> = parents
+        parents
             .iter()
-            .map(|p| {
-                let mut parent = p.status_cache.write().unwrap();
-                parent.freeze();
-                parent
-            })
-            .collect();
-        self.status_cache.write().unwrap().squash(&parent_caches);
+            .for_each(|p| self.status_cache.write().unwrap().add_root(p.slot()));
     }
 
     /// Return the more recent checkpoint of this bank instance.
@@ -355,7 +348,7 @@ impl Bank {
 
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
-        self.status_cache.write().unwrap().clear();
+        self.status_cache.write().unwrap().clear_signatures();
     }
 
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
@@ -364,7 +357,12 @@ impl Bank {
             match &res[i] {
                 Ok(_) => {
                     if !tx.signatures.is_empty() {
-                        status_cache.add(&tx.signatures[0]);
+                        status_cache.insert(
+                            &tx.recent_blockhash,
+                            &tx.signatures[0],
+                            self.slot(),
+                            Ok(()),
+                        );
                     }
                 }
                 Err(TransactionError::BlockhashNotFound) => (),
@@ -372,8 +370,12 @@ impl Bank {
                 Err(TransactionError::AccountNotFound) => (),
                 Err(e) => {
                     if !tx.signatures.is_empty() {
-                        status_cache.add(&tx.signatures[0]);
-                        status_cache.save_failure_status(&tx.signatures[0], e.clone());
+                        status_cache.insert(
+                            &tx.recent_blockhash,
+                            &tx.signatures[0],
+                            self.slot(),
+                            Err(e.clone()),
+                        );
                     }
                 }
             }
@@ -430,12 +432,7 @@ impl Bank {
 
         // Register a new block hash if at the last tick in the slot
         if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
-            let mut blockhash_queue = self.blockhash_queue.write().unwrap();
-            blockhash_queue.register_hash(hash);
-        }
-
-        if current_tick_height % NUM_TICKS_PER_SECOND == 0 {
-            self.status_cache.write().unwrap().new_cache(hash);
+            self.blockhash_queue.write().unwrap().register_hash(hash);
         }
     }
 
@@ -515,16 +512,24 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let parents = self.parents();
-        let mut caches = vec![self.status_cache.read().unwrap()];
-        caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
+        let mut ancestors = HashMap::new();
+        ancestors.insert(self.slot(), 0);
+        self.parents().iter().enumerate().for_each(|(i, p)| {
+            ancestors.insert(p.slot(), i + 1);
+        });
+
+        let rcache = self.status_cache.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
                 if tx.signatures.is_empty() {
                     return lock_res;
                 }
-                if lock_res.is_ok() && StatusCache::has_signature_all(&caches, &tx.signatures[0]) {
+                if lock_res.is_ok()
+                    && rcache
+                        .get_signature_status(&tx.signatures[0], &tx.recent_blockhash, &ancestors)
+                        .is_some()
+                {
                     error_counters.duplicate_signature += 1;
                     Err(TransactionError::DuplicateSignature)
                 } else {
@@ -793,10 +798,13 @@ impl Bank {
         &self,
         signature: &Signature,
     ) -> Option<(usize, Result<()>)> {
-        let parents = self.parents();
-        let mut caches = vec![self.status_cache.read().unwrap()];
-        caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
-        StatusCache::get_signature_status_all(&caches, signature)
+        let mut ancestors = HashMap::new();
+        ancestors.insert(self.slot(), 0);
+        self.parents().iter().enumerate().for_each(|(i, p)| {
+            ancestors.insert(p.slot(), i + 1);
+        });
+        let rcache = self.status_cache.read().unwrap();
+        rcache.get_signature_status_slow(signature, &ancestors)
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
@@ -805,10 +813,7 @@ impl Bank {
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        let parents = self.parents();
-        let mut caches = vec![self.status_cache.read().unwrap()];
-        caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
-        StatusCache::has_signature_all(&caches, signature)
+        self.get_signature_confirmation_status(signature).is_some()
     }
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
@@ -1432,6 +1437,7 @@ mod tests {
     /// Verifies that last ids and accounts are correctly referenced from parent
     #[test]
     fn test_bank_squash() {
+        solana_logger::setup();
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let key1 = Keypair::new();
         let key2 = Keypair::new();
@@ -1439,10 +1445,23 @@ mod tests {
 
         let tx_move_mint_to_1 =
             SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        trace!("parent process tx ");
         assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
+        trace!("done parent process tx ");
         assert_eq!(parent.transaction_count(), 1);
+        assert_eq!(
+            parent.get_signature_status(&tx_move_mint_to_1.signatures[0]),
+            Some(Ok(()))
+        );
 
+        trace!("new form parent");
         let bank = new_from_parent(&parent);
+        trace!("done new form parent");
+        assert_eq!(
+            bank.get_signature_status(&tx_move_mint_to_1.signatures[0]),
+            Some(Ok(()))
+        );
+
         assert_eq!(bank.transaction_count(), parent.transaction_count());
         let tx_move_1_to_2 =
             SystemTransaction::new_move(&key1, &key2.pubkey(), 1, genesis_block.hash(), 0);
@@ -1459,6 +1478,7 @@ mod tests {
             assert_eq!(bank.get_balance(&key1.pubkey()), 0);
             assert_eq!(bank.get_account(&key1.pubkey()), None);
             assert_eq!(bank.get_balance(&key2.pubkey()), 1);
+            trace!("start");
             assert_eq!(
                 bank.get_signature_status(&tx_move_mint_to_1.signatures[0]),
                 Some(Ok(()))
@@ -1469,6 +1489,7 @@ mod tests {
             );
 
             // works iteration 0, no-ops on iteration 1 and 2
+            trace!("SQUASH");
             bank.squash();
 
             assert_eq!(parent.transaction_count(), 1);

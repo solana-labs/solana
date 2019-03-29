@@ -69,6 +69,10 @@ impl BlockhashQueue {
         self.last_hash = Some(*hash);
     }
 
+    fn check_age(hash_height: u64, max_age: usize, age: &HashAge) -> bool {
+        hash_height - age.hash_height <= max_age as u64
+    }
+
     pub fn register_hash(&mut self, hash: &Hash) {
         self.hash_height += 1;
         let hash_height = self.hash_height;
@@ -78,7 +82,7 @@ impl BlockhashQueue {
         let max_age = self.max_age;
         if self.ages.len() >= max_age {
             self.ages
-                .retain(|_, age| hash_height - age.hash_height <= max_age as u64);
+                .retain(|_, age| Self::check_age(hash_height, max_age, age));
         }
         self.ages.insert(
             *hash,
@@ -118,10 +122,10 @@ mod tests {
     }
     #[test]
     fn test_reject_old_last_hash() {
-        let last_hash = Hash::default();
         let mut hash_queue = BlockhashQueue::new(100);
-        for i in 0..100 {
-            let last_hash = hash(&serialize(&i).unwrap()); // Unique hash
+        let last_hash = hash(&serialize(&0).unwrap());
+        for i in 0..102 {
+            let last_hash = hash(&serialize(&i).unwrap());
             hash_queue.register_hash(&last_hash);
         }
         // Assert we're no longer able to use the oldest hash.
