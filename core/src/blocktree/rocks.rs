@@ -48,6 +48,12 @@ pub struct ErasureCf {
     db: Arc<Rocks>,
 }
 
+/// The detached heads column family
+#[derive(Debug)]
+pub struct DetachedHeadsCf {
+    db: Arc<Rocks>,
+}
+
 /// TODO: all this goes away with Blocktree
 pub struct EntryIterator {
     db_iterator: DBRawIterator,
@@ -82,10 +88,13 @@ impl Blocktree {
             ColumnFamilyDescriptor::new(super::DATA_CF, Blocktree::get_cf_options());
         let erasure_cf_descriptor =
             ColumnFamilyDescriptor::new(super::ERASURE_CF, Blocktree::get_cf_options());
+        let detached_heads_descriptor = 
+            ColumnFamilyDescriptor::new(super::DETACHED_HEADS_CF, Blocktree::get_cf_options());
         let cfs = vec![
             meta_cf_descriptor,
             data_cf_descriptor,
             erasure_cf_descriptor,
+            detached_heads_descriptor,
         ];
 
         // Open the database
@@ -104,11 +113,14 @@ impl Blocktree {
         // Create the erasure column family
         let erasure_cf = ErasureCf { db: db.clone() };
 
+        let detached_heads_cf = DetachedHeadsCf { db: db.clone() };
+
         Ok(Blocktree {
             db,
             meta_cf,
             data_cf,
             erasure_cf,
+            detached_heads_cf,
             new_blobs_signals: vec![],
         })
     }
@@ -300,6 +312,34 @@ impl LedgerColumnFamily<Rocks> for MetaCf {
 }
 
 impl IndexColumn<Rocks> for MetaCf {
+    type Index = u64;
+
+    fn index(key: &[u8]) -> u64 {
+        BigEndian::read_u64(&key[..8])
+    }
+
+    fn key(slot: &u64) -> Vec<u8> {
+        let mut key = vec![0; 8];
+        BigEndian::write_u64(&mut key[..], *slot);
+        key
+    }
+}
+
+impl LedgerColumnFamilyRaw<Rocks> for DetachedHeadsCf {
+    fn db(&self) -> &Arc<Rocks> {
+        &self.db
+    }
+
+    fn handle(&self) -> ColumnFamily {
+        self.db.cf_handle(super::DETACHED_HEADS_CF).unwrap()
+    }
+}
+
+impl LedgerColumnFamily<Rocks> for DetachedHeadsCf {
+    type ValueType = bool;
+}
+
+impl IndexColumn<Rocks> for DetachedHeadsCf {
     type Index = u64;
 
     fn index(key: &[u8]) -> u64 {

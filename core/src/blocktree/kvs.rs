@@ -31,6 +31,12 @@ pub struct ErasureCf {
     db: Arc<Kvs>,
 }
 
+/// The detached heads column family
+#[derive(Debug)]
+pub struct DetachedHeadsCf {
+    db: Arc<Kvs>,
+}
+
 /// Dummy struct to get things compiling
 /// TODO: all this goes away with Blocktree
 pub struct EntryIterator(i32);
@@ -195,6 +201,34 @@ impl LedgerColumnFamily<Kvs> for MetaCf {
 }
 
 impl IndexColumn<Kvs> for MetaCf {
+    type Index = u64;
+
+    fn index(key: &Key) -> u64 {
+        BigEndian::read_u64(&key.0[8..16])
+    }
+
+    fn key(slot: &u64) -> Key {
+        let mut key = Key::default();
+        BigEndian::write_u64(&mut key.0[8..16], *slot);
+        key
+    }
+}
+
+impl LedgerColumnFamilyRaw<Kvs> for DetachedHeadsCf {
+    fn db(&self) -> &Arc<Kvs> {
+        &self.db
+    }
+
+    fn handle(&self) -> ColumnFamily {
+        self.db.cf_handle(super::DETACHED_HEADS_CF).unwrap()
+    }
+}
+
+impl LedgerColumnFamily<Kvs> for DetachedHeadsCf {
+    type ValueType = bool;
+}
+
+impl IndexColumn<Kvs> for DetachedHeadsCf {
     type Index = u64;
 
     fn index(key: &Key) -> u64 {
