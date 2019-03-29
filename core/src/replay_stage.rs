@@ -320,7 +320,6 @@ impl ReplayStage {
                 &[voting_keypair.as_ref()],
                 vec![vote_ix],
                 bank.last_blockhash(),
-                0,
             );
             if let Some(new_root) = locktower.record_vote(bank.slot()) {
                 bank_forks.write().unwrap().set_root(new_root);
@@ -657,7 +656,6 @@ mod test {
                 &[voting_keypair.as_ref()],
                 vec![vote_ix],
                 bank.last_blockhash(),
-                0,
             );
             cluster_info_me.write().unwrap().push_vote(vote_tx);
 

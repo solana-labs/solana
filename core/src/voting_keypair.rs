@@ -114,7 +114,7 @@ pub mod tests {
 
     fn process_instructions<T: KeypairUtil>(bank: &Bank, keypairs: &[&T], ixs: Vec<Instruction>) {
         let blockhash = bank.last_blockhash();
-        let tx = Transaction::new_signed_instructions(keypairs, ixs, blockhash, 0);
+        let tx = Transaction::new_signed_instructions(keypairs, ixs, blockhash);
         bank.process_transaction(&tx).unwrap();
     }
 

@@ -365,7 +365,7 @@ mod tests {
             None,
             51,
         );
-        let tx = Transaction::new_signed_instructions(&[&contract_funds], ixs, blockhash, 0);
+        let tx = Transaction::new_signed_instructions(&[&contract_funds], ixs, blockhash);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
@@ -398,7 +398,7 @@ mod tests {
             &contract_state.pubkey(),
             &bob_pubkey,
         );
-        let tx = Transaction::new_signed_instructions(&[&witness], vec![ix], blockhash, 0);
+        let tx = Transaction::new_signed_instructions(&[&witness], vec![ix], blockhash);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 

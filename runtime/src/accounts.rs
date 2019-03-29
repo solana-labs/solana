@@ -1045,7 +1045,6 @@ mod tests {
             &[],
             &[],
             Hash::default(),
-            0,
             vec![native_loader::id()],
             instructions,
         );
@@ -1069,7 +1068,6 @@ mod tests {
             &[&keypair],
             &[],
             Hash::default(),
-            0,
             vec![native_loader::id()],
             instructions,
         );
@@ -1101,7 +1099,6 @@ mod tests {
             &[&keypair],
             &[],
             Hash::default(),
-            0,
             vec![Pubkey::default()],
             instructions,
         );
@@ -1129,7 +1126,6 @@ mod tests {
             &[&keypair],
             &[],
             Hash::default(),
-            10,
             vec![native_loader::id()],
             instructions,
         );
@@ -1168,7 +1164,6 @@ mod tests {
             &[&keypair],
             &[key1],
             Hash::default(),
-            0,
             vec![native_loader::id()],
             instructions,
         );
@@ -1240,7 +1235,6 @@ mod tests {
             &[&keypair],
             &[],
             Hash::default(),
-            0,
             vec![key6],
             instructions,
         );
@@ -1274,7 +1268,6 @@ mod tests {
             &[&keypair],
             &[],
             Hash::default(),
-            0,
             vec![key1],
             instructions,
         );
@@ -1307,7 +1300,6 @@ mod tests {
             &[&keypair],
             &[],
             Hash::default(),
-            0,
             vec![key1],
             instructions,
         );
@@ -1356,7 +1348,6 @@ mod tests {
             &[&keypair],
             &[],
             Hash::default(),
-            0,
             vec![key1, key2],
             instructions,
         );
@@ -1400,7 +1391,6 @@ mod tests {
             &[&keypair],
             &[pubkey],
             Hash::default(),
-            0,
             vec![native_loader::id()],
             instructions,
         );

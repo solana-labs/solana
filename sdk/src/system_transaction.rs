@@ -18,13 +18,13 @@ impl SystemTransaction {
         lamports: u64,
         space: u64,
         program_id: &Pubkey,
-        fee: u64,
+        _fee: u64,
     ) -> Transaction {
         let from_pubkey = from_keypair.pubkey();
         let create_instruction =
             SystemInstruction::new_program_account(&from_pubkey, to, lamports, space, program_id);
         let instructions = vec![create_instruction];
-        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash, fee)
+        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
     }
 
     /// Create and sign a transaction to create a system account
@@ -52,12 +52,12 @@ impl SystemTransaction {
         from_keypair: &Keypair,
         recent_blockhash: Hash,
         program_id: &Pubkey,
-        fee: u64,
+        _fee: u64,
     ) -> Transaction {
         let from_pubkey = from_keypair.pubkey();
         let assign_instruction = SystemInstruction::new_assign(&from_pubkey, program_id);
         let instructions = vec![assign_instruction];
-        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash, fee)
+        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
     }
 
     /// Create and sign new SystemInstruction::Move transaction
@@ -66,11 +66,11 @@ impl SystemTransaction {
         to: &Pubkey,
         lamports: u64,
         recent_blockhash: Hash,
-        fee: u64,
+        _fee: u64,
     ) -> Transaction {
         let from_pubkey = from_keypair.pubkey();
         let move_instruction = SystemInstruction::new_move(&from_pubkey, to, lamports);
         let instructions = vec![move_instruction];
-        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash, fee)
+        Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
     }
 }
