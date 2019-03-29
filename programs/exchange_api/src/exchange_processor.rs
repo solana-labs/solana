@@ -18,8 +18,12 @@ impl ExchangeProcessor {
         InstructionError::InvalidArgument
     }
 
-    fn is_account_unallocated(data: &[u8]) -> Result<(), InstructionError> {
-        let state: ExchangeState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
+    fn is_account_unallocated(
+        keyed_accounts: &mut [KeyedAccount],
+        index: usize,
+    ) -> Result<(), InstructionError> {
+        let state: ExchangeState = bincode::deserialize(&keyed_accounts[index].account.data[..])
+            .map_err(Self::map_to_invalid_arg)?;
         match state {
             ExchangeState::Unallocated => Ok(()),
             _ => {
@@ -29,8 +33,12 @@ impl ExchangeProcessor {
         }
     }
 
-    fn deserialize_account(data: &[u8]) -> Result<(TokenAccountInfo), InstructionError> {
-        let state: ExchangeState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
+    fn deserialize_account(
+        keyed_accounts: &mut [KeyedAccount],
+        index: usize,
+    ) -> Result<(TokenAccountInfo), InstructionError> {
+        let state: ExchangeState = bincode::deserialize(&keyed_accounts[index].account.data[..])
+            .map_err(Self::map_to_invalid_arg)?;
         match state {
             ExchangeState::Account(account) => Ok(account),
             _ => {
@@ -40,8 +48,12 @@ impl ExchangeProcessor {
         }
     }
 
-    fn deserialize_trade(data: &[u8]) -> Result<(TradeOrderInfo), InstructionError> {
-        let state: ExchangeState = bincode::deserialize(data).map_err(Self::map_to_invalid_arg)?;
+    fn deserialize_trade(
+        keyed_accounts: &mut [KeyedAccount],
+        index: usize,
+    ) -> Result<(TradeOrderInfo), InstructionError> {
+        let state: ExchangeState = bincode::deserialize(&keyed_accounts[index].account.data[..])
+            .map_err(Self::map_to_invalid_arg)?;
         match state {
             ExchangeState::Trade(info) => Ok(info),
             _ => {
@@ -51,8 +63,12 @@ impl ExchangeProcessor {
         }
     }
 
-    fn serialize(state: &ExchangeState, data: &mut [u8]) -> Result<(), InstructionError> {
-        let writer = std::io::BufWriter::new(data);
+    fn serialize(
+        state: &ExchangeState,
+        keyed_accounts: &mut [KeyedAccount],
+        index: usize,
+    ) -> Result<(), InstructionError> {
+        let writer = std::io::BufWriter::new(&mut keyed_accounts[index].account.data[..]);
         match bincode::serialize_into(writer, state) {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -154,41 +170,48 @@ impl ExchangeProcessor {
         Ok(())
     }
 
-    fn do_account_request(ka: &mut [KeyedAccount]) -> Result<(), InstructionError> {
-        if ka.len() < 2 {
+    fn do_account_request(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+        const OWNER_INDEX: usize = 0;
+        const NEW_ACCOUNT_INDEX: usize = 1;
+
+        if keyed_accounts.len() < 2 {
             error!("Not enough accounts");
             Err(InstructionError::InvalidArgument)?
         }
 
-        Self::is_account_unallocated(&ka[1].account.data[..])?;
+        Self::is_account_unallocated(keyed_accounts, NEW_ACCOUNT_INDEX)?;
         Self::serialize(
             &ExchangeState::Account(
                 TokenAccountInfo::default()
-                    .owner(&ka[0].unsigned_key())
+                    .owner(&keyed_accounts[OWNER_INDEX].unsigned_key())
                     .tokens(100_000, 100_000, 100_000, 100_000),
             ),
-            &mut ka[1].account.data[..],
+            &mut keyed_accounts[NEW_ACCOUNT_INDEX].account.data[..],
         )
     }
 
     fn do_transfer_request(
-        ka: &mut [KeyedAccount],
+        keyed_accounts: &mut [KeyedAccount],
         token: Token,
         tokens: u64,
     ) -> Result<(), InstructionError> {
-        if ka.len() < 3 {
+        const OWNER_INDEX: usize = 0;
+        const TO_ACCOUNT_INDEX: usize = 1;
+        const FROM_ACCOUNT_INDEX: usize = 2;
+
+        if keyed_accounts.len() < 3 {
             error!("Not enough accounts");
             Err(InstructionError::InvalidArgument)?
         }
 
-        let mut to_account = Self::deserialize_account(&ka[1].account.data[..])?;
+        let mut to_account = Self::deserialize_account(keyed_accounts, TO_ACCOUNT_INDEX)?;
 
-        if &id() == ka[2].unsigned_key() {
+        if &id() == keyed_accounts[FROM_ACCOUNT_INDEX].unsigned_key() {
             to_account.tokens[token] += tokens;
         } else {
-            let mut from_account = Self::deserialize_account(&ka[2].account.data[..])?;
+            let mut from_account = Self::deserialize_account(keyed_accounts, FROM_ACCOUNT_INDEX)?;
 
-            if &from_account.owner != ka[0].unsigned_key() {
+            if &from_account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
                 error!("Signer does not own from account");
                 Err(InstructionError::GenericError)?
             }
@@ -203,30 +226,36 @@ impl ExchangeProcessor {
 
             Self::serialize(
                 &ExchangeState::Account(from_account),
-                &mut ka[1].account.data[..],
+                keyed_accounts,
+                FROM_ACCOUNT_INDEX,
             )?;
         }
 
         Self::serialize(
             &ExchangeState::Account(to_account),
-            &mut ka[1].account.data[..],
+            keyed_accounts,
+            TO_ACCOUNT_INDEX,
         )
     }
 
     fn do_trade_request(
-        ka: &mut [KeyedAccount],
+        keyed_accounts: &mut [KeyedAccount],
         info: TradeRequestInfo,
     ) -> Result<(), InstructionError> {
-        if ka.len() < 3 {
+        const OWNER_INDEX: usize = 0;
+        const TRADE_INDEX: usize = 1;
+        const ACCOUNT_INDEX: usize = 2;
+
+        if keyed_accounts.len() < 3 {
             error!("Not enough accounts");
             Err(InstructionError::InvalidArgument)?
         }
 
-        Self::is_account_unallocated(&ka[1].account.data[..])?;
+        Self::is_account_unallocated(keyed_accounts, TRADE_INDEX)?;
 
-        let mut account = Self::deserialize_account(&ka[2].account.data[..])?;
+        let mut account = Self::deserialize_account(keyed_accounts, ACCOUNT_INDEX)?;
 
-        if &account.owner != ka[0].unsigned_key() {
+        if &account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own account");
             Err(InstructionError::GenericError)?
         }
@@ -248,36 +277,43 @@ impl ExchangeProcessor {
 
         Self::serialize(
             &ExchangeState::Trade(TradeOrderInfo {
-                owner: *ka[0].unsigned_key(),
+                owner: *keyed_accounts[OWNER_INDEX].unsigned_key(),
                 direction: info.direction,
                 pair: info.pair,
                 tokens: info.tokens,
                 price: info.price,
-                src_account: *ka[2].unsigned_key(),
+                src_account: *keyed_accounts[ACCOUNT_INDEX].unsigned_key(),
                 dst_account: info.dst_account,
             }),
-            &mut ka[1].account.data[..],
+            keyed_accounts,
+            TRADE_INDEX,
         )?;
         Self::serialize(
             &ExchangeState::Account(account),
-            &mut ka[2].account.data[..],
+            keyed_accounts,
+            ACCOUNT_INDEX,
         )
     }
 
-    fn do_trade_cancellation(ka: &mut [KeyedAccount]) -> Result<(), InstructionError> {
-        if ka.len() < 3 {
+    fn do_trade_cancellation(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+        const OWNER_INDEX: usize = 0;
+        const TRADE_INDEX: usize = 1;
+        const ACCOUNT_INDEX: usize = 2;
+
+        if keyed_accounts.len() < 3 {
             error!("Not enough accounts");
             Err(InstructionError::InvalidArgument)?
         }
-        let mut trade = Self::deserialize_trade(&ka[1].account.data[..])?;
-        let mut account = Self::deserialize_account(&ka[2].account.data[..])?;
 
-        if &trade.owner != ka[0].unsigned_key() {
+        let mut trade = Self::deserialize_trade(keyed_accounts, TRADE_INDEX)?;
+        let mut account = Self::deserialize_account(keyed_accounts, ACCOUNT_INDEX)?;
+
+        if &trade.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own trade");
             Err(InstructionError::GenericError)?
         }
 
-        if &account.owner != ka[0].unsigned_key() {
+        if &account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own account");
             Err(InstructionError::GenericError)?
         }
@@ -292,30 +328,39 @@ impl ExchangeProcessor {
         // Trade becomes invalid
         trade.tokens = 0;
 
-        Self::serialize(&ExchangeState::Trade(trade), &mut ka[1].account.data[..])?;
+        Self::serialize(&ExchangeState::Trade(trade), keyed_accounts, TRADE_INDEX)?;
         Self::serialize(
             &ExchangeState::Account(account),
-            &mut ka[2].account.data[..],
+            keyed_accounts,
+            ACCOUNT_INDEX,
         )
     }
 
-    fn do_swap_request(ka: &mut [KeyedAccount]) -> Result<(), InstructionError> {
-        if ka.len() < 7 {
+    fn do_swap_request(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+        const SWAP_ACCOUNT_INDEX: usize = 1;
+        const TO_TRADE_INDEX: usize = 2;
+        const FROM_TRADE_INDEX: usize = 3;
+        const TO_ACCOUNT_INDEX: usize = 4;
+        const FROM_ACCOUNT_INDEX: usize = 5;
+        const PROFIT_ACCOUNT_INDEX: usize = 6;
+
+        if keyed_accounts.len() < 7 {
             error!("Not enough accounts");
             Err(InstructionError::InvalidArgument)?
         }
-        Self::is_account_unallocated(&ka[1].account.data[..])?;
-        let mut to_trade = Self::deserialize_trade(&ka[2].account.data[..])?;
-        let mut from_trade = Self::deserialize_trade(&ka[3].account.data[..])?;
-        let mut to_trade_account = Self::deserialize_account(&ka[4].account.data[..])?;
-        let mut from_trade_account = Self::deserialize_account(&ka[5].account.data[..])?;
-        let mut profit_account = Self::deserialize_account(&ka[6].account.data[..])?;
 
-        if &to_trade.dst_account != ka[4].unsigned_key() {
+        Self::is_account_unallocated(keyed_accounts, SWAP_ACCOUNT_INDEX)?;
+        let mut to_trade = Self::deserialize_trade(keyed_accounts, TO_TRADE_INDEX)?;
+        let mut from_trade = Self::deserialize_trade(keyed_accounts, FROM_TRADE_INDEX)?;
+        let mut to_trade_account = Self::deserialize_account(keyed_accounts, TO_ACCOUNT_INDEX)?;
+        let mut from_trade_account = Self::deserialize_account(keyed_accounts, FROM_ACCOUNT_INDEX)?;
+        let mut profit_account = Self::deserialize_account(keyed_accounts, PROFIT_ACCOUNT_INDEX)?;
+
+        if &to_trade.dst_account != keyed_accounts[TO_ACCOUNT_INDEX].unsigned_key() {
             error!("To trade account and to account differ");
             Err(InstructionError::InvalidArgument)?
         }
-        if &from_trade.dst_account != ka[5].unsigned_key() {
+        if &from_trade.dst_account != keyed_accounts[FROM_ACCOUNT_INDEX].unsigned_key() {
             error!("From trade account and from account differ");
             Err(InstructionError::InvalidArgument)?
         }
@@ -337,8 +382,8 @@ impl ExchangeProcessor {
         }
 
         let mut swap = TradeSwapInfo::default();
-        swap.to_trade_order = *ka[2].unsigned_key();
-        swap.from_trade_order = *ka[3].unsigned_key();
+        swap.to_trade_order = *keyed_accounts[TO_TRADE_INDEX].unsigned_key();
+        swap.from_trade_order = *keyed_accounts[FROM_TRADE_INDEX].unsigned_key();
 
         if let Err(e) = Self::calculate_swap(
             SCALER,
@@ -356,23 +401,35 @@ impl ExchangeProcessor {
             Err(e)?
         }
 
-        Self::serialize(&ExchangeState::Swap(swap), &mut ka[1].account.data[..])?;
-        Self::serialize(&ExchangeState::Trade(to_trade), &mut ka[2].account.data[..])?;
+        Self::serialize(
+            &ExchangeState::Swap(swap),
+            keyed_accounts,
+            SWAP_ACCOUNT_INDEX,
+        )?;
+        Self::serialize(
+            &ExchangeState::Trade(to_trade),
+            keyed_accounts,
+            TO_TRADE_INDEX,
+        )?;
         Self::serialize(
             &ExchangeState::Trade(from_trade),
-            &mut ka[3].account.data[..],
+            keyed_accounts,
+            FROM_TRADE_INDEX,
         )?;
         Self::serialize(
             &ExchangeState::Account(to_trade_account),
-            &mut ka[4].account.data[..],
+            keyed_accounts,
+            TO_ACCOUNT_INDEX,
         )?;
         Self::serialize(
             &ExchangeState::Account(from_trade_account),
-            &mut ka[5].account.data[..],
+            keyed_accounts,
+            FROM_ACCOUNT_INDEX,
         )?;
         Self::serialize(
             &ExchangeState::Account(profit_account),
-            &mut ka[6].account.data[..],
+            keyed_accounts,
+            PROFIT_ACCOUNT_INDEX,
         )
     }
 }
@@ -415,6 +472,7 @@ mod test {
     use crate::exchange_instruction;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
+    use solana_sdk::account::create_keyed_accounts;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction;
@@ -442,8 +500,8 @@ mod test {
         let mut swap = TradeSwapInfo::default();
         let mut to_trade = TradeOrderInfo::default();
         let mut from_trade = TradeOrderInfo::default().direction(Direction::From);
-        let mut to_account = TokenAccountInfo::default();
-        let mut from_account = TokenAccountInfo::default();
+        let mut to_trade_account = TokenAccountInfo::default();
+        let mut from_trade_account = TokenAccountInfo::default();
         let mut profit_account = TokenAccountInfo::default();
 
         to_trade.tokens = primary_tokens;
@@ -455,8 +513,8 @@ mod test {
             &mut swap,
             &mut to_trade,
             &mut from_trade,
-            &mut to_account,
-            &mut from_account,
+            &mut to_trade_account,
+            &mut from_trade_account,
             &mut profit_account,
         )?;
 
@@ -466,9 +524,9 @@ mod test {
             primary_tokens_expect,
             from_trade.tokens,
             secondary_tokens_expect,
-            to_account.tokens,
+            to_trade_account.tokens,
             primary_account_tokens,
-            from_account.tokens,
+            from_trade_account.tokens,
             secondary_account_tokens,
             profit_account.tokens,
             profit_account_tokens
@@ -476,8 +534,8 @@ mod test {
 
         assert_eq!(to_trade.tokens, primary_tokens_expect);
         assert_eq!(from_trade.tokens, secondary_tokens_expect);
-        assert_eq!(to_account.tokens, primary_account_tokens);
-        assert_eq!(from_account.tokens, secondary_account_tokens);
+        assert_eq!(to_trade_account.tokens, primary_account_tokens);
+        assert_eq!(from_trade_account.tokens, secondary_account_tokens);
         assert_eq!(profit_account.tokens, profit_account_tokens);
         assert_eq!(swap.primary_tokens, primary_tokens - to_trade.tokens);
         assert_eq!(swap.primary_price, to_trade.price);
@@ -599,9 +657,9 @@ mod test {
         (trade, src, dst)
     }
 
-    fn deserialize_swap(data: &[u8]) -> TradeSwapInfo {
-        let state: ExchangeState =
-            bincode::deserialize(data).expect(&format!("{}:{}", line!(), file!()));
+    fn deserialize_swap(keyed_accounts: &mut [KeyedAccount], index: usize) -> TradeSwapInfo {
+        let state: ExchangeState = bincode::deserialize(&keyed_accounts[index].account.data[..])
+            .expect(&format!("{}:{}", line!(), file!()));
         match state {
             ExchangeState::Swap(info) => info,
             _ => panic!("Not a valid swap"),
@@ -616,6 +674,8 @@ mod test {
 
         let new = create_token_account(&client, &owner);
         let new_account = bank.get_account(&new).unwrap();
+        let mut array = [(Pubkey::default(), new_account)];
+        let mut keyed_accounts = create_keyed_accounts(&mut array);
 
         // Check results
 
@@ -623,7 +683,7 @@ mod test {
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_000, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&new_account.data[..]).unwrap()
+            ExchangeProcessor::deserialize_account(&mut keyed_accounts, 0).unwrap()
         );
     }
 
@@ -655,6 +715,8 @@ mod test {
             .expect(&format!("{}:{}", line!(), file!()));
 
         let new_account = bank.get_account(&new).unwrap();
+        let mut array = [(Pubkey::default(), new_account)];
+        let mut keyed_accounts = create_keyed_accounts(&mut array);
 
         // Check results
 
@@ -662,7 +724,7 @@ mod test {
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_042, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&new_account.data[..]).unwrap()
+            ExchangeProcessor::deserialize_account(&mut keyed_accounts, 0).unwrap()
         );
     }
 
@@ -686,6 +748,12 @@ mod test {
         let trade_account = bank.get_account(&trade).unwrap();
         let src_account = bank.get_account(&src).unwrap();
         let dst_account = bank.get_account(&dst).unwrap();
+        let mut array = [
+            (Pubkey::default(), trade_account),
+            (Pubkey::default(), src_account),
+            (Pubkey::default(), dst_account),
+        ];
+        let mut keyed_accounts = create_keyed_accounts(&mut array);
 
         // check results
 
@@ -699,19 +767,19 @@ mod test {
                 src_account: src,
                 dst_account: dst
             },
-            ExchangeProcessor::deserialize_trade(&trade_account.data[..]).unwrap()
+            ExchangeProcessor::deserialize_trade(&mut keyed_accounts, 0).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_040, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&src_account.data[..]).unwrap()
+            ExchangeProcessor::deserialize_account(&mut keyed_accounts, 1).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_000, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&dst_account.data[..]).unwrap()
+            ExchangeProcessor::deserialize_account(&mut keyed_accounts, 2).unwrap()
         );
     }
 
@@ -765,6 +833,17 @@ mod test {
         let from_dst_account = bank.get_account(&from_dst).unwrap();
         let profit_account = bank.get_account(&profit).unwrap();
         let swap_account = bank.get_account(&swap).unwrap();
+        let mut array = [
+            (Pubkey::default(), to_trade_account),
+            (Pubkey::default(), to_src_account),
+            (Pubkey::default(), to_dst_account),
+            (Pubkey::default(), from_trade_account),
+            (Pubkey::default(), from_src_account),
+            (Pubkey::default(), from_dst_account),
+            (Pubkey::default(), profit_account),
+            (Pubkey::default(), swap_account),
+        ];
+        let mut keyed_accounts = create_keyed_accounts(&mut array);
 
         // check results
 
@@ -778,19 +857,19 @@ mod test {
                 src_account: to_src,
                 dst_account: to_dst
             },
-            ExchangeProcessor::deserialize_trade(&to_trade_account.data[..]).unwrap()
+            ExchangeProcessor::deserialize_trade(&mut keyed_accounts, 0).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_000, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&to_src_account.data[..]).unwrap()
+            ExchangeProcessor::deserialize_account(&mut keyed_accounts, 1).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_000, 100_002, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&to_dst_account.data[..]).unwrap()
+            ExchangeProcessor::deserialize_account(&mut keyed_accounts, 2).unwrap()
         );
         assert_eq!(
             TradeOrderInfo {
@@ -802,25 +881,25 @@ mod test {
                 src_account: from_src,
                 dst_account: from_dst
             },
-            ExchangeProcessor::deserialize_trade(&from_trade_account.data[..]).unwrap()
+            ExchangeProcessor::deserialize_trade(&mut keyed_accounts, 3).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_000, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&from_src_account.data[..]).unwrap()
+            ExchangeProcessor::deserialize_account(&mut keyed_accounts, 4).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_001, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&from_dst_account.data[..]).unwrap()
+            ExchangeProcessor::deserialize_account(&mut keyed_accounts, 5).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_000, 100_001, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&profit_account.data[..]).unwrap()
+            ExchangeProcessor::deserialize_account(&mut keyed_accounts, 6).unwrap()
         );
         assert_eq!(
             TradeSwapInfo {
@@ -832,7 +911,7 @@ mod test {
                 secondary_tokens: 3,
                 secondary_price: 3000,
             },
-            deserialize_swap(&swap_account.data[..])
+            deserialize_swap(&mut keyed_accounts, 7)
         );
     }
 }
