@@ -1,5 +1,6 @@
 pub mod account;
 pub mod bpf_loader;
+pub mod fee_calculator;
 pub mod genesis_block;
 pub mod hash;
 pub mod instruction;

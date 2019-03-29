@@ -49,7 +49,7 @@ pub enum TransactionError {
 /// An atomic transaction
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Transaction {
-    /// A set of digital signatures of `account_keys`, `program_ids`, `recent_blockhash`, `fee` and `instructions`, signed by the first
+    /// A set of digital signatures of `account_keys`, `program_ids`, `recent_blockhash`, and `instructions`, signed by the first
     /// signatures.len() keys of account_keys
     #[serde(with = "short_vec")]
     pub signatures: Vec<Signature>,
@@ -85,10 +85,9 @@ impl Transaction {
         from_keypairs: &[&T],
         instructions: Vec<Instruction>,
         recent_blockhash: Hash,
-        fee: u64,
+        _fee: u64,
     ) -> Transaction {
-        let mut message = Message::new(instructions);
-        message.fee = fee;
+        let message = Message::new(instructions);
         Self::new(from_keypairs, message, recent_blockhash)
     }
 
@@ -104,7 +103,7 @@ impl Transaction {
         from_keypairs: &[&T],
         keys: &[Pubkey],
         recent_blockhash: Hash,
-        fee: u64,
+        _fee: u64,
         program_ids: Vec<Pubkey>,
         instructions: Vec<CompiledInstruction>,
     ) -> Self {
@@ -117,7 +116,6 @@ impl Transaction {
             from_keypairs.len() as u8,
             account_keys,
             Hash::default(),
-            fee,
             program_ids,
             instructions,
         );
@@ -308,8 +306,7 @@ mod tests {
             AccountMeta::new(to, false),
         ];
         let instruction = Instruction::new(program_id, &(1u8, 2u8, 3u8), account_metas);
-        let mut message = Message::new(vec![instruction]);
-        message.fee = 99;
+        let message = Message::new(vec![instruction]);
         Transaction::new(&[&keypair], message, Hash::default())
     }
 
@@ -352,19 +349,17 @@ mod tests {
         let len_size = 1;
         let num_required_sigs_size = 1;
         let blockhash_size = size_of::<Hash>();
-        let fee_size = size_of::<u64>();
         let expected_transaction_size = len_size
             + (tx.signatures.len() * size_of::<Signature>())
             + num_required_sigs_size
             + len_size
             + (tx.message.account_keys.len() * size_of::<Pubkey>())
             + blockhash_size
-            + fee_size
             + len_size
             + (tx.message.program_ids.len() * size_of::<Pubkey>())
             + len_size
             + expected_instruction_size;
-        assert_eq!(expected_transaction_size, 222);
+        assert_eq!(expected_transaction_size, 214);
 
         assert_eq!(
             serialized_size(&tx).unwrap() as usize,
@@ -380,16 +375,16 @@ mod tests {
         assert_eq!(
             serialize(&create_sample_transaction()).unwrap(),
             vec![
-                1, 102, 197, 120, 176, 192, 35, 190, 233, 5, 135, 30, 114, 209, 105, 219, 212, 203,
-                242, 72, 150, 205, 68, 30, 188, 119, 31, 212, 40, 43, 88, 45, 239, 83, 45, 208,
-                103, 108, 239, 82, 185, 160, 161, 111, 112, 51, 254, 61, 254, 131, 206, 221, 117,
-                124, 50, 1, 6, 38, 218, 9, 95, 28, 46, 49, 5, 1, 2, 36, 100, 158, 252, 33, 161, 97,
+                1, 0, 30, 236, 164, 222, 77, 89, 244, 36, 92, 35, 192, 25, 100, 18, 61, 155, 111,
+                89, 189, 154, 90, 255, 217, 203, 105, 50, 243, 208, 179, 89, 146, 122, 222, 91, 34,
+                106, 93, 82, 147, 213, 223, 184, 32, 204, 61, 227, 227, 41, 211, 67, 5, 156, 236,
+                251, 178, 235, 234, 174, 123, 15, 26, 145, 3, 1, 2, 36, 100, 158, 252, 33, 161, 97,
                 185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231,
                 62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9,
                 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 0, 0,
-                1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6,
-                5, 4, 2, 2, 2, 1, 0, 2, 0, 1, 3, 1, 2, 3
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 4, 5, 6, 7, 8,
+                9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 1, 0, 2, 0,
+                1, 3, 1, 2, 3
             ]
         );
     }

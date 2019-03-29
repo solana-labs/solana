@@ -81,9 +81,6 @@ pub struct Message {
     /// The id of a recent ledger entry.
     pub recent_blockhash: Hash,
 
-    /// The number of lamports paid for processing and storing of this transaction.
-    pub fee: u64,
-
     /// All the program id keys used to execute this transaction's instructions
     #[serde(with = "short_vec")]
     pub program_ids: Vec<Pubkey>,
@@ -99,7 +96,6 @@ impl Message {
         num_required_signatures: u8,
         account_keys: Vec<Pubkey>,
         recent_blockhash: Hash,
-        fee: u64,
         program_ids: Vec<Pubkey>,
         instructions: Vec<CompiledInstruction>,
     ) -> Self {
@@ -107,7 +103,6 @@ impl Message {
             num_required_signatures,
             account_keys,
             recent_blockhash,
-            fee,
             program_ids,
             instructions,
         }
@@ -123,7 +118,6 @@ impl Message {
             num_required_signatures,
             signed_keys,
             Hash::default(),
-            0,
             program_ids,
             instructions,
         )
