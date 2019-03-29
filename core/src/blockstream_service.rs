@@ -109,7 +109,7 @@ mod test {
     use super::*;
     use crate::blocktree::create_new_tmp_ledger;
     use crate::entry::{create_ticks, Entry};
-    use bincode::deserialize;
+    use bincode::{deserialize, serialize};
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
     use solana_sdk::genesis_block::GenesisBlock;
@@ -197,8 +197,14 @@ mod test {
                         .as_array()
                         .unwrap()
                         .into_iter()
-                        .map(|tx| {
+                        .enumerate()
+                        .map(|(j, tx)| {
                             let tx_vec: Vec<u8> = serde_json::from_value(tx.clone()).unwrap();
+                            // Check explicitly that transaction matches bincode-serialized format
+                            assert_eq!(
+                                tx_vec,
+                                serialize(&expected_entries[i].transactions[j]).unwrap()
+                            );
                             deserialize(&tx_vec).unwrap()
                         })
                         .collect(),

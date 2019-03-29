@@ -93,11 +93,7 @@ where
         leader_id: &Pubkey,
         entry: &Entry,
     ) -> Result<()> {
-        let transactions: Vec<Vec<u8>> = entry
-            .transactions
-            .iter()
-            .map(|tx| serialize(&tx).unwrap())
-            .collect();
+        let transactions: Vec<Vec<u8>> = serialize_transactions(entry);
         let stream_entry = json!({
             "num_hashes": entry.num_hashes,
             "hash": entry.hash,
@@ -160,6 +156,14 @@ impl MockBlockstream {
     }
 }
 
+fn serialize_transactions(entry: &Entry) -> Vec<Vec<u8>> {
+    entry
+        .transactions
+        .iter()
+        .map(|tx| serialize(&tx).unwrap())
+        .collect()
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -168,7 +172,27 @@ mod test {
     use serde_json::Value;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::system_transaction::SystemTransaction;
     use std::collections::HashSet;
+
+    #[test]
+    fn test_serialize_transactions() {
+        let entry = Entry::new(&Hash::default(), 1, vec![]);
+        let empty_vec: Vec<Vec<u8>> = vec![];
+        assert_eq!(serialize_transactions(&entry), empty_vec);
+
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let tx0 = SystemTransaction::new_move(&keypair0, &keypair1.pubkey(), 1, Hash::default(), 0);
+        let tx1 = SystemTransaction::new_move(&keypair1, &keypair0.pubkey(), 2, Hash::default(), 0);
+        let serialized_tx0 = serialize(&tx0).unwrap();
+        let serialized_tx1 = serialize(&tx1).unwrap();
+        let entry = Entry::new(&Hash::default(), 1, vec![tx0, tx1]);
+        assert_eq!(
+            serialize_transactions(&entry),
+            vec![serialized_tx0, serialized_tx1]
+        );
+    }
 
     #[test]
     fn test_blockstream() -> () {
