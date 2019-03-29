@@ -206,29 +206,38 @@ impl ReplayStage {
         grace_ticks: u64,
     ) {
         trace!("{} checking poh slot {}", my_id, poh_slot);
-        if blocktree.meta(poh_slot).unwrap().is_some() {
-            // We've already broadcasted entries for this slot, skip it
+        if reached_leader_tick && blocktree.meta(poh_slot).unwrap().is_some() {
+            // We've already broadcasted entries for this slot, skip it. Since
+            // we are skipping our leader slot, also tell poh recorder when we
+            // should be leader again
+            let start_slot = poh_recorder.lock().unwrap().start_slot();
+            let r_bank_forks = bank_forks.read().unwrap();
 
-            // Since we are skipping our leader slot, let's tell poh recorder when we should be
-            // leader again
-            if reached_leader_tick {
-                let _ = bank_forks.read().unwrap().get(poh_slot).map(|bank| {
-                    let next_leader_slot =
-                        leader_schedule_utils::next_leader_slot(&my_id, bank.slot(), &bank);
-                    let mut poh = poh_recorder.lock().unwrap();
-                    let start_slot = poh.start_slot();
-                    poh.reset(
-                        bank.tick_height(),
-                        bank.last_blockhash(),
-                        start_slot,
-                        next_leader_slot,
-                        bank.ticks_per_slot(),
-                    );
-                });
-            }
+            // Start slot must be frozen by the time start_leader() is called.
+            let start_slot_bank = r_bank_forks
+                .get(start_slot)
+                .expect("start slot doesn't exist");
+
+            assert!(start_slot_bank.is_frozen());
+
+            let next_leader_slot = leader_schedule_utils::next_leader_slot(
+                &my_id,
+                start_slot_bank.slot(),
+                &start_slot_bank,
+            );
+            trace!("poh slot skipped, reset start slot to: {}", start_slot);
+            let mut poh = poh_recorder.lock().unwrap();
+            poh.reset(
+                start_slot_bank.tick_height(),
+                start_slot_bank.last_blockhash(),
+                start_slot,
+                next_leader_slot,
+                start_slot_bank.ticks_per_slot(),
+            );
 
             return;
         }
+
         if bank_forks.read().unwrap().get(poh_slot).is_none() {
             let frozen = bank_forks.read().unwrap().frozen_banks();
             let parent_slot = poh_recorder.lock().unwrap().start_slot();
