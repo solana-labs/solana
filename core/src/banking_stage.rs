@@ -115,6 +115,10 @@ impl BankingStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         buffered_packets: &[(SharedPackets, usize)],
     ) -> bool {
+        if buffered_packets.is_empty() {
+            return false;
+        }
+
         let rcluster_info = cluster_info.read().unwrap();
 
         // If there's a bank, and leader is available, forward the buffered packets
