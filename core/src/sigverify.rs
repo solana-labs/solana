@@ -333,14 +333,8 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
 mod tests {
     use crate::packet::{Packet, SharedPackets};
     use crate::sigverify;
-    use crate::test_tx::test_tx;
+    use crate::test_tx::{test_multisig_tx, test_tx};
     use bincode::{deserialize, serialize};
-    use solana_budget_api;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::instruction::CompiledInstruction;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_instruction::SystemInstruction;
-    use solana_sdk::system_program;
     use solana_sdk::transaction::Transaction;
 
     const SIG_OFFSET: usize = std::mem::size_of::<u64>() + 1;
@@ -415,16 +409,27 @@ mod tests {
         assert_ne!(message0a, message0b);
     }
 
-    #[test]
-    fn test_get_packet_offsets() {
-        let tx = test_tx();
+    // Just like get_packet_offsets, but not returning redundant information.
+    fn get_packet_offsets_from_tx(tx: Transaction, current_offset: u32) -> (u32, u32, u32, u32) {
         let packet = sigverify::make_packet_from_transaction(tx);
         let (sig_len, sig_start, msg_start_offset, pubkey_offset) =
-            sigverify::get_packet_offsets(&packet, 0);
-        assert_eq!(sig_len, 1);
-        assert_eq!(sig_start, 9);
-        assert_eq!(msg_start_offset, 73);
-        assert_eq!(pubkey_offset, 74);
+            sigverify::get_packet_offsets(&packet, current_offset);
+        (
+            sig_len,
+            sig_start - current_offset,
+            msg_start_offset - sig_start,
+            pubkey_offset - msg_start_offset,
+        )
+    }
+
+    #[test]
+    fn test_get_packet_offsets() {
+        assert_eq!(get_packet_offsets_from_tx(test_tx(), 0), (1, 9, 64, 1));
+        assert_eq!(get_packet_offsets_from_tx(test_tx(), 100), (1, 9, 64, 1));
+        assert_eq!(
+            get_packet_offsets_from_tx(test_multisig_tx(), 0),
+            (2, 9, 128, 1)
+        );
     }
 
     fn generate_packet_vec(
@@ -488,30 +493,10 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_multi_sig() {
+    fn test_verify_multisig() {
         solana_logger::setup();
-        let keypair0 = Keypair::new();
-        let keypair1 = Keypair::new();
-        let keypairs = vec![&keypair0, &keypair1];
-        let lamports = 5;
-        let fee = 2;
-        let blockhash = Hash::default();
 
-        let system_instruction = SystemInstruction::Move { lamports };
-
-        let program_ids = vec![system_program::id(), solana_budget_api::id()];
-
-        let instructions = vec![CompiledInstruction::new(0, &system_instruction, vec![0, 1])];
-
-        let tx = Transaction::new_with_compiled_instructions(
-            &keypairs,
-            &[],
-            blockhash,
-            fee,
-            program_ids,
-            instructions,
-        );
-
+        let tx = test_multisig_tx();
         let mut packet = sigverify::make_packet_from_transaction(tx);
 
         let n = 4;
