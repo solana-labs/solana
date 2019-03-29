@@ -70,19 +70,47 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Message {
-    #[serde(skip)]
     pub num_signatures: u8,
+
+    /// All the account keys used by this transaction
     #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
+
+    /// The id of a recent ledger entry.
     pub recent_blockhash: Hash,
+
+    /// The number of lamports paid for processing and storing of this transaction.
     pub fee: u64,
+
+    /// All the program id keys used to execute this transaction's instructions
     #[serde(with = "short_vec")]
     pub program_ids: Vec<Pubkey>,
+
+    /// Programs that will be executed in sequence and committed in one atomic transaction if all
+    /// succeed.
     #[serde(with = "short_vec")]
     pub instructions: Vec<CompiledInstruction>,
 }
 
 impl Message {
+    pub fn new_with_compiled_instructions(
+        num_signatures: u8,
+        account_keys: Vec<Pubkey>,
+        recent_blockhash: Hash,
+        fee: u64,
+        program_ids: Vec<Pubkey>,
+        instructions: Vec<CompiledInstruction>,
+    ) -> Self {
+        Self {
+            num_signatures,
+            account_keys,
+            recent_blockhash,
+            fee,
+            program_ids,
+            instructions,
+        }
+    }
+
     /// Return an unsigned transaction with space for requires signatures.
     pub fn new(instructions: Vec<Instruction>) -> Self {
         let program_ids = get_program_ids(&instructions);
@@ -90,14 +118,19 @@ impl Message {
         let num_signatures = signed_keys.len() as u8;
         signed_keys.extend(&unsigned_keys);
         let instructions = compile_instructions(instructions, &signed_keys, &program_ids);
-        Self {
+        Self::new_with_compiled_instructions(
             num_signatures,
-            account_keys: signed_keys,
-            recent_blockhash: Hash::default(),
-            fee: 0,
+            signed_keys,
+            Hash::default(),
+            0,
             program_ids,
             instructions,
-        }
+        )
+    }
+
+    pub fn program_id(&self, instruction_index: usize) -> &Pubkey {
+        let program_ids_index = self.instructions[instruction_index].program_ids_index;
+        &self.program_ids[program_ids_index as usize]
     }
 }
 

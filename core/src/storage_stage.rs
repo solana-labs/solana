@@ -401,9 +401,10 @@ impl StorageStage {
             // Go through the transactions, find proofs, and use them to update
             // the storage_keys with their signatures
             for tx in entry.transactions {
-                for (i, program_id) in tx.program_ids.iter().enumerate() {
+                let message = tx.message();
+                for (i, program_id) in message.program_ids.iter().enumerate() {
                     if solana_storage_api::check_id(&program_id) {
-                        match deserialize(&tx.instructions[i].data) {
+                        match deserialize(&message.instructions[i].data) {
                             Ok(StorageInstruction::SubmitMiningProof {
                                 entry_height: proof_entry_height,
                                 signature,
@@ -436,7 +437,7 @@ impl StorageStage {
                                         (proof_entry_height / ENTRIES_PER_SEGMENT) as usize;
                                     if proof_segment_index < statew.replicator_map.len() {
                                         statew.replicator_map[proof_segment_index]
-                                            .insert(tx.account_keys[0]);
+                                            .insert(message.account_keys[0]);
                                     }
                                 }
                                 debug!("storage proof: entry_height: {}", entry_height);

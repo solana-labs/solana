@@ -508,7 +508,7 @@ fn do_tx_transfers(
 }
 
 fn verify_funding_transfer(client: &ThinClient, tx: &Transaction, amount: u64) -> bool {
-    for a in &tx.account_keys[1..] {
+    for a in &tx.message().account_keys[1..] {
         if client.get_balance(a).unwrap_or(0) >= amount {
             return true;
         }
@@ -577,7 +577,7 @@ fn fund_keys(client: &ThinClient, source: &Keypair, dests: &[Keypair], lamports:
             while !to_fund_txs.is_empty() {
                 let receivers = to_fund_txs
                     .iter()
-                    .fold(0, |len, (_, tx)| len + tx.instructions.len());
+                    .fold(0, |len, (_, tx)| len + tx.message().instructions.len());
 
                 println!(
                     "{} {} to {} in {} txs",

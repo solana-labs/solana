@@ -693,7 +693,7 @@ impl KeypairUtil for DroneKeypair {
 
     /// Return the public key of the keypair used to sign votes
     fn pubkey(&self) -> Pubkey {
-        self.transaction.account_keys[0]
+        self.transaction.message().account_keys[0]
     }
 
     fn sign_message(&self, _msg: &[u8]) -> Signature {

@@ -53,36 +53,16 @@ pub struct Transaction {
     /// signatures.len() keys of account_keys
     #[serde(with = "short_vec")]
     pub signatures: Vec<Signature>,
-    /// All the account keys used by this transaction
 
-    #[serde(with = "short_vec")]
-    pub account_keys: Vec<Pubkey>,
-
-    /// The id of a recent ledger entry.
-    pub recent_blockhash: Hash,
-
-    /// The number of lamports paid for processing and storing of this transaction.
-    pub fee: u64,
-
-    /// All the program id keys used to execute this transaction's instructions
-    #[serde(with = "short_vec")]
-    pub program_ids: Vec<Pubkey>,
-
-    /// Programs that will be executed in sequence and committed in one atomic transaction if all
-    /// succeed.
-    #[serde(with = "short_vec")]
-    pub instructions: Vec<CompiledInstruction>,
+    /// The message to sign.
+    pub message: Message,
 }
 
 impl Transaction {
     pub fn new_unsigned(message: Message) -> Self {
         Self {
             signatures: Vec::with_capacity(message.num_signatures as usize),
-            account_keys: message.account_keys,
-            recent_blockhash: message.recent_blockhash,
-            fee: message.fee,
-            program_ids: message.program_ids,
-            instructions: message.instructions,
+            message,
         }
     }
 
@@ -133,31 +113,31 @@ impl Transaction {
             .map(|keypair| keypair.pubkey())
             .collect();
         account_keys.extend_from_slice(keys);
-        let mut tx = Transaction {
-            signatures: Vec::with_capacity(from_keypairs.len()),
+        let message = Message::new_with_compiled_instructions(
+            from_keypairs.len() as u8,
             account_keys,
-            recent_blockhash: Hash::default(),
+            Hash::default(),
             fee,
             program_ids,
             instructions,
-        };
-        tx.sign(from_keypairs, recent_blockhash);
-        tx
+        );
+        Transaction::new(from_keypairs, message, recent_blockhash)
     }
 
     pub fn data(&self, instruction_index: usize) -> &[u8] {
-        &self.instructions[instruction_index].data
+        &self.message.instructions[instruction_index].data
     }
 
     fn key_index(&self, instruction_index: usize, accounts_index: usize) -> Option<usize> {
-        self.instructions
+        self.message
+            .instructions
             .get(instruction_index)
             .and_then(|instruction| instruction.accounts.get(accounts_index))
             .map(|&account_keys_index| account_keys_index as usize)
     }
     pub fn key(&self, instruction_index: usize, accounts_index: usize) -> Option<&Pubkey> {
         self.key_index(instruction_index, accounts_index)
-            .and_then(|account_keys_index| self.account_keys.get(account_keys_index))
+            .and_then(|account_keys_index| self.message.account_keys.get(account_keys_index))
     }
     pub fn signer_key(&self, instruction_index: usize, accounts_index: usize) -> Option<&Pubkey> {
         match self.key_index(instruction_index, accounts_index) {
@@ -166,25 +146,17 @@ impl Transaction {
                 if signature_index >= self.signatures.len() {
                     return None;
                 }
-                self.account_keys.get(signature_index)
+                self.message.account_keys.get(signature_index)
             }
         }
     }
     pub fn program_id(&self, instruction_index: usize) -> &Pubkey {
-        let program_ids_index = self.instructions[instruction_index].program_ids_index;
-        &self.program_ids[program_ids_index as usize]
+        self.message().program_id(instruction_index)
     }
 
     /// Return a message containing all data that should be signed.
-    pub fn message(&self) -> Message {
-        Message {
-            num_signatures: self.signatures.len() as u8,
-            account_keys: self.account_keys.clone(),
-            recent_blockhash: self.recent_blockhash,
-            fee: self.fee,
-            program_ids: self.program_ids.clone(),
-            instructions: self.instructions.clone(),
-        }
+    pub fn message(&self) -> &Message {
+        &self.message
     }
 
     /// Return the serialized message data to sign.
@@ -194,7 +166,7 @@ impl Transaction {
 
     /// Sign this transaction.
     pub fn sign_unchecked<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
-        self.recent_blockhash = recent_blockhash;
+        self.message.recent_blockhash = recent_blockhash;
         let message_data = self.message_data();
         self.signatures = keypairs
             .iter()
@@ -203,9 +175,8 @@ impl Transaction {
     }
 
     /// Check keys and keypair lengths, then sign this transaction.
-    /// Note: this presumes signatures.capacity() was set to the number of required signatures.
     pub fn sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
-        let signed_keys = &self.account_keys[0..self.signatures.capacity()];
+        let signed_keys = &self.message.account_keys[0..self.message.num_signatures as usize];
         for (i, keypair) in keypairs.iter().enumerate() {
             assert_eq!(keypair.pubkey(), signed_keys[i], "keypair-pubkey mismatch");
         }
@@ -216,12 +187,13 @@ impl Transaction {
 
     /// Verify that references in the instructions are valid
     pub fn verify_refs(&self) -> bool {
-        for instruction in &self.instructions {
-            if (instruction.program_ids_index as usize) >= self.program_ids.len() {
+        let message = self.message();
+        for instruction in &message.instructions {
+            if (instruction.program_ids_index as usize) >= message.program_ids.len() {
                 return false;
             }
             for account_index in &instruction.accounts {
-                if (*account_index as usize) >= self.account_keys.len() {
+                if (*account_index as usize) >= message.account_keys.len() {
                     return false;
                 }
             }
@@ -379,14 +351,15 @@ mod tests {
         let expected_transaction_size = 1
             + (tx.signatures.len() * size_of::<Signature>())
             + 1
-            + (tx.account_keys.len() * size_of::<Pubkey>())
+            + 1
+            + (tx.message.account_keys.len() * size_of::<Pubkey>())
             + size_of::<Hash>()
             + size_of::<u64>()
             + 1
-            + (tx.program_ids.len() * size_of::<Pubkey>())
+            + (tx.message.program_ids.len() * size_of::<Pubkey>())
             + 1
             + expected_instruction_size;
-        assert_eq!(expected_transaction_size, 221);
+        assert_eq!(expected_transaction_size, 222);
 
         assert_eq!(
             serialized_size(&tx).unwrap() as usize,
@@ -402,16 +375,16 @@ mod tests {
         assert_eq!(
             serialize(&create_sample_transaction()).unwrap(),
             vec![
-                1, 107, 231, 179, 42, 11, 220, 153, 173, 229, 29, 51, 218, 98, 26, 46, 164, 248,
-                228, 118, 244, 191, 192, 198, 228, 190, 119, 21, 52, 66, 25, 124, 247, 192, 73, 48,
-                231, 2, 70, 34, 82, 133, 137, 148, 66, 73, 231, 72, 195, 100, 133, 214, 2, 168,
-                108, 252, 200, 83, 99, 105, 51, 216, 145, 30, 14, 2, 36, 100, 158, 252, 33, 161,
-                97, 185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219,
-                231, 62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9,
-                9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 0,
-                0, 1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7,
-                6, 5, 4, 2, 2, 2, 1, 0, 2, 0, 1, 3, 1, 2, 3
+                1, 102, 197, 120, 176, 192, 35, 190, 233, 5, 135, 30, 114, 209, 105, 219, 212, 203,
+                242, 72, 150, 205, 68, 30, 188, 119, 31, 212, 40, 43, 88, 45, 239, 83, 45, 208,
+                103, 108, 239, 82, 185, 160, 161, 111, 112, 51, 254, 61, 254, 131, 206, 221, 117,
+                124, 50, 1, 6, 38, 218, 9, 95, 28, 46, 49, 5, 1, 2, 36, 100, 158, 252, 33, 161, 97,
+                185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90, 248, 14, 68, 219, 231,
+                62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+                9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 0, 0,
+                1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6,
+                5, 4, 2, 2, 2, 1, 0, 2, 0, 1, 3, 1, 2, 3
             ]
         );
     }
@@ -452,6 +425,9 @@ mod tests {
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
         tx.sign(&[&keypair0], Hash::default());
-        assert_eq!(tx.instructions[0], CompiledInstruction::new(0, &0, vec![0]));
+        assert_eq!(
+            tx.message.instructions[0],
+            CompiledInstruction::new(0, &0, vec![0])
+        );
     }
 }

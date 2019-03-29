@@ -196,7 +196,7 @@ impl RpcClient {
 
             // Re-sign any failed transactions with a new blockhash and retry
             let blockhash =
-                self.get_new_blockhash(&transactions_signatures[0].0.recent_blockhash)?;
+                self.get_new_blockhash(&transactions_signatures[0].0.message().recent_blockhash)?;
             transactions = transactions_signatures
                 .into_iter()
                 .map(|(mut transaction, _)| {
@@ -212,7 +212,7 @@ impl RpcClient {
         tx: &mut Transaction,
         signer_key: &T,
     ) -> Result<(), Box<dyn error::Error>> {
-        let blockhash = self.get_new_blockhash(&tx.recent_blockhash)?;
+        let blockhash = self.get_new_blockhash(&tx.message().recent_blockhash)?;
         tx.sign(&[signer_key], blockhash);
         Ok(())
     }
@@ -744,10 +744,10 @@ mod tests {
 
         assert_ne!(prev_tx, tx);
         assert_ne!(prev_tx.signatures, tx.signatures);
-        assert_ne!(prev_tx.recent_blockhash, tx.recent_blockhash);
-        assert_eq!(prev_tx.fee, tx.fee);
-        assert_eq!(prev_tx.account_keys, tx.account_keys);
-        assert_eq!(prev_tx.instructions, tx.instructions);
+        assert_ne!(
+            prev_tx.message().recent_blockhash,
+            tx.message().recent_blockhash
+        );
     }
 
 }

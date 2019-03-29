@@ -497,7 +497,9 @@ impl Bank {
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && !hash_queue.check_hash_age(tx.recent_blockhash, max_age) {
+                if lock_res.is_ok()
+                    && !hash_queue.check_hash_age(tx.message().recent_blockhash, max_age)
+                {
                     error_counters.reserve_blockhash += 1;
                     Err(TransactionError::BlockhashNotFound)
                 } else {
@@ -566,7 +568,7 @@ impl Bank {
                 Err(e) => Err(e.clone()),
                 Ok((ref mut accounts, ref mut loaders)) => {
                     self.runtime
-                        .execute_transaction(tx, loaders, accounts, tick_height)
+                        .process_message(tx.message(), loaders, accounts, tick_height)
                 }
             })
             .collect();
@@ -652,18 +654,21 @@ impl Bank {
         let results = txs
             .iter()
             .zip(executed.iter())
-            .map(|(tx, res)| match *res {
-                Err(TransactionError::InstructionError(_, _)) => {
-                    // Charge the transaction fee even in case of InstructionError
-                    self.withdraw(&tx.account_keys[0], tx.fee)?;
-                    fees += tx.fee;
-                    Ok(())
+            .map(|(tx, res)| {
+                let message = tx.message();
+                match *res {
+                    Err(TransactionError::InstructionError(_, _)) => {
+                        // Charge the transaction fee even in case of InstructionError
+                        self.withdraw(&message.account_keys[0], message.fee)?;
+                        fees += message.fee;
+                        Ok(())
+                    }
+                    Ok(()) => {
+                        fees += message.fee;
+                        Ok(())
+                    }
+                    _ => res.clone(),
                 }
-                Ok(()) => {
-                    fees += tx.fee;
-                    Ok(())
-                }
-                _ => res.clone(),
             })
             .collect();
         self.deposit(&self.collector_id, fees);
@@ -1308,14 +1313,14 @@ mod tests {
         );
 
         let mut tx_invalid_program_index = tx.clone();
-        tx_invalid_program_index.instructions[0].program_ids_index = 42;
+        tx_invalid_program_index.message.instructions[0].program_ids_index = 42;
         assert_eq!(
             bank.process_transaction(&tx_invalid_program_index),
             Err(TransactionError::InvalidAccountIndex)
         );
 
         let mut tx_invalid_account_index = tx.clone();
-        tx_invalid_account_index.instructions[0].accounts[0] = 42;
+        tx_invalid_account_index.message.instructions[0].accounts[0] = 42;
         assert_eq!(
             bank.process_transaction(&tx_invalid_account_index),
             Err(TransactionError::InvalidAccountIndex)
@@ -1598,7 +1603,7 @@ mod tests {
 
         // Set the fee to 0, this should give an InstructionError
         // but since no signature we cannot look up the error.
-        tx.fee = 0;
+        tx.message.fee = 0;
 
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(bank.get_balance(&key.pubkey()), 0);

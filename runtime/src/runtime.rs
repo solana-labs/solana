@@ -1,9 +1,10 @@
 use crate::native_loader;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
-use solana_sdk::transaction::{Transaction, TransactionError};
+use solana_sdk::transaction::TransactionError;
 
 /// Return true if the slice has any duplicate elements
 pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
@@ -113,22 +114,22 @@ impl Runtime {
     /// This method calls the instruction's program entrypoint method
     fn process_instruction(
         &self,
-        tx: &Transaction,
+        message: &Message,
         instruction_index: usize,
         executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
         tick_height: u64,
     ) -> Result<(), InstructionError> {
-        let program_id = tx.program_id(instruction_index);
+        let program_id = message.program_id(instruction_index);
 
         let mut keyed_accounts = create_keyed_accounts(executable_accounts);
-        let mut keyed_accounts2: Vec<_> = tx.instructions[instruction_index]
+        let mut keyed_accounts2: Vec<_> = message.instructions[instruction_index]
             .accounts
             .iter()
             .map(|&index| {
                 let index = index as usize;
-                let key = &tx.account_keys[index];
-                (key, index < tx.signatures.len())
+                let key = &message.account_keys[index];
+                (key, index < message.num_signatures as usize)
             })
             .zip(program_accounts.iter_mut())
             .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
@@ -140,7 +141,7 @@ impl Runtime {
                 return process_instruction(
                     &program_id,
                     &mut keyed_accounts[1..],
-                    &tx.instructions[instruction_index].data,
+                    &message.instructions[instruction_index].data,
                     tick_height,
                 );
             }
@@ -149,7 +150,7 @@ impl Runtime {
         native_loader::entrypoint(
             &program_id,
             &mut keyed_accounts,
-            &tx.instructions[instruction_index].data,
+            &message.instructions[instruction_index].data,
             tick_height,
         )
     }
@@ -160,13 +161,13 @@ impl Runtime {
     /// The accounts are committed back to the bank only if this function returns Ok(_).
     fn execute_instruction(
         &self,
-        tx: &Transaction,
+        message: &Message,
         instruction_index: usize,
         executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
         tick_height: u64,
     ) -> Result<(), InstructionError> {
-        let program_id = tx.program_id(instruction_index);
+        let program_id = message.program_id(instruction_index);
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard-coded programs not to clobber or allocate
         let pre_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
@@ -176,7 +177,7 @@ impl Runtime {
             .collect();
 
         self.process_instruction(
-            tx,
+            message,
             instruction_index,
             executable_accounts,
             program_accounts,
@@ -204,22 +205,22 @@ impl Runtime {
         Ok(())
     }
 
-    /// Execute a transaction.
-    /// This method calls each instruction in the transaction over the set of loaded Accounts
+    /// Process a message.
+    /// This method calls each instruction in the message over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
-    pub fn execute_transaction(
+    pub fn process_message(
         &self,
-        tx: &Transaction,
+        message: &Message,
         loaders: &mut [Vec<(Pubkey, Account)>],
-        tx_accounts: &mut [Account],
+        accounts: &mut [Account],
         tick_height: u64,
     ) -> Result<(), TransactionError> {
-        for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
+        for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let executable_accounts = &mut loaders[instruction.program_ids_index as usize];
-            let mut program_accounts = get_subset_unchecked_mut(tx_accounts, &instruction.accounts)
+            let mut program_accounts = get_subset_unchecked_mut(accounts, &instruction.accounts)
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
             self.execute_instruction(
-                tx,
+                message,
                 instruction_index,
                 executable_accounts,
                 &mut program_accounts,
