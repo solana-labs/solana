@@ -66,8 +66,11 @@ pub fn next_leader_slot(
             current_slot += 1;
             if *pubkey == leader_schedule[i] {
                 if let Some(blocktree) = blocktree {
-                    if blocktree.meta(current_slot).unwrap().is_some() {
-                        continue;
+                    if let Some(meta) = blocktree.meta(current_slot).unwrap() {
+                        // We have already sent a blob for this slot, so skip it
+                        if meta.received > 0 {
+                            continue;
+                        }
                     }
                 }
 
@@ -94,6 +97,8 @@ pub fn tick_height_to_slot(ticks_per_slot: u64, tick_height: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::tests::make_slot_entries;
     use crate::staking_utils;
     use crate::voting_keypair::tests::new_vote_account_with_delegate;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
@@ -134,6 +139,74 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn test_next_leader_slot_blocktree() {
+        let pubkey = Keypair::new().pubkey();
+        let mut genesis_block = GenesisBlock::new_with_leader(
+            BOOTSTRAP_LEADER_LAMPORTS,
+            &pubkey,
+            BOOTSTRAP_LEADER_LAMPORTS,
+        )
+        .0;
+        genesis_block.epoch_warmup = false;
+
+        let bank = Bank::new(&genesis_block);
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Arc::new(
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            );
+
+            assert_eq!(slot_leader_at(bank.slot(), &bank).unwrap(), pubkey);
+            // Check that the next leader slot after 0 is slot 1
+            assert_eq!(
+                next_leader_slot(&pubkey, 0, &bank, Some(&blocktree)),
+                Some(1)
+            );
+
+            // Write a blob into slot 2 that chains to slot 1,
+            // but slot 1 is empty so should not be skipped
+            let (blobs, _) = make_slot_entries(2, 1, 1);
+            blocktree.write_blobs(&blobs[..]).unwrap();
+            assert_eq!(
+                next_leader_slot(&pubkey, 0, &bank, Some(&blocktree)),
+                Some(1)
+            );
+
+            // Write a blob into slot 1
+            let (blobs, _) = make_slot_entries(1, 0, 1);
+
+            // Check that slot 1 and 2 are skipped
+            blocktree.write_blobs(&blobs[..]).unwrap();
+            assert_eq!(
+                next_leader_slot(&pubkey, 0, &bank, Some(&blocktree)),
+                Some(3)
+            );
+
+            // Integrity checks
+            assert_eq!(
+                next_leader_slot(
+                    &pubkey,
+                    2 * genesis_block.slots_per_epoch - 1, // no schedule generated for epoch 2
+                    &bank,
+                    Some(&blocktree)
+                ),
+                None
+            );
+
+            assert_eq!(
+                next_leader_slot(
+                    &Keypair::new().pubkey(), // not in leader_schedule
+                    0,
+                    &bank,
+                    Some(&blocktree)
+                ),
+                None
+            );
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
