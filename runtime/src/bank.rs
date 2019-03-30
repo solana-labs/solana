@@ -11,6 +11,7 @@ use bincode::serialize;
 use hashbrown::HashMap;
 use log::*;
 use solana_metrics::counter::Counter;
+use solana_metrics::influxdb;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -19,7 +20,7 @@ use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCKHASHES};
+use solana_sdk::timing::{duration_as_ms, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Transaction, TransactionError};
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState};
@@ -260,11 +261,28 @@ impl Bank {
         let parents = self.parents();
         *self.parent.write().unwrap() = None;
 
+        let squash_accounts_start = Instant::now();
         self.accounts.squash(self.accounts_id);
+        let squash_accounts_ms = duration_as_ms(&squash_accounts_start.elapsed());
 
+        let squash_cache_start = Instant::now();
         parents
             .iter()
             .for_each(|p| self.status_cache.write().unwrap().add_root(p.slot()));
+        let squash_cache_ms = duration_as_ms(&squash_cache_start.elapsed());
+
+        solana_metrics::submit(
+            influxdb::Point::new("counter-locktower-observed")
+                .add_field(
+                    "squash_accounts_ms",
+                    influxdb::Value::Integer(squash_accounts_ms as i64),
+                )
+                .add_field(
+                    "squash_cache_ms",
+                    influxdb::Value::Integer(squash_cache_ms as i64),
+                )
+                .to_owned(),
+        );
     }
 
     /// Return the more recent checkpoint of this bank instance.
