@@ -34,7 +34,6 @@ fn new_gossip(
     GossipService::new(&cluster_info, None, None, gossip, exit)
 }
 
-/// Test that message sent from leader to target1 and replayed to target2
 #[test]
 fn test_replay() {
     solana_logger::setup();
@@ -99,8 +98,9 @@ fn test_replay() {
     let dr_1 = new_gossip(cref1.clone(), target1.sockets.gossip, &exit);
 
     let voting_keypair = Keypair::new();
+    let blocktree = Arc::new(blocktree);
     let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
-        create_test_recorder(&bank);
+        create_test_recorder(&bank, &blocktree);
     let tvu = Tvu::new(
         &voting_keypair.pubkey(),
         Some(Arc::new(voting_keypair)),
@@ -114,7 +114,7 @@ fn test_replay() {
                 fetch: target1.sockets.tvu,
             }
         },
-        Arc::new(blocktree),
+        blocktree,
         STORAGE_ROTATE_TEST_COUNT,
         &StorageState::default(),
         None,
@@ -185,6 +185,7 @@ fn test_replay() {
     dr_1.join().unwrap();
     t_receiver.join().unwrap();
     t_responder.join().unwrap();
+    drop(poh_recorder);
     Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     let _ignored = remove_dir_all(&blocktree_path);
 }

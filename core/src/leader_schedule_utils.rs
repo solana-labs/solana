@@ -1,3 +1,4 @@
+use crate::blocktree::Blocktree;
 use crate::leader_schedule::LeaderSchedule;
 use crate::staking_utils;
 use solana_runtime::bank::Bank;
@@ -44,7 +45,12 @@ pub fn slot_leader_at(slot: u64, bank: &Bank) -> Option<Pubkey> {
 }
 
 /// Return the next slot after the given current_slot that the given node will be leader
-pub fn next_leader_slot(pubkey: &Pubkey, mut current_slot: u64, bank: &Bank) -> Option<u64> {
+pub fn next_leader_slot(
+    pubkey: &Pubkey,
+    mut current_slot: u64,
+    bank: &Bank,
+    blocktree: Option<&Blocktree>,
+) -> Option<u64> {
     let (mut epoch, mut start_index) = bank.get_epoch_and_slot_index(current_slot + 1);
     while let Some(leader_schedule) = leader_schedule(epoch, bank) {
         // clippy thinks I should do this:
@@ -59,6 +65,15 @@ pub fn next_leader_slot(pubkey: &Pubkey, mut current_slot: u64, bank: &Bank) -> 
         for i in start_index..bank.get_slots_in_epoch(epoch) {
             current_slot += 1;
             if *pubkey == leader_schedule[i] {
+                if let Some(blocktree) = blocktree {
+                    if let Some(meta) = blocktree.meta(current_slot).unwrap() {
+                        // We have already sent a blob for this slot, so skip it
+                        if meta.received > 0 {
+                            continue;
+                        }
+                    }
+                }
+
                 return Some(current_slot);
             }
         }
@@ -82,9 +97,13 @@ pub fn tick_height_to_slot(ticks_per_slot: u64, tick_height: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::tests::make_slot_entries;
     use crate::staking_utils;
+    use crate::voting_keypair::tests::new_vote_account_with_delegate;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::sync::Arc;
 
     #[test]
     fn test_next_leader_slot() {
@@ -99,13 +118,14 @@ mod tests {
 
         let bank = Bank::new(&genesis_block);
         assert_eq!(slot_leader_at(bank.slot(), &bank).unwrap(), pubkey);
-        assert_eq!(next_leader_slot(&pubkey, 0, &bank), Some(1));
-        assert_eq!(next_leader_slot(&pubkey, 1, &bank), Some(2));
+        assert_eq!(next_leader_slot(&pubkey, 0, &bank, None), Some(1));
+        assert_eq!(next_leader_slot(&pubkey, 1, &bank, None), Some(2));
         assert_eq!(
             next_leader_slot(
                 &pubkey,
                 2 * genesis_block.slots_per_epoch - 1, // no schedule generated for epoch 2
-                &bank
+                &bank,
+                None
             ),
             None
         );
@@ -114,9 +134,130 @@ mod tests {
             next_leader_slot(
                 &Keypair::new().pubkey(), // not in leader_schedule
                 0,
-                &bank
+                &bank,
+                None
             ),
             None
+        );
+    }
+
+    #[test]
+    fn test_next_leader_slot_blocktree() {
+        let pubkey = Keypair::new().pubkey();
+        let mut genesis_block = GenesisBlock::new_with_leader(
+            BOOTSTRAP_LEADER_LAMPORTS,
+            &pubkey,
+            BOOTSTRAP_LEADER_LAMPORTS,
+        )
+        .0;
+        genesis_block.epoch_warmup = false;
+
+        let bank = Bank::new(&genesis_block);
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Arc::new(
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            );
+
+            assert_eq!(slot_leader_at(bank.slot(), &bank).unwrap(), pubkey);
+            // Check that the next leader slot after 0 is slot 1
+            assert_eq!(
+                next_leader_slot(&pubkey, 0, &bank, Some(&blocktree)),
+                Some(1)
+            );
+
+            // Write a blob into slot 2 that chains to slot 1,
+            // but slot 1 is empty so should not be skipped
+            let (blobs, _) = make_slot_entries(2, 1, 1);
+            blocktree.write_blobs(&blobs[..]).unwrap();
+            assert_eq!(
+                next_leader_slot(&pubkey, 0, &bank, Some(&blocktree)),
+                Some(1)
+            );
+
+            // Write a blob into slot 1
+            let (blobs, _) = make_slot_entries(1, 0, 1);
+
+            // Check that slot 1 and 2 are skipped
+            blocktree.write_blobs(&blobs[..]).unwrap();
+            assert_eq!(
+                next_leader_slot(&pubkey, 0, &bank, Some(&blocktree)),
+                Some(3)
+            );
+
+            // Integrity checks
+            assert_eq!(
+                next_leader_slot(
+                    &pubkey,
+                    2 * genesis_block.slots_per_epoch - 1, // no schedule generated for epoch 2
+                    &bank,
+                    Some(&blocktree)
+                ),
+                None
+            );
+
+            assert_eq!(
+                next_leader_slot(
+                    &Keypair::new().pubkey(), // not in leader_schedule
+                    0,
+                    &bank,
+                    Some(&blocktree)
+                ),
+                None
+            );
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_next_leader_slot_next_epoch() {
+        let pubkey = Keypair::new().pubkey();
+        let (mut genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
+            2 * BOOTSTRAP_LEADER_LAMPORTS,
+            &pubkey,
+            BOOTSTRAP_LEADER_LAMPORTS,
+        );
+        genesis_block.epoch_warmup = false;
+
+        let bank = Bank::new(&genesis_block);
+        let delegate_id = Keypair::new().pubkey();
+
+        // Create new vote account
+        let new_voting_keypair = Keypair::new();
+        new_vote_account_with_delegate(
+            &mint_keypair,
+            &new_voting_keypair,
+            &delegate_id,
+            &bank,
+            BOOTSTRAP_LEADER_LAMPORTS,
+        );
+
+        // Have to wait until the epoch at after the epoch stakes generated at genesis
+        // for the new votes to take effect.
+        let mut target_slot = 1;
+        let epoch = bank.get_stakers_epoch(0);
+        while bank.get_stakers_epoch(target_slot) == epoch {
+            target_slot += 1;
+        }
+
+        let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), target_slot);
+        let mut expected_slot = 0;
+        let epoch = bank.get_stakers_epoch(target_slot);
+        for i in 0..epoch {
+            expected_slot += bank.get_slots_in_epoch(i);
+        }
+
+        let schedule = leader_schedule(epoch, &bank).unwrap();
+        let mut index = 0;
+        while schedule[index] != delegate_id {
+            index += 1
+        }
+
+        expected_slot += index;
+
+        assert_eq!(
+            next_leader_slot(&delegate_id, 0, &bank, None),
+            Some(expected_slot),
         );
     }
 
