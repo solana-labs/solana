@@ -202,8 +202,10 @@ pub mod tests {
         let blocktree_path = get_tmp_ledger_path!();
         let (blocktree, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
+        let blocktree = Arc::new(blocktree);
         let bank = bank_forks.working_bank();
-        let (exit, poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
+        let (exit, poh_recorder, poh_service, _entry_receiver) =
+            create_test_recorder(&bank, &blocktree);
         let voting_keypair = Keypair::new();
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
@@ -218,7 +220,7 @@ pub mod tests {
                     fetch: target1.sockets.tvu,
                 }
             },
-            Arc::new(blocktree),
+            blocktree,
             STORAGE_ROTATE_TEST_COUNT,
             &StorageState::default(),
             None,
