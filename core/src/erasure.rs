@@ -25,6 +25,7 @@ pub enum ErasureError {
     EncodeError,
     InvalidBlockSize,
     InvalidBlobData,
+    CorruptCoding,
 }
 
 // k = number of data devices
@@ -470,6 +471,78 @@ pub fn recover(
     Ok((missing_data, missing_coding))
 }
 
+pub fn recover_with_blobs(
+    slot: u64,
+    start_idx: u64,
+    blobs_to_recover: &[Option<Vec<u8>>; NUM_CODING + NUM_DATA],
+) -> Result<(Vec<SharedBlob>, Vec<SharedBlob>)> {
+    let block_start_idx = start_idx - (start_idx % NUM_DATA as u64);
+
+    debug!("block_start_idx: {}", block_start_idx);
+
+    let coding_start_idx = block_start_idx + NUM_DATA as u64 - NUM_CODING as u64;
+    let block_end_idx = block_start_idx + NUM_DATA as u64;
+    trace!(
+        "recover: coding_start_idx: {} block_end_idx: {}",
+        coding_start_idx,
+        block_end_idx
+    );
+
+    let mut blobs: Vec<SharedBlob> = Vec::with_capacity(ERASURE_SET_SIZE);
+    let mut erasures: Vec<i32> = Vec::with_capacity(NUM_CODING);
+
+    let mut missing_data: Vec<SharedBlob> = vec![];
+    let mut missing_coding: Vec<SharedBlob> = vec![];
+
+    if blobs_to_recover[NUM_DATA..].iter().all(Option::is_none) {
+        return Err(Error::ErasureError(ErasureError::NotEnoughBlocksToDecode));
+    }
+
+    let mut size = None;
+
+    for (erasure_index, blob_bytes_opt) in blobs_to_recover.iter().enumerate() {
+        match blob_bytes_opt {
+            Some(bytes) => {
+                if bytes.len() <= BLOB_HEADER_SIZE || bytes.len() > BLOB_SIZE {
+                    return Err(Error::ErasureError(ErasureError::InvalidBlobData));
+                }
+                if erasure_index as usize >= NUM_DATA && size.is_none() {
+                    size = Some(bytes.len() - BLOB_HEADER_SIZE);
+                }
+                blobs.push(Arc::new(RwLock::new(Blob::new(&bytes))));
+            }
+
+            None => {
+                erasures.push(erasure_index as i32);
+                let b = SharedBlob::default();
+                blobs.push(b.clone());
+                if erasure_index < NUM_DATA {
+                    missing_data.push(b);
+                } else {
+                    missing_coding.push(b);
+                }
+            }
+        }
+    }
+
+    // Due to checks above we know at least one coding block must exist, so "size" can
+    //  not remain None after the above processing.
+    let size = size.unwrap();
+
+    // marks end of erasures
+    erasures.push(-1);
+
+    trace!("erasures[]:{:?} data_size: {}", erasures, size,);
+
+    let corrupt = decode_blobs(&blobs, &erasures, size, block_start_idx, slot)?;
+
+    if corrupt {
+        return Err(Error::ErasureError(ErasureError::CorruptCoding));
+    }
+
+    Ok((missing_data, missing_coding))
+}
+
 fn categorize_blob(
     get_blob_result: &Option<Vec<u8>>,
     blobs: &mut Vec<SharedBlob>,
@@ -522,6 +595,23 @@ pub mod test {
     pub struct SlotSpec {
         pub slot: u64,
         pub set_specs: Vec<ErasureSpec>,
+    }
+
+    /// Model of a slot in 16-blob chunks with varying amounts of erasure and coding blobs
+    /// present
+    #[derive(Debug, Clone)]
+    pub struct SlotModel {
+        pub slot: u64,
+        pub chunks: Vec<ErasureSetModel>,
+    }
+
+    /// Model of 16-blob chunk
+    #[derive(Debug, Clone)]
+    pub struct ErasureSetModel {
+        pub set_index: u64,
+        pub start_index: u64,
+        pub coding: Vec<SharedBlob>,
+        pub data: Vec<SharedBlob>,
     }
 
     #[test]
@@ -780,46 +870,70 @@ pub mod test {
         Blocktree::destroy(&ledger_path).expect("Expect successful blocktree destruction");
     }
 
-    /// Genarates a ledger according to the given specs. Does not generate a valid ledger with
-    /// chaining and etc.
+    /// Generates a model of a ledger containing certain data and coding blobs according to a spec
+    pub fn generate_ledger_model<'a>(
+        specs: &'a [SlotSpec],
+    ) -> impl Iterator<Item = SlotModel> + Clone + 'a {
+        specs.iter().map(|spec| {
+            let slot = spec.slot;
+
+            let chunks = spec
+                .set_specs
+                .iter()
+                .map(|erasure_spec| {
+                    let set_index = erasure_spec.set_index as usize;
+                    let start_index = set_index * NUM_DATA;
+
+                    let mut blobs = make_tiny_test_entries(NUM_DATA).to_single_entry_shared_blobs();
+                    index_blobs(
+                        &blobs,
+                        &Keypair::new().pubkey(),
+                        start_index as u64,
+                        slot,
+                        0,
+                    );
+
+                    let mut coding_generator = CodingGenerator::new();
+                    let mut coding_blobs = coding_generator.next(&blobs).unwrap();
+
+                    blobs.drain(erasure_spec.num_data..);
+                    coding_blobs.drain(erasure_spec.num_coding..);
+
+                    ErasureSetModel {
+                        start_index: start_index as u64,
+                        set_index: set_index as u64,
+                        data: blobs,
+                        coding: coding_blobs,
+                    }
+                })
+                .collect();
+
+            SlotModel { slot, chunks }
+        })
+    }
+
+    /// Genarates a ledger according to the given specs.
+    /// Blocktree should have correct SlotMeta and ErasureMeta and so on but will not have done any
+    /// possible recovery.
     pub fn generate_blocktree_with_coding(ledger_path: &str, specs: &[SlotSpec]) -> Blocktree {
         let blocktree = Blocktree::open(ledger_path).unwrap();
 
-        for spec in specs {
-            let slot = spec.slot;
+        let model = generate_ledger_model(specs);
+        for slot_model in model {
+            let slot = slot_model.slot;
 
-            for erasure_spec in spec.set_specs.iter() {
-                let set_index = erasure_spec.set_index as usize;
-                let start_index = set_index * NUM_DATA;
+            for erasure_set in slot_model.chunks {
+                blocktree.write_shared_blobs(erasure_set.data).unwrap();
 
-                let mut blobs = make_tiny_test_entries(NUM_DATA).to_single_entry_shared_blobs();
-                index_blobs(
-                    &blobs,
-                    &Keypair::new().pubkey(),
-                    start_index as u64,
-                    slot,
-                    0,
-                );
-
-                let mut coding_generator = CodingGenerator::new();
-                let mut coding_blobs = coding_generator.next(&blobs).unwrap();
-
-                blobs.drain(erasure_spec.num_data..);
-                coding_blobs.drain(erasure_spec.num_coding..);
-
-                for shared_blob in blobs {
-                    let blob = shared_blob.read().unwrap();
-                    let size = blob.size() as usize + BLOB_HEADER_SIZE;
+                for shared_coding_blob in erasure_set.coding.into_iter() {
+                    let blob = shared_coding_blob.read().unwrap();
                     blocktree
-                        .put_data_blob_bytes(blob.slot(), blob.index(), &blob.data[..size])
-                        .unwrap();
-                }
-
-                for shared_blob in coding_blobs {
-                    let blob = shared_blob.read().unwrap();
-                    let size = blob.size() as usize + BLOB_HEADER_SIZE;
-                    blocktree
-                        .put_coding_blob_bytes(blob.slot(), blob.index(), &blob.data[..size])
+                        .write_coding_blob(
+                            slot,
+                            blob.index(),
+                            &blob.data[..blob.size() + BLOB_HEADER_SIZE],
+                            false,
+                        )
                         .unwrap();
                 }
             }

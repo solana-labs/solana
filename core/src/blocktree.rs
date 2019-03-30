@@ -3,6 +3,8 @@
 //! access read to a persistent file-based ledger.
 
 use crate::entry::Entry;
+#[cfg(feature = "erasure")]
+use crate::erasure;
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
 #[cfg(feature = "kvstore")]
@@ -42,6 +44,10 @@ macro_rules! db_imports {
         };
 
         pub use $mod::{$db, ErasureCf, MetaCf, DataCf, DetachedHeadsCf};
+        pub use $mod::{$db, ErasureCf, MetaCf, DataCf};
+        #[cfg(feature = "erasure")]
+        pub use $mod::{ErasureMetaCf};
+
         pub type BlocktreeRawIterator = <$db as Database>::Cursor;
         pub type WriteBatch = <$db as Database>::WriteBatch;
         pub type OwnedKey = <$db as Database>::OwnedKey;
@@ -115,6 +121,99 @@ impl SlotMeta {
     }
 }
 
+#[cfg(feature = "erasure")]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+/// Erasure coding information
+pub struct ErasureMeta {
+    pub slot: u64,
+    /// Which erasure set in the slot this is.
+    /// Example: Set index `0` covers data indexes `[0, 16)` and coding blobs at `[12,16)`.
+    pub set_index: u64,
+    /// Bitfield representing presence/absence of data blobs
+    pub data: u16,
+    /// Bitfield representing presence/absence of coding blobs
+    pub coding: u8,
+}
+
+#[cfg(feature = "erasure")]
+impl ErasureMeta {
+    pub fn new(slot: u64, set_index: u64) -> ErasureMeta {
+        ErasureMeta {
+            slot,
+            set_index,
+            data: 0,
+            coding: 0,
+        }
+    }
+
+    pub fn can_recover(&self) -> bool {
+        let (data_missing, coding_missing) = (
+            erasure::NUM_DATA - self.data.count_ones() as usize,
+            erasure::NUM_CODING - self.coding.count_ones() as usize,
+        );
+        (data_missing > 0 && data_missing + coding_missing <= erasure::NUM_CODING)
+    }
+
+    pub fn is_coding_present(&self, index: u64) -> bool {
+        let set_index = Self::set_index_for(index);
+
+        if set_index as u64 == self.set_index {
+            let (_, coding_start) = self.start_indices();
+            let position = index - coding_start;
+
+            self.coding & (1 << position) != 0
+        } else {
+            false
+        }
+    }
+
+    pub fn set_coding_present(&mut self, index: u64) {
+        let set_index = Self::set_index_for(index);
+
+        if set_index as u64 == self.set_index {
+            let (_, coding_start) = self.start_indices();
+            let position = index - coding_start;
+
+            self.coding |= 1 << position;
+        }
+    }
+
+    pub fn is_data_present(&self, index: u64) -> bool {
+        let set_index = Self::set_index_for(index);
+
+        if set_index as u64 == self.set_index {
+            let (data_start, _) = self.start_indices();
+            let position = index - data_start;
+
+            self.data & (1 << position) != 0
+        } else {
+            false
+        }
+    }
+
+    pub fn set_data_present(&mut self, index: u64) {
+        let set_index = Self::set_index_for(index);
+
+        if set_index as u64 == self.set_index {
+            let (data_start, _) = self.start_indices();
+            let position = index - data_start;
+
+            self.data |= 1 << position;
+        }
+    }
+
+    pub fn set_index_for(index: u64) -> u64 {
+        index / erasure::NUM_DATA as u64
+    }
+
+    /// returns a tuple of (data_start, coding_start)
+    pub fn start_indices(&self) -> (u64, u64) {
+        let data_start = self.set_index * erasure::NUM_DATA as u64;
+        let coding_start = data_start + (erasure::NUM_DATA - erasure::NUM_CODING) as u64;
+        (data_start, coding_start)
+    }
+}
+
 // ledger window
 pub struct Blocktree {
     // Underlying database is automatically closed in the Drop implementation of DB
@@ -126,6 +225,8 @@ pub struct Blocktree {
     data_cf: DataCf,
     erasure_cf: ErasureCf,
     detached_heads_cf: DetachedHeadsCf,
+    #[cfg(feature = "erasure")]
+    erasure_meta_cf: ErasureMetaCf,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
 }
 
@@ -137,6 +238,8 @@ pub const DATA_CF: &str = "data";
 pub const ERASURE_CF: &str = "erasure";
 // Column family for detached heads data
 pub const DETACHED_HEADS_CF: &str = "detached_heads";
+#[cfg(feature = "erasure")]
+pub const ERASURE_META_CF: &str = "erasure_meta";
 
 impl Blocktree {
     pub fn open_with_signal(ledger_path: &str) -> Result<(Self, Receiver<bool>)> {
@@ -269,6 +372,9 @@ impl Blocktree {
         // A map from slot to a 2-tuple of metadata: (working copy, backup copy),
         // so we can detect changes to the slot metadata later
         let mut slot_meta_working_set = HashMap::new();
+        #[cfg(feature = "erasure")]
+        let mut erasure_meta_working_set = HashMap::new();
+
         let new_blobs: Vec<_> = new_blobs.into_iter().collect();
         let mut prev_inserted_blob_datas = HashMap::new();
 
@@ -309,6 +415,21 @@ impl Blocktree {
                 continue;
             }
 
+            #[cfg(feature = "erasure")]
+            {
+                let set_index = ErasureMeta::set_index_for(blob.index());
+                let erasure_meta_entry = erasure_meta_working_set
+                    .entry((blob_slot, set_index))
+                    .or_insert_with(|| {
+                        self.erasure_meta_cf
+                            .get(&ErasureMetaCf::key(&(blob_slot, set_index)))
+                            .expect("Expect database get to succeed")
+                            .unwrap_or_else(|| ErasureMeta::new(blob_slot, set_index))
+                    });
+
+                erasure_meta_entry.set_data_present(blob.index());
+            }
+
             let _ = self.insert_data_blob(
                 blob,
                 &mut prev_inserted_blob_datas,
@@ -334,6 +455,15 @@ impl Blocktree {
                     &serialize(&meta)?,
                 )?;
             }
+        }
+
+        #[cfg(feature = "erasure")]
+        for ((slot, set_index), erasure_meta) in erasure_meta_working_set.into_iter() {
+            write_batch.put_cf(
+                self.erasure_meta_cf.handle(),
+                &ErasureMetaCf::key(&(slot, set_index)),
+                &serialize(&erasure_meta)?,
+            )?;
         }
 
         self.db.write(write_batch)?;
@@ -420,6 +550,90 @@ impl Blocktree {
     }
     pub fn put_coding_blob_bytes(&self, slot: u64, index: u64, bytes: &[u8]) -> Result<()> {
         self.erasure_cf.put_by_index(&(slot, index), bytes)
+    }
+
+    /// this function will insert coding blobs and also automatically track erasure-related
+    /// metadata
+    /// The `auto_recover` parameter controls whether blocktree will automatically do any recovery
+    /// made possible by the insertion of this coding blob
+    #[cfg(feature = "erasure")]
+    pub fn write_coding_blob(
+        &self,
+        slot: u64,
+        index: u64,
+        bytes: &[u8],
+        auto_recover: bool,
+    ) -> Result<()> {
+        let set_index = ErasureMeta::set_index_for(index);
+        let mut erasure_meta = self
+            .erasure_meta_cf
+            .get(&ErasureMetaCf::key(&(slot, set_index)))?
+            .unwrap_or_else(|| ErasureMeta::new(slot, set_index));
+
+        erasure_meta.set_coding_present(index);
+
+        let mut writebatch = self.db.batch()?;
+
+        writebatch.put_cf(
+            self.erasure_cf.handle(),
+            &ErasureCf::key(&(slot, index)),
+            bytes,
+        )?;
+
+        let mut blobs_to_write = vec![];
+        let mut coding_to_delete = vec![];
+
+        if auto_recover && erasure_meta.can_recover() {
+            match self.recover(&erasure_meta, slot, index, bytes) {
+                Ok((mut recovered_data, recovered_coding)) => {
+                    blobs_to_write.append(&mut recovered_data);
+
+                    if !recovered_coding.is_empty() {
+                        for coding_blob in recovered_coding {
+                            let blob = coding_blob.read().unwrap();
+                            let index = blob.index();
+
+                            writebatch.put_cf(
+                                self.erasure_cf.handle(),
+                                &ErasureCf::key(&(slot, index)),
+                                &blob.data[..BLOB_HEADER_SIZE + blob.size()],
+                            )?;
+
+                            erasure_meta.set_coding_present(index)
+                        }
+                    }
+                }
+                Err(Error::ErasureError(erasure::ErasureError::CorruptCoding)) => {
+                    let (_, coding_start) = erasure_meta.start_indices();
+                    let coding_end = coding_start + erasure::NUM_DATA as u64;
+
+                    erasure_meta.coding = 0;
+
+                    for i in coding_start..coding_end {
+                        coding_to_delete.push((slot, i));
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        writebatch.put_cf(
+            self.erasure_meta_cf.handle(),
+            &ErasureMetaCf::key(&(slot, set_index)),
+            &serialize(&erasure_meta)?,
+        )?;
+
+        self.db.write(writebatch)?;
+
+        // TODO: add delete function to WriteBatch so this can all be done at once.
+        // As is there's a chance we could waste a lot of work
+        for (slot, index) in coding_to_delete {
+            self.delete_coding_blob(slot, index as u64)?;
+        }
+
+        self.write_shared_blobs(blobs_to_write)?;
+
+        Ok(())
     }
 
     pub fn put_data_raw(&self, key: &Key, value: &[u8]) -> Result<()> {
@@ -910,6 +1124,59 @@ impl Blocktree {
         Ok(())
     }
 
+    #[cfg(feature = "erasure")]
+    /// Attempts recovery using erasure coding
+    fn recover(
+        &self,
+        erasure_meta: &ErasureMeta,
+        slot: u64,
+        index: u64,
+        new_coding_blob: &[u8],
+    ) -> Result<(Vec<SharedBlob>, Vec<SharedBlob>)> {
+        use crate::erasure::{ERASURE_SET_SIZE, NUM_DATA};
+
+        let (data_start, coding_start) = erasure_meta.start_indices();
+        let data_end = data_start + NUM_DATA as u64;
+
+        // Can't use array init syntax [<expr>; N] for non-copy type
+        let mut recovery = [
+            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None,
+        ];
+        assert_eq!(recovery.len(), ERASURE_SET_SIZE);
+
+        let recovery_index_for_current_blob = (index - coding_start) as usize + NUM_DATA;
+        recovery[recovery_index_for_current_blob] = Some(new_coding_blob.to_vec());
+
+        let (data, coding) = recovery.split_at_mut(NUM_DATA);
+
+        for i in data_start..data_end {
+            let position_from_start = i - data_start;
+
+            if erasure_meta.is_data_present(i) {
+                let blob_bytes = self
+                    .get_data_blob_bytes(slot, i)?
+                    .expect("erasure_meta must have no false positives");
+                data[position_from_start as usize] = Some(blob_bytes);
+            }
+        }
+
+        for i in coding_start..data_end {
+            let position_from_start = i - coding_start;
+
+            // Must not try to retrieve the coding blob currently being inserted
+            if erasure_meta.is_coding_present(i) && i != index {
+                let blob_bytes = self
+                    .get_coding_blob_bytes(slot, i)?
+                    .expect("erasure_meta must have no false positives");
+
+                coding[position_from_start as usize] = Some(blob_bytes);
+            }
+        }
+
+        erasure::recover_with_blobs(slot, data_start, &recovery)
+    }
+
     /// Returns the next consumed index and the number of ticks in the new consumed
     /// range
     fn get_slot_consecutive_blobs<'a>(
@@ -1220,14 +1487,11 @@ pub mod tests {
         // Test erasure column family
         let erasure = vec![1u8; 16];
         let erasure_key = ErasureCf::key(&(0, 0));
-        ledger
-            .erasure_cf
-            .put_bytes(&erasure_key[..], &erasure)
-            .unwrap();
+        ledger.erasure_cf.put_bytes(&erasure_key, &erasure).unwrap();
 
         let result = ledger
             .erasure_cf
-            .get_bytes(&erasure_key[..])
+            .get_bytes(&erasure_key)
             .unwrap()
             .expect("Expected erasure object to exist");
 
@@ -2397,6 +2661,294 @@ pub mod tests {
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[cfg(feature = "erasure")]
+    mod erasure {
+        use super::*;
+        use crate::erasure::test::{generate_ledger_model, ErasureSpec, SlotSpec};
+        use crate::erasure::{CodingGenerator, NUM_CODING, NUM_DATA};
+        use rand::{thread_rng, Rng};
+        use std::sync::RwLock;
+
+        impl Into<SharedBlob> for Blob {
+            fn into(self) -> SharedBlob {
+                Arc::new(RwLock::new(self))
+            }
+        }
+
+        #[test]
+        fn test_can_recover() {
+            let slot = 0;
+            let set_index = 0;
+            let mut e_meta = ErasureMeta {
+                slot,
+                set_index,
+                data: 0,
+                coding: 0,
+            };
+
+            assert!(!e_meta.can_recover());
+
+            e_meta.data = 0b1111_1111_1111_1111;
+            e_meta.coding = 0x00;
+
+            assert!(!e_meta.can_recover());
+
+            e_meta.coding = 0x0e;
+            assert_eq!(0x0fu8, 0b0000_1111u8);
+            assert!(!e_meta.can_recover());
+
+            e_meta.data = 0b0111_1111_1111_1111;
+            assert!(e_meta.can_recover());
+
+            e_meta.data = 0b0111_1111_1111_1110;
+            assert!(e_meta.can_recover());
+
+            e_meta.data = 0b0111_1111_1011_1110;
+            assert!(e_meta.can_recover());
+
+            e_meta.data = 0b0111_1011_1011_1110;
+            assert!(!e_meta.can_recover());
+
+            e_meta.data = 0b0111_1011_1011_1110;
+            assert!(!e_meta.can_recover());
+
+            e_meta.coding = 0b0000_1110;
+            e_meta.data = 0b1111_1111_1111_1100;
+            assert!(e_meta.can_recover());
+
+            e_meta.data = 0b1111_1111_1111_1000;
+            assert!(e_meta.can_recover());
+        }
+
+        #[test]
+        fn test_erasure_meta_tracking() {
+            let path = get_tmp_ledger_path!();
+            let blocktree = Blocktree::open(&path).unwrap();
+
+            // one erasure set + half of the next
+            let num_blobs = 24;
+            let slot = 0;
+
+            let (blobs, _) = make_slot_entries(slot, 0, num_blobs);
+            let shared_blobs: Vec<_> = blobs
+                .iter()
+                .cloned()
+                .map(|blob| Arc::new(RwLock::new(blob)))
+                .collect();
+
+            blocktree.write_blobs(&blobs[8..16]).unwrap();
+
+            let erasure_meta_opt = blocktree
+                .erasure_meta_cf
+                .get(&ErasureMetaCf::key(&(slot, 0)))
+                .expect("DB get must succeed");
+
+            assert!(erasure_meta_opt.is_some());
+            let erasure_meta = erasure_meta_opt.unwrap();
+
+            assert_eq!(erasure_meta.data, 0xFF00);
+            assert_eq!(erasure_meta.coding, 0x0);
+
+            blocktree.write_blobs(&blobs[..8]).unwrap();
+
+            let erasure_meta = blocktree
+                .erasure_meta_cf
+                .get(&ErasureMetaCf::key(&(slot, 0)))
+                .expect("DB get must succeed")
+                .unwrap();
+
+            assert_eq!(erasure_meta.data, 0xFFFF);
+            assert_eq!(erasure_meta.coding, 0x0);
+
+            blocktree.write_blobs(&blobs[16..]).unwrap();
+
+            let erasure_meta = blocktree
+                .erasure_meta_cf
+                .get(&ErasureMetaCf::key(&(slot, 1)))
+                .expect("DB get must succeed")
+                .unwrap();
+
+            assert_eq!(erasure_meta.data, 0x00FF);
+            assert_eq!(erasure_meta.coding, 0x0);
+
+            let mut coding_generator = CodingGenerator::new();
+            let coding_blobs = coding_generator.next(&shared_blobs[..NUM_DATA]).unwrap();
+
+            for shared_coding_blob in coding_blobs {
+                let blob = shared_coding_blob.read().unwrap();
+                let size = blob.size() + BLOB_HEADER_SIZE;
+                blocktree
+                    .write_coding_blob(blob.slot(), blob.index(), &blob.data[..size], false)
+                    .unwrap();
+            }
+
+            let erasure_meta = blocktree
+                .erasure_meta_cf
+                .get(&ErasureMetaCf::key(&(slot, 0)))
+                .expect("DB get must succeed")
+                .unwrap();
+
+            assert_eq!(erasure_meta.data, 0xFFFF);
+            assert_eq!(erasure_meta.coding, 0x0F);
+        }
+
+        #[test]
+        pub fn test_recovery_basic() {
+            let slot = 0;
+
+            let ledger_path = get_tmp_ledger_path!();
+
+            let blocktree = Blocktree::open(&ledger_path).unwrap();
+            let data_blobs = make_slot_entries(slot, 0, 3 * NUM_DATA as u64)
+                .0
+                .into_iter()
+                .map(Blob::into)
+                .collect::<Vec<_>>();
+
+            let mut coding_generator = CodingGenerator::new();
+
+            for (set_index, data_blobs) in data_blobs.chunks_exact(NUM_DATA).enumerate() {
+                let focused_index = (set_index + 1) * NUM_DATA - 1;
+                let coding_blobs = coding_generator.next(&data_blobs).unwrap();
+                assert_eq!(coding_blobs.len(), NUM_CODING);
+
+                let deleted_data = data_blobs[NUM_DATA - 1].clone();
+
+                blocktree
+                    .write_shared_blobs(&data_blobs[..NUM_DATA])
+                    .unwrap();
+
+                // this should trigger recovery
+                for shared_coding_blob in coding_blobs {
+                    let blob = shared_coding_blob.read().unwrap();
+                    let size = blob.size() + BLOB_HEADER_SIZE;
+
+                    blocktree
+                        .write_coding_blob(slot, blob.index(), &blob.data[..size], true)
+                        .expect("Inserting coding blobs must succeed");
+                }
+
+                let erasure_meta = blocktree
+                    .erasure_meta_cf
+                    .get(&ErasureMetaCf::key(&(slot, set_index as u64)))
+                    .expect("Erasure Meta should be present")
+                    .unwrap();
+
+                assert_eq!(erasure_meta.data, 0xFFFF);
+                assert_eq!(erasure_meta.coding, 0x0F);
+
+                let retrieved_data = blocktree
+                    .data_cf
+                    .get_by_index(&(slot, focused_index as u64))
+                    .unwrap();
+
+                assert!(retrieved_data.is_some());
+
+                let data_blob = Blob::new(&retrieved_data.unwrap());
+
+                assert_eq!(&data_blob, &*deleted_data.read().unwrap());
+            }
+
+            drop(blocktree);
+
+            Blocktree::destroy(&ledger_path).expect("Expect successful Blocktree destruction");
+        }
+
+        #[test]
+        fn test_recovery_multi_slot_multi_thread() {
+            use std::thread;
+
+            let slots = vec![0, 3, 5, 50, 100];
+            let max_erasure_sets = 16;
+            let path = get_tmp_ledger_path!();
+            let mut rng = thread_rng();
+
+            // Specification should generate a ledger where each slot has an random number of
+            // erasure sets. Odd erasure sets will have all data blobs and no coding blobs, and even ones
+            // will have between 1-4 data blobs missing and all coding blobs
+            let specs = slots
+                .iter()
+                .map(|&slot| {
+                    let num_erasure_sets = rng.gen_range(0, max_erasure_sets);
+
+                    let set_specs = (0..num_erasure_sets)
+                        .map(|set_index| {
+                            let (num_data, num_coding) = if set_index % 2 == 0 {
+                                (NUM_DATA - rng.gen_range(1, 5), NUM_CODING)
+                            } else {
+                                (NUM_DATA, 0)
+                            };
+                            ErasureSpec {
+                                set_index,
+                                num_data,
+                                num_coding,
+                            }
+                        })
+                        .collect();
+
+                    SlotSpec { slot, set_specs }
+                })
+                .collect::<Vec<_>>();
+
+            let model = generate_ledger_model(&specs);
+            let blocktree = Arc::new(Blocktree::open(&path).unwrap());
+
+            // Write to each slot in a different thread simultaneously.
+            // These writes should trigger the recovery. Every erasure set should have all of its
+            // data blobs
+            let handles = model
+                .clone()
+                .map(|slot_model| {
+                    let blocktree = Arc::clone(&blocktree);
+                    let slot = slot_model.slot;
+
+                    thread::spawn(move || {
+                        for erasure_set in slot_model.chunks {
+                            blocktree
+                                .write_shared_blobs(erasure_set.data)
+                                .expect("Writing data blobs must succeed");
+
+                            for shared_coding_blob in erasure_set.coding {
+                                let blob = shared_coding_blob.read().unwrap();
+                                let size = blob.size() + BLOB_HEADER_SIZE;
+                                blocktree
+                                    .write_coding_blob(slot, blob.index(), &blob.data[..size], true)
+                                    .expect("Writing coding blobs must succeed");
+                            }
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            handles
+                .into_iter()
+                .for_each(|handle| handle.join().unwrap());
+
+            for slot_model in model {
+                let slot = slot_model.slot;
+
+                for erasure_set_model in slot_model.chunks {
+                    let set_index = erasure_set_model.set_index as u64;
+
+                    let erasure_meta = blocktree
+                        .erasure_meta_cf
+                        .get(&ErasureMetaCf::key(&(slot, set_index)))
+                        .expect("DB get must succeed")
+                        .expect("ErasureMeta must be present for each erasure set");
+
+                    // all possibility for recovery should be exhausted
+                    assert!(!erasure_meta.can_recover());
+                    // Should have all data
+                    assert_eq!(erasure_meta.data, 0xFFFF);
+                    if set_index % 2 == 0 {
+                        // Even sets have all coding
+                        assert_eq!(erasure_meta.coding, 0x0F);
+                    }
+                }
+            }
+        }
     }
 
     pub fn entries_to_blobs(

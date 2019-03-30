@@ -37,6 +37,13 @@ pub struct DetachedHeadsCf {
     db: Arc<Kvs>,
 }
 
+#[cfg(feature = "erasure")]
+/// The erasure meta column family
+#[derive(Debug)]
+pub struct ErasureMetaCf {
+    db: Arc<Kvs>,
+}
+
 /// Dummy struct to get things compiling
 /// TODO: all this goes away with Blocktree
 pub struct EntryIterator(i32);
@@ -238,6 +245,40 @@ impl IndexColumn<Kvs> for DetachedHeadsCf {
     fn key(slot: &u64) -> Key {
         let mut key = Key::default();
         BigEndian::write_u64(&mut key.0[8..16], *slot);
+        key
+    }
+}
+
+#[cfg(feature = "erasure")]
+impl LedgerColumnFamilyRaw<Kvs> for ErasureMetaCf {
+    fn db(&self) -> &Arc<Kvs> {
+        &self.db
+    }
+
+    fn handle(&self) -> ColumnFamily {
+        self.db.cf_handle(super::ERASURE_META_CF).unwrap()
+    }
+}
+
+#[cfg(feature = "erasure")]
+impl LedgerColumnFamily<Kvs> for ErasureMetaCf {
+    type ValueType = super::ErasureMeta;
+}
+
+#[cfg(feature = "erasure")]
+impl IndexColumn<Kvs> for ErasureMetaCf {
+    type Index = (u64, u64);
+
+    fn index(key: &Key) -> (u64, u64) {
+        let slot = BigEndian::read_u64(&key.0[8..16]);
+        let set_index = BigEndian::read_u64(&key.0[16..]);
+        (slot, set_index)
+    }
+
+    fn key(&(slot, set_index): &(u64, u64)) -> Key {
+        let mut key = Key::default();
+        BigEndian::write_u64(&mut key.0[8..16], slot);
+        BigEndian::write_u64(&mut key.0[16..], set_index);
         key
     }
 }

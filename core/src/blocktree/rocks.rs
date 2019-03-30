@@ -54,6 +54,13 @@ pub struct DetachedHeadsCf {
     db: Arc<Rocks>,
 }
 
+#[cfg(feature = "erasure")]
+/// The erasure column family
+#[derive(Debug)]
+pub struct ErasureMetaCf {
+    db: Arc<Rocks>,
+}
+
 /// TODO: all this goes away with Blocktree
 pub struct EntryIterator {
     db_iterator: DBRawIterator,
@@ -88,13 +95,15 @@ impl Blocktree {
             ColumnFamilyDescriptor::new(super::DATA_CF, Blocktree::get_cf_options());
         let erasure_cf_descriptor =
             ColumnFamilyDescriptor::new(super::ERASURE_CF, Blocktree::get_cf_options());
-        let detached_heads_descriptor = 
+        let detached_heads_descriptor =
             ColumnFamilyDescriptor::new(super::DETACHED_HEADS_CF, Blocktree::get_cf_options());
         let cfs = vec![
             meta_cf_descriptor,
             data_cf_descriptor,
             erasure_cf_descriptor,
             detached_heads_descriptor,
+            #[cfg(feature = "erasure")]
+            ColumnFamilyDescriptor::new(super::ERASURE_META_CF, Blocktree::get_cf_options()),
         ];
 
         // Open the database
@@ -115,12 +124,17 @@ impl Blocktree {
 
         let detached_heads_cf = DetachedHeadsCf { db: db.clone() };
 
+        #[cfg(feature = "erasure")]
+        let erasure_meta_cf = ErasureMetaCf { db: db.clone() };
+
         Ok(Blocktree {
             db,
             meta_cf,
             data_cf,
             erasure_cf,
             detached_heads_cf,
+            #[cfg(feature = "erasure")]
+            erasure_meta_cf,
             new_blobs_signals: vec![],
         })
     }
@@ -349,6 +363,41 @@ impl IndexColumn<Rocks> for DetachedHeadsCf {
     fn key(slot: &u64) -> Vec<u8> {
         let mut key = vec![0; 8];
         BigEndian::write_u64(&mut key[..], *slot);
+        key
+    }
+}
+
+#[cfg(feature = "erasure")]
+impl LedgerColumnFamilyRaw<Rocks> for ErasureMetaCf {
+    fn db(&self) -> &Arc<Rocks> {
+        &self.db
+    }
+
+    fn handle(&self) -> ColumnFamily {
+        self.db.cf_handle(super::DETACHED_HEADS_CF).unwrap()
+    }
+}
+
+#[cfg(feature = "erasure")]
+impl LedgerColumnFamily<Rocks> for ErasureMetaCf {
+    type ValueType = super::ErasureMeta;
+}
+
+#[cfg(feature = "erasure")]
+impl IndexColumn<Rocks> for ErasureMetaCf {
+    type Index = (u64, u64);
+
+    fn index(key: &[u8]) -> (u64, u64) {
+        let slot = BigEndian::read_u64(&key[..8]);
+        let set_index = BigEndian::read_u64(&key[8..]);
+
+        (slot, set_index)
+    }
+
+    fn key(&(slot, set_index): &(u64, u64)) -> Vec<u8> {
+        let mut key = vec![0; 16];
+        BigEndian::write_u64(&mut key[..8], slot);
+        BigEndian::write_u64(&mut key[8..], set_index);
         key
     }
 }
