@@ -105,13 +105,15 @@ impl Fullnode {
             bank.tick_height(),
             bank.last_blockhash(),
         );
+        let blocktree = Arc::new(blocktree);
         let (poh_recorder, entry_receiver) = PohRecorder::new(
             bank.tick_height(),
             bank.last_blockhash(),
             bank.slot(),
-            leader_schedule_utils::next_leader_slot(&id, bank.slot(), &bank),
+            leader_schedule_utils::next_leader_slot(&id, bank.slot(), &bank, Some(&blocktree)),
             bank.ticks_per_slot(),
             &id,
+            &blocktree,
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, &exit);
@@ -130,7 +132,6 @@ impl Fullnode {
             node.sockets.gossip.local_addr().unwrap()
         );
 
-        let blocktree = Arc::new(blocktree);
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
         node.info.wallclock = timestamp();

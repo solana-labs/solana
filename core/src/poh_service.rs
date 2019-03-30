@@ -1,6 +1,5 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
-
 use crate::poh_recorder::PohRecorder;
 use crate::service::Service;
 use solana_sdk::timing::NUM_TICKS_PER_SECOND;
@@ -98,6 +97,7 @@ impl Service for PohService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::poh_recorder::WorkingBank;
     use crate::result::Result;
     use crate::test_tx::test_tx;
@@ -111,87 +111,94 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_hash = bank.last_blockhash();
-        let (poh_recorder, entry_receiver) = PohRecorder::new(
-            bank.tick_height(),
-            prev_hash,
-            bank.slot(),
-            Some(4),
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
-        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-        let exit = Arc::new(AtomicBool::new(false));
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            min_tick_height: bank.tick_height(),
-            max_tick_height: std::u64::MAX,
-        };
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (poh_recorder, entry_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                prev_hash,
+                bank.slot(),
+                Some(4),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
+            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+            let exit = Arc::new(AtomicBool::new(false));
+            let working_bank = WorkingBank {
+                bank: bank.clone(),
+                min_tick_height: bank.tick_height(),
+                max_tick_height: std::u64::MAX,
+            };
 
-        let entry_producer: JoinHandle<Result<()>> = {
-            let poh_recorder = poh_recorder.clone();
-            let exit = exit.clone();
+            let entry_producer: JoinHandle<Result<()>> = {
+                let poh_recorder = poh_recorder.clone();
+                let exit = exit.clone();
 
-            Builder::new()
-                .name("solana-poh-service-entry_producer".to_string())
-                .spawn(move || {
-                    loop {
-                        // send some data
-                        let h1 = hash(b"hello world!");
-                        let tx = test_tx();
-                        poh_recorder
-                            .lock()
-                            .unwrap()
-                            .record(bank.slot(), h1, vec![tx])
-                            .unwrap();
+                Builder::new()
+                    .name("solana-poh-service-entry_producer".to_string())
+                    .spawn(move || {
+                        loop {
+                            // send some data
+                            let h1 = hash(b"hello world!");
+                            let tx = test_tx();
+                            poh_recorder
+                                .lock()
+                                .unwrap()
+                                .record(bank.slot(), h1, vec![tx])
+                                .unwrap();
 
-                        if exit.load(Ordering::Relaxed) {
-                            break Ok(());
+                            if exit.load(Ordering::Relaxed) {
+                                break Ok(());
+                            }
                         }
-                    }
-                })
-                .unwrap()
-        };
+                    })
+                    .unwrap()
+            };
 
-        const HASHES_PER_TICK: u64 = 2;
-        let poh_service = PohService::new(
-            poh_recorder.clone(),
-            &PohServiceConfig::Tick(HASHES_PER_TICK as usize),
-            &exit,
-        );
-        poh_recorder.lock().unwrap().set_working_bank(working_bank);
+            const HASHES_PER_TICK: u64 = 2;
+            let poh_service = PohService::new(
+                poh_recorder.clone(),
+                &PohServiceConfig::Tick(HASHES_PER_TICK as usize),
+                &exit,
+            );
+            poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
-        // get some events
-        let mut hashes = 0;
-        let mut need_tick = true;
-        let mut need_entry = true;
-        let mut need_partial = true;
+            // get some events
+            let mut hashes = 0;
+            let mut need_tick = true;
+            let mut need_entry = true;
+            let mut need_partial = true;
 
-        while need_tick || need_entry || need_partial {
-            for entry in entry_receiver.recv().unwrap().1 {
-                let entry = &entry.0;
-                if entry.is_tick() {
-                    assert!(entry.num_hashes <= HASHES_PER_TICK);
+            while need_tick || need_entry || need_partial {
+                for entry in entry_receiver.recv().unwrap().1 {
+                    let entry = &entry.0;
+                    if entry.is_tick() {
+                        assert!(entry.num_hashes <= HASHES_PER_TICK);
 
-                    if entry.num_hashes == HASHES_PER_TICK {
-                        need_tick = false;
+                        if entry.num_hashes == HASHES_PER_TICK {
+                            need_tick = false;
+                        } else {
+                            need_partial = false;
+                        }
+
+                        hashes += entry.num_hashes;
+
+                        assert_eq!(hashes, HASHES_PER_TICK);
+
+                        hashes = 0;
                     } else {
-                        need_partial = false;
+                        assert!(entry.num_hashes >= 1);
+                        need_entry = false;
+                        hashes += entry.num_hashes - 1;
                     }
-
-                    hashes += entry.num_hashes;
-
-                    assert_eq!(hashes, HASHES_PER_TICK);
-
-                    hashes = 0;
-                } else {
-                    assert!(entry.num_hashes >= 1);
-                    need_entry = false;
-                    hashes += entry.num_hashes - 1;
                 }
             }
+            exit.store(true, Ordering::Relaxed);
+            let _ = poh_service.join().unwrap();
+            let _ = entry_producer.join().unwrap();
         }
-        exit.store(true, Ordering::Relaxed);
-        let _ = poh_service.join().unwrap();
-        let _ = entry_producer.join().unwrap();
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 }

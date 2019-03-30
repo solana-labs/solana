@@ -99,95 +99,98 @@ fn test_replay() {
     let dr_1 = new_gossip(cref1.clone(), target1.sockets.gossip, &exit);
 
     let voting_keypair = Keypair::new();
-    let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
-        create_test_recorder(&bank);
-    let (storage_sender, storage_receiver) = channel();
-    let tvu = Tvu::new(
-        &voting_keypair.pubkey(),
-        Some(Arc::new(voting_keypair)),
-        &bank_forks,
-        &bank_forks_info,
-        &cref1,
-        {
-            Sockets {
-                repair: target1.sockets.repair,
-                retransmit: target1.sockets.retransmit,
-                fetch: target1.sockets.tvu,
-            }
-        },
-        Arc::new(blocktree),
-        STORAGE_ROTATE_TEST_COUNT,
-        &StorageState::default(),
-        None,
-        ledger_signal_receiver,
-        &Arc::new(RpcSubscriptions::default()),
-        &poh_recorder,
-        storage_sender,
-        storage_receiver,
-        &exit,
-    );
-
-    let mut mint_ref_balance = starting_mint_balance;
-    let mut msgs = Vec::new();
-    let mut blob_idx = 0;
-    let num_transfers = 10;
-    let mut transfer_amount = 501;
-    let bob_keypair = Keypair::new();
-    let mut cur_hash = blockhash;
-    for i in 0..num_transfers {
-        let entry0 = next_entry_mut(&mut cur_hash, i, vec![]);
-        let entry_tick0 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
-
-        let tx0 = SystemTransaction::new_account(
-            &mint_keypair,
-            &bob_keypair.pubkey(),
-            transfer_amount,
-            blockhash,
-            0,
+    let blocktree = Arc::new(blocktree);
+    {
+        let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
+            create_test_recorder(&bank, &blocktree);
+        let (storage_sender, storage_receiver) = channel();
+        let tvu = Tvu::new(
+            &voting_keypair.pubkey(),
+            Some(Arc::new(voting_keypair)),
+            &bank_forks,
+            &bank_forks_info,
+            &cref1,
+            {
+                Sockets {
+                    repair: target1.sockets.repair,
+                    retransmit: target1.sockets.retransmit,
+                    fetch: target1.sockets.tvu,
+                }
+            },
+            blocktree,
+            STORAGE_ROTATE_TEST_COUNT,
+            &StorageState::default(),
+            None,
+            ledger_signal_receiver,
+            &Arc::new(RpcSubscriptions::default()),
+            &poh_recorder,
+            storage_sender,
+            storage_receiver,
+            &exit,
         );
-        let entry_tick1 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
-        let entry1 = next_entry_mut(&mut cur_hash, i + num_transfers, vec![tx0]);
-        let entry_tick2 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
 
-        mint_ref_balance -= transfer_amount;
-        transfer_amount -= 1; // Sneaky: change transfer_amount slightly to avoid DuplicateSignature errors
+        let mut mint_ref_balance = starting_mint_balance;
+        let mut msgs = Vec::new();
+        let mut blob_idx = 0;
+        let num_transfers = 10;
+        let mut transfer_amount = 501;
+        let bob_keypair = Keypair::new();
+        let mut cur_hash = blockhash;
+        for i in 0..num_transfers {
+            let entry0 = next_entry_mut(&mut cur_hash, i, vec![]);
+            let entry_tick0 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
 
-        let entries = vec![entry0, entry_tick0, entry_tick1, entry1, entry_tick2];
-        let blobs = entries.to_shared_blobs();
-        index_blobs(&blobs, &leader.info.id, blob_idx, 1, 0);
-        blob_idx += blobs.len() as u64;
-        blobs
-            .iter()
-            .for_each(|b| b.write().unwrap().meta.set_addr(&tvu_addr));
-        msgs.extend(blobs.into_iter());
+            let tx0 = SystemTransaction::new_account(
+                &mint_keypair,
+                &bob_keypair.pubkey(),
+                transfer_amount,
+                blockhash,
+                0,
+            );
+            let entry_tick1 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
+            let entry1 = next_entry_mut(&mut cur_hash, i + num_transfers, vec![tx0]);
+            let entry_tick2 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
+
+            mint_ref_balance -= transfer_amount;
+            transfer_amount -= 1; // Sneaky: change transfer_amount slightly to avoid DuplicateSignature errors
+
+            let entries = vec![entry0, entry_tick0, entry_tick1, entry1, entry_tick2];
+            let blobs = entries.to_shared_blobs();
+            index_blobs(&blobs, &leader.info.id, blob_idx, 1, 0);
+            blob_idx += blobs.len() as u64;
+            blobs
+                .iter()
+                .for_each(|b| b.write().unwrap().meta.set_addr(&tvu_addr));
+            msgs.extend(blobs.into_iter());
+        }
+
+        // send the blobs into the socket
+        s_responder.send(msgs).expect("send");
+        drop(s_responder);
+
+        // receive retransmitted messages
+        let timer = Duration::new(1, 0);
+        while let Ok(_msg) = r_reader.recv_timeout(timer) {
+            trace!("got msg");
+        }
+
+        let working_bank = bank_forks.read().unwrap().working_bank();
+        let final_mint_balance = working_bank.get_balance(&mint_keypair.pubkey());
+        assert_eq!(final_mint_balance, mint_ref_balance);
+
+        let bob_balance = working_bank.get_balance(&bob_keypair.pubkey());
+        assert_eq!(bob_balance, starting_mint_balance - mint_ref_balance);
+
+        exit.store(true, Ordering::Relaxed);
+        poh_service_exit.store(true, Ordering::Relaxed);
+        poh_service.join().unwrap();
+        tvu.join().unwrap();
+        dr_l.join().unwrap();
+        dr_2.join().unwrap();
+        dr_1.join().unwrap();
+        t_receiver.join().unwrap();
+        t_responder.join().unwrap();
     }
-
-    // send the blobs into the socket
-    s_responder.send(msgs).expect("send");
-    drop(s_responder);
-
-    // receive retransmitted messages
-    let timer = Duration::new(1, 0);
-    while let Ok(_msg) = r_reader.recv_timeout(timer) {
-        trace!("got msg");
-    }
-
-    let working_bank = bank_forks.read().unwrap().working_bank();
-    let final_mint_balance = working_bank.get_balance(&mint_keypair.pubkey());
-    assert_eq!(final_mint_balance, mint_ref_balance);
-
-    let bob_balance = working_bank.get_balance(&bob_keypair.pubkey());
-    assert_eq!(bob_balance, starting_mint_balance - mint_ref_balance);
-
-    exit.store(true, Ordering::Relaxed);
-    poh_service_exit.store(true, Ordering::Relaxed);
-    poh_service.join().unwrap();
-    tvu.join().unwrap();
-    dr_l.join().unwrap();
-    dr_2.join().unwrap();
-    dr_1.join().unwrap();
-    t_receiver.join().unwrap();
-    t_responder.join().unwrap();
     Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     let _ignored = remove_dir_all(&blocktree_path);
 }
