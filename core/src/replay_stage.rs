@@ -147,7 +147,13 @@ impl ReplayStage {
                             &cluster_info,
                         );
 
-                        Self::reset_poh_recorder(&my_id, &bank, &poh_recorder, ticks_per_slot);
+                        Self::reset_poh_recorder(
+                            &my_id,
+                            &blocktree,
+                            &bank,
+                            &poh_recorder,
+                            ticks_per_slot,
+                        );
 
                         is_tpu_bank_active = false;
                     }
@@ -171,7 +177,6 @@ impl ReplayStage {
                             &bank_forks,
                             &poh_recorder,
                             &cluster_info,
-                            &blocktree,
                             poh_slot,
                             reached_leader_tick,
                             grace_ticks,
@@ -200,41 +205,11 @@ impl ReplayStage {
         bank_forks: &Arc<RwLock<BankForks>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        blocktree: &Blocktree,
         poh_slot: u64,
         reached_leader_tick: bool,
         grace_ticks: u64,
     ) {
         trace!("{} checking poh slot {}", my_id, poh_slot);
-        if reached_leader_tick && blocktree.meta(poh_slot).unwrap().is_some() {
-            // We've already broadcasted entries for this slot, skip it. Since
-            // we are skipping our leader slot, also tell poh recorder when we
-            // should be leader again
-            let start_slot = poh_recorder.lock().unwrap().start_slot();
-            let r_bank_forks = bank_forks.read().unwrap();
-
-            // Start slot must be frozen by the time start_leader() is called.
-            let start_slot_bank = r_bank_forks
-                .get(start_slot)
-                .expect("start slot doesn't exist");
-
-            assert!(start_slot_bank.is_frozen());
-
-            let next_leader_slot =
-                leader_schedule_utils::next_leader_slot(&my_id, poh_slot, &start_slot_bank);
-            trace!("poh slot skipped, reset start slot to: {}", start_slot);
-            let mut poh = poh_recorder.lock().unwrap();
-            poh.reset(
-                start_slot_bank.tick_height(),
-                start_slot_bank.last_blockhash(),
-                start_slot,
-                next_leader_slot,
-                start_slot_bank.ticks_per_slot(),
-            );
-
-            return;
-        }
-
         if bank_forks.read().unwrap().get(poh_slot).is_none() {
             let frozen = bank_forks.read().unwrap().frozen_banks();
             let parent_slot = poh_recorder.lock().unwrap().start_slot();
@@ -335,11 +310,13 @@ impl ReplayStage {
 
     fn reset_poh_recorder(
         my_id: &Pubkey,
+        blocktree: &Blocktree,
         bank: &Arc<Bank>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         ticks_per_slot: u64,
     ) {
-        let next_leader_slot = leader_schedule_utils::next_leader_slot(&my_id, bank.slot(), &bank);
+        let next_leader_slot =
+            leader_schedule_utils::next_leader_slot(&my_id, bank.slot(), &bank, Some(blocktree));
         poh_recorder.lock().unwrap().reset(
             bank.tick_height(),
             bank.last_blockhash(),
@@ -638,7 +615,8 @@ mod test {
             let bank = bank_forks.working_bank();
 
             let blocktree = Arc::new(blocktree);
-            let (exit, poh_recorder, poh_service, _entry_receiver) = create_test_recorder(&bank);
+            let (exit, poh_recorder, poh_service, _entry_receiver) =
+                create_test_recorder(&bank, &blocktree);
             let (ledger_writer_sender, ledger_writer_receiver) = channel();
             let (replay_stage, _slot_full_receiver) = ReplayStage::new(
                 &my_keypair.pubkey(),

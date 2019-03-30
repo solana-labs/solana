@@ -1,7 +1,7 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
-
+use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
 use crate::entry;
 use crate::entry::{hash_transactions, Entry};
@@ -472,6 +472,7 @@ impl Service for BankingStage {
 
 pub fn create_test_recorder(
     bank: &Arc<Bank>,
+    blocktree: &Arc<Blocktree>,
 ) -> (
     Arc<AtomicBool>,
     Arc<Mutex<PohRecorder>>,
@@ -486,6 +487,7 @@ pub fn create_test_recorder(
         Some(4),
         bank.ticks_per_slot(),
         &Pubkey::default(),
+        blocktree,
     );
     poh_recorder.set_bank(&bank);
 
@@ -498,10 +500,12 @@ pub fn create_test_recorder(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::Node;
     use crate::entry::EntrySlice;
     use crate::packet::to_packets;
     use crate::poh_recorder::WorkingBank;
+    use crate::{get_tmp_ledger_path, tmp_ledger_name};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -514,14 +518,22 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
-        let (exit, poh_recorder, poh_service, _entry_receiever) = create_test_recorder(&bank);
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
-        let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
-        drop(verified_sender);
-        exit.store(true, Ordering::Relaxed);
-        banking_stage.join().unwrap();
-        poh_service.join().unwrap();
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Arc::new(
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            );
+            let (exit, poh_recorder, poh_service, _entry_receiever) =
+                create_test_recorder(&bank, &blocktree);
+            let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+            let cluster_info = Arc::new(RwLock::new(cluster_info));
+            let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
+            drop(verified_sender);
+            exit.store(true, Ordering::Relaxed);
+            banking_stage.join().unwrap();
+            poh_service.join().unwrap();
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
@@ -532,27 +544,35 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
-        let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
-        let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
-        trace!("sending bank");
-        sleep(Duration::from_millis(600));
-        drop(verified_sender);
-        exit.store(true, Ordering::Relaxed);
-        poh_service.join().unwrap();
-        drop(poh_recorder);
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Arc::new(
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            );
+            let (exit, poh_recorder, poh_service, entry_receiver) =
+                create_test_recorder(&bank, &blocktree);
+            let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+            let cluster_info = Arc::new(RwLock::new(cluster_info));
+            let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
+            trace!("sending bank");
+            sleep(Duration::from_millis(600));
+            drop(verified_sender);
+            exit.store(true, Ordering::Relaxed);
+            poh_service.join().unwrap();
+            drop(poh_recorder);
 
-        trace!("getting entries");
-        let entries: Vec<_> = entry_receiver
-            .iter()
-            .flat_map(|x| x.1.into_iter().map(|e| e.0))
-            .collect();
-        trace!("done");
-        assert_eq!(entries.len(), genesis_block.ticks_per_slot as usize - 1);
-        assert!(entries.verify(&start_hash));
-        assert_eq!(entries[entries.len() - 1].hash, bank.last_blockhash());
-        banking_stage.join().unwrap();
+            trace!("getting entries");
+            let entries: Vec<_> = entry_receiver
+                .iter()
+                .flat_map(|x| x.1.into_iter().map(|e| e.0))
+                .collect();
+            trace!("done");
+            assert_eq!(entries.len(), genesis_block.ticks_per_slot as usize - 1);
+            assert!(entries.verify(&start_hash));
+            assert_eq!(entries[entries.len() - 1].hash, bank.last_blockhash());
+            banking_stage.join().unwrap();
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
@@ -562,76 +582,84 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
-        let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
-        let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
-        let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Arc::new(
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+            );
+            let (exit, poh_recorder, poh_service, entry_receiver) =
+                create_test_recorder(&bank, &blocktree);
+            let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+            let cluster_info = Arc::new(RwLock::new(cluster_info));
+            let banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
 
-        // fund another account so we can send 2 good transactions in a single batch.
-        let keypair = Keypair::new();
-        let fund_tx =
-            SystemTransaction::new_account(&mint_keypair, &keypair.pubkey(), 2, start_hash, 0);
-        bank.process_transaction(&fund_tx).unwrap();
+            // fund another account so we can send 2 good transactions in a single batch.
+            let keypair = Keypair::new();
+            let fund_tx =
+                SystemTransaction::new_account(&mint_keypair, &keypair.pubkey(), 2, start_hash, 0);
+            bank.process_transaction(&fund_tx).unwrap();
 
-        // good tx
-        let to = Keypair::new().pubkey();
-        let tx = SystemTransaction::new_account(&mint_keypair, &to, 1, start_hash, 0);
+            // good tx
+            let to = Keypair::new().pubkey();
+            let tx = SystemTransaction::new_account(&mint_keypair, &to, 1, start_hash, 0);
 
-        // good tx, but no verify
-        let to2 = Keypair::new().pubkey();
-        let tx_no_ver = SystemTransaction::new_account(&keypair, &to2, 2, start_hash, 0);
+            // good tx, but no verify
+            let to2 = Keypair::new().pubkey();
+            let tx_no_ver = SystemTransaction::new_account(&keypair, &to2, 2, start_hash, 0);
 
-        // bad tx, AccountNotFound
-        let keypair = Keypair::new();
-        let to3 = Keypair::new().pubkey();
-        let tx_anf = SystemTransaction::new_account(&keypair, &to3, 1, start_hash, 0);
+            // bad tx, AccountNotFound
+            let keypair = Keypair::new();
+            let to3 = Keypair::new().pubkey();
+            let tx_anf = SystemTransaction::new_account(&keypair, &to3, 1, start_hash, 0);
 
-        // send 'em over
-        let packets = to_packets(&[tx_no_ver, tx_anf, tx]);
+            // send 'em over
+            let packets = to_packets(&[tx_no_ver, tx_anf, tx]);
 
-        // glad they all fit
-        assert_eq!(packets.len(), 1);
-        verified_sender // no_ver, anf, tx
-            .send(vec![(packets[0].clone(), vec![0u8, 1u8, 1u8])])
-            .unwrap();
+            // glad they all fit
+            assert_eq!(packets.len(), 1);
+            verified_sender // no_ver, anf, tx
+                .send(vec![(packets[0].clone(), vec![0u8, 1u8, 1u8])])
+                .unwrap();
 
-        drop(verified_sender);
-        exit.store(true, Ordering::Relaxed);
-        poh_service.join().unwrap();
-        drop(poh_recorder);
+            drop(verified_sender);
+            exit.store(true, Ordering::Relaxed);
+            poh_service.join().unwrap();
+            drop(poh_recorder);
 
-        let mut blockhash = start_hash;
-        let bank = Bank::new(&genesis_block);
-        bank.process_transaction(&fund_tx).unwrap();
-        //receive entries + ticks
-        for _ in 0..10 {
-            let ventries: Vec<Vec<Entry>> = entry_receiver
-                .iter()
-                .map(|x| x.1.into_iter().map(|e| e.0).collect())
-                .collect();
+            let mut blockhash = start_hash;
+            let bank = Bank::new(&genesis_block);
+            bank.process_transaction(&fund_tx).unwrap();
+            //receive entries + ticks
+            for _ in 0..10 {
+                let ventries: Vec<Vec<Entry>> = entry_receiver
+                    .iter()
+                    .map(|x| x.1.into_iter().map(|e| e.0).collect())
+                    .collect();
 
-            for entries in &ventries {
-                for entry in entries {
-                    bank.process_transactions(&entry.transactions)
-                        .iter()
-                        .for_each(|x| assert_eq!(*x, Ok(())));
+                for entries in &ventries {
+                    for entry in entries {
+                        bank.process_transactions(&entry.transactions)
+                            .iter()
+                            .for_each(|x| assert_eq!(*x, Ok(())));
+                    }
+                    assert!(entries.verify(&blockhash));
+                    blockhash = entries.last().unwrap().hash;
                 }
-                assert!(entries.verify(&blockhash));
-                blockhash = entries.last().unwrap().hash;
+
+                if bank.get_balance(&to) == 1 {
+                    break;
+                }
+
+                sleep(Duration::from_millis(200));
             }
 
-            if bank.get_balance(&to) == 1 {
-                break;
-            }
+            assert_eq!(bank.get_balance(&to), 1);
+            assert_eq!(bank.get_balance(&to2), 0);
 
-            sleep(Duration::from_millis(200));
+            drop(entry_receiver);
+            banking_stage.join().unwrap();
         }
-
-        assert_eq!(bank.get_balance(&to), 1);
-        assert_eq!(bank.get_balance(&to2), 0);
-
-        drop(entry_receiver);
-        banking_stage.join().unwrap();
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
@@ -671,43 +699,57 @@ mod tests {
             .send(vec![(packets[0].clone(), vec![1u8])])
             .unwrap();
 
-        let entry_receiver = {
-            // start a banking_stage to eat verified receiver
-            let bank = Arc::new(Bank::new(&genesis_block));
-            let (exit, poh_recorder, poh_service, entry_receiver) = create_test_recorder(&bank);
-            let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
-            let cluster_info = Arc::new(RwLock::new(cluster_info));
-            let _banking_stage =
-                BankingStage::new_num_threads(&cluster_info, &poh_recorder, verified_receiver, 1);
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let entry_receiver = {
+                // start a banking_stage to eat verified receiver
+                let bank = Arc::new(Bank::new(&genesis_block));
+                let blocktree = Arc::new(
+                    Blocktree::open(&ledger_path)
+                        .expect("Expected to be able to open database ledger"),
+                );
+                let (exit, poh_recorder, poh_service, entry_receiver) =
+                    create_test_recorder(&bank, &blocktree);
+                let cluster_info =
+                    ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
+                let cluster_info = Arc::new(RwLock::new(cluster_info));
+                let _banking_stage = BankingStage::new_num_threads(
+                    &cluster_info,
+                    &poh_recorder,
+                    verified_receiver,
+                    1,
+                );
 
-            // wait for banking_stage to eat the packets
-            while bank.get_balance(&alice.pubkey()) != 1 {
-                sleep(Duration::from_millis(100));
-            }
-            exit.store(true, Ordering::Relaxed);
-            poh_service.join().unwrap();
-            entry_receiver
-        };
-        drop(verified_sender);
+                // wait for banking_stage to eat the packets
+                while bank.get_balance(&alice.pubkey()) != 1 {
+                    sleep(Duration::from_millis(100));
+                }
+                exit.store(true, Ordering::Relaxed);
+                poh_service.join().unwrap();
+                entry_receiver
+            };
+            drop(verified_sender);
 
-        // consume the entire entry_receiver, feed it into a new bank
-        // check that the balance is what we expect.
-        let entries: Vec<_> = entry_receiver
-            .iter()
-            .flat_map(|x| x.1.into_iter().map(|e| e.0))
-            .collect();
-
-        let bank = Bank::new(&genesis_block);
-        for entry in &entries {
-            bank.process_transactions(&entry.transactions)
+            // consume the entire entry_receiver, feed it into a new bank
+            // check that the balance is what we expect.
+            let entries: Vec<_> = entry_receiver
                 .iter()
-                .for_each(|x| assert_eq!(*x, Ok(())));
-        }
+                .flat_map(|x| x.1.into_iter().map(|e| e.0))
+                .collect();
 
-        // Assert the user holds one lamport, not two. If the stage only outputs one
-        // entry, then the second transaction will be rejected, because it drives
-        // the account balance below zero before the credit is added.
-        assert_eq!(bank.get_balance(&alice.pubkey()), 1);
+            let bank = Bank::new(&genesis_block);
+            for entry in &entries {
+                bank.process_transactions(&entry.transactions)
+                    .iter()
+                    .for_each(|x| assert_eq!(*x, Ok(())));
+            }
+
+            // Assert the user holds one lamport, not two. If the stage only outputs one
+            // entry, then the second transaction will be rejected, because it drives
+            // the account balance below zero before the credit is added.
+            assert_eq!(bank.get_balance(&alice.pubkey()), 1);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
@@ -719,47 +761,53 @@ mod tests {
             min_tick_height: bank.tick_height(),
             max_tick_height: std::u64::MAX,
         };
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (poh_recorder, entry_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.slot(),
+                None,
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
+            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-        let (poh_recorder, entry_receiver) = PohRecorder::new(
-            bank.tick_height(),
-            bank.last_blockhash(),
-            bank.slot(),
-            None,
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
-        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+            poh_recorder.lock().unwrap().set_working_bank(working_bank);
+            let pubkey = Keypair::new().pubkey();
 
-        poh_recorder.lock().unwrap().set_working_bank(working_bank);
-        let pubkey = Keypair::new().pubkey();
+            let transactions = vec![
+                SystemTransaction::new_move(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
+                SystemTransaction::new_move(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
+            ];
 
-        let transactions = vec![
-            SystemTransaction::new_move(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            SystemTransaction::new_move(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-        ];
+            let mut results = vec![Ok(()), Ok(())];
+            BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
+                .unwrap();
+            let (_, entries) = entry_receiver.recv().unwrap();
+            assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
-        let mut results = vec![Ok(()), Ok(())];
-        BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
-            .unwrap();
-        let (_, entries) = entry_receiver.recv().unwrap();
-        assert_eq!(entries[0].0.transactions.len(), transactions.len());
+            // InstructionErrors should still be recorded
+            results[0] = Err(TransactionError::InstructionError(
+                1,
+                InstructionError::new_result_with_negative_lamports(),
+            ));
+            BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
+                .unwrap();
+            let (_, entries) = entry_receiver.recv().unwrap();
+            assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
-        // InstructionErrors should still be recorded
-        results[0] = Err(TransactionError::InstructionError(
-            1,
-            InstructionError::new_result_with_negative_lamports(),
-        ));
-        BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
-            .unwrap();
-        let (_, entries) = entry_receiver.recv().unwrap();
-        assert_eq!(entries[0].0.transactions.len(), transactions.len());
-
-        // Other TransactionErrors should not be recorded
-        results[0] = Err(TransactionError::AccountNotFound);
-        BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
-            .unwrap();
-        let (_, entries) = entry_receiver.recv().unwrap();
-        assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
+            // Other TransactionErrors should not be recorded
+            results[0] = Err(TransactionError::AccountNotFound);
+            BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
+                .unwrap();
+            let (_, entries) = entry_receiver.recv().unwrap();
+            assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
@@ -782,53 +830,61 @@ mod tests {
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.tick_height() + 1,
         };
-        let (poh_recorder, entry_receiver) = PohRecorder::new(
-            bank.tick_height(),
-            bank.last_blockhash(),
-            bank.slot(),
-            Some(4),
-            bank.ticks_per_slot(),
-            &pubkey,
-        );
-        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (poh_recorder, entry_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.slot(),
+                Some(4),
+                bank.ticks_per_slot(),
+                &pubkey,
+                &Arc::new(blocktree),
+            );
+            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-        poh_recorder.lock().unwrap().set_working_bank(working_bank);
+            poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
-        BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder).unwrap();
-        poh_recorder.lock().unwrap().tick();
+            BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder)
+                .unwrap();
+            poh_recorder.lock().unwrap().tick();
 
-        let mut done = false;
-        // read entries until I find mine, might be ticks...
-        while let Ok((_, entries)) = entry_receiver.recv() {
-            for (entry, _) in entries {
-                if !entry.is_tick() {
-                    trace!("got entry");
-                    assert_eq!(entry.transactions.len(), transactions.len());
-                    assert_eq!(bank.get_balance(&pubkey), 1);
-                    done = true;
+            let mut done = false;
+            // read entries until I find mine, might be ticks...
+            while let Ok((_, entries)) = entry_receiver.recv() {
+                for (entry, _) in entries {
+                    if !entry.is_tick() {
+                        trace!("got entry");
+                        assert_eq!(entry.transactions.len(), transactions.len());
+                        assert_eq!(bank.get_balance(&pubkey), 1);
+                        done = true;
+                    }
+                }
+                if done {
+                    break;
                 }
             }
-            if done {
-                break;
-            }
+            trace!("done ticking");
+
+            assert_eq!(done, true);
+
+            let transactions = vec![SystemTransaction::new_move(
+                &mint_keypair,
+                &pubkey,
+                2,
+                genesis_block.hash(),
+                0,
+            )];
+
+            assert_matches!(
+                BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder),
+                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
+            );
+
+            assert_eq!(bank.get_balance(&pubkey), 1);
         }
-        trace!("done ticking");
-
-        assert_eq!(done, true);
-
-        let transactions = vec![SystemTransaction::new_move(
-            &mint_keypair,
-            &pubkey,
-            2,
-            genesis_block.hash(),
-            0,
-        )];
-
-        assert_matches!(
-            BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder),
-            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
-        );
-
-        assert_eq!(bank.get_balance(&pubkey), 1);
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 }

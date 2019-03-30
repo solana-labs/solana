@@ -1,3 +1,4 @@
+use crate::blocktree::Blocktree;
 use crate::leader_schedule::LeaderSchedule;
 use crate::staking_utils;
 use solana_runtime::bank::Bank;
@@ -44,7 +45,12 @@ pub fn slot_leader_at(slot: u64, bank: &Bank) -> Option<Pubkey> {
 }
 
 /// Return the next slot after the given current_slot that the given node will be leader
-pub fn next_leader_slot(pubkey: &Pubkey, mut current_slot: u64, bank: &Bank) -> Option<u64> {
+pub fn next_leader_slot(
+    pubkey: &Pubkey,
+    mut current_slot: u64,
+    bank: &Bank,
+    blocktree: Option<&Blocktree>,
+) -> Option<u64> {
     let (mut epoch, mut start_index) = bank.get_epoch_and_slot_index(current_slot + 1);
     while let Some(leader_schedule) = leader_schedule(epoch, bank) {
         // clippy thinks I should do this:
@@ -59,6 +65,12 @@ pub fn next_leader_slot(pubkey: &Pubkey, mut current_slot: u64, bank: &Bank) -> 
         for i in start_index..bank.get_slots_in_epoch(epoch) {
             current_slot += 1;
             if *pubkey == leader_schedule[i] {
+                if let Some(blocktree) = blocktree {
+                    if blocktree.meta(current_slot).unwrap().is_some() {
+                        continue;
+                    }
+                }
+
                 return Some(current_slot);
             }
         }
@@ -101,13 +113,14 @@ mod tests {
 
         let bank = Bank::new(&genesis_block);
         assert_eq!(slot_leader_at(bank.slot(), &bank).unwrap(), pubkey);
-        assert_eq!(next_leader_slot(&pubkey, 0, &bank), Some(1));
-        assert_eq!(next_leader_slot(&pubkey, 1, &bank), Some(2));
+        assert_eq!(next_leader_slot(&pubkey, 0, &bank, None), Some(1));
+        assert_eq!(next_leader_slot(&pubkey, 1, &bank, None), Some(2));
         assert_eq!(
             next_leader_slot(
                 &pubkey,
                 2 * genesis_block.slots_per_epoch - 1, // no schedule generated for epoch 2
-                &bank
+                &bank,
+                None
             ),
             None
         );
@@ -116,7 +129,8 @@ mod tests {
             next_leader_slot(
                 &Keypair::new().pubkey(), // not in leader_schedule
                 0,
-                &bank
+                &bank,
+                None
             ),
             None
         );
@@ -169,8 +183,8 @@ mod tests {
         expected_slot += index;
 
         assert_eq!(
-            next_leader_slot(&delegate_id, 0, &bank),
-            Some(expected_slot)
+            next_leader_slot(&delegate_id, 0, &bank, None),
+            Some(expected_slot),
         );
     }
 

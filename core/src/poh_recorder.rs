@@ -10,6 +10,7 @@
 //! For Entries:
 //! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::man_tick_height
 //!
+use crate::blocktree::Blocktree;
 use crate::entry::Entry;
 use crate::leader_schedule_utils;
 use crate::poh::Poh;
@@ -51,14 +52,19 @@ pub struct PohRecorder {
     last_leader_tick: Option<u64>,
     max_last_leader_grace_ticks: u64,
     id: Pubkey,
+    blocktree: Arc<Blocktree>,
 }
 
 impl PohRecorder {
     pub fn clear_bank(&mut self) {
         if let Some(working_bank) = self.working_bank.take() {
             let bank = working_bank.bank;
-            let next_leader_slot =
-                leader_schedule_utils::next_leader_slot(&self.id, bank.slot(), &bank);
+            let next_leader_slot = leader_schedule_utils::next_leader_slot(
+                &self.id,
+                bank.slot(),
+                &bank,
+                Some(&self.blocktree),
+            );
             let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
                 &next_leader_slot,
                 bank.ticks_per_slot(),
@@ -273,6 +279,7 @@ impl PohRecorder {
         my_leader_slot_index: Option<u64>,
         ticks_per_slot: u64,
         id: &Pubkey,
+        blocktree: &Arc<Blocktree>,
     ) -> (Self, Receiver<WorkingBankEntries>) {
         let poh = Poh::new(last_entry_hash, tick_height);
         let (sender, receiver) = channel();
@@ -295,6 +302,7 @@ impl PohRecorder {
                 last_leader_tick,
                 max_last_leader_grace_ticks,
                 id: *id,
+                blocktree: blocktree.clone(),
             },
             receiver,
         )
@@ -345,6 +353,7 @@ impl PohRecorder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::test_tx::test_tx;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
@@ -355,620 +364,750 @@ mod tests {
     #[test]
     fn test_poh_recorder_no_zero_tick() {
         let prev_hash = Hash::default();
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
-            0,
-            prev_hash,
-            0,
-            Some(4),
-            DEFAULT_TICKS_PER_SLOT,
-            &Pubkey::default(),
-        );
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.tick_cache.len(), 1);
-        assert_eq!(poh_recorder.tick_cache[0].1, 1);
-        assert_eq!(poh_recorder.poh.tick_height, 1);
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                Some(4),
+                DEFAULT_TICKS_PER_SLOT,
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.tick_cache.len(), 1);
+            assert_eq!(poh_recorder.tick_cache[0].1, 1);
+            assert_eq!(poh_recorder.poh.tick_height, 1);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_poh_recorder_tick_height_is_last_tick() {
         let prev_hash = Hash::default();
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
-            0,
-            prev_hash,
-            0,
-            Some(4),
-            DEFAULT_TICKS_PER_SLOT,
-            &Pubkey::default(),
-        );
-        poh_recorder.tick();
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.tick_cache.len(), 2);
-        assert_eq!(poh_recorder.tick_cache[1].1, 2);
-        assert_eq!(poh_recorder.poh.tick_height, 2);
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                Some(4),
+                DEFAULT_TICKS_PER_SLOT,
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
+            poh_recorder.tick();
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.tick_cache.len(), 2);
+            assert_eq!(poh_recorder.tick_cache[1].1, 2);
+            assert_eq!(poh_recorder.poh.tick_height, 2);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_poh_recorder_reset_clears_cache() {
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
-            0,
-            Hash::default(),
-            0,
-            Some(4),
-            DEFAULT_TICKS_PER_SLOT,
-            &Pubkey::default(),
-        );
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.tick_cache.len(), 1);
-        poh_recorder.reset(0, Hash::default(), 0, Some(4), DEFAULT_TICKS_PER_SLOT);
-        assert_eq!(poh_recorder.tick_cache.len(), 0);
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                Hash::default(),
+                0,
+                Some(4),
+                DEFAULT_TICKS_PER_SLOT,
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.tick_cache.len(), 1);
+            poh_recorder.reset(0, Hash::default(), 0, Some(4), DEFAULT_TICKS_PER_SLOT);
+            assert_eq!(poh_recorder.tick_cache.len(), 0);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_poh_recorder_clear() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
-            0,
-            prev_hash,
-            0,
-            Some(4),
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                Some(4),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
 
-        let working_bank = WorkingBank {
-            bank,
-            min_tick_height: 2,
-            max_tick_height: 3,
-        };
-        poh_recorder.set_working_bank(working_bank);
-        assert!(poh_recorder.working_bank.is_some());
-        poh_recorder.clear_bank();
-        assert!(poh_recorder.working_bank.is_none());
+            let working_bank = WorkingBank {
+                bank,
+                min_tick_height: 2,
+                max_tick_height: 3,
+            };
+            poh_recorder.set_working_bank(working_bank);
+            assert!(poh_recorder.working_bank.is_some());
+            poh_recorder.clear_bank();
+            assert!(poh_recorder.working_bank.is_none());
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_poh_recorder_tick_sent_after_min() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new(
-            0,
-            prev_hash,
-            0,
-            Some(4),
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                Some(4),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
 
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            min_tick_height: 2,
-            max_tick_height: 3,
-        };
-        poh_recorder.set_working_bank(working_bank);
-        poh_recorder.tick();
-        poh_recorder.tick();
-        //tick height equal to min_tick_height
-        //no tick has been sent
-        assert_eq!(poh_recorder.tick_cache.last().unwrap().1, 2);
-        assert!(entry_receiver.try_recv().is_err());
+            let working_bank = WorkingBank {
+                bank: bank.clone(),
+                min_tick_height: 2,
+                max_tick_height: 3,
+            };
+            poh_recorder.set_working_bank(working_bank);
+            poh_recorder.tick();
+            poh_recorder.tick();
+            //tick height equal to min_tick_height
+            //no tick has been sent
+            assert_eq!(poh_recorder.tick_cache.last().unwrap().1, 2);
+            assert!(entry_receiver.try_recv().is_err());
 
-        // all ticks are sent after height > min
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.poh.tick_height, 3);
-        assert_eq!(poh_recorder.tick_cache.len(), 0);
-        let (bank_, e) = entry_receiver.recv().expect("recv 1");
-        assert_eq!(e.len(), 3);
-        assert_eq!(bank_.slot(), bank.slot());
-        assert!(poh_recorder.working_bank.is_none());
+            // all ticks are sent after height > min
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.poh.tick_height, 3);
+            assert_eq!(poh_recorder.tick_cache.len(), 0);
+            let (bank_, e) = entry_receiver.recv().expect("recv 1");
+            assert_eq!(e.len(), 3);
+            assert_eq!(bank_.slot(), bank.slot());
+            assert!(poh_recorder.working_bank.is_none());
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_poh_recorder_tick_sent_upto_and_including_max() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new(
-            0,
-            prev_hash,
-            0,
-            Some(4),
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                Some(4),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
 
-        poh_recorder.tick();
-        poh_recorder.tick();
-        poh_recorder.tick();
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.tick_cache.last().unwrap().1, 4);
-        assert_eq!(poh_recorder.poh.tick_height, 4);
+            poh_recorder.tick();
+            poh_recorder.tick();
+            poh_recorder.tick();
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.tick_cache.last().unwrap().1, 4);
+            assert_eq!(poh_recorder.poh.tick_height, 4);
 
-        let working_bank = WorkingBank {
-            bank,
-            min_tick_height: 2,
-            max_tick_height: 3,
-        };
-        poh_recorder.set_working_bank(working_bank);
-        poh_recorder.tick();
+            let working_bank = WorkingBank {
+                bank,
+                min_tick_height: 2,
+                max_tick_height: 3,
+            };
+            poh_recorder.set_working_bank(working_bank);
+            poh_recorder.tick();
 
-        assert_eq!(poh_recorder.poh.tick_height, 5);
-        assert!(poh_recorder.working_bank.is_none());
-        let (_, e) = entry_receiver.recv().expect("recv 1");
-        assert_eq!(e.len(), 3);
+            assert_eq!(poh_recorder.poh.tick_height, 5);
+            assert!(poh_recorder.working_bank.is_none());
+            let (_, e) = entry_receiver.recv().expect("recv 1");
+            assert_eq!(e.len(), 3);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_poh_recorder_record_to_early() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new(
-            0,
-            prev_hash,
-            0,
-            Some(4),
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                Some(4),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
 
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            min_tick_height: 2,
-            max_tick_height: 3,
-        };
-        poh_recorder.set_working_bank(working_bank);
-        poh_recorder.tick();
-        let tx = test_tx();
-        let h1 = hash(b"hello world!");
-        assert!(poh_recorder
-            .record(bank.slot(), h1, vec![tx.clone()])
-            .is_err());
-        assert!(entry_receiver.try_recv().is_err());
+            let working_bank = WorkingBank {
+                bank: bank.clone(),
+                min_tick_height: 2,
+                max_tick_height: 3,
+            };
+            poh_recorder.set_working_bank(working_bank);
+            poh_recorder.tick();
+            let tx = test_tx();
+            let h1 = hash(b"hello world!");
+            assert!(poh_recorder
+                .record(bank.slot(), h1, vec![tx.clone()])
+                .is_err());
+            assert!(entry_receiver.try_recv().is_err());
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_poh_recorder_record_bad_slot() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
-            0,
-            prev_hash,
-            0,
-            Some(4),
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                Some(4),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
 
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            min_tick_height: 1,
-            max_tick_height: 2,
-        };
-        poh_recorder.set_working_bank(working_bank);
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.tick_cache.len(), 1);
-        assert_eq!(poh_recorder.poh.tick_height, 1);
-        let tx = test_tx();
-        let h1 = hash(b"hello world!");
-        assert_matches!(
-            poh_recorder.record(bank.slot() + 1, h1, vec![tx.clone()]),
-            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
-        );
+            let working_bank = WorkingBank {
+                bank: bank.clone(),
+                min_tick_height: 1,
+                max_tick_height: 2,
+            };
+            poh_recorder.set_working_bank(working_bank);
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.tick_cache.len(), 1);
+            assert_eq!(poh_recorder.poh.tick_height, 1);
+            let tx = test_tx();
+            let h1 = hash(b"hello world!");
+            assert_matches!(
+                poh_recorder.record(bank.slot() + 1, h1, vec![tx.clone()]),
+                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
+            );
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_poh_recorder_record_at_min_passes() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new(
-            0,
-            prev_hash,
-            0,
-            Some(4),
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                Some(4),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
 
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            min_tick_height: 1,
-            max_tick_height: 2,
-        };
-        poh_recorder.set_working_bank(working_bank);
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.tick_cache.len(), 1);
-        assert_eq!(poh_recorder.poh.tick_height, 1);
-        let tx = test_tx();
-        let h1 = hash(b"hello world!");
-        assert!(poh_recorder
-            .record(bank.slot(), h1, vec![tx.clone()])
-            .is_ok());
-        assert_eq!(poh_recorder.tick_cache.len(), 0);
+            let working_bank = WorkingBank {
+                bank: bank.clone(),
+                min_tick_height: 1,
+                max_tick_height: 2,
+            };
+            poh_recorder.set_working_bank(working_bank);
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.tick_cache.len(), 1);
+            assert_eq!(poh_recorder.poh.tick_height, 1);
+            let tx = test_tx();
+            let h1 = hash(b"hello world!");
+            assert!(poh_recorder
+                .record(bank.slot(), h1, vec![tx.clone()])
+                .is_ok());
+            assert_eq!(poh_recorder.tick_cache.len(), 0);
 
-        //tick in the cache + entry
-        let (_b, e) = entry_receiver.recv().expect("recv 1");
-        assert_eq!(e.len(), 1);
-        assert!(e[0].0.is_tick());
-        let (_b, e) = entry_receiver.recv().expect("recv 2");
-        assert!(!e[0].0.is_tick());
+            //tick in the cache + entry
+            let (_b, e) = entry_receiver.recv().expect("recv 1");
+            assert_eq!(e.len(), 1);
+            assert!(e[0].0.is_tick());
+            let (_b, e) = entry_receiver.recv().expect("recv 2");
+            assert!(!e[0].0.is_tick());
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_poh_recorder_record_at_max_fails() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new(
-            0,
-            prev_hash,
-            0,
-            Some(4),
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                Some(4),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
 
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            min_tick_height: 1,
-            max_tick_height: 2,
-        };
-        poh_recorder.set_working_bank(working_bank);
-        poh_recorder.tick();
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.poh.tick_height, 2);
-        let tx = test_tx();
-        let h1 = hash(b"hello world!");
-        assert!(poh_recorder
-            .record(bank.slot(), h1, vec![tx.clone()])
-            .is_err());
+            let working_bank = WorkingBank {
+                bank: bank.clone(),
+                min_tick_height: 1,
+                max_tick_height: 2,
+            };
+            poh_recorder.set_working_bank(working_bank);
+            poh_recorder.tick();
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.poh.tick_height, 2);
+            let tx = test_tx();
+            let h1 = hash(b"hello world!");
+            assert!(poh_recorder
+                .record(bank.slot(), h1, vec![tx.clone()])
+                .is_err());
 
-        let (_bank, e) = entry_receiver.recv().expect("recv 1");
-        assert_eq!(e.len(), 2);
-        assert!(e[0].0.is_tick());
-        assert!(e[1].0.is_tick());
+            let (_bank, e) = entry_receiver.recv().expect("recv 1");
+            assert_eq!(e.len(), 2);
+            assert!(e[0].0.is_tick());
+            assert!(e[1].0.is_tick());
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_poh_cache_on_disconnect() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new(
-            0,
-            prev_hash,
-            0,
-            Some(4),
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                Some(4),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
 
-        let working_bank = WorkingBank {
-            bank,
-            min_tick_height: 2,
-            max_tick_height: 3,
-        };
-        poh_recorder.set_working_bank(working_bank);
-        poh_recorder.tick();
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.poh.tick_height, 2);
-        drop(entry_receiver);
-        poh_recorder.tick();
-        assert!(poh_recorder.working_bank.is_none());
-        assert_eq!(poh_recorder.tick_cache.len(), 3);
+            let working_bank = WorkingBank {
+                bank,
+                min_tick_height: 2,
+                max_tick_height: 3,
+            };
+            poh_recorder.set_working_bank(working_bank);
+            poh_recorder.tick();
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.poh.tick_height, 2);
+            drop(entry_receiver);
+            poh_recorder.tick();
+            assert!(poh_recorder.working_bank.is_none());
+            assert_eq!(poh_recorder.tick_cache.len(), 3);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_reset_current() {
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
-            0,
-            Hash::default(),
-            0,
-            Some(4),
-            DEFAULT_TICKS_PER_SLOT,
-            &Pubkey::default(),
-        );
-        poh_recorder.tick();
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.tick_cache.len(), 2);
-        poh_recorder.reset(
-            poh_recorder.poh.tick_height,
-            poh_recorder.poh.hash,
-            0,
-            Some(4),
-            DEFAULT_TICKS_PER_SLOT,
-        );
-        assert_eq!(poh_recorder.tick_cache.len(), 0);
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                Hash::default(),
+                0,
+                Some(4),
+                DEFAULT_TICKS_PER_SLOT,
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
+            poh_recorder.tick();
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.tick_cache.len(), 2);
+            poh_recorder.reset(
+                poh_recorder.poh.tick_height,
+                poh_recorder.poh.hash,
+                0,
+                Some(4),
+                DEFAULT_TICKS_PER_SLOT,
+            );
+            assert_eq!(poh_recorder.tick_cache.len(), 0);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_reset_with_cached() {
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
-            0,
-            Hash::default(),
-            0,
-            Some(4),
-            DEFAULT_TICKS_PER_SLOT,
-            &Pubkey::default(),
-        );
-        poh_recorder.tick();
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.tick_cache.len(), 2);
-        poh_recorder.reset(
-            poh_recorder.tick_cache[0].1,
-            poh_recorder.tick_cache[0].0.hash,
-            0,
-            Some(4),
-            DEFAULT_TICKS_PER_SLOT,
-        );
-        assert_eq!(poh_recorder.tick_cache.len(), 0);
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                Hash::default(),
+                0,
+                Some(4),
+                DEFAULT_TICKS_PER_SLOT,
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
+            poh_recorder.tick();
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.tick_cache.len(), 2);
+            poh_recorder.reset(
+                poh_recorder.tick_cache[0].1,
+                poh_recorder.tick_cache[0].0.hash,
+                0,
+                Some(4),
+                DEFAULT_TICKS_PER_SLOT,
+            );
+            assert_eq!(poh_recorder.tick_cache.len(), 0);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_reset_to_new_value() {
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
-            0,
-            Hash::default(),
-            0,
-            Some(4),
-            DEFAULT_TICKS_PER_SLOT,
-            &Pubkey::default(),
-        );
-        poh_recorder.tick();
-        poh_recorder.tick();
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.tick_cache.len(), 3);
-        assert_eq!(poh_recorder.poh.tick_height, 3);
-        poh_recorder.reset(1, hash(b"hello"), 0, Some(4), DEFAULT_TICKS_PER_SLOT);
-        assert_eq!(poh_recorder.tick_cache.len(), 0);
-        poh_recorder.tick();
-        assert_eq!(poh_recorder.poh.tick_height, 2);
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                Hash::default(),
+                0,
+                Some(4),
+                DEFAULT_TICKS_PER_SLOT,
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
+            poh_recorder.tick();
+            poh_recorder.tick();
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.tick_cache.len(), 3);
+            assert_eq!(poh_recorder.poh.tick_height, 3);
+            poh_recorder.reset(1, hash(b"hello"), 0, Some(4), DEFAULT_TICKS_PER_SLOT);
+            assert_eq!(poh_recorder.tick_cache.len(), 0);
+            poh_recorder.tick();
+            assert_eq!(poh_recorder.poh.tick_height, 2);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_reset_clear_bank() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
-            0,
-            Hash::default(),
-            0,
-            Some(4),
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
-        let ticks_per_slot = bank.ticks_per_slot();
-        let working_bank = WorkingBank {
-            bank,
-            min_tick_height: 2,
-            max_tick_height: 3,
-        };
-        poh_recorder.set_working_bank(working_bank);
-        poh_recorder.reset(1, hash(b"hello"), 0, Some(4), ticks_per_slot);
-        assert!(poh_recorder.working_bank.is_none());
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                Hash::default(),
+                0,
+                Some(4),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
+            let ticks_per_slot = bank.ticks_per_slot();
+            let working_bank = WorkingBank {
+                bank,
+                min_tick_height: 2,
+                max_tick_height: 3,
+            };
+            poh_recorder.set_working_bank(working_bank);
+            poh_recorder.reset(1, hash(b"hello"), 0, Some(4), ticks_per_slot);
+            assert!(poh_recorder.working_bank.is_none());
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     pub fn test_clear_signal() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
-            0,
-            Hash::default(),
-            0,
-            None,
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
-        let (sender, receiver) = sync_channel(1);
-        poh_recorder.set_bank(&bank);
-        poh_recorder.clear_bank_signal = Some(sender);
-        poh_recorder.clear_bank();
-        assert!(receiver.try_recv().is_ok());
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                Hash::default(),
+                0,
+                None,
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
+            let (sender, receiver) = sync_channel(1);
+            poh_recorder.set_bank(&bank);
+            poh_recorder.clear_bank_signal = Some(sender);
+            poh_recorder.clear_bank();
+            assert!(receiver.try_recv().is_ok());
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_poh_recorder_reset_start_slot() {
-        let ticks_per_slot = 5;
-        let (mut genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        genesis_block.ticks_per_slot = ticks_per_slot;
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let ticks_per_slot = 5;
+            let (mut genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            genesis_block.ticks_per_slot = ticks_per_slot;
+            let bank = Arc::new(Bank::new(&genesis_block));
 
-        let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
-            0,
-            prev_hash,
-            0,
-            Some(4),
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                Some(4),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
 
-        let end_slot = 3;
-        let max_tick_height = (end_slot + 1) * ticks_per_slot - 1;
-        let working_bank = WorkingBank {
-            bank: bank.clone(),
-            min_tick_height: 1,
-            max_tick_height,
-        };
+            let end_slot = 3;
+            let max_tick_height = (end_slot + 1) * ticks_per_slot - 1;
+            let working_bank = WorkingBank {
+                bank: bank.clone(),
+                min_tick_height: 1,
+                max_tick_height,
+            };
 
-        poh_recorder.set_working_bank(working_bank);
-        for _ in 0..max_tick_height {
-            poh_recorder.tick();
+            poh_recorder.set_working_bank(working_bank);
+            for _ in 0..max_tick_height {
+                poh_recorder.tick();
+            }
+
+            let tx = test_tx();
+            let h1 = hash(b"hello world!");
+            assert!(poh_recorder
+                .record(bank.slot(), h1, vec![tx.clone()])
+                .is_err());
+            assert!(poh_recorder.working_bank.is_none());
+            // Make sure the starting slot is updated
+            assert_eq!(poh_recorder.start_slot(), end_slot);
         }
-
-        let tx = test_tx();
-        let h1 = hash(b"hello world!");
-        assert!(poh_recorder
-            .record(bank.slot(), h1, vec![tx.clone()])
-            .is_err());
-        assert!(poh_recorder.working_bank.is_none());
-        // Make sure the starting slot is updated
-        assert_eq!(poh_recorder.start_slot(), end_slot);
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
     fn test_reached_leader_tick() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_hash = bank.last_blockhash();
-        let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
-            0,
-            prev_hash,
-            0,
-            None,
-            bank.ticks_per_slot(),
-            &Pubkey::default(),
-        );
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                None,
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+            );
 
-        // Test that with no leader slot, we don't reach the leader tick
-        assert_eq!(poh_recorder.reached_leader_tick().0, false);
+            // Test that with no leader slot, we don't reach the leader tick
+            assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
-        for _ in 0..bank.ticks_per_slot() {
+            for _ in 0..bank.ticks_per_slot() {
+                poh_recorder.tick();
+            }
+
+            // Tick should not be recorded
+            assert_eq!(poh_recorder.tick_height(), 0);
+
+            // Test that with no leader slot, we don't reach the leader tick after sending some ticks
+            assert_eq!(poh_recorder.reached_leader_tick().0, false);
+
+            poh_recorder.reset(
+                poh_recorder.tick_height(),
+                bank.last_blockhash(),
+                0,
+                None,
+                bank.ticks_per_slot(),
+            );
+
+            // Test that with no leader slot in reset(), we don't reach the leader tick
+            assert_eq!(poh_recorder.reached_leader_tick().0, false);
+
+            // Provide a leader slot 1 slot down
+            poh_recorder.reset(
+                bank.ticks_per_slot(),
+                bank.last_blockhash(),
+                0,
+                Some(2),
+                bank.ticks_per_slot(),
+            );
+
+            let init_ticks = poh_recorder.tick_height();
+
+            // Send one slot worth of ticks
+            for _ in 0..bank.ticks_per_slot() {
+                poh_recorder.tick();
+            }
+
+            // Tick should be recorded
+            assert_eq!(
+                poh_recorder.tick_height(),
+                init_ticks + bank.ticks_per_slot()
+            );
+
+            // Test that we don't reach the leader tick because of grace ticks
+            assert_eq!(poh_recorder.reached_leader_tick().0, false);
+
+            // reset poh now. it should discard the grace ticks wait
+            poh_recorder.reset(
+                poh_recorder.tick_height(),
+                bank.last_blockhash(),
+                1,
+                Some(2),
+                bank.ticks_per_slot(),
+            );
+            // without sending more ticks, we should be leader now
+            assert_eq!(poh_recorder.reached_leader_tick().0, true);
+            assert_eq!(poh_recorder.reached_leader_tick().1, 0);
+
+            // Now test that with grace ticks we can reach leader ticks
+            // Set the leader slot 1 slot down
+            poh_recorder.reset(
+                poh_recorder.tick_height(),
+                bank.last_blockhash(),
+                2,
+                Some(3),
+                bank.ticks_per_slot(),
+            );
+
+            // Send one slot worth of ticks
+            for _ in 0..bank.ticks_per_slot() {
+                poh_recorder.tick();
+            }
+
+            // We are not the leader yet, as expected
+            assert_eq!(poh_recorder.reached_leader_tick().0, false);
+
+            // Send 1 less tick than the grace ticks
+            for _ in 0..bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR - 1 {
+                poh_recorder.tick();
+            }
+            // We are still not the leader
+            assert_eq!(poh_recorder.reached_leader_tick().0, false);
+
+            // Send one more tick
             poh_recorder.tick();
-        }
 
-        // Tick should not be recorded
-        assert_eq!(poh_recorder.tick_height(), 0);
+            // We should be the leader now
+            assert_eq!(poh_recorder.reached_leader_tick().0, true);
+            assert_eq!(
+                poh_recorder.reached_leader_tick().1,
+                bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR
+            );
 
-        // Test that with no leader slot, we don't reach the leader tick after sending some ticks
-        assert_eq!(poh_recorder.reached_leader_tick().0, false);
+            // Let's test that correct grace ticks are reported
+            // Set the leader slot 1 slot down
+            poh_recorder.reset(
+                poh_recorder.tick_height(),
+                bank.last_blockhash(),
+                3,
+                Some(4),
+                bank.ticks_per_slot(),
+            );
 
-        poh_recorder.reset(
-            poh_recorder.tick_height(),
-            bank.last_blockhash(),
-            0,
-            None,
-            bank.ticks_per_slot(),
-        );
+            // Send remaining ticks for the slot (remember we sent extra ticks in the previous part of the test)
+            for _ in
+                bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR..bank.ticks_per_slot()
+            {
+                poh_recorder.tick();
+            }
 
-        // Test that with no leader slot in reset(), we don't reach the leader tick
-        assert_eq!(poh_recorder.reached_leader_tick().0, false);
-
-        // Provide a leader slot 1 slot down
-        poh_recorder.reset(
-            bank.ticks_per_slot(),
-            bank.last_blockhash(),
-            0,
-            Some(2),
-            bank.ticks_per_slot(),
-        );
-
-        let init_ticks = poh_recorder.tick_height();
-
-        // Send one slot worth of ticks
-        for _ in 0..bank.ticks_per_slot() {
+            // Send one extra tick before resetting (so that there's one grace tick)
             poh_recorder.tick();
+
+            // We are not the leader yet, as expected
+            assert_eq!(poh_recorder.reached_leader_tick().0, false);
+            poh_recorder.reset(
+                poh_recorder.tick_height(),
+                bank.last_blockhash(),
+                3,
+                Some(4),
+                bank.ticks_per_slot(),
+            );
+            // without sending more ticks, we should be leader now
+            assert_eq!(poh_recorder.reached_leader_tick().0, true);
+            assert_eq!(poh_recorder.reached_leader_tick().1, 1);
+
+            // Let's test that if a node overshoots the ticks for its target
+            // leader slot, reached_leader_tick() will return false
+            // Set the leader slot 1 slot down
+            poh_recorder.reset(
+                poh_recorder.tick_height(),
+                bank.last_blockhash(),
+                4,
+                Some(5),
+                bank.ticks_per_slot(),
+            );
+
+            // Send remaining ticks for the slot (remember we sent extra ticks in the previous part of the test)
+            for _ in 0..4 * bank.ticks_per_slot() {
+                poh_recorder.tick();
+            }
+
+            // We are not the leader, as expected
+            assert_eq!(poh_recorder.reached_leader_tick().0, false);
         }
-
-        // Tick should be recorded
-        assert_eq!(
-            poh_recorder.tick_height(),
-            init_ticks + bank.ticks_per_slot()
-        );
-
-        // Test that we don't reach the leader tick because of grace ticks
-        assert_eq!(poh_recorder.reached_leader_tick().0, false);
-
-        // reset poh now. it should discard the grace ticks wait
-        poh_recorder.reset(
-            poh_recorder.tick_height(),
-            bank.last_blockhash(),
-            1,
-            Some(2),
-            bank.ticks_per_slot(),
-        );
-        // without sending more ticks, we should be leader now
-        assert_eq!(poh_recorder.reached_leader_tick().0, true);
-        assert_eq!(poh_recorder.reached_leader_tick().1, 0);
-
-        // Now test that with grace ticks we can reach leader ticks
-        // Set the leader slot 1 slot down
-        poh_recorder.reset(
-            poh_recorder.tick_height(),
-            bank.last_blockhash(),
-            2,
-            Some(3),
-            bank.ticks_per_slot(),
-        );
-
-        // Send one slot worth of ticks
-        for _ in 0..bank.ticks_per_slot() {
-            poh_recorder.tick();
-        }
-
-        // We are not the leader yet, as expected
-        assert_eq!(poh_recorder.reached_leader_tick().0, false);
-
-        // Send 1 less tick than the grace ticks
-        for _ in 0..bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR - 1 {
-            poh_recorder.tick();
-        }
-        // We are still not the leader
-        assert_eq!(poh_recorder.reached_leader_tick().0, false);
-
-        // Send one more tick
-        poh_recorder.tick();
-
-        // We should be the leader now
-        assert_eq!(poh_recorder.reached_leader_tick().0, true);
-        assert_eq!(
-            poh_recorder.reached_leader_tick().1,
-            bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR
-        );
-
-        // Let's test that correct grace ticks are reported
-        // Set the leader slot 1 slot down
-        poh_recorder.reset(
-            poh_recorder.tick_height(),
-            bank.last_blockhash(),
-            3,
-            Some(4),
-            bank.ticks_per_slot(),
-        );
-
-        // Send remaining ticks for the slot (remember we sent extra ticks in the previous part of the test)
-        for _ in bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR..bank.ticks_per_slot() {
-            poh_recorder.tick();
-        }
-
-        // Send one extra tick before resetting (so that there's one grace tick)
-        poh_recorder.tick();
-
-        // We are not the leader yet, as expected
-        assert_eq!(poh_recorder.reached_leader_tick().0, false);
-        poh_recorder.reset(
-            poh_recorder.tick_height(),
-            bank.last_blockhash(),
-            3,
-            Some(4),
-            bank.ticks_per_slot(),
-        );
-        // without sending more ticks, we should be leader now
-        assert_eq!(poh_recorder.reached_leader_tick().0, true);
-        assert_eq!(poh_recorder.reached_leader_tick().1, 1);
-
-        // Let's test that if a node overshoots the ticks for its target
-        // leader slot, reached_leader_tick() will return false
-        // Set the leader slot 1 slot down
-        poh_recorder.reset(
-            poh_recorder.tick_height(),
-            bank.last_blockhash(),
-            4,
-            Some(5),
-            bank.ticks_per_slot(),
-        );
-
-        // Send remaining ticks for the slot (remember we sent extra ticks in the previous part of the test)
-        for _ in 0..4 * bank.ticks_per_slot() {
-            poh_recorder.tick();
-        }
-
-        // We are not the leader, as expected
-        assert_eq!(poh_recorder.reached_leader_tick().0, false);
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 }
