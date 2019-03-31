@@ -20,6 +20,7 @@ use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
 use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote};
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
+use crate::repair_service::RepairType;
 use crate::result::Result;
 use crate::staking_utils;
 use crate::streamer::{BlobReceiver, BlobSender};
@@ -57,6 +58,9 @@ pub const GROW_LAYER_CAPACITY: bool = false;
 
 /// milliseconds we sleep for between gossip requests
 pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
+
+/// the number of slots to respond with when responding to `DetachedHead` requests
+pub const MAX_SLOT_REPAIR_RESPONSES: usize = 10;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -161,6 +165,7 @@ enum Protocol {
     /// TODO: move this message to a different module
     RequestWindowIndex(ContactInfo, u64, u64),
     RequestHighestWindowIndex(ContactInfo, u64, u64),
+    RequestDetachedHead(ContactInfo, u64),
 }
 
 impl ClusterInfo {
@@ -746,12 +751,13 @@ impl ClusterInfo {
         Ok(out)
     }
 
-    pub fn window_index_request(
-        &self,
-        slot: u64,
-        blob_index: u64,
-        get_highest: bool,
-    ) -> Result<(SocketAddr, Vec<u8>)> {
+    fn detached_head_bytes(&self, slot: u64) -> Result<Vec<u8>> {
+        let req = Protocol::RequestDetachedHead(self.my_data().clone(), slot);
+        let out = serialize(&req)?;
+        Ok(out)
+    }
+
+    pub fn repair_request(&self, repair_request: &RepairType) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication, as indicated
         //  by a valid tvu port location
         let valid: Vec<_> = self.repair_peers();
@@ -761,18 +767,36 @@ impl ClusterInfo {
         let n = thread_rng().gen::<usize>() % valid.len();
         let addr = valid[n].gossip; // send the request to the peer's gossip port
         let out = {
-            if get_highest {
-                self.window_highest_index_request_bytes(slot, blob_index)?
-            } else {
-                self.window_index_request_bytes(slot, blob_index)?
+            match repair_request {
+                RepairType::Blob(slot, blob_index) => {
+                    submit(
+                        influxdb::Point::new("cluster-info")
+                            .add_field("repair-ix", influxdb::Value::Integer(*blob_index as i64))
+                            .to_owned(),
+                    );
+                    self.window_index_request_bytes(*slot, *blob_index)?
+                }
+                RepairType::HighestBlob(slot, blob_index) => {
+                    submit(
+                        influxdb::Point::new("cluster-info")
+                            .add_field("repair-highest-ix", influxdb::Value::Integer(*slot as i64))
+                            .to_owned(),
+                    );
+                    self.window_highest_index_request_bytes(*slot, *blob_index)?
+                }
+                RepairType::DetachedHead(slot) => {
+                    submit(
+                        influxdb::Point::new("cluster-info")
+                            .add_field(
+                                "repair-detached-head",
+                                influxdb::Value::Integer(*slot as i64),
+                            )
+                            .to_owned(),
+                    );
+                    self.detached_head_bytes(*slot)?
+                }
             }
         };
-
-        submit(
-            influxdb::Point::new("cluster-info")
-                .add_field("repair-ix", influxdb::Value::Integer(blob_index as i64))
-                .to_owned(),
-        );
 
         Ok((addr, out))
     }
@@ -966,6 +990,32 @@ impl ClusterInfo {
         vec![]
     }
 
+    fn run_detached_head(
+        from_addr: &SocketAddr,
+        blocktree: Option<&Arc<Blocktree>>,
+        mut slot: u64,
+        max_responses: usize,
+    ) -> Vec<SharedBlob> {
+        let mut res = vec![];
+        if let Some(blocktree) = blocktree {
+            // Try to find the next "n" parent slots of the input slot
+            while let Ok(Some(meta)) = blocktree.meta(slot) {
+                let blob = blocktree.get_data_blob(slot, meta.received - 1);
+                if let Ok(Some(mut blob)) = blob {
+                    blob.meta.set_addr(from_addr);
+                    res.push(Arc::new(RwLock::new(blob)));
+                }
+                if meta.is_parent_set() && res.len() <= max_responses {
+                    slot = meta.parent_slot;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        res
+    }
+
     //TODO we should first coalesce all the requests
     fn handle_blob(
         obj: &Arc<RwLock<Self>>,
@@ -1082,14 +1132,21 @@ impl ClusterInfo {
             vec![]
         }
     }
-    fn handle_request_window_index(
+
+    fn get_repair_sender(request: &Protocol) -> &ContactInfo {
+        match request {
+            Protocol::RequestWindowIndex(ref from, _, _) => from,
+            Protocol::RequestHighestWindowIndex(ref from, _, _) => from,
+            Protocol::RequestDetachedHead(ref from, _) => from,
+            _ => panic!("Not a repair request"),
+        }
+    }
+
+    fn handle_repair(
         me: &Arc<RwLock<Self>>,
-        from: &ContactInfo,
-        blocktree: Option<&Arc<Blocktree>>,
-        slot: u64,
-        blob_index: u64,
         from_addr: &SocketAddr,
-        is_get_highest: bool,
+        blocktree: Option<&Arc<Blocktree>>,
+        request: Protocol,
     ) -> Vec<SharedBlob> {
         let now = Instant::now();
 
@@ -1098,12 +1155,13 @@ impl ClusterInfo {
         //TODO verify from is signed
 
         let self_id = me.read().unwrap().gossip.id;
+        let from = Self::get_repair_sender(&request);
         if from.id == me.read().unwrap().gossip.id {
             warn!(
-                "{}: Ignored received RequestWindowIndex from ME {} {} {} ",
-                self_id, from.id, slot, blob_index,
+                "{}: Ignored received repair request from ME {}",
+                self_id, from.id,
             );
-            inc_new_counter_info!("cluster_info-window-request-address-eq", 1);
+            inc_new_counter_info!("cluster_info-handle-repair--eq", 1);
             return vec![];
         }
 
@@ -1113,26 +1171,54 @@ impl ClusterInfo {
             .crds
             .update_record_timestamp(&from.id, timestamp());
         let my_info = me.read().unwrap().my_data().clone();
-        inc_new_counter_info!("cluster_info-window-request-recv", 1);
-        trace!(
-            "{}: received RequestWindowIndex from: {} slot: {}, blob_index: {}",
-            self_id,
-            from.id,
-            slot,
-            blob_index,
-        );
-        let res = {
-            if is_get_highest {
-                Self::run_highest_window_request(&from_addr, blocktree, slot, blob_index)
-            } else {
-                Self::run_window_request(&from, &from_addr, blocktree, &my_info, slot, blob_index)
+
+        let (res, label) = {
+            match &request {
+                Protocol::RequestWindowIndex(from, slot, blob_index) => {
+                    inc_new_counter_info!("cluster_info-request-window-index", 1);
+                    (
+                        Self::run_window_request(
+                            from,
+                            &from_addr,
+                            blocktree,
+                            &my_info,
+                            *slot,
+                            *blob_index,
+                        ),
+                        "RequestWindowIndex",
+                    )
+                }
+
+                Protocol::RequestHighestWindowIndex(from, slot, highest_index) => {
+                    inc_new_counter_info!("cluster_info-request-highest-window-index", 1);
+                    (
+                        Self::run_highest_window_request(
+                            &from_addr,
+                            blocktree,
+                            *slot,
+                            *highest_index,
+                        ),
+                        "RequestHighestWindowIndex",
+                    )
+                }
+                Protocol::RequestDetachedHead(from, slot) => {
+                    inc_new_counter_info!("cluster_info-request-detached-head", 1);
+                    (
+                        Self::run_detached_head(
+                            &from_addr,
+                            blocktree,
+                            *slot,
+                            MAX_SLOT_REPAIR_RESPONSES,
+                        ),
+                        "RequestDetachedHead",
+                    )
+                }
+                _ => panic!("Not a repair request"),
             }
         };
-        report_time_spent(
-            "RequestWindowIndex",
-            &now.elapsed(),
-            &format!("slot {}, blob_index: {}", slot, blob_index),
-        );
+
+        trace!("{}: received repair request: {:?}", self_id, request);
+        report_time_spent(label, &now.elapsed(), "");
         res
     }
 
@@ -1198,22 +1284,7 @@ impl ClusterInfo {
                 }
                 vec![]
             }
-            Protocol::RequestWindowIndex(from, slot, blob_index) => {
-                Self::handle_request_window_index(
-                    me, &from, blocktree, slot, blob_index, from_addr, false,
-                )
-            }
-            Protocol::RequestHighestWindowIndex(from, slot, highest_index) => {
-                Self::handle_request_window_index(
-                    me,
-                    &from,
-                    blocktree,
-                    slot,
-                    highest_index,
-                    from_addr,
-                    true,
-                )
-            }
+            _ => Self::handle_repair(me, from_addr, blocktree, request),
         }
     }
 
@@ -1525,6 +1596,7 @@ mod tests {
     use crate::blocktree::Blocktree;
     use crate::crds_value::CrdsValueLabel;
     use crate::packet::BLOB_HEADER_SIZE;
+    use crate::repair_service::RepairType;
     use crate::result::Error;
     use crate::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -1591,7 +1663,7 @@ mod tests {
     fn window_index_request() {
         let me = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(me);
-        let rv = cluster_info.window_index_request(0, 0, false);
+        let rv = cluster_info.repair_request(&RepairType::Blob(0, 0));
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
         let gossip_addr = socketaddr!([127, 0, 0, 1], 1234);
@@ -1607,7 +1679,9 @@ mod tests {
             0,
         );
         cluster_info.insert_info(nxt.clone());
-        let rv = cluster_info.window_index_request(0, 0, false).unwrap();
+        let rv = cluster_info
+            .repair_request(&RepairType::Blob(0, 0))
+            .unwrap();
         assert_eq!(nxt.gossip, gossip_addr);
         assert_eq!(rv.0, nxt.gossip);
 
@@ -1628,7 +1702,9 @@ mod tests {
         let mut two = false;
         while !one || !two {
             //this randomly picks an option, so eventually it should pick both
-            let rv = cluster_info.window_index_request(0, 0, false).unwrap();
+            let rv = cluster_info
+                .repair_request(&RepairType::Blob(0, 0))
+                .unwrap();
             if rv.0 == gossip_addr {
                 one = true;
             }

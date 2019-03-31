@@ -4,9 +4,9 @@
 use crate::blocktree::{Blocktree, SlotMeta};
 use crate::cluster_info::ClusterInfo;
 use crate::leader_schedule_utils;
+use crate::poh_recorder;
 use crate::result::Result;
 use crate::service::Service;
-use crate::poh_recorder;
 use solana_metrics::{influxdb, submit};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,11 +19,11 @@ pub const MAX_REPAIR_LENGTH: usize = 16;
 pub const REPAIR_MS: u64 = 100;
 pub const MAX_REPAIR_TRIES: u64 = 128;
 pub const NUM_FORKS_TO_REPAIR: usize = 5;
-pub const NUM_SLOT_REPAIRS: usize = 32;
 pub const MAX_DETACHED_HEADS: usize = 5;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepairType {
+    DetachedHead(u64),
     HighestBlob(u64, u64),
     Blob(u64, u64),
 }
@@ -68,7 +68,6 @@ impl RepairService {
         repair_socket: &Arc<UdpSocket>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         repair_slot_range: RepairSlotRange,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) {
         let mut repair_info = RepairInfo::new();
         let id = cluster_info.read().unwrap().id();
@@ -77,41 +76,28 @@ impl RepairService {
                 break;
             }
 
-            let repairs = Self::generate_repairs(
-                blocktree,
-                MAX_REPAIR_LENGTH,
-                &mut repair_info,
-                poh_recorder,
-            );
+            let repairs = Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH, &mut repair_info);
 
             if let Ok(repairs) = repairs {
                 let reqs: Vec<_> = repairs
                     .into_iter()
                     .filter_map(|repair_request| {
-                        let (slot, blob_index, is_highest_request) = {
-                            match repair_request {
-                                RepairType::Blob(s, i) => (s, i, false),
-                                RepairType::HighestBlob(s, i) => (s, i, true),
-                            }
-                        };
                         cluster_info
                             .read()
                             .unwrap()
-                            .window_index_request(slot, blob_index, is_highest_request)
-                            .map(|result| (result, slot, blob_index))
+                            .repair_request(&repair_request)
+                            .map(|result| (result, repair_request))
                             .ok()
                     })
                     .collect();
 
-                for ((to, req), slot, blob_index) in reqs {
+                for ((to, req), repair_request) in reqs {
                     if let Ok(local_addr) = repair_socket.local_addr() {
                         submit(
                             influxdb::Point::new("repair_service")
-                                .add_field("repair_slot", influxdb::Value::Integer(slot as i64))
-                                .to_owned()
                                 .add_field(
-                                    "repair_blob",
-                                    influxdb::Value::Integer(blob_index as i64),
+                                    "repair_request",
+                                    influxdb::Value::String(format!("{:?}", repair_request)),
                                 )
                                 .to_owned()
                                 .add_field("to", influxdb::Value::String(to.to_string()))
@@ -185,7 +171,6 @@ impl RepairService {
         blocktree: &Blocktree,
         max_repairs: usize,
         repair_info: &mut RepairInfo,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Result<(Vec<RepairType>)> {
         // Slot height and blob indexes for blobs we want to repair
         let mut repairs: Vec<RepairType> = vec![];
@@ -209,15 +194,23 @@ impl RepairService {
             }
         }
 
-        // Ask for all missing slots from last vote up to the current Poh - grace period
-        let (tick_height, start_slot) = {
+        // Ask for all missing slots up to what gossip is pushing
+        /*let (tick_height, start_slot) = {
             let r_poh = poh_recorder.read().unwrap();
             (r_poh.tick_height(), r_poh.start_slot()) ;
         };
 
-        let slot = leader_schedule_utils::tick_height_to_slot(tick_height);
+        let slot = leader_schedule_utils::tick_height_to_slot(tick_height);*/
 
+        // Try to resolve detached heads in blocktree
+        let detached_heads = blocktree.get_detached_heads(Some(MAX_DETACHED_HEADS));
+
+        Self::generate_repairs_for_detached_heads(&detached_heads[..], &mut repairs);
         Ok(repairs)
+    }
+
+    fn generate_repairs_for_detached_heads(detached_heads: &[u64], repairs: &mut Vec<RepairType>) {
+        repairs.extend(detached_heads.iter().map(|h| RepairType::DetachedHead(*h)));
     }
 
     /// Repairs any fork starting at the input slot
@@ -226,7 +219,7 @@ impl RepairService {
         repairs: &mut Vec<RepairType>,
         max_repairs: usize,
         slot: u64,
-    ) -> {
+    ) {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
             let slot = pending_slots.pop().unwrap();
@@ -304,13 +297,7 @@ mod test {
 
             blocktree.write_blobs(&blobs).unwrap();
             assert_eq!(
-                RepairService::generate_repairs(
-                    &blocktree,
-                    2,
-                    &mut repair_info,
-                    &repair_slot_range
-                )
-                .unwrap(),
+                RepairService::generate_repairs(&blocktree, 2, &mut repair_info,).unwrap(),
                 vec![]
             );
             assert_eq!(repair_info.repair_tries, 1);
@@ -337,13 +324,7 @@ mod test {
             blocktree.write_blobs(&blobs).unwrap();
             // Check that repair tries to patch the empty slot
             assert_eq!(
-                RepairService::generate_repairs(
-                    &blocktree,
-                    2,
-                    &mut repair_info,
-                    &RepairSlotRange::default()
-                )
-                .unwrap(),
+                RepairService::generate_repairs(&blocktree, 2, &mut repair_info,).unwrap(),
                 vec![RepairType::HighestBlob(0, 0), RepairType::Blob(2, 0)]
             );
         }
@@ -387,24 +368,14 @@ mod test {
             let repair_slot_range = RepairSlotRange::default();
 
             assert_eq!(
-                RepairService::generate_repairs(
-                    &blocktree,
-                    std::usize::MAX,
-                    &mut repair_info,
-                    &repair_slot_range
-                )
-                .unwrap(),
+                RepairService::generate_repairs(&blocktree, std::usize::MAX, &mut repair_info,)
+                    .unwrap(),
                 expected
             );
 
             assert_eq!(
-                RepairService::generate_repairs(
-                    &blocktree,
-                    expected.len() - 2,
-                    &mut repair_info,
-                    &repair_slot_range
-                )
-                .unwrap()[..],
+                RepairService::generate_repairs(&blocktree, expected.len() - 2, &mut repair_info,)
+                    .unwrap()[..],
                 expected[0..expected.len() - 2]
             );
         }
@@ -435,13 +406,8 @@ mod test {
             let repair_slot_range = RepairSlotRange::default();
 
             assert_eq!(
-                RepairService::generate_repairs(
-                    &blocktree,
-                    std::usize::MAX,
-                    &mut repair_info,
-                    &repair_slot_range
-                )
-                .unwrap(),
+                RepairService::generate_repairs(&blocktree, std::usize::MAX, &mut repair_info,)
+                    .unwrap(),
                 expected
             );
         }
@@ -476,13 +442,8 @@ mod test {
             repair_slot_range.end = end;
 
             assert_eq!(
-                RepairService::generate_repairs(
-                    &blocktree,
-                    std::usize::MAX,
-                    &mut repair_info,
-                    &repair_slot_range
-                )
-                .unwrap(),
+                RepairService::generate_repairs(&blocktree, std::usize::MAX, &mut repair_info,)
+                    .unwrap(),
                 expected
             );
         }

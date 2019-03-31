@@ -105,6 +105,10 @@ impl SlotMeta {
         self.consumed == self.last_index + 1
     }
 
+    pub fn is_parent_set(&self) -> bool {
+        self.parent_slot != std::u64::MAX
+    }
+
     fn new(slot: u64, parent_slot: u64) -> Self {
         SlotMeta {
             slot,
@@ -696,6 +700,25 @@ impl Blocktree {
         *self.slots_of_interest.write().unwrap() = slots_of_interest;
     }
 
+    pub fn get_detached_heads(&self, max: Option<usize>) -> Vec<u64> {
+        let mut results = vec![];
+        let mut iter = self
+            .db
+            .raw_iterator_cf(self.detached_heads_cf.handle())
+            .unwrap();
+        iter.seek_to_first();
+        while iter.valid() {
+            if let Some(max) = max {
+                if results.len() > max {
+                    break;
+                }
+            }
+            results.push(DetachedHeadsCf::index(&iter.key().unwrap()));
+            iter.next();
+        }
+        results
+    }
+
     fn deserialize_blobs<I>(blob_datas: &[I]) -> Vec<Entry>
     where
         I: Borrow<[u8]>,
@@ -850,9 +873,9 @@ impl Blocktree {
     }
 
     fn is_detached_head(meta: &SlotMeta) -> bool {
-        // If we have children, but no parent, then this is the head of a detached chain of
+        // If we have no parent, then this is the head of a detached chain of
         // slots
-        meta.parent_slot == std::u64::MAX
+        meta.is_parent_set()
     }
 
     // 1) Chain current_slot to the previous slot defined by prev_slot_meta
@@ -2209,7 +2232,7 @@ pub mod tests {
                 .expect("Expect database get to succeed")
                 .unwrap();
             assert!(Blocktree::is_detached_head(&meta));
-            assert_eq!(get_detached_heads(&blocktree), vec![1]);
+            assert_eq!(blocktree.get_detached_heads(None), vec![1]);
 
             // Write slot 1 which chains to slot 0, so now slot 0 is the
             // detached head, and slot 1 is no longer the detached head.
@@ -2224,14 +2247,14 @@ pub mod tests {
                 .expect("Expect database get to succeed")
                 .unwrap();
             assert!(Blocktree::is_detached_head(&meta));
-            assert_eq!(get_detached_heads(&blocktree), vec![0]);
+            assert_eq!(blocktree.get_detached_heads(None), vec![0]);
 
             // Write some slot that also chains to existing slots and detached head,
             // nothing should change
             let blob4 = &make_slot_entries(4, 0, 1).0[0];
             let blob5 = &make_slot_entries(5, 1, 1).0[0];
             blocktree.write_blobs(vec![blob4, blob5]).unwrap();
-            assert_eq!(get_detached_heads(&blocktree), vec![0]);
+            assert_eq!(blocktree.get_detached_heads(None), vec![0]);
 
             // Write zeroth slot, no more detached heads
             blocktree.write_blobs(once(&blobs[0])).unwrap();
@@ -2506,16 +2529,5 @@ pub mod tests {
         }
 
         (blobs, entries)
-    }
-
-    fn get_detached_heads(blocktree: &Blocktree) -> Vec<u64> {
-        let mut results = vec![];
-        let mut iter = blocktree.detached_heads_cf.cursor().unwrap();
-        iter.seek_to_first();
-        while iter.valid() {
-            results.push(iter.key().unwrap());
-            iter.next();
-        }
-        results
     }
 }
