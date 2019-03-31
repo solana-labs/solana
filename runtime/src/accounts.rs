@@ -107,10 +107,6 @@ struct AccountInfo {
     /// lamports in the account used when squashing kept for optimization
     /// purposes to remove accounts with zero balance.
     lamports: u64,
-
-    /// keep track if this is a vote account for performance reasons to avoid
-    /// having to read the accounts from the storage
-    is_vote_account: bool,
 }
 
 // in a given a Fork, which AppendVecId and offset
@@ -589,7 +585,6 @@ impl AccountsDB {
                 id,
                 offset,
                 lamports: account.lamports,
-                is_vote_account: solana_vote_api::check_id(&account.owner),
             };
             self.insert_account_entry(&pubkey, &account_info, &mut account_map);
             if solana_vote_api::check_id(&account.owner) {
