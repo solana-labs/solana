@@ -3,7 +3,7 @@ use serde_json::Value;
 use solana_client::rpc_client::RpcClient;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::KeypairUtil;
 use solana_wallet::wallet::{
     process_command, request_and_confirm_airdrop, WalletCommand, WalletConfig,
 };
@@ -21,7 +21,7 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: &Pubkey) {
 #[test]
 fn test_wallet_timestamp_tx() {
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
-    let bob_pubkey = Keypair::new().pubkey();
+    let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
     run_local_drone(alice, sender);
@@ -81,7 +81,7 @@ fn test_wallet_timestamp_tx() {
 #[test]
 fn test_wallet_witness_tx() {
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
-    let bob_pubkey = Keypair::new().pubkey();
+    let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
     run_local_drone(alice, sender);
@@ -138,7 +138,7 @@ fn test_wallet_witness_tx() {
 #[test]
 fn test_wallet_cancel_tx() {
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
-    let bob_pubkey = Keypair::new().pubkey();
+    let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
     run_local_drone(alice, sender);

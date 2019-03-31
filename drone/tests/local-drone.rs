@@ -1,6 +1,7 @@
 use solana_drone::drone::{request_airdrop_transaction, run_local_drone};
 use solana_sdk::hash::Hash;
 use solana_sdk::message::Message;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::transaction::Transaction;
@@ -9,7 +10,7 @@ use std::sync::mpsc::channel;
 #[test]
 fn test_local_drone() {
     let keypair = Keypair::new();
-    let to = Keypair::new().pubkey();
+    let to = Pubkey::new_rand();
     let lamports = 50;
     let blockhash = Hash::new(&to.as_ref());
     let create_instruction = SystemInstruction::new_account(&keypair.pubkey(), &to, lamports);

@@ -56,7 +56,6 @@ mod test {
     use crate::blocktree::get_tmp_ledger_path;
     use crate::entry::{make_tiny_test_entries, EntrySlice};
     use crate::packet::index_blobs;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::Arc;
 
     #[test]
@@ -67,7 +66,7 @@ mod test {
         let original_entries = make_tiny_test_entries(num_entries);
         let shared_blobs = original_entries.clone().to_shared_blobs();
 
-        index_blobs(&shared_blobs, &Keypair::new().pubkey(), 0, 0, 0);
+        index_blobs(&shared_blobs, &Pubkey::new_rand(), 0, 0, 0);
 
         for blob in shared_blobs.iter().rev() {
             process_blob(&blocktree, blob).expect("Expect successful processing of blob");

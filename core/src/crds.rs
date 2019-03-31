@@ -165,7 +165,6 @@ impl Crds {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_insert() {
@@ -302,11 +301,11 @@ mod test {
     fn test_label_order() {
         let v1 = VersionedCrdsValue::new(
             1,
-            CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0)),
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0)),
         );
         let v2 = VersionedCrdsValue::new(
             1,
-            CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0)),
+            CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0)),
         );
         assert_ne!(v1, v2);
         assert!(!(v1 == v2));

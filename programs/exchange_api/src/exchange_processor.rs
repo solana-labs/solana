@@ -522,7 +522,7 @@ mod test {
     }
 
     fn create_account(client: &BankClient, owner: &Keypair) -> Pubkey {
-        let new = Keypair::new().pubkey();
+        let new = Pubkey::new_rand();
         let instruction = SystemInstruction::new_program_account(
             &owner.pubkey(),
             &new,
@@ -537,7 +537,7 @@ mod test {
     }
 
     fn create_token_account(client: &BankClient, owner: &Keypair) -> Pubkey {
-        let new = Keypair::new().pubkey();
+        let new = Pubkey::new_rand();
         let instruction = SystemInstruction::new_program_account(
             &owner.pubkey(),
             &new,

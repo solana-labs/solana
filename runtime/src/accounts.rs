@@ -1570,7 +1570,7 @@ mod tests {
         num_vote: usize,
     ) {
         for t in 0..num {
-            let pubkey = Keypair::new().pubkey();
+            let pubkey = Pubkey::new_rand();
             let mut default_account = Account::default();
             pubkeys.push(pubkey.clone());
             default_account.lamports = (t + 1) as u64;
@@ -1578,7 +1578,7 @@ mod tests {
             accounts.store(fork, &pubkey, &default_account);
         }
         for t in 0..num_vote {
-            let pubkey = Keypair::new().pubkey();
+            let pubkey = Pubkey::new_rand();
             let mut default_account = Account::default();
             pubkeys.push(pubkey.clone());
             default_account.owner = solana_vote_api::id();
@@ -1681,7 +1681,7 @@ mod tests {
         let accounts = AccountsDB::new_with_file_size(0, &paths.paths, size, 0);
         let mut keys = vec![];
         for i in 0..9 {
-            let key = Keypair::new().pubkey();
+            let key = Pubkey::new_rand();
             let account = Account::new(i + 1, size as usize / 4, &key);
             accounts.store(0, &key, &account);
             keys.push(key);
@@ -1713,7 +1713,7 @@ mod tests {
             AccountStorageStatus::StorageAvailable,
             AccountStorageStatus::StorageFull,
         ];
-        let pubkey1 = Keypair::new().pubkey();
+        let pubkey1 = Pubkey::new_rand();
         let account1 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, &pubkey1);
         accounts.store(0, &pubkey1, &account1);
         {
@@ -1723,7 +1723,7 @@ mod tests {
             assert_eq!(stores[0].get_status(), status[0]);
         }
 
-        let pubkey2 = Keypair::new().pubkey();
+        let pubkey2 = Pubkey::new_rand();
         let account2 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, &pubkey2);
         accounts.store(0, &pubkey2, &account2);
         {
@@ -1785,7 +1785,7 @@ mod tests {
     fn test_accounts_vote_filter() {
         let accounts = Accounts::new(0, None);
         let mut vote_account = Account::new(1, 0, &solana_vote_api::id());
-        let key = Keypair::new().pubkey();
+        let key = Pubkey::new_rand();
         accounts.store_slow(0, &key, &vote_account);
 
         accounts.new_from_parent(1, 0);
@@ -1800,7 +1800,7 @@ mod tests {
         assert_eq!(vote_accounts.len(), 0);
 
         let mut vote_account1 = Account::new(2, 0, &solana_vote_api::id());
-        let key1 = Keypair::new().pubkey();
+        let key1 = Pubkey::new_rand();
         accounts.store_slow(1, &key1, &vote_account1);
 
         accounts.squash(1);
@@ -1828,7 +1828,7 @@ mod tests {
         accounts.iter().for_each(|(_, account)| {
             assert_eq!(account.owner, solana_vote_api::id());
         });
-        let lastkey = Keypair::new().pubkey();
+        let lastkey = Pubkey::new_rand();
         let mut lastaccount = Account::new(1, 0, &solana_vote_api::id());
         accounts_db.store(0, &lastkey, &lastaccount);
         assert_eq!(accounts_db.get_vote_accounts(0).len(), 2);
@@ -1890,7 +1890,7 @@ mod tests {
         let accounts = AccountsDB::new(0, &paths.paths);
         let mut error_counters = ErrorCounters::default();
         assert_eq!(
-            accounts.load_executable_accounts(0, &Keypair::new().pubkey(), &mut error_counters),
+            accounts.load_executable_accounts(0, &Pubkey::new_rand(), &mut error_counters),
             Err(TransactionError::AccountNotFound)
         );
         assert_eq!(error_counters.account_not_found, 1);
@@ -1921,13 +1921,13 @@ mod tests {
         let accounts_db = AccountsDB::new(0, &paths.paths);
 
         // Load accounts owned by various programs into AccountsDB
-        let pubkey0 = Keypair::new().pubkey();
+        let pubkey0 = Pubkey::new_rand();
         let account0 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts_db.store(0, &pubkey0, &account0);
-        let pubkey1 = Keypair::new().pubkey();
+        let pubkey1 = Pubkey::new_rand();
         let account1 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts_db.store(0, &pubkey1, &account1);
-        let pubkey2 = Keypair::new().pubkey();
+        let pubkey2 = Pubkey::new_rand();
         let account2 = Account::new(1, 0, &Pubkey::new(&[3; 32]));
         accounts_db.store(0, &pubkey2, &account2);
 

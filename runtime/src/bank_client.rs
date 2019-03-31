@@ -64,7 +64,7 @@ mod tests {
         let bank_client = BankClient::new(&bank);
 
         // Create 2-2 Multisig Move instruction.
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let mut move_instruction = SystemInstruction::new_move(&john_pubkey, &bob_pubkey, 42);
         move_instruction
             .accounts

@@ -117,10 +117,10 @@ mod tests {
     #[test]
     fn test_create_system_account() {
         let new_program_owner = Pubkey::new(&[9; 32]);
-        let from = Keypair::new().pubkey();
+        let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &system_program::id());
 
-        let to = Keypair::new().pubkey();
+        let to = Pubkey::new_rand();
         let mut to_account = Account::new(0, 0, &Pubkey::default());
 
         let mut keyed_accounts = [
@@ -142,10 +142,10 @@ mod tests {
     fn test_create_negative_lamports() {
         // Attempt to create account with more lamports than remaining in from_account
         let new_program_owner = Pubkey::new(&[9; 32]);
-        let from = Keypair::new().pubkey();
+        let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &system_program::id());
 
-        let to = Keypair::new().pubkey();
+        let to = Pubkey::new_rand();
         let mut to_account = Account::new(0, 0, &Pubkey::default());
         let unchanged_account = to_account.clone();
 
@@ -164,11 +164,11 @@ mod tests {
     fn test_create_already_owned() {
         // Attempt to create system account in account already owned by another program
         let new_program_owner = Pubkey::new(&[9; 32]);
-        let from = Keypair::new().pubkey();
+        let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &system_program::id());
 
         let original_program_owner = Pubkey::new(&[5; 32]);
-        let owned_key = Keypair::new().pubkey();
+        let owned_key = Pubkey::new_rand();
         let mut owned_account = Account::new(0, 0, &original_program_owner);
         let unchanged_account = owned_account.clone();
 
@@ -187,10 +187,10 @@ mod tests {
     fn test_create_data_populated() {
         // Attempt to create system account in account with populated data
         let new_program_owner = Pubkey::new(&[9; 32]);
-        let from = Keypair::new().pubkey();
+        let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &system_program::id());
 
-        let populated_key = Keypair::new().pubkey();
+        let populated_key = Pubkey::new_rand();
         let mut populated_account = Account {
             lamports: 0,
             data: vec![0, 1, 2, 3],
@@ -213,9 +213,9 @@ mod tests {
     fn test_create_not_system_account() {
         let other_program = Pubkey::new(&[9; 32]);
 
-        let from = Keypair::new().pubkey();
+        let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &other_program);
-        let to = Keypair::new().pubkey();
+        let to = Pubkey::new_rand();
         let mut to_account = Account::new(0, 0, &Pubkey::default());
         let mut keyed_accounts = [
             KeyedAccount::new(&from, true, &mut from_account),
@@ -229,7 +229,7 @@ mod tests {
     fn test_assign_account_to_program() {
         let new_program_owner = Pubkey::new(&[9; 32]);
 
-        let from = Keypair::new().pubkey();
+        let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &system_program::id());
         let mut keyed_accounts = [KeyedAccount::new(&from, true, &mut from_account)];
         assign_account_to_program(&mut keyed_accounts, &new_program_owner).unwrap();
@@ -250,9 +250,9 @@ mod tests {
 
     #[test]
     fn test_move_lamports() {
-        let from = Keypair::new().pubkey();
+        let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
-        let to = Keypair::new().pubkey();
+        let to = Pubkey::new_rand();
         let mut to_account = Account::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
         let mut keyed_accounts = [
             KeyedAccount::new(&from, true, &mut from_account),

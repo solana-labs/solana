@@ -33,11 +33,7 @@ impl GenesisBlock {
         let lamports = lamports
             .checked_add(BOOTSTRAP_LEADER_LAMPORTS)
             .unwrap_or(lamports);
-        Self::new_with_leader(
-            lamports,
-            &Keypair::new().pubkey(),
-            BOOTSTRAP_LEADER_LAMPORTS,
-        )
+        Self::new_with_leader(lamports, &Pubkey::new_rand(), BOOTSTRAP_LEADER_LAMPORTS)
     }
 
     pub fn new_with_leader(

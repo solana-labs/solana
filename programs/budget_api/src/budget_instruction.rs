@@ -6,7 +6,6 @@ use chrono::prelude::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction::SystemInstruction;
 
 /// A smart contract.
@@ -59,7 +58,7 @@ impl BudgetInstruction {
 
     /// Create a new payment script.
     pub fn new_payment(from: &Pubkey, to: &Pubkey, lamports: u64) -> Vec<Instruction> {
-        let contract = Keypair::new().pubkey();
+        let contract = Pubkey::new_rand();
         let expr = BudgetExpr::new_payment(lamports, to);
         Self::new_account(from, &contract, lamports, expr)
     }
@@ -127,17 +126,17 @@ mod tests {
 
     #[test]
     fn test_budget_instruction_verify() {
-        let alice_pubkey = Keypair::new().pubkey();
-        let bob_pubkey = Keypair::new().pubkey();
+        let alice_pubkey = Pubkey::new_rand();
+        let bob_pubkey = Pubkey::new_rand();
         BudgetInstruction::new_payment(&alice_pubkey, &bob_pubkey, 1); // No panic! indicates success.
     }
 
     #[test]
     #[should_panic]
     fn test_budget_instruction_overspend() {
-        let alice_pubkey = Keypair::new().pubkey();
-        let bob_pubkey = Keypair::new().pubkey();
-        let budget_pubkey = Keypair::new().pubkey();
+        let alice_pubkey = Pubkey::new_rand();
+        let bob_pubkey = Pubkey::new_rand();
+        let budget_pubkey = Pubkey::new_rand();
         let expr = BudgetExpr::new_payment(2, &bob_pubkey);
         BudgetInstruction::new_account(&alice_pubkey, &budget_pubkey, 1, expr);
     }
@@ -145,9 +144,9 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_budget_instruction_underspend() {
-        let alice_pubkey = Keypair::new().pubkey();
-        let bob_pubkey = Keypair::new().pubkey();
-        let budget_pubkey = Keypair::new().pubkey();
+        let alice_pubkey = Pubkey::new_rand();
+        let bob_pubkey = Pubkey::new_rand();
+        let budget_pubkey = Pubkey::new_rand();
         let expr = BudgetExpr::new_payment(1, &bob_pubkey);
         BudgetInstruction::new_account(&alice_pubkey, &budget_pubkey, 2, expr);
     }

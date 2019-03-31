@@ -120,7 +120,7 @@ mod tests {
         let (bank, from_keypair) = create_bank(10_000);
         let vote_keypair = Keypair::new();
         let bank_client = BankClient::new(&bank);
-        let delegate_id = Keypair::new().pubkey();
+        let delegate_id = Pubkey::new_rand();
         create_vote_account_with_delegate(
             &bank_client,
             &from_keypair,

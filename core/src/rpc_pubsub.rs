@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn test_signature_unsubscribe() {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
         let blockhash = arc_bank.last_blockhash();
@@ -339,7 +339,7 @@ mod tests {
             .native_programs
             .push(("solana_budget_program".to_string(), solana_budget_api::id()));
 
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let witness = Keypair::new();
         let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
@@ -407,7 +407,7 @@ mod tests {
 
     #[test]
     fn test_account_unsubscribe() {
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let session = create_session();
 
         let mut io = PubSubHandler::default();

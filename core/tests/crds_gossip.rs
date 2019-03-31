@@ -10,18 +10,16 @@ use solana::crds_value::CrdsValue;
 use solana::crds_value::CrdsValueLabel;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
 use std::sync::{Arc, Mutex};
 
 type Node = Arc<Mutex<CrdsGossip>>;
 type Network = HashMap<Pubkey, Node>;
 fn star_network_create(num: usize) -> Network {
-    let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+    let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
-            let new =
-                CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+            let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
             let id = new.label().pubkey();
             let mut node = CrdsGossip::default();
             node.crds.insert(new.clone(), 0).unwrap();
@@ -39,15 +37,14 @@ fn star_network_create(num: usize) -> Network {
 }
 
 fn rstar_network_create(num: usize) -> Network {
-    let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+    let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
     let mut origin = CrdsGossip::default();
     let id = entry.label().pubkey();
     origin.crds.insert(entry.clone(), 0).unwrap();
     origin.set_self(&id);
     let mut network: HashMap<_, _> = (1..num)
         .map(|_| {
-            let new =
-                CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+            let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
             let id = new.label().pubkey();
             let mut node = CrdsGossip::default();
             node.crds.insert(new.clone(), 0).unwrap();
@@ -63,8 +60,7 @@ fn rstar_network_create(num: usize) -> Network {
 fn ring_network_create(num: usize) -> Network {
     let mut network: HashMap<_, _> = (0..num)
         .map(|_| {
-            let new =
-                CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+            let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
             let id = new.label().pubkey();
             let mut node = CrdsGossip::default();
             node.crds.insert(new.clone(), 0).unwrap();

@@ -16,7 +16,7 @@ pub fn request_airdrop_transaction(
         Err(Error::new(ErrorKind::Other, "Airdrop failed"))?
     }
     let key = Keypair::new();
-    let to = Keypair::new().pubkey();
+    let to = Pubkey::new_rand();
     let blockhash = Hash::default();
     let tx = SystemTransaction::new_account(&key, &to, lamports, blockhash, 0);
     Ok(tx)

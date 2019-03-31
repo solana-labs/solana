@@ -230,6 +230,7 @@ mod tests {
     use crate::entry::{create_ticks, next_entry, Entry};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
+    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::TransactionError;
@@ -441,7 +442,7 @@ mod tests {
     #[test]
     fn test_process_ledger_simple() {
         solana_logger::setup();
-        let leader_pubkey = Keypair::new().pubkey();
+        let leader_pubkey = Pubkey::new_rand();
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, &leader_pubkey, 50);
         let (ledger_path, mut last_entry_hash) = create_new_tmp_ledger!(&genesis_block);
         debug!("ledger_path: {:?}", ledger_path);

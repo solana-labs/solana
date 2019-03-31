@@ -95,7 +95,6 @@ impl SystemInstruction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::signature::{Keypair, KeypairUtil};
 
     fn get_keys(instruction: &Instruction) -> Vec<Pubkey> {
         instruction.accounts.iter().map(|x| x.pubkey).collect()
@@ -103,9 +102,9 @@ mod tests {
 
     #[test]
     fn test_move_many() {
-        let alice_pubkey = Keypair::new().pubkey();
-        let bob_pubkey = Keypair::new().pubkey();
-        let carol_pubkey = Keypair::new().pubkey();
+        let alice_pubkey = Pubkey::new_rand();
+        let bob_pubkey = Pubkey::new_rand();
+        let carol_pubkey = Pubkey::new_rand();
         let to_lamports = vec![(bob_pubkey, 1), (carol_pubkey, 2)];
 
         let instructions = SystemInstruction::new_move_many(&alice_pubkey, &to_lamports);

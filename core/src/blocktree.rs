@@ -1085,6 +1085,7 @@ pub mod tests {
     use rand::seq::SliceRandom;
     use rand::thread_rng;
     use solana_sdk::hash::Hash;
+    use solana_sdk::pubkey::Pubkey;
     use std::cmp::min;
     use std::collections::HashSet;
     use std::iter::once;
@@ -1255,7 +1256,7 @@ pub mod tests {
     fn test_read_blobs_bytes() {
         let shared_blobs = make_tiny_test_entries(10).to_single_entry_shared_blobs();
         let slot = 0;
-        packet::index_blobs(&shared_blobs, &Keypair::new().pubkey(), 0, slot, 0);
+        packet::index_blobs(&shared_blobs, &Pubkey::new_rand(), 0, slot, 0);
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
@@ -2379,7 +2380,7 @@ pub mod tests {
         let num_entries = 10;
         let shared_blobs = make_tiny_test_entries(num_entries).to_single_entry_shared_blobs();
 
-        crate::packet::index_blobs(&shared_blobs, &Keypair::new().pubkey(), 0, slot, 0);
+        crate::packet::index_blobs(&shared_blobs, &Pubkey::new_rand(), 0, slot, 0);
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();

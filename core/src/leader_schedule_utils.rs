@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_next_leader_slot() {
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let mut genesis_block = GenesisBlock::new_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
             &pubkey,
@@ -132,7 +132,7 @@ mod tests {
 
         assert_eq!(
             next_leader_slot(
-                &Keypair::new().pubkey(), // not in leader_schedule
+                &Pubkey::new_rand(), // not in leader_schedule
                 0,
                 &bank,
                 None
@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn test_next_leader_slot_blocktree() {
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let mut genesis_block = GenesisBlock::new_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
             &pubkey,
@@ -198,7 +198,7 @@ mod tests {
 
             assert_eq!(
                 next_leader_slot(
-                    &Keypair::new().pubkey(), // not in leader_schedule
+                    &Pubkey::new_rand(), // not in leader_schedule
                     0,
                     &bank,
                     Some(&blocktree)
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn test_next_leader_slot_next_epoch() {
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let (mut genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
             2 * BOOTSTRAP_LEADER_LAMPORTS,
             &pubkey,
@@ -220,7 +220,7 @@ mod tests {
         genesis_block.epoch_warmup = false;
 
         let bank = Bank::new(&genesis_block);
-        let delegate_id = Keypair::new().pubkey();
+        let delegate_id = Pubkey::new_rand();
 
         // Create new vote account
         let new_voting_keypair = Keypair::new();
@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_leader_schedule_via_bank() {
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
             &pubkey,
@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn test_leader_scheduler1_basic() {
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let genesis_block = GenesisBlock::new_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
             &pubkey,
@@ -300,8 +300,8 @@ mod tests {
 
     #[test]
     fn test_sort_stakes_basic() {
-        let pubkey0 = Keypair::new().pubkey();
-        let pubkey1 = Keypair::new().pubkey();
+        let pubkey0 = Pubkey::new_rand();
+        let pubkey1 = Pubkey::new_rand();
         let mut stakes = vec![(pubkey0, 1), (pubkey1, 2)];
         sort_stakes(&mut stakes);
         assert_eq!(stakes, vec![(pubkey1, 2), (pubkey0, 1)]);
@@ -309,8 +309,8 @@ mod tests {
 
     #[test]
     fn test_sort_stakes_with_dup() {
-        let pubkey0 = Keypair::new().pubkey();
-        let pubkey1 = Keypair::new().pubkey();
+        let pubkey0 = Pubkey::new_rand();
+        let pubkey1 = Pubkey::new_rand();
         let mut stakes = vec![(pubkey0, 1), (pubkey1, 2), (pubkey0, 1)];
         sort_stakes(&mut stakes);
         assert_eq!(stakes, vec![(pubkey1, 2), (pubkey0, 1)]);
@@ -319,7 +319,7 @@ mod tests {
     #[test]
     fn test_sort_stakes_with_equal_stakes() {
         let pubkey0 = Pubkey::default();
-        let pubkey1 = Keypair::new().pubkey();
+        let pubkey1 = Pubkey::new_rand();
         let mut stakes = vec![(pubkey0, 1), (pubkey1, 1)];
         sort_stakes(&mut stakes);
         assert_eq!(stakes, vec![(pubkey1, 1), (pubkey0, 1)]);

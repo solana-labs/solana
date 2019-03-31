@@ -600,16 +600,16 @@ mod tests {
             bank.process_transaction(&fund_tx).unwrap();
 
             // good tx
-            let to = Keypair::new().pubkey();
+            let to = Pubkey::new_rand();
             let tx = SystemTransaction::new_account(&mint_keypair, &to, 1, start_hash, 0);
 
             // good tx, but no verify
-            let to2 = Keypair::new().pubkey();
+            let to2 = Pubkey::new_rand();
             let tx_no_ver = SystemTransaction::new_account(&keypair, &to2, 2, start_hash, 0);
 
             // bad tx, AccountNotFound
             let keypair = Keypair::new();
-            let to3 = Keypair::new().pubkey();
+            let to3 = Pubkey::new_rand();
             let tx_anf = SystemTransaction::new_account(&keypair, &to3, 1, start_hash, 0);
 
             // send 'em over
@@ -777,7 +777,7 @@ mod tests {
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
-            let pubkey = Keypair::new().pubkey();
+            let pubkey = Pubkey::new_rand();
 
             let transactions = vec![
                 SystemTransaction::new_move(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
@@ -815,7 +815,7 @@ mod tests {
         solana_logger::setup();
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
 
         let transactions = vec![SystemTransaction::new_move(
             &mint_keypair,

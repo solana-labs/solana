@@ -369,7 +369,6 @@ impl Locktower {
 #[cfg(test)]
 mod test {
     use super::*;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
 
     fn gen_accounts(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, Account)> {
         let mut accounts = vec![];
@@ -384,7 +383,7 @@ mod test {
             vote_state
                 .serialize(&mut account.data)
                 .expect("serialize state");
-            accounts.push((Keypair::new().pubkey(), account));
+            accounts.push((Pubkey::new_rand(), account));
         }
         accounts
     }

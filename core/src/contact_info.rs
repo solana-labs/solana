@@ -130,7 +130,7 @@ impl ContactInfo {
         let addr = socketaddr!("224.0.1.255:1000");
         assert!(addr.ip().is_multicast());
         Self::new(
-            &Keypair::new().pubkey(),
+            &Pubkey::new_rand(),
             addr,
             addr,
             addr,

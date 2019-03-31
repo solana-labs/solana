@@ -165,7 +165,7 @@ mod tests {
         let (bank, alice_keypair) = create_bank(10_000);
         let bank_client = BankClient::new(&bank);
         let alice_pubkey = alice_keypair.pubkey();
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let instructions = BudgetInstruction::new_payment(&alice_pubkey, &bob_pubkey, 100);
         let message = Message::new(instructions);
         bank_client
@@ -181,9 +181,9 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
 
         // Initialize BudgetState
-        let budget_pubkey = Keypair::new().pubkey();
-        let bob_pubkey = Keypair::new().pubkey();
-        let witness = Keypair::new().pubkey();
+        let budget_pubkey = Pubkey::new_rand();
+        let bob_pubkey = Pubkey::new_rand();
+        let witness = Pubkey::new_rand();
         let instructions = BudgetInstruction::new_when_signed(
             &alice_pubkey,
             &bob_pubkey,
@@ -228,8 +228,8 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
 
         // Initialize BudgetState
-        let budget_pubkey = Keypair::new().pubkey();
-        let bob_pubkey = Keypair::new().pubkey();
+        let budget_pubkey = Pubkey::new_rand();
+        let bob_pubkey = Pubkey::new_rand();
         let dt = Utc::now();
         let instructions = BudgetInstruction::new_on_date(
             &alice_pubkey,
@@ -278,9 +278,9 @@ mod tests {
         let (bank, alice_keypair) = create_bank(2);
         let bank_client = BankClient::new(&bank);
         let alice_pubkey = alice_keypair.pubkey();
-        let budget_pubkey = Keypair::new().pubkey();
-        let bob_pubkey = Keypair::new().pubkey();
-        let mallory_pubkey = Keypair::new().pubkey();
+        let budget_pubkey = Pubkey::new_rand();
+        let bob_pubkey = Pubkey::new_rand();
+        let mallory_pubkey = Pubkey::new_rand();
         let dt = Utc::now();
         let instructions = BudgetInstruction::new_on_date(
             &alice_pubkey,
@@ -344,8 +344,8 @@ mod tests {
         let (bank, alice_keypair) = create_bank(3);
         let bank_client = BankClient::new(&bank);
         let alice_pubkey = alice_keypair.pubkey();
-        let budget_pubkey = Keypair::new().pubkey();
-        let bob_pubkey = Keypair::new().pubkey();
+        let budget_pubkey = Pubkey::new_rand();
+        let bob_pubkey = Pubkey::new_rand();
         let dt = Utc::now();
 
         let instructions = BudgetInstruction::new_on_date(

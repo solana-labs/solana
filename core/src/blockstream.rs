@@ -206,7 +206,7 @@ mod test {
         let tick_height_initial = 0;
         let tick_height_final = tick_height_initial + ticks_per_slot + 2;
         let mut curr_slot = 0;
-        let leader_id = Keypair::new().pubkey();
+        let leader_id = Pubkey::new_rand();
 
         for tick_height in tick_height_initial..=tick_height_final {
             if tick_height == 5 {
