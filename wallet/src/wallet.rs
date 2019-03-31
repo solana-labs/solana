@@ -949,11 +949,11 @@ mod tests {
                             .help("Optional arbitrary timestamp to apply"),
                     ),
             );
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let pubkey_string = format!("{}", pubkey);
-        let witness0 = Keypair::new().pubkey();
+        let witness0 = Pubkey::new_rand();
         let witness0_string = format!("{}", witness0);
-        let witness1 = Keypair::new().pubkey();
+        let witness1 = Pubkey::new_rand();
         let witness1_string = format!("{}", witness1);
         let dt = Utc.ymd(2018, 9, 19).and_hms(17, 30, 59);
 
@@ -997,7 +997,7 @@ mod tests {
         assert!(parse_command(&pubkey, &test_bad_signature).is_err());
 
         // Test ConfigureStakingAccount Subcommand
-        let second_pubkey = Keypair::new().pubkey();
+        let second_pubkey = Pubkey::new_rand();
         let second_pubkey_string = format!("{}", second_pubkey);
         let test_configure_staking_account = test_commands.clone().get_matches_from(vec![
             "test",
@@ -1174,7 +1174,7 @@ mod tests {
         config.command = WalletCommand::Balance(config.id.pubkey());
         assert_eq!(process_command(&config).unwrap(), "50 lamports");
 
-        let process_id = Keypair::new().pubkey();
+        let process_id = Pubkey::new_rand();
         config.command = WalletCommand::Cancel(process_id);
         assert_eq!(process_command(&config).unwrap(), SIGNATURE);
 
@@ -1182,7 +1182,7 @@ mod tests {
         config.command = WalletCommand::Confirm(good_signature);
         assert_eq!(process_command(&config).unwrap(), "Confirmed");
 
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         config.command = WalletCommand::ConfigureStakingAccount(None, Some(bob_pubkey));
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -1220,7 +1220,7 @@ mod tests {
             SIGNATURE.to_string()
         );
 
-        let witness = Keypair::new().pubkey();
+        let witness = Pubkey::new_rand();
         config.command = WalletCommand::Pay(
             10,
             bob_pubkey,
@@ -1241,12 +1241,12 @@ mod tests {
             SIGNATURE.to_string()
         );
 
-        let process_id = Keypair::new().pubkey();
+        let process_id = Pubkey::new_rand();
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
-        let witness = Keypair::new().pubkey();
+        let witness = Pubkey::new_rand();
         config.command = WalletCommand::Witness(bob_pubkey, witness);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -1260,7 +1260,7 @@ mod tests {
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
-        let witness = Keypair::new().pubkey();
+        let witness = Pubkey::new_rand();
         config.command = WalletCommand::Witness(bob_pubkey, witness);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());

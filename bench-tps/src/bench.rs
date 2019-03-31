@@ -96,7 +96,7 @@ pub fn do_bench_tps(config: Config) {
     }
     let gen_keypairs = rnd.gen_n_keypairs(total_keys as u64);
     let barrier_source_keypair = Keypair::new();
-    let barrier_dest_id = Keypair::new().pubkey();
+    let barrier_dest_id = Pubkey::new_rand();
 
     println!("Get lamports...");
     let num_lamports_per_account = 20;

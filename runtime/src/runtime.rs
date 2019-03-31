@@ -235,7 +235,6 @@ impl Runtime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_has_duplicates() {
@@ -282,8 +281,8 @@ mod tests {
         }
 
         let system_program_id = system_program::id();
-        let alice_program_id = Keypair::new().pubkey();
-        let mallory_program_id = Keypair::new().pubkey();
+        let alice_program_id = Pubkey::new_rand();
+        let mallory_program_id = Pubkey::new_rand();
 
         assert_eq!(
             change_program_id(&system_program_id, &system_program_id, &alice_program_id),
@@ -300,13 +299,13 @@ mod tests {
     #[test]
     fn test_verify_instruction_change_data() {
         fn change_data(program_id: &Pubkey) -> Result<(), InstructionError> {
-            let alice_program_id = Keypair::new().pubkey();
+            let alice_program_id = Pubkey::new_rand();
             let account = Account::new(0, 0, &alice_program_id);
             verify_instruction(&program_id, &alice_program_id, 0, &[42], &account)
         }
 
         let system_program_id = system_program::id();
-        let mallory_program_id = Keypair::new().pubkey();
+        let mallory_program_id = Pubkey::new_rand();
 
         assert_eq!(
             change_data(&system_program_id),

@@ -599,7 +599,7 @@ mod test {
         let my_node = Node::new_localhost_with_pubkey(&my_id);
 
         // Create keypair for the leader
-        let leader_id = Keypair::new().pubkey();
+        let leader_id = Pubkey::new_rand();
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10_000, &leader_id, 500);
 

@@ -210,10 +210,10 @@ mod tests {
     #[test]
     fn test_refs() {
         let key = Keypair::new();
-        let key1 = Keypair::new().pubkey();
-        let key2 = Keypair::new().pubkey();
-        let prog1 = Keypair::new().pubkey();
-        let prog2 = Keypair::new().pubkey();
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
+        let prog1 = Pubkey::new_rand();
+        let prog2 = Pubkey::new_rand();
         let instructions = vec![
             CompiledInstruction::new(0, &(), vec![0, 1]),
             CompiledInstruction::new(1, &(), vec![0, 2]),
@@ -317,7 +317,7 @@ mod tests {
     fn test_transaction_minimum_serialized_size() {
         let alice_keypair = Keypair::new();
         let alice_pubkey = alice_keypair.pubkey();
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let ix = SystemInstruction::new_move(&alice_pubkey, &bob_pubkey, 42);
 
         let expected_data_size = size_of::<u32>() + size_of::<u64>();

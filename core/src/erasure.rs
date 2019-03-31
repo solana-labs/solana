@@ -502,9 +502,8 @@ pub mod test {
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::Blocktree;
     use crate::entry::{make_tiny_test_entries, EntrySlice};
-
     use crate::packet::{index_blobs, SharedBlob};
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::pubkey::Pubkey;
 
     /// Specifies the contents of a 16-data-blob and 4-coding-blob erasure set
     /// Exists to be passed to `generate_blocktree_with_coding`
@@ -793,13 +792,7 @@ pub mod test {
                 let start_index = set_index * NUM_DATA;
 
                 let mut blobs = make_tiny_test_entries(NUM_DATA).to_single_entry_shared_blobs();
-                index_blobs(
-                    &blobs,
-                    &Keypair::new().pubkey(),
-                    start_index as u64,
-                    slot,
-                    0,
-                );
+                index_blobs(&blobs, &Pubkey::new_rand(), start_index as u64, slot, 0);
 
                 let mut coding_generator = CodingGenerator::new();
                 let mut coding_blobs = coding_generator.next(&blobs).unwrap();
@@ -831,7 +824,7 @@ pub mod test {
     fn generate_test_blobs(offset: usize, num_blobs: usize) -> Vec<SharedBlob> {
         let blobs = make_tiny_test_entries(num_blobs).to_single_entry_shared_blobs();
 
-        index_blobs(&blobs, &Keypair::new().pubkey(), offset as u64, 0, 0);
+        index_blobs(&blobs, &Pubkey::new_rand(), offset as u64, 0, 0);
         blobs
     }
 

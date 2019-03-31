@@ -45,6 +45,10 @@ impl Pubkey {
     pub fn new(pubkey_vec: &[u8]) -> Self {
         Pubkey(GenericArray::clone_from_slice(&pubkey_vec))
     }
+
+    pub fn new_rand() -> Self {
+        Self::new(&rand::random::<[u8; 32]>())
+    }
 }
 
 impl AsRef<[u8]> for Pubkey {
@@ -87,12 +91,11 @@ pub fn read_pubkey(infile: &str) -> Result<Pubkey, Box<error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::signature::{Keypair, KeypairUtil};
     use std::fs::remove_file;
 
     #[test]
     fn pubkey_fromstr() {
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let mut pubkey_base58_str = bs58::encode(pubkey.0).into_string();
 
         assert_eq!(pubkey_base58_str.parse::<Pubkey>(), Ok(pubkey));
@@ -126,7 +129,7 @@ mod tests {
     #[test]
     fn test_read_write_pubkey() -> Result<(), Box<error::Error>> {
         let filename = "test_pubkey.json";
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         write_pubkey(filename, pubkey)?;
         let read = read_pubkey(filename)?;
         assert_eq!(read, pubkey);

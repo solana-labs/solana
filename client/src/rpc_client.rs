@@ -660,7 +660,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
         let key = Keypair::new();
-        let to = Keypair::new().pubkey();
+        let to = Pubkey::new_rand();
         let blockhash = Hash::default();
         let tx = SystemTransaction::new_account(&key, &to, 50, blockhash, 0);
 
@@ -711,7 +711,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
         let key = Keypair::new();
-        let to = Keypair::new().pubkey();
+        let to = Pubkey::new_rand();
         let blockhash = Hash::default();
         let mut tx = SystemTransaction::new_account(&key, &to, 50, blockhash, 0);
 
@@ -732,7 +732,7 @@ mod tests {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
         let key = Keypair::new();
-        let to = Keypair::new().pubkey();
+        let to = Pubkey::new_rand();
         let vec = bs58::decode("HUu3LwEzGRsUkuJS121jzkPJW39Kq62pXCTmTa1F9jDL")
             .into_vec()
             .unwrap();

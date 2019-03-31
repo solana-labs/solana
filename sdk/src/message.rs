@@ -148,7 +148,7 @@ mod tests {
     #[test]
     fn test_message_unique_program_ids_not_adjacent() {
         let program_id0 = Pubkey::default();
-        let program_id1 = Keypair::new().pubkey();
+        let program_id1 = Pubkey::new_rand();
         let program_ids = get_program_ids(&[
             Instruction::new(program_id0, &0, vec![]),
             Instruction::new(program_id1, &0, vec![]),
@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_message_unique_program_ids_order_preserved() {
-        let program_id0 = Keypair::new().pubkey();
+        let program_id0 = Pubkey::new_rand();
         let program_id1 = Pubkey::default(); // Key less than program_id0
         let program_ids = get_program_ids(&[
             Instruction::new(program_id0, &0, vec![]),
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn test_message_unique_keys_order_preserved() {
         let program_id = Pubkey::default();
-        let id0 = Keypair::new().pubkey();
+        let id0 = Pubkey::new_rand();
         let id1 = Pubkey::default(); // Key less than id0
         let keys = get_keys(&[
             Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
@@ -207,7 +207,7 @@ mod tests {
     fn test_message_unique_keys_not_adjacent() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
-        let id1 = Keypair::new().pubkey();
+        let id1 = Pubkey::new_rand();
         let keys = get_keys(&[
             Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
             Instruction::new(program_id, &0, vec![AccountMeta::new(id1, false)]),
@@ -220,7 +220,7 @@ mod tests {
     fn test_message_signed_keys_first() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
-        let id1 = Keypair::new().pubkey();
+        let id1 = Pubkey::new_rand();
         let keys = get_keys(&[
             Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
             Instruction::new(program_id, &0, vec![AccountMeta::new(id1, true)]),
@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn test_message_kitchen_sink() {
         let program_id0 = Pubkey::default();
-        let program_id1 = Keypair::new().pubkey();
+        let program_id1 = Pubkey::new_rand();
         let id0 = Pubkey::default();
         let keypair1 = Keypair::new();
         let id1 = keypair1.pubkey();

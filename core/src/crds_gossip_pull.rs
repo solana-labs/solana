@@ -209,18 +209,16 @@ impl CrdsGossipPull {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_new_pull_with_stakes() {
         let mut crds = Crds::default();
         let mut stakes = HashMap::new();
         let node = CrdsGossipPull::default();
-        let me = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+        let me = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         crds.insert(me.clone(), 0).unwrap();
         for i in 1..=30 {
-            let entry =
-                CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+            let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
             let id = entry.label().pubkey();
             crds.insert(entry.clone(), 0).unwrap();
             stakes.insert(id, i * 100);
@@ -239,7 +237,7 @@ mod test {
     #[test]
     fn test_new_pull_request() {
         let mut crds = Crds::default();
-        let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+        let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         let id = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         assert_eq!(
@@ -253,7 +251,7 @@ mod test {
             Err(CrdsGossipError::NoPeers)
         );
 
-        let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+        let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         crds.insert(new.clone(), 0).unwrap();
         let req = node.new_pull_request(&crds, &id, 0, &HashMap::new());
         let (to, _, self_info) = req.unwrap();
@@ -264,13 +262,13 @@ mod test {
     #[test]
     fn test_new_mark_creation_time() {
         let mut crds = Crds::default();
-        let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+        let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         let node_id = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
         crds.insert(entry.clone(), 0).unwrap();
-        let old = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+        let old = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         crds.insert(old.clone(), 0).unwrap();
-        let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+        let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         crds.insert(new.clone(), 0).unwrap();
 
         // set request creation time to max_value
@@ -288,11 +286,11 @@ mod test {
     #[test]
     fn test_process_pull_request() {
         let mut node_crds = Crds::default();
-        let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+        let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         let node_id = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         node_crds.insert(entry.clone(), 0).unwrap();
-        let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+        let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         node_crds.insert(new.clone(), 0).unwrap();
         let req = node.new_pull_request(&node_crds, &node_id, 0, &HashMap::new());
 
@@ -320,17 +318,17 @@ mod test {
     #[test]
     fn test_process_pull_request_response() {
         let mut node_crds = Crds::default();
-        let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+        let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         let node_id = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
         node_crds.insert(entry.clone(), 0).unwrap();
 
-        let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+        let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         node_crds.insert(new.clone(), 0).unwrap();
 
         let mut dest = CrdsGossipPull::default();
         let mut dest_crds = Crds::default();
-        let new_id = Keypair::new().pubkey();
+        let new_id = Pubkey::new_rand();
         let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&new_id, 1));
         dest_crds.insert(new.clone(), 0).unwrap();
 
@@ -384,12 +382,12 @@ mod test {
     #[test]
     fn test_gossip_purge() {
         let mut node_crds = Crds::default();
-        let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+        let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         let node_label = entry.label();
         let node_id = node_label.pubkey();
         let mut node = CrdsGossipPull::default();
         node_crds.insert(entry.clone(), 0).unwrap();
-        let old = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Keypair::new().pubkey(), 0));
+        let old = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         node_crds.insert(old.clone(), 0).unwrap();
         let value_hash = node_crds.lookup_versioned(&old.label()).unwrap().value_hash;
 

@@ -40,7 +40,7 @@ pub fn transfer(
 fn test_thin_client_basic() {
     solana_logger::setup();
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
-    let bob_pubkey = Keypair::new().pubkey();
+    let bob_pubkey = Pubkey::new_rand();
     discover(&leader_data.gossip, 1).unwrap();
 
     let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
@@ -69,7 +69,7 @@ fn test_thin_client_basic() {
 fn test_bad_sig() {
     solana_logger::setup();
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
-    let bob_pubkey = Keypair::new().pubkey();
+    let bob_pubkey = Pubkey::new_rand();
     discover(&leader_data.gossip, 1).unwrap();
 
     let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);

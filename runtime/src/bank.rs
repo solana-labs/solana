@@ -978,7 +978,7 @@ mod tests {
 
     #[test]
     fn test_bank_new_with_leader() {
-        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_id = Pubkey::new_rand();
         let dummy_leader_lamports = BOOTSTRAP_LEADER_LAMPORTS;
         let (genesis_block, _) =
             GenesisBlock::new_with_leader(10_000, &dummy_leader_id, dummy_leader_lamports);
@@ -1000,7 +1000,7 @@ mod tests {
     #[test]
     fn test_two_payments_to_one_party() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.last_blockhash(), genesis_block.hash());
 
@@ -1015,8 +1015,8 @@ mod tests {
     #[test]
     fn test_one_source_two_tx_one_batch() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(1);
-        let key1 = Keypair::new().pubkey();
-        let key2 = Keypair::new().pubkey();
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.last_blockhash(), genesis_block.hash());
 
@@ -1040,8 +1040,8 @@ mod tests {
     #[test]
     fn test_one_tx_two_out_atomic_fail() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(1);
-        let key1 = Keypair::new().pubkey();
-        let key2 = Keypair::new().pubkey();
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
         let bank = Bank::new(&genesis_block);
         let instructions =
             SystemInstruction::new_move_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
@@ -1065,8 +1065,8 @@ mod tests {
     #[test]
     fn test_one_tx_two_out_atomic_pass() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
-        let key1 = Keypair::new().pubkey();
-        let key2 = Keypair::new().pubkey();
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
         let bank = Bank::new(&genesis_block);
         let instructions =
             SystemInstruction::new_move_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
@@ -1132,7 +1132,7 @@ mod tests {
     fn test_insufficient_funds() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(11_000);
         let bank = Bank::new(&genesis_block);
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(bank.get_balance(&pubkey), 1_000);
@@ -1154,7 +1154,7 @@ mod tests {
     fn test_transfer_to_newb() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         bank.transfer(500, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.get_balance(&pubkey), 500);
     }
@@ -1202,7 +1202,7 @@ mod tests {
 
     #[test]
     fn test_bank_tx_fee() {
-        let leader = Keypair::new().pubkey();
+        let leader = Pubkey::new_rand();
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, &leader, 3);
         let mut bank = Bank::new(&genesis_block);
         bank.fee_calculator.lamports_per_signature = 3;
@@ -1229,7 +1229,7 @@ mod tests {
 
     #[test]
     fn test_filter_program_errors_and_collect_fee() {
-        let leader = Keypair::new().pubkey();
+        let leader = Pubkey::new_rand();
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, &leader, 3);
         let mut bank = Bank::new(&genesis_block);
 
@@ -1284,7 +1284,7 @@ mod tests {
 
     #[test]
     fn test_process_genesis() {
-        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_id = Pubkey::new_rand();
         let dummy_leader_lamports = 2;
         let (genesis_block, _) =
             GenesisBlock::new_with_leader(5, &dummy_leader_id, dummy_leader_lamports);
@@ -1440,7 +1440,7 @@ mod tests {
         let initial_state = bank0.hash_internal_state();
         assert_eq!(bank1.hash_internal_state(), initial_state);
 
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         bank0.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         assert_ne!(bank0.hash_internal_state(), initial_state);
         bank1.transfer(1_000, &mint_keypair, &pubkey).unwrap();
@@ -1554,7 +1554,7 @@ mod tests {
 
     #[test]
     fn test_bank_epoch_vote_accounts() {
-        let leader_id = Keypair::new().pubkey();
+        let leader_id = Pubkey::new_rand();
         let leader_lamports = 3;
         let (mut genesis_block, _) = GenesisBlock::new_with_leader(5, &leader_id, leader_lamports);
 

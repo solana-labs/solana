@@ -491,7 +491,7 @@ mod tests {
 
     #[test]
     fn test_rpc_request_processor_new() {
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let exit = Arc::new(AtomicBool::new(false));
         let (bank_forks, alice) = new_bank_forks();
         let bank = bank_forks.read().unwrap().working_bank();
@@ -513,7 +513,7 @@ mod tests {
 
     #[test]
     fn test_rpc_get_balance() {
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(
@@ -531,7 +531,7 @@ mod tests {
 
     #[test]
     fn test_rpc_get_tx_count() {
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
@@ -546,7 +546,7 @@ mod tests {
 
     #[test]
     fn test_rpc_get_account_info() {
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(
@@ -573,7 +573,7 @@ mod tests {
 
     #[test]
     fn test_rpc_confirm_tx() {
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let (io, meta, blockhash, alice) = start_rpc_handler_with_tx(&bob_pubkey);
         let tx = SystemTransaction::new_move(&alice, &bob_pubkey, 20, blockhash, 0);
 
@@ -592,7 +592,7 @@ mod tests {
 
     #[test]
     fn test_rpc_get_signature_status() {
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let (io, meta, blockhash, alice) = start_rpc_handler_with_tx(&bob_pubkey);
         let tx = SystemTransaction::new_move(&alice, &bob_pubkey, 20, blockhash, 0);
 
@@ -625,7 +625,7 @@ mod tests {
 
     #[test]
     fn test_rpc_get_recent_blockhash() {
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let (io, meta, blockhash, _alice) = start_rpc_handler_with_tx(&bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"}}"#);
@@ -640,7 +640,7 @@ mod tests {
 
     #[test]
     fn test_rpc_fail_request_airdrop() {
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob_pubkey = Pubkey::new_rand();
         let (io, meta, _blockhash, _alice) = start_rpc_handler_with_tx(&bob_pubkey);
 
         // Expect internal error because no drone is available
@@ -705,7 +705,7 @@ mod tests {
 
     #[test]
     fn test_rpc_verify_pubkey() {
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         assert_eq!(verify_pubkey(pubkey.to_string()).unwrap(), pubkey);
         let bad_pubkey = "a1b2c3d4";
         assert_eq!(
@@ -716,13 +716,8 @@ mod tests {
 
     #[test]
     fn test_rpc_verify_signature() {
-        let tx = SystemTransaction::new_move(
-            &Keypair::new(),
-            &Keypair::new().pubkey(),
-            20,
-            hash(&[0]),
-            0,
-        );
+        let tx =
+            SystemTransaction::new_move(&Keypair::new(), &Pubkey::new_rand(), 20, hash(&[0]), 0);
         assert_eq!(
             verify_signature(&tx.signatures[0].to_string()).unwrap(),
             tx.signatures[0]

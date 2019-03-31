@@ -214,7 +214,6 @@ impl BudgetExpr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_signature_satisfied() {
@@ -258,8 +257,8 @@ mod tests {
     #[test]
     fn test_future_payment() {
         let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
-        let from = Keypair::new().pubkey();
-        let to = Keypair::new().pubkey();
+        let from = Pubkey::new_rand();
+        let to = Pubkey::new_rand();
 
         let mut expr = BudgetExpr::new_future_payment(dt, &from, 42, &to);
         expr.apply_witness(&Witness::Timestamp(dt), &from);
@@ -271,8 +270,8 @@ mod tests {
         // Ensure timestamp will only be acknowledged if it came from the
         // whitelisted public key.
         let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
-        let from = Keypair::new().pubkey();
-        let to = Keypair::new().pubkey();
+        let from = Pubkey::new_rand();
+        let to = Pubkey::new_rand();
 
         let mut expr = BudgetExpr::new_future_payment(dt, &from, 42, &to);
         let orig_expr = expr.clone();
@@ -296,8 +295,8 @@ mod tests {
     }
     #[test]
     fn test_2_2_multisig_payment() {
-        let from0 = Keypair::new().pubkey();
-        let from1 = Keypair::new().pubkey();
+        let from0 = Pubkey::new_rand();
+        let from1 = Pubkey::new_rand();
         let to = Pubkey::default();
 
         let mut expr = BudgetExpr::new_2_2_multisig_payment(&from0, &from1, 42, &to);
@@ -307,9 +306,9 @@ mod tests {
 
     #[test]
     fn test_multisig_after_sig() {
-        let from0 = Keypair::new().pubkey();
-        let from1 = Keypair::new().pubkey();
-        let from2 = Keypair::new().pubkey();
+        let from0 = Pubkey::new_rand();
+        let from1 = Pubkey::new_rand();
+        let from2 = Pubkey::new_rand();
         let to = Pubkey::default();
 
         let expr = BudgetExpr::new_2_2_multisig_payment(&from0, &from1, 42, &to);
@@ -322,8 +321,8 @@ mod tests {
 
     #[test]
     fn test_multisig_after_ts() {
-        let from0 = Keypair::new().pubkey();
-        let from1 = Keypair::new().pubkey();
+        let from0 = Pubkey::new_rand();
+        let from1 = Pubkey::new_rand();
         let dt = Utc.ymd(2014, 11, 11).and_hms(7, 7, 7);
         let to = Pubkey::default();
 

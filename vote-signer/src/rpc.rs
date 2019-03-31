@@ -330,7 +330,7 @@ mod tests {
         let res = io.handle_request_sync(&req.to_string(), meta.clone());
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
-        let mut vote_pubkey = Keypair::new().pubkey();
+        let mut vote_pubkey = Pubkey::new_rand();
         if let Response::Single(out) = result {
             if let Output::Success(succ) = out {
                 assert_eq!(succ.jsonrpc.unwrap(), Version::V2);

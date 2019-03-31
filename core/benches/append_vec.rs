@@ -9,7 +9,7 @@ use solana_runtime::append_vec::{
     deserialize_account, get_serialized_size, serialize_account, AppendVec,
 };
 use solana_sdk::account::Account;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::pubkey::Pubkey;
 use std::env;
 use std::io::Cursor;
 use std::path::PathBuf;
@@ -200,7 +200,7 @@ fn append_vec_concurrent_get_append(bencher: &mut Bencher) {
 #[bench]
 fn bench_account_serialize(bencher: &mut Bencher) {
     let num: usize = 1000;
-    let account = Account::new(2, 100, &Keypair::new().pubkey());
+    let account = Account::new(2, 100, &Pubkey::new_rand());
     let len = get_serialized_size(&account);
     let ser_len = align_up!(len + std::mem::size_of::<u64>(), std::mem::size_of::<u64>());
     let mut memory = vec![0; num * ser_len];
@@ -225,7 +225,7 @@ fn bench_account_serialize(bencher: &mut Bencher) {
 #[bench]
 fn bench_account_serialize_bincode(bencher: &mut Bencher) {
     let num: usize = 1000;
-    let account = Account::new(2, 100, &Keypair::new().pubkey());
+    let account = Account::new(2, 100, &Pubkey::new_rand());
     let len = serialized_size(&account).unwrap() as usize;
     let mut memory = vec![0u8; num * len];
     bencher.iter(|| {

@@ -160,7 +160,7 @@ mod tests {
 
     #[test]
     fn test_bank_staked_nodes_at_epoch() {
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let bootstrap_lamports = 2;
         let (genesis_block, _) =
             GenesisBlock::new_with_leader(bootstrap_lamports, &pubkey, bootstrap_lamports);
@@ -276,8 +276,8 @@ mod tests {
     #[test]
     fn test_to_delegated_stakes() {
         let mut stakes = Vec::new();
-        let delegate1 = Keypair::new().pubkey();
-        let delegate2 = Keypair::new().pubkey();
+        let delegate1 = Pubkey::new_rand();
+        let delegate2 = Pubkey::new_rand();
 
         // Delegate 1 has stake of 3
         for i in 0..3 {

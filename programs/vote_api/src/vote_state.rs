@@ -312,14 +312,13 @@ pub fn vote_and_deserialize(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_initialize_vote_account() {
-        let vote_account_id = Keypair::new().pubkey();
+        let vote_account_id = Pubkey::new_rand();
         let mut vote_account = create_vote_account(100);
 
-        let bogus_account_id = Keypair::new().pubkey();
+        let bogus_account_id = Pubkey::new_rand();
         let mut bogus_account = Account::new(100, 0, &id());
 
         let mut keyed_accounts = [KeyedAccount::new(
@@ -351,7 +350,7 @@ mod tests {
 
     #[test]
     fn test_voter_registration() {
-        let vote_id = Keypair::new().pubkey();
+        let vote_id = Pubkey::new_rand();
         let mut vote_account = create_vote_account(100);
 
         let vote_state = initialize_and_deserialize(&vote_id, &mut vote_account).unwrap();
@@ -361,7 +360,7 @@ mod tests {
 
     #[test]
     fn test_vote() {
-        let vote_id = Keypair::new().pubkey();
+        let vote_id = Pubkey::new_rand();
         let mut vote_account = create_vote_account(100);
         initialize_and_deserialize(&vote_id, &mut vote_account).unwrap();
 
@@ -373,7 +372,7 @@ mod tests {
 
     #[test]
     fn test_vote_signature() {
-        let vote_id = Keypair::new().pubkey();
+        let vote_id = Pubkey::new_rand();
         let mut vote_account = create_vote_account(100);
         initialize_and_deserialize(&vote_id, &mut vote_account).unwrap();
 
@@ -385,7 +384,7 @@ mod tests {
 
     #[test]
     fn test_vote_without_initialization() {
-        let vote_id = Keypair::new().pubkey();
+        let vote_id = Pubkey::new_rand();
         let mut vote_account = create_vote_account(100);
 
         let vote = Vote::new(1);
@@ -395,7 +394,7 @@ mod tests {
 
     #[test]
     fn test_vote_lockout() {
-        let voter_id = Keypair::new().pubkey();
+        let voter_id = Pubkey::new_rand();
         let mut vote_state = VoteState::new(&voter_id);
 
         for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
@@ -425,7 +424,7 @@ mod tests {
 
     #[test]
     fn test_vote_double_lockout_after_expiration() {
-        let voter_id = Keypair::new().pubkey();
+        let voter_id = Pubkey::new_rand();
         let mut vote_state = VoteState::new(&voter_id);
 
         for i in 0..3 {
@@ -451,7 +450,7 @@ mod tests {
 
     #[test]
     fn test_vote_credits() {
-        let voter_id = Keypair::new().pubkey();
+        let voter_id = Pubkey::new_rand();
         let mut vote_state = VoteState::new(&voter_id);
 
         for i in 0..MAX_LOCKOUT_HISTORY {
@@ -472,7 +471,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_vote() {
-        let voter_id = Keypair::new().pubkey();
+        let voter_id = Pubkey::new_rand();
         let mut vote_state = VoteState::new(&voter_id);
         vote_state.process_vote(Vote::new(0));
         vote_state.process_vote(Vote::new(1));
@@ -484,7 +483,7 @@ mod tests {
 
     #[test]
     fn test_nth_recent_vote() {
-        let voter_id = Keypair::new().pubkey();
+        let voter_id = Pubkey::new_rand();
         let mut vote_state = VoteState::new(&voter_id);
         for i in 0..MAX_LOCKOUT_HISTORY {
             vote_state.process_vote(Vote::new(i as u64));

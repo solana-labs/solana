@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn test_storage_tx() {
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let mut accounts = [(pubkey, Account::default())];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
         assert!(process_instruction(&id(), &mut keyed_accounts, &[], 42).is_err());
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn test_serialize_overflow() {
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let mut keyed_accounts = Vec::new();
         let mut user_account = Account::default();
         keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_invalid_accounts_len() {
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let mut accounts = [Account::default()];
 
         let ix =
@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn test_submit_mining_invalid_entry_height() {
         solana_logger::setup();
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let mut accounts = [Account::default(), Account::default()];
         accounts[1].data.resize(16 * 1024, 0);
 
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn test_submit_mining_ok() {
         solana_logger::setup();
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let mut accounts = [Account::default(), Account::default()];
         accounts[0].data.resize(16 * 1024, 0);
 
@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn test_validate_mining() {
         solana_logger::setup();
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         let mut accounts = [Account::default(), Account::default()];
         accounts[0].data.resize(16 * 1024, 0);
 
@@ -362,8 +362,8 @@ mod tests {
         let alice_pubkey = alice_keypair.pubkey();
         let bob_keypair = Keypair::new();
         let bob_pubkey = bob_keypair.pubkey();
-        let jack_pubkey = Keypair::new().pubkey();
-        let jill_pubkey = Keypair::new().pubkey();
+        let jack_pubkey = Pubkey::new_rand();
+        let jill_pubkey = Pubkey::new_rand();
 
         let mut bank = Bank::new(&genesis_block);
         bank.add_instruction_processor(id(), process_instruction);

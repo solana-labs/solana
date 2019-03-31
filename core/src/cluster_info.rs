@@ -1358,7 +1358,7 @@ pub struct Node {
 
 impl Node {
     pub fn new_localhost() -> Self {
-        let pubkey = Keypair::new().pubkey();
+        let pubkey = Pubkey::new_rand();
         Self::new_localhost_with_pubkey(&pubkey)
     }
     pub fn new_localhost_replicator(pubkey: &Pubkey) -> Self {
@@ -1536,7 +1536,7 @@ mod tests {
     fn test_cluster_spy_gossip() {
         //check that gossip doesn't try to push to invalid addresses
         let node = Node::new_localhost();
-        let (spy, _) = ClusterInfo::spy_node(&Keypair::new().pubkey());
+        let (spy, _) = ClusterInfo::spy_node(&Pubkey::new_rand());
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
             node.info,
         )));
@@ -1560,43 +1560,43 @@ mod tests {
 
     #[test]
     fn test_cluster_info_new() {
-        let d = ContactInfo::new_localhost(&Keypair::new().pubkey(), timestamp());
+        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         let cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
         assert_eq!(d.id, cluster_info.my_data().id);
     }
 
     #[test]
     fn insert_info_test() {
-        let d = ContactInfo::new_localhost(&Keypair::new().pubkey(), timestamp());
+        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(d);
-        let d = ContactInfo::new_localhost(&Keypair::new().pubkey(), timestamp());
+        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         let label = CrdsValueLabel::ContactInfo(d.id);
         cluster_info.insert_info(d);
         assert!(cluster_info.gossip.crds.lookup(&label).is_some());
     }
     #[test]
     fn test_insert_self() {
-        let d = ContactInfo::new_localhost(&Keypair::new().pubkey(), timestamp());
+        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(d.clone());
         let entry_label = CrdsValueLabel::ContactInfo(cluster_info.id());
         assert!(cluster_info.gossip.crds.lookup(&entry_label).is_some());
 
         // inserting something else shouldn't work
-        let d = ContactInfo::new_localhost(&Keypair::new().pubkey(), timestamp());
+        let d = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         cluster_info.insert_self(d.clone());
         let label = CrdsValueLabel::ContactInfo(d.id);
         assert!(cluster_info.gossip.crds.lookup(&label).is_none());
     }
     #[test]
     fn window_index_request() {
-        let me = ContactInfo::new_localhost(&Keypair::new().pubkey(), timestamp());
+        let me = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(me);
         let rv = cluster_info.window_index_request(0, 0, false);
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
         let gossip_addr = socketaddr!([127, 0, 0, 1], 1234);
         let nxt = ContactInfo::new(
-            &Keypair::new().pubkey(),
+            &Pubkey::new_rand(),
             gossip_addr,
             socketaddr!([127, 0, 0, 1], 1235),
             socketaddr!([127, 0, 0, 1], 1236),
@@ -1613,7 +1613,7 @@ mod tests {
 
         let gossip_addr2 = socketaddr!([127, 0, 0, 2], 1234);
         let nxt = ContactInfo::new(
-            &Keypair::new().pubkey(),
+            &Pubkey::new_rand(),
             gossip_addr2,
             socketaddr!([127, 0, 0, 1], 1235),
             socketaddr!([127, 0, 0, 1], 1236),
@@ -1647,7 +1647,7 @@ mod tests {
         {
             let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
             let me = ContactInfo::new(
-                &Keypair::new().pubkey(),
+                &Pubkey::new_rand(),
                 socketaddr!("127.0.0.1:1234"),
                 socketaddr!("127.0.0.1:1235"),
                 socketaddr!("127.0.0.1:1236"),
@@ -1749,7 +1749,7 @@ mod tests {
     #[test]
     fn test_default_leader() {
         solana_logger::setup();
-        let contact_info = ContactInfo::new_localhost(&Keypair::new().pubkey(), 0);
+        let contact_info = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(contact_info);
         let network_entry_point =
             ContactInfo::new_gossip_entry_point(&socketaddr!("127.0.0.1:1239"));
@@ -1788,7 +1788,7 @@ mod tests {
     #[test]
     fn new_with_external_ip_test_random() {
         let ip = Ipv4Addr::from(0);
-        let node = Node::new_with_external_ip(&Keypair::new().pubkey(), &socketaddr!(ip, 0));
+        let node = Node::new_with_external_ip(&Pubkey::new_rand(), &socketaddr!(ip, 0));
 
         check_node_sockets(&node, IpAddr::V4(ip), FULLNODE_PORT_RANGE);
     }
@@ -1801,7 +1801,7 @@ mod tests {
                 .expect("Failed to bind")
                 .0
         };
-        let node = Node::new_with_external_ip(&Keypair::new().pubkey(), &socketaddr!(0, port));
+        let node = Node::new_with_external_ip(&Pubkey::new_rand(), &socketaddr!(0, port));
 
         check_node_sockets(&node, ip, FULLNODE_PORT_RANGE);
 
@@ -1811,8 +1811,7 @@ mod tests {
     #[test]
     fn new_replicator_external_ip_test() {
         let ip = Ipv4Addr::from(0);
-        let node =
-            Node::new_replicator_with_external_ip(&Keypair::new().pubkey(), &socketaddr!(ip, 0));
+        let node = Node::new_replicator_with_external_ip(&Pubkey::new_rand(), &socketaddr!(ip, 0));
 
         let ip = IpAddr::V4(ip);
         check_socket(&node.sockets.storage.unwrap(), ip, FULLNODE_PORT_RANGE);
@@ -2034,7 +2033,7 @@ fn test_add_entrypoint() {
         ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
         node_keypair,
     );
-    let entrypoint_id = Keypair::new().pubkey();
+    let entrypoint_id = Pubkey::new_rand();
     let entrypoint = ContactInfo::new_localhost(&entrypoint_id, timestamp());
     cluster_info.set_entrypoint(entrypoint.clone());
     let pulls = cluster_info.new_pull_requests(&HashMap::new());
