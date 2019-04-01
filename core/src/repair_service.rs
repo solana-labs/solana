@@ -50,7 +50,7 @@ impl RepairService {
         exit: Arc<AtomicBool>,
         repair_socket: &Arc<UdpSocket>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        repair_slot_range: RepairSlotRange,
+        _repair_slot_range: RepairSlotRange,
     ) {
         let id = cluster_info.read().unwrap().id();
         loop {

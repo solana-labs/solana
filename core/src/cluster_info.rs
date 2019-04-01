@@ -1601,7 +1601,7 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::tests::{make_many_slot_entries, make_slot_entries};
+    use crate::blocktree::tests::make_many_slot_entries;
     use crate::blocktree::Blocktree;
     use crate::crds_value::CrdsValueLabel;
     use crate::packet::BLOB_HEADER_SIZE;
