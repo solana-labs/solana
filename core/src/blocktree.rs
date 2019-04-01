@@ -875,7 +875,7 @@ impl Blocktree {
     fn is_detached_head(meta: &SlotMeta) -> bool {
         // If we have no parent, then this is the head of a detached chain of
         // slots
-        meta.is_parent_set()
+        !meta.is_parent_set()
     }
 
     // 1) Chain current_slot to the previous slot defined by prev_slot_meta

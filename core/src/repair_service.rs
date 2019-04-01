@@ -28,21 +28,6 @@ pub enum RepairType {
     Blob(u64, u64),
 }
 
-#[derive(Default)]
-struct RepairInfo {
-    max_slot: u64,
-    repair_tries: u64,
-}
-
-impl RepairInfo {
-    fn new() -> Self {
-        RepairInfo {
-            max_slot: 0,
-            repair_tries: 0,
-        }
-    }
-}
-
 pub struct RepairSlotRange {
     pub start: u64,
     pub end: u64,
@@ -69,14 +54,13 @@ impl RepairService {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         repair_slot_range: RepairSlotRange,
     ) {
-        let mut repair_info = RepairInfo::new();
         let id = cluster_info.read().unwrap().id();
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
 
-            let repairs = Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH, &mut repair_info);
+            let repairs = Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH);
 
             if let Ok(repairs) = repairs {
                 let reqs: Vec<_> = repairs
@@ -167,11 +151,7 @@ impl RepairService {
         }
     }
 
-    fn generate_repairs(
-        blocktree: &Blocktree,
-        max_repairs: usize,
-        repair_info: &mut RepairInfo,
-    ) -> Result<(Vec<RepairType>)> {
+    fn generate_repairs(blocktree: &Blocktree, max_repairs: usize) -> Result<(Vec<RepairType>)> {
         // Slot height and blob indexes for blobs we want to repair
         let mut repairs: Vec<RepairType> = vec![];
 
@@ -258,50 +238,20 @@ mod test {
     use solana_sdk::hash::Hash;
 
     #[test]
-    pub fn test_repair_missed_future_slot() {
+    pub fn test_repair_detached_head() {
         let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            let mut blobs = create_ticks(1, Hash::default()).to_blobs();
-            blobs[0].set_index(0);
-            blobs[0].set_slot(0);
-            blobs[0].set_is_last_in_slot();
-
-            blocktree.write_blobs(&blobs).unwrap();
-
-            let mut repair_info = RepairInfo::new();
-            let repair_slot_range = RepairSlotRange::default();
-            // We have all the blobs for all the slots in the ledger, wait for optimistic
-            // future repair after MAX_REPAIR_TRIES
-            for i in 0..MAX_REPAIR_TRIES {
-                // Check that repair tries to patch the empty slot
-                assert_eq!(repair_info.repair_tries, i);
-                assert_eq!(repair_info.max_slot, 0);
-                let expected = if i == MAX_REPAIR_TRIES - 1 {
-                    vec![RepairType::HighestBlob(1, 0)]
-                } else {
-                    vec![]
-                };
-                assert_eq!(
-                    RepairService::generate_repairs(&blocktree, 2, &mut repair_info,).unwrap(),
-                    expected
-                );
-            }
-
-            // Insert a bigger blob, see that we the MAX_REPAIR_TRIES gets reset
-            let mut blobs = create_ticks(1, Hash::default()).to_blobs();
-            blobs[0].set_index(0);
-            blobs[0].set_slot(1);
-            blobs[0].set_is_last_in_slot();
-
+            // Create some detached head slots
+            let (mut blobs, _) = make_slot_entries(1, 0, 1);
+            let (blobs2, _) = make_slot_entries(5, 2, 1);
+            blobs.extend(blobs2);
             blocktree.write_blobs(&blobs).unwrap();
             assert_eq!(
-                RepairService::generate_repairs(&blocktree, 2, &mut repair_info,).unwrap(),
-                vec![]
+                RepairService::generate_repairs(&blocktree, 2).unwrap(),
+                vec![RepairType::DetachedHead(0), RepairType::DetachedHead(2)]
             );
-            assert_eq!(repair_info.repair_tries, 1);
-            assert_eq!(repair_info.max_slot, 1);
         }
 
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
@@ -313,19 +263,19 @@ mod test {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            let mut blobs = make_tiny_test_entries(1).to_blobs();
-            blobs[0].set_index(1);
-            blobs[0].set_slot(2);
+            let (blobs, _) = make_slot_entries(2, 0, 1);
 
-            let mut repair_info = RepairInfo::new();
+            // Tell repair we're interested in this fork
+            blocktree.set_slots_of_interest(vec![(0, 0)]);
 
-            // Write this blob to slot 2, should chain to slot 1, which we haven't received
+            // Write this blob to slot 2, should chain to slot 0, which we haven't received
             // any blobs for
             blocktree.write_blobs(&blobs).unwrap();
+
             // Check that repair tries to patch the empty slot
             assert_eq!(
-                RepairService::generate_repairs(&blocktree, 2, &mut repair_info,).unwrap(),
-                vec![RepairType::HighestBlob(0, 0), RepairType::Blob(2, 0)]
+                RepairService::generate_repairs(&blocktree, 2).unwrap(),
+                vec![RepairType::HighestBlob(0, 0), RepairType::DetachedHead(0)]
             );
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
@@ -341,7 +291,8 @@ mod test {
             let num_entries_per_slot = 5 * nth;
             let num_slots = 2;
 
-            let mut repair_info = RepairInfo::new();
+            // Tell repair we're interested in this fork
+            blocktree.set_slots_of_interest(vec![(0, 0)]);
 
             // Create some blobs
             let (blobs, _) =
@@ -364,18 +315,13 @@ mod test {
                 })
                 .collect();
 
-            // Across all slots, find all missing indexes in the range [0, num_entries_per_slot]
-            let repair_slot_range = RepairSlotRange::default();
-
             assert_eq!(
-                RepairService::generate_repairs(&blocktree, std::usize::MAX, &mut repair_info,)
-                    .unwrap(),
+                RepairService::generate_repairs(&blocktree, std::usize::MAX).unwrap(),
                 expected
             );
 
             assert_eq!(
-                RepairService::generate_repairs(&blocktree, expected.len() - 2, &mut repair_info,)
-                    .unwrap()[..],
+                RepairService::generate_repairs(&blocktree, expected.len() - 2).unwrap()[..],
                 expected[0..expected.len() - 2]
             );
         }
@@ -390,8 +336,6 @@ mod test {
 
             let num_entries_per_slot = 10;
 
-            let mut repair_info = RepairInfo::new();
-
             // Create some blobs
             let (mut blobs, _) = make_slot_entries(0, 0, num_entries_per_slot as u64);
 
@@ -400,21 +344,21 @@ mod test {
 
             blocktree.write_blobs(&blobs).unwrap();
 
+            // Tell repair we're interested in this fork
+            blocktree.set_slots_of_interest(vec![(0, 0)]);
+
             // We didn't get the last blob for this slot, so ask for the highest blob for that slot
             let expected: Vec<RepairType> = vec![RepairType::HighestBlob(0, num_entries_per_slot)];
 
-            let repair_slot_range = RepairSlotRange::default();
-
             assert_eq!(
-                RepairService::generate_repairs(&blocktree, std::usize::MAX, &mut repair_info,)
-                    .unwrap(),
+                RepairService::generate_repairs(&blocktree, std::usize::MAX).unwrap(),
                 expected
             );
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
-    #[test]
+    /*#[test]
     pub fn test_repair_range() {
         let blocktree_path = get_tmp_ledger_path!();
         {
@@ -448,6 +392,5 @@ mod test {
             );
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
-    }
-
+    }*/
 }
