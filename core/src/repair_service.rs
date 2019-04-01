@@ -3,8 +3,6 @@
 
 use crate::blocktree::{Blocktree, SlotMeta};
 use crate::cluster_info::ClusterInfo;
-use crate::leader_schedule_utils;
-use crate::poh_recorder;
 use crate::result::Result;
 use crate::service::Service;
 use solana_metrics::{influxdb, submit};
@@ -210,9 +208,6 @@ mod test {
     use super::*;
     use crate::blocktree::tests::{make_many_slot_entries, make_slot_entries};
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
-    use crate::entry::create_ticks;
-    use crate::entry::{make_tiny_test_entries, EntrySlice};
-    use solana_sdk::hash::Hash;
 
     #[test]
     pub fn test_repair_detached_head() {

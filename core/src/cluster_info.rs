@@ -780,7 +780,10 @@ impl ClusterInfo {
                 RepairType::HighestBlob(slot, blob_index) => {
                     submit(
                         influxdb::Point::new("cluster-info-repair-highest")
-                            .add_field("repair-highest-slot", influxdb::Value::Integer(*slot as i64))
+                            .add_field(
+                                "repair-highest-slot",
+                                influxdb::Value::Integer(*slot as i64),
+                            )
                             .add_field("repair-highest-ix", influxdb::Value::Integer(*slot as i64))
                             .to_owned(),
                     );
@@ -1002,6 +1005,9 @@ impl ClusterInfo {
         if let Some(blocktree) = blocktree {
             // Try to find the next "n" parent slots of the input slot
             while let Ok(Some(meta)) = blocktree.meta(slot) {
+                if meta.received == 0 {
+                    break;
+                }
                 let blob = blocktree.get_data_blob(slot, meta.received - 1);
                 if let Ok(Some(mut blob)) = blob {
                     blob.meta.set_addr(from_addr);
@@ -1191,7 +1197,7 @@ impl ClusterInfo {
                     )
                 }
 
-                Protocol::RequestHighestWindowIndex(from, slot, highest_index) => {
+                Protocol::RequestHighestWindowIndex(_, slot, highest_index) => {
                     inc_new_counter_info!("cluster_info-request-highest-window-index", 1);
                     (
                         Self::run_highest_window_request(
@@ -1203,7 +1209,7 @@ impl ClusterInfo {
                         "RequestHighestWindowIndex",
                     )
                 }
-                Protocol::RequestDetachedHead(from, slot) => {
+                Protocol::RequestDetachedHead(_, slot) => {
                     inc_new_counter_info!("cluster_info-request-detached-head", 1);
                     (
                         Self::run_detached_head(
@@ -1595,6 +1601,7 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::tests::{make_many_slot_entries, make_slot_entries};
     use crate::blocktree::Blocktree;
     use crate::crds_value::CrdsValueLabel;
     use crate::packet::BLOB_HEADER_SIZE;
@@ -1819,6 +1826,43 @@ mod tests {
                 max_index,
             );
             assert!(rv.is_empty());
+        }
+
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn run_detached_head() {
+        solana_logger::setup();
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+            let rv = ClusterInfo::run_detached_head(&socketaddr_any!(), Some(&blocktree), 2, 0);
+            assert!(rv.is_empty());
+
+            // Create slots 1, 2, 3 with 5 blobs apiece
+            let (blobs, _) = make_many_slot_entries(1, 3, 5);
+
+            blocktree
+                .write_blobs(&blobs)
+                .expect("Expect successful ledger write");
+
+            // We don't have slot 4, so we don't know how to service this requeset
+            let rv = ClusterInfo::run_detached_head(&socketaddr_any!(), Some(&blocktree), 4, 5);
+            assert!(rv.is_empty());
+
+            // For slot 3, we should return the highest blobs from slots 3, 2, 1 respectively
+            // for this request
+            let rv: Vec<_> =
+                ClusterInfo::run_detached_head(&socketaddr_any!(), Some(&blocktree), 3, 5)
+                    .iter()
+                    .map(|b| b.read().unwrap().clone())
+                    .collect();
+            let expected: Vec<_> = (1..=3)
+                .rev()
+                .map(|slot| blocktree.get_data_blob(slot, 4).unwrap().unwrap())
+                .collect();
+            assert_eq!(rv, expected)
         }
 
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
