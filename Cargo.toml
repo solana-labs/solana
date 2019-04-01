@@ -6,6 +6,7 @@ members = [
     "drone",
     "fullnode",
     "genesis",
+    "gossip",
     "install",
     "keygen",
     "kvstore",
