@@ -2,7 +2,7 @@ use bincode::{deserialize, serialize};
 use log::*;
 use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::fullnode::new_fullnode_for_tests;
-use solana::gossip_service::discover;
+use solana::gossip_service::discover_nodes;
 use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
 use solana_logger;
@@ -41,7 +41,7 @@ fn test_thin_client_basic() {
     solana_logger::setup();
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
     let bob_pubkey = Pubkey::new_rand();
-    discover(&leader_data.gossip, 1).unwrap();
+    discover_nodes(&leader_data.gossip, 1).unwrap();
 
     let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
 
@@ -70,7 +70,7 @@ fn test_bad_sig() {
     solana_logger::setup();
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
     let bob_pubkey = Pubkey::new_rand();
-    discover(&leader_data.gossip, 1).unwrap();
+    discover_nodes(&leader_data.gossip, 1).unwrap();
 
     let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
 
@@ -101,7 +101,7 @@ fn test_bad_sig() {
 fn test_register_vote_account() {
     solana_logger::setup();
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
-    discover(&leader_data.gossip, 1).unwrap();
+    discover_nodes(&leader_data.gossip, 1).unwrap();
 
     let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
 
@@ -178,7 +178,7 @@ fn test_zero_balance_after_nonzero() {
     solana_logger::setup();
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
     let bob_keypair = Keypair::new();
-    discover(&leader_data.gossip, 1).unwrap();
+    discover_nodes(&leader_data.gossip, 1).unwrap();
 
     let client = create_client(leader_data.client_facing_addr(), FULLNODE_PORT_RANGE);
     let blockhash = client.get_recent_blockhash().unwrap();

@@ -51,10 +51,10 @@ At test start, the cluster has already been established and is fully connected.
 The test can discover most of the available nodes over a few second.
 
 ```rust,ignore
-use crate::gossip_service::discover;
+use crate::gossip_service::discover_nodes;
 
 // Discover the cluster over a few seconds.
-let cluster_nodes = discover(&entry_point_info, num_nodes);
+let cluster_nodes = discover_nodes(&entry_point_info, num_nodes);
 ```
 
 ## Cluster Configuration
@@ -99,7 +99,7 @@ pub fn test_large_invalid_gossip_nodes(
     funding_keypair: &Keypair,
     num_nodes: usize,
 ) {
-    let cluster = discover(&entry_point_info, num_nodes);
+    let cluster = discover_nodes(&entry_point_info, num_nodes);
 
     // Poison the cluster.
     let client = create_client(entry_point_info.client_facing_addr(), FULLNODE_PORT_RANGE);

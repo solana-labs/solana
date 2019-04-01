@@ -3,7 +3,7 @@ use crate::cluster::Cluster;
 use crate::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::fullnode::{Fullnode, FullnodeConfig};
-use crate::gossip_service::discover;
+use crate::gossip_service::discover_nodes;
 use crate::replicator::Replicator;
 use crate::service::Service;
 use solana_client::thin_client::create_client;
@@ -156,13 +156,13 @@ impl LocalCluster {
             cluster.add_validator(&fullnode_config, *stake);
         }
 
-        discover(&cluster.entry_point_info.gossip, node_stakes.len()).unwrap();
+        discover_nodes(&cluster.entry_point_info.gossip, node_stakes.len()).unwrap();
 
         for _ in 0..num_replicators {
             cluster.add_replicator();
         }
 
-        discover(
+        discover_nodes(
             &cluster.entry_point_info.gossip,
             node_stakes.len() + num_replicators,
         )
