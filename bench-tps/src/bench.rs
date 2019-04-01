@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::contact_info::ContactInfo;
 use solana::gen_keys::GenKeys;
-use solana::gossip_service::discover;
+use solana::gossip_service::discover_nodes;
 use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
 use solana_drone::drone::request_airdrop_transaction;
@@ -55,7 +55,7 @@ pub fn do_bench_tps(config: Config) {
         converge_only,
     } = config;
 
-    let nodes = discover(&network, num_nodes).unwrap_or_else(|err| {
+    let nodes = discover_nodes(&network, num_nodes).unwrap_or_else(|err| {
         eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
         exit(1);
     });

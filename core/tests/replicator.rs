@@ -9,7 +9,7 @@ use solana::blocktree::{create_new_tmp_ledger, Blocktree};
 use solana::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
 use solana::fullnode::FullnodeConfig;
-use solana::gossip_service::discover;
+use solana::gossip_service::discover_nodes;
 use solana::local_cluster::LocalCluster;
 use solana::replicator::Replicator;
 use solana::replicator::ReplicatorRequest;
@@ -116,7 +116,7 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
         DEFAULT_SLOTS_PER_EPOCH,
     );
 
-    let cluster_nodes = discover(
+    let cluster_nodes = discover_nodes(
         &cluster.entry_point_info.gossip,
         num_nodes + num_replicators,
     )
@@ -230,7 +230,7 @@ fn test_account_setup() {
         DEFAULT_SLOTS_PER_EPOCH,
     );
 
-    let _ = discover(
+    let _ = discover_nodes(
         &cluster.entry_point_info.gossip,
         num_nodes + num_replicators,
     )

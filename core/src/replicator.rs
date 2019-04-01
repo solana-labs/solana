@@ -215,7 +215,7 @@ impl Replicator {
         );
 
         info!("Looking for leader at {:?}", cluster_entrypoint);
-        crate::gossip_service::discover(&cluster_entrypoint.gossip, 1)?;
+        crate::gossip_service::discover_nodes(&cluster_entrypoint.gossip, 1)?;
 
         let (storage_blockhash, storage_entry_height) =
             Self::poll_for_blockhash_and_entry_height(&cluster_info)?;
