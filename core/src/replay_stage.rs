@@ -97,7 +97,9 @@ impl ReplayStage {
         let vote_account = *vote_account;
         let mut ticks_per_slot = 0;
         let mut locktower = Locktower::new_from_forks(&bank_forks.read().unwrap(), &my_id);
-
+        if let Some(root) = locktower.root() {
+            blocktree.set_root(root);
+        }
         // Start the replay stage loop
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
