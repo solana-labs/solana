@@ -17,8 +17,6 @@ pub struct Config {
     pub tx_count: usize,
     pub thread_batch_sleep_ms: usize,
     pub sustained: bool,
-    pub reject_extra_nodes: bool,
-    pub converge_only: bool,
 }
 
 impl Default for Config {
@@ -33,8 +31,6 @@ impl Default for Config {
             tx_count: 500_000,
             thread_batch_sleep_ms: 0,
             sustained: false,
-            reject_extra_nodes: false,
-            converge_only: false,
         }
     }
 }
@@ -76,11 +72,6 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                 .help("Wait for NUM nodes to converge"),
         )
         .arg(
-            Arg::with_name("reject-extra-nodes")
-                .long("reject-extra-nodes")
-                .help("Require exactly `num-nodes` on convergence. Appropriate only for internal networks"),
-        )
-        .arg(
             Arg::with_name("threads")
                 .short("t")
                 .long("threads")
@@ -94,11 +85,6 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                 .value_name("SECS")
                 .takes_value(true)
                 .help("Seconds to run benchmark, then exit; default is forever"),
-        )
-        .arg(
-            Arg::with_name("converge-only")
-                .long("converge-only")
-                .help("Exit immediately after converging"),
         )
         .arg(
             Arg::with_name("sustained")
@@ -176,8 +162,6 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     }
 
     args.sustained = matches.is_present("sustained");
-    args.converge_only = matches.is_present("converge-only");
-    args.reject_extra_nodes = matches.is_present("reject-extra-nodes");
 
     args
 }

@@ -51,8 +51,6 @@ pub fn do_bench_tps(config: Config) {
         duration,
         tx_count,
         sustained,
-        reject_extra_nodes,
-        converge_only,
     } = config;
 
     let nodes = discover_nodes(&network, num_nodes).unwrap_or_else(|err| {
@@ -65,17 +63,6 @@ pub fn do_bench_tps(config: Config) {
             num_nodes
         );
         exit(1);
-    }
-    if reject_extra_nodes && nodes.len() > num_nodes {
-        eprintln!(
-            "Error: Extra nodes discovered.  Expecting exactly {}",
-            num_nodes
-        );
-        exit(1);
-    }
-
-    if converge_only {
-        return;
     }
     let cluster_entrypoint = nodes[0].clone(); // Pick the first node, why not?
 
