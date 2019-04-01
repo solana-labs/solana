@@ -210,7 +210,7 @@ start() {
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
-          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
+          -t "$CHANNEL_OR_TAG" -n 35 -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
           ${maybeReuseLedger:+-r} \
           ${maybeDelete:+-D}
     )
