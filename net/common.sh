@@ -24,6 +24,7 @@ entrypointIp=
 publicNetwork=
 netBasename=
 sshPrivateKey=
+externalNodeSshKey=
 sshOptions=()
 fullnodeIpList=()
 fullnodeIpListPrivate=()
@@ -41,8 +42,9 @@ buildSshOptions() {
     -o "User=solana"
     -o "IdentityFile=$sshPrivateKey"
     -o "LogLevel=ERROR"
-    -F /dev/null
   )
+
+  [[ -z $externalNodeSshKey ]] || sshOptions+=(-o "IdentityFile=$externalNodeSshKey")
 }
 
 loadConfigFile() {
