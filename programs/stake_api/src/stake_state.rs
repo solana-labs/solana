@@ -39,28 +39,19 @@ pub trait StakeAccount {
     ) -> Result<(), InstructionError>;
 }
 
-pub trait AccountState<T> {
+pub trait State<T> {
     fn state(&self) -> Result<T, InstructionError>;
     fn set_state(&mut self, state: &T) -> Result<(), InstructionError>;
 }
 
-impl<'a> AccountState<StakeState> for KeyedAccount<'a> {
-    fn state(&self) -> Result<StakeState, InstructionError> {
+impl<'a, T> State<T> for KeyedAccount<'a>
+where
+    T: serde::Serialize + serde::de::DeserializeOwned,
+{
+    fn state(&self) -> Result<T, InstructionError> {
         deserialize(&self.account.data).map_err(|_| InstructionError::InvalidAccountData)
     }
-    fn set_state(&mut self, state: &StakeState) -> Result<(), InstructionError> {
-        serialize_into(&mut self.account.data[..], state).map_err(|err| match *err {
-            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
-            _ => InstructionError::GenericError,
-        })
-    }
-}
-
-impl<'a> AccountState<VoteState> for KeyedAccount<'a> {
-    fn state(&self) -> Result<VoteState, InstructionError> {
-        deserialize(&self.account.data).map_err(|_| InstructionError::InvalidAccountData)
-    }
-    fn set_state(&mut self, state: &VoteState) -> Result<(), InstructionError> {
+    fn set_state(&mut self, state: &T) -> Result<(), InstructionError> {
         serialize_into(&mut self.account.data[..], state).map_err(|err| match *err {
             ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
             _ => InstructionError::GenericError,
