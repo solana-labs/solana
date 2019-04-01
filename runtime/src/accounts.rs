@@ -1532,7 +1532,7 @@ mod tests {
             let account = db.load(0, &pubkeys[idx], true).unwrap();
             let mut default_account = Account::default();
             default_account.lamports = (idx + 1) as u64;
-            assert_eq!(compare_account(&default_account, &account), true);
+            assert_eq!(default_account, account);
         }
         db.add_fork(1, Some(0));
 
@@ -1629,21 +1629,10 @@ mod tests {
                 } else {
                     let mut default_account = Account::default();
                     default_account.lamports = account.lamports;
-                    assert_eq!(compare_account(&default_account, &account), true);
+                    assert_eq!(default_account, account);
                 }
             }
         }
-    }
-
-    fn compare_account(account1: &Account, account2: &Account) -> bool {
-        if account1.data != account2.data
-            || account1.owner != account2.owner
-            || account1.executable != account2.executable
-            || account1.lamports != account2.lamports
-        {
-            return false;
-        }
-        true
     }
 
     fn check_storage(accounts: &AccountsDB, count: usize) -> bool {
@@ -1662,7 +1651,7 @@ mod tests {
             let account = accounts.load(fork, &pubkeys[idx], true).unwrap();
             let mut default_account = Account::default();
             default_account.lamports = (idx + 1) as u64;
-            assert_eq!(compare_account(&default_account, &account), true);
+            assert_eq!(default_account, account);
         }
     }
 
@@ -1682,7 +1671,7 @@ mod tests {
         let account = accounts.load(0, &pubkeys[0], true).unwrap();
         let mut default_account = Account::default();
         default_account.lamports = 1;
-        assert_eq!(compare_account(&default_account, &account), true);
+        assert_eq!(default_account, account);
     }
 
     #[test]
