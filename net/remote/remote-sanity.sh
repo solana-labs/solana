@@ -67,7 +67,7 @@ local|tar)
 
   entrypointRsyncUrl="$entrypointIp:~/solana"
 
-  solana_bench_tps=solana-bench-tps
+  solana_gossip=solana-gossip
   solana_ledger_tool=solana-ledger-tool
   solana_keygen=solana-keygen
 
@@ -84,18 +84,14 @@ echo "+++ $entrypointIp: node count ($numNodes expected)"
   set -x
   $solana_keygen -o "$client_id"
 
-  maybeRejectExtraNodes=
+  nodeArg="--num-nodes"
   if $rejectExtraNodes; then
-    maybeRejectExtraNodes="--reject-extra-nodes"
+    nodeArg="--num-nodes-exactly"
   fi
 
-  timeout 2m $solana_bench_tps \
+  timeout 2m $solana_gossip \
     --network "$entrypointIp:8001" \
-    --drone "$entrypointIp:9900" \
-    --identity "$client_id" \
-    --num-nodes "$numNodes" \
-    $maybeRejectExtraNodes \
-    --converge-only
+    --$nodeArg "$numNodes" \
 )
 
 echo "--- RPC API: getTransactionCount"

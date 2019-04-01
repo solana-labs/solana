@@ -73,7 +73,7 @@ Inspect the blockexplorer at http://beta.testnet.solana.com/ for activity.
 
 Run the following command to join the gossip network and view all the other nodes in the cluster:
 ```bash
-$ RUST_LOG=info solana-bench-tps --converge-only --num-nodes 100000 --network ${ip:?}:8001
+$ RUST_LOG=info solana-gossip --network ${ip:?}:8001
 ```
 
 #### Starting The Validator
@@ -85,7 +85,7 @@ $ RUST_LOG=warn ./multinode-demo/fullnode-x.sh --public-address --poll-for-new-g
 Then from another console, confirm the IP address if your node is now visible in
 the gossip network by running:
 ```bash
-$ RUST_LOG=info solana-bench-tps --converge-only --num-nodes 100000 --network ${ip:?}:8001
+$ RUST_LOG=info solana-gossip --network ${ip:?}:8001
 ```
 
 Congratulations, you're now participating in the testnet cluster!
@@ -102,7 +102,7 @@ source scripts/configure-metrics.sh
 Inspect for your contributions to our [metrics dashboard](https://metrics.solana.com:3000/d/U9-26Cqmk/testnet-monitor-cloud?refresh=60s&orgId=2&var-hostid=All).
 
 #### Metrics Server Maintenance
-Sometimes the dashboard becomes unresponsive. This happens due to glitch in the metrics server. 
+Sometimes the dashboard becomes unresponsive. This happens due to glitch in the metrics server.
 The current solution is to reset the metrics server. Use the following steps.
 
 1. The server is hosted in a GCP VM instance. Check if the VM instance is down by trying to SSH
