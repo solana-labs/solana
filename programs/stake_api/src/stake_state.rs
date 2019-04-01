@@ -62,8 +62,10 @@ where
 impl<'a> StakeAccount for KeyedAccount<'a> {
     fn delegate_stake(&mut self, vote_account: &KeyedAccount) -> Result<(), InstructionError> {
         if self.signer_key().is_none() {
-            Err(InstructionError::MissingRequiredSignature)
-        } else if let StakeState::Delegate { .. } = self.state()? {
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+
+        if let StakeState::Delegate { .. } = self.state()? {
             let vote_state: VoteState = vote_account.state()?;
             self.set_state(&StakeState::Delegate {
                 voter_id: *vote_account.unsigned_key(),
@@ -90,29 +92,30 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
             let vote_state: VoteState = vote_account.state()?;
 
             if voter_id != *vote_account.unsigned_key() {
-                Err(InstructionError::InvalidArgument)
-            } else if credits_observed > vote_state.credits() {
-                Err(InstructionError::InvalidAccountData)
-            } else {
-                let credits = vote_state.credits() - credits_observed;
-                credits_observed = vote_state.credits();
-
-                if self.account.lamports >= credits {
-                    // TODO: commission and network inflation parameter
-                    //   mining pool lamports reduced by credits * network_inflation_param
-                    //   stake_account and vote_account lamports up by the net
-                    //   split by a commission in vote_state
-                    self.account.lamports -= credits;
-                    stake_account.account.lamports += credits;
-
-                    stake_account.set_state(&StakeState::Delegate {
-                        voter_id,
-                        credits_observed,
-                    })
-                } else {
-                    Err(InstructionError::UnbalancedInstruction)
-                }
+                return Err(InstructionError::InvalidArgument);
             }
+
+            if credits_observed > vote_state.credits() {
+                return Err(InstructionError::InvalidAccountData);
+            }
+
+            let credits = vote_state.credits() - credits_observed;
+            credits_observed = vote_state.credits();
+
+            if self.account.lamports < credits {
+                return Err(InstructionError::UnbalancedInstruction);
+            }
+            // TODO: commission and network inflation parameter
+            //   mining pool lamports reduced by credits * network_inflation_param
+            //   stake_account and vote_account lamports up by the net
+            //   split by a commission in vote_state
+            self.account.lamports -= credits;
+            stake_account.account.lamports += credits;
+
+            stake_account.set_state(&StakeState::Delegate {
+                voter_id,
+                credits_observed,
+            })
         } else {
             Err(InstructionError::InvalidAccountData)
         }
