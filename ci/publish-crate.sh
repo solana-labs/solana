@@ -26,6 +26,7 @@ CRATES=(
   core
   fullnode
   genesis
+  gossip
   ledger-tool
   wallet
   install
