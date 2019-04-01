@@ -154,33 +154,10 @@ impl RepairService {
     fn generate_repairs(blocktree: &Blocktree, max_repairs: usize) -> Result<(Vec<RepairType>)> {
         // Slot height and blob indexes for blobs we want to repair
         let mut repairs: Vec<RepairType> = vec![];
+        let slot = *blocktree.root_slot.read().unwrap();
+        Self::generate_repairs_for_fork(blocktree, &mut repairs, max_repairs, slot);
 
-        // Find the first NUM_FORKS_TO_REPAIR forks we're interested in
-        let slots_of_interest: Vec<_> = {
-            let r_slots_of_interest = blocktree.slots_of_interest.read().unwrap();
-
-            r_slots_of_interest
-                .iter()
-                .take(NUM_FORKS_TO_REPAIR)
-                .cloned()
-                .collect()
-        };
-
-        // Iterate through the possible forks in order (they are weighted by lockout)
-        for (_, slot) in &slots_of_interest {
-            Self::generate_repairs_for_fork(blocktree, &mut repairs, max_repairs, *slot);
-            if repairs.len() >= max_repairs {
-                break;
-            }
-        }
-
-        // Ask for all missing slots up to what gossip is pushing
-        /*let (tick_height, start_slot) = {
-            let r_poh = poh_recorder.read().unwrap();
-            (r_poh.tick_height(), r_poh.start_slot()) ;
-        };
-
-        let slot = leader_schedule_utils::tick_height_to_slot(tick_height);*/
+        // TODO: Incorporate gossip to determine priorities for repair?
 
         // Try to resolve detached heads in blocktree
         let detached_heads = blocktree.get_detached_heads(Some(MAX_DETACHED_HEADS));
@@ -250,7 +227,11 @@ mod test {
             blocktree.write_blobs(&blobs).unwrap();
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, 2).unwrap(),
-                vec![RepairType::DetachedHead(0), RepairType::DetachedHead(2)]
+                vec![
+                    RepairType::HighestBlob(0, 0),
+                    RepairType::DetachedHead(0),
+                    RepairType::DetachedHead(2)
+                ]
             );
         }
 
@@ -264,9 +245,6 @@ mod test {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
             let (blobs, _) = make_slot_entries(2, 0, 1);
-
-            // Tell repair we're interested in this fork
-            blocktree.set_slots_of_interest(vec![(0, 0)]);
 
             // Write this blob to slot 2, should chain to slot 0, which we haven't received
             // any blobs for
@@ -290,9 +268,6 @@ mod test {
             let nth = 3;
             let num_entries_per_slot = 5 * nth;
             let num_slots = 2;
-
-            // Tell repair we're interested in this fork
-            blocktree.set_slots_of_interest(vec![(0, 0)]);
 
             // Create some blobs
             let (blobs, _) =
@@ -343,9 +318,6 @@ mod test {
             blobs.last_mut().unwrap().set_flags(0);
 
             blocktree.write_blobs(&blobs).unwrap();
-
-            // Tell repair we're interested in this fork
-            blocktree.set_slots_of_interest(vec![(0, 0)]);
 
             // We didn't get the last blob for this slot, so ask for the highest blob for that slot
             let expected: Vec<RepairType> = vec![RepairType::HighestBlob(0, num_entries_per_slot)];

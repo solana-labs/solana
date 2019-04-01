@@ -131,14 +131,10 @@ impl ReplayStage {
                         ticks_per_slot = bank.ticks_per_slot();
                     }
 
-                    let votable = Self::generate_votable_banks(
-                        &bank_forks,
-                        &locktower,
-                        &mut progress,
-                        &blocktree,
-                    );
+                    let votable =
+                        Self::generate_votable_banks(&bank_forks, &locktower, &mut progress);
 
-                    if let Some((_, bank)) = votable.first() {
+                    if let Some((_, bank)) = votable.last() {
                         subscriptions.notify_subscribers(&bank);
 
                         Self::handle_votable_bank(
@@ -149,6 +145,7 @@ impl ReplayStage {
                             &voting_keypair,
                             &vote_account,
                             &cluster_info,
+                            &blocktree,
                         );
 
                         Self::reset_poh_recorder(
@@ -296,6 +293,7 @@ impl ReplayStage {
         voting_keypair: &Option<Arc<T>>,
         vote_account: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+        blocktree: &Arc<Blocktree>,
     ) where
         T: 'static + KeypairUtil + Send + Sync,
     {
@@ -308,6 +306,7 @@ impl ReplayStage {
             );
             if let Some(new_root) = locktower.record_vote(bank.slot()) {
                 bank_forks.write().unwrap().set_root(new_root);
+                blocktree.set_root(new_root);
                 Self::handle_new_root(&bank_forks, progress);
             }
             locktower.update_epoch(&bank);
@@ -374,7 +373,6 @@ impl ReplayStage {
         bank_forks: &Arc<RwLock<BankForks>>,
         locktower: &Locktower,
         progress: &mut HashMap<u64, ForkProgress>,
-        blocktree: &Arc<Blocktree>,
     ) -> Vec<(u128, Arc<Bank>)> {
         let locktower_start = Instant::now();
         // Locktower voting
@@ -425,12 +423,7 @@ impl ReplayStage {
             .map(|(b, stake_lockouts)| (locktower.calculate_weight(&stake_lockouts), b.clone()))
             .collect();
 
-        votable.sort_by(|a, b| a.0.cmp(&b.0).reverse());
-        let slots_of_interest: Vec<_> = votable.iter().map(|(w, b)| (*w, b.slot())).collect();
-        if !slots_of_interest.is_empty() {
-            blocktree.set_slots_of_interest(slots_of_interest);
-        }
-
+        votable.sort_by_key(|b| b.0);
         let ms = timing::duration_as_ms(&locktower_start.elapsed());
 
         trace!("votable_banks {}", votable.len());
