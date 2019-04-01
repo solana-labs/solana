@@ -26,7 +26,7 @@ ec2)
   cpuBootstrapLeaderMachineType=m4.4xlarge
   gpuBootstrapLeaderMachineType=p2.xlarge
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
-  fullNodeMachineType=m4.2xlarge
+  fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType=m4.2xlarge
   blockstreamerMachineType=m4.2xlarge
   ;;
