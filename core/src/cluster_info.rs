@@ -770,7 +770,8 @@ impl ClusterInfo {
             match repair_request {
                 RepairType::Blob(slot, blob_index) => {
                     submit(
-                        influxdb::Point::new("cluster-info")
+                        influxdb::Point::new("cluster-info-repair")
+                            .add_field("repair-slot", influxdb::Value::Integer(*slot as i64))
                             .add_field("repair-ix", influxdb::Value::Integer(*blob_index as i64))
                             .to_owned(),
                     );
@@ -778,7 +779,8 @@ impl ClusterInfo {
                 }
                 RepairType::HighestBlob(slot, blob_index) => {
                     submit(
-                        influxdb::Point::new("cluster-info")
+                        influxdb::Point::new("cluster-info-repair-highest")
+                            .add_field("repair-highest-slot", influxdb::Value::Integer(*slot as i64))
                             .add_field("repair-highest-ix", influxdb::Value::Integer(*slot as i64))
                             .to_owned(),
                     );
@@ -786,7 +788,7 @@ impl ClusterInfo {
                 }
                 RepairType::DetachedHead(slot) => {
                     submit(
-                        influxdb::Point::new("cluster-info")
+                        influxdb::Point::new("cluster-info-repair-detached")
                             .add_field(
                                 "repair-detached-head",
                                 influxdb::Value::Integer(*slot as i64),

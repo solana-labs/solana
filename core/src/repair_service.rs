@@ -180,19 +180,19 @@ impl RepairService {
         let mut pending_slots = vec![slot];
         while repairs.len() < max_repairs && !pending_slots.is_empty() {
             let slot = pending_slots.pop().unwrap();
-            let slot_meta = blocktree
-                .meta(slot)
-                .unwrap()
-                .expect("slot referenced as the child of another slot doesn't exist");
-            let new_repairs = Self::generate_repairs_for_slot(
-                blocktree,
-                slot,
-                &slot_meta,
-                max_repairs - repairs.len(),
-            );
-            repairs.extend(new_repairs);
-            let next_slots = slot_meta.next_slots;
-            pending_slots.extend(next_slots);
+            if let Some(slot_meta) = blocktree.meta(slot).unwrap() {
+                let new_repairs = Self::generate_repairs_for_slot(
+                    blocktree,
+                    slot,
+                    &slot_meta,
+                    max_repairs - repairs.len(),
+                );
+                repairs.extend(new_repairs);
+                let next_slots = slot_meta.next_slots;
+                pending_slots.extend(next_slots);
+            } else {
+                break;
+            }
         }
     }
 }
