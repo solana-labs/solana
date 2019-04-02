@@ -162,7 +162,11 @@ impl ExchangeProcessor {
 
         Self::is_account_unallocated(&ka[1].account.data[..])?;
         Self::serialize(
-            &ExchangeState::Account(TokenAccountInfo::default().owner(&ka[0].unsigned_key())),
+            &ExchangeState::Account(
+                TokenAccountInfo::default()
+                    .owner(&ka[0].unsigned_key())
+                    .tokens(100_000, 100_000, 100_000, 100_000),
+            ),
             &mut ka[1].account.data[..],
         )
     }
@@ -615,7 +619,9 @@ mod test {
         // Check results
 
         assert_eq!(
-            TokenAccountInfo::default().owner(&owner.pubkey()),
+            TokenAccountInfo::default()
+                .owner(&owner.pubkey())
+                .tokens(100_000, 100_000, 100_000, 100_000),
             ExchangeProcessor::deserialize_account(&new_account.data[..]).unwrap()
         );
     }
@@ -654,7 +660,7 @@ mod test {
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
-                .tokens(42, 0, 0, 0),
+                .tokens(100_042, 100_000, 100_000, 100_000),
             ExchangeProcessor::deserialize_account(&new_account.data[..]).unwrap()
         );
     }
@@ -697,13 +703,13 @@ mod test {
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
-                .tokens(40, 0, 0, 0),
+                .tokens(100_040, 100_000, 100_000, 100_000),
             ExchangeProcessor::deserialize_account(&src_account.data[..]).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
-                .tokens(0, 0, 0, 0),
+                .tokens(100_000, 100_000, 100_000, 100_000),
             ExchangeProcessor::deserialize_account(&dst_account.data[..]).unwrap()
         );
     }
@@ -776,13 +782,13 @@ mod test {
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
-                .tokens(0, 0, 0, 0),
+                .tokens(100_000, 100_000, 100_000, 100_000),
             ExchangeProcessor::deserialize_account(&to_src_account.data[..]).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
-                .tokens(0, 2, 0, 0),
+                .tokens(100_000, 100_002, 100_000, 100_000),
             ExchangeProcessor::deserialize_account(&to_dst_account.data[..]).unwrap()
         );
         assert_eq!(
@@ -800,19 +806,19 @@ mod test {
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
-                .tokens(0, 0, 0, 0),
+                .tokens(100_000, 100_000, 100_000, 100_000),
             ExchangeProcessor::deserialize_account(&from_src_account.data[..]).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
-                .tokens(1, 0, 0, 0),
+                .tokens(100_001, 100_000, 100_000, 100_000),
             ExchangeProcessor::deserialize_account(&from_dst_account.data[..]).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
-                .tokens(0, 1, 0, 0),
+                .tokens(100_000, 100_001, 100_000, 100_000),
             ExchangeProcessor::deserialize_account(&profit_account.data[..]).unwrap()
         );
         assert_eq!(
