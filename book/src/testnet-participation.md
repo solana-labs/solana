@@ -29,7 +29,7 @@ MacOS or WSL users may build from source.
 The shell commands in this section assume the following environment variables are
 set:
 ```bash
-$ export release=0.12.1
+$ export release=0.12.3
 $ export ip=$(dig +short beta.testnet.solana.com)
 $ export USE_INSTALL=1
 ```
