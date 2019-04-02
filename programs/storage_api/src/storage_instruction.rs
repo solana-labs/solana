@@ -1,11 +1,12 @@
 use crate::id;
-use crate::storage_contract::ProofStatus;
+use crate::storage_contract::ProofInfo;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 
+// TODO maybe split this into StorageReplicator and StorageValidator
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageInstruction {
     SubmitMiningProof {
@@ -22,7 +23,7 @@ pub enum StorageInstruction {
     },
     ProofValidation {
         entry_height: u64,
-        proof_mask: Vec<ProofStatus>,
+        proofs: Vec<ProofInfo>,
     },
 }
 
@@ -57,13 +58,16 @@ pub fn advertise_recent_blockhash(
 pub fn proof_validation(
     from_pubkey: &Pubkey,
     entry_height: u64,
-    proof_mask: Vec<ProofStatus>,
+    proofs: Vec<ProofInfo>,
 ) -> Instruction {
+    let mut account_metas = vec![AccountMeta::new(*from_pubkey, true)];
+    proofs
+        .iter()
+        .for_each(|proof| account_metas.push(AccountMeta::new(proof.id, false)));
     let storage_instruction = StorageInstruction::ProofValidation {
         entry_height,
-        proof_mask,
+        proofs,
     };
-    let account_metas = vec![AccountMeta::new(*from_pubkey, true)];
     Instruction::new(id(), &storage_instruction, account_metas)
 }
 

@@ -2,40 +2,113 @@
 //!  Receive mining proofs from miners, validate the answers
 //!  and give reward for good proofs.
 
-use crate::storage_contract::{ProofInfo, ProofStatus, StorageContract, ValidationInfo};
+use crate::storage_contract::{ProofInfo, ProofStatus, StorageContract};
 use crate::storage_instruction::StorageInstruction;
 use crate::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use log::*;
-use solana_sdk::account::KeyedAccount;
+use serde::Serialize;
+use solana_sdk::account::{Account, KeyedAccount};
+use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction::InstructionError::InvalidArgument;
 use solana_sdk::pubkey::Pubkey;
+use std::cmp;
 
-pub const TOTAL_VALIDATOR_REWARDS: u64 = 1000;
-pub const TOTAL_REPLICATOR_REWARDS: u64 = 1000;
+pub const TOTAL_VALIDATOR_REWARDS: u64 = 1;
+pub const TOTAL_REPLICATOR_REWARDS: u64 = 1;
 
-fn count_valid_proofs(proofs: &[ProofStatus]) -> u64 {
+fn count_valid_proofs(proofs: &[ProofInfo]) -> u64 {
     let mut num = 0;
     for proof in proofs {
-        if let ProofStatus::Valid = proof {
+        if let ProofStatus::Valid = proof.status {
             num += 1;
         }
     }
     num
 }
 
+/// Serialize account data
+fn store_contract<T>(account: &mut Account, contract: &T) -> Result<(), InstructionError>
+where
+    T: Serialize,
+{
+    if bincode::serialize_into(&mut account.data[..], contract).is_err() {
+        return Err(InstructionError::AccountDataTooSmall);
+    }
+    Ok(())
+}
+
+/// Deserialize account data
+fn read_contract(account: &Account) -> Result<StorageContract, InstructionError> {
+    if let Ok(storage_contract) = bincode::deserialize(&account.data) {
+        Ok(storage_contract)
+    } else {
+        Err(InstructionError::InvalidAccountData)
+    }
+}
+
+/// Deserialize account data but handle uninitialized accounts
+fn read_contract_with_default(
+    op: &StorageInstruction,
+    account: &Account,
+) -> Result<StorageContract, InstructionError> {
+    let mut storage_contract = read_contract(&account);
+    if let Ok(StorageContract::Default) = storage_contract {
+        match op {
+            StorageInstruction::SubmitMiningProof { .. } => {
+                storage_contract = Ok(StorageContract::ReplicatorStorage {
+                    proofs: vec![],
+                    reward_validations: vec![],
+                })
+            }
+            StorageInstruction::AdvertiseStorageRecentBlockhash { .. }
+            | StorageInstruction::ProofValidation { .. } => {
+                storage_contract = Ok(StorageContract::ValidatorStorage {
+                    entry_height: 0,
+                    hash: Hash::default(),
+                    lockout_validations: vec![],
+                    reward_validations: vec![],
+                })
+            }
+            StorageInstruction::ClaimStorageReward { .. } => Err(InvalidArgument)?,
+        }
+    }
+    storage_contract
+}
+
+/// Store the result of a proof validation into the replicator account
+fn store_validation_result(
+    account: &mut Account,
+    segment_index: usize,
+    status: ProofStatus,
+) -> Result<(), InstructionError> {
+    let mut storage_contract = read_contract(account)?;
+    match &mut storage_contract {
+        StorageContract::ReplicatorStorage {
+            proofs,
+            reward_validations,
+            ..
+        } => {
+            if segment_index > reward_validations.len() || reward_validations.is_empty() {
+                reward_validations.resize(cmp::max(1, segment_index), vec![]);
+            }
+            let mut result = proofs[segment_index].clone();
+            result.status = status;
+            reward_validations[segment_index].push(result);
+        }
+        _ => return Err(InstructionError::InvalidAccountData),
+    }
+    store_contract(account, &storage_contract)?;
+    Ok(())
+}
+
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
-    _tick_height: u64,
+    tick_height: u64,
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
-
-    if keyed_accounts.len() != 1 {
-        // keyed_accounts[1] should be the main storage key
-        // to access its data
-        Err(InstructionError::InvalidArgument)?;
-    }
 
     // accounts_keys[0] must be signed
     if keyed_accounts[0].signer_key().is_none() {
@@ -45,120 +118,200 @@ pub fn process_instruction(
 
     if let Ok(syscall) = bincode::deserialize(data) {
         let mut storage_contract =
-            if let Ok(storage_contract) = bincode::deserialize(&keyed_accounts[0].account.data) {
-                storage_contract
-            } else {
-                StorageContract::default()
-            };
-
-        debug!(
-            "deserialized contract height: {}",
-            storage_contract.entry_height
-        );
+            read_contract_with_default(&syscall, &keyed_accounts[0].account)?;
         match syscall {
             StorageInstruction::SubmitMiningProof {
                 sha_state,
                 entry_height,
                 signature,
             } => {
-                let segment_index = get_segment_from_entry(entry_height);
-                let current_segment_index = get_segment_from_entry(storage_contract.entry_height);
-                if segment_index >= current_segment_index {
-                    return Err(InstructionError::InvalidArgument);
-                }
+                if let StorageContract::ReplicatorStorage { proofs, .. } = &mut storage_contract {
+                    if keyed_accounts.len() != 1 {
+                        // keyed_accounts[1] should be the main storage key
+                        // to access its data
+                        Err(InstructionError::InvalidArgument)?;
+                    }
 
-                debug!(
-                    "Mining proof submitted with contract {:?} entry_height: {}",
-                    sha_state, entry_height
-                );
+                    let segment_index = get_segment_from_entry(entry_height);
+                    if segment_index > proofs.len() || proofs.is_empty() {
+                        proofs.resize(cmp::max(1, segment_index), ProofInfo::default());
+                    }
 
-                let proof_info = ProofInfo {
-                    id: *keyed_accounts[0].signer_key().unwrap(),
-                    sha_state,
-                    signature,
-                };
-                storage_contract.proofs[segment_index].push(proof_info);
-            }
-            StorageInstruction::AdvertiseStorageRecentBlockhash { hash, entry_height } => {
-                let original_segments = storage_contract.entry_height / ENTRIES_PER_SEGMENT;
-                let segments = entry_height / ENTRIES_PER_SEGMENT;
-                debug!(
-                    "advertise new last id segments: {} orig: {}",
-                    segments, original_segments
-                );
-                if segments <= original_segments {
-                    return Err(InstructionError::InvalidArgument);
-                }
-
-                storage_contract.entry_height = entry_height;
-                storage_contract.hash = hash;
-
-                // move the proofs to previous_proofs
-                storage_contract.previous_proofs = storage_contract.proofs.clone();
-                storage_contract.proofs.clear();
-                storage_contract
-                    .proofs
-                    .resize(segments as usize, Vec::new());
-
-                // move lockout_validations to reward_validations
-                storage_contract.reward_validations = storage_contract.lockout_validations.clone();
-                storage_contract.lockout_validations.clear();
-                storage_contract
-                    .lockout_validations
-                    .resize(segments as usize, Vec::new());
-            }
-            StorageInstruction::ProofValidation {
-                entry_height,
-                proof_mask,
-            } => {
-                if entry_height >= storage_contract.entry_height {
-                    return Err(InstructionError::InvalidArgument);
-                }
-
-                let segment_index = get_segment_from_entry(entry_height);
-                if storage_contract.previous_proofs[segment_index].len() != proof_mask.len() {
-                    return Err(InstructionError::InvalidArgument);
-                }
-
-                // TODO: Check that each proof mask matches the signature
-                /*for (i, entry) in proof_mask.iter().enumerate() {
-                    if storage_contract.previous_proofs[segment_index][i] != signature.as_ref[0] {
+                    if segment_index > proofs.len() {
+                        // only possible if usize max < u64 max
                         return Err(InstructionError::InvalidArgument);
                     }
-                }*/
 
-                let info = ValidationInfo {
-                    id: *keyed_accounts[0].signer_key().unwrap(),
-                    proof_mask,
-                };
-                storage_contract.lockout_validations[segment_index].push(info);
+                    debug!(
+                        "Mining proof submitted with contract {:?} entry_height: {}",
+                        sha_state, entry_height
+                    );
+
+                    let proof_info = ProofInfo {
+                        id: *keyed_accounts[0].signer_key().unwrap(),
+                        sha_state,
+                        signature,
+                        // don't care
+                        status: ProofStatus::Skipped,
+                    };
+                    proofs[segment_index] = proof_info;
+                } else {
+                    Err(InstructionError::InvalidArgument)?;
+                }
+            }
+            StorageInstruction::AdvertiseStorageRecentBlockhash { hash, entry_height } => {
+                if let StorageContract::ValidatorStorage {
+                    entry_height: state_entry_height,
+                    hash: state_hash,
+                    reward_validations,
+                    lockout_validations,
+                } = &mut storage_contract
+                {
+                    if keyed_accounts.len() != 1 {
+                        // keyed_accounts[1] should be the main storage key
+                        // to access its data
+                        Err(InstructionError::InvalidArgument)?;
+                    }
+
+                    let original_segments = *state_entry_height / ENTRIES_PER_SEGMENT;
+                    let segments = entry_height / ENTRIES_PER_SEGMENT;
+                    debug!(
+                        "advertise new last id segments: {} orig: {}",
+                        segments, original_segments
+                    );
+                    if segments <= original_segments {
+                        return Err(InstructionError::InvalidArgument);
+                    }
+
+                    *state_entry_height = entry_height;
+                    *state_hash = hash;
+
+                    // move lockout_validations to reward_validations
+                    *reward_validations = lockout_validations.clone();
+                    lockout_validations.clear();
+                    lockout_validations.resize(segments as usize, Vec::new());
+                } else {
+                    return Err(InstructionError::InvalidArgument);
+                }
             }
             StorageInstruction::ClaimStorageReward { entry_height } => {
-                let claims_index = get_segment_from_entry(entry_height);
-                let account_key = keyed_accounts[0].signer_key().unwrap();
-                let mut num_validations = 0;
-                let mut total_validations = 0;
-                for validation in &storage_contract.reward_validations[claims_index] {
-                    if *account_key == validation.id {
-                        num_validations += count_valid_proofs(&validation.proof_mask);
-                    } else {
-                        total_validations += count_valid_proofs(&validation.proof_mask);
-                    }
+                if keyed_accounts.len() != 1 {
+                    // keyed_accounts[1] should be the main storage key
+                    // to access its data
+                    Err(InstructionError::InvalidArgument)?;
                 }
-                total_validations += num_validations;
-                if total_validations > 0 {
-                    keyed_accounts[0].account.lamports +=
-                        (TOTAL_VALIDATOR_REWARDS * num_validations) / total_validations;
+
+                if let StorageContract::ValidatorStorage {
+                    reward_validations, ..
+                } = &mut storage_contract
+                {
+                    let claims_index = get_segment_from_entry(entry_height);
+                    let _num_validations = count_valid_proofs(&reward_validations[claims_index]);
+                    // TODO can't just create lamports out of thin air
+                    // keyed_accounts[0].account.lamports += TOTAL_VALIDATOR_REWARDS * num_validations;
+                    reward_validations.clear();
+                } else if let StorageContract::ReplicatorStorage {
+                    reward_validations, ..
+                } = &mut storage_contract
+                {
+                    // if current tick height is a full segment away? then allow reward collection
+                    // storage needs to move to tick heights too, until then this makes little sense
+                    let current_index = get_segment_from_entry(tick_height);
+                    let claims_index = get_segment_from_entry(entry_height);
+                    if current_index <= claims_index || claims_index >= reward_validations.len() {
+                        println!(
+                            "current {:?}, claim {:?}, rewards {:?}",
+                            current_index,
+                            claims_index,
+                            reward_validations.len()
+                        );
+                        return Err(InstructionError::InvalidArgument);
+                    }
+                    let _num_validations = count_valid_proofs(&reward_validations[claims_index]);
+                    // TODO can't just create lamports out of thin air
+                    // keyed_accounts[0].account.lamports += num_validations
+                    //     * TOTAL_REPLICATOR_REWARDS
+                    //     * (num_validations / reward_validations[claims_index].len() as u64);
+                    reward_validations.clear();
+                } else {
+                    return Err(InstructionError::InvalidArgument);
+                }
+            }
+            StorageInstruction::ProofValidation {
+                entry_height: proof_entry_height,
+                proofs,
+            } => {
+                if let StorageContract::ValidatorStorage {
+                    entry_height: current_entry_height,
+                    lockout_validations,
+                    ..
+                } = &mut storage_contract
+                {
+                    if keyed_accounts.len() == 1 {
+                        // have to have at least 1 replicator to do any verification
+                        Err(InstructionError::InvalidArgument)?;
+                    }
+
+                    if proof_entry_height >= *current_entry_height {
+                        return Err(InstructionError::InvalidArgument);
+                    }
+
+                    let segment_index = get_segment_from_entry(proof_entry_height);
+                    let mut previous_proofs = keyed_accounts[1..]
+                        .iter_mut()
+                        .filter_map(|account| {
+                            read_contract(&account.account)
+                                .ok()
+                                .map(move |contract| match contract {
+                                    StorageContract::ReplicatorStorage { proofs, .. } => {
+                                        Some((&mut account.account, proofs[segment_index].clone()))
+                                    }
+                                    _ => None,
+                                })
+                        })
+                        .flatten()
+                        .collect::<Vec<_>>();
+
+                    if previous_proofs.len() != proofs.len() {
+                        // don't have all the accounts to validate the proofs against
+                        return Err(InstructionError::InvalidArgument);
+                    }
+
+                    let mut valid_proofs: Vec<_> = proofs
+                        .into_iter()
+                        .enumerate()
+                        .filter_map(|(i, entry)| {
+                            if previous_proofs[i].1.signature != entry.signature
+                                || entry.status != ProofStatus::Valid
+                            {
+                                let _ = store_validation_result(
+                                    &mut previous_proofs[i].0,
+                                    segment_index,
+                                    entry.status,
+                                );
+                                None
+                            } else if store_validation_result(
+                                &mut previous_proofs[i].0,
+                                segment_index,
+                                entry.status.clone(),
+                            )
+                            .is_ok()
+                            {
+                                Some(entry)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+
+                    // allow validators to store successful validations
+                    lockout_validations[segment_index].append(&mut valid_proofs);
+                } else {
+                    return Err(InstructionError::InvalidArgument);
                 }
             }
         }
-
-        if bincode::serialize_into(&mut keyed_accounts[0].account.data[..], &storage_contract)
-            .is_err()
-        {
-            return Err(InstructionError::AccountDataTooSmall);
-        }
-
+        store_contract(&mut keyed_accounts[0].account, &storage_contract)?;
         Ok(())
     } else {
         info!("Invalid instruction data: {:?}", data);
@@ -170,7 +323,6 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use crate::id;
-    use crate::storage_contract::ProofStatus;
     use crate::storage_instruction;
     use crate::ENTRIES_PER_SEGMENT;
     use bincode::deserialize;
@@ -225,7 +377,7 @@ mod tests {
 
         assert_eq!(
             process_instruction(&id(), &mut keyed_accounts, &ix.data, 42),
-            Err(InstructionError::AccountDataTooSmall)
+            Err(InstructionError::InvalidAccountData)
         );
     }
 
@@ -279,52 +431,134 @@ mod tests {
     }
 
     #[test]
+    fn test_account_data() {
+        solana_logger::setup();
+        let mut account = Account::default();
+        account.data.resize(4 * 1024, 0);
+        let pubkey = &Pubkey::default();
+        let mut keyed_account = KeyedAccount::new(&pubkey, false, &mut account);
+        // pretend it's a validator op code
+        let mut contract = read_contract(&keyed_account.account).unwrap();
+        if let StorageContract::ValidatorStorage { .. } = contract {
+            assert!(true)
+        }
+        if let StorageContract::ReplicatorStorage { .. } = &mut contract {
+            panic!("this shouldn't work");
+        }
+
+        contract = StorageContract::ValidatorStorage {
+            entry_height: 0,
+            hash: Hash::default(),
+            lockout_validations: vec![],
+            reward_validations: vec![],
+        };
+        store_contract(&mut keyed_account.account, &contract).unwrap();
+        if let StorageContract::ReplicatorStorage { .. } = contract {
+            panic!("this shouldn't work");
+        }
+        contract = StorageContract::ReplicatorStorage {
+            proofs: vec![],
+            reward_validations: vec![],
+        };
+        store_contract(&mut keyed_account.account, &contract).unwrap();
+        if let StorageContract::ValidatorStorage { .. } = contract {
+            panic!("this shouldn't work");
+        }
+    }
+
+    #[test]
     fn test_validate_mining() {
         solana_logger::setup();
-        let pubkey = Pubkey::new_rand();
-        let mut accounts = [Account::default(), Account::default()];
-        accounts[0].data.resize(16 * 1024, 0);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
+        let mint_pubkey = mint_keypair.pubkey();
+        let replicator_keypair = Keypair::new();
+        let replicator = replicator_keypair.pubkey();
+        let validator_keypair = Keypair::new();
+        let validator = validator_keypair.pubkey();
 
+        let mut bank = Bank::new(&genesis_block);
+        bank.add_instruction_processor(id(), process_instruction);
         let entry_height = 0;
+        let bank_client = BankClient::new(&bank);
+
+        let ix = SystemInstruction::new_account(&mint_pubkey, &validator, 10, 4 * 1042, &id());
+        bank_client.process_instruction(&mint_keypair, ix).unwrap();
+
+        let ix = SystemInstruction::new_account(&mint_pubkey, &replicator, 10, 4 * 1042, &id());
+        bank_client.process_instruction(&mint_keypair, ix).unwrap();
 
         let ix = storage_instruction::advertise_recent_blockhash(
-            &pubkey,
+            &validator,
             Hash::default(),
             ENTRIES_PER_SEGMENT,
         );
 
-        test_instruction(&ix, &mut accounts).unwrap();
+        bank_client
+            .process_instruction(&validator_keypair, ix)
+            .unwrap();
 
         let ix = storage_instruction::mining_proof(
-            &pubkey,
+            &replicator,
             Hash::default(),
             entry_height,
             Signature::default(),
         );
-        test_instruction(&ix, &mut accounts).unwrap();
+        bank_client
+            .process_instruction(&replicator_keypair, ix)
+            .unwrap();
 
         let ix = storage_instruction::advertise_recent_blockhash(
-            &pubkey,
+            &validator,
             Hash::default(),
             ENTRIES_PER_SEGMENT * 2,
         );
-        test_instruction(&ix, &mut accounts).unwrap();
+        bank_client
+            .process_instruction(&validator_keypair, ix)
+            .unwrap();
 
-        let ix =
-            storage_instruction::proof_validation(&pubkey, entry_height, vec![ProofStatus::Valid]);
-        test_instruction(&ix, &mut accounts).unwrap();
+        let ix = storage_instruction::proof_validation(
+            &validator,
+            entry_height,
+            vec![ProofInfo {
+                id: replicator,
+                signature: Signature::default(),
+                sha_state: Hash::default(),
+                status: ProofStatus::Valid,
+            }],
+        );
+        bank_client
+            .process_instruction(&validator_keypair, ix)
+            .unwrap();
 
         let ix = storage_instruction::advertise_recent_blockhash(
-            &pubkey,
+            &validator,
             Hash::default(),
             ENTRIES_PER_SEGMENT * 3,
         );
-        test_instruction(&ix, &mut accounts).unwrap();
+        bank_client
+            .process_instruction(&validator_keypair, ix)
+            .unwrap();
 
-        let ix = storage_instruction::reward_claim(&pubkey, entry_height);
-        test_instruction(&ix, &mut accounts).unwrap();
+        let ix = storage_instruction::reward_claim(&validator, entry_height);
+        bank_client
+            .process_instruction(&validator_keypair, ix)
+            .unwrap();
 
-        assert!(accounts[0].lamports == TOTAL_VALIDATOR_REWARDS);
+        // TODO enable when rewards are working
+        // assert_eq!(bank.get_balance(&validator), TOTAL_VALIDATOR_REWARDS);
+
+        // tick the bank into the next storage epoch so that rewards can be claimed
+        for _ in 0..=ENTRIES_PER_SEGMENT {
+            bank.register_tick(&bank.last_blockhash());
+        }
+
+        let ix = StorageInstruction::new_reward_claim(&replicator, entry_height);
+        bank_client
+            .process_instruction(&replicator_keypair, ix)
+            .unwrap();
+
+        // TODO enable when rewards are working
+        // assert_eq!(bank.get_balance(&replicator), TOTAL_REPLICATOR_REWARDS);
     }
 
     fn get_storage_entry_height(bank: &Bank, account: &Pubkey) -> u64 {
@@ -332,8 +566,12 @@ mod tests {
             Some(storage_system_account) => {
                 let contract = deserialize(&storage_system_account.data);
                 if let Ok(contract) = contract {
-                    let contract: StorageContract = contract;
-                    return contract.entry_height;
+                    match contract {
+                        StorageContract::ValidatorStorage { entry_height, .. } => {
+                            return entry_height;
+                        }
+                        _ => info!("error in reading entry_height"),
+                    }
                 }
             }
             None => {
@@ -347,8 +585,12 @@ mod tests {
         if let Some(storage_system_account) = bank.get_account(&account) {
             let contract = deserialize(&storage_system_account.data);
             if let Ok(contract) = contract {
-                let contract: StorageContract = contract;
-                return contract.hash;
+                match contract {
+                    StorageContract::ValidatorStorage { hash, .. } => {
+                        return hash;
+                    }
+                    _ => (),
+                }
             }
         }
         Hash::default()
@@ -356,12 +598,12 @@ mod tests {
 
     #[test]
     fn test_bank_storage() {
-        let (genesis_block, alice_keypair) = GenesisBlock::new(1000);
-        let alice_pubkey = alice_keypair.pubkey();
-        let bob_keypair = Keypair::new();
-        let bob_pubkey = bob_keypair.pubkey();
-        let jack_pubkey = Pubkey::new_rand();
-        let jill_pubkey = Pubkey::new_rand();
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
+        let mint_pubkey = mint_keypair.pubkey();
+        let replicator_keypair = Keypair::new();
+        let replicator_pubkey = replicator_keypair.pubkey();
+        let validator_keypair = Keypair::new();
+        let validator_pubkey = validator_keypair.pubkey();
 
         let mut bank = Bank::new(&genesis_block);
         bank.add_instruction_processor(id(), process_instruction);
@@ -375,40 +617,85 @@ mod tests {
         bank.register_tick(&blockhash);
 
         bank_client
-            .transfer(10, &alice_keypair, &jill_pubkey)
-            .unwrap();
-        bank_client
-            .transfer(10, &alice_keypair, &bob_pubkey)
-            .unwrap();
-        bank_client
-            .transfer(10, &alice_keypair, &jack_pubkey)
+            .transfer(10, &mint_keypair, &replicator_pubkey)
             .unwrap();
 
-        let ix = system_instruction::create_account(&alice_pubkey, &bob_pubkey, 1, 4 * 1024, &id());
+        let ix = system_instruction::create_account(
+            &mint_pubkey,
+            &replicator_pubkey,
+            1,
+            4 * 1024,
+            &id(),
+        );
 
-        bank_client.process_instruction(&alice_keypair, ix).unwrap();
+        bank_client.process_instruction(&mint_keypair, ix).unwrap();
+
+        let ix = system_instruction::create_account(
+            &mint_pubkey,
+            &validator_pubkey,
+            1,
+            4 * 1024,
+            &id(),
+        );
+
+        bank_client.process_instruction(&mint_keypair, ix).unwrap();
 
         let ix = storage_instruction::advertise_recent_blockhash(
-            &bob_pubkey,
+            &validator_pubkey,
             storage_blockhash,
             ENTRIES_PER_SEGMENT,
         );
 
-        bank_client.process_instruction(&bob_keypair, ix).unwrap();
+        bank_client
+            .process_instruction(&validator_keypair, ix)
+            .unwrap();
 
         let entry_height = 0;
-        let ix = storage_instruction::mining_proof(
-            &bob_pubkey,
+        let ix = storage_instruction::mining_proof()
+            &replicator_pubkey,
             Hash::default(),
             entry_height,
             Signature::default(),
         );
-        let _result = bank_client.process_instruction(&bob_keypair, ix).unwrap();
+        let _result = bank_client
+            .process_instruction(&replicator_keypair, ix)
+            .unwrap();
 
         assert_eq!(
-            get_storage_entry_height(&bank, &bob_pubkey),
+            get_storage_entry_height(&bank, &validator_pubkey),
             ENTRIES_PER_SEGMENT
         );
-        assert_eq!(get_storage_blockhash(&bank, &bob_pubkey), storage_blockhash);
+        assert_eq!(
+            get_storage_blockhash(&bank, &validator_pubkey),
+            storage_blockhash
+        );
+    }
+
+    /// check that uninitialized accounts are handled
+    #[test]
+    fn test_read_contract_with_default() {
+        let mut account = Account::default();
+        // no space allocated
+        assert!(read_contract(&account).is_err());
+        account.data.resize(4 * 1024, 0);
+        let instruction = StorageInstruction::AdvertiseStorageRecentBlockhash {
+            hash: Hash::default(),
+            entry_height: 0,
+        };
+        read_contract_with_default(&instruction, &account).unwrap();
+        let instruction = StorageInstruction::SubmitMiningProof {
+            sha_state: Hash::default(),
+            entry_height: 0,
+            signature: Signature::default(),
+        };
+        read_contract_with_default(&instruction, &account).unwrap();
+        let instruction = StorageInstruction::ProofValidation {
+            entry_height: 0,
+            proofs: vec![],
+        };
+        read_contract_with_default(&instruction, &account).unwrap();
+        // Can't claim rewards on an uninitialized account
+        let instruction = StorageInstruction::ClaimStorageReward { entry_height: 0 };
+        assert!(read_contract_with_default(&instruction, &account).is_err());
     }
 }
