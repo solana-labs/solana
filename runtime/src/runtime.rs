@@ -1,4 +1,5 @@
 use crate::native_loader;
+use crate::system_instruction_processor;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::message::Message;
@@ -90,8 +91,10 @@ pub struct Runtime {
 
 impl Default for Runtime {
     fn default() -> Self {
-        let instruction_processors: Vec<(Pubkey, ProcessInstruction)> =
-            vec![(system_program::id(), crate::system_program::entrypoint)];
+        let instruction_processors: Vec<(Pubkey, ProcessInstruction)> = vec![(
+            system_program::id(),
+            system_instruction_processor::process_instruction,
+        )];
 
         Self {
             instruction_processors,
