@@ -129,4 +129,8 @@ impl CompiledInstruction {
             accounts,
         }
     }
+
+    pub fn program_id<'a>(&self, program_ids: &'a [Pubkey]) -> &'a Pubkey {
+        &program_ids[self.program_ids_index as usize]
+    }
 }

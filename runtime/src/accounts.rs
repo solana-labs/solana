@@ -707,11 +707,11 @@ impl AccountsDB {
             .instructions
             .iter()
             .map(|ix| {
-                if message.program_ids.len() <= ix.program_ids_index as usize {
+                if message.program_ids().len() <= ix.program_ids_index as usize {
                     error_counters.account_not_found += 1;
                     return Err(TransactionError::AccountNotFound);
                 }
-                let program_id = message.program_ids[ix.program_ids_index as usize];
+                let program_id = message.program_ids()[ix.program_ids_index as usize];
                 self.load_executable_accounts(fork, &program_id, error_counters)
             })
             .collect()

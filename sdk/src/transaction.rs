@@ -145,9 +145,6 @@ impl Transaction {
             }
         }
     }
-    pub fn program_id(&self, instruction_index: usize) -> &Pubkey {
-        self.message().program_id(instruction_index)
-    }
 
     /// Return a message containing all data that should be signed.
     pub fn message(&self) -> &Message {
@@ -185,7 +182,7 @@ impl Transaction {
     pub fn verify_refs(&self) -> bool {
         let message = self.message();
         for instruction in &message.instructions {
-            if (instruction.program_ids_index as usize) >= message.program_ids.len() {
+            if (instruction.program_ids_index as usize) >= message.program_ids().len() {
                 return false;
             }
             for account_index in &instruction.accounts {
@@ -206,6 +203,12 @@ mod tests {
     use crate::system_instruction::SystemInstruction;
     use bincode::{deserialize, serialize, serialized_size};
     use std::mem::size_of;
+
+    fn get_program_id(tx: &Transaction, instruction_index: usize) -> &Pubkey {
+        let message = tx.message();
+        let instruction = &message.instructions[instruction_index];
+        instruction.program_id(message.program_ids())
+    }
 
     #[test]
     fn test_refs() {
@@ -245,8 +248,8 @@ mod tests {
         assert_eq!(tx.key(0, 2), None);
         assert_eq!(tx.signer_key(0, 2), None);
 
-        assert_eq!(*tx.program_id(0), prog1);
-        assert_eq!(*tx.program_id(1), prog2);
+        assert_eq!(*get_program_id(&tx, 0), prog1);
+        assert_eq!(*get_program_id(&tx, 1), prog2);
     }
     #[test]
     fn test_refs_invalid_program_id() {
@@ -272,7 +275,7 @@ mod tests {
             vec![Pubkey::default()],
             instructions,
         );
-        assert_eq!(*tx.program_id(0), Pubkey::default());
+        assert_eq!(*get_program_id(&tx, 0), Pubkey::default());
         assert!(!tx.verify_refs());
     }
 
@@ -350,7 +353,7 @@ mod tests {
             + (tx.message.account_keys.len() * size_of::<Pubkey>())
             + blockhash_size
             + len_size
-            + (tx.message.program_ids.len() * size_of::<Pubkey>())
+            + (tx.message.program_ids().len() * size_of::<Pubkey>())
             + len_size
             + expected_instruction_size;
         assert_eq!(expected_transaction_size, 214);
