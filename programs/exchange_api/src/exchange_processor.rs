@@ -162,7 +162,11 @@ impl ExchangeProcessor {
 
         Self::is_account_unallocated(&ka[1].account.data[..])?;
         Self::serialize(
-            &ExchangeState::Account(TokenAccountInfo::default().owner(&ka[0].unsigned_key()).tokens(100_000,100_000,100_000,100_000)),
+            &ExchangeState::Account(
+                TokenAccountInfo::default()
+                    .owner(&ka[0].unsigned_key())
+                    .tokens(100_000, 100_000, 100_000, 100_000),
+            ),
             &mut ka[1].account.data[..],
         )
     }
