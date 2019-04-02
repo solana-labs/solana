@@ -38,11 +38,11 @@ impl Backend for Rocks {
         let db_options = get_db_options();
 
         // Column family names
-        let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::DESC, get_cf_options());
-        let data_cf_descriptor = ColumnFamilyDescriptor::new(Data::DESC, get_cf_options());
-        let erasure_cf_descriptor = ColumnFamilyDescriptor::new(Coding::DESC, get_cf_options());
+        let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
+        let data_cf_descriptor = ColumnFamilyDescriptor::new(Data::NAME, get_cf_options());
+        let erasure_cf_descriptor = ColumnFamilyDescriptor::new(Coding::NAME, get_cf_options());
         let detached_heads_descriptor =
-            ColumnFamilyDescriptor::new(DetachedHeads::DESC, get_cf_options());
+            ColumnFamilyDescriptor::new(DetachedHeads::NAME, get_cf_options());
 
         let cfs = vec![
             meta_cf_descriptor,
@@ -61,10 +61,10 @@ impl Backend for Rocks {
         use crate::blocktree::db::columns::{Coding, Data, DetachedHeads, SlotMeta};
 
         vec![
-            Coding::DESC,
-            Data::DESC,
-            DetachedHeads::DESC,
-            SlotMeta::DESC,
+            Coding::NAME,
+            Data::NAME,
+            DetachedHeads::NAME,
+            SlotMeta::NAME,
         ]
     }
 
@@ -120,7 +120,7 @@ impl Backend for Rocks {
 }
 
 impl Column<Rocks> for cf::Coding {
-    const DESC: &'static str = super::ERASURE_CF;
+    const NAME: &'static str = super::ERASURE_CF;
     type Index = (u64, u64);
 
     fn key(index: (u64, u64)) -> Vec<u8> {
@@ -133,7 +133,7 @@ impl Column<Rocks> for cf::Coding {
 }
 
 impl Column<Rocks> for cf::Data {
-    const DESC: &'static str = super::DATA_CF;
+    const NAME: &'static str = super::DATA_CF;
     type Index = (u64, u64);
 
     fn key((slot, index): (u64, u64)) -> Vec<u8> {
@@ -151,7 +151,7 @@ impl Column<Rocks> for cf::Data {
 }
 
 impl Column<Rocks> for cf::DetachedHeads {
-    const DESC: &'static str = super::DETACHED_HEADS_CF;
+    const NAME: &'static str = super::DETACHED_HEADS_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {
@@ -170,7 +170,7 @@ impl TypedColumn<Rocks> for cf::DetachedHeads {
 }
 
 impl Column<Rocks> for cf::SlotMeta {
-    const DESC: &'static str = super::META_CF;
+    const NAME: &'static str = super::META_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {

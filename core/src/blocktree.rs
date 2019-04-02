@@ -39,9 +39,7 @@ macro_rules! db_imports {
         use $mod::$db;
         use db::columns as cf;
 
-        pub use db::{
-            columns
-        };
+        pub use db::columns;
 
         pub type Database = db::Database<$db>;
         pub type Cursor<C>  = db::Cursor<$db, C>;
@@ -122,10 +120,6 @@ impl SlotMeta {
 
 // ledger window
 pub struct Blocktree {
-    // Underlying database is automatically closed in the Drop implementation of DB
-    //#[cfg(not(feature = "kvstore"))]
-    //db: Arc<Rocks>,
-    //#[cfg(feature = "kvstore")]
     db: Arc<Database>,
     meta_cf: LedgerColumn<cf::SlotMeta>,
     data_cf: LedgerColumn<cf::Data>,
@@ -1499,7 +1493,6 @@ pub mod tests {
                 .expect("Expected successful write of blobs");
 
             let mut db_iterator = blocktree
-                //.data_cf
                 .db
                 .cursor::<cf::Data>()
                 .expect("Expected to be able to open database iterator");

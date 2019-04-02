@@ -65,7 +65,7 @@ pub trait Column<B>
 where
     B: Backend,
 {
-    const DESC: &'static str;
+    const NAME: &'static str;
     type Index;
 
     fn key(index: Self::Index) -> B::OwnedKey;
@@ -109,7 +109,7 @@ pub struct Database<B>
 where
     B: Backend,
 {
-    inner: B,
+    backend: B,
 }
 
 #[derive(Debug, Clone)]
@@ -118,7 +118,7 @@ where
     B: Backend,
     C: Column<B>,
 {
-    inner: B::Cursor,
+    db_cursor: B::Cursor,
     column: PhantomData<C>,
     backend: PhantomData<B>,
 }
@@ -138,7 +138,7 @@ pub struct WriteBatch<B>
 where
     B: Backend,
 {
-    inner: B::WriteBatch,
+    write_batch: B::WriteBatch,
     backend: PhantomData<B>,
     map: HashMap<&'static str, B::ColumnFamily>,
 }
@@ -148,9 +148,9 @@ where
     B: Backend,
 {
     pub fn open(path: &Path) -> Result<Self> {
-        let inner = B::open(path)?;
+        let backend = B::open(path)?;
 
-        Ok(Database { inner })
+        Ok(Database { backend })
     }
 
     pub fn destroy(path: &Path) -> Result<()> {
@@ -163,7 +163,7 @@ where
     where
         C: Column<B>,
     {
-        self.inner
+        self.backend
             .get_cf(self.cf_handle::<C>(), C::key(key).borrow())
     }
 
@@ -171,7 +171,7 @@ where
     where
         C: Column<B>,
     {
-        self.inner
+        self.backend
             .put_cf(self.cf_handle::<C>(), C::key(key).borrow(), data)
     }
 
@@ -179,7 +179,7 @@ where
     where
         C: Column<B>,
     {
-        self.inner
+        self.backend
             .delete_cf(self.cf_handle::<C>(), C::key(key).borrow())
     }
 
@@ -188,7 +188,7 @@ where
         C: TypedColumn<B>,
     {
         if let Some(serialized_value) = self
-            .inner
+            .backend
             .get_cf(self.cf_handle::<C>(), C::key(key).borrow())?
         {
             let value = deserialize(&serialized_value)?;
@@ -205,7 +205,7 @@ where
     {
         let serialized_value = serialize(value)?;
 
-        self.inner.put_cf(
+        self.backend.put_cf(
             self.cf_handle::<C>(),
             C::key(key).borrow(),
             &serialized_value,
@@ -216,10 +216,10 @@ where
     where
         C: Column<B>,
     {
-        let db_cursor = self.inner.raw_iterator_cf(self.cf_handle::<C>())?;
+        let db_cursor = self.backend.raw_iterator_cf(self.cf_handle::<C>())?;
 
         Ok(Cursor {
-            inner: db_cursor,
+            db_cursor,
             column: PhantomData,
             backend: PhantomData,
         })
@@ -230,7 +230,7 @@ where
         C: Column<B>,
     {
         let iter = self
-            .inner
+            .backend
             .iterator_cf(self.cf_handle::<C>())?
             .map(|(key, value)| (C::index(&key), value.into()));
 
@@ -238,23 +238,23 @@ where
     }
 
     pub fn batch(&self) -> Result<WriteBatch<B>> {
-        let db_write_batch = self.inner.batch()?;
+        let db_write_batch = self.backend.batch()?;
         let map = self
-            .inner
+            .backend
             .columns()
             .into_iter()
-            .map(|desc| (desc, self.inner.cf_handle(desc)))
+            .map(|desc| (desc, self.backend.cf_handle(desc)))
             .collect();
 
         Ok(WriteBatch {
-            inner: db_write_batch,
+            write_batch: db_write_batch,
             backend: PhantomData,
             map,
         })
     }
 
     pub fn write(&self, batch: WriteBatch<B>) -> Result<()> {
-        self.inner.write(batch.inner)
+        self.backend.write(batch.write_batch)
     }
 
     #[inline]
@@ -262,7 +262,7 @@ where
     where
         C: Column<B>,
     {
-        self.inner.cf_handle(C::DESC).clone()
+        self.backend.cf_handle(C::NAME).clone()
     }
 }
 
@@ -272,23 +272,23 @@ where
     C: Column<B>,
 {
     pub fn valid(&self) -> bool {
-        self.inner.valid()
+        self.db_cursor.valid()
     }
 
     pub fn seek(&mut self, key: C::Index) {
-        self.inner.seek(C::key(key).borrow());
+        self.db_cursor.seek(C::key(key).borrow());
     }
 
     pub fn seek_to_first(&mut self) {
-        self.inner.seek_to_first();
+        self.db_cursor.seek_to_first();
     }
 
     pub fn next(&mut self) {
-        self.inner.next();
+        self.db_cursor.next();
     }
 
     pub fn key(&self) -> Option<C::Index> {
-        if let Some(key) = self.inner.key() {
+        if let Some(key) = self.db_cursor.key() {
             Some(C::index(key.borrow()))
         } else {
             None
@@ -296,7 +296,7 @@ where
     }
 
     pub fn value_bytes(&self) -> Option<Vec<u8>> {
-        self.inner.value()
+        self.db_cursor.value()
     }
 }
 
@@ -306,7 +306,7 @@ where
     C: TypedColumn<B>,
 {
     pub fn value(&self) -> Option<C::Type> {
-        if let Some(bytes) = self.inner.value() {
+        if let Some(bytes) = self.db_cursor.value() {
             let value = deserialize(&bytes).ok()?;
             Some(value)
         } else {
@@ -329,16 +329,18 @@ where
 
     pub fn put_bytes(&self, key: C::Index, value: &[u8]) -> Result<()> {
         self.db
-            .inner
+            .backend
             .put_cf(self.handle(), C::key(key).borrow(), value)
     }
 
     pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
-        self.db.inner.get_cf(self.handle(), C::key(key).borrow())
+        self.db.backend.get_cf(self.handle(), C::key(key).borrow())
     }
 
     pub fn delete(&self, key: C::Index) -> Result<()> {
-        self.db.inner.delete_cf(self.handle(), C::key(key).borrow())
+        self.db
+            .backend
+            .delete_cf(self.handle(), C::key(key).borrow())
     }
 
     pub fn cursor(&self) -> Result<Cursor<B, C>> {
@@ -379,23 +381,23 @@ where
     B: Backend,
 {
     pub fn put_bytes<C: Column<B>>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
-        self.inner
+        self.write_batch
             .put_cf(self.get_cf::<C>(), C::key(key).borrow(), bytes)
     }
 
     pub fn delete<C: Column<B>>(&mut self, key: C::Index) -> Result<()> {
-        self.inner
+        self.write_batch
             .delete_cf(self.get_cf::<C>(), C::key(key).borrow())
     }
 
     pub fn put<C: TypedColumn<B>>(&mut self, key: C::Index, value: &C::Type) -> Result<()> {
         let serialized_value = serialize(&value)?;
-        self.inner
+        self.write_batch
             .put_cf(self.get_cf::<C>(), C::key(key).borrow(), &serialized_value)
     }
 
     #[inline]
     fn get_cf<C: Column<B>>(&self) -> B::ColumnFamily {
-        self.map.get(C::DESC).unwrap().clone()
+        self.map.get(C::NAME).unwrap().clone()
     }
 }

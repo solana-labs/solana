@@ -70,7 +70,7 @@ impl Backend for Kvs {
 }
 
 impl Column<Kvs> for cf::Coding {
-    const DESC: &'static str = super::ERASURE_CF;
+    const NAME: &'static str = super::ERASURE_CF;
     type Index = (u64, u64);
 
     fn key(index: (u64, u64)) -> Key {
@@ -83,7 +83,7 @@ impl Column<Kvs> for cf::Coding {
 }
 
 impl Column<Kvs> for cf::Data {
-    const DESC: &'static str = super::DATA_CF;
+    const NAME: &'static str = super::DATA_CF;
     type Index = (u64, u64);
 
     fn key((slot, index): (u64, u64)) -> Key {
@@ -101,7 +101,7 @@ impl Column<Kvs> for cf::Data {
 }
 
 impl Column<Kvs> for cf::DetachedHeads {
-    const DESC: &'static str = super::DETACHED_HEADS_CF;
+    const NAME: &'static str = super::DETACHED_HEADS_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Key {
@@ -120,7 +120,7 @@ impl TypedColumn<Kvs> for cf::DetachedHeads {
 }
 
 impl Column<Kvs> for cf::SlotMeta {
-    const DESC: &'static str = super::META_CF;
+    const NAME: &'static str = super::META_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Key {
