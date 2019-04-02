@@ -6,7 +6,7 @@
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::blockhash_queue::BlockhashQueue;
 use crate::locked_accounts_results::LockedAccountsResults;
-use crate::runtime::{ProcessInstruction, Runtime};
+use crate::message_processor::{MessageProcessor, ProcessInstruction};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
@@ -160,8 +160,8 @@ pub struct Bank {
     /// stream for the slot == self.slot
     is_delta: AtomicBool,
 
-    /// The runtime executation environment
-    runtime: Runtime,
+    /// The Message processor
+    message_processor: MessageProcessor,
 }
 
 impl Default for BlockhashQueue {
@@ -346,7 +346,7 @@ impl Bank {
             genesis_block.epoch_warmup,
         );
 
-        // Add native programs mandatory for the runtime to function
+        // Add native programs mandatory for the MessageProcessor to function
         self.register_native_instruction_processor(
             "solana_system_program",
             &solana_sdk::system_program::id(),
@@ -609,17 +609,17 @@ impl Bank {
 
         let load_elapsed = now.elapsed();
         let now = Instant::now();
-        let executed: Vec<Result<()>> = loaded_accounts
-            .iter_mut()
-            .zip(txs.iter())
-            .map(|(accs, tx)| match accs {
-                Err(e) => Err(e.clone()),
-                Ok((ref mut accounts, ref mut loaders)) => {
-                    self.runtime
-                        .process_message(tx.message(), loaders, accounts, tick_height)
-                }
-            })
-            .collect();
+        let executed: Vec<Result<()>> =
+            loaded_accounts
+                .iter_mut()
+                .zip(txs.iter())
+                .map(|(accs, tx)| match accs {
+                    Err(e) => Err(e.clone()),
+                    Ok((ref mut accounts, ref mut loaders)) => self
+                        .message_processor
+                        .process_message(tx.message(), loaders, accounts, tick_height),
+                })
+                .collect();
 
         let execution_elapsed = now.elapsed();
 
@@ -934,7 +934,7 @@ impl Bank {
         program_id: Pubkey,
         process_instruction: ProcessInstruction,
     ) {
-        self.runtime
+        self.message_processor
             .add_instruction_processor(program_id, process_instruction);
 
         // Register a bogus executable account, which will be loaded and ignored.

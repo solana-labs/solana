@@ -6,8 +6,8 @@ mod blockhash_queue;
 pub mod bloom;
 pub mod loader_utils;
 pub mod locked_accounts_results;
+pub mod message_processor;
 mod native_loader;
-pub mod runtime;
 mod status_cache;
 mod system_instruction_processor;
 

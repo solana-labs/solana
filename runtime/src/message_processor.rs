@@ -10,7 +10,7 @@ use solana_sdk::transaction::TransactionError;
 /// Return true if the slice has any duplicate elements
 pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
     // Note: This is an O(n^2) algorithm, but requires no heap allocations. The benchmark
-    // `bench_has_duplicates` in benches/runtime.rs shows that this implementation is
+    // `bench_has_duplicates` in benches/message_processor.rs shows that this implementation is
     // ~50 times faster than using HashSet for very short slices.
     for i in 1..xs.len() {
         if xs[i..].contains(&xs[i - 1]) {
@@ -85,11 +85,11 @@ fn verify_error(err: InstructionError) -> InstructionError {
 pub type ProcessInstruction =
     fn(&Pubkey, &mut [KeyedAccount], &[u8], u64) -> Result<(), InstructionError>;
 
-pub struct Runtime {
+pub struct MessageProcessor {
     instruction_processors: Vec<(Pubkey, ProcessInstruction)>,
 }
 
-impl Default for Runtime {
+impl Default for MessageProcessor {
     fn default() -> Self {
         let instruction_processors: Vec<(Pubkey, ProcessInstruction)> = vec![(
             system_program::id(),
@@ -102,7 +102,7 @@ impl Default for Runtime {
     }
 }
 
-impl Runtime {
+impl MessageProcessor {
     /// Add a static entrypoint to intercept intructions before the dynamic loader.
     pub fn add_instruction_processor(
         &mut self,
