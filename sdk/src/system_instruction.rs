@@ -32,7 +32,7 @@ pub enum SystemInstruction {
 }
 
 impl SystemInstruction {
-    pub fn new_program_account(
+    pub fn new_account(
         from_id: &Pubkey,
         to_id: &Pubkey,
         lamports: u64,
@@ -55,9 +55,9 @@ impl SystemInstruction {
     }
 
     /// Create and sign a transaction to create a system account
-    pub fn new_account(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction {
+    pub fn new_user_account(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction {
         let program_id = system_program::id();
-        Self::new_program_account(from_id, to_id, lamports, 0, &program_id)
+        Self::new_account(from_id, to_id, lamports, 0, &program_id)
     }
 
     pub fn new_assign(from_id: &Pubkey, program_id: &Pubkey) -> Instruction {

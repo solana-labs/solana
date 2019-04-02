@@ -32,7 +32,7 @@ pub fn transfer(
         to,
         blockhash
     );
-    let transaction = SystemTransaction::new_account(keypair, to, lamports, *blockhash, 0);
+    let transaction = SystemTransaction::new_user_account(keypair, to, lamports, *blockhash, 0);
     thin_client.transfer_signed(&transaction)
 }
 
@@ -76,13 +76,13 @@ fn test_bad_sig() {
 
     let blockhash = client.get_recent_blockhash().unwrap();
 
-    let tx = SystemTransaction::new_account(&alice, &bob_pubkey, 500, blockhash, 0);
+    let tx = SystemTransaction::new_user_account(&alice, &bob_pubkey, 500, blockhash, 0);
 
     let _sig = client.transfer_signed(&tx).unwrap();
 
     let blockhash = client.get_recent_blockhash().unwrap();
 
-    let mut tr2 = SystemTransaction::new_account(&alice, &bob_pubkey, 501, blockhash, 0);
+    let mut tr2 = SystemTransaction::new_user_account(&alice, &bob_pubkey, 501, blockhash, 0);
     let mut instruction2 = deserialize(tr2.data(0)).unwrap();
     if let SystemInstruction::Move { ref mut lamports } = instruction2 {
         *lamports = 502;

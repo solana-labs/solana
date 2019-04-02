@@ -421,7 +421,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
         let slot_entries = create_ticks(genesis_block.ticks_per_slot - 1, genesis_block.hash());
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &mint_keypair,
             &keypair.pubkey(),
             1,
@@ -453,8 +453,13 @@ mod tests {
         for _ in 0..3 {
             // Transfer one token from the mint to a random account
             let keypair = Keypair::new();
-            let tx =
-                SystemTransaction::new_account(&mint_keypair, &keypair.pubkey(), 1, blockhash, 0);
+            let tx = SystemTransaction::new_user_account(
+                &mint_keypair,
+                &keypair.pubkey(),
+                1,
+                blockhash,
+                0,
+            );
             let entry = Entry::new(&last_entry_hash, 1, vec![tx]);
             last_entry_hash = entry.hash;
             entries.push(entry);
@@ -462,7 +467,8 @@ mod tests {
             // Add a second Transaction that will produce a
             // InstructionError<0, ResultWithNegativeLamports> error when processed
             let keypair2 = Keypair::new();
-            let tx = SystemTransaction::new_account(&keypair, &keypair2.pubkey(), 42, blockhash, 0);
+            let tx =
+                SystemTransaction::new_user_account(&keypair, &keypair2.pubkey(), 42, blockhash, 0);
             let entry = Entry::new(&last_entry_hash, 1, vec![tx]);
             last_entry_hash = entry.hash;
             entries.push(entry);
@@ -539,7 +545,7 @@ mod tests {
         let blockhash = bank.last_blockhash();
 
         // ensure bank can process 2 entries that have a common account and no tick is registered
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &mint_keypair,
             &keypair1.pubkey(),
             2,
@@ -547,7 +553,7 @@ mod tests {
             0,
         );
         let entry_1 = next_entry(&blockhash, 1, vec![tx]);
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &mint_keypair,
             &keypair2.pubkey(),
             2,
@@ -577,7 +583,7 @@ mod tests {
         let entry_1_to_mint = next_entry(
             &bank.last_blockhash(),
             1,
-            vec![SystemTransaction::new_account(
+            vec![SystemTransaction::new_user_account(
                 &keypair1,
                 &mint_keypair.pubkey(),
                 1,
@@ -590,14 +596,14 @@ mod tests {
             &entry_1_to_mint.hash,
             1,
             vec![
-                SystemTransaction::new_account(
+                SystemTransaction::new_user_account(
                     &keypair2,
                     &keypair3.pubkey(),
                     2,
                     bank.last_blockhash(),
                     0,
                 ), // should be fine
-                SystemTransaction::new_account(
+                SystemTransaction::new_user_account(
                     &keypair1,
                     &mint_keypair.pubkey(),
                     2,
@@ -636,7 +642,7 @@ mod tests {
             &bank.last_blockhash(),
             1,
             vec![
-                SystemTransaction::new_account(
+                SystemTransaction::new_user_account(
                     &keypair1,
                     &mint_keypair.pubkey(),
                     1,
@@ -657,14 +663,14 @@ mod tests {
             &entry_1_to_mint.hash,
             1,
             vec![
-                SystemTransaction::new_account(
+                SystemTransaction::new_user_account(
                     &keypair2,
                     &keypair3.pubkey(),
                     2,
                     bank.last_blockhash(),
                     0,
                 ), // should be fine
-                SystemTransaction::new_account(
+                SystemTransaction::new_user_account(
                     &keypair1,
                     &mint_keypair.pubkey(),
                     2,
@@ -709,7 +715,7 @@ mod tests {
         let keypair4 = Keypair::new();
 
         //load accounts
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &mint_keypair,
             &keypair1.pubkey(),
             1,
@@ -717,7 +723,7 @@ mod tests {
             0,
         );
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &mint_keypair,
             &keypair2.pubkey(),
             1,
@@ -728,7 +734,7 @@ mod tests {
 
         // ensure bank can process 2 entries that do not have a common account and no tick is registered
         let blockhash = bank.last_blockhash();
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &keypair1,
             &keypair3.pubkey(),
             1,
@@ -736,7 +742,7 @@ mod tests {
             0,
         );
         let entry_1 = next_entry(&blockhash, 1, vec![tx]);
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &keypair2,
             &keypair4.pubkey(),
             1,
@@ -760,7 +766,7 @@ mod tests {
         let keypair4 = Keypair::new();
 
         //load accounts
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &mint_keypair,
             &keypair1.pubkey(),
             1,
@@ -768,7 +774,7 @@ mod tests {
             0,
         );
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &mint_keypair,
             &keypair2.pubkey(),
             1,
@@ -783,10 +789,11 @@ mod tests {
         }
 
         // ensure bank can process 2 entries that do not have a common account and tick is registered
-        let tx = SystemTransaction::new_account(&keypair2, &keypair3.pubkey(), 1, blockhash, 0);
+        let tx =
+            SystemTransaction::new_user_account(&keypair2, &keypair3.pubkey(), 1, blockhash, 0);
         let entry_1 = next_entry(&blockhash, 1, vec![tx]);
         let tick = next_entry(&entry_1.hash, 1, vec![]);
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &keypair1,
             &keypair4.pubkey(),
             1,
@@ -802,7 +809,7 @@ mod tests {
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
 
         // ensure that an error is returned for an empty account (keypair2)
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &keypair2,
             &keypair3.pubkey(),
             1,

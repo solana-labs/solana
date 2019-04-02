@@ -593,22 +593,27 @@ mod tests {
 
             // fund another account so we can send 2 good transactions in a single batch.
             let keypair = Keypair::new();
-            let fund_tx =
-                SystemTransaction::new_account(&mint_keypair, &keypair.pubkey(), 2, start_hash, 0);
+            let fund_tx = SystemTransaction::new_user_account(
+                &mint_keypair,
+                &keypair.pubkey(),
+                2,
+                start_hash,
+                0,
+            );
             bank.process_transaction(&fund_tx).unwrap();
 
             // good tx
             let to = Pubkey::new_rand();
-            let tx = SystemTransaction::new_account(&mint_keypair, &to, 1, start_hash, 0);
+            let tx = SystemTransaction::new_user_account(&mint_keypair, &to, 1, start_hash, 0);
 
             // good tx, but no verify
             let to2 = Pubkey::new_rand();
-            let tx_no_ver = SystemTransaction::new_account(&keypair, &to2, 2, start_hash, 0);
+            let tx_no_ver = SystemTransaction::new_user_account(&keypair, &to2, 2, start_hash, 0);
 
             // bad tx, AccountNotFound
             let keypair = Keypair::new();
             let to3 = Pubkey::new_rand();
-            let tx_anf = SystemTransaction::new_account(&keypair, &to3, 1, start_hash, 0);
+            let tx_anf = SystemTransaction::new_user_account(&keypair, &to3, 1, start_hash, 0);
 
             // send 'em over
             let packets = to_packets(&[tx_no_ver, tx_anf, tx]);
@@ -671,7 +676,7 @@ mod tests {
 
         // Process a batch that includes a transaction that receives two lamports.
         let alice = Keypair::new();
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &mint_keypair,
             &alice.pubkey(),
             2,
@@ -685,7 +690,7 @@ mod tests {
             .unwrap();
 
         // Process a second batch that spends one of those lamports.
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &alice,
             &mint_keypair.pubkey(),
             1,

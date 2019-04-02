@@ -390,7 +390,7 @@ fn process_deploy(
         )
     })?;
 
-    let mut tx = SystemTransaction::new_program_account(
+    let mut tx = SystemTransaction::new_account(
         &config.keypair,
         &program_id.pubkey(),
         blockhash,

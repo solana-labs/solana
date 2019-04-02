@@ -777,7 +777,7 @@ impl Bank {
     /// `n` lamports where `blockhash` is the last Entry ID observed by the client.
     pub fn transfer(&self, n: u64, keypair: &Keypair, to: &Pubkey) -> Result<Signature> {
         let blockhash = self.last_blockhash();
-        let tx = SystemTransaction::new_account(keypair, to, n, blockhash, 0);
+        let tx = SystemTransaction::new_user_account(keypair, to, n, blockhash, 0);
         let signature = tx.signatures[0];
         self.process_transaction(&tx).map(|_| signature)
     }
@@ -1098,7 +1098,7 @@ mod tests {
         let dest = Keypair::new();
 
         // source with 0 program context
-        let tx = SystemTransaction::new_account(
+        let tx = SystemTransaction::new_user_account(
             &mint_keypair,
             &dest.pubkey(),
             2,
@@ -1267,14 +1267,14 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
-        let tx0 = SystemTransaction::new_account(
+        let tx0 = SystemTransaction::new_user_account(
             &mint_keypair,
             &keypair.pubkey(),
             2,
             genesis_block.hash(),
             0,
         );
-        let tx1 = SystemTransaction::new_account(
+        let tx1 = SystemTransaction::new_user_account(
             &keypair,
             &mint_keypair.pubkey(),
             1,
@@ -1307,7 +1307,7 @@ mod tests {
         let alice = Keypair::new();
         let bob = Keypair::new();
 
-        let tx1 = SystemTransaction::new_account(
+        let tx1 = SystemTransaction::new_user_account(
             &mint_keypair,
             &alice.pubkey(),
             1,

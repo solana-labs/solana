@@ -318,7 +318,7 @@ pub fn make_active_set_entries(
     num_ending_ticks: u64,
 ) -> (Vec<Entry>, Keypair) {
     // 1) Assume the active_keypair node has no lamports staked
-    let transfer_tx = SystemTransaction::new_account(
+    let transfer_tx = SystemTransaction::new_user_account(
         &lamport_source,
         &active_keypair.pubkey(),
         stake,

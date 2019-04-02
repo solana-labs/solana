@@ -45,8 +45,7 @@ impl VoteInstruction {
 
     pub fn new_account(from_id: &Pubkey, staker_id: &Pubkey, lamports: u64) -> Vec<Instruction> {
         let space = VoteState::max_size() as u64;
-        let create_ix =
-            SystemInstruction::new_program_account(&from_id, staker_id, lamports, space, &id());
+        let create_ix = SystemInstruction::new_account(&from_id, staker_id, lamports, space, &id());
         let init_ix = VoteInstruction::new_initialize_account(staker_id);
         vec![create_ix, init_ix]
     }
