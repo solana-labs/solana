@@ -179,6 +179,8 @@ impl Blocktree {
     }
 
     pub fn destroy(ledger_path: &str) -> Result<()> {
+        // Database::destroy() fails is the path doesn't exist
+        fs::create_dir_all(ledger_path)?;
         let path = std::path::Path::new(ledger_path).join(BLOCKTREE_DIRECTORY);
         Database::destroy(&path)
     }

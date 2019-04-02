@@ -69,9 +69,7 @@ impl Backend for Rocks {
     }
 
     fn destroy(path: &Path) -> Result<()> {
-        if path.exists() {
-            DB::destroy(&Options::default(), path)?;
-        }
+        DB::destroy(&Options::default(), path)?;
 
         Ok(())
     }
