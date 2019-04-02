@@ -11,6 +11,8 @@ clientNodeCount=0
 additionalFullNodeCount=10
 publicNetwork=false
 skipSetup=false
+skipStart=false
+externalNode=false
 tarChannelOrTag=edge
 delete=false
 enableGpu=false
@@ -65,7 +67,7 @@ zone=$3
 [[ -n $zone ]] || usage "Zone not specified"
 shift 3
 
-while getopts "h?p:Pn:c:t:gG:a:Dbd:ru" opt; do
+while getopts "h?p:Pn:c:t:gG:a:Dbd:rusx" opt; do
   case $opt in
   h | \?)
     usage
@@ -111,6 +113,12 @@ while getopts "h?p:Pn:c:t:gG:a:Dbd:ru" opt; do
   r)
     skipSetup=true
     ;;
+  s)
+    skipStart=true
+    ;;
+  x)
+    externalNode=true
+    ;;
   u)
     blockstreamer=true
     ;;
@@ -142,7 +150,7 @@ set -x
 
 if ! $skipSetup; then
   echo "--- $cloudProvider.sh delete"
-  time net/"$cloudProvider".sh delete -z "$zone" -p "$netName"
+  time net/"$cloudProvider".sh delete -z "$zone" -p "$netName" ${externalNode:+-x}
   if $delete; then
     exit 0
   fi
@@ -178,6 +186,10 @@ if ! $skipSetup; then
 
   if $publicNetwork; then
     create_args+=(-P)
+  fi
+
+  if $externalNode; then
+    create_args+=(-x)
   fi
 
   time net/"$cloudProvider".sh create "${create_args[@]}"
@@ -218,19 +230,22 @@ if $skipSetup; then
 fi
 
 ok=true
-(
-  if $skipSetup; then
-    # TODO: Enable rolling updates
-    #op=update
-    op=restart
-  else
-    op=start
-  fi
+if ! $skipStart; then
+  (
+    if $skipSetup; then
+      # TODO: Enable rolling updates
+      #op=update
+      op=restart
+    else
+      op=start
+    fi
 
-  # shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
-  time net/net.sh $op -t "$tarChannelOrTag" \
-    $maybeSkipSetup $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
-) || ok=false
+    # shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
+    time net/net.sh $op -t "$tarChannelOrTag" \
+      $maybeSkipSetup $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
+  ) || ok=false
 
-net/net.sh logs
+  net/net.sh logs
+fi
+
 $ok
