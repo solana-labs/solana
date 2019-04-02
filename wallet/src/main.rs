@@ -58,17 +58,17 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
 
         path.to_str().unwrap()
     };
-    let id = read_keypair(id_path).or_else(|err| {
+    let keypair = read_keypair(id_path).or_else(|err| {
         Err(WalletError::BadParameter(format!(
             "{}: Unable to open keypair file: {}",
             err, id_path
         )))
     })?;
 
-    let command = parse_command(&id.pubkey(), &matches)?;
+    let command = parse_command(&keypair.pubkey(), &matches)?;
 
     Ok(WalletConfig {
-        id,
+        keypair,
         command,
         drone_host,
         drone_port,
