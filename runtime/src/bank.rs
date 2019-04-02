@@ -5,6 +5,7 @@
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::blockhash_queue::BlockhashQueue;
+use crate::locked_accounts_results::LockedAccountsResults;
 use crate::runtime::{ProcessInstruction, Runtime};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
@@ -467,18 +468,28 @@ impl Bank {
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
     }
 
-    pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
+    pub fn lock_accounts<'a, 'b>(
+        &'a self,
+        txs: &'b [Transaction],
+    ) -> LockedAccountsResults<'a, 'b> {
         if self.is_frozen() {
             warn!("=========== FIXME: lock_accounts() working on a frozen bank! ================");
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
-        self.accounts.lock_accounts(self.accounts_id, txs)
+        let results = self.accounts.lock_accounts(self.accounts_id, txs);
+        LockedAccountsResults::new(results, &self, txs)
     }
 
-    pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
-        self.accounts
-            .unlock_accounts(self.accounts_id, txs, results)
+    pub fn unlock_accounts(&self, locked_accounts_results: &mut LockedAccountsResults) {
+        if locked_accounts_results.needs_unlock {
+            locked_accounts_results.needs_unlock = false;
+            self.accounts.unlock_accounts(
+                self.accounts_id,
+                locked_accounts_results.transactions(),
+                locked_accounts_results.locked_accounts_results(),
+            )
+        }
     }
 
     fn load_accounts(
@@ -498,17 +509,17 @@ impl Bank {
     fn check_refs(
         &self,
         txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
+        lock_results: &LockedAccountsResults,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
         txs.iter()
-            .zip(lock_results.into_iter())
+            .zip(lock_results.locked_accounts_results())
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok() && !tx.verify_refs() {
                     error_counters.invalid_account_index += 1;
                     Err(TransactionError::InvalidAccountIndex)
                 } else {
-                    lock_res
+                    lock_res.clone()
                 }
             })
             .collect()
@@ -575,7 +586,7 @@ impl Bank {
     pub fn load_and_execute_transactions(
         &self,
         txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
+        lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> (
         Vec<Result<(InstructionAccounts, InstructionLoaders)>>,
@@ -741,7 +752,7 @@ impl Bank {
     pub fn load_execute_and_commit_transactions(
         &self,
         txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
+        lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> Vec<Result<()>> {
         let (loaded_accounts, executed) =
@@ -753,10 +764,7 @@ impl Bank {
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let lock_results = self.lock_accounts(txs);
-        let results =
-            self.load_execute_and_commit_transactions(txs, lock_results, MAX_RECENT_BLOCKHASHES);
-        self.unlock_accounts(txs, &results);
-        results
+        self.load_execute_and_commit_transactions(txs, &lock_results, MAX_RECENT_BLOCKHASHES)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -1312,7 +1320,7 @@ mod tests {
         let lock_result = bank.lock_accounts(&pay_alice);
         let results_alice = bank.load_execute_and_commit_transactions(
             &pay_alice,
-            lock_result,
+            &lock_result,
             MAX_RECENT_BLOCKHASHES,
         );
         assert_eq!(results_alice[0], Ok(()));
@@ -1329,7 +1337,7 @@ mod tests {
             Err(TransactionError::AccountInUse)
         );
 
-        bank.unlock_accounts(&pay_alice, &results_alice);
+        drop(lock_result);
 
         assert!(bank.transfer(2, &mint_keypair, &bob.pubkey()).is_ok());
     }

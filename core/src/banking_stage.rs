@@ -17,6 +17,7 @@ use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{self, Bank};
+use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Transaction, TransactionError};
@@ -253,18 +254,15 @@ impl BankingStage {
         bank: &Bank,
         txs: &[Transaction],
         poh: &Arc<Mutex<PohRecorder>>,
-        lock_results: &[bank::Result<()>],
+        lock_results: &LockedAccountsResults,
     ) -> Result<()> {
         let now = Instant::now();
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
         // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
-        let (loaded_accounts, results) = bank.load_and_execute_transactions(
-            txs,
-            lock_results.to_vec(),
-            MAX_RECENT_BLOCKHASHES / 2,
-        );
+        let (loaded_accounts, results) =
+            bank.load_and_execute_transactions(txs, lock_results, MAX_RECENT_BLOCKHASHES / 2);
         let load_execute_time = now.elapsed();
 
         let record_time = {
@@ -306,7 +304,7 @@ impl BankingStage {
 
         let now = Instant::now();
         // Once the accounts are new transactions can enter the pipeline to process them
-        bank.unlock_accounts(&txs, &lock_results);
+        drop(lock_results);
         let unlock_time = now.elapsed();
 
         debug!(

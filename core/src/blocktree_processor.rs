@@ -5,6 +5,7 @@ use crate::leader_schedule_utils;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{Bank, Result};
+use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::timing::MAX_RECENT_BLOCKHASHES;
@@ -19,17 +20,16 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
-fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
+fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults)]) -> Result<()> {
     inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
     let results: Vec<Result<()>> = entries
         .into_par_iter()
-        .map(|(e, lock_results)| {
+        .map(|(e, locked_accounts)| {
             let results = bank.load_execute_and_commit_transactions(
                 &e.transactions,
-                lock_results.to_vec(),
+                locked_accounts,
                 MAX_RECENT_BLOCKHASHES,
             );
-            bank.unlock_accounts(&e.transactions, &results);
             first_err(&results)
         })
         .collect();
@@ -57,11 +57,12 @@ pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
         let lock_results = bank.lock_accounts(&entry.transactions);
         // if any of the locks error out
         // execute the current group
-        if first_err(&lock_results).is_err() {
+        if first_err(lock_results.locked_accounts_results()).is_err() {
             par_execute_entries(bank, &mt_group)?;
+            // Drop all the locks on accounts by clearing the LockedAccountsFinalizer's in the
+            // mt_group
             mt_group = vec![];
-            //reset the lock and push the entry
-            bank.unlock_accounts(&entry.transactions, &lock_results);
+            drop(lock_results);
             let lock_results = bank.lock_accounts(&entry.transactions);
             mt_group.push((entry, lock_results));
         } else {
@@ -614,6 +615,88 @@ mod tests {
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair2.pubkey()), 2);
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 2);
+    }
+
+    #[test]
+    fn test_process_entries_2_txes_collision_and_error() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
+        let bank = Bank::new(&genesis_block);
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+        let keypair4 = Keypair::new();
+
+        // fund: put 4 in each of 1 and 2
+        assert_matches!(bank.transfer(4, &mint_keypair, &keypair1.pubkey()), Ok(_));
+        assert_matches!(bank.transfer(4, &mint_keypair, &keypair2.pubkey()), Ok(_));
+        assert_matches!(bank.transfer(4, &mint_keypair, &keypair4.pubkey()), Ok(_));
+
+        // construct an Entry whose 2nd transaction would cause a lock conflict with previous entry
+        let entry_1_to_mint = next_entry(
+            &bank.last_blockhash(),
+            1,
+            vec![
+                SystemTransaction::new_account(
+                    &keypair1,
+                    &mint_keypair.pubkey(),
+                    1,
+                    bank.last_blockhash(),
+                    0,
+                ),
+                SystemTransaction::new_move(
+                    &keypair4,
+                    &keypair4.pubkey(),
+                    1,
+                    Hash::default(), // Should cause a transaction failure with BlockhashNotFound
+                    0,
+                ),
+            ],
+        );
+
+        let entry_2_to_3_mint_to_1 = next_entry(
+            &entry_1_to_mint.hash,
+            1,
+            vec![
+                SystemTransaction::new_account(
+                    &keypair2,
+                    &keypair3.pubkey(),
+                    2,
+                    bank.last_blockhash(),
+                    0,
+                ), // should be fine
+                SystemTransaction::new_account(
+                    &keypair1,
+                    &mint_keypair.pubkey(),
+                    2,
+                    bank.last_blockhash(),
+                    0,
+                ), // will collide
+            ],
+        );
+
+        assert!(process_entries(
+            &bank,
+            &[entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()]
+        )
+        .is_err());
+
+        // First transaction in first entry succeeded, so keypair1 lost 1 lamport
+        assert_eq!(bank.get_balance(&keypair1.pubkey()), 3);
+        assert_eq!(bank.get_balance(&keypair2.pubkey()), 4);
+
+        // Check all accounts are unlocked
+        let txs1 = &entry_1_to_mint.transactions[..];
+        let txs2 = &entry_2_to_3_mint_to_1.transactions[..];
+        let locked_accounts1 = bank.lock_accounts(txs1);
+        for result in locked_accounts1.locked_accounts_results() {
+            assert!(result.is_ok());
+        }
+        // txs1 and txs2 have accounts that conflict, so we must drop txs1 first
+        drop(locked_accounts1);
+        let locked_accounts2 = bank.lock_accounts(txs2);
+        for result in locked_accounts2.locked_accounts_results() {
+            assert!(result.is_ok());
+        }
     }
 
     #[test]

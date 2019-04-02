@@ -5,6 +5,7 @@ pub mod bank_client;
 mod blockhash_queue;
 pub mod bloom;
 pub mod loader_utils;
+pub mod locked_accounts_results;
 mod native_loader;
 pub mod runtime;
 mod status_cache;
