@@ -44,7 +44,6 @@ macro_rules! db_imports {
         };
 
         pub use $mod::{$db, ErasureCf, MetaCf, DataCf, DetachedHeadsCf};
-        pub use $mod::{$db, ErasureCf, MetaCf, DataCf};
         #[cfg(feature = "erasure")]
         pub use $mod::{ErasureMetaCf};
 
