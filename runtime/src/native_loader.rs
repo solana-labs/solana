@@ -7,8 +7,8 @@ use libloading::os::windows::*;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_processor_utils;
 use solana_sdk::loader_instruction::LoaderInstruction;
-use solana_sdk::native_program;
 use solana_sdk::pubkey::Pubkey;
 use std::env;
 use std::path::PathBuf;
@@ -69,14 +69,14 @@ pub fn entrypoint(
         // TODO linux tls bug can cause crash on dlclose(), workaround by never unloading
         match Library::open(Some(&path), libc::RTLD_NODELETE | libc::RTLD_NOW) {
             Ok(library) => unsafe {
-                let entrypoint: Symbol<native_program::Entrypoint> =
-                    match library.get(native_program::ENTRYPOINT.as_bytes()) {
+                let entrypoint: Symbol<instruction_processor_utils::Entrypoint> =
+                    match library.get(instruction_processor_utils::ENTRYPOINT.as_bytes()) {
                         Ok(s) => s,
                         Err(e) => {
                             warn!(
                                 "{:?}: Unable to find {:?} in program",
                                 e,
-                                native_program::ENTRYPOINT
+                                instruction_processor_utils::ENTRYPOINT
                             );
                             return Err(InstructionError::GenericError);
                         }

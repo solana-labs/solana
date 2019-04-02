@@ -347,19 +347,25 @@ impl Bank {
         );
 
         // Add native programs mandatory for the runtime to function
-        self.add_native_program("solana_system_program", &solana_sdk::system_program::id());
-        self.add_native_program("solana_bpf_loader", &solana_sdk::bpf_loader::id());
-        self.add_native_program("solana_vote_program", &solana_vote_api::id());
+        self.register_native_instruction_processor(
+            "solana_system_program",
+            &solana_sdk::system_program::id(),
+        );
+        self.register_native_instruction_processor(
+            "solana_bpf_loader",
+            &solana_sdk::bpf_loader::id(),
+        );
+        self.register_native_instruction_processor("solana_vote_program", &solana_vote_api::id());
 
         // Add additional native programs specified in the genesis block
         for (name, program_id) in &genesis_block.native_programs {
-            self.add_native_program(name, program_id);
+            self.register_native_instruction_processor(name, program_id);
         }
     }
 
-    pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
+    pub fn register_native_instruction_processor(&self, name: &str, program_id: &Pubkey) {
         debug!("Adding native program {} under {:?}", name, program_id);
-        let account = native_loader::create_program_account(name);
+        let account = native_loader::create_loadable_account(name);
         self.accounts
             .store_slow(self.accounts_id, program_id, &account);
     }
@@ -931,15 +937,8 @@ impl Bank {
         self.runtime
             .add_instruction_processor(program_id, process_instruction);
 
-        // Add a bogus executable account to load.
-        let bogus_account = Account {
-            lamports: 1,
-            data: vec![],
-            owner: native_loader::id(),
-            executable: true,
-        };
-        self.accounts
-            .store_slow(self.accounts_id, &program_id, &bogus_account);
+        // Register a bogus executable account, which will be loaded and ignored.
+        self.register_native_instruction_processor("", &program_id);
     }
 
     pub fn is_in_subtree_of(&self, parent: u64) -> bool {
