@@ -14,7 +14,7 @@ pub fn check_id(program_id: &Pubkey) -> bool {
 }
 
 /// Create an executable account with the given shared object name.
-pub fn create_program_account(name: &str) -> Account {
+pub fn create_loadable_account(name: &str) -> Account {
     Account {
         lamports: 1,
         owner: id(),
