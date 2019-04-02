@@ -301,7 +301,7 @@ impl Bank {
         let parents = self.parents();
         *self.parent.write().unwrap() = None;
 
-        self.accounts().squash(self.accounts_id);
+        // self.accounts().squash(self.accounts_id);
 
         let parent_caches: Vec<_> = parents
             .iter()
