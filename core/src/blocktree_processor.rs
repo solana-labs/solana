@@ -618,6 +618,72 @@ mod tests {
     }
 
     #[test]
+    fn test_process_entries_2_txes_collision_and_error() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
+        let bank = Bank::new(&genesis_block);
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+
+        // fund: put 4 in each of 1 and 2
+        assert_matches!(bank.transfer(4, &mint_keypair, &keypair1.pubkey()), Ok(_));
+        assert_matches!(bank.transfer(4, &mint_keypair, &keypair2.pubkey()), Ok(_));
+
+        // construct an Entry whose 2nd transaction would cause a lock conflict with previous entry
+        let entry_1_to_mint = next_entry(
+            &bank.last_blockhash(),
+            1,
+            vec![SystemTransaction::new_account(
+                &keypair1,
+                &mint_keypair.pubkey(),
+                1001, // Should cause a transaction failure
+                bank.last_blockhash(),
+                0,
+            )],
+        );
+
+        let entry_2_to_3_mint_to_1 = next_entry(
+            &entry_1_to_mint.hash,
+            1,
+            vec![
+                SystemTransaction::new_account(
+                    &keypair2,
+                    &keypair3.pubkey(),
+                    2,
+                    bank.last_blockhash(),
+                    0,
+                ), // should be fine
+                SystemTransaction::new_account(
+                    &keypair1,
+                    &mint_keypair.pubkey(),
+                    2,
+                    bank.last_blockhash(),
+                    0,
+                ), // will collide
+            ],
+        );
+
+        assert!(process_entries(
+            &bank,
+            &[entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()]
+        )
+        .is_err());
+
+        assert_eq!(bank.get_balance(&keypair1.pubkey()), 4);
+        assert_eq!(bank.get_balance(&keypair2.pubkey()), 4);
+
+        // Check all accounts are unlocked
+        let txs: Vec<_> = vec![entry_1_to_mint, entry_2_to_3_mint_to_1]
+            .into_iter()
+            .flat_map(|e| e.transactions)
+            .collect();
+        let locked_accounts = bank.lock_accounts(&txs[..]);
+        for result in locked_accounts.locked_accounts_results() {
+            assert!(result.is_ok());
+        }
+    }
+
+    #[test]
     fn test_process_entries_2_entries_par() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
         let bank = Bank::new(&genesis_block);
