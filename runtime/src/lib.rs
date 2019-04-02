@@ -4,6 +4,7 @@ pub mod bank;
 pub mod bloom;
 mod hash_queue;
 pub mod loader_utils;
+pub mod locked_accounts_results;
 mod native_loader;
 pub mod runtime;
 mod status_cache;
