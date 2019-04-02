@@ -24,7 +24,7 @@ pub struct GenesisBlock {
     pub slots_per_epoch: u64,
     pub stakers_slot_offset: u64,
     pub epoch_warmup: bool,
-    pub native_programs: Vec<(String, Pubkey)>,
+    pub native_instruction_processors: Vec<(String, Pubkey)>,
 }
 
 impl GenesisBlock {
@@ -54,7 +54,7 @@ impl GenesisBlock {
                 slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
                 stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
                 epoch_warmup: true,
-                native_programs: vec![],
+                native_instruction_processors: vec![],
             },
             mint_keypair,
         )

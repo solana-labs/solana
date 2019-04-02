@@ -358,7 +358,7 @@ impl Bank {
         self.register_native_instruction_processor("solana_vote_program", &solana_vote_api::id());
 
         // Add additional native programs specified in the genesis block
-        for (name, program_id) in &genesis_block.native_programs {
+        for (name, program_id) in &genesis_block.native_instruction_processors {
             self.register_native_instruction_processor(name, program_id);
         }
     }

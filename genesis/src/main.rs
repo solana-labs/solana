@@ -71,19 +71,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     );
     genesis_block.mint_id = mint_keypair.pubkey();
     genesis_block.bootstrap_leader_vote_account_id = bootstrap_leader_vote_account_keypair.pubkey();
-    genesis_block.native_programs.extend_from_slice(&[
-        ("solana_budget_program".to_string(), solana_budget_api::id()),
-        (
-            "solana_storage_program".to_string(),
-            solana_storage_api::id(),
-        ),
-        ("solana_token_program".to_string(), solana_token_api::id()),
-        ("solana_config_program".to_string(), solana_config_api::id()),
-        (
-            "solana_exchange_program".to_string(),
-            solana_exchange_api::id(),
-        ),
-    ]);
+    genesis_block
+        .native_instruction_processors
+        .extend_from_slice(&[
+            ("solana_budget_program".to_string(), solana_budget_api::id()),
+            (
+                "solana_storage_program".to_string(),
+                solana_storage_api::id(),
+            ),
+            ("solana_token_program".to_string(), solana_token_api::id()),
+            ("solana_config_program".to_string(), solana_config_api::id()),
+            (
+                "solana_exchange_program".to_string(),
+                solana_exchange_api::id(),
+            ),
+        ]);
 
     create_new_ledger(ledger_path, &genesis_block)?;
     Ok(())
