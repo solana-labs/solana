@@ -481,9 +481,15 @@ impl Bank {
         LockedAccountsResults::new(results, &self, txs)
     }
 
-    pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
-        self.accounts
-            .unlock_accounts(self.accounts_id, txs, results)
+    pub fn unlock_accounts(&self, locked_accounts_results: &mut LockedAccountsResults) {
+        if locked_accounts_results.needs_unlock {
+            locked_accounts_results.needs_unlock = false;
+            self.accounts.unlock_accounts(
+                self.accounts_id,
+                locked_accounts_results.transactions(),
+                locked_accounts_results.locked_accounts_results(),
+            )
+        }
     }
 
     fn load_accounts(
@@ -758,10 +764,7 @@ impl Bank {
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let lock_results = self.lock_accounts(txs);
-        let results =
-            self.load_execute_and_commit_transactions(txs, &lock_results, MAX_RECENT_BLOCKHASHES);
-        self.unlock_accounts(txs, &results);
-        results
+        self.load_execute_and_commit_transactions(txs, &lock_results, MAX_RECENT_BLOCKHASHES)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -1334,7 +1337,7 @@ mod tests {
             Err(TransactionError::AccountInUse)
         );
 
-        bank.unlock_accounts(&pay_alice, &results_alice);
+        drop(lock_result);
 
         assert!(bank.transfer(2, &mint_keypair, &bob.pubkey()).is_ok());
     }
