@@ -216,7 +216,7 @@ start() {
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh beta-testnet-solana-com gce us-west1-a \
-          -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -u -P \
+          -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -P \
           ${maybeReuseLedger:+-r} \
           ${maybeDelete:+-D}
     )
