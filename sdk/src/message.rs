@@ -83,7 +83,7 @@ pub struct Message {
 
     /// All the program id keys used to execute this transaction's instructions
     #[serde(with = "short_vec")]
-    pub program_ids: Vec<Pubkey>,
+    program_ids: Vec<Pubkey>,
 
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
@@ -123,9 +123,8 @@ impl Message {
         )
     }
 
-    pub fn program_id(&self, instruction_index: usize) -> &Pubkey {
-        let program_ids_index = self.instructions[instruction_index].program_ids_index;
-        &self.program_ids[program_ids_index as usize]
+    pub fn program_ids(&self) -> &[Pubkey] {
+        &self.program_ids
     }
 }
 

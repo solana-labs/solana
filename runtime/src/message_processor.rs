@@ -1,7 +1,7 @@
 use crate::native_loader;
 use crate::system_instruction_processor;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
-use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
@@ -118,15 +118,15 @@ impl MessageProcessor {
     fn process_instruction(
         &self,
         message: &Message,
-        instruction_index: usize,
+        instruction: &CompiledInstruction,
         executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
         tick_height: u64,
     ) -> Result<(), InstructionError> {
-        let program_id = message.program_id(instruction_index);
+        let program_id = instruction.program_id(message.program_ids());
 
         let mut keyed_accounts = create_keyed_accounts(executable_accounts);
-        let mut keyed_accounts2: Vec<_> = message.instructions[instruction_index]
+        let mut keyed_accounts2: Vec<_> = instruction
             .accounts
             .iter()
             .map(|&index| {
@@ -144,7 +144,7 @@ impl MessageProcessor {
                 return process_instruction(
                     &program_id,
                     &mut keyed_accounts[1..],
-                    &message.instructions[instruction_index].data,
+                    &instruction.data,
                     tick_height,
                 );
             }
@@ -153,7 +153,7 @@ impl MessageProcessor {
         native_loader::entrypoint(
             &program_id,
             &mut keyed_accounts,
-            &message.instructions[instruction_index].data,
+            &instruction.data,
             tick_height,
         )
     }
@@ -165,12 +165,12 @@ impl MessageProcessor {
     fn execute_instruction(
         &self,
         message: &Message,
-        instruction_index: usize,
+        instruction: &CompiledInstruction,
         executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
         tick_height: u64,
     ) -> Result<(), InstructionError> {
-        let program_id = message.program_id(instruction_index);
+        let program_id = instruction.program_id(message.program_ids());
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard-coded programs not to clobber or allocate
         let pre_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
@@ -181,7 +181,7 @@ impl MessageProcessor {
 
         self.process_instruction(
             message,
-            instruction_index,
+            instruction,
             executable_accounts,
             program_accounts,
             tick_height,
@@ -224,7 +224,7 @@ impl MessageProcessor {
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
             self.execute_instruction(
                 message,
-                instruction_index,
+                instruction,
                 executable_accounts,
                 &mut program_accounts,
                 tick_height,
