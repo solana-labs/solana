@@ -9,7 +9,7 @@ pub mod locked_accounts_results;
 mod native_loader;
 pub mod runtime;
 mod status_cache;
-mod system_program;
+mod system_instruction_processor;
 
 #[macro_use]
 extern crate solana_metrics;
