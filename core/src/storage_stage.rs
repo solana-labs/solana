@@ -279,7 +279,7 @@ impl StorageStage {
             if let Some(account) = account_to_create {
                 if client.get_account_data(&account).is_err() {
                     // TODO the account space needs to be well defined somewhere
-                    let tx = SystemTransaction::new_program_account(
+                    let tx = SystemTransaction::new_account(
                         keypair,
                         &storage_keypair.pubkey(),
                         blockhash,

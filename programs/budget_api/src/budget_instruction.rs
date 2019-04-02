@@ -51,7 +51,7 @@ impl BudgetInstruction {
         }
         let space = serialized_size(&BudgetState::new(expr.clone())).unwrap();
         vec![
-            SystemInstruction::new_program_account(&from, contract, lamports, space, &id()),
+            SystemInstruction::new_account(&from, contract, lamports, space, &id()),
             BudgetInstruction::new_initialize_account(contract, expr),
         ]
     }

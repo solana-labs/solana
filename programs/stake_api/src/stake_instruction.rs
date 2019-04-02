@@ -24,7 +24,7 @@ pub enum StakeInstruction {
 
 impl StakeInstruction {
     pub fn new_account(from_id: &Pubkey, staker_id: &Pubkey, lamports: u64) -> Vec<Instruction> {
-        vec![SystemInstruction::new_program_account(
+        vec![SystemInstruction::new_account(
             from_id,
             staker_id,
             lamports,

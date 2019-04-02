@@ -434,7 +434,7 @@ impl Replicator {
         {
             let blockhash = client.get_recent_blockhash().expect("blockhash");
             //TODO the account space needs to be well defined somewhere
-            let tx = SystemTransaction::new_program_account(
+            let tx = SystemTransaction::new_account(
                 keypair,
                 &storage_keypair.pubkey(),
                 blockhash,

@@ -211,7 +211,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let blockhash = bank.last_blockhash();
-        let tx = SystemTransaction::new_program_account(
+        let tx = SystemTransaction::new_account(
             &mint_keypair,
             &alice.pubkey(),
             blockhash,
@@ -257,7 +257,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let blockhash = bank.last_blockhash();
-        let tx = SystemTransaction::new_program_account(
+        let tx = SystemTransaction::new_account(
             &mint_keypair,
             &alice.pubkey(),
             blockhash,

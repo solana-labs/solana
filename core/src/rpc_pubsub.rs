@@ -354,7 +354,8 @@ mod tests {
         let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
         rpc.account_subscribe(session, subscriber, contract_state.pubkey().to_string());
 
-        let tx = SystemTransaction::new_account(&alice, &contract_funds.pubkey(), 51, blockhash, 0);
+        let tx =
+            SystemTransaction::new_user_account(&alice, &contract_funds.pubkey(), 51, blockhash, 0);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
 
         let ixs = BudgetInstruction::new_when_signed(
@@ -390,7 +391,7 @@ mod tests {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
 
-        let tx = SystemTransaction::new_account(&alice, &witness.pubkey(), 1, blockhash, 0);
+        let tx = SystemTransaction::new_user_account(&alice, &witness.pubkey(), 1, blockhash, 0);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
         let ix = BudgetInstruction::new_apply_signature(

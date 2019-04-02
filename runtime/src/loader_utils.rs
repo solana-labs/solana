@@ -15,7 +15,7 @@ pub fn load_program(
     let program_keypair = Keypair::new();
     let program_pubkey = program_keypair.pubkey();
 
-    let instruction = SystemInstruction::new_program_account(
+    let instruction = SystemInstruction::new_account(
         &from_keypair.pubkey(),
         &program_pubkey,
         1,

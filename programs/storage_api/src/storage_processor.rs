@@ -386,8 +386,7 @@ mod tests {
             .transfer(10, &alice_keypair, &jack_pubkey)
             .unwrap();
 
-        let ix =
-            SystemInstruction::new_program_account(&alice_pubkey, &bob_pubkey, 1, 4 * 1024, &id());
+        let ix = SystemInstruction::new_account(&alice_pubkey, &bob_pubkey, 1, 4 * 1024, &id());
 
         bank_client.process_instruction(&alice_keypair, ix).unwrap();
 

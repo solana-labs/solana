@@ -494,8 +494,8 @@ mod tests {
 
         // First, verify entries
         let keypair = Keypair::new();
-        let tx0 = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 0, zero, 0);
-        let tx1 = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 1, zero, 0);
+        let tx0 = SystemTransaction::new_user_account(&keypair, &keypair.pubkey(), 0, zero, 0);
+        let tx1 = SystemTransaction::new_user_account(&keypair, &keypair.pubkey(), 1, zero, 0);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
@@ -545,7 +545,7 @@ mod tests {
     fn test_next_entry_panic() {
         let zero = Hash::default();
         let keypair = Keypair::new();
-        let tx = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 0, zero, 0);
+        let tx = SystemTransaction::new_user_account(&keypair, &keypair.pubkey(), 0, zero, 0);
         next_entry(&zero, 0, vec![tx]);
     }
 
@@ -553,7 +553,7 @@ mod tests {
     fn test_serialized_size() {
         let zero = Hash::default();
         let keypair = Keypair::new();
-        let tx = SystemTransaction::new_account(&keypair, &keypair.pubkey(), 0, zero, 0);
+        let tx = SystemTransaction::new_user_account(&keypair, &keypair.pubkey(), 0, zero, 0);
         let entry = next_entry(&zero, 1, vec![tx.clone()]);
         assert_eq!(
             Entry::serialized_size(&[tx]),

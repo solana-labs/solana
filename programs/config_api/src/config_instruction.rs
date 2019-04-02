@@ -13,7 +13,7 @@ impl ConfigInstruction {
         config_account_pubkey: &Pubkey,
         lamports: u64,
     ) -> Instruction {
-        SystemInstruction::new_program_account(
+        SystemInstruction::new_account(
             from_account_pubkey,
             config_account_pubkey,
             lamports,

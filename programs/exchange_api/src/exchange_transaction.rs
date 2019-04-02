@@ -19,7 +19,7 @@ impl ExchangeTransaction {
     ) -> Transaction {
         let owner_id = &owner.pubkey();
         let space = mem::size_of::<ExchangeState>() as u64;
-        let create_ix = SystemInstruction::new_program_account(owner_id, new, 1, space, &id());
+        let create_ix = SystemInstruction::new_account(owner_id, new, 1, space, &id());
         let request_ix = ExchangeInstruction::new_account_request(owner_id, new);
         Transaction::new_signed_instructions(
             &[owner],
@@ -58,7 +58,7 @@ impl ExchangeTransaction {
     ) -> Transaction {
         let owner_id = &owner.pubkey();
         let space = mem::size_of::<ExchangeState>() as u64;
-        let create_ix = SystemInstruction::new_program_account(owner_id, trade, 1, space, &id());
+        let create_ix = SystemInstruction::new_account(owner_id, trade, 1, space, &id());
         let request_ix = ExchangeInstruction::new_trade_request(
             owner_id,
             trade,
@@ -101,7 +101,7 @@ impl ExchangeTransaction {
     ) -> Transaction {
         let owner_id = &owner.pubkey();
         let space = mem::size_of::<ExchangeState>() as u64;
-        let create_ix = SystemInstruction::new_program_account(owner_id, swap, 1, space, &id());
+        let create_ix = SystemInstruction::new_account(owner_id, swap, 1, space, &id());
         let request_ix = ExchangeInstruction::new_swap_request(
             owner_id,
             swap,

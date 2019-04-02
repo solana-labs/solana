@@ -10,7 +10,7 @@ pub fn test_tx() -> Transaction {
     let keypair1 = Keypair::new();
     let pubkey1 = keypair1.pubkey();
     let zero = Hash::default();
-    SystemTransaction::new_account(&keypair1, &pubkey1, 42, zero, 0)
+    SystemTransaction::new_user_account(&keypair1, &pubkey1, 42, zero, 0)
 }
 
 pub fn test_multisig_tx() -> Transaction {

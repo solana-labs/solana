@@ -11,7 +11,7 @@ pub struct SystemTransaction {}
 
 impl SystemTransaction {
     /// Create and sign new SystemInstruction::CreateAccount transaction
-    pub fn new_program_account(
+    pub fn new_account(
         from_keypair: &Keypair,
         to: &Pubkey,
         recent_blockhash: Hash,
@@ -22,13 +22,13 @@ impl SystemTransaction {
     ) -> Transaction {
         let from_pubkey = from_keypair.pubkey();
         let create_instruction =
-            SystemInstruction::new_program_account(&from_pubkey, to, lamports, space, program_id);
+            SystemInstruction::new_account(&from_pubkey, to, lamports, space, program_id);
         let instructions = vec![create_instruction];
         Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
     }
 
     /// Create and sign a transaction to create a system account
-    pub fn new_account(
+    pub fn new_user_account(
         from_keypair: &Keypair,
         to: &Pubkey,
         lamports: u64,
@@ -36,7 +36,7 @@ impl SystemTransaction {
         fee: u64,
     ) -> Transaction {
         let program_id = system_program::id();
-        Self::new_program_account(
+        Self::new_account(
             from_keypair,
             to,
             recent_blockhash,

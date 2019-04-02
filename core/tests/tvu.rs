@@ -140,7 +140,7 @@ fn test_replay() {
             let entry0 = next_entry_mut(&mut cur_hash, i, vec![]);
             let entry_tick0 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
 
-            let tx0 = SystemTransaction::new_account(
+            let tx0 = SystemTransaction::new_user_account(
                 &mint_keypair,
                 &bob_keypair.pubkey(),
                 transfer_amount,
