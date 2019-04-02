@@ -1,6 +1,6 @@
 use crate::append_vec::AppendVec;
 use crate::bank::Result;
-use crate::runtime::has_duplicates;
+use crate::message_processor::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
 use log::*;
