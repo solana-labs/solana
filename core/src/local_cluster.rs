@@ -422,6 +422,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_local_cluster_start_and_exit_with_config() {
         solana_logger::setup();
         let mut fullnode_exit = FullnodeConfig::default();
