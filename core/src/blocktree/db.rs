@@ -398,6 +398,6 @@ where
 
     #[inline]
     fn get_cf<C: Column<B>>(&self) -> B::ColumnFamily {
-        self.map.get(C::NAME).unwrap().clone()
+        self.map[C::NAME].clone()
     }
 }
