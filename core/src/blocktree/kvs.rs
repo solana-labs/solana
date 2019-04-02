@@ -2,7 +2,7 @@ use crate::blocktree::db::columns as cf;
 use crate::blocktree::db::{Backend, Column, DbCursor, IWriteBatch, TypedColumn};
 use crate::blocktree::BlocktreeError;
 use crate::result::{Error, Result};
-use byteorder::{ByteOrder, LittleEndian};
+use byteorder::{BigEndian, ByteOrder};
 use solana_kvstore::{self as kvstore, Key, KvStore};
 use std::path::Path;
 
@@ -88,14 +88,14 @@ impl Column<Kvs> for cf::Data {
 
     fn key((slot, index): (u64, u64)) -> Key {
         let mut key = Key::default();
-        LittleEndian::write_u64(&mut key.0[8..16], slot);
-        LittleEndian::write_u64(&mut key.0[16..], index);
+        BigEndian::write_u64(&mut key.0[8..16], slot);
+        BigEndian::write_u64(&mut key.0[16..], index);
         key
     }
 
     fn index(key: &Key) -> (u64, u64) {
-        let slot = LittleEndian::read_u64(&key.0[8..16]);
-        let index = LittleEndian::read_u64(&key.0[16..]);
+        let slot = BigEndian::read_u64(&key.0[8..16]);
+        let index = BigEndian::read_u64(&key.0[16..]);
         (slot, index)
     }
 }
@@ -106,12 +106,12 @@ impl Column<Kvs> for cf::DetachedHeads {
 
     fn key(slot: u64) -> Key {
         let mut key = Key::default();
-        LittleEndian::write_u64(&mut key.0[8..16], slot);
+        BigEndian::write_u64(&mut key.0[8..16], slot);
         key
     }
 
     fn index(key: &Key) -> u64 {
-        LittleEndian::read_u64(&key.0[8..16])
+        BigEndian::read_u64(&key.0[8..16])
     }
 }
 
@@ -125,12 +125,12 @@ impl Column<Kvs> for cf::SlotMeta {
 
     fn key(slot: u64) -> Key {
         let mut key = Key::default();
-        LittleEndian::write_u64(&mut key.0[8..16], slot);
+        BigEndian::write_u64(&mut key.0[8..16], slot);
         key
     }
 
     fn index(key: &Key) -> u64 {
-        LittleEndian::read_u64(&key.0[8..16])
+        BigEndian::read_u64(&key.0[8..16])
     }
 }
 
