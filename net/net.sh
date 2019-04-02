@@ -163,7 +163,7 @@ startCommon() {
       mkdir -p ~/.cargo/bin
     "
   fi
-  ssh-copy-id -f -i "$externalNodeSshKey" "${sshOptions[@]}" "solana@$ipAddress"
+  [[ -z "$externalNodeSshKey" ]] || ssh-copy-id -f -i "$externalNodeSshKey" "${sshOptions[@]}" "solana@$ipAddress"
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
     "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
     "$ipAddress":~/solana/
