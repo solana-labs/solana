@@ -5,6 +5,7 @@ use crate::leader_schedule_utils;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{Bank, Result};
+use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::timing::MAX_RECENT_BLOCKHASHES;
@@ -19,17 +20,16 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
-fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
+fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults)]) -> Result<()> {
     inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
     let results: Vec<Result<()>> = entries
         .into_par_iter()
-        .map(|(e, lock_results)| {
+        .map(|(e, finalizer)| {
             let results = bank.load_execute_and_commit_transactions(
                 &e.transactions,
-                lock_results.to_vec(),
+                finalizer,
                 MAX_RECENT_BLOCKHASHES,
             );
-            bank.unlock_accounts(&e.transactions, &results);
             first_err(&results)
         })
         .collect();
@@ -57,11 +57,12 @@ pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
         let lock_results = bank.lock_accounts(&entry.transactions);
         // if any of the locks error out
         // execute the current group
-        if first_err(&lock_results).is_err() {
+        if first_err(lock_results.locked_accounts_results()).is_err() {
             par_execute_entries(bank, &mt_group)?;
+            // Drop all the locks on accounts by clearing the LockedAccountsFinalizer's in the
+            // mt_group
             mt_group = vec![];
-            //reset the lock and push the entry
-            bank.unlock_accounts(&entry.transactions, &lock_results);
+            drop(lock_results);
             let lock_results = bank.lock_accounts(&entry.transactions);
             mt_group.push((entry, lock_results));
         } else {
