@@ -402,9 +402,10 @@ impl StorageStage {
             // the storage_keys with their signatures
             for tx in entry.transactions {
                 let message = tx.message();
-                for (i, program_id) in message.program_ids().iter().enumerate() {
-                    if solana_storage_api::check_id(&program_id) {
-                        match deserialize(&message.instructions[i].data) {
+                for instruction in &message.instructions {
+                    let program_id = instruction.program_id(message.program_ids());
+                    if solana_storage_api::check_id(program_id) {
+                        match deserialize(&instruction.data) {
                             Ok(StorageInstruction::SubmitMiningProof {
                                 entry_height: proof_entry_height,
                                 signature,
