@@ -28,7 +28,7 @@ pub enum Token {
     D,
 }
 impl Default for Token {
-    fn default() -> Token {
+    fn default() -> Self {
         Token::A
     }
 }
@@ -44,7 +44,7 @@ pub struct Tokens {
 }
 impl Tokens {
     pub fn new(a: u64, b: u64, c: u64, d: u64) -> Self {
-        Tokens {
+        Self {
             A: a,
             B: b,
             C: c,
@@ -85,29 +85,23 @@ pub enum TokenPair {
     CD,
 }
 impl Default for TokenPair {
-    fn default() -> TokenPair {
+    fn default() -> Self {
         TokenPair::AB
     }
 }
 impl TokenPair {
     pub fn primary(self) -> Token {
         match self {
-            TokenPair::AB => Token::A,
-            TokenPair::AC => Token::A,
-            TokenPair::AD => Token::A,
-            TokenPair::BC => Token::B,
-            TokenPair::BD => Token::B,
+            TokenPair::AB | TokenPair::AC | TokenPair::AD => Token::A,
+            TokenPair::BC | TokenPair::BD => Token::B,
             TokenPair::CD => Token::C,
         }
     }
     pub fn secondary(self) -> Token {
         match self {
             TokenPair::AB => Token::B,
-            TokenPair::AC => Token::C,
-            TokenPair::AD => Token::D,
-            TokenPair::BC => Token::C,
-            TokenPair::BD => Token::D,
-            TokenPair::CD => Token::D,
+            TokenPair::AC | TokenPair::BC => Token::C,
+            TokenPair::AD | TokenPair::BD | TokenPair::CD => Token::D,
         }
     }
 }
@@ -175,8 +169,8 @@ pub struct TradeOrderInfo {
     pub dst_account: Pubkey,
 }
 impl Default for TradeOrderInfo {
-    fn default() -> TradeOrderInfo {
-        TradeOrderInfo {
+    fn default() -> Self {
+        Self {
             owner: Pubkey::default(),
             pair: TokenPair::AB,
             direction: Direction::To,
@@ -261,7 +255,7 @@ pub enum ExchangeState {
     Invalid,
 }
 impl Default for ExchangeState {
-    fn default() -> ExchangeState {
+    fn default() -> Self {
         ExchangeState::Unallocated
     }
 }
