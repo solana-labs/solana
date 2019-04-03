@@ -27,6 +27,11 @@ pub mod columns {
     #[derive(Debug)]
     /// Data Column
     pub struct Data;
+
+    #[cfg(feature = "erasure")]
+    #[derive(Debug)]
+    /// The erasure meta column
+    pub struct ErasureMeta;
 }
 
 pub trait Backend: Sized + Send + Sync {
