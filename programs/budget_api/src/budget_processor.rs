@@ -151,6 +151,7 @@ mod tests {
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::sync_client::SyncClient;
     use solana_sdk::transaction::TransactionError;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
@@ -169,7 +170,7 @@ mod tests {
         let instructions = budget_instruction::payment(&alice_pubkey, &bob_pubkey, 100);
         let message = Message::new(instructions);
         bank_client
-            .process_message(&[&alice_keypair], message)
+            .send_message(&[&alice_keypair], message)
             .unwrap();
         assert_eq!(bank.get_balance(&bob_pubkey), 100);
     }
@@ -194,7 +195,7 @@ mod tests {
         );
         let message = Message::new(instructions);
         bank_client
-            .process_message(&[&alice_keypair], message)
+            .send_message(&[&alice_keypair], message)
             .unwrap();
 
         // Attack! Part 1: Sign a witness transaction with a random key.
@@ -213,7 +214,7 @@ mod tests {
 
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
-            bank_client.process_message(&[&mallory_keypair], message),
+            bank_client.send_message(&[&mallory_keypair], message),
             Err(TransactionError::InstructionError(
                 0,
                 InstructionError::MissingRequiredSignature
@@ -242,7 +243,7 @@ mod tests {
         );
         let message = Message::new(instructions);
         bank_client
-            .process_message(&[&alice_keypair], message)
+            .send_message(&[&alice_keypair], message)
             .unwrap();
 
         // Attack! Part 1: Sign a timestamp transaction with a random key.
@@ -261,7 +262,7 @@ mod tests {
 
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
-            bank_client.process_message(&[&mallory_keypair], message),
+            bank_client.send_message(&[&mallory_keypair], message),
             Err(TransactionError::InstructionError(
                 0,
                 InstructionError::MissingRequiredSignature
@@ -289,7 +290,7 @@ mod tests {
         );
         let message = Message::new(instructions);
         bank_client
-            .process_message(&[&alice_keypair], message)
+            .send_message(&[&alice_keypair], message)
             .unwrap();
         assert_eq!(bank.get_balance(&alice_pubkey), 1);
         assert_eq!(bank.get_balance(&budget_pubkey), 1);
@@ -303,7 +304,7 @@ mod tests {
             budget_instruction::apply_timestamp(&alice_pubkey, &budget_pubkey, &mallory_pubkey, dt);
         assert_eq!(
             bank_client
-                .process_instruction(&alice_keypair, instruction)
+                .send_instruction(&alice_keypair, instruction)
                 .unwrap_err(),
             TransactionError::InstructionError(
                 0,
@@ -323,7 +324,7 @@ mod tests {
         let instruction =
             budget_instruction::apply_timestamp(&alice_pubkey, &budget_pubkey, &bob_pubkey, dt);
         bank_client
-            .process_instruction(&alice_keypair, instruction)
+            .send_instruction(&alice_keypair, instruction)
             .unwrap();
         assert_eq!(bank.get_balance(&alice_pubkey), 1);
         assert_eq!(bank.get_balance(&budget_pubkey), 0);
@@ -351,7 +352,7 @@ mod tests {
         );
         let message = Message::new(instructions);
         bank_client
-            .process_message(&[&alice_keypair], message)
+            .send_message(&[&alice_keypair], message)
             .unwrap();
         assert_eq!(bank.get_balance(&alice_pubkey), 2);
         assert_eq!(bank.get_balance(&budget_pubkey), 1);
@@ -371,7 +372,7 @@ mod tests {
         let instruction =
             budget_instruction::apply_signature(&mallory_pubkey, &budget_pubkey, &bob_pubkey);
         bank_client
-            .process_instruction(&mallory_keypair, instruction)
+            .send_instruction(&mallory_keypair, instruction)
             .unwrap();
         // nothing should be changed because apply witness didn't finalize a payment
         assert_eq!(bank.get_balance(&alice_pubkey), 1);
@@ -382,7 +383,7 @@ mod tests {
         let instruction =
             budget_instruction::apply_signature(&alice_pubkey, &budget_pubkey, &alice_pubkey);
         bank_client
-            .process_instruction(&alice_keypair, instruction)
+            .send_instruction(&alice_keypair, instruction)
             .unwrap();
         assert_eq!(bank.get_balance(&alice_pubkey), 2);
         assert_eq!(bank.get_account(&budget_pubkey), None);

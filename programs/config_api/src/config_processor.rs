@@ -36,6 +36,7 @@ mod tests {
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::sync_client::SyncClient;
     use solana_sdk::system_instruction;
 
     #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
@@ -76,7 +77,7 @@ mod tests {
             .unwrap();
 
         bank_client
-            .process_instruction(
+            .send_instruction(
                 &mint_keypair,
                 config_instruction::create_account::<MyConfig>(
                     &mint_keypair.pubkey(),
@@ -114,7 +115,7 @@ mod tests {
             config_instruction::store(&from_keypair.pubkey(), &config_pubkey, &my_config);
         let message = Message::new(vec![instruction]);
         bank_client
-            .process_message(&[&from_keypair, &config_keypair], message)
+            .send_message(&[&from_keypair, &config_keypair], message)
             .unwrap();
 
         let config_account = bank.get_account(&config_pubkey).unwrap();
@@ -139,7 +140,7 @@ mod tests {
 
         let message = Message::new(vec![instruction]);
         bank_client
-            .process_message(&[&from_keypair, &config_keypair], message)
+            .send_message(&[&from_keypair, &config_keypair], message)
             .unwrap_err();
     }
 
@@ -162,7 +163,7 @@ mod tests {
         // Don't sign the transaction with `config_client`
         let message = Message::new(vec![move_instruction, store_instruction]);
         bank_client
-            .process_message(&[&system_keypair], message)
+            .send_message(&[&system_keypair], message)
             .unwrap_err();
     }
 }

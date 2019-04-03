@@ -13,6 +13,7 @@ pub mod pubkey;
 pub mod rpc_port;
 pub mod short_vec;
 pub mod signature;
+pub mod sync_client;
 pub mod system_instruction;
 pub mod system_program;
 pub mod system_transaction;
