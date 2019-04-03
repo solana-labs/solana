@@ -453,6 +453,7 @@ mod test {
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::sync_client::SyncClient;
     use solana_sdk::system_instruction;
     use std::mem;
 
@@ -572,7 +573,7 @@ mod test {
             &id(),
         );
         client
-            .process_instruction(&owner, instruction)
+            .send_instruction(&owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
         new
     }
@@ -587,11 +588,11 @@ mod test {
             &id(),
         );
         client
-            .process_instruction(owner, instruction)
+            .send_instruction(owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
         let instruction = exchange_instruction::account_request(&owner.pubkey(), &new);
         client
-            .process_instruction(owner, instruction)
+            .send_instruction(owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
         new
     }
@@ -600,7 +601,7 @@ mod test {
         let instruction =
             exchange_instruction::transfer_request(&owner.pubkey(), to, &id(), token, tokens);
         client
-            .process_instruction(owner, instruction)
+            .send_instruction(owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
     }
 
@@ -630,7 +631,7 @@ mod test {
             &dst,
         );
         client
-            .process_instruction(owner, instruction)
+            .send_instruction(owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
         (trade, src, dst)
     }
@@ -672,7 +673,7 @@ mod test {
         let new = create_token_account(&client, &owner);
         let instruction = exchange_instruction::account_request(&owner.pubkey(), &new);
         client
-            .process_instruction(&owner, instruction)
+            .send_instruction(&owner, instruction)
             .expect_err(&format!("{}:{}", line!(), file!()));
     }
 
@@ -687,7 +688,7 @@ mod test {
         let instruction =
             exchange_instruction::transfer_request(&owner.pubkey(), &new, &id(), Token::A, 42);
         client
-            .process_instruction(&owner, instruction)
+            .send_instruction(&owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
 
         let new_account = bank.get_account(&new).unwrap();
@@ -790,7 +791,7 @@ mod test {
             &profit,
         );
         client
-            .process_instruction(&owner, instruction)
+            .send_instruction(&owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
 
         let to_trade_account = bank.get_account(&to_trade).unwrap();

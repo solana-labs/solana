@@ -110,6 +110,7 @@ mod tests {
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::sync_client::SyncClient;
     use solana_sdk::system_program;
     use solana_sdk::transaction::TransactionError;
 
@@ -300,7 +301,7 @@ mod tests {
             account_metas,
         );
         assert_eq!(
-            bank_client.process_instruction(&mallory_keypair, malicious_instruction),
+            bank_client.send_instruction(&mallory_keypair, malicious_instruction),
             Err(TransactionError::InstructionError(
                 0,
                 InstructionError::MissingRequiredSignature

@@ -4,6 +4,7 @@ use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::loader_instruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::sync_client::SyncClient;
 use solana_sdk::system_instruction;
 
 pub fn load_program(
@@ -23,7 +24,7 @@ pub fn load_program(
         loader_id,
     );
     bank_client
-        .process_instruction(&from_keypair, instruction)
+        .send_instruction(&from_keypair, instruction)
         .unwrap();
 
     let chunk_size = 256; // Size of chunk just needs to fit into tx
@@ -32,14 +33,14 @@ pub fn load_program(
         let instruction =
             loader_instruction::write(&program_pubkey, loader_id, offset, chunk.to_vec());
         bank_client
-            .process_instruction(&program_keypair, instruction)
+            .send_instruction(&program_keypair, instruction)
             .unwrap();
         offset += chunk_size as u32;
     }
 
     let instruction = loader_instruction::finalize(&program_pubkey, loader_id);
     bank_client
-        .process_instruction(&program_keypair, instruction)
+        .send_instruction(&program_keypair, instruction)
         .unwrap();
 
     program_pubkey

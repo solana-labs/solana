@@ -334,6 +334,7 @@ mod tests {
     use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+    use solana_sdk::sync_client::SyncClient;
     use solana_sdk::system_instruction;
 
     fn test_instruction(
@@ -474,10 +475,10 @@ mod tests {
         let bank_client = BankClient::new(&bank);
 
         let ix = system_instruction::create_account(&mint_pubkey, &validator, 10, 4 * 1042, &id());
-        bank_client.process_instruction(&mint_keypair, ix).unwrap();
+        bank_client.send_instruction(&mint_keypair, ix).unwrap();
 
         let ix = system_instruction::create_account(&mint_pubkey, &replicator, 10, 4 * 1042, &id());
-        bank_client.process_instruction(&mint_keypair, ix).unwrap();
+        bank_client.send_instruction(&mint_keypair, ix).unwrap();
 
         let ix = storage_instruction::advertise_recent_blockhash(
             &validator,
@@ -486,7 +487,7 @@ mod tests {
         );
 
         bank_client
-            .process_instruction(&validator_keypair, ix)
+            .send_instruction(&validator_keypair, ix)
             .unwrap();
 
         let ix = storage_instruction::mining_proof(
@@ -496,7 +497,7 @@ mod tests {
             Signature::default(),
         );
         bank_client
-            .process_instruction(&replicator_keypair, ix)
+            .send_instruction(&replicator_keypair, ix)
             .unwrap();
 
         let ix = storage_instruction::advertise_recent_blockhash(
@@ -505,7 +506,7 @@ mod tests {
             ENTRIES_PER_SEGMENT * 2,
         );
         bank_client
-            .process_instruction(&validator_keypair, ix)
+            .send_instruction(&validator_keypair, ix)
             .unwrap();
 
         let ix = storage_instruction::proof_validation(
@@ -521,7 +522,7 @@ mod tests {
             }],
         );
         bank_client
-            .process_instruction(&validator_keypair, ix)
+            .send_instruction(&validator_keypair, ix)
             .unwrap();
 
         let ix = storage_instruction::advertise_recent_blockhash(
@@ -530,12 +531,12 @@ mod tests {
             ENTRIES_PER_SEGMENT * 3,
         );
         bank_client
-            .process_instruction(&validator_keypair, ix)
+            .send_instruction(&validator_keypair, ix)
             .unwrap();
 
         let ix = storage_instruction::reward_claim(&validator, entry_height);
         bank_client
-            .process_instruction(&validator_keypair, ix)
+            .send_instruction(&validator_keypair, ix)
             .unwrap();
 
         // TODO enable when rewards are working
@@ -548,7 +549,7 @@ mod tests {
 
         let ix = storage_instruction::reward_claim(&replicator, entry_height);
         bank_client
-            .process_instruction(&replicator_keypair, ix)
+            .send_instruction(&replicator_keypair, ix)
             .unwrap();
 
         // TODO enable when rewards are working
@@ -622,12 +623,12 @@ mod tests {
             &id(),
         );
 
-        bank_client.process_instruction(&mint_keypair, ix).unwrap();
+        bank_client.send_instruction(&mint_keypair, ix).unwrap();
 
         let ix =
             system_instruction::create_account(&mint_pubkey, &validator_pubkey, 1, 4 * 1024, &id());
 
-        bank_client.process_instruction(&mint_keypair, ix).unwrap();
+        bank_client.send_instruction(&mint_keypair, ix).unwrap();
 
         let ix = storage_instruction::advertise_recent_blockhash(
             &validator_pubkey,
@@ -636,7 +637,7 @@ mod tests {
         );
 
         bank_client
-            .process_instruction(&validator_keypair, ix)
+            .send_instruction(&validator_keypair, ix)
             .unwrap();
 
         let entry_height = 0;
@@ -647,7 +648,7 @@ mod tests {
             Signature::default(),
         );
         let _result = bank_client
-            .process_instruction(&replicator_keypair, ix)
+            .send_instruction(&replicator_keypair, ix)
             .unwrap();
 
         assert_eq!(

@@ -29,6 +29,7 @@ mod bpf {
         use super::*;
         use solana_sdk::bpf_loader;
         use solana_sdk::signature::KeypairUtil;
+        use solana_sdk::sync_client::SyncClient;
         use std::io::Read;
 
         #[test]
@@ -47,7 +48,7 @@ mod bpf {
             let program_id = load_program(&bank_client, &alice_keypair, &bpf_loader::id(), elf);
             let instruction = create_invoke_instruction(alice_keypair.pubkey(), program_id, &1u8);
             bank_client
-                .process_instruction(&alice_keypair, instruction)
+                .send_instruction(&alice_keypair, instruction)
                 .unwrap();
         }
 
@@ -86,7 +87,7 @@ mod bpf {
                 let instruction =
                     create_invoke_instruction(alice_keypair.pubkey(), program_id, &1u8);
                 bank_client
-                    .process_instruction(&alice_keypair, instruction)
+                    .send_instruction(&alice_keypair, instruction)
                     .unwrap();
             }
         }
@@ -100,6 +101,7 @@ mod bpf {
     mod bpf_rust {
         use super::*;
         use solana_sdk::signature::KeypairUtil;
+        use solana_sdk::sync_client::SyncClient;
         use std::io::Read;
 
         #[test]
@@ -130,7 +132,7 @@ mod bpf {
                 let instruction =
                     create_invoke_instruction(alice_keypair.pubkey(), program_id, &1u8);
                 bank_client
-                    .process_instruction(&alice_keypair, instruction)
+                    .send_instruction(&alice_keypair, instruction)
                     .unwrap();
             }
         }

@@ -5,6 +5,7 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::native_loader;
 use solana_sdk::signature::KeypairUtil;
+use solana_sdk::sync_client::SyncClient;
 use solana_sdk::transaction::TransactionError;
 
 #[test]
@@ -19,7 +20,7 @@ fn test_program_native_failure() {
     // Call user program
     let instruction = create_invoke_instruction(alice_keypair.pubkey(), program_id, &1u8);
     assert_eq!(
-        bank_client.process_instruction(&alice_keypair, instruction),
+        bank_client.send_instruction(&alice_keypair, instruction),
         Err(TransactionError::InstructionError(
             0,
             InstructionError::GenericError

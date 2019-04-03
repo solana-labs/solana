@@ -4,6 +4,7 @@ use solana_runtime::loader_utils::{create_invoke_instruction, load_program};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::native_loader;
 use solana_sdk::signature::KeypairUtil;
+use solana_sdk::sync_client::SyncClient;
 
 #[test]
 fn test_program_native_noop() {
@@ -19,6 +20,6 @@ fn test_program_native_noop() {
     // Call user program
     let instruction = create_invoke_instruction(alice_keypair.pubkey(), program_id, &1u8);
     bank_client
-        .process_instruction(&alice_keypair, instruction)
+        .send_instruction(&alice_keypair, instruction)
         .unwrap();
 }

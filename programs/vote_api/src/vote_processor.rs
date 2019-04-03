@@ -54,6 +54,7 @@ mod tests {
     use solana_sdk::message::Message;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::sync_client::SyncClient;
     use solana_sdk::system_instruction;
     use solana_sdk::transaction::TransactionError;
 
@@ -72,7 +73,7 @@ mod tests {
     ) -> Result<()> {
         let ixs = vote_instruction::create_account(&from_keypair.pubkey(), vote_id, lamports);
         let message = Message::new(ixs);
-        bank_client.process_message(&[from_keypair], message)
+        bank_client.send_message(&[from_keypair], message)
     }
 
     fn create_vote_account_with_delegate(
@@ -87,7 +88,7 @@ mod tests {
         let delegate_ix = vote_instruction::delegate_stake(&vote_id, delegate_id);
         ixs.push(delegate_ix);
         let message = Message::new(ixs);
-        bank_client.process_message(&[&from_keypair, vote_keypair], message)
+        bank_client.send_message(&[&from_keypair, vote_keypair], message)
     }
 
     fn submit_vote(
@@ -96,7 +97,7 @@ mod tests {
         tick_height: u64,
     ) -> Result<()> {
         let vote_ix = vote_instruction::vote(&vote_keypair.pubkey(), Vote::new(tick_height));
-        bank_client.process_instruction(&vote_keypair, vote_ix)
+        bank_client.send_instruction(&vote_keypair, vote_ix)
     }
 
     #[test]
@@ -150,7 +151,7 @@ mod tests {
         // needs to check that it's signed.
         let move_ix = system_instruction::transfer(&mallory_id, &vote_id, 1);
         let message = Message::new(vec![move_ix, vote_ix]);
-        let result = bank_client.process_message(&[&mallory_keypair], message);
+        let result = bank_client.send_message(&[&mallory_keypair], message);
 
         // And ensure there's no vote.
         let vote_account = bank.get_account(&vote_id).unwrap();

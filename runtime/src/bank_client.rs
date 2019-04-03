@@ -3,6 +3,7 @@ use solana_sdk::instruction::Instruction;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::sync_client::SyncClient;
 use solana_sdk::system_instruction;
 use solana_sdk::transaction::{Transaction, TransactionError};
 
@@ -10,12 +11,8 @@ pub struct BankClient<'a> {
     bank: &'a Bank,
 }
 
-impl<'a> BankClient<'a> {
-    pub fn new(bank: &'a Bank) -> Self {
-        Self { bank }
-    }
-
-    pub fn process_message(
+impl<'a> SyncClient for BankClient<'a> {
+    fn send_message(
         &self,
         keypairs: &[&Keypair],
         message: Message,
@@ -26,24 +23,30 @@ impl<'a> BankClient<'a> {
     }
 
     /// Create and process a transaction from a single instruction.
-    pub fn process_instruction(
+    fn send_instruction(
         &self,
         keypair: &Keypair,
         instruction: Instruction,
     ) -> Result<(), TransactionError> {
         let message = Message::new(vec![instruction]);
-        self.process_message(&[keypair], message)
+        self.send_message(&[keypair], message)
     }
 
     /// Transfer `lamports` from `keypair` to `pubkey`
-    pub fn transfer(
+    fn transfer(
         &self,
         lamports: u64,
         keypair: &Keypair,
         pubkey: &Pubkey,
     ) -> Result<(), TransactionError> {
         let move_instruction = system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
-        self.process_instruction(keypair, move_instruction)
+        self.send_instruction(keypair, move_instruction)
+    }
+}
+
+impl<'a> BankClient<'a> {
+    pub fn new(bank: &'a Bank) -> Self {
+        Self { bank }
     }
 }
 
@@ -71,7 +74,7 @@ mod tests {
             .push(AccountMeta::new(jane_pubkey, true));
 
         let message = Message::new(vec![move_instruction]);
-        bank_client.process_message(&doe_keypairs, message).unwrap();
+        bank_client.send_message(&doe_keypairs, message).unwrap();
         assert_eq!(bank.get_balance(&bob_pubkey), 42);
     }
 }
