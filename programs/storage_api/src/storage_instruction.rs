@@ -1,5 +1,5 @@
 use crate::id;
-use crate::storage_contract::ProofInfo;
+use crate::storage_contract::CheckedProof;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::{AccountMeta, Instruction};
@@ -23,7 +23,7 @@ pub enum StorageInstruction {
     },
     ProofValidation {
         entry_height: u64,
-        proofs: Vec<ProofInfo>,
+        proofs: Vec<CheckedProof>,
     },
 }
 
@@ -58,12 +58,12 @@ pub fn advertise_recent_blockhash(
 pub fn proof_validation(
     from_pubkey: &Pubkey,
     entry_height: u64,
-    proofs: Vec<ProofInfo>,
+    proofs: Vec<CheckedProof>,
 ) -> Instruction {
     let mut account_metas = vec![AccountMeta::new(*from_pubkey, true)];
-    proofs
-        .iter()
-        .for_each(|proof| account_metas.push(AccountMeta::new(proof.id, false)));
+    proofs.iter().for_each(|checked_proof| {
+        account_metas.push(AccountMeta::new(checked_proof.proof.id, false))
+    });
     let storage_instruction = StorageInstruction::ProofValidation {
         entry_height,
         proofs,

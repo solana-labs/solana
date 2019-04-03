@@ -2,7 +2,7 @@
 //!  Receive mining proofs from miners, validate the answers
 //!  and give reward for good proofs.
 
-use crate::storage_contract::{ProofInfo, ProofStatus, StorageContract};
+use crate::storage_contract::{CheckedProof, Proof, ProofStatus, StorageContract};
 use crate::storage_instruction::StorageInstruction;
 use crate::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use log::*;
@@ -17,7 +17,7 @@ use std::cmp;
 pub const TOTAL_VALIDATOR_REWARDS: u64 = 1;
 pub const TOTAL_REPLICATOR_REWARDS: u64 = 1;
 
-fn count_valid_proofs(proofs: &[ProofInfo]) -> u64 {
+fn count_valid_proofs(proofs: &[CheckedProof]) -> u64 {
     let mut num = 0;
     for proof in proofs {
         if let ProofStatus::Valid = proof.status {
@@ -92,9 +92,11 @@ fn store_validation_result(
             if segment_index > reward_validations.len() || reward_validations.is_empty() {
                 reward_validations.resize(cmp::max(1, segment_index), vec![]);
             }
-            let mut result = proofs[segment_index].clone();
-            result.status = status;
-            reward_validations[segment_index].push(result);
+            let result = proofs[segment_index].clone();
+            reward_validations[segment_index].push(CheckedProof {
+                proof: result,
+                status,
+            });
         }
         _ => return Err(InstructionError::InvalidAccountData),
     }
@@ -134,7 +136,7 @@ pub fn process_instruction(
 
                     let segment_index = get_segment_from_entry(entry_height);
                     if segment_index > proofs.len() || proofs.is_empty() {
-                        proofs.resize(cmp::max(1, segment_index), ProofInfo::default());
+                        proofs.resize(cmp::max(1, segment_index), Proof::default());
                     }
 
                     if segment_index > proofs.len() {
@@ -147,12 +149,10 @@ pub fn process_instruction(
                         sha_state, entry_height
                     );
 
-                    let proof_info = ProofInfo {
+                    let proof_info = Proof {
                         id: *keyed_accounts[0].signer_key().unwrap(),
                         sha_state,
                         signature,
-                        // don't care
-                        status: ProofStatus::Skipped,
                     };
                     proofs[segment_index] = proof_info;
                 } else {
@@ -281,7 +281,7 @@ pub fn process_instruction(
                         .into_iter()
                         .enumerate()
                         .filter_map(|(i, entry)| {
-                            if previous_proofs[i].1.signature != entry.signature
+                            if previous_proofs[i].1.signature != entry.proof.signature
                                 || entry.status != ProofStatus::Valid
                             {
                                 let _ = store_validation_result(
@@ -416,14 +416,6 @@ mod tests {
         let mut accounts = [Account::default(), Account::default()];
         accounts[0].data.resize(16 * 1024, 0);
 
-        let ix = storage_instruction::advertise_recent_blockhash(
-            &pubkey,
-            Hash::default(),
-            ENTRIES_PER_SEGMENT,
-        );
-
-        test_instruction(&ix, &mut accounts).unwrap();
-
         let ix =
             storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
 
@@ -481,10 +473,10 @@ mod tests {
         let entry_height = 0;
         let bank_client = BankClient::new(&bank);
 
-        let ix = SystemInstruction::new_account(&mint_pubkey, &validator, 10, 4 * 1042, &id());
+        let ix = system_instruction::create_account(&mint_pubkey, &validator, 10, 4 * 1042, &id());
         bank_client.process_instruction(&mint_keypair, ix).unwrap();
 
-        let ix = SystemInstruction::new_account(&mint_pubkey, &replicator, 10, 4 * 1042, &id());
+        let ix = system_instruction::create_account(&mint_pubkey, &replicator, 10, 4 * 1042, &id());
         bank_client.process_instruction(&mint_keypair, ix).unwrap();
 
         let ix = storage_instruction::advertise_recent_blockhash(
@@ -519,10 +511,12 @@ mod tests {
         let ix = storage_instruction::proof_validation(
             &validator,
             entry_height,
-            vec![ProofInfo {
-                id: replicator,
-                signature: Signature::default(),
-                sha_state: Hash::default(),
+            vec![CheckedProof {
+                proof: Proof {
+                    id: replicator,
+                    signature: Signature::default(),
+                    sha_state: Hash::default(),
+                },
                 status: ProofStatus::Valid,
             }],
         );
@@ -552,7 +546,7 @@ mod tests {
             bank.register_tick(&bank.last_blockhash());
         }
 
-        let ix = StorageInstruction::new_reward_claim(&replicator, entry_height);
+        let ix = storage_instruction::reward_claim(&replicator, entry_height);
         bank_client
             .process_instruction(&replicator_keypair, ix)
             .unwrap();
@@ -630,13 +624,8 @@ mod tests {
 
         bank_client.process_instruction(&mint_keypair, ix).unwrap();
 
-        let ix = system_instruction::create_account(
-            &mint_pubkey,
-            &validator_pubkey,
-            1,
-            4 * 1024,
-            &id(),
-        );
+        let ix =
+            system_instruction::create_account(&mint_pubkey, &validator_pubkey, 1, 4 * 1024, &id());
 
         bank_client.process_instruction(&mint_keypair, ix).unwrap();
 
@@ -651,7 +640,7 @@ mod tests {
             .unwrap();
 
         let entry_height = 0;
-        let ix = storage_instruction::mining_proof()
+        let ix = storage_instruction::mining_proof(
             &replicator_pubkey,
             Hash::default(),
             entry_height,

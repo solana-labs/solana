@@ -17,17 +17,16 @@ impl Default for ProofStatus {
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct ProofInfo {
+pub struct Proof {
     pub id: Pubkey,
     pub signature: Signature,
     pub sha_state: Hash,
-    pub status: ProofStatus,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct ValidationInfo {
-    pub id: Pubkey,
-    pub proof_mask: Vec<ProofStatus>,
+pub struct CheckedProof {
+    pub proof: Proof,
+    pub status: ProofStatus,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,11 +37,11 @@ pub enum StorageContract {
     ValidatorStorage {
         entry_height: u64,
         hash: Hash,
-        lockout_validations: Vec<Vec<ProofInfo>>,
-        reward_validations: Vec<Vec<ProofInfo>>,
+        lockout_validations: Vec<Vec<CheckedProof>>,
+        reward_validations: Vec<Vec<CheckedProof>>,
     },
     ReplicatorStorage {
-        proofs: Vec<ProofInfo>,
-        reward_validations: Vec<Vec<ProofInfo>>,
+        proofs: Vec<Proof>,
+        reward_validations: Vec<Vec<CheckedProof>>,
     },
 }
