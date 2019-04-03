@@ -12,7 +12,7 @@ edition = "2018"
 bincode = "1.1.2"
 chrono = { version = "0.4.0", features = ["serde"] }
 log = "0.4.2"
-serde = "1.0.89"
+serde = "1.0.90"
 serde_derive = "1.0.89"
 solana-sdk = { path = "../../sdk", version = "0.13.0" }
 
