@@ -45,7 +45,7 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use crate::id;
-    use crate::vote_instruction::{Vote, VoteInstruction};
+    use crate::vote_instruction::{self, Vote};
     use crate::vote_state::VoteState;
     use solana_runtime::bank::{Bank, Result};
     use solana_runtime::bank_client::BankClient;
@@ -54,7 +54,7 @@ mod tests {
     use solana_sdk::message::Message;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_instruction::SystemInstruction;
+    use solana_sdk::system_instruction;
     use solana_sdk::transaction::TransactionError;
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
@@ -70,7 +70,7 @@ mod tests {
         vote_id: &Pubkey,
         lamports: u64,
     ) -> Result<()> {
-        let ixs = VoteInstruction::new_account(&from_keypair.pubkey(), vote_id, lamports);
+        let ixs = vote_instruction::create_account(&from_keypair.pubkey(), vote_id, lamports);
         let message = Message::new(ixs);
         bank_client.process_message(&[from_keypair], message)
     }
@@ -83,8 +83,8 @@ mod tests {
         lamports: u64,
     ) -> Result<()> {
         let vote_id = vote_keypair.pubkey();
-        let mut ixs = VoteInstruction::new_account(&from_keypair.pubkey(), &vote_id, lamports);
-        let delegate_ix = VoteInstruction::new_delegate_stake(&vote_id, delegate_id);
+        let mut ixs = vote_instruction::create_account(&from_keypair.pubkey(), &vote_id, lamports);
+        let delegate_ix = vote_instruction::delegate_stake(&vote_id, delegate_id);
         ixs.push(delegate_ix);
         let message = Message::new(ixs);
         bank_client.process_message(&[&from_keypair, vote_keypair], message)
@@ -95,7 +95,7 @@ mod tests {
         vote_keypair: &Keypair,
         tick_height: u64,
     ) -> Result<()> {
-        let vote_ix = VoteInstruction::new_vote(&vote_keypair.pubkey(), Vote::new(tick_height));
+        let vote_ix = vote_instruction::vote(&vote_keypair.pubkey(), Vote::new(tick_height));
         bank_client.process_instruction(&vote_keypair, vote_ix)
     }
 
@@ -142,13 +142,13 @@ mod tests {
         create_vote_account(&bank_client, &mallory_keypair, &vote_id, 100).unwrap();
 
         let mallory_id = mallory_keypair.pubkey();
-        let mut vote_ix = VoteInstruction::new_vote(&vote_id, Vote::new(0));
+        let mut vote_ix = vote_instruction::vote(&vote_id, Vote::new(0));
         vote_ix.accounts[0].is_signer = false; // <--- attack!! No signer required.
 
         // Sneak in an instruction so that the transaction is signed but
         // the 0th account in the second instruction is not! The program
         // needs to check that it's signed.
-        let move_ix = SystemInstruction::new_transfer(&mallory_id, &vote_id, 1);
+        let move_ix = system_instruction::transfer(&mallory_id, &vote_id, 1);
         let message = Message::new(vec![move_ix, vote_ix]);
         let result = bank_client.process_message(&[&mallory_keypair], message);
 

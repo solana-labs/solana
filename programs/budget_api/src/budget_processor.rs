@@ -143,7 +143,7 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::budget_instruction::BudgetInstruction;
+    use crate::budget_instruction;
     use crate::id;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
@@ -166,7 +166,7 @@ mod tests {
         let bank_client = BankClient::new(&bank);
         let alice_pubkey = alice_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
-        let instructions = BudgetInstruction::new_payment(&alice_pubkey, &bob_pubkey, 100);
+        let instructions = budget_instruction::payment(&alice_pubkey, &bob_pubkey, 100);
         let message = Message::new(instructions);
         bank_client
             .process_message(&[&alice_keypair], message)
@@ -184,7 +184,7 @@ mod tests {
         let budget_pubkey = Pubkey::new_rand();
         let bob_pubkey = Pubkey::new_rand();
         let witness = Pubkey::new_rand();
-        let instructions = BudgetInstruction::new_when_signed(
+        let instructions = budget_instruction::when_signed(
             &alice_pubkey,
             &bob_pubkey,
             &budget_pubkey,
@@ -204,7 +204,7 @@ mod tests {
             .transfer(1, &alice_keypair, &mallory_pubkey)
             .unwrap();
         let instruction =
-            BudgetInstruction::new_apply_signature(&mallory_pubkey, &budget_pubkey, &bob_pubkey);
+            budget_instruction::apply_signature(&mallory_pubkey, &budget_pubkey, &bob_pubkey);
         let mut message = Message::new(vec![instruction]);
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
@@ -231,7 +231,7 @@ mod tests {
         let budget_pubkey = Pubkey::new_rand();
         let bob_pubkey = Pubkey::new_rand();
         let dt = Utc::now();
-        let instructions = BudgetInstruction::new_on_date(
+        let instructions = budget_instruction::on_date(
             &alice_pubkey,
             &bob_pubkey,
             &budget_pubkey,
@@ -251,12 +251,8 @@ mod tests {
         bank_client
             .transfer(1, &alice_keypair, &mallory_pubkey)
             .unwrap();
-        let instruction = BudgetInstruction::new_apply_timestamp(
-            &mallory_pubkey,
-            &budget_pubkey,
-            &bob_pubkey,
-            dt,
-        );
+        let instruction =
+            budget_instruction::apply_timestamp(&mallory_pubkey, &budget_pubkey, &bob_pubkey, dt);
         let mut message = Message::new(vec![instruction]);
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
@@ -282,7 +278,7 @@ mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let mallory_pubkey = Pubkey::new_rand();
         let dt = Utc::now();
-        let instructions = BudgetInstruction::new_on_date(
+        let instructions = budget_instruction::on_date(
             &alice_pubkey,
             &bob_pubkey,
             &budget_pubkey,
@@ -303,12 +299,8 @@ mod tests {
         assert!(budget_state.is_pending());
 
         // Attack! Try to payout to mallory_pubkey
-        let instruction = BudgetInstruction::new_apply_timestamp(
-            &alice_pubkey,
-            &budget_pubkey,
-            &mallory_pubkey,
-            dt,
-        );
+        let instruction =
+            budget_instruction::apply_timestamp(&alice_pubkey, &budget_pubkey, &mallory_pubkey, dt);
         assert_eq!(
             bank_client
                 .process_instruction(&alice_keypair, instruction)
@@ -329,7 +321,7 @@ mod tests {
         // Now, acknowledge the time in the condition occurred and
         // that pubkey's funds are now available.
         let instruction =
-            BudgetInstruction::new_apply_timestamp(&alice_pubkey, &budget_pubkey, &bob_pubkey, dt);
+            budget_instruction::apply_timestamp(&alice_pubkey, &budget_pubkey, &bob_pubkey, dt);
         bank_client
             .process_instruction(&alice_keypair, instruction)
             .unwrap();
@@ -348,7 +340,7 @@ mod tests {
         let bob_pubkey = Pubkey::new_rand();
         let dt = Utc::now();
 
-        let instructions = BudgetInstruction::new_on_date(
+        let instructions = budget_instruction::on_date(
             &alice_pubkey,
             &bob_pubkey,
             &budget_pubkey,
@@ -377,7 +369,7 @@ mod tests {
         assert_eq!(bank.get_balance(&alice_pubkey), 1);
 
         let instruction =
-            BudgetInstruction::new_apply_signature(&mallory_pubkey, &budget_pubkey, &bob_pubkey);
+            budget_instruction::apply_signature(&mallory_pubkey, &budget_pubkey, &bob_pubkey);
         bank_client
             .process_instruction(&mallory_keypair, instruction)
             .unwrap();
@@ -388,7 +380,7 @@ mod tests {
 
         // Now, cancel the transaction. mint gets her funds back
         let instruction =
-            BudgetInstruction::new_apply_signature(&alice_pubkey, &budget_pubkey, &alice_pubkey);
+            budget_instruction::apply_signature(&alice_pubkey, &budget_pubkey, &alice_pubkey);
         bank_client
             .process_instruction(&alice_keypair, instruction)
             .unwrap();

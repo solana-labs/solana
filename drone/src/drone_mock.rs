@@ -1,7 +1,7 @@
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::system_transaction;
 use solana_sdk::transaction::Transaction;
 use std::io::{Error, ErrorKind};
 use std::net::SocketAddr;
@@ -18,6 +18,6 @@ pub fn request_airdrop_transaction(
     let key = Keypair::new();
     let to = Pubkey::new_rand();
     let blockhash = Hash::default();
-    let tx = SystemTransaction::new_user_account(&key, &to, lamports, blockhash, 0);
+    let tx = system_transaction::create_user_account(&key, &to, lamports, blockhash, 0);
     Ok(tx)
 }

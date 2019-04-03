@@ -12,7 +12,7 @@ use crate::poh_service::PohServiceConfig;
 use solana_client::thin_client::create_client;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::system_transaction;
 use solana_sdk::timing::{
     duration_as_ms, DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS, NUM_TICKS_PER_SECOND,
 };
@@ -37,7 +37,7 @@ pub fn spend_and_verify_all_nodes(
             .poll_get_balance(&funding_keypair.pubkey())
             .expect("balance in source");
         assert!(bal > 0);
-        let mut transaction = SystemTransaction::new_transfer(
+        let mut transaction = system_transaction::transfer(
             &funding_keypair,
             &random_keypair.pubkey(),
             1,
@@ -63,7 +63,7 @@ pub fn send_many_transactions(node: &ContactInfo, funding_keypair: &Keypair, num
             .poll_get_balance(&funding_keypair.pubkey())
             .expect("balance in source");
         assert!(bal > 0);
-        let mut transaction = SystemTransaction::new_transfer(
+        let mut transaction = system_transaction::transfer(
             &funding_keypair,
             &random_keypair.pubkey(),
             1,
@@ -183,7 +183,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
             }
 
             let random_keypair = Keypair::new();
-            let mut transaction = SystemTransaction::new_transfer(
+            let mut transaction = system_transaction::transfer(
                 &funding_keypair,
                 &random_keypair.pubkey(),
                 1,

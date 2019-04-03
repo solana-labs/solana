@@ -172,7 +172,7 @@ mod test {
     use serde_json::Value;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction;
     use std::collections::HashSet;
 
     #[test]
@@ -184,9 +184,9 @@ mod test {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
         let tx0 =
-            SystemTransaction::new_transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default(), 0);
+            system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default(), 0);
         let tx1 =
-            SystemTransaction::new_transfer(&keypair1, &keypair0.pubkey(), 2, Hash::default(), 0);
+            system_transaction::transfer(&keypair1, &keypair0.pubkey(), 2, Hash::default(), 0);
         let serialized_tx0 = serialize(&tx0).unwrap();
         let serialized_tx1 = serialize(&tx1).unwrap();
         let entry = Entry::new(&Hash::default(), 1, vec![tx0, tx1]);

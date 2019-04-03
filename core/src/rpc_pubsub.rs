@@ -227,12 +227,12 @@ mod tests {
     use jsonrpc_core::Response;
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use solana_budget_api;
-    use solana_budget_api::budget_instruction::BudgetInstruction;
+    use solana_budget_api::budget_instruction;
     use solana_runtime::bank::{self, Bank};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction;
     use solana_sdk::transaction::Transaction;
     use std::thread::sleep;
     use std::time::Duration;
@@ -270,7 +270,7 @@ mod tests {
         let rpc = RpcSolPubSubImpl::default();
 
         // Test signature subscriptions
-        let tx = SystemTransaction::new_transfer(&alice, &bob_pubkey, 20, blockhash, 0);
+        let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash, 0);
 
         let session = create_session();
         let (subscriber, _id_receiver, mut receiver) =
@@ -302,7 +302,7 @@ mod tests {
         let rpc = RpcSolPubSubImpl::default();
         io.extend_with(rpc.to_delegate());
 
-        let tx = SystemTransaction::new_transfer(&alice, &bob_pubkey, 20, blockhash, 0);
+        let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
             tx.signatures[0].to_string()
@@ -354,11 +354,16 @@ mod tests {
         let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
         rpc.account_subscribe(session, subscriber, contract_state.pubkey().to_string());
 
-        let tx =
-            SystemTransaction::new_user_account(&alice, &contract_funds.pubkey(), 51, blockhash, 0);
+        let tx = system_transaction::create_user_account(
+            &alice,
+            &contract_funds.pubkey(),
+            51,
+            blockhash,
+            0,
+        );
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
 
-        let ixs = BudgetInstruction::new_when_signed(
+        let ixs = budget_instruction::when_signed(
             &contract_funds.pubkey(),
             &bob_pubkey,
             &contract_state.pubkey(),
@@ -391,10 +396,11 @@ mod tests {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
 
-        let tx = SystemTransaction::new_user_account(&alice, &witness.pubkey(), 1, blockhash, 0);
+        let tx =
+            system_transaction::create_user_account(&alice, &witness.pubkey(), 1, blockhash, 0);
         let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
-        let ix = BudgetInstruction::new_apply_signature(
+        let ix = budget_instruction::apply_signature(
             &witness.pubkey(),
             &contract_state.pubkey(),
             &bob_pubkey,

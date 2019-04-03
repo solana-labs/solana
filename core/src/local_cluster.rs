@@ -11,11 +11,11 @@ use solana_client::thin_client::ThinClient;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::system_transaction;
 use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use solana_sdk::transaction::Transaction;
-use solana_vote_api::vote_instruction::VoteInstruction;
+use solana_vote_api::vote_instruction;
 use solana_vote_api::vote_state::VoteState;
 use std::collections::HashMap;
 use std::fs::remove_dir_all;
@@ -296,7 +296,7 @@ impl LocalCluster {
     ) -> u64 {
         trace!("getting leader blockhash");
         let blockhash = client.get_recent_blockhash().unwrap();
-        let mut tx = SystemTransaction::new_user_account(
+        let mut tx = system_transaction::create_user_account(
             &source_keypair,
             dest_pubkey,
             lamports,
@@ -328,8 +328,11 @@ impl LocalCluster {
         // Create the vote account if necessary
         if client.poll_get_balance(&vote_account_pubkey).unwrap_or(0) == 0 {
             // 1) Create vote account
-            let instructions =
-                VoteInstruction::new_account(&from_account.pubkey(), &vote_account_pubkey, amount);
+            let instructions = vote_instruction::create_account(
+                &from_account.pubkey(),
+                &vote_account_pubkey,
+                amount,
+            );
             let mut transaction = Transaction::new_signed_instructions(
                 &[from_account.as_ref()],
                 instructions,
@@ -345,7 +348,7 @@ impl LocalCluster {
 
             // 2) Set delegate for new vote account
             let vote_instruction =
-                VoteInstruction::new_delegate_stake(&vote_account_pubkey, &delegate_id);
+                vote_instruction::delegate_stake(&vote_account_pubkey, &delegate_id);
 
             let mut transaction = Transaction::new_signed_instructions(
                 &[vote_account],

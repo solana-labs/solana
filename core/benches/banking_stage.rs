@@ -18,7 +18,7 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{KeypairUtil, Signature};
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::system_transaction;
 use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES};
 use std::iter;
 use std::sync::atomic::Ordering;
@@ -56,7 +56,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
-    let dummy = SystemTransaction::new_transfer(
+    let dummy = system_transaction::transfer(
         &mint_keypair,
         &mint_keypair.pubkey(),
         1,
@@ -78,7 +78,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         .collect();
     // fund all the accounts
     transactions.iter().for_each(|tx| {
-        let fund = SystemTransaction::new_transfer(
+        let fund = system_transaction::transfer(
             &mint_keypair,
             &tx.message.account_keys[0],
             mint_total / txes as u64,
@@ -156,7 +156,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
-    let dummy = SystemTransaction::new_transfer(
+    let dummy = system_transaction::transfer(
         &mint_keypair,
         &mint_keypair.pubkey(),
         1,
@@ -194,7 +194,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         })
         .collect();
     transactions.iter().for_each(|tx| {
-        let fund = SystemTransaction::new_transfer(
+        let fund = system_transaction::transfer(
             &mint_keypair,
             &tx.message.account_keys[0],
             mint_total / txes as u64,

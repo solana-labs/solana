@@ -202,7 +202,7 @@ mod tests {
     use solana_budget_api;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction;
     use tokio::prelude::{Async, Stream};
 
     #[test]
@@ -211,7 +211,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let blockhash = bank.last_blockhash();
-        let tx = SystemTransaction::new_account(
+        let tx = system_transaction::create_account(
             &mint_keypair,
             &alice.pubkey(),
             blockhash,
@@ -257,7 +257,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let blockhash = bank.last_blockhash();
-        let tx = SystemTransaction::new_account(
+        let tx = system_transaction::create_account(
             &mint_keypair,
             &alice.pubkey(),
             blockhash,
@@ -302,7 +302,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let blockhash = bank.last_blockhash();
-        let tx = SystemTransaction::new_transfer(&mint_keypair, &alice.pubkey(), 20, blockhash, 0);
+        let tx = system_transaction::transfer(&mint_keypair, &alice.pubkey(), 20, blockhash, 0);
         let signature = tx.signatures[0];
         bank.process_transaction(&tx).unwrap();
 

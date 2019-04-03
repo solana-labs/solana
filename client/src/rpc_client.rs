@@ -556,7 +556,7 @@ mod tests {
     use serde_json::Number;
     use solana_logger;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction;
     use std::sync::mpsc::channel;
     use std::thread;
 
@@ -662,7 +662,7 @@ mod tests {
         let key = Keypair::new();
         let to = Pubkey::new_rand();
         let blockhash = Hash::default();
-        let tx = SystemTransaction::new_user_account(&key, &to, 50, blockhash, 0);
+        let tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
 
         let signature = rpc_client.send_transaction(&tx);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -713,7 +713,7 @@ mod tests {
         let key = Keypair::new();
         let to = Pubkey::new_rand();
         let blockhash = Hash::default();
-        let mut tx = SystemTransaction::new_user_account(&key, &to, 50, blockhash, 0);
+        let mut tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
 
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &key);
         result.unwrap();
@@ -737,8 +737,8 @@ mod tests {
             .into_vec()
             .unwrap();
         let blockhash = Hash::new(&vec);
-        let prev_tx = SystemTransaction::new_user_account(&key, &to, 50, blockhash, 0);
-        let mut tx = SystemTransaction::new_user_account(&key, &to, 50, blockhash, 0);
+        let prev_tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
+        let mut tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
 
         rpc_client.resign_transaction(&mut tx, &key).unwrap();
 

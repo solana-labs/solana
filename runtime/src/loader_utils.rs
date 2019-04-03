@@ -1,10 +1,10 @@
 use crate::bank_client::BankClient;
 use serde::Serialize;
 use solana_sdk::instruction::{AccountMeta, Instruction};
-use solana_sdk::loader_instruction::LoaderInstruction;
+use solana_sdk::loader_instruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_instruction;
 
 pub fn load_program(
     bank_client: &BankClient,
@@ -15,7 +15,7 @@ pub fn load_program(
     let program_keypair = Keypair::new();
     let program_pubkey = program_keypair.pubkey();
 
-    let instruction = SystemInstruction::new_account(
+    let instruction = system_instruction::create_account(
         &from_keypair.pubkey(),
         &program_pubkey,
         1,
@@ -30,14 +30,14 @@ pub fn load_program(
     let mut offset = 0;
     for chunk in program.chunks(chunk_size) {
         let instruction =
-            LoaderInstruction::new_write(&program_pubkey, loader_id, offset, chunk.to_vec());
+            loader_instruction::write(&program_pubkey, loader_id, offset, chunk.to_vec());
         bank_client
             .process_instruction(&program_keypair, instruction)
             .unwrap();
         offset += chunk_size as u32;
     }
 
-    let instruction = LoaderInstruction::new_finalize(&program_pubkey, loader_id);
+    let instruction = loader_instruction::finalize(&program_pubkey, loader_id);
     bank_client
         .process_instruction(&program_keypair, instruction)
         .unwrap();

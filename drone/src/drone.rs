@@ -16,7 +16,7 @@ use solana_sdk::message::Message;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_instruction;
 use solana_sdk::transaction::Transaction;
 use std::io;
 use std::io::{Error, ErrorKind};
@@ -127,7 +127,7 @@ impl Drone {
 
                     info!("Requesting airdrop of {} to {:?}", lamports, to);
 
-                    let create_instruction = SystemInstruction::new_user_account(
+                    let create_instruction = system_instruction::create_user_account(
                         &self.mint_keypair.pubkey(),
                         &to,
                         lamports,
@@ -285,6 +285,7 @@ pub fn run_local_drone(mint_keypair: Keypair, sender: Sender<SocketAddr>) {
 mod tests {
     use super::*;
     use bytes::BufMut;
+    use solana_sdk::system_instruction::SystemInstruction;
     use std::time::Duration;
 
     #[test]
@@ -394,7 +395,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let expected_instruction =
-            SystemInstruction::new_user_account(&keypair.pubkey(), &to, lamports);
+            system_instruction::create_user_account(&keypair.pubkey(), &to, lamports);
         let message = Message::new(vec![expected_instruction]);
         let expected_tx = Transaction::new(&[&keypair], message, blockhash);
         let expected_bytes = serialize(&expected_tx).unwrap();

@@ -5,7 +5,7 @@ use log::*;
 use serde_json;
 use serde_json::json;
 use solana_budget_api;
-use solana_budget_api::budget_instruction::BudgetInstruction;
+use solana_budget_api::budget_instruction;
 use solana_client::rpc_client::{get_rpc_request_str, RpcClient};
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
@@ -14,13 +14,13 @@ use solana_drone::drone::DRONE_PORT;
 use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::bpf_loader;
 use solana_sdk::hash::Hash;
-use solana_sdk::loader_instruction::LoaderInstruction;
+use solana_sdk::loader_instruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::rpc_port::DEFAULT_RPC_PORT;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::system_transaction;
 use solana_sdk::transaction::Transaction;
-use solana_vote_api::vote_instruction::VoteInstruction;
+use solana_vote_api::vote_instruction;
 use std::fs::File;
 use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -333,13 +333,13 @@ fn process_configure_staking(
     let recent_blockhash = rpc_client.get_recent_blockhash()?;
     let mut ixs = vec![];
     if let Some(delegate_id) = delegate_option {
-        ixs.push(VoteInstruction::new_delegate_stake(
+        ixs.push(vote_instruction::delegate_stake(
             &config.keypair.pubkey(),
             &delegate_id,
         ));
     }
     if let Some(authorized_voter_id) = authorized_voter_option {
-        ixs.push(VoteInstruction::new_authorize_voter(
+        ixs.push(vote_instruction::authorize_voter(
             &config.keypair.pubkey(),
             &authorized_voter_id,
         ));
@@ -356,7 +356,8 @@ fn process_create_staking(
     lamports: u64,
 ) -> ProcessResult {
     let recent_blockhash = rpc_client.get_recent_blockhash()?;
-    let ixs = VoteInstruction::new_account(&config.keypair.pubkey(), voting_account_id, lamports);
+    let ixs =
+        vote_instruction::create_account(&config.keypair.pubkey(), voting_account_id, lamports);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
     Ok(signature_str.to_string())
@@ -390,7 +391,7 @@ fn process_deploy(
         )
     })?;
 
-    let mut tx = SystemTransaction::new_account(
+    let mut tx = system_transaction::create_account(
         &config.keypair,
         &program_id.pubkey(),
         blockhash,
@@ -411,7 +412,7 @@ fn process_deploy(
         .chunks(USERDATA_CHUNK_SIZE)
         .zip(0..)
         .map(|(chunk, i)| {
-            let instruction = LoaderInstruction::new_write(
+            let instruction = loader_instruction::write(
                 &program_id.pubkey(),
                 &bpf_loader::id(),
                 (i * USERDATA_CHUNK_SIZE) as u32,
@@ -423,7 +424,7 @@ fn process_deploy(
     rpc_client.send_and_confirm_transactions(write_transactions, &program_id)?;
 
     trace!("Finalizing program account");
-    let instruction = LoaderInstruction::new_finalize(&program_id.pubkey(), &bpf_loader::id());
+    let instruction = loader_instruction::finalize(&program_id.pubkey(), &bpf_loader::id());
     let mut tx = Transaction::new_signed_instructions(&[&program_id], vec![instruction], blockhash);
     rpc_client
         .send_and_confirm_transaction(&mut tx, &program_id)
@@ -450,7 +451,7 @@ fn process_pay(
     let blockhash = rpc_client.get_recent_blockhash()?;
 
     if timestamp == None && *witnesses == None {
-        let mut tx = SystemTransaction::new_transfer(&config.keypair, to, lamports, blockhash, 0);
+        let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash, 0);
         let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
         Ok(signature_str.to_string())
     } else if *witnesses == None {
@@ -463,7 +464,7 @@ fn process_pay(
         let contract_state = Keypair::new();
 
         // Initializing contract
-        let ixs = BudgetInstruction::new_on_date(
+        let ixs = budget_instruction::on_date(
             &config.keypair.pubkey(),
             to,
             &contract_state.pubkey(),
@@ -494,7 +495,7 @@ fn process_pay(
         let contract_state = Keypair::new();
 
         // Initializing contract
-        let ixs = BudgetInstruction::new_when_signed(
+        let ixs = budget_instruction::when_signed(
             &config.keypair.pubkey(),
             to,
             &contract_state.pubkey(),
@@ -517,7 +518,7 @@ fn process_pay(
 
 fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey) -> ProcessResult {
     let blockhash = rpc_client.get_recent_blockhash()?;
-    let ix = BudgetInstruction::new_apply_signature(
+    let ix = budget_instruction::apply_signature(
         &config.keypair.pubkey(),
         pubkey,
         &config.keypair.pubkey(),
@@ -548,7 +549,7 @@ fn process_time_elapsed(
 
     let blockhash = rpc_client.get_recent_blockhash()?;
 
-    let ix = BudgetInstruction::new_apply_timestamp(&config.keypair.pubkey(), pubkey, to, dt);
+    let ix = budget_instruction::apply_timestamp(&config.keypair.pubkey(), pubkey, to, dt);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
 
@@ -569,7 +570,7 @@ fn process_witness(
     }
 
     let blockhash = rpc_client.get_recent_blockhash()?;
-    let ix = BudgetInstruction::new_apply_signature(&config.keypair.pubkey(), pubkey, to);
+    let ix = budget_instruction::apply_signature(&config.keypair.pubkey(), pubkey, to);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
 

@@ -1,10 +1,8 @@
 use serde::Serialize;
 use solana_sdk::pubkey::Pubkey;
 
-mod config_instruction;
+pub mod config_instruction;
 pub mod config_processor;
-
-pub use config_instruction::ConfigInstruction;
 
 const CONFIG_PROGRAM_ID: [u8; 32] = [
     133, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

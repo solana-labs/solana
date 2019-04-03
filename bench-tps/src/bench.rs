@@ -13,8 +13,8 @@ use solana_metrics::influxdb;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::system_instruction;
+use solana_sdk::system_transaction;
 use solana_sdk::timing::timestamp;
 use solana_sdk::timing::{duration_as_ms, duration_as_s};
 use solana_sdk::transaction::Transaction;
@@ -321,7 +321,7 @@ fn send_barrier_transaction(
         *blockhash = barrier_client.get_recent_blockhash().unwrap();
 
         let transaction =
-            SystemTransaction::new_user_account(&source_keypair, dest_id, 0, *blockhash, 0);
+            system_transaction::create_user_account(&source_keypair, dest_id, 0, *blockhash, 0);
         let signature = barrier_client
             .transfer_signed(&transaction)
             .expect("Unable to send barrier transaction");
@@ -399,7 +399,7 @@ fn generate_txs(
         .par_iter()
         .map(|(id, keypair)| {
             (
-                SystemTransaction::new_user_account(id, &keypair.pubkey(), 1, blockhash, 0),
+                system_transaction::create_user_account(id, &keypair.pubkey(), 1, blockhash, 0),
                 timestamp(),
             )
         })
@@ -551,9 +551,10 @@ fn fund_keys(client: &ThinClient, source: &Keypair, dests: &[Keypair], lamports:
                 .map(|(k, m)| {
                     (
                         k.clone(),
-                        Transaction::new_unsigned_instructions(
-                            SystemInstruction::new_transfer_many(&k.pubkey(), &m),
-                        ),
+                        Transaction::new_unsigned_instructions(system_instruction::transfer_many(
+                            &k.pubkey(),
+                            &m,
+                        )),
                     )
                 })
                 .collect();

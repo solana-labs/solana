@@ -115,7 +115,7 @@ mod test {
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction;
     use std::sync::mpsc::channel;
 
     #[test]
@@ -141,8 +141,13 @@ mod test {
 
         let keypair = Keypair::new();
         let mut blockhash = entries[3].hash;
-        let tx =
-            SystemTransaction::new_user_account(&keypair, &keypair.pubkey(), 1, Hash::default(), 0);
+        let tx = system_transaction::create_user_account(
+            &keypair,
+            &keypair.pubkey(),
+            1,
+            Hash::default(),
+            0,
+        );
         let entry = Entry::new(&mut blockhash, 1, vec![tx]);
         blockhash = entry.hash;
         entries.push(entry);

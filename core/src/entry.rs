@@ -8,7 +8,7 @@ use crate::result::Result;
 use bincode::{deserialize, serialized_size};
 use chrono::prelude::Utc;
 use rayon::prelude::*;
-use solana_budget_api::budget_instruction::BudgetInstruction;
+use solana_budget_api::budget_instruction;
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
@@ -380,7 +380,7 @@ pub fn make_tiny_test_entries_from_hash(start: &Hash, num: usize) -> Vec<Entry> 
     let mut num_hashes = 0;
     (0..num)
         .map(|_| {
-            let ix = BudgetInstruction::new_apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
+            let ix = budget_instruction::apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
             let tx = Transaction::new_signed_instructions(&[&keypair], vec![ix], *start);
             Entry::new_mut(&mut hash, &mut num_hashes, vec![tx])
         })
@@ -399,7 +399,7 @@ pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
     let keypair = Keypair::new();
     let pubkey = keypair.pubkey();
 
-    let ix = BudgetInstruction::new_apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
+    let ix = budget_instruction::apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
     let tx = Transaction::new_signed_instructions(&[&keypair], vec![ix], one);
 
     let serialized_size = serialized_size(&tx).unwrap();
@@ -450,31 +450,31 @@ mod tests {
     use crate::packet::{to_blobs, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction::SystemTransaction;
-    use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
+    use solana_sdk::system_transaction;
+    use solana_vote_api::vote_instruction::{self, Vote};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     fn create_sample_payment(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
-        let ixs = BudgetInstruction::new_payment(&pubkey, &pubkey, 1);
+        let ixs = budget_instruction::payment(&pubkey, &pubkey, 1);
         Transaction::new_signed_instructions(&[keypair], ixs, hash)
     }
 
     fn create_sample_timestamp(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
-        let ix = BudgetInstruction::new_apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
+        let ix = budget_instruction::apply_timestamp(&pubkey, &pubkey, &pubkey, Utc::now());
         Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
     }
 
     fn create_sample_signature(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
-        let ix = BudgetInstruction::new_apply_signature(&pubkey, &pubkey, &pubkey);
+        let ix = budget_instruction::apply_signature(&pubkey, &pubkey, &pubkey);
         Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
     }
 
     fn create_sample_vote(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
-        let ix = VoteInstruction::new_vote(&pubkey, Vote::new(1));
+        let ix = vote_instruction::vote(&pubkey, Vote::new(1));
         Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
     }
 
@@ -494,8 +494,8 @@ mod tests {
 
         // First, verify entries
         let keypair = Keypair::new();
-        let tx0 = SystemTransaction::new_user_account(&keypair, &keypair.pubkey(), 0, zero, 0);
-        let tx1 = SystemTransaction::new_user_account(&keypair, &keypair.pubkey(), 1, zero, 0);
+        let tx0 = system_transaction::create_user_account(&keypair, &keypair.pubkey(), 0, zero, 0);
+        let tx1 = system_transaction::create_user_account(&keypair, &keypair.pubkey(), 1, zero, 0);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
@@ -545,7 +545,7 @@ mod tests {
     fn test_next_entry_panic() {
         let zero = Hash::default();
         let keypair = Keypair::new();
-        let tx = SystemTransaction::new_user_account(&keypair, &keypair.pubkey(), 0, zero, 0);
+        let tx = system_transaction::create_user_account(&keypair, &keypair.pubkey(), 0, zero, 0);
         next_entry(&zero, 0, vec![tx]);
     }
 
@@ -553,7 +553,7 @@ mod tests {
     fn test_serialized_size() {
         let zero = Hash::default();
         let keypair = Keypair::new();
-        let tx = SystemTransaction::new_user_account(&keypair, &keypair.pubkey(), 0, zero, 0);
+        let tx = system_transaction::create_user_account(&keypair, &keypair.pubkey(), 0, zero, 0);
         let entry = next_entry(&zero, 1, vec![tx.clone()]);
         assert_eq!(
             Entry::serialized_size(&[tx]),

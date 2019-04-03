@@ -16,9 +16,9 @@ use solana_client::thin_client::{create_client_with_timeout, ThinClient};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::system_transaction;
 use solana_sdk::transaction::Transaction;
-use solana_storage_api::storage_instruction::StorageInstruction;
+use solana_storage_api::storage_instruction::{self, StorageInstruction};
 use std::collections::HashSet;
 use std::io;
 use std::mem::size_of;
@@ -279,7 +279,7 @@ impl StorageStage {
             if let Some(account) = account_to_create {
                 if client.get_account_data(&account).is_err() {
                     // TODO the account space needs to be well defined somewhere
-                    let tx = SystemTransaction::new_account(
+                    let tx = system_transaction::create_account(
                         keypair,
                         &storage_keypair.pubkey(),
                         blockhash,
@@ -318,7 +318,7 @@ impl StorageStage {
         let mut seed = [0u8; 32];
         let signature = keypair.sign(&entry_id.as_ref());
 
-        let ix = StorageInstruction::new_advertise_recent_blockhash(
+        let ix = storage_instruction::advertise_recent_blockhash(
             &keypair.pubkey(),
             entry_id,
             entry_height,
@@ -643,7 +643,7 @@ mod tests {
         }
 
         let keypair = Keypair::new();
-        let mining_proof_ix = StorageInstruction::new_mining_proof(
+        let mining_proof_ix = storage_instruction::mining_proof(
             &keypair.pubkey(),
             Hash::default(),
             0,
