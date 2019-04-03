@@ -84,7 +84,7 @@ fn test_bad_sig() {
 
     let mut tr2 = SystemTransaction::new_user_account(&alice, &bob_pubkey, 501, blockhash, 0);
     let mut instruction2 = deserialize(tr2.data(0)).unwrap();
-    if let SystemInstruction::Move { ref mut lamports } = instruction2 {
+    if let SystemInstruction::Transfer { ref mut lamports } = instruction2 {
         *lamports = 502;
     }
     tr2.instructions[0].data = serialize(&instruction2).unwrap();

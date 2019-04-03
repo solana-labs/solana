@@ -450,7 +450,7 @@ fn process_pay(
     let blockhash = rpc_client.get_recent_blockhash()?;
 
     if timestamp == None && *witnesses == None {
-        let mut tx = SystemTransaction::new_move(&config.keypair, to, lamports, blockhash, 0);
+        let mut tx = SystemTransaction::new_transfer(&config.keypair, to, lamports, blockhash, 0);
         let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
         Ok(signature_str.to_string())
     } else if *witnesses == None {

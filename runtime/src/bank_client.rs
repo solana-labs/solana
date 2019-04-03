@@ -42,7 +42,7 @@ impl<'a> BankClient<'a> {
         keypair: &Keypair,
         pubkey: &Pubkey,
     ) -> Result<(), TransactionError> {
-        let move_instruction = SystemInstruction::new_move(&keypair.pubkey(), pubkey, lamports);
+        let move_instruction = SystemInstruction::new_transfer(&keypair.pubkey(), pubkey, lamports);
         self.process_instruction(keypair, move_instruction)
     }
 }
@@ -63,9 +63,9 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let bank_client = BankClient::new(&bank);
 
-        // Create 2-2 Multisig Move instruction.
+        // Create 2-2 Multisig Transfer instruction.
         let bob_pubkey = Pubkey::new_rand();
-        let mut move_instruction = SystemInstruction::new_move(&john_pubkey, &bob_pubkey, 42);
+        let mut move_instruction = SystemInstruction::new_transfer(&john_pubkey, &bob_pubkey, 42);
         move_instruction
             .accounts
             .push(AccountMeta::new(jane_pubkey, true));

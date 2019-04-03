@@ -37,7 +37,7 @@ pub fn spend_and_verify_all_nodes(
             .poll_get_balance(&funding_keypair.pubkey())
             .expect("balance in source");
         assert!(bal > 0);
-        let mut transaction = SystemTransaction::new_move(
+        let mut transaction = SystemTransaction::new_transfer(
             &funding_keypair,
             &random_keypair.pubkey(),
             1,
@@ -63,7 +63,7 @@ pub fn send_many_transactions(node: &ContactInfo, funding_keypair: &Keypair, num
             .poll_get_balance(&funding_keypair.pubkey())
             .expect("balance in source");
         assert!(bal > 0);
-        let mut transaction = SystemTransaction::new_move(
+        let mut transaction = SystemTransaction::new_transfer(
             &funding_keypair,
             &random_keypair.pubkey(),
             1,
@@ -183,7 +183,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
             }
 
             let random_keypair = Keypair::new();
-            let mut transaction = SystemTransaction::new_move(
+            let mut transaction = SystemTransaction::new_transfer(
                 &funding_keypair,
                 &random_keypair.pubkey(),
                 1,

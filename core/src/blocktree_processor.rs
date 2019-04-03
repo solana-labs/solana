@@ -649,7 +649,7 @@ mod tests {
                     bank.last_blockhash(),
                     0,
                 ),
-                SystemTransaction::new_move(
+                SystemTransaction::new_transfer(
                     &keypair4,
                     &keypair4.pubkey(),
                     1,

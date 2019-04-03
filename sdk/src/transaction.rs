@@ -321,7 +321,7 @@ mod tests {
         let alice_keypair = Keypair::new();
         let alice_pubkey = alice_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
-        let ix = SystemInstruction::new_move(&alice_pubkey, &bob_pubkey, 42);
+        let ix = SystemInstruction::new_transfer(&alice_pubkey, &bob_pubkey, 42);
 
         let expected_data_size = size_of::<u32>() + size_of::<u64>();
         assert_eq!(expected_data_size, 12);

@@ -35,13 +35,13 @@ mod tests {
         // One signature, a fee.
         let pubkey0 = Pubkey::new(&[0; 32]);
         let pubkey1 = Pubkey::new(&[1; 32]);
-        let ix0 = SystemInstruction::new_move(&pubkey0, &pubkey1, 1);
+        let ix0 = SystemInstruction::new_transfer(&pubkey0, &pubkey1, 1);
         let message = Message::new(vec![ix0]);
         assert_eq!(FeeCalculator::new(2).calculate_fee(&message), 2);
 
         // Two signatures, double the fee.
-        let ix0 = SystemInstruction::new_move(&pubkey0, &pubkey1, 1);
-        let ix1 = SystemInstruction::new_move(&pubkey1, &pubkey0, 1);
+        let ix0 = SystemInstruction::new_transfer(&pubkey0, &pubkey1, 1);
+        let ix1 = SystemInstruction::new_transfer(&pubkey1, &pubkey0, 1);
         let message = Message::new(vec![ix0, ix1]);
         assert_eq!(FeeCalculator::new(2).calculate_fee(&message), 4);
     }
