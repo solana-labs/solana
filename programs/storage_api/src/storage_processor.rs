@@ -219,7 +219,7 @@ pub fn process_instruction(
                     let current_index = get_segment_from_entry(tick_height);
                     let claims_index = get_segment_from_entry(entry_height);
                     if current_index <= claims_index || claims_index >= reward_validations.len() {
-                        println!(
+                        debug!(
                             "current {:?}, claim {:?}, rewards {:?}",
                             current_index,
                             claims_index,
