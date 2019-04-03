@@ -134,6 +134,9 @@ pub struct Bank {
     /// Hash of this Bank's parent's state
     parent_hash: Hash,
 
+    /// The number of transactions processed without error
+    transaction_count: AtomicUsize, // TODO: Use AtomicU64 if/when available
+
     /// Bank tick height
     tick_height: AtomicUsize, // TODO: Use AtomicU64 if/when available
 
@@ -196,6 +199,9 @@ impl Bank {
         let mut bank = Self::default();
         bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
         bank.status_cache = parent.status_cache.clone();
+
+        bank.transaction_count
+            .store(parent.transaction_count() as usize, Ordering::Relaxed);
 
         bank.tick_height
             .store(parent.tick_height.load(Ordering::SeqCst), Ordering::SeqCst);
@@ -650,8 +656,7 @@ impl Bank {
             inc_new_counter_info!("bank-process_transactions-error_count", err_count);
         }
 
-        self.accounts
-            .increment_transaction_count(self.accounts_id, tx_count);
+        self.increment_transaction_count(tx_count);
 
         inc_new_counter_info!("bank-process_transactions-txs", tx_count);
         if 0 != error_counters.blockhash_not_found {
@@ -842,7 +847,11 @@ impl Bank {
     }
 
     pub fn transaction_count(&self) -> u64 {
-        self.accounts.transaction_count(self.accounts_id)
+        self.transaction_count.load(Ordering::Relaxed) as u64
+    }
+    fn increment_transaction_count(&self, tx_count: usize) {
+        self.transaction_count
+            .fetch_add(tx_count, Ordering::Relaxed);
     }
 
     pub fn get_signature_confirmation_status(
@@ -1761,4 +1770,42 @@ mod tests {
         assert!(!bank5.is_in_subtree_of(2));
         assert!(!bank5.is_in_subtree_of(4));
     }
+
+    #[test]
+    fn test_bank_inherit_tx_count() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(500);
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        // Bank 1
+        let bank = Arc::new(new_from_parent(&parent));
+        // Bank 2
+        let bank2 = Arc::new(new_from_parent(&bank));
+        // Bank 5
+        let bank5 = new_from_parent(&bank);
+
+        let key1 = Keypair::new();
+
+        // move a token
+        let tx_move_mint_to_1 =
+            system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        assert_eq!(bank2.process_transaction(&tx_move_mint_to_1), Ok(()));
+
+        assert_eq!(bank.transaction_count(), 0);
+        assert_eq!(bank5.transaction_count(), 0);
+        assert_eq!(bank2.transaction_count(), 1);
+
+        bank2.squash();
+
+        assert_eq!(bank.transaction_count(), 0);
+        assert_eq!(bank5.transaction_count(), 0);
+        assert_eq!(bank2.transaction_count(), 1);
+
+        let bank6 = new_from_parent(&bank2);
+        assert_eq!(bank2.transaction_count(), 1);
+        assert_eq!(bank6.transaction_count(), 1);
+
+        bank6.squash();
+        assert_eq!(bank6.transaction_count(), 1);
+    }
+
 }
