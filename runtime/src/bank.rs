@@ -112,9 +112,6 @@ pub struct Bank {
     /// where all the Accounts are stored
     accounts: Arc<Accounts>,
 
-    /// Bank accounts fork id
-    accounts_id: u64,
-
     /// A cache of signature statuses
     status_cache: Arc<RwLock<BankStatusCache>>,
 
@@ -123,6 +120,9 @@ pub struct Bank {
 
     /// Previous checkpoint of this bank
     parent: RwLock<Option<Arc<Bank>>>,
+
+    /// The set of parents including this bank
+    ancestors: HashMap<u64, usize>,
 
     /// Hash of this Bank's state. Only meaningful after freezing.
     hash: RwLock<Hash>,
@@ -182,7 +182,8 @@ impl Bank {
 
     pub fn new_with_paths(genesis_block: &GenesisBlock, paths: Option<String>) -> Self {
         let mut bank = Self::default();
-        bank.accounts = Arc::new(Accounts::new(bank.slot, paths));
+        bank.ancestors.insert(bank.slot(), 0);
+        bank.accounts = Arc::new(Accounts::new(paths));
         bank.process_genesis_block(genesis_block);
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
@@ -218,12 +219,7 @@ impl Bank {
         bank.parent_hash = parent.hash();
         bank.collector_id = *collector_id;
 
-        // Accounts needs a unique id
-        static BANK_ACCOUNTS_ID: AtomicUsize = AtomicUsize::new(1);
-        bank.accounts_id = BANK_ACCOUNTS_ID.fetch_add(1, Ordering::Relaxed) as u64;
-        bank.accounts = parent.accounts.clone();
-        bank.accounts
-            .new_from_parent(bank.accounts_id, parent.accounts_id);
+        bank.accounts = Arc::new(Accounts::new_from_parent(&parent.accounts));
 
         bank.epoch_vote_accounts = {
             let mut epoch_vote_accounts = parent.epoch_vote_accounts.clone();
@@ -236,6 +232,10 @@ impl Bank {
             }
             epoch_vote_accounts
         };
+        bank.ancestors.insert(bank.slot(), 0);
+        bank.parents().iter().enumerate().for_each(|(i, p)| {
+            bank.ancestors.insert(p.slot(), i + 1);
+        });
 
         bank
     }
@@ -274,7 +274,10 @@ impl Bank {
         *self.parent.write().unwrap() = None;
 
         let squash_accounts_start = Instant::now();
-        self.accounts.squash(self.accounts_id);
+        for p in &parents {
+            // root forks cannot be purged
+            self.accounts.add_root(p.slot());
+        }
         let squash_accounts_ms = duration_as_ms(&squash_accounts_start.elapsed());
 
         let squash_cache_start = Instant::now();
@@ -503,7 +506,7 @@ impl Bank {
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
-        let results = self.accounts.lock_accounts(self.accounts_id, txs);
+        let results = self.accounts.lock_accounts(txs);
         LockedAccountsResults::new(results, &self, txs)
     }
 
@@ -511,7 +514,6 @@ impl Bank {
         if locked_accounts_results.needs_unlock {
             locked_accounts_results.needs_unlock = false;
             self.accounts.unlock_accounts(
-                self.accounts_id,
                 locked_accounts_results.transactions(),
                 locked_accounts_results.locked_accounts_results(),
             )
@@ -525,7 +527,7 @@ impl Bank {
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         self.accounts.load_accounts(
-            self.accounts_id,
+            &self.ancestors,
             txs,
             results,
             &self.fee_calculator,
@@ -578,12 +580,6 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let mut ancestors = HashMap::new();
-        ancestors.insert(self.slot(), 0);
-        self.parents().iter().enumerate().for_each(|(i, p)| {
-            ancestors.insert(p.slot(), i + 1);
-        });
-
         let rcache = self.status_cache.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
@@ -596,7 +592,7 @@ impl Bank {
                         .get_signature_status(
                             &tx.signatures[0],
                             &tx.message().recent_blockhash,
-                            &ancestors,
+                            &self.ancestors,
                         )
                         .is_some()
                 {
@@ -761,7 +757,7 @@ impl Bank {
         // assert!(!self.is_frozen());
         let now = Instant::now();
         self.accounts
-            .store_accounts(self.accounts_id, txs, executed, loaded_accounts);
+            .store_accounts(self.slot(), txs, executed, loaded_accounts);
 
         self.store_vote_accounts(txs, executed, loaded_accounts);
 
@@ -828,8 +824,7 @@ impl Bank {
     }
 
     fn store(&self, pubkey: &Pubkey, account: &Account) {
-        self.accounts.store_slow(self.accounts_id, pubkey, &account);
-
+        self.accounts.store_slow(self.slot(), pubkey, account);
         if solana_vote_api::check_id(&account.owner) {
             let mut vote_accounts = self.vote_accounts.write().unwrap();
             if account.lamports != 0 {
@@ -863,19 +858,19 @@ impl Bank {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts.load_slow(self.accounts_id, pubkey)
+        self.accounts.load_slow(&self.ancestors, pubkey)
     }
 
     pub fn get_program_accounts_modified_since_parent(
         &self,
         program_id: &Pubkey,
     ) -> Vec<(Pubkey, Account)> {
-        self.accounts
-            .load_by_program_slow_no_parent(self.accounts_id, program_id)
+        self.accounts.load_by_program(self.slot(), program_id)
     }
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts.load_slow_no_parent(self.accounts_id, pubkey)
+        let just_self: HashMap<u64, usize> = vec![(self.slot(), 0)].into_iter().collect();
+        self.accounts.load_slow(&just_self, pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
@@ -890,13 +885,8 @@ impl Bank {
         &self,
         signature: &Signature,
     ) -> Option<(usize, Result<()>)> {
-        let mut ancestors = HashMap::new();
-        ancestors.insert(self.slot(), 0);
-        self.parents().iter().enumerate().for_each(|(i, p)| {
-            ancestors.insert(p.slot(), i + 1);
-        });
         let rcache = self.status_cache.read().unwrap();
-        rcache.get_signature_status_slow(signature, &ancestors)
+        rcache.get_signature_status_slow(signature, &self.ancestors)
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
@@ -913,11 +903,11 @@ impl Bank {
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the same hash as we did before
         // checkpointing.
-        if !self.accounts.has_accounts(self.accounts_id) {
+        if !self.accounts.has_accounts(self.slot()) {
             return self.parent_hash;
         }
 
-        let accounts_delta_hash = self.accounts.hash_internal_state(self.accounts_id);
+        let accounts_delta_hash = self.accounts.hash_internal_state(self.slot());
         extend_and_hash(&self.parent_hash, &serialize(&accounts_delta_hash).unwrap())
     }
 
@@ -1039,7 +1029,8 @@ impl Bank {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        self.accounts.remove_accounts(self.accounts_id);
+        // For root forks this is a noop
+        self.accounts.purge_fork(self.slot());
     }
 }
 
@@ -1056,10 +1047,14 @@ mod tests {
     use solana_vote_api::vote_state::VoteState;
 
     #[test]
-    fn test_bank_new() {
+    fn test_bank_new_no_parent() {
+        solana_logger::setup();
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.get_balance(&genesis_block.mint_id), 10_000);
+        trace!("get balance {}", genesis_block.mint_id);
+        let bal = bank.get_balance(&genesis_block.mint_id);
+        trace!("done get balance {}", bal);
+        assert_eq!(bal, 10_000);
     }
 
     #[test]
