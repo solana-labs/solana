@@ -412,11 +412,12 @@ pub fn process_instruction(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::exchange_instruction;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_instruction::SystemInstruction;
+    use solana_sdk::system_instruction;
     use std::mem;
 
     fn try_calc(
@@ -527,7 +528,7 @@ mod test {
 
     fn create_account(client: &BankClient, owner: &Keypair) -> Pubkey {
         let new = Pubkey::new_rand();
-        let instruction = SystemInstruction::new_account(
+        let instruction = system_instruction::create_account(
             &owner.pubkey(),
             &new,
             1,
@@ -542,7 +543,7 @@ mod test {
 
     fn create_token_account(client: &BankClient, owner: &Keypair) -> Pubkey {
         let new = Pubkey::new_rand();
-        let instruction = SystemInstruction::new_account(
+        let instruction = system_instruction::create_account(
             &owner.pubkey(),
             &new,
             1,
@@ -552,7 +553,7 @@ mod test {
         client
             .process_instruction(owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
-        let instruction = ExchangeInstruction::new_account_request(&owner.pubkey(), &new);
+        let instruction = exchange_instruction::account_request(&owner.pubkey(), &new);
         client
             .process_instruction(owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
@@ -561,7 +562,7 @@ mod test {
 
     fn transfer(client: &BankClient, owner: &Keypair, to: &Pubkey, token: Token, tokens: u64) {
         let instruction =
-            ExchangeInstruction::new_transfer_request(&owner.pubkey(), to, &id(), token, tokens);
+            exchange_instruction::transfer_request(&owner.pubkey(), to, &id(), token, tokens);
         client
             .process_instruction(owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
@@ -582,7 +583,7 @@ mod test {
         let dst = create_token_account(&client, &owner);
         transfer(&client, &owner, &src, from_token, src_tokens);
 
-        let instruction = ExchangeInstruction::new_trade_request(
+        let instruction = exchange_instruction::trade_request(
             &owner.pubkey(),
             &trade,
             direction,
@@ -633,7 +634,7 @@ mod test {
         let (client, owner) = create_client(&bank, mint_keypair);
 
         let new = create_token_account(&client, &owner);
-        let instruction = ExchangeInstruction::new_account_request(&owner.pubkey(), &new);
+        let instruction = exchange_instruction::account_request(&owner.pubkey(), &new);
         client
             .process_instruction(&owner, instruction)
             .expect_err(&format!("{}:{}", line!(), file!()));
@@ -648,7 +649,7 @@ mod test {
         let new = create_token_account(&client, &owner);
 
         let instruction =
-            ExchangeInstruction::new_transfer_request(&owner.pubkey(), &new, &id(), Token::A, 42);
+            exchange_instruction::transfer_request(&owner.pubkey(), &new, &id(), Token::A, 42);
         client
             .process_instruction(&owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
@@ -743,7 +744,7 @@ mod test {
             3000,
         );
 
-        let instruction = ExchangeInstruction::new_swap_request(
+        let instruction = exchange_instruction::swap_request(
             &owner.pubkey(),
             &swap,
             &to_trade,

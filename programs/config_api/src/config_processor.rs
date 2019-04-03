@@ -28,7 +28,7 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{id, ConfigInstruction, ConfigState};
+    use crate::{config_instruction, id, ConfigState};
     use bincode::{deserialize, serialized_size};
     use serde_derive::{Deserialize, Serialize};
     use solana_runtime::bank::Bank;
@@ -36,7 +36,7 @@ mod tests {
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_instruction::SystemInstruction;
+    use solana_sdk::system_instruction;
 
     #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
     struct MyConfig {
@@ -78,7 +78,7 @@ mod tests {
         bank_client
             .process_instruction(
                 &mint_keypair,
-                ConfigInstruction::new_account::<MyConfig>(
+                config_instruction::create_account::<MyConfig>(
                     &mint_keypair.pubkey(),
                     &config_pubkey,
                     1,
@@ -111,7 +111,7 @@ mod tests {
 
         let my_config = MyConfig::new(42);
         let instruction =
-            ConfigInstruction::new_store(&from_keypair.pubkey(), &config_pubkey, &my_config);
+            config_instruction::store(&from_keypair.pubkey(), &config_pubkey, &my_config);
         let message = Message::new(vec![instruction]);
         bank_client
             .process_message(&[&from_keypair, &config_keypair], message)
@@ -133,11 +133,8 @@ mod tests {
         let my_config = MyConfig::new(42);
 
         // Replace instruction data with a vector that's too large
-        let mut instruction = ConfigInstruction::new_store(
-            &from_keypair.pubkey(),
-            &config_keypair.pubkey(),
-            &my_config,
-        );
+        let mut instruction =
+            config_instruction::store(&from_keypair.pubkey(), &config_keypair.pubkey(), &my_config);
         instruction.data = vec![0; 123];
 
         let message = Message::new(vec![instruction]);
@@ -155,14 +152,10 @@ mod tests {
         bank.transfer(42, &mint_keypair, &system_pubkey).unwrap();
         let (bank_client, from_keypair, config_keypair) = create_config_client(&bank, mint_keypair);
 
-        let move_instruction =
-            SystemInstruction::new_transfer(&system_pubkey, &Pubkey::default(), 42);
+        let move_instruction = system_instruction::transfer(&system_pubkey, &Pubkey::default(), 42);
         let my_config = MyConfig::new(42);
-        let mut store_instruction = ConfigInstruction::new_store(
-            &from_keypair.pubkey(),
-            &config_keypair.pubkey(),
-            &my_config,
-        );
+        let mut store_instruction =
+            config_instruction::store(&from_keypair.pubkey(), &config_keypair.pubkey(), &my_config);
         store_instruction.accounts[0].is_signer = false;
         store_instruction.accounts[1].is_signer = false;
 

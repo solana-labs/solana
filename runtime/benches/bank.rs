@@ -6,7 +6,7 @@ use solana_runtime::bank::*;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::system_transaction;
 use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES};
 use test::Bencher;
 
@@ -21,7 +21,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
         .map(|_| {
             // Seed the 'from' account.
             let rando0 = Keypair::new();
-            let tx = SystemTransaction::new_transfer(
+            let tx = system_transaction::transfer(
                 &mint_keypair,
                 &rando0.pubkey(),
                 10_000,
@@ -32,7 +32,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
 
             // Seed the 'to' account and a cell for its signature.
             let rando1 = Keypair::new();
-            let tx = SystemTransaction::new_transfer(
+            let tx = system_transaction::transfer(
                 &rando0,
                 &rando1.pubkey(),
                 1,

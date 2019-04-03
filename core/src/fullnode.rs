@@ -25,10 +25,10 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::system_transaction;
 use solana_sdk::timing::timestamp;
 use solana_sdk::transaction::Transaction;
-use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
+use solana_vote_api::vote_instruction::{self, Vote};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
@@ -318,7 +318,7 @@ pub fn make_active_set_entries(
     num_ending_ticks: u64,
 ) -> (Vec<Entry>, Keypair) {
     // 1) Assume the active_keypair node has no lamports staked
-    let transfer_tx = SystemTransaction::new_user_account(
+    let transfer_tx = system_transaction::create_user_account(
         &lamport_source,
         &active_keypair.pubkey(),
         stake,
@@ -332,7 +332,7 @@ pub fn make_active_set_entries(
     let voting_keypair = Keypair::new();
     let vote_account_id = voting_keypair.pubkey();
 
-    let new_vote_account_ixs = VoteInstruction::new_account(
+    let new_vote_account_ixs = vote_instruction::create_account(
         &active_keypair.pubkey(),
         &vote_account_id,
         stake.saturating_sub(2),
@@ -345,7 +345,7 @@ pub fn make_active_set_entries(
     let new_vote_account_entry = next_entry_mut(&mut last_entry_hash, 1, vec![new_vote_account_tx]);
 
     // 3) Create vote entry
-    let vote_ix = VoteInstruction::new_vote(&voting_keypair.pubkey(), Vote::new(slot_to_vote_on));
+    let vote_ix = vote_instruction::vote(&voting_keypair.pubkey(), Vote::new(slot_to_vote_on));
     let vote_tx =
         Transaction::new_signed_instructions(&[&voting_keypair], vec![vote_ix], *blockhash);
     let vote_entry = next_entry_mut(&mut last_entry_hash, 1, vec![vote_tx]);

@@ -21,7 +21,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::KeypairUtil;
 use solana_sdk::timing::{self, duration_as_ms};
 use solana_sdk::transaction::Transaction;
-use solana_vote_api::vote_instruction::{Vote, VoteInstruction};
+use solana_vote_api::vote_instruction::{self, Vote};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, RwLock};
@@ -296,7 +296,7 @@ impl ReplayStage {
         T: 'static + KeypairUtil + Send + Sync,
     {
         if let Some(ref voting_keypair) = voting_keypair {
-            let vote_ix = VoteInstruction::new_vote(&vote_account, Vote::new(bank.slot()));
+            let vote_ix = vote_instruction::vote(&vote_account, Vote::new(bank.slot()));
             let vote_tx = Transaction::new_signed_instructions(
                 &[voting_keypair.as_ref()],
                 vec![vote_ix],
@@ -635,7 +635,7 @@ mod test {
                 ledger_writer_sender,
             );
 
-            let vote_ix = VoteInstruction::new_vote(&voting_keypair.pubkey(), Vote::new(0));
+            let vote_ix = vote_instruction::vote(&voting_keypair.pubkey(), Vote::new(0));
             let vote_tx = Transaction::new_signed_instructions(
                 &[voting_keypair.as_ref()],
                 vec![vote_ix],

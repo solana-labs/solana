@@ -10,7 +10,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::system_transaction;
 use solana_vote_api::vote_instruction::VoteInstruction;
 use solana_vote_api::vote_state::VoteState;
 use std::fs::remove_dir_all;
@@ -32,7 +32,7 @@ pub fn transfer(
         to,
         blockhash
     );
-    let transaction = SystemTransaction::new_user_account(keypair, to, lamports, *blockhash, 0);
+    let transaction = system_transaction::create_user_account(keypair, to, lamports, *blockhash, 0);
     thin_client.transfer_signed(&transaction)
 }
 
@@ -76,15 +76,15 @@ fn test_bad_sig() {
 
     let blockhash = client.get_recent_blockhash().unwrap();
 
-    let tx = SystemTransaction::new_user_account(&alice, &bob_pubkey, 500, blockhash, 0);
+    let tx = system_transaction::create_user_account(&alice, &bob_pubkey, 500, blockhash, 0);
 
     let _sig = client.transfer_signed(&tx).unwrap();
 
     let blockhash = client.get_recent_blockhash().unwrap();
 
-    let mut tr2 = SystemTransaction::new_user_account(&alice, &bob_pubkey, 501, blockhash, 0);
+    let mut tr2 = system_transaction::create_user_account(&alice, &bob_pubkey, 501, blockhash, 0);
     let mut instruction2 = deserialize(tr2.data(0)).unwrap();
-    if let SystemInstruction::Transfer { ref mut lamports } = instruction2 {
+    if let system_instruction::Transfer { ref mut lamports } = instruction2 {
         *lamports = 502;
     }
     tr2.instructions[0].data = serialize(&instruction2).unwrap();
@@ -125,7 +125,7 @@ fn test_register_vote_account() {
     let blockhash = client.get_recent_blockhash().unwrap();
 
     let instructions =
-        VoteInstruction::new_account(&validator_keypair.pubkey(), &vote_account_id, 1);
+        vote_instruction::create_account(&validator_keypair.pubkey(), &vote_account_id, 1);
     let transaction =
         Transaction::new_signed_instructions(&[&validator_keypair], instructions, blockhash);
     let signature = client.transfer_signed(&transaction).unwrap();

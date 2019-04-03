@@ -507,7 +507,7 @@ mod tests {
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction;
     use std::sync::mpsc::channel;
     use std::thread::sleep;
 
@@ -593,7 +593,7 @@ mod tests {
 
             // fund another account so we can send 2 good transactions in a single batch.
             let keypair = Keypair::new();
-            let fund_tx = SystemTransaction::new_user_account(
+            let fund_tx = system_transaction::create_user_account(
                 &mint_keypair,
                 &keypair.pubkey(),
                 2,
@@ -604,16 +604,17 @@ mod tests {
 
             // good tx
             let to = Pubkey::new_rand();
-            let tx = SystemTransaction::new_user_account(&mint_keypair, &to, 1, start_hash, 0);
+            let tx = system_transaction::create_user_account(&mint_keypair, &to, 1, start_hash, 0);
 
             // good tx, but no verify
             let to2 = Pubkey::new_rand();
-            let tx_no_ver = SystemTransaction::new_user_account(&keypair, &to2, 2, start_hash, 0);
+            let tx_no_ver =
+                system_transaction::create_user_account(&keypair, &to2, 2, start_hash, 0);
 
             // bad tx, AccountNotFound
             let keypair = Keypair::new();
             let to3 = Pubkey::new_rand();
-            let tx_anf = SystemTransaction::new_user_account(&keypair, &to3, 1, start_hash, 0);
+            let tx_anf = system_transaction::create_user_account(&keypair, &to3, 1, start_hash, 0);
 
             // send 'em over
             let packets = to_packets(&[tx_no_ver, tx_anf, tx]);
@@ -676,7 +677,7 @@ mod tests {
 
         // Process a batch that includes a transaction that receives two lamports.
         let alice = Keypair::new();
-        let tx = SystemTransaction::new_user_account(
+        let tx = system_transaction::create_user_account(
             &mint_keypair,
             &alice.pubkey(),
             2,
@@ -690,7 +691,7 @@ mod tests {
             .unwrap();
 
         // Process a second batch that spends one of those lamports.
-        let tx = SystemTransaction::new_user_account(
+        let tx = system_transaction::create_user_account(
             &alice,
             &mint_keypair.pubkey(),
             1,
@@ -783,8 +784,8 @@ mod tests {
             let pubkey = Pubkey::new_rand();
 
             let transactions = vec![
-                SystemTransaction::new_transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-                SystemTransaction::new_transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
+                system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
+                system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
             ];
 
             let mut results = vec![Ok(()), Ok(())];
@@ -820,7 +821,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let pubkey = Pubkey::new_rand();
 
-        let transactions = vec![SystemTransaction::new_transfer(
+        let transactions = vec![system_transaction::transfer(
             &mint_keypair,
             &pubkey,
             1,
@@ -873,7 +874,7 @@ mod tests {
 
             assert_eq!(done, true);
 
-            let transactions = vec![SystemTransaction::new_transfer(
+            let transactions = vec![system_transaction::transfer(
                 &mint_keypair,
                 &pubkey,
                 2,

@@ -6,7 +6,7 @@ use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_instruction;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum StakeInstruction {
@@ -22,44 +22,38 @@ pub enum StakeInstruction {
     RedeemVoteCredits,
 }
 
-impl StakeInstruction {
-    pub fn new_account(from_id: &Pubkey, staker_id: &Pubkey, lamports: u64) -> Vec<Instruction> {
-        vec![SystemInstruction::new_account(
-            from_id,
-            staker_id,
-            lamports,
-            std::mem::size_of::<StakeState>() as u64,
-            &id(),
-        )]
-    }
+pub fn create_account(from_id: &Pubkey, staker_id: &Pubkey, lamports: u64) -> Vec<Instruction> {
+    vec![system_instruction::create_account(
+        from_id,
+        staker_id,
+        lamports,
+        std::mem::size_of::<StakeState>() as u64,
+        &id(),
+    )]
+}
 
-    pub fn new_redeem_vote_credits(
-        from_id: &Pubkey,
-        mining_pool_id: &Pubkey,
-        stake_id: &Pubkey,
-        vote_id: &Pubkey,
-    ) -> Instruction {
-        let account_metas = vec![
-            AccountMeta::new(*from_id, true),
-            AccountMeta::new(*mining_pool_id, false),
-            AccountMeta::new(*stake_id, false),
-            AccountMeta::new(*vote_id, false),
-        ];
-        Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
-    }
+pub fn redeem_vote_credits(
+    from_id: &Pubkey,
+    mining_pool_id: &Pubkey,
+    stake_id: &Pubkey,
+    vote_id: &Pubkey,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*from_id, true),
+        AccountMeta::new(*mining_pool_id, false),
+        AccountMeta::new(*stake_id, false),
+        AccountMeta::new(*vote_id, false),
+    ];
+    Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
+}
 
-    pub fn new_delegate_stake(
-        from_id: &Pubkey,
-        stake_id: &Pubkey,
-        vote_id: &Pubkey,
-    ) -> Instruction {
-        let account_metas = vec![
-            AccountMeta::new(*from_id, true),
-            AccountMeta::new(*stake_id, true),
-            AccountMeta::new(*vote_id, false),
-        ];
-        Instruction::new(id(), &StakeInstruction::DelegateStake, account_metas)
-    }
+pub fn delegate_stake(from_id: &Pubkey, stake_id: &Pubkey, vote_id: &Pubkey) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*from_id, true),
+        AccountMeta::new(*stake_id, true),
+        AccountMeta::new(*vote_id, false),
+    ];
+    Instruction::new(id(), &StakeInstruction::DelegateStake, account_metas)
 }
 
 pub fn process_instruction(

@@ -97,7 +97,7 @@ mod tests {
     use ring::signature::Ed25519KeyPair;
     use solana_sdk::hash::{hash, Hash, Hasher};
     use solana_sdk::signature::KeypairUtil;
-    use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction;
     use std::fs::remove_file;
     use std::fs::File;
     use std::io::Read;
@@ -124,7 +124,7 @@ mod tests {
                 Entry::new_mut(
                     &mut id,
                     &mut num_hashes,
-                    vec![SystemTransaction::new_user_account(
+                    vec![system_transaction::create_user_account(
                         &keypair,
                         &keypair.pubkey(),
                         1,

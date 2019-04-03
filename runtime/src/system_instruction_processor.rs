@@ -110,7 +110,6 @@ mod tests {
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
     use solana_sdk::transaction::TransactionError;
 

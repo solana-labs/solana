@@ -22,9 +22,9 @@ use solana_client::thin_client::{create_client, ThinClient};
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::system_transaction;
 use solana_sdk::transaction::Transaction;
-use solana_storage_api::storage_instruction::StorageInstruction;
+use solana_storage_api::storage_instruction;
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
@@ -434,7 +434,7 @@ impl Replicator {
         {
             let blockhash = client.get_recent_blockhash().expect("blockhash");
             //TODO the account space needs to be well defined somewhere
-            let tx = SystemTransaction::new_account(
+            let tx = system_transaction::create_account(
                 keypair,
                 &storage_keypair.pubkey(),
                 blockhash,
@@ -455,7 +455,7 @@ impl Replicator {
         );
         Self::get_airdrop_lamports(&client, &self.keypair, &self.cluster_entrypoint);
 
-        let ix = StorageInstruction::new_mining_proof(
+        let ix = storage_instruction::mining_proof(
             &self.storage_keypair.pubkey(),
             self.hash,
             self.slot,

@@ -3,7 +3,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_instruction;
 use solana_sdk::transaction::Transaction;
 use std::sync::mpsc::channel;
 
@@ -13,7 +13,8 @@ fn test_local_drone() {
     let to = Pubkey::new_rand();
     let lamports = 50;
     let blockhash = Hash::new(&to.as_ref());
-    let create_instruction = SystemInstruction::new_user_account(&keypair.pubkey(), &to, lamports);
+    let create_instruction =
+        system_instruction::create_user_account(&keypair.pubkey(), &to, lamports);
     let message = Message::new(vec![create_instruction]);
     let expected_tx = Transaction::new(&[&keypair], message, blockhash);
 

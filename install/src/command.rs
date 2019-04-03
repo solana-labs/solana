@@ -5,7 +5,7 @@ use console::{style, Emoji};
 use indicatif::{ProgressBar, ProgressStyle};
 use ring::digest::{Context, Digest, SHA256};
 use solana_client::rpc_client::RpcClient;
-use solana_config_api::ConfigInstruction;
+use solana_config_api::config_instruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil, Signable};
 use solana_sdk::transaction::Transaction;
@@ -198,7 +198,7 @@ fn new_update_manifest(
     {
         let recect_blockhash = rpc_client.get_recent_blockhash()?;
 
-        let new_account = ConfigInstruction::new_account::<SignedUpdateManifest>(
+        let new_account = config_instruction::create_account::<SignedUpdateManifest>(
             &from_keypair.pubkey(),
             &update_manifest_keypair.pubkey(),
             1, // lamports
@@ -220,7 +220,7 @@ fn store_update_manifest(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let recect_blockhash = rpc_client.get_recent_blockhash()?;
 
-    let new_store = ConfigInstruction::new_store::<SignedUpdateManifest>(
+    let new_store = config_instruction::store::<SignedUpdateManifest>(
         &from_keypair.pubkey(),
         &update_manifest_keypair.pubkey(),
         update_manifest,

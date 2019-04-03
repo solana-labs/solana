@@ -171,6 +171,7 @@ mod tests {
     use super::*;
     use crate::id;
     use crate::storage_contract::ProofStatus;
+    use crate::storage_instruction;
     use crate::ENTRIES_PER_SEGMENT;
     use bincode::deserialize;
     use solana_runtime::bank::Bank;
@@ -181,7 +182,7 @@ mod tests {
     use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-    use solana_sdk::system_instruction::SystemInstruction;
+    use solana_sdk::system_instruction;
 
     fn test_instruction(
         ix: &Instruction,
@@ -216,7 +217,7 @@ mod tests {
         let mut user_account = Account::default();
         keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
 
-        let ix = StorageInstruction::new_advertise_recent_blockhash(
+        let ix = storage_instruction::advertise_recent_blockhash(
             &pubkey,
             Hash::default(),
             ENTRIES_PER_SEGMENT,
@@ -234,7 +235,7 @@ mod tests {
         let mut accounts = [Account::default()];
 
         let ix =
-            StorageInstruction::new_mining_proof(&pubkey, Hash::default(), 0, Signature::default());
+            storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
         assert!(test_instruction(&ix, &mut accounts).is_err());
 
         let mut accounts = [Account::default(), Account::default(), Account::default()];
@@ -250,7 +251,7 @@ mod tests {
         accounts[1].data.resize(16 * 1024, 0);
 
         let ix =
-            StorageInstruction::new_mining_proof(&pubkey, Hash::default(), 0, Signature::default());
+            storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
 
         // Haven't seen a transaction to roll over the epoch, so this should fail
         assert!(test_instruction(&ix, &mut accounts).is_err());
@@ -263,7 +264,7 @@ mod tests {
         let mut accounts = [Account::default(), Account::default()];
         accounts[0].data.resize(16 * 1024, 0);
 
-        let ix = StorageInstruction::new_advertise_recent_blockhash(
+        let ix = storage_instruction::advertise_recent_blockhash(
             &pubkey,
             Hash::default(),
             ENTRIES_PER_SEGMENT,
@@ -272,7 +273,7 @@ mod tests {
         test_instruction(&ix, &mut accounts).unwrap();
 
         let ix =
-            StorageInstruction::new_mining_proof(&pubkey, Hash::default(), 0, Signature::default());
+            storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
 
         test_instruction(&ix, &mut accounts).unwrap();
     }
@@ -286,7 +287,7 @@ mod tests {
 
         let entry_height = 0;
 
-        let ix = StorageInstruction::new_advertise_recent_blockhash(
+        let ix = storage_instruction::advertise_recent_blockhash(
             &pubkey,
             Hash::default(),
             ENTRIES_PER_SEGMENT,
@@ -294,7 +295,7 @@ mod tests {
 
         test_instruction(&ix, &mut accounts).unwrap();
 
-        let ix = StorageInstruction::new_mining_proof(
+        let ix = storage_instruction::mining_proof(
             &pubkey,
             Hash::default(),
             entry_height,
@@ -302,28 +303,25 @@ mod tests {
         );
         test_instruction(&ix, &mut accounts).unwrap();
 
-        let ix = StorageInstruction::new_advertise_recent_blockhash(
+        let ix = storage_instruction::advertise_recent_blockhash(
             &pubkey,
             Hash::default(),
             ENTRIES_PER_SEGMENT * 2,
         );
         test_instruction(&ix, &mut accounts).unwrap();
 
-        let ix = StorageInstruction::new_proof_validation(
-            &pubkey,
-            entry_height,
-            vec![ProofStatus::Valid],
-        );
+        let ix =
+            storage_instruction::proof_validation(&pubkey, entry_height, vec![ProofStatus::Valid]);
         test_instruction(&ix, &mut accounts).unwrap();
 
-        let ix = StorageInstruction::new_advertise_recent_blockhash(
+        let ix = storage_instruction::advertise_recent_blockhash(
             &pubkey,
             Hash::default(),
             ENTRIES_PER_SEGMENT * 3,
         );
         test_instruction(&ix, &mut accounts).unwrap();
 
-        let ix = StorageInstruction::new_reward_claim(&pubkey, entry_height);
+        let ix = storage_instruction::reward_claim(&pubkey, entry_height);
         test_instruction(&ix, &mut accounts).unwrap();
 
         assert!(accounts[0].lamports == TOTAL_VALIDATOR_REWARDS);
@@ -386,11 +384,11 @@ mod tests {
             .transfer(10, &alice_keypair, &jack_pubkey)
             .unwrap();
 
-        let ix = SystemInstruction::new_account(&alice_pubkey, &bob_pubkey, 1, 4 * 1024, &id());
+        let ix = system_instruction::create_account(&alice_pubkey, &bob_pubkey, 1, 4 * 1024, &id());
 
         bank_client.process_instruction(&alice_keypair, ix).unwrap();
 
-        let ix = StorageInstruction::new_advertise_recent_blockhash(
+        let ix = storage_instruction::advertise_recent_blockhash(
             &bob_pubkey,
             storage_blockhash,
             ENTRIES_PER_SEGMENT,
@@ -399,7 +397,7 @@ mod tests {
         bank_client.process_instruction(&bob_keypair, ix).unwrap();
 
         let entry_height = 0;
-        let ix = StorageInstruction::new_mining_proof(
+        let ix = storage_instruction::mining_proof(
             &bob_pubkey,
             Hash::default(),
             entry_height,

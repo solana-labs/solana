@@ -3,7 +3,7 @@ use solana_sdk::instruction::Instruction;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_instruction;
 use solana_sdk::transaction::{Transaction, TransactionError};
 
 pub struct BankClient<'a> {
@@ -42,7 +42,7 @@ impl<'a> BankClient<'a> {
         keypair: &Keypair,
         pubkey: &Pubkey,
     ) -> Result<(), TransactionError> {
-        let move_instruction = SystemInstruction::new_transfer(&keypair.pubkey(), pubkey, lamports);
+        let move_instruction = system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
         self.process_instruction(keypair, move_instruction)
     }
 }
@@ -65,7 +65,7 @@ mod tests {
 
         // Create 2-2 Multisig Transfer instruction.
         let bob_pubkey = Pubkey::new_rand();
-        let mut move_instruction = SystemInstruction::new_transfer(&john_pubkey, &bob_pubkey, 42);
+        let mut move_instruction = system_instruction::transfer(&john_pubkey, &bob_pubkey, 42);
         move_instruction
             .accounts
             .push(AccountMeta::new(jane_pubkey, true));

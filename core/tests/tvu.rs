@@ -18,7 +18,7 @@ use solana::streamer;
 use solana::tvu::{Sockets, Tvu};
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::system_transaction;
 use std::fs::remove_dir_all;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -140,7 +140,7 @@ fn test_replay() {
             let entry0 = next_entry_mut(&mut cur_hash, i, vec![]);
             let entry_tick0 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
 
-            let tx0 = SystemTransaction::new_user_account(
+            let tx0 = system_transaction::create_user_account(
                 &mint_keypair,
                 &bob_keypair.pubkey(),
                 transfer_amount,
