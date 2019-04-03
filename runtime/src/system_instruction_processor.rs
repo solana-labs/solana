@@ -307,7 +307,7 @@ mod tests {
                 InstructionError::MissingRequiredSignature
             ))
         );
-        assert_eq!(bank.get_balance(&alice_pubkey), 50);
-        assert_eq!(bank.get_balance(&mallory_pubkey), 50);
+        assert_eq!(bank_client.get_balance(&alice_pubkey), 50);
+        assert_eq!(bank_client.get_balance(&mallory_pubkey), 50);
     }
 }

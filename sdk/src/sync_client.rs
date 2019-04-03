@@ -5,14 +5,17 @@
 use crate::instruction::Instruction;
 use crate::message::Message;
 use crate::pubkey::Pubkey;
-use crate::signature::Keypair;
+use crate::signature::{Keypair, Signature};
 use crate::transaction::TransactionError;
 
 pub trait SyncClient {
     /// Create a transaction from the given message, and send it to the
     /// server, retrying as-needed.
-    fn send_message(&self, keypairs: &[&Keypair], message: Message)
-        -> Result<(), TransactionError>;
+    fn send_message(
+        &self,
+        keypairs: &[&Keypair],
+        message: Message,
+    ) -> Result<Signature, TransactionError>;
 
     /// Create a transaction from a single instruction that only requires
     /// a single signer. Then send it to the server, retrying as-needed.
@@ -20,7 +23,7 @@ pub trait SyncClient {
         &self,
         keypair: &Keypair,
         instruction: Instruction,
-    ) -> Result<(), TransactionError>;
+    ) -> Result<Signature, TransactionError>;
 
     /// Transfer lamports from `keypair` to `pubkey`, retrying until the
     /// transfer completes or produces and error.
@@ -29,5 +32,11 @@ pub trait SyncClient {
         lamports: u64,
         keypair: &Keypair,
         pubkey: &Pubkey,
-    ) -> Result<(), TransactionError>;
+    ) -> Result<Signature, TransactionError>;
+
+    /// Get an account or None if not found.
+    fn get_account_data(&self, pubkey: &Pubkey) -> Option<Vec<u8>>;
+
+    /// Get account balance or 0 if not found.
+    fn get_balance(&self, pubkey: &Pubkey) -> u64;
 }

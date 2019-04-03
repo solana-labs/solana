@@ -652,7 +652,7 @@ mod test {
         let (client, owner) = create_client(&bank, mint_keypair);
 
         let new = create_token_account(&client, &owner);
-        let new_account = bank.get_account(&new).unwrap();
+        let new_account_data = client.get_account_data(&new).unwrap();
 
         // Check results
 
@@ -660,7 +660,7 @@ mod test {
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_000, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&new_account.data).unwrap()
+            ExchangeProcessor::deserialize_account(&new_account_data).unwrap()
         );
     }
 
@@ -691,7 +691,7 @@ mod test {
             .send_instruction(&owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
 
-        let new_account = bank.get_account(&new).unwrap();
+        let new_account_data = client.get_account_data(&new).unwrap();
 
         // Check results
 
@@ -699,7 +699,7 @@ mod test {
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_042, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&new_account.data).unwrap()
+            ExchangeProcessor::deserialize_account(&new_account_data).unwrap()
         );
     }
 
@@ -720,9 +720,9 @@ mod test {
             1000,
         );
 
-        let trade_account = bank.get_account(&trade).unwrap();
-        let src_account = bank.get_account(&src).unwrap();
-        let dst_account = bank.get_account(&dst).unwrap();
+        let trade_account_data = client.get_account_data(&trade).unwrap();
+        let src_account_data = client.get_account_data(&src).unwrap();
+        let dst_account_data = client.get_account_data(&dst).unwrap();
 
         // check results
 
@@ -736,19 +736,19 @@ mod test {
                 src_account: src,
                 dst_account: dst
             },
-            ExchangeProcessor::deserialize_trade(&trade_account.data).unwrap()
+            ExchangeProcessor::deserialize_trade(&trade_account_data).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_040, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&src_account.data).unwrap()
+            ExchangeProcessor::deserialize_account(&src_account_data).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_000, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&dst_account.data).unwrap()
+            ExchangeProcessor::deserialize_account(&dst_account_data).unwrap()
         );
     }
 
@@ -794,14 +794,14 @@ mod test {
             .send_instruction(&owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
 
-        let to_trade_account = bank.get_account(&to_trade).unwrap();
-        let to_src_account = bank.get_account(&to_src).unwrap();
-        let to_dst_account = bank.get_account(&to_dst).unwrap();
-        let from_trade_account = bank.get_account(&from_trade).unwrap();
-        let from_src_account = bank.get_account(&from_src).unwrap();
-        let from_dst_account = bank.get_account(&from_dst).unwrap();
-        let profit_account = bank.get_account(&profit).unwrap();
-        let swap_account = bank.get_account(&swap).unwrap();
+        let to_trade_account_data = client.get_account_data(&to_trade).unwrap();
+        let to_src_account_data = client.get_account_data(&to_src).unwrap();
+        let to_dst_account_data = client.get_account_data(&to_dst).unwrap();
+        let from_trade_account_data = client.get_account_data(&from_trade).unwrap();
+        let from_src_account_data = client.get_account_data(&from_src).unwrap();
+        let from_dst_account_data = client.get_account_data(&from_dst).unwrap();
+        let profit_account_data = client.get_account_data(&profit).unwrap();
+        let swap_account_data = client.get_account_data(&swap).unwrap();
 
         // check results
 
@@ -815,19 +815,19 @@ mod test {
                 src_account: to_src,
                 dst_account: to_dst
             },
-            ExchangeProcessor::deserialize_trade(&to_trade_account.data).unwrap()
+            ExchangeProcessor::deserialize_trade(&to_trade_account_data).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_000, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&to_src_account.data).unwrap()
+            ExchangeProcessor::deserialize_account(&to_src_account_data).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_000, 100_002, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&to_dst_account.data).unwrap()
+            ExchangeProcessor::deserialize_account(&to_dst_account_data).unwrap()
         );
         assert_eq!(
             TradeOrderInfo {
@@ -839,25 +839,25 @@ mod test {
                 src_account: from_src,
                 dst_account: from_dst
             },
-            ExchangeProcessor::deserialize_trade(&from_trade_account.data).unwrap()
+            ExchangeProcessor::deserialize_trade(&from_trade_account_data).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_000, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&from_src_account.data).unwrap()
+            ExchangeProcessor::deserialize_account(&from_src_account_data).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_001, 100_000, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&from_dst_account.data).unwrap()
+            ExchangeProcessor::deserialize_account(&from_dst_account_data).unwrap()
         );
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
                 .tokens(100_000, 100_001, 100_000, 100_000),
-            ExchangeProcessor::deserialize_account(&profit_account.data).unwrap()
+            ExchangeProcessor::deserialize_account(&profit_account_data).unwrap()
         );
         assert_eq!(
             TradeSwapInfo {
@@ -869,7 +869,7 @@ mod test {
                 secondary_tokens: 3,
                 secondary_price: 3000,
             },
-            deserialize_swap(&swap_account.data)
+            deserialize_swap(&swap_account_data)
         );
     }
 }
