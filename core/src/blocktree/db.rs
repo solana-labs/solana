@@ -17,8 +17,8 @@ pub mod columns {
     pub struct SlotMeta;
 
     #[derive(Debug)]
-    /// DetachedHeads Column
-    pub struct DetachedHeads;
+    /// Orphans Column
+    pub struct Orphans;
 
     #[derive(Debug)]
     /// Erasure Column

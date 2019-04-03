@@ -59,8 +59,8 @@ pub const GROW_LAYER_CAPACITY: bool = false;
 /// milliseconds we sleep for between gossip requests
 pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 
-/// the number of slots to respond with when responding to `DetachedHead` requests
-pub const MAX_SLOT_REPAIR_RESPONSES: usize = 10;
+/// the number of slots to respond with when responding to `Orphan` requests
+pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -165,7 +165,7 @@ enum Protocol {
     /// TODO: move this message to a different module
     RequestWindowIndex(ContactInfo, u64, u64),
     RequestHighestWindowIndex(ContactInfo, u64, u64),
-    RequestDetachedHead(ContactInfo, u64),
+    RequestOrphan(ContactInfo, u64),
 }
 
 impl ClusterInfo {
@@ -313,6 +313,7 @@ impl ClusterInfo {
             .collect();
         let max_ts = votes.iter().map(|x| x.0).max().unwrap_or(since);
         let txs: Vec<Transaction> = votes.into_iter().map(|x| x.1).collect();
+        let votes: Vec<u64> = txs.iter().map(|tx| )
         (txs, max_ts)
     }
 
@@ -751,8 +752,8 @@ impl ClusterInfo {
         Ok(out)
     }
 
-    fn detached_head_bytes(&self, slot: u64) -> Result<Vec<u8>> {
-        let req = Protocol::RequestDetachedHead(self.my_data().clone(), slot);
+    fn orphan_bytes(&self, slot: u64) -> Result<Vec<u8>> {
+        let req = Protocol::RequestOrphan(self.my_data().clone(), slot);
         let out = serialize(&req)?;
         Ok(out)
     }
@@ -789,16 +790,13 @@ impl ClusterInfo {
                     );
                     self.window_highest_index_request_bytes(*slot, *blob_index)?
                 }
-                RepairType::DetachedHead(slot) => {
+                RepairType::Orphan(slot) => {
                     submit(
-                        influxdb::Point::new("cluster_info-repair_detached")
-                            .add_field(
-                                "repair-detached-head",
-                                influxdb::Value::Integer(*slot as i64),
-                            )
+                        influxdb::Point::new("cluster_info-repair_orphan")
+                            .add_field("repair-orphan", influxdb::Value::Integer(*slot as i64))
                             .to_owned(),
                     );
-                    self.detached_head_bytes(*slot)?
+                    self.orphan_bytes(*slot)?
                 }
             }
         };
@@ -995,7 +993,7 @@ impl ClusterInfo {
         vec![]
     }
 
-    fn run_detached_head(
+    fn run_orphan(
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
         mut slot: u64,
@@ -1145,7 +1143,7 @@ impl ClusterInfo {
         match request {
             Protocol::RequestWindowIndex(ref from, _, _) => from,
             Protocol::RequestHighestWindowIndex(ref from, _, _) => from,
-            Protocol::RequestDetachedHead(ref from, _) => from,
+            Protocol::RequestOrphan(ref from, _) => from,
             _ => panic!("Not a repair request"),
         }
     }
@@ -1209,16 +1207,11 @@ impl ClusterInfo {
                         "RequestHighestWindowIndex",
                     )
                 }
-                Protocol::RequestDetachedHead(_, slot) => {
-                    inc_new_counter_info!("cluster_info-request-detached-head", 1);
+                Protocol::RequestOrphan(_, slot) => {
+                    inc_new_counter_info!("cluster_info-request-orphan", 1);
                     (
-                        Self::run_detached_head(
-                            &from_addr,
-                            blocktree,
-                            *slot,
-                            MAX_SLOT_REPAIR_RESPONSES,
-                        ),
-                        "RequestDetachedHead",
+                        Self::run_orphan(&from_addr, blocktree, *slot, MAX_ORPHAN_REPAIR_RESPONSES),
+                        "RequestOrphan",
                     )
                 }
                 _ => panic!("Not a repair request"),
@@ -1832,12 +1825,12 @@ mod tests {
     }
 
     #[test]
-    fn run_detached_head() {
+    fn run_orphan() {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
-            let rv = ClusterInfo::run_detached_head(&socketaddr_any!(), Some(&blocktree), 2, 0);
+            let rv = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 2, 0);
             assert!(rv.is_empty());
 
             // Create slots 1, 2, 3 with 5 blobs apiece
@@ -1848,16 +1841,15 @@ mod tests {
                 .expect("Expect successful ledger write");
 
             // We don't have slot 4, so we don't know how to service this requeset
-            let rv = ClusterInfo::run_detached_head(&socketaddr_any!(), Some(&blocktree), 4, 5);
+            let rv = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 4, 5);
             assert!(rv.is_empty());
 
             // For slot 3, we should return the highest blobs from slots 3, 2, 1 respectively
             // for this request
-            let rv: Vec<_> =
-                ClusterInfo::run_detached_head(&socketaddr_any!(), Some(&blocktree), 3, 5)
-                    .iter()
-                    .map(|b| b.read().unwrap().clone())
-                    .collect();
+            let rv: Vec<_> = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 3, 5)
+                .iter()
+                .map(|b| b.read().unwrap().clone())
+                .collect();
             let expected: Vec<_> = (1..=3)
                 .rev()
                 .map(|slot| blocktree.get_data_blob(slot, 4).unwrap().unwrap())

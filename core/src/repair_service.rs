@@ -17,11 +17,11 @@ pub const MAX_REPAIR_LENGTH: usize = 16;
 pub const REPAIR_MS: u64 = 100;
 pub const MAX_REPAIR_TRIES: u64 = 128;
 pub const NUM_FORKS_TO_REPAIR: usize = 5;
-pub const MAX_DETACHED_HEADS: usize = 5;
+pub const MAX_ORPHANS: usize = 5;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepairType {
-    DetachedHead(u64),
+    Orphan(u64),
     HighestBlob(u64, u64),
     Blob(u64, u64),
 }
@@ -157,15 +157,15 @@ impl RepairService {
 
         // TODO: Incorporate gossip to determine priorities for repair?
 
-        // Try to resolve detached heads in blocktree
-        let detached_heads = blocktree.get_detached_heads(Some(MAX_DETACHED_HEADS));
+        // Try to resolve orphans in blocktree
+        let orphans = blocktree.get_orphans(Some(MAX_ORPHANS));
 
-        Self::generate_repairs_for_detached_heads(&detached_heads[..], &mut repairs);
+        Self::generate_repairs_for_orphans(&orphans[..], &mut repairs);
         Ok(repairs)
     }
 
-    fn generate_repairs_for_detached_heads(detached_heads: &[u64], repairs: &mut Vec<RepairType>) {
-        repairs.extend(detached_heads.iter().map(|h| RepairType::DetachedHead(*h)));
+    fn generate_repairs_for_orphans(orphans: &[u64], repairs: &mut Vec<RepairType>) {
+        repairs.extend(orphans.iter().map(|h| RepairType::Orphan(*h)));
     }
 
     /// Repairs any fork starting at the input slot
@@ -210,12 +210,12 @@ mod test {
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
 
     #[test]
-    pub fn test_repair_detached_head() {
+    pub fn test_repair_orphan() {
         let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            // Create some detached head slots
+            // Create some orphan slots
             let (mut blobs, _) = make_slot_entries(1, 0, 1);
             let (blobs2, _) = make_slot_entries(5, 2, 1);
             blobs.extend(blobs2);
@@ -224,8 +224,8 @@ mod test {
                 RepairService::generate_repairs(&blocktree, 2).unwrap(),
                 vec![
                     RepairType::HighestBlob(0, 0),
-                    RepairType::DetachedHead(0),
-                    RepairType::DetachedHead(2)
+                    RepairType::Orphan(0),
+                    RepairType::Orphan(2)
                 ]
             );
         }
@@ -248,7 +248,7 @@ mod test {
             // Check that repair tries to patch the empty slot
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, 2).unwrap(),
-                vec![RepairType::HighestBlob(0, 0), RepairType::DetachedHead(0)]
+                vec![RepairType::HighestBlob(0, 0), RepairType::Orphan(0)]
             );
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
