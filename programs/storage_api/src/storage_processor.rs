@@ -556,10 +556,10 @@ mod tests {
         // assert_eq!(bank.get_balance(&replicator), TOTAL_REPLICATOR_REWARDS);
     }
 
-    fn get_storage_entry_height(bank: &Bank, account: &Pubkey) -> u64 {
-        match bank.get_account(&account) {
-            Some(storage_system_account) => {
-                let contract = deserialize(&storage_system_account.data);
+    fn get_storage_entry_height<C: SyncClient>(client: &C, account: &Pubkey) -> u64 {
+        match client.get_account_data(&account) {
+            Some(storage_system_account_data) => {
+                let contract = deserialize(&storage_system_account_data);
                 if let Ok(contract) = contract {
                     match contract {
                         StorageContract::ValidatorStorage { entry_height, .. } => {
@@ -576,9 +576,9 @@ mod tests {
         0
     }
 
-    fn get_storage_blockhash(bank: &Bank, account: &Pubkey) -> Hash {
-        if let Some(storage_system_account) = bank.get_account(&account) {
-            let contract = deserialize(&storage_system_account.data);
+    fn get_storage_blockhash<C: SyncClient>(client: &C, account: &Pubkey) -> Hash {
+        if let Some(storage_system_account_data) = client.get_account_data(&account) {
+            let contract = deserialize(&storage_system_account_data);
             if let Ok(contract) = contract {
                 match contract {
                     StorageContract::ValidatorStorage { hash, .. } => {
@@ -652,11 +652,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            get_storage_entry_height(&bank, &validator_pubkey),
+            get_storage_entry_height(&bank_client, &validator_pubkey),
             ENTRIES_PER_SEGMENT
         );
         assert_eq!(
-            get_storage_blockhash(&bank, &validator_pubkey),
+            get_storage_blockhash(&bank_client, &validator_pubkey),
             storage_blockhash
         );
     }
