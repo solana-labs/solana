@@ -46,7 +46,7 @@ pub enum ExchangeInstruction {
 
     /// Trade cancellation
     /// key 0 - Signer
-    /// key 1 -Ttrade order to cancel
+    /// key 1 - Trade order to cancel
     TradeCancellation,
 
     /// Trade swap request
