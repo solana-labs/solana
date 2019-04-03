@@ -172,6 +172,7 @@ impl Blocktree {
             erasure_cf,
             detached_heads_cf,
             new_blobs_signals: vec![],
+            root_slot: RwLock::new(0),
         })
     }
 
@@ -702,10 +703,7 @@ impl Blocktree {
 
     pub fn get_detached_heads(&self, max: Option<usize>) -> Vec<u64> {
         let mut results = vec![];
-        let mut iter = self
-            .db
-            .raw_iterator_cf(self.detached_heads_cf.handle())
-            .unwrap();
+        let mut iter = self.detached_heads_cf.cursor().unwrap();
         iter.seek_to_first();
         while iter.valid() {
             if let Some(max) = max {
@@ -713,7 +711,7 @@ impl Blocktree {
                     break;
                 }
             }
-            results.push(DetachedHeadsCf::index(&iter.key().unwrap()));
+            results.push(iter.key().unwrap());
             iter.next();
         }
         results

@@ -12,12 +12,6 @@ use rocksdb::{
 
 use std::fs;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
-
-use super::db::{
-    Cursor, Database, IWriteBatch, IndexColumn, LedgerColumnFamily, LedgerColumnFamilyRaw,
-};
-use super::{Blocktree, BlocktreeError};
 
 // A good value for this is the number of cores on the machine
 const TOTAL_THREADS: i32 = 8;
