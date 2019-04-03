@@ -155,7 +155,8 @@ mod tests {
         bank.transfer(42, &mint_keypair, &system_pubkey).unwrap();
         let (bank_client, from_keypair, config_keypair) = create_config_client(&bank, mint_keypair);
 
-        let move_instruction = SystemInstruction::new_move(&system_pubkey, &Pubkey::default(), 42);
+        let move_instruction =
+            SystemInstruction::new_transfer(&system_pubkey, &Pubkey::default(), 42);
         let my_config = MyConfig::new(42);
         let mut store_instruction = ConfigInstruction::new_store(
             &from_keypair.pubkey(),

@@ -783,8 +783,8 @@ mod tests {
             let pubkey = Pubkey::new_rand();
 
             let transactions = vec![
-                SystemTransaction::new_move(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-                SystemTransaction::new_move(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
+                SystemTransaction::new_transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
+                SystemTransaction::new_transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
             ];
 
             let mut results = vec![Ok(()), Ok(())];
@@ -820,7 +820,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let pubkey = Pubkey::new_rand();
 
-        let transactions = vec![SystemTransaction::new_move(
+        let transactions = vec![SystemTransaction::new_transfer(
             &mint_keypair,
             &pubkey,
             1,
@@ -873,7 +873,7 @@ mod tests {
 
             assert_eq!(done, true);
 
-            let transactions = vec![SystemTransaction::new_move(
+            let transactions = vec![SystemTransaction::new_transfer(
                 &mint_keypair,
                 &pubkey,
                 2,

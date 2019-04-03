@@ -20,7 +20,7 @@ pub fn test_multisig_tx() -> Transaction {
     let lamports = 5;
     let blockhash = Hash::default();
 
-    let system_instruction = SystemInstruction::Move { lamports };
+    let system_instruction = SystemInstruction::Transfer { lamports };
 
     let program_ids = vec![system_program::id(), solana_budget_api::id()];
 

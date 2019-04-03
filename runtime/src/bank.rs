@@ -1027,8 +1027,8 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.last_blockhash(), genesis_block.hash());
 
-        let t1 = SystemTransaction::new_move(&mint_keypair, &key1, 1, genesis_block.hash(), 0);
-        let t2 = SystemTransaction::new_move(&mint_keypair, &key2, 1, genesis_block.hash(), 0);
+        let t1 = SystemTransaction::new_transfer(&mint_keypair, &key1, 1, genesis_block.hash(), 0);
+        let t2 = SystemTransaction::new_transfer(&mint_keypair, &key2, 1, genesis_block.hash(), 0);
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
@@ -1051,7 +1051,7 @@ mod tests {
         let key2 = Pubkey::new_rand();
         let bank = Bank::new(&genesis_block);
         let instructions =
-            SystemInstruction::new_move_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
+            SystemInstruction::new_transfer_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
         let tx = Transaction::new_signed_instructions(
             &[&mint_keypair],
             instructions,
@@ -1076,7 +1076,7 @@ mod tests {
         let key2 = Pubkey::new_rand();
         let bank = Bank::new(&genesis_block);
         let instructions =
-            SystemInstruction::new_move_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
+            SystemInstruction::new_transfer_many(&mint_keypair.pubkey(), &[(key1, 1), (key2, 1)]);
         let tx = Transaction::new_signed_instructions(
             &[&mint_keypair],
             instructions,
@@ -1217,8 +1217,13 @@ mod tests {
         let key1 = Keypair::new();
         let key2 = Keypair::new();
 
-        let tx =
-            SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 2, genesis_block.hash(), 0);
+        let tx = SystemTransaction::new_transfer(
+            &mint_keypair,
+            &key1.pubkey(),
+            2,
+            genesis_block.hash(),
+            0,
+        );
         let initial_balance = bank.get_balance(&leader);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(bank.get_balance(&leader), initial_balance + 3);
@@ -1226,7 +1231,7 @@ mod tests {
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5 - 3);
 
         bank.fee_calculator.lamports_per_signature = 1;
-        let tx = SystemTransaction::new_move(&key1, &key2.pubkey(), 1, genesis_block.hash(), 0);
+        let tx = SystemTransaction::new_transfer(&key1, &key2.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(bank.get_balance(&leader), initial_balance + 4);
         assert_eq!(bank.get_balance(&key1.pubkey()), 0);
@@ -1241,10 +1246,20 @@ mod tests {
         let mut bank = Bank::new(&genesis_block);
 
         let key = Keypair::new();
-        let tx1 =
-            SystemTransaction::new_move(&mint_keypair, &key.pubkey(), 2, genesis_block.hash(), 0);
-        let tx2 =
-            SystemTransaction::new_move(&mint_keypair, &key.pubkey(), 5, genesis_block.hash(), 0);
+        let tx1 = SystemTransaction::new_transfer(
+            &mint_keypair,
+            &key.pubkey(),
+            2,
+            genesis_block.hash(),
+            0,
+        );
+        let tx2 = SystemTransaction::new_transfer(
+            &mint_keypair,
+            &key.pubkey(),
+            5,
+            genesis_block.hash(),
+            0,
+        );
 
         let results = vec![
             Ok(()),
@@ -1347,7 +1362,7 @@ mod tests {
         let keypair = Keypair::new();
         let bank = Bank::new(&genesis_block);
 
-        let tx = SystemTransaction::new_move(
+        let tx = SystemTransaction::new_transfer(
             &mint_keypair,
             &keypair.pubkey(),
             1,
@@ -1378,7 +1393,7 @@ mod tests {
 
         bank.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
-        let tx = SystemTransaction::new_move(&key1, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        let tx = SystemTransaction::new_transfer(&key1, &key1.pubkey(), 1, genesis_block.hash(), 0);
         let res = bank.process_transactions(&vec![tx.clone()]);
         assert_eq!(res.len(), 1);
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
@@ -1412,8 +1427,13 @@ mod tests {
         let key1 = Keypair::new();
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let tx =
-            SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        let tx = SystemTransaction::new_transfer(
+            &mint_keypair,
+            &key1.pubkey(),
+            1,
+            genesis_block.hash(),
+            0,
+        );
         assert_eq!(parent.process_transaction(&tx), Ok(()));
         let bank = new_from_parent(&parent);
         assert_eq!(
@@ -1430,11 +1450,16 @@ mod tests {
         let key2 = Keypair::new();
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let tx =
-            SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        let tx = SystemTransaction::new_transfer(
+            &mint_keypair,
+            &key1.pubkey(),
+            1,
+            genesis_block.hash(),
+            0,
+        );
         assert_eq!(parent.process_transaction(&tx), Ok(()));
         let bank = new_from_parent(&parent);
-        let tx = SystemTransaction::new_move(&key1, &key2.pubkey(), 1, genesis_block.hash(), 0);
+        let tx = SystemTransaction::new_transfer(&key1, &key2.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(parent.get_signature_status(&tx.signatures[0]), None);
     }
@@ -1491,8 +1516,13 @@ mod tests {
         let key2 = Keypair::new();
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let tx_move_mint_to_1 =
-            SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        let tx_move_mint_to_1 = SystemTransaction::new_transfer(
+            &mint_keypair,
+            &key1.pubkey(),
+            1,
+            genesis_block.hash(),
+            0,
+        );
         trace!("parent process tx ");
         assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
         trace!("done parent process tx ");
@@ -1512,7 +1542,7 @@ mod tests {
 
         assert_eq!(bank.transaction_count(), parent.transaction_count());
         let tx_move_1_to_2 =
-            SystemTransaction::new_move(&key1, &key2.pubkey(), 1, genesis_block.hash(), 0);
+            SystemTransaction::new_transfer(&key1, &key2.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(bank.process_transaction(&tx_move_1_to_2), Ok(()));
         assert_eq!(bank.transaction_count(), 2);
         assert_eq!(parent.transaction_count(), 1);
@@ -1630,7 +1660,7 @@ mod tests {
         let key = Keypair::new();
 
         let mut move_instruction =
-            SystemInstruction::new_move(&mint_keypair.pubkey(), &key.pubkey(), 0);
+            SystemInstruction::new_transfer(&mint_keypair.pubkey(), &key.pubkey(), 0);
         move_instruction.accounts[0].is_signer = false;
 
         let tx = Transaction::new_signed_instructions(
@@ -1711,8 +1741,13 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(500);
         let bank = Arc::new(Bank::new(&genesis_block));
         let key1 = Keypair::new();
-        let tx_move_mint_to_1 =
-            SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        let tx_move_mint_to_1 = SystemTransaction::new_transfer(
+            &mint_keypair,
+            &key1.pubkey(),
+            1,
+            genesis_block.hash(),
+            0,
+        );
         assert_eq!(bank.process_transaction(&tx_move_mint_to_1), Ok(()));
         assert_eq!(bank.is_delta.load(Ordering::Relaxed), true);
     }
@@ -1725,8 +1760,13 @@ mod tests {
         assert_eq!(bank.is_votable(), false);
 
         // Set is_delta to true
-        let tx_move_mint_to_1 =
-            SystemTransaction::new_move(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        let tx_move_mint_to_1 = SystemTransaction::new_transfer(
+            &mint_keypair,
+            &key1.pubkey(),
+            1,
+            genesis_block.hash(),
+            0,
+        );
         assert_eq!(bank.process_transaction(&tx_move_mint_to_1), Ok(()));
         assert_eq!(bank.is_votable(), false);
 

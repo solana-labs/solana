@@ -54,7 +54,7 @@ fn assign_account_to_program(
 fn move_lamports(keyed_accounts: &mut [KeyedAccount], lamports: u64) -> Result<(), SystemError> {
     if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports {
         debug!(
-            "Move: insufficient lamports ({}, need {})",
+            "Transfer: insufficient lamports ({}, need {})",
             keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports, lamports
         );
         Err(SystemError::ResultWithNegativeLamports)?;
@@ -92,7 +92,7 @@ pub fn process_instruction(
                 }
                 assign_account_to_program(keyed_accounts, &program_id)
             }
-            SystemInstruction::Move { lamports } => move_lamports(keyed_accounts, lamports),
+            SystemInstruction::Transfer { lamports } => move_lamports(keyed_accounts, lamports),
         }
         .map_err(|e| InstructionError::CustomError(serialize(&e).unwrap()))
     } else {
@@ -297,7 +297,7 @@ mod tests {
         ];
         let malicious_instruction = Instruction::new(
             system_program::id(),
-            &SystemInstruction::Move { lamports: 10 },
+            &SystemInstruction::Transfer { lamports: 10 },
             account_metas,
         );
         assert_eq!(

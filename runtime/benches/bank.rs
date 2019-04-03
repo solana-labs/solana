@@ -21,7 +21,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
         .map(|_| {
             // Seed the 'from' account.
             let rando0 = Keypair::new();
-            let tx = SystemTransaction::new_move(
+            let tx = SystemTransaction::new_transfer(
                 &mint_keypair,
                 &rando0.pubkey(),
                 10_000,
@@ -32,8 +32,13 @@ fn bench_process_transaction(bencher: &mut Bencher) {
 
             // Seed the 'to' account and a cell for its signature.
             let rando1 = Keypair::new();
-            let tx =
-                SystemTransaction::new_move(&rando0, &rando1.pubkey(), 1, bank.last_blockhash(), 0);
+            let tx = SystemTransaction::new_transfer(
+                &rando0,
+                &rando1.pubkey(),
+                1,
+                bank.last_blockhash(),
+                0,
+            );
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
             // Finally, return the transaction to the benchmark.

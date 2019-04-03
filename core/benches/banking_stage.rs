@@ -56,7 +56,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
-    let dummy = SystemTransaction::new_move(
+    let dummy = SystemTransaction::new_transfer(
         &mint_keypair,
         &mint_keypair.pubkey(),
         1,
@@ -78,7 +78,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         .collect();
     // fund all the accounts
     transactions.iter().for_each(|tx| {
-        let fund = SystemTransaction::new_move(
+        let fund = SystemTransaction::new_transfer(
             &mint_keypair,
             &tx.message.account_keys[0],
             mint_total / txes as u64,
@@ -156,7 +156,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
-    let dummy = SystemTransaction::new_move(
+    let dummy = SystemTransaction::new_transfer(
         &mint_keypair,
         &mint_keypair.pubkey(),
         1,
@@ -194,7 +194,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         })
         .collect();
     transactions.iter().for_each(|tx| {
-        let fund = SystemTransaction::new_move(
+        let fund = SystemTransaction::new_transfer(
             &mint_keypair,
             &tx.message.account_keys[0],
             mint_total / txes as u64,

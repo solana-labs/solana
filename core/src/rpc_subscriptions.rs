@@ -302,7 +302,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let blockhash = bank.last_blockhash();
-        let tx = SystemTransaction::new_move(&mint_keypair, &alice.pubkey(), 20, blockhash, 0);
+        let tx = SystemTransaction::new_transfer(&mint_keypair, &alice.pubkey(), 20, blockhash, 0);
         let signature = tx.signatures[0];
         bank.process_transaction(&tx).unwrap();
 

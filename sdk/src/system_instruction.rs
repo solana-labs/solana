@@ -25,10 +25,10 @@ pub enum SystemInstruction {
     /// Assign account to a program
     /// * Transaction::keys[0] - account to assign
     Assign { program_id: Pubkey },
-    /// Move lamports
+    /// Transfer lamports
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - destination
-    Move { lamports: u64 },
+    Transfer { lamports: u64 },
 }
 
 impl SystemInstruction {
@@ -71,23 +71,23 @@ impl SystemInstruction {
         )
     }
 
-    pub fn new_move(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction {
+    pub fn new_transfer(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction {
         let account_metas = vec![
             AccountMeta::new(*from_id, true),
             AccountMeta::new(*to_id, false),
         ];
         Instruction::new(
             system_program::id(),
-            &SystemInstruction::Move { lamports },
+            &SystemInstruction::Transfer { lamports },
             account_metas,
         )
     }
 
-    /// Create and sign new SystemInstruction::Move transaction to many destinations
-    pub fn new_move_many(from_id: &Pubkey, to_lamports: &[(Pubkey, u64)]) -> Vec<Instruction> {
+    /// Create and sign new SystemInstruction::Transfer transaction to many destinations
+    pub fn new_transfer_many(from_id: &Pubkey, to_lamports: &[(Pubkey, u64)]) -> Vec<Instruction> {
         to_lamports
             .iter()
-            .map(|(to_id, lamports)| SystemInstruction::new_move(from_id, to_id, *lamports))
+            .map(|(to_id, lamports)| SystemInstruction::new_transfer(from_id, to_id, *lamports))
             .collect()
     }
 }
@@ -107,7 +107,7 @@ mod tests {
         let carol_pubkey = Pubkey::new_rand();
         let to_lamports = vec![(bob_pubkey, 1), (carol_pubkey, 2)];
 
-        let instructions = SystemInstruction::new_move_many(&alice_pubkey, &to_lamports);
+        let instructions = SystemInstruction::new_transfer_many(&alice_pubkey, &to_lamports);
         assert_eq!(instructions.len(), 2);
         assert_eq!(get_keys(&instructions[0]), vec![alice_pubkey, bob_pubkey]);
         assert_eq!(get_keys(&instructions[1]), vec![alice_pubkey, carol_pubkey]);

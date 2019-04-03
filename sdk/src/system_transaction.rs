@@ -60,8 +60,8 @@ impl SystemTransaction {
         Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
     }
 
-    /// Create and sign new SystemInstruction::Move transaction
-    pub fn new_move(
+    /// Create and sign new SystemInstruction::Transfer transaction
+    pub fn new_transfer(
         from_keypair: &Keypair,
         to: &Pubkey,
         lamports: u64,
@@ -69,7 +69,7 @@ impl SystemTransaction {
         _fee: u64,
     ) -> Transaction {
         let from_pubkey = from_keypair.pubkey();
-        let move_instruction = SystemInstruction::new_move(&from_pubkey, to, lamports);
+        let move_instruction = SystemInstruction::new_transfer(&from_pubkey, to, lamports);
         let instructions = vec![move_instruction];
         Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
     }
