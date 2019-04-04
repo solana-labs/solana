@@ -207,18 +207,30 @@ start() {
   testnet-beta)
     (
       set -x
+      # Force delete the network, as two different cloud providers are being used
+      # (otherwise, a subset of the nodes stay up while first cloud is deleted,
+      #  and the leader might be in that subset)
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
-          -t "$CHANNEL_OR_TAG" -n 35 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
-          ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-D}
+          -t "$CHANNEL_OR_TAG" -n 35 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 -D
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh beta-testnet-solana-com gce us-west1-a \
-          -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -P \
-          ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-D}
+          -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -P -D
+
+      if ! $maybeDelete; then
+        NO_VALIDATOR_SANITY=1 \
+        RUST_LOG=solana=info \
+          ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
+            -t "$CHANNEL_OR_TAG" -n 35 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
+            ${maybeReuseLedger:+-r}
+        NO_VALIDATOR_SANITY=1 \
+        RUST_LOG=solana=info \
+          ci/testnet-deploy.sh beta-testnet-solana-com gce us-west1-a \
+            -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -P \
+            ${maybeReuseLedger:+-r}
+      fi
     )
     ;;
   testnet-beta-perf)
