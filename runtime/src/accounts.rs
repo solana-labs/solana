@@ -796,8 +796,8 @@ impl AccountsDB {
                         stores[account_info.id].add_account();
                     }
                     for (pubkey, account_info) in account_map.iter() {
-                        if maps.insert(*pubkey, account_info.clone()).is_some() {
-                            stores[account_info.id].remove_account();
+                        if let Some(old_account_info) = maps.insert(*pubkey, account_info.clone()) {
+                            stores[old_account_info.id].remove_account();
                         }
                     }
                     *account_map = maps;
