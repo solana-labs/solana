@@ -25,7 +25,7 @@ log = "0.4.2"
 reqwest = "0.9.13"
 ring = "0.13.2"
 serde = "1.0.90"
-serde_derive = "1.0.89"
+serde_derive = "1.0.90"
 serde_yaml = "0.8.8"
 solana-client = { path = "../client", version = "0.13.0" }
 solana-config-api = { path = "../programs/config_api", version = "0.13.0" }
