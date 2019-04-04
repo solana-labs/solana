@@ -1,10 +1,10 @@
 use crate::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
-use bincode::{deserialize, serialize_into, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_processor_utils::State;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::cmp;
@@ -55,59 +55,23 @@ pub enum StorageContract {
     },
 }
 
-pub trait StorageAccount {
-    fn submit_mining_proof(
-        &mut self,
-        sha_state: Hash,
-        entry_height: u64,
-        signature: Signature,
-    ) -> Result<(), InstructionError>;
-    fn advertise_storage_recent_blockhash(
-        &mut self,
-        hash: Hash,
-        entry_height: u64,
-    ) -> Result<(), InstructionError>;
-    fn proof_validation(
-        &mut self,
-        entry_height: u64,
-        proofs: Vec<CheckedProof>,
-        replicator_accounts: &mut [KeyedAccount],
-    ) -> Result<(), InstructionError>;
-    fn claim_storage_reward(
-        &mut self,
-        entry_height: u64,
-        tick_height: u64,
-    ) -> Result<(), InstructionError>;
+pub struct StorageAccount<'a> {
+    account: &'a mut Account,
 }
 
-pub trait State<T> {
-    fn state(&self) -> Result<T, InstructionError>;
-    fn set_state(&mut self, state: &T) -> Result<(), InstructionError>;
-}
-
-impl<'a, T> State<T> for KeyedAccount<'a>
-where
-    T: serde::Serialize + serde::de::DeserializeOwned,
-{
-    fn state(&self) -> Result<T, InstructionError> {
-        deserialize(&self.account.data).map_err(|_| InstructionError::InvalidAccountData)
+impl<'a> StorageAccount<'a> {
+    pub fn new(account: &'a mut Account) -> Self {
+        Self { account }
     }
-    fn set_state(&mut self, state: &T) -> Result<(), InstructionError> {
-        serialize_into(&mut self.account.data[..], state).map_err(|err| match *err {
-            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
-            _ => InstructionError::GenericError,
-        })
-    }
-}
 
-impl<'a> StorageAccount for KeyedAccount<'a> {
-    fn submit_mining_proof(
+    pub fn submit_mining_proof(
         &mut self,
+        id: Pubkey,
         sha_state: Hash,
         entry_height: u64,
         signature: Signature,
     ) -> Result<(), InstructionError> {
-        let mut storage_contract = &mut self.state()?;
+        let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::Default = storage_contract {
             *storage_contract = StorageContract::ReplicatorStorage {
                 proofs: vec![],
@@ -132,23 +96,23 @@ impl<'a> StorageAccount for KeyedAccount<'a> {
             );
 
             let proof_info = Proof {
-                id: *self.signer_key().unwrap(),
+                id,
                 sha_state,
                 signature,
             };
             proofs[segment_index] = proof_info;
-            self.set_state(storage_contract)
+            self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
         }
     }
 
-    fn advertise_storage_recent_blockhash(
+    pub fn advertise_storage_recent_blockhash(
         &mut self,
         hash: Hash,
         entry_height: u64,
     ) -> Result<(), InstructionError> {
-        let mut storage_contract = &mut self.state()?;
+        let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::Default = storage_contract {
             *storage_contract = StorageContract::ValidatorStorage {
                 entry_height: 0,
@@ -182,19 +146,19 @@ impl<'a> StorageAccount for KeyedAccount<'a> {
             *reward_validations = lockout_validations.clone();
             lockout_validations.clear();
             lockout_validations.resize(segments as usize, Vec::new());
-            self.set_state(storage_contract)
+            self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
         }
     }
 
-    fn proof_validation(
+    pub fn proof_validation(
         &mut self,
         entry_height: u64,
         proofs: Vec<CheckedProof>,
-        replicator_accounts: &mut [KeyedAccount],
+        replicator_accounts: &mut [StorageAccount],
     ) -> Result<(), InstructionError> {
-        let mut storage_contract = &mut self.state()?;
+        let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::Default = storage_contract {
             *storage_contract = StorageContract::ValidatorStorage {
                 entry_height: 0,
@@ -218,12 +182,16 @@ impl<'a> StorageAccount for KeyedAccount<'a> {
             let mut previous_proofs = replicator_accounts
                 .iter_mut()
                 .filter_map(|account| {
-                    account.state().ok().map(move |contract| match contract {
-                        StorageContract::ReplicatorStorage { proofs, .. } => {
-                            Some((account, proofs[segment_index].clone()))
-                        }
-                        _ => None,
-                    })
+                    account
+                        .account
+                        .state()
+                        .ok()
+                        .map(move |contract| match contract {
+                            StorageContract::ReplicatorStorage { proofs, .. } => {
+                                Some((account, proofs[segment_index].clone()))
+                            }
+                            _ => None,
+                        })
                 })
                 .flatten()
                 .collect::<Vec<_>>();
@@ -262,18 +230,18 @@ impl<'a> StorageAccount for KeyedAccount<'a> {
 
             // allow validators to store successful validations
             lockout_validations[segment_index].append(&mut valid_proofs);
-            self.set_state(storage_contract)
+            self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
         }
     }
 
-    fn claim_storage_reward(
+    pub fn claim_storage_reward(
         &mut self,
         entry_height: u64,
         tick_height: u64,
     ) -> Result<(), InstructionError> {
-        let mut storage_contract = &mut self.state()?;
+        let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::Default = storage_contract {
             Err(InstructionError::InvalidArgument)?
         };
@@ -287,7 +255,7 @@ impl<'a> StorageAccount for KeyedAccount<'a> {
             // TODO can't just create lamports out of thin air
             // self.account.lamports += TOTAL_VALIDATOR_REWARDS * num_validations;
             reward_validations.clear();
-            self.set_state(storage_contract)
+            self.account.set_state(storage_contract)
         } else if let StorageContract::ReplicatorStorage {
             reward_validations, ..
         } = &mut storage_contract
@@ -311,7 +279,7 @@ impl<'a> StorageAccount for KeyedAccount<'a> {
             //     * TOTAL_REPLICATOR_REWARDS
             //     * (num_validations / reward_validations[claims_index].len() as u64);
             reward_validations.clear();
-            self.set_state(storage_contract)
+            self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
         }
@@ -320,11 +288,11 @@ impl<'a> StorageAccount for KeyedAccount<'a> {
 
 /// Store the result of a proof validation into the replicator account
 fn store_validation_result(
-    keyed_account: &mut KeyedAccount,
+    storage_account: &mut StorageAccount,
     segment_index: usize,
     status: ProofStatus,
 ) -> Result<(), InstructionError> {
-    let mut storage_contract = keyed_account.state()?;
+    let mut storage_contract = storage_account.account.state()?;
     match &mut storage_contract {
         StorageContract::ReplicatorStorage {
             proofs,
@@ -342,7 +310,7 @@ fn store_validation_result(
         }
         _ => return Err(InstructionError::InvalidAccountData),
     }
-    keyed_account.set_state(&storage_contract)
+    storage_account.account.set_state(&storage_contract)
 }
 
 fn count_valid_proofs(proofs: &[CheckedProof]) -> u64 {
@@ -353,4 +321,44 @@ fn count_valid_proofs(proofs: &[CheckedProof]) -> u64 {
         }
     }
     num
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_account_data() {
+        solana_logger::setup();
+        let mut account = Account::default();
+        account.data.resize(4 * 1024, 0);
+        let storage_account = StorageAccount::new(&mut account);
+        // pretend it's a validator op code
+        let mut contract = storage_account.account.state().unwrap();
+        if let StorageContract::ValidatorStorage { .. } = contract {
+            assert!(true)
+        }
+        if let StorageContract::ReplicatorStorage { .. } = &mut contract {
+            panic!("this shouldn't work");
+        }
+
+        contract = StorageContract::ValidatorStorage {
+            entry_height: 0,
+            hash: Hash::default(),
+            lockout_validations: vec![],
+            reward_validations: vec![],
+        };
+        storage_account.account.set_state(&contract).unwrap();
+        if let StorageContract::ReplicatorStorage { .. } = contract {
+            panic!("this shouldn't work");
+        }
+        contract = StorageContract::ReplicatorStorage {
+            proofs: vec![],
+            reward_validations: vec![],
+        };
+        storage_account.account.set_state(&contract).unwrap();
+        if let StorageContract::ValidatorStorage { .. } = contract {
+            panic!("this shouldn't work");
+        }
+    }
 }

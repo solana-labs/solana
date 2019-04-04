@@ -5,10 +5,10 @@
 
 //use crate::{check_id, id};
 //use log::*;
-use bincode::{deserialize, serialize_into, ErrorKind};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_processor_utils::State;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::VoteState;
 
@@ -37,26 +37,6 @@ pub trait StakeAccount {
         stake_account: &mut KeyedAccount,
         vote_account: &KeyedAccount,
     ) -> Result<(), InstructionError>;
-}
-
-pub trait State<T> {
-    fn state(&self) -> Result<T, InstructionError>;
-    fn set_state(&mut self, state: &T) -> Result<(), InstructionError>;
-}
-
-impl<'a, T> State<T> for KeyedAccount<'a>
-where
-    T: serde::Serialize + serde::de::DeserializeOwned,
-{
-    fn state(&self) -> Result<T, InstructionError> {
-        deserialize(&self.account.data).map_err(|_| InstructionError::InvalidAccountData)
-    }
-    fn set_state(&mut self, state: &T) -> Result<(), InstructionError> {
-        serialize_into(&mut self.account.data[..], state).map_err(|err| match *err {
-            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
-            _ => InstructionError::GenericError,
-        })
-    }
 }
 
 impl<'a> StakeAccount for KeyedAccount<'a> {
