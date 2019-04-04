@@ -83,7 +83,7 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use crate::id;
-    use crate::storage_contract::{CheckedProof, Proof, ProofStatus, State, StorageContract};
+    use crate::storage_contract::{CheckedProof, Proof, ProofStatus, StorageContract};
     use crate::storage_instruction;
     use crate::ENTRIES_PER_SEGMENT;
     use bincode::deserialize;
@@ -181,41 +181,6 @@ mod tests {
             storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
 
         test_instruction(&ix, &mut accounts).unwrap();
-    }
-
-    #[test]
-    fn test_account_data() {
-        solana_logger::setup();
-        let mut account = Account::default();
-        account.data.resize(4 * 1024, 0);
-        let mut storage_account = StorageAccount::new(&mut account);
-        // pretend it's a validator op code
-        let mut contract = storage_account.state().unwrap();
-        if let StorageContract::ValidatorStorage { .. } = contract {
-            assert!(true)
-        }
-        if let StorageContract::ReplicatorStorage { .. } = &mut contract {
-            panic!("this shouldn't work");
-        }
-
-        contract = StorageContract::ValidatorStorage {
-            entry_height: 0,
-            hash: Hash::default(),
-            lockout_validations: vec![],
-            reward_validations: vec![],
-        };
-        storage_account.set_state(&contract).unwrap();
-        if let StorageContract::ReplicatorStorage { .. } = contract {
-            panic!("this shouldn't work");
-        }
-        contract = StorageContract::ReplicatorStorage {
-            proofs: vec![],
-            reward_validations: vec![],
-        };
-        storage_account.set_state(&contract).unwrap();
-        if let StorageContract::ValidatorStorage { .. } = contract {
-            panic!("this shouldn't work");
-        }
     }
 
     #[test]
