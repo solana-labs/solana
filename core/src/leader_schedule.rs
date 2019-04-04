@@ -5,7 +5,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::ops::Index;
 
 /// Stake-weighted leader schedule for one epoch.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct LeaderSchedule {
     slot_leaders: Vec<Pubkey>,
 }

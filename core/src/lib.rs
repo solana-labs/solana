@@ -37,6 +37,7 @@ pub mod fullnode;
 pub mod gen_keys;
 pub mod gossip_service;
 pub mod leader_schedule;
+pub mod leader_schedule_cache;
 pub mod leader_schedule_utils;
 pub mod local_cluster;
 pub mod local_vote_signer_service;

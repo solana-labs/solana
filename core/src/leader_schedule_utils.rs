@@ -6,7 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::NUM_CONSECUTIVE_LEADER_SLOTS;
 
 /// Return the leader schedule for the given epoch.
-fn leader_schedule(epoch_height: u64, bank: &Bank) -> Option<LeaderSchedule> {
+pub fn leader_schedule(epoch_height: u64, bank: &Bank) -> Option<LeaderSchedule> {
     staking_utils::delegated_stakes_at_epoch(bank, epoch_height).map(|stakes| {
         let mut seed = [0u8; 32];
         seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
@@ -19,22 +19,6 @@ fn leader_schedule(epoch_height: u64, bank: &Bank) -> Option<LeaderSchedule> {
             NUM_CONSECUTIVE_LEADER_SLOTS,
         )
     })
-}
-
-fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
-    // Sort first by stake. If stakes are the same, sort by pubkey to ensure a
-    // deterministic result.
-    // Note: Use unstable sort, because we dedup right after to remove the equal elements.
-    stakes.sort_unstable_by(|(l_id, l_stake), (r_id, r_stake)| {
-        if r_stake == l_stake {
-            r_id.cmp(&l_id)
-        } else {
-            r_stake.cmp(&l_stake)
-        }
-    });
-
-    // Now that it's sorted, we can do an O(n) dedup.
-    stakes.dedup();
 }
 
 /// Return the leader for the given slot.
@@ -92,6 +76,22 @@ pub fn num_ticks_left_in_slot(bank: &Bank, tick_height: u64) -> u64 {
 
 pub fn tick_height_to_slot(ticks_per_slot: u64, tick_height: u64) -> u64 {
     tick_height / ticks_per_slot
+}
+
+fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
+    // Sort first by stake. If stakes are the same, sort by pubkey to ensure a
+    // deterministic result.
+    // Note: Use unstable sort, because we dedup right after to remove the equal elements.
+    stakes.sort_unstable_by(|(l_id, l_stake), (r_id, r_stake)| {
+        if r_stake == l_stake {
+            r_id.cmp(&l_id)
+        } else {
+            r_stake.cmp(&l_stake)
+        }
+    });
+
+    // Now that it's sorted, we can do an O(n) dedup.
+    stakes.dedup();
 }
 
 #[cfg(test)]
