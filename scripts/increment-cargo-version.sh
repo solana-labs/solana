@@ -80,16 +80,16 @@ for Cargo_toml in $Cargo_tomls; do
   # Set new crate version
   (
     set -x
-    sed -i "$Cargo_toml" -e "s/^version = \"[^\"]*\"$/version = \"$newVersion\"/"
+    sed -e "s/^version = \"[^\"]*\"$/version = \"$newVersion\"/" -i '' "$Cargo_toml"
   )
 
   # Fix up the version references to other internal crates
   for crate in "${crates[@]}"; do
     (
       set -x
-      sed -i "$Cargo_toml" -e "
+      sed -e "
         s/^$crate = .*path = \"\([^\"]*\)\".*\$/$crate = \{ path = \"\1\", version = \"$newVersion\" \}/
-      "
+      " -i '' "$Cargo_toml"
     )
   done
 done
