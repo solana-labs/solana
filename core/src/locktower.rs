@@ -164,14 +164,16 @@ impl Locktower {
             }
 
             if vote_state.votes.len() > 1 {
-                let last_real_vote = &vote_state.votes[vote_state.votes.len() - 2];
+                let last_real_vote = &vote_state.nth_recent_vote(1);
                 // Update all the parents of this last vote with the stake of this vote account
-                Self::update_ancestor_stakes(
-                    &mut stake_lockouts,
-                    last_real_vote.slot,
-                    lamports,
-                    ancestors,
-                );
+                if let Some(vote) = last_real_vote {
+                    Self::update_ancestor_stakes(
+                        &mut stake_lockouts,
+                        vote.slot,
+                        lamports,
+                        ancestors,
+                    );
+                }
             }
         }
         stake_lockouts
