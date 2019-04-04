@@ -6,18 +6,15 @@ use solana_sdk::signature::Signature;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::sync_client::SyncClient;
 use solana_sdk::system_instruction;
-use solana_sdk::transaction::{Transaction, TransactionError};
+use solana_sdk::transaction::Transaction;
+use solana_sdk::transport::Result;
 
 pub struct BankClient<'a> {
     bank: &'a Bank,
 }
 
 impl<'a> SyncClient for BankClient<'a> {
-    fn send_message(
-        &self,
-        keypairs: &[&Keypair],
-        message: Message,
-    ) -> Result<Signature, TransactionError> {
+    fn send_message(&self, keypairs: &[&Keypair], message: Message) -> Result<Signature> {
         let blockhash = self.bank.last_blockhash();
         let transaction = Transaction::new(&keypairs, message, blockhash);
         self.bank.process_transaction(&transaction)?;
@@ -25,33 +22,23 @@ impl<'a> SyncClient for BankClient<'a> {
     }
 
     /// Create and process a transaction from a single instruction.
-    fn send_instruction(
-        &self,
-        keypair: &Keypair,
-        instruction: Instruction,
-    ) -> Result<Signature, TransactionError> {
+    fn send_instruction(&self, keypair: &Keypair, instruction: Instruction) -> Result<Signature> {
         let message = Message::new(vec![instruction]);
         self.send_message(&[keypair], message)
     }
 
     /// Transfer `lamports` from `keypair` to `pubkey`
-    fn transfer(
-        &self,
-        lamports: u64,
-        keypair: &Keypair,
-        pubkey: &Pubkey,
-    ) -> Result<Signature, TransactionError> {
+    fn transfer(&self, lamports: u64, keypair: &Keypair, pubkey: &Pubkey) -> Result<Signature> {
         let move_instruction = system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
         self.send_instruction(keypair, move_instruction)
     }
 
-    fn get_account_data(&self, pubkey: &Pubkey) -> Option<Vec<u8>> {
-        let account = self.bank.get_account(pubkey)?;
-        Some(account.data)
+    fn get_account_data(&self, pubkey: &Pubkey) -> Result<Option<Vec<u8>>> {
+        Ok(self.bank.get_account(pubkey).map(|account| account.data))
     }
 
-    fn get_balance(&self, pubkey: &Pubkey) -> u64 {
-        self.bank.get_balance(pubkey)
+    fn get_balance(&self, pubkey: &Pubkey) -> Result<u64> {
+        Ok(self.bank.get_balance(pubkey))
     }
 }
 
@@ -86,6 +73,6 @@ mod tests {
 
         let message = Message::new(vec![move_instruction]);
         bank_client.send_message(&doe_keypairs, message).unwrap();
-        assert_eq!(bank_client.get_balance(&bob_pubkey), 42);
+        assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 42);
     }
 }

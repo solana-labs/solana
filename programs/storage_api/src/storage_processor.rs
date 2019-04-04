@@ -557,7 +557,7 @@ mod tests {
     }
 
     fn get_storage_entry_height<C: SyncClient>(client: &C, account: &Pubkey) -> u64 {
-        match client.get_account_data(&account) {
+        match client.get_account_data(&account).unwrap() {
             Some(storage_system_account_data) => {
                 let contract = deserialize(&storage_system_account_data);
                 if let Ok(contract) = contract {
@@ -577,7 +577,7 @@ mod tests {
     }
 
     fn get_storage_blockhash<C: SyncClient>(client: &C, account: &Pubkey) -> Hash {
-        if let Some(storage_system_account_data) = client.get_account_data(&account) {
+        if let Some(storage_system_account_data) = client.get_account_data(&account).unwrap() {
             let contract = deserialize(&storage_system_account_data);
             if let Ok(contract) = contract {
                 match contract {

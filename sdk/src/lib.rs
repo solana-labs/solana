@@ -19,6 +19,7 @@ pub mod system_program;
 pub mod system_transaction;
 pub mod timing;
 pub mod transaction;
+pub mod transport;
 
 #[macro_use]
 extern crate serde_derive;
