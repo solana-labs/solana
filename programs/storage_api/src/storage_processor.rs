@@ -17,15 +17,22 @@ pub fn process_instruction(
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
+    let num_keyed_accounts = keyed_accounts.len();
+    let (me, rest) = keyed_accounts.split_at_mut(1);
+
     // accounts_keys[0] must be signed
-    if keyed_accounts[0].signer_key().is_none() {
+    let storage_account_pubkey = me[0].signer_key();
+    if storage_account_pubkey.is_none() {
         info!("account[0] is unsigned");
         Err(InstructionError::MissingRequiredSignature)?;
     }
+    let storage_account_pubkey = *storage_account_pubkey.unwrap();
 
-    let num_keyed_accounts = keyed_accounts.len();
-    let (me, rest) = keyed_accounts.split_at_mut(1);
-    let me = &mut me[0];
+    let mut storage_account = StorageAccount::new(&mut me[0].account);
+    let mut rest: Vec<_> = rest
+        .into_iter()
+        .map(|keyed_account| StorageAccount::new(&mut keyed_account.account))
+        .collect();
 
     match bincode::deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StorageInstruction::SubmitMiningProof {
@@ -36,7 +43,12 @@ pub fn process_instruction(
             if num_keyed_accounts != 1 {
                 Err(InstructionError::InvalidArgument)?;
             }
-            me.submit_mining_proof(sha_state, entry_height, signature)
+            storage_account.submit_mining_proof(
+                storage_account_pubkey,
+                sha_state,
+                entry_height,
+                signature,
+            )
         }
         StorageInstruction::AdvertiseStorageRecentBlockhash { hash, entry_height } => {
             if num_keyed_accounts != 1 {
@@ -44,7 +56,7 @@ pub fn process_instruction(
                 // to access its data
                 Err(InstructionError::InvalidArgument)?;
             }
-            me.advertise_storage_recent_blockhash(hash, entry_height)
+            storage_account.advertise_storage_recent_blockhash(hash, entry_height)
         }
         StorageInstruction::ClaimStorageReward { entry_height } => {
             if num_keyed_accounts != 1 {
@@ -52,7 +64,7 @@ pub fn process_instruction(
                 // to access its data
                 Err(InstructionError::InvalidArgument)?;
             }
-            me.claim_storage_reward(entry_height, tick_height)
+            storage_account.claim_storage_reward(entry_height, tick_height)
         }
         StorageInstruction::ProofValidation {
             entry_height,
@@ -62,7 +74,7 @@ pub fn process_instruction(
                 // have to have at least 1 replicator to do any verification
                 Err(InstructionError::InvalidArgument)?;
             }
-            me.proof_validation(entry_height, proofs, rest)
+            storage_account.proof_validation(entry_height, proofs, &mut rest)
         }
     }
 }
@@ -176,10 +188,9 @@ mod tests {
         solana_logger::setup();
         let mut account = Account::default();
         account.data.resize(4 * 1024, 0);
-        let pubkey = &Pubkey::default();
-        let mut keyed_account = KeyedAccount::new(&pubkey, false, &mut account);
+        let mut storage_account = StorageAccount::new(&mut account);
         // pretend it's a validator op code
-        let mut contract = keyed_account.state().unwrap();
+        let mut contract = storage_account.state().unwrap();
         if let StorageContract::ValidatorStorage { .. } = contract {
             assert!(true)
         }
@@ -193,7 +204,7 @@ mod tests {
             lockout_validations: vec![],
             reward_validations: vec![],
         };
-        keyed_account.set_state(&contract).unwrap();
+        storage_account.set_state(&contract).unwrap();
         if let StorageContract::ReplicatorStorage { .. } = contract {
             panic!("this shouldn't work");
         }
@@ -201,7 +212,7 @@ mod tests {
             proofs: vec![],
             reward_validations: vec![],
         };
-        keyed_account.set_state(&contract).unwrap();
+        storage_account.set_state(&contract).unwrap();
         if let StorageContract::ValidatorStorage { .. } = contract {
             panic!("this shouldn't work");
         }

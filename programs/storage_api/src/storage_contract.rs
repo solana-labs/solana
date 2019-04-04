@@ -2,7 +2,7 @@ use crate::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use bincode::{deserialize, serialize_into, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
@@ -55,29 +55,8 @@ pub enum StorageContract {
     },
 }
 
-pub trait StorageAccount {
-    fn submit_mining_proof(
-        &mut self,
-        sha_state: Hash,
-        entry_height: u64,
-        signature: Signature,
-    ) -> Result<(), InstructionError>;
-    fn advertise_storage_recent_blockhash(
-        &mut self,
-        hash: Hash,
-        entry_height: u64,
-    ) -> Result<(), InstructionError>;
-    fn proof_validation(
-        &mut self,
-        entry_height: u64,
-        proofs: Vec<CheckedProof>,
-        replicator_accounts: &mut [KeyedAccount],
-    ) -> Result<(), InstructionError>;
-    fn claim_storage_reward(
-        &mut self,
-        entry_height: u64,
-        tick_height: u64,
-    ) -> Result<(), InstructionError>;
+pub struct StorageAccount<'a> {
+    account: &'a mut Account,
 }
 
 pub trait State<T> {
@@ -85,7 +64,7 @@ pub trait State<T> {
     fn set_state(&mut self, state: &T) -> Result<(), InstructionError>;
 }
 
-impl<'a, T> State<T> for KeyedAccount<'a>
+impl<'a, T> State<T> for StorageAccount<'a>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -100,9 +79,14 @@ where
     }
 }
 
-impl<'a> StorageAccount for KeyedAccount<'a> {
-    fn submit_mining_proof(
+impl<'a> StorageAccount<'a> {
+    pub fn new(account: &'a mut Account) -> Self {
+        Self { account }
+    }
+
+    pub fn submit_mining_proof(
         &mut self,
+        id: Pubkey,
         sha_state: Hash,
         entry_height: u64,
         signature: Signature,
@@ -132,7 +116,7 @@ impl<'a> StorageAccount for KeyedAccount<'a> {
             );
 
             let proof_info = Proof {
-                id: *self.signer_key().unwrap(),
+                id,
                 sha_state,
                 signature,
             };
@@ -143,7 +127,7 @@ impl<'a> StorageAccount for KeyedAccount<'a> {
         }
     }
 
-    fn advertise_storage_recent_blockhash(
+    pub fn advertise_storage_recent_blockhash(
         &mut self,
         hash: Hash,
         entry_height: u64,
@@ -188,11 +172,11 @@ impl<'a> StorageAccount for KeyedAccount<'a> {
         }
     }
 
-    fn proof_validation(
+    pub fn proof_validation(
         &mut self,
         entry_height: u64,
         proofs: Vec<CheckedProof>,
-        replicator_accounts: &mut [KeyedAccount],
+        replicator_accounts: &mut [StorageAccount],
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.state()?;
         if let StorageContract::Default = storage_contract {
@@ -268,7 +252,7 @@ impl<'a> StorageAccount for KeyedAccount<'a> {
         }
     }
 
-    fn claim_storage_reward(
+    pub fn claim_storage_reward(
         &mut self,
         entry_height: u64,
         tick_height: u64,
@@ -320,11 +304,11 @@ impl<'a> StorageAccount for KeyedAccount<'a> {
 
 /// Store the result of a proof validation into the replicator account
 fn store_validation_result(
-    keyed_account: &mut KeyedAccount,
+    storage_account: &mut StorageAccount,
     segment_index: usize,
     status: ProofStatus,
 ) -> Result<(), InstructionError> {
-    let mut storage_contract = keyed_account.state()?;
+    let mut storage_contract = storage_account.state()?;
     match &mut storage_contract {
         StorageContract::ReplicatorStorage {
             proofs,
@@ -342,7 +326,7 @@ fn store_validation_result(
         }
         _ => return Err(InstructionError::InvalidAccountData),
     }
-    keyed_account.set_state(&storage_contract)
+    storage_account.set_state(&storage_contract)
 }
 
 fn count_valid_proofs(proofs: &[CheckedProof]) -> u64 {
