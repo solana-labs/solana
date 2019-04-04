@@ -49,7 +49,7 @@ __cloud_FindInstances() {
   declare filter="$1"
 
   instances=()
-  declare -a regions=("us-east-1" "us-west-1" "us-west-2")
+  declare -a regions=("us-east-1" "us-west-1" "us-west-2" "sa-east-1" "ap-northeast-2" "eu-central-1" "ca-central-1")
   for region in "${regions[@]}"
   do
     declare name publicIp privateIp
@@ -201,6 +201,18 @@ cloud_CreateInstances() {
       ;;
     us-west-2)
       imageName="ami-0dc34f4b016c9ce49"
+      ;;
+    sa-east-1)
+      imageName="ami-0f1678b6f63a0f923"
+      ;;
+    ap-northeast-2)
+      imageName="ami-0695e34e31339c3ff"
+      ;;
+    eu-central-1)
+      imageName="ami-054e21e355db24124"
+      ;;
+    ca-central-1)
+      imageName="ami-06ed08059bdc08fc9"
       ;;
     *)
       usage "Unsupported region: $region"
