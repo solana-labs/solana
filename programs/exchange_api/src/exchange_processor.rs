@@ -652,7 +652,7 @@ mod test {
         let (client, owner) = create_client(&bank, mint_keypair);
 
         let new = create_token_account(&client, &owner);
-        let new_account_data = client.get_account_data(&new).unwrap();
+        let new_account_data = client.get_account_data(&new).unwrap().unwrap();
 
         // Check results
 
@@ -691,7 +691,7 @@ mod test {
             .send_instruction(&owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
 
-        let new_account_data = client.get_account_data(&new).unwrap();
+        let new_account_data = client.get_account_data(&new).unwrap().unwrap();
 
         // Check results
 
@@ -720,9 +720,9 @@ mod test {
             1000,
         );
 
-        let trade_account_data = client.get_account_data(&trade).unwrap();
-        let src_account_data = client.get_account_data(&src).unwrap();
-        let dst_account_data = client.get_account_data(&dst).unwrap();
+        let trade_account_data = client.get_account_data(&trade).unwrap().unwrap();
+        let src_account_data = client.get_account_data(&src).unwrap().unwrap();
+        let dst_account_data = client.get_account_data(&dst).unwrap().unwrap();
 
         // check results
 
@@ -794,14 +794,14 @@ mod test {
             .send_instruction(&owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
 
-        let to_trade_account_data = client.get_account_data(&to_trade).unwrap();
-        let to_src_account_data = client.get_account_data(&to_src).unwrap();
-        let to_dst_account_data = client.get_account_data(&to_dst).unwrap();
-        let from_trade_account_data = client.get_account_data(&from_trade).unwrap();
-        let from_src_account_data = client.get_account_data(&from_src).unwrap();
-        let from_dst_account_data = client.get_account_data(&from_dst).unwrap();
-        let profit_account_data = client.get_account_data(&profit).unwrap();
-        let swap_account_data = client.get_account_data(&swap).unwrap();
+        let to_trade_account_data = client.get_account_data(&to_trade).unwrap().unwrap();
+        let to_src_account_data = client.get_account_data(&to_src).unwrap().unwrap();
+        let to_dst_account_data = client.get_account_data(&to_dst).unwrap().unwrap();
+        let from_trade_account_data = client.get_account_data(&from_trade).unwrap().unwrap();
+        let from_src_account_data = client.get_account_data(&from_src).unwrap().unwrap();
+        let from_dst_account_data = client.get_account_data(&from_dst).unwrap().unwrap();
+        let profit_account_data = client.get_account_data(&profit).unwrap().unwrap();
+        let swap_account_data = client.get_account_data(&swap).unwrap().unwrap();
 
         // check results
 

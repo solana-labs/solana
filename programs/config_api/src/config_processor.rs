@@ -118,7 +118,10 @@ mod tests {
             .send_message(&[&from_keypair, &config_keypair], message)
             .unwrap();
 
-        let config_account_data = bank_client.get_account_data(&config_pubkey).unwrap();
+        let config_account_data = bank_client
+            .get_account_data(&config_pubkey)
+            .unwrap()
+            .unwrap();
         assert_eq!(
             my_config,
             MyConfig::deserialize(&config_account_data).unwrap()

@@ -172,7 +172,7 @@ mod tests {
         bank_client
             .send_message(&[&alice_keypair], message)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&bob_pubkey), 100);
+        assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 100);
     }
 
     #[test]
@@ -214,11 +214,11 @@ mod tests {
 
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
-            bank_client.send_message(&[&mallory_keypair], message),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::MissingRequiredSignature
-            ))
+            bank_client
+                .send_message(&[&mallory_keypair], message)
+                .unwrap_err()
+                .unwrap(),
+            TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
         );
     }
 
@@ -262,11 +262,11 @@ mod tests {
 
         // Ensure the transaction fails because of the unsigned key.
         assert_eq!(
-            bank_client.send_message(&[&mallory_keypair], message),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::MissingRequiredSignature
-            ))
+            bank_client
+                .send_message(&[&mallory_keypair], message)
+                .unwrap_err()
+                .unwrap(),
+            TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
         );
     }
 
@@ -292,10 +292,13 @@ mod tests {
         bank_client
             .send_message(&[&alice_keypair], message)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&alice_pubkey), 1);
-        assert_eq!(bank_client.get_balance(&budget_pubkey), 1);
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 1);
 
-        let contract_account = bank_client.get_account_data(&budget_pubkey).unwrap();
+        let contract_account = bank_client
+            .get_account_data(&budget_pubkey)
+            .unwrap()
+            .unwrap();
         let budget_state = BudgetState::deserialize(&contract_account).unwrap();
         assert!(budget_state.is_pending());
 
@@ -305,17 +308,21 @@ mod tests {
         assert_eq!(
             bank_client
                 .send_instruction(&alice_keypair, instruction)
-                .unwrap_err(),
+                .unwrap_err()
+                .unwrap(),
             TransactionError::InstructionError(
                 0,
                 InstructionError::CustomError(serialize(&BudgetError::DestinationMissing).unwrap())
             )
         );
-        assert_eq!(bank_client.get_balance(&alice_pubkey), 1);
-        assert_eq!(bank_client.get_balance(&budget_pubkey), 1);
-        assert_eq!(bank_client.get_balance(&bob_pubkey), 0);
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 0);
 
-        let contract_account = bank_client.get_account_data(&budget_pubkey).unwrap();
+        let contract_account = bank_client
+            .get_account_data(&budget_pubkey)
+            .unwrap()
+            .unwrap();
         let budget_state = BudgetState::deserialize(&contract_account).unwrap();
         assert!(budget_state.is_pending());
 
@@ -326,10 +333,10 @@ mod tests {
         bank_client
             .send_instruction(&alice_keypair, instruction)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&alice_pubkey), 1);
-        assert_eq!(bank_client.get_balance(&budget_pubkey), 0);
-        assert_eq!(bank_client.get_balance(&bob_pubkey), 1);
-        assert_eq!(bank_client.get_account_data(&budget_pubkey), None);
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 0);
+        assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_account_data(&budget_pubkey).unwrap(), None);
     }
 
     #[test]
@@ -354,10 +361,13 @@ mod tests {
         bank_client
             .send_message(&[&alice_keypair], message)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&alice_pubkey), 2);
-        assert_eq!(bank_client.get_balance(&budget_pubkey), 1);
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 2);
+        assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 1);
 
-        let contract_account = bank_client.get_account_data(&budget_pubkey).unwrap();
+        let contract_account = bank_client
+            .get_account_data(&budget_pubkey)
+            .unwrap()
+            .unwrap();
         let budget_state = BudgetState::deserialize(&contract_account).unwrap();
         assert!(budget_state.is_pending());
 
@@ -367,7 +377,7 @@ mod tests {
         bank_client
             .transfer(1, &alice_keypair, &mallory_pubkey)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&alice_pubkey), 1);
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
 
         let instruction =
             budget_instruction::apply_signature(&mallory_pubkey, &budget_pubkey, &bob_pubkey);
@@ -375,9 +385,9 @@ mod tests {
             .send_instruction(&mallory_keypair, instruction)
             .unwrap();
         // nothing should be changed because apply witness didn't finalize a payment
-        assert_eq!(bank_client.get_balance(&alice_pubkey), 1);
-        assert_eq!(bank_client.get_balance(&budget_pubkey), 1);
-        assert_eq!(bank_client.get_account_data(&bob_pubkey), None);
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 1);
+        assert_eq!(bank_client.get_account_data(&bob_pubkey).unwrap(), None);
 
         // Now, cancel the transaction. mint gets her funds back
         let instruction =
@@ -385,8 +395,8 @@ mod tests {
         bank_client
             .send_instruction(&alice_keypair, instruction)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&alice_pubkey), 2);
-        assert_eq!(bank_client.get_account_data(&budget_pubkey), None);
-        assert_eq!(bank_client.get_account_data(&bob_pubkey), None);
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 2);
+        assert_eq!(bank_client.get_account_data(&budget_pubkey).unwrap(), None);
+        assert_eq!(bank_client.get_account_data(&bob_pubkey).unwrap(), None);
     }
 }

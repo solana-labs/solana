@@ -301,13 +301,13 @@ mod tests {
             account_metas,
         );
         assert_eq!(
-            bank_client.send_instruction(&mallory_keypair, malicious_instruction),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::MissingRequiredSignature
-            ))
+            bank_client
+                .send_instruction(&mallory_keypair, malicious_instruction)
+                .unwrap_err()
+                .unwrap(),
+            TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
         );
-        assert_eq!(bank_client.get_balance(&alice_pubkey), 50);
-        assert_eq!(bank_client.get_balance(&mallory_pubkey), 50);
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 50);
+        assert_eq!(bank_client.get_balance(&mallory_pubkey).unwrap(), 50);
     }
 }

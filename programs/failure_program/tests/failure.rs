@@ -20,10 +20,10 @@ fn test_program_native_failure() {
     // Call user program
     let instruction = create_invoke_instruction(alice_keypair.pubkey(), program_id, &1u8);
     assert_eq!(
-        bank_client.send_instruction(&alice_keypair, instruction),
-        Err(TransactionError::InstructionError(
-            0,
-            InstructionError::GenericError
-        ))
+        bank_client
+            .send_instruction(&alice_keypair, instruction)
+            .unwrap_err()
+            .unwrap(),
+        TransactionError::InstructionError(0, InstructionError::GenericError)
     );
 }

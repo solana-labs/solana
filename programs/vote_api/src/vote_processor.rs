@@ -73,7 +73,9 @@ mod tests {
     ) -> Result<()> {
         let ixs = vote_instruction::create_account(&from_keypair.pubkey(), vote_id, lamports);
         let message = Message::new(ixs);
-        bank_client.send_message(&[from_keypair], message)?;
+        bank_client
+            .send_message(&[from_keypair], message)
+            .map_err(|err| err.unwrap())?;
         Ok(())
     }
 
@@ -89,7 +91,9 @@ mod tests {
         let delegate_ix = vote_instruction::delegate_stake(&vote_id, delegate_id);
         ixs.push(delegate_ix);
         let message = Message::new(ixs);
-        bank_client.send_message(&[&from_keypair, vote_keypair], message)?;
+        bank_client
+            .send_message(&[from_keypair, vote_keypair], message)
+            .map_err(|err| err.unwrap())?;
         Ok(())
     }
 
@@ -99,7 +103,9 @@ mod tests {
         tick_height: u64,
     ) -> Result<()> {
         let vote_ix = vote_instruction::vote(&vote_keypair.pubkey(), Vote::new(tick_height));
-        bank_client.send_instruction(&vote_keypair, vote_ix)?;
+        bank_client
+            .send_instruction(vote_keypair, vote_ix)
+            .map_err(|err| err.unwrap())?;
         Ok(())
     }
 
@@ -114,7 +120,7 @@ mod tests {
         create_vote_account(&bank_client, &from_keypair, &vote_id, 100).unwrap();
         submit_vote(&bank_client, &vote_keypair, 0).unwrap();
 
-        let vote_account_data = bank_client.get_account_data(&vote_id).unwrap();
+        let vote_account_data = bank_client.get_account_data(&vote_id).unwrap().unwrap();
         let vote_state = VoteState::deserialize(&vote_account_data).unwrap();
         assert_eq!(vote_state.votes.len(), 1);
     }
@@ -157,16 +163,13 @@ mod tests {
         let result = bank_client.send_message(&[&mallory_keypair], message);
 
         // And ensure there's no vote.
-        let vote_account_data = bank_client.get_account_data(&vote_id).unwrap();
+        let vote_account_data = bank_client.get_account_data(&vote_id).unwrap().unwrap();
         let vote_state = VoteState::deserialize(&vote_account_data).unwrap();
         assert_eq!(vote_state.votes.len(), 0);
 
         assert_eq!(
-            result,
-            Err(TransactionError::InstructionError(
-                1,
-                InstructionError::InvalidArgument
-            ))
+            result.unwrap_err().unwrap(),
+            TransactionError::InstructionError(1, InstructionError::InvalidArgument)
         );
     }
 }
