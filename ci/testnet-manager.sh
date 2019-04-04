@@ -186,10 +186,11 @@ start() {
       set -x
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
-        ci/testnet-deploy.sh edge-testnet-solana-com ec2 us-west-1a \
+        ci/testnet-deploy.sh \
           -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0ccd4f2239886fa94 \
           ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-D}
+          ${maybeDelete:+-D} \
+          edge-testnet-solana-com ec2 us-west-1a
     )
     ;;
   testnet-edge-perf)
@@ -197,11 +198,12 @@ start() {
       set -x
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh edge-perf-testnet-solana-com ec2 us-west-2b \
+        ci/testnet-deploy.sh \
           -g -t "$CHANNEL_OR_TAG" -c 2 \
           -b \
           ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-D}
+          ${maybeDelete:+-D} \
+          edge-perf-testnet-solana-com ec2 us-west-2b
     )
     ;;
   testnet-beta)
@@ -212,24 +214,28 @@ start() {
       #  and the leader might be in that subset)
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
-        ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
-          -t "$CHANNEL_OR_TAG" -n 35 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 -D
+        ci/testnet-deploy.sh \
+          -t "$CHANNEL_OR_TAG" -n 35 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 -D \
+          beta-testnet-solana-com ec2 us-west-1a us-west-1b
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
-        ci/testnet-deploy.sh beta-testnet-solana-com gce us-west1-a \
-          -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -P -D
+        ci/testnet-deploy.sh \
+          -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -P -D \
+          beta-testnet-solana-com gce us-west1-a us-west1-b
 
       if ! $maybeDelete; then
         NO_VALIDATOR_SANITY=1 \
         RUST_LOG=solana=info \
-          ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
+          ci/testnet-deploy.sh \
             -t "$CHANNEL_OR_TAG" -n 35 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
-            ${maybeReuseLedger:+-r}
+            ${maybeReuseLedger:+-r} \
+            beta-testnet-solana-com ec2 us-west-1a us-west-1b
         NO_VALIDATOR_SANITY=1 \
         RUST_LOG=solana=info \
-          ci/testnet-deploy.sh beta-testnet-solana-com gce us-west1-a \
+          ci/testnet-deploy.sh \
             -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -P \
-            ${maybeReuseLedger:+-r}
+            ${maybeReuseLedger:+-r} \
+            beta-testnet-solana-com gce us-west1-a us-west1-b
       fi
     )
     ;;
@@ -238,11 +244,12 @@ start() {
       set -x
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh beta-perf-testnet-solana-com ec2 us-west-2b \
+        ci/testnet-deploy.sh \
           -g -t "$CHANNEL_OR_TAG" -c 2 \
           -b \
           ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-D}
+          ${maybeDelete:+-D} \
+          beta-perf-testnet-solana-com ec2 us-west-2b
     )
     ;;
   testnet)
@@ -250,15 +257,17 @@ start() {
       set -x
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
-        ci/testnet-deploy.sh testnet-solana-com ec2 us-west-1a \
+        ci/testnet-deploy.sh \
           -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0fa502bf95f6f18b2 \
           -b \
           ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-D}
-        #ci/testnet-deploy.sh testnet-solana-com gce us-east1-c \
+          ${maybeDelete:+-D} \
+          testnet-solana-com ec2 us-west-1a
+        #ci/testnet-deploy.sh \
         #  -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a testnet-solana-com  \
         #  ${maybeReuseLedger:+-r} \
-        #  ${maybeDelete:+-D}
+        #  ${maybeDelete:+-D} \
+        #  testnet-solana-com gce us-east1-c
     )
     ;;
   testnet-perf)
@@ -266,18 +275,20 @@ start() {
       set -x
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh perf-testnet-solana-com gce us-west1-b \
+        ci/testnet-deploy.sh \
           -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
           -t "$CHANNEL_OR_TAG" -c 2 \
           -b \
           -d pd-ssd \
           ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-D}
-        #ci/testnet-deploy.sh perf-testnet-solana-com ec2 us-east-1a \
+          ${maybeDelete:+-D} \
+          perf-testnet-solana-com gce us-west1-b
+        #ci/testnet-deploy.sh \
         #  -g \
         #  -t "$CHANNEL_OR_TAG" -c 2 \
         #  ${maybeReuseLedger:+-r} \
-        #  ${maybeDelete:+-D}
+        #  ${maybeDelete:+-D} \
+        #  perf-testnet-solana-com ec2 us-east-1a
     )
     ;;
   *)
