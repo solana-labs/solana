@@ -34,6 +34,7 @@ BIN_CRATES=(
   drone
   fullnode
   genesis
+  gossip
   install
   keygen
   ledger-tool
