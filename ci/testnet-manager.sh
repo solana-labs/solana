@@ -221,22 +221,21 @@ start() {
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh \
           -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -P -D \
-          beta-testnet-solana-com gce us-west1-a us-west1-b
-
-      if ! $maybeDelete; then
-        NO_VALIDATOR_SANITY=1 \
-        RUST_LOG=solana=info \
-          ci/testnet-deploy.sh \
-            -t "$CHANNEL_OR_TAG" -n 35 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
-            ${maybeReuseLedger:+-r} \
-            beta-testnet-solana-com ec2 us-west-1a us-west-1b
-        NO_VALIDATOR_SANITY=1 \
-        RUST_LOG=solana=info \
-          ci/testnet-deploy.sh \
-            -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -P \
-            ${maybeReuseLedger:+-r} \
-            beta-testnet-solana-com gce us-west1-a us-west1-b
-      fi
+          beta-testnet-solana-com gce us-west1-a
+      NO_VALIDATOR_SANITY=1 \
+      RUST_LOG=solana=info \
+        ci/testnet-deploy.sh \
+          -t "$CHANNEL_OR_TAG" -n 35 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
+          ${maybeReuseLedger:+-r} \
+          ${maybeDelete:+-D} \
+          beta-testnet-solana-com ec2 us-west-1a
+      NO_VALIDATOR_SANITY=1 \
+      RUST_LOG=solana=info \
+        ci/testnet-deploy.sh \
+          -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -P \
+          ${maybeReuseLedger:+-r} \
+          ${maybeDelete:+-D} \
+          beta-testnet-solana-com gce us-west1-a
     )
     ;;
   testnet-beta-perf)
