@@ -30,7 +30,7 @@ pub fn process_instruction(
 
     let mut storage_account = StorageAccount::new(&mut me[0].account);
     let mut rest: Vec<_> = rest
-        .into_iter()
+        .iter_mut()
         .map(|keyed_account| StorageAccount::new(&mut keyed_account.account))
         .collect();
 

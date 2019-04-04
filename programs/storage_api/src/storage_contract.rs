@@ -205,22 +205,8 @@ impl<'a> StorageAccount<'a> {
                 .into_iter()
                 .enumerate()
                 .filter_map(|(i, entry)| {
-                    if previous_proofs[i].1.signature != entry.proof.signature
-                        || entry.status != ProofStatus::Valid
-                    {
-                        let _ = store_validation_result(
-                            &mut previous_proofs[i].0,
-                            segment_index,
-                            entry.status,
-                        );
-                        None
-                    } else if store_validation_result(
-                        &mut previous_proofs[i].0,
-                        segment_index,
-                        entry.status.clone(),
-                    )
-                    .is_ok()
-                    {
+                    let (account, proof) = &mut previous_proofs[i];
+                    if process_validation(account, segment_index, &proof, &entry).is_ok() {
                         Some(entry)
                     } else {
                         None
@@ -299,6 +285,9 @@ fn store_validation_result(
             reward_validations,
             ..
         } => {
+            if segment_index >= proofs.len() {
+                return Err(InstructionError::InvalidAccountData);
+            }
             if segment_index > reward_validations.len() || reward_validations.is_empty() {
                 reward_validations.resize(cmp::max(1, segment_index), vec![]);
             }
@@ -323,9 +312,25 @@ fn count_valid_proofs(proofs: &[CheckedProof]) -> u64 {
     num
 }
 
+fn process_validation(
+    account: &mut StorageAccount,
+    segment_index: usize,
+    proof: &Proof,
+    checked_proof: &CheckedProof,
+) -> Result<(), InstructionError> {
+    store_validation_result(account, segment_index, checked_proof.status.clone())?;
+    if proof.signature != checked_proof.proof.signature
+        || checked_proof.status != ProofStatus::Valid
+    {
+        return Err(InstructionError::GenericError);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::id;
 
     #[test]
     fn test_account_data() {
@@ -339,7 +344,7 @@ mod tests {
             assert!(true)
         }
         if let StorageContract::ReplicatorStorage { .. } = &mut contract {
-            panic!("this shouldn't work");
+            panic!("Contract should not decode into two types");
         }
 
         contract = StorageContract::ValidatorStorage {
@@ -350,7 +355,7 @@ mod tests {
         };
         storage_account.account.set_state(&contract).unwrap();
         if let StorageContract::ReplicatorStorage { .. } = contract {
-            panic!("this shouldn't work");
+            panic!("Wrong contract type");
         }
         contract = StorageContract::ReplicatorStorage {
             proofs: vec![],
@@ -358,7 +363,50 @@ mod tests {
         };
         storage_account.account.set_state(&contract).unwrap();
         if let StorageContract::ValidatorStorage { .. } = contract {
-            panic!("this shouldn't work");
+            panic!("Wrong contract type");
         }
+    }
+
+    #[test]
+    fn test_process_validation() {
+        let mut account = StorageAccount {
+            account: &mut Account {
+                lamports: 0,
+                data: vec![],
+                owner: id(),
+                executable: false,
+            },
+        };
+        let segment_index = 0_usize;
+        let proof = Proof {
+            id: Pubkey::default(),
+            signature: Signature::default(),
+            sha_state: Hash::default(),
+        };
+        let mut checked_proof = CheckedProof {
+            proof: proof.clone(),
+            status: ProofStatus::Valid,
+        };
+
+        // account has no space
+        process_validation(&mut account, segment_index, &proof, &checked_proof).unwrap_err();
+
+        account.account.data.resize(4 * 1024, 0);
+        let storage_contract = &mut account.account.state().unwrap();
+        if let StorageContract::Default = storage_contract {
+            *storage_contract = StorageContract::ReplicatorStorage {
+                proofs: vec![proof.clone()],
+                reward_validations: vec![],
+            };
+        };
+        account.account.set_state(storage_contract).unwrap();
+
+        // proof is valid
+        process_validation(&mut account, segment_index, &proof, &checked_proof).unwrap();
+
+        checked_proof.status = ProofStatus::NotValid;
+
+        // proof failed verification
+        process_validation(&mut account, segment_index, &proof, &checked_proof).unwrap_err();
     }
 }
