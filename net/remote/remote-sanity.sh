@@ -84,9 +84,9 @@ echo "+++ $entrypointIp: node count ($numNodes expected)"
   set -x
   $solana_keygen -o "$client_id"
 
-  nodeArg="--num-nodes"
+  nodeArg="num-nodes"
   if $rejectExtraNodes; then
-    nodeArg="--num-nodes-exactly"
+    nodeArg="num-nodes-exactly"
   fi
 
   timeout 2m $solana_gossip \
