@@ -206,6 +206,12 @@ impl Replicator {
 
         let blocktree = Arc::new(blocktree);
 
+        info!("Looking for leader at {:?}", cluster_entrypoint);
+        crate::gossip_service::discover_nodes(&cluster_entrypoint.gossip, 1)?;
+
+        let client = create_client(cluster_entrypoint.client_facing_addr(), FULLNODE_PORT_RANGE);
+        Self::setup_mining_account(&client, &keypair, &storage_keypair, &cluster_entrypoint);
+
         let gossip_service = GossipService::new(
             &cluster_info,
             Some(blocktree.clone()),
@@ -213,9 +219,6 @@ impl Replicator {
             node.sockets.gossip,
             &exit,
         );
-
-        info!("Looking for leader at {:?}", cluster_entrypoint);
-        crate::gossip_service::discover_nodes(&cluster_entrypoint.gossip, 1)?;
 
         let (storage_blockhash, storage_entry_height) =
             Self::poll_for_blockhash_and_entry_height(&cluster_info)?;
@@ -263,27 +266,10 @@ impl Replicator {
 
         let exit3 = exit.clone();
         let blocktree1 = blocktree.clone();
-        let keypair1 = keypair.clone();
-        let storage_keypair1 = storage_keypair.clone();
-        let cluster_entrypoint1 = cluster_entrypoint.clone();
-        let t_replicate = spawn(move || {
-            let client = create_client(
-                cluster_entrypoint1.client_facing_addr(),
-                FULLNODE_PORT_RANGE,
-            );
-            Self::setup_mining_account(&client, &keypair1, &storage_keypair1, &cluster_entrypoint1);
-
-            loop {
-                Self::wait_for_ledger_download(
-                    slot,
-                    &blocktree1,
-                    &exit3,
-                    &node_info,
-                    &cluster_info,
-                );
-                if exit3.load(Ordering::Relaxed) {
-                    break;
-                }
+        let t_replicate = spawn(move || loop {
+            Self::wait_for_ledger_download(slot, &blocktree1, &exit3, &node_info, &cluster_info);
+            if exit3.load(Ordering::Relaxed) {
+                break;
             }
         });
         thread_handles.push(t_replicate);
@@ -492,6 +478,10 @@ impl Replicator {
             let rpc_client = {
                 let cluster_info = cluster_info.read().unwrap();
                 let rpc_peers = cluster_info.rpc_peers();
+                if rpc_peers.is_empty() {
+                    sleep(Duration::from_secs(3));
+                    continue;
+                }
                 debug!("rpc peers: {:?}", rpc_peers);
                 let node_idx = thread_rng().gen_range(0, rpc_peers.len());
                 RpcClient::new_socket(rpc_peers[node_idx].rpc)
