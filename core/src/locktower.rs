@@ -162,8 +162,17 @@ impl Locktower {
                 };
                 Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
             }
-            // each account hash a stake for all the forks in the active tree for this bank
-            Self::update_ancestor_stakes(&mut stake_lockouts, bank_slot, lamports, ancestors);
+
+            if vote_state.votes.len() > 1 {
+                let last_real_vote = &vote_state.votes[vote_state.votes.len() - 2];
+                // Update all the parents of this last vote with the stake of this vote account
+                Self::update_ancestor_stakes(
+                    &mut stake_lockouts,
+                    last_real_vote.slot,
+                    lamports,
+                    ancestors,
+                );
+            }
         }
         stake_lockouts
     }
