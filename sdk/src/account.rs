@@ -45,6 +45,14 @@ impl Account {
             executable: false,
         }
     }
+
+    pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
+        bincode::deserialize(&self.data)
+    }
+
+    pub fn serialize_data<T: serde::Serialize>(&mut self, state: &T) -> Result<(), bincode::Error> {
+        bincode::serialize_into(&mut self.data[..], state)
+    }
 }
 
 #[repr(C)]

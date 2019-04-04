@@ -1,10 +1,10 @@
 use crate::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
-use bincode::{deserialize, serialize_into, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_processor_utils::State;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::cmp;
@@ -57,26 +57,6 @@ pub enum StorageContract {
 
 pub struct StorageAccount<'a> {
     account: &'a mut Account,
-}
-
-trait State<T> {
-    fn state(&self) -> Result<T, InstructionError>;
-    fn set_state(&mut self, state: &T) -> Result<(), InstructionError>;
-}
-
-impl<T> State<T> for Account
-where
-    T: serde::Serialize + serde::de::DeserializeOwned,
-{
-    fn state(&self) -> Result<T, InstructionError> {
-        deserialize(&self.data).map_err(|_| InstructionError::InvalidAccountData)
-    }
-    fn set_state(&mut self, state: &T) -> Result<(), InstructionError> {
-        serialize_into(&mut self.data[..], state).map_err(|err| match *err {
-            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
-            _ => InstructionError::GenericError,
-        })
-    }
 }
 
 impl<'a> StorageAccount<'a> {
