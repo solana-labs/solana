@@ -215,27 +215,27 @@ start() {
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh \
-          -t "$CHANNEL_OR_TAG" -n 35 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 -D \
-          beta-testnet-solana-com ec2 us-west-1a us-west-1b
+          -t "$CHANNEL_OR_TAG" -n 50 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 -D \
+          beta-testnet-solana-com ec2 sa-east-1a us-west-1a ap-northeast-2a eu-central-1a ca-central-1a
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh \
-          -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -P -D \
-          beta-testnet-solana-com gce us-west1-a
+          -t "$CHANNEL_OR_TAG" -n 50 -c 0 -x -P -D \
+          beta-testnet-solana-com gce us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh \
-          -t "$CHANNEL_OR_TAG" -n 35 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
+          -t "$CHANNEL_OR_TAG" -n 50 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
           ${maybeReuseLedger:+-r} \
           ${maybeDelete:+-D} \
-          beta-testnet-solana-com ec2 us-west-1a
+          beta-testnet-solana-com ec2 sa-east-1a us-west-1a ap-northeast-2a eu-central-1a ca-central-1a
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh \
-          -t "$CHANNEL_OR_TAG" -n 65 -c 0 -x -P \
+          -t "$CHANNEL_OR_TAG" -n 50 -c 0 -x -P \
           ${maybeReuseLedger:+-r} \
           ${maybeDelete:+-D} \
-          beta-testnet-solana-com gce us-west1-a
+          beta-testnet-solana-com gce us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c
     )
     ;;
   testnet-beta-perf)
