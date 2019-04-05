@@ -726,8 +726,6 @@ mod tests {
     use super::*;
     use solana::fullnode::FullnodeConfig;
     use solana::local_cluster::LocalCluster;
-    use solana_drone::drone::run_local_drone;
-    use std::sync::mpsc::channel;
 
     #[test]
     fn test_switch_directions() {
@@ -751,21 +749,12 @@ mod tests {
         const NUM_NODES: usize = 1;
         let cluster =
             LocalCluster::new_with_config(&[999_990; NUM_NODES], 2_000_000, &fullnode_config);
-
-        let drone_keypair = Keypair::new();
-        cluster.transfer(&cluster.funding_keypair, &drone_keypair.pubkey(), 1_000_000);
-
-        let (addr_sender, addr_receiver) = channel();
-        run_local_drone(drone_keypair, addr_sender);
-        let drone_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
-
         let mut cfg = Config::default();
         cfg.network_addr = cluster.entry_point_info.gossip;
-        cfg.drone_addr = drone_addr;
+        cfg.drone_addr = cluster.drone_addr;
         cfg.tx_count = 100;
         cfg.duration = Duration::from_secs(5);
         cfg.num_nodes = NUM_NODES;
-
         do_bench_tps(cfg);
     }
 }

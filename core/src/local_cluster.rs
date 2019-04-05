@@ -8,10 +8,10 @@ use crate::replicator::Replicator;
 use crate::service::Service;
 use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
+use solana_drone::drone;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_transaction;
 use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use solana_sdk::transaction::Transaction;
@@ -20,7 +20,10 @@ use solana_vote_api::vote_state::VoteState;
 use std::collections::HashMap;
 use std::fs::remove_dir_all;
 use std::io::{Error, ErrorKind, Result};
+use std::net::SocketAddr;
+use std::sync::mpsc::channel;
 use std::sync::Arc;
+use std::time::Duration;
 
 pub struct FullnodeInfo {
     pub keypair: Arc<Keypair>,
@@ -51,11 +54,12 @@ impl ReplicatorInfo {
 }
 
 pub struct LocalCluster {
-    /// Keypair with funding to particpiate in the network
-    pub funding_keypair: Keypair,
+    /// The pubkey of the funding account
+    pub funding_pubkey: Pubkey,
     pub fullnode_config: FullnodeConfig,
     /// Entry point from which the rest of the network can be discovered
     pub entry_point_info: ContactInfo,
+    pub drone_addr: SocketAddr,
     pub fullnode_infos: HashMap<Pubkey, FullnodeInfo>,
     fullnodes: HashMap<Pubkey, Fullnode>,
     genesis_ledger_path: String,
@@ -121,6 +125,14 @@ impl LocalCluster {
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
         let voting_keypair = Keypair::new();
         let leader_contact_info = leader_node.info.clone();
+        let funding_pubkey = mint_keypair.pubkey();
+        let mut fullnode_config = fullnode_config.clone();
+
+        // start a drone
+        let (addr_sender, addr_receiver) = channel();
+        drone::run_local_drone(mint_keypair, addr_sender);
+        let drone_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
+        fullnode_config.rpc_config.drone_addr = Some(drone_addr.clone());
 
         let leader_server = Fullnode::new(
             leader_node,
@@ -129,7 +141,7 @@ impl LocalCluster {
             &voting_keypair.pubkey(),
             voting_keypair,
             None,
-            fullnode_config,
+            &fullnode_config,
         );
 
         let mut fullnodes = HashMap::new();
@@ -141,8 +153,9 @@ impl LocalCluster {
         );
 
         let mut cluster = Self {
-            funding_keypair: mint_keypair,
+            funding_pubkey,
             entry_point_info: leader_contact_info,
+            drone_addr,
             fullnodes,
             replicators: vec![],
             genesis_ledger_path,
@@ -203,8 +216,7 @@ impl LocalCluster {
         let ledger_path = tmp_copy_blocktree!(&self.genesis_ledger_path);
 
         // Send each validator some lamports to vote
-        let validator_balance =
-            Self::transfer_with_client(&client, &self.funding_keypair, &validator_pubkey, stake);
+        let validator_balance = Self::request_airdrop(&client, &validator_pubkey, stake);
         info!(
             "validator {} balance {}",
             validator_pubkey, validator_balance
@@ -236,17 +248,6 @@ impl LocalCluster {
         let replicator_id = replicator_keypair.pubkey();
         let storage_keypair = Arc::new(Keypair::new());
         let storage_id = storage_keypair.pubkey();
-        let client = create_client(
-            self.entry_point_info.client_facing_addr(),
-            FULLNODE_PORT_RANGE,
-        );
-
-        Self::transfer_with_client(
-            &client,
-            &self.funding_keypair,
-            &replicator_keypair.pubkey(),
-            1,
-        );
         let replicator_node = Node::new_localhost_replicator(&replicator_id);
 
         let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_block);
@@ -280,38 +281,18 @@ impl LocalCluster {
         }
     }
 
-    pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
+    pub fn transfer(&self, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,
         );
-        Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
+        Self::request_airdrop(&client, dest_pubkey, lamports)
     }
 
-    fn transfer_with_client(
-        client: &ThinClient,
-        source_keypair: &Keypair,
-        dest_pubkey: &Pubkey,
-        lamports: u64,
-    ) -> u64 {
-        trace!("getting leader blockhash");
-        let blockhash = client.get_recent_blockhash().unwrap();
-        let mut tx = system_transaction::create_user_account(
-            &source_keypair,
-            dest_pubkey,
-            lamports,
-            blockhash,
-            0,
-        );
-        info!(
-            "executing transfer of {} from {} to {}",
-            lamports,
-            source_keypair.pubkey(),
-            *dest_pubkey
-        );
+    fn request_airdrop(client: &ThinClient, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
         client
-            .retry_transfer(&source_keypair, &mut tx, 5)
-            .expect("client transfer");
+            .request_airdrop(dest_pubkey, lamports)
+            .expect("couldn't transfer");
         client
             .wait_for_balance(dest_pubkey, Some(lamports))
             .expect("get balance")

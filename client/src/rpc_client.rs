@@ -348,6 +348,39 @@ impl RpcClient {
         ))
     }
 
+    pub fn request_airdrop(&self, to: &Pubkey, lamports: u64) -> io::Result<String> {
+        let params = json!([format!("{}", to), lamports]);
+        let mut num_retries = 10;
+        while num_retries > 0 {
+            match self
+                .client
+                .send(&RpcRequest::RequestAirdrop, Some(params.clone()), 0)
+            {
+                Ok(signature) => {
+                    if signature.as_str().is_none() {
+                        Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "Received result of an unexpected type",
+                        ))?;
+                    }
+                    return Ok(signature.as_str().unwrap().to_string());
+                }
+                Err(err) => {
+                    debug!("failed to request airdrop: {:?}", err);
+                }
+            }
+            // Retry ~twice during a slot
+            sleep(Duration::from_millis(
+                500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND,
+            ));
+            num_retries -= 1;
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Unable to complete airdrop, too many retries",
+        ))
+    }
+
     pub fn poll_balance_with_timeout(
         &self,
         pubkey: &Pubkey,

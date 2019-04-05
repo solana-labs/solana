@@ -7,12 +7,13 @@ use crate::cluster_info::FULLNODE_PORT_RANGE;
 use crate::contact_info::ContactInfo;
 use crate::entry::{Entry, EntrySlice};
 use crate::gossip_service::discover_nodes;
+use crate::local_cluster::LocalCluster;
 use crate::locktower::VOTE_THRESHOLD_DEPTH;
 use crate::poh_service::PohServiceConfig;
 use solana_client::thin_client::create_client;
 use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_transaction;
 use solana_sdk::timing::{
     duration_as_ms, DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS, NUM_TICKS_PER_SECOND,
 };
@@ -25,7 +26,7 @@ const SLOT_MILLIS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / NUM_TICKS_PER_SECOND;
 /// Spend and verify from every node in the network
 pub fn spend_and_verify_all_nodes(
     entry_point_info: &ContactInfo,
-    funding_keypair: &Keypair,
+    funding_pubkey: &Pubkey,
     nodes: usize,
 ) {
     let cluster_nodes = discover_nodes(&entry_point_info.gossip, nodes).unwrap();
@@ -34,19 +35,12 @@ pub fn spend_and_verify_all_nodes(
         let random_keypair = Keypair::new();
         let client = create_client(ingress_node.client_facing_addr(), FULLNODE_PORT_RANGE);
         let bal = client
-            .poll_get_balance(&funding_keypair.pubkey())
+            .poll_get_balance(&funding_pubkey)
             .expect("balance in source");
         assert!(bal > 0);
-        let mut transaction = system_transaction::transfer(
-            &funding_keypair,
-            &random_keypair.pubkey(),
-            1,
-            client.get_recent_blockhash().unwrap(),
-            0,
-        );
         let confs = VOTE_THRESHOLD_DEPTH + 1;
         let sig = client
-            .retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 5, confs)
+            .retry_airdrop_until_confirmed(&random_keypair.pubkey(), 1, confs, 5)
             .unwrap();
         for validator in &cluster_nodes {
             let client = create_client(validator.client_facing_addr(), FULLNODE_PORT_RANGE);
@@ -55,24 +49,16 @@ pub fn spend_and_verify_all_nodes(
     }
 }
 
-pub fn send_many_transactions(node: &ContactInfo, funding_keypair: &Keypair, num_txs: u64) {
+pub fn send_many_transactions(node: &ContactInfo, cluster: &LocalCluster, num_txs: u64) {
+    let funding_pubkey = cluster.funding_pubkey;
     let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
     for _ in 0..num_txs {
         let random_keypair = Keypair::new();
         let bal = client
-            .poll_get_balance(&funding_keypair.pubkey())
+            .poll_get_balance(&funding_pubkey)
             .expect("balance in source");
         assert!(bal > 0);
-        let mut transaction = system_transaction::transfer(
-            &funding_keypair,
-            &random_keypair.pubkey(),
-            1,
-            client.get_recent_blockhash().unwrap(),
-            0,
-        );
-        client
-            .retry_transfer(&funding_keypair, &mut transaction, 5)
-            .unwrap();
+        cluster.transfer(&random_keypair.pubkey(), 1);
     }
 }
 
@@ -144,7 +130,7 @@ pub fn sleep_n_epochs(
 
 pub fn kill_entry_and_spend_and_verify_rest(
     entry_point_info: &ContactInfo,
-    funding_keypair: &Keypair,
+    funding_pubkey: &Pubkey,
     nodes: usize,
 ) {
     solana_logger::setup();
@@ -170,7 +156,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
 
         let client = create_client(ingress_node.client_facing_addr(), FULLNODE_PORT_RANGE);
         let bal = client
-            .poll_get_balance(&funding_keypair.pubkey())
+            .poll_get_balance(funding_pubkey)
             .expect("balance in source");
         assert!(bal > 0);
 
@@ -183,22 +169,10 @@ pub fn kill_entry_and_spend_and_verify_rest(
             }
 
             let random_keypair = Keypair::new();
-            let mut transaction = system_transaction::transfer(
-                &funding_keypair,
-                &random_keypair.pubkey(),
-                1,
-                client.get_recent_blockhash().unwrap(),
-                0,
-            );
-
             let confs = VOTE_THRESHOLD_DEPTH + 1;
             let sig = {
-                let sig = client.retry_transfer_until_confirmed(
-                    &funding_keypair,
-                    &mut transaction,
-                    5,
-                    confs,
-                );
+                let sig =
+                    client.retry_airdrop_until_confirmed(&random_keypair.pubkey(), 1, confs, 5);
                 match sig {
                     Err(e) => {
                         result = Err(e);

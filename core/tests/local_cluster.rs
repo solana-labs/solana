@@ -16,7 +16,7 @@ fn test_spend_and_verify_all_nodes_1() {
     let local = LocalCluster::new(num_nodes, 10_000, 100);
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
-        &local.funding_keypair,
+        &local.funding_pubkey,
         num_nodes,
     );
 }
@@ -28,7 +28,7 @@ fn test_spend_and_verify_all_nodes_2() {
     let local = LocalCluster::new(num_nodes, 10_000, 100);
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
-        &local.funding_keypair,
+        &local.funding_pubkey,
         num_nodes,
     );
 }
@@ -40,7 +40,7 @@ fn test_spend_and_verify_all_nodes_3() {
     let local = LocalCluster::new(num_nodes, 10_000, 100);
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
-        &local.funding_keypair,
+        &local.funding_pubkey,
         num_nodes,
     );
 }
@@ -74,7 +74,7 @@ fn test_leader_failure_4() {
     let local = LocalCluster::new_with_config(&[100; 4], 10_000, &fullnode_config);
     cluster_tests::kill_entry_and_spend_and_verify_rest(
         &local.entry_point_info,
-        &local.funding_keypair,
+        &local.funding_pubkey,
         num_nodes,
     );
 }
@@ -123,7 +123,7 @@ fn test_forwarding() {
     let validator_info = cluster_nodes.iter().find(|c| c.id != leader_id).unwrap();
 
     // Confirm that transactions were forwarded to and processed by the leader.
-    cluster_tests::send_many_transactions(&validator_info, &cluster.funding_keypair, 20);
+    cluster_tests::send_many_transactions(&validator_info, &cluster, 20);
 }
 
 #[test]
@@ -152,5 +152,5 @@ fn test_restart_node() {
         timing::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );
-    cluster_tests::send_many_transactions(&cluster.entry_point_info, &cluster.funding_keypair, 1);
+    cluster_tests::send_many_transactions(&cluster.entry_point_info, &cluster, 1);
 }

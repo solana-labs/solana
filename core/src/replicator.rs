@@ -19,7 +19,6 @@ use rand::Rng;
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_client::thin_client::{create_client, ThinClient};
-use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction;
@@ -248,6 +247,9 @@ impl Replicator {
             repair_slot_range,
         );
 
+        let client = create_client(cluster_entrypoint.client_facing_addr(), FULLNODE_PORT_RANGE);
+        Self::setup_mining_account(&client, &keypair, &storage_keypair);
+
         let mut thread_handles =
             create_request_processor(node.sockets.storage.unwrap(), &exit, slot);
 
@@ -263,27 +265,10 @@ impl Replicator {
 
         let exit3 = exit.clone();
         let blocktree1 = blocktree.clone();
-        let keypair1 = keypair.clone();
-        let storage_keypair1 = storage_keypair.clone();
-        let cluster_entrypoint1 = cluster_entrypoint.clone();
-        let t_replicate = spawn(move || {
-            let client = create_client(
-                cluster_entrypoint1.client_facing_addr(),
-                FULLNODE_PORT_RANGE,
-            );
-            Self::setup_mining_account(&client, &keypair1, &storage_keypair1, &cluster_entrypoint1);
-
-            loop {
-                Self::wait_for_ledger_download(
-                    slot,
-                    &blocktree1,
-                    &exit3,
-                    &node_info,
-                    &cluster_info,
-                );
-                if exit3.load(Ordering::Relaxed) {
-                    break;
-                }
+        let t_replicate = spawn(move || loop {
+            Self::wait_for_ledger_download(slot, &blocktree1, &exit3, &node_info, &cluster_info);
+            if exit3.load(Ordering::Relaxed) {
+                break;
             }
         });
         thread_handles.push(t_replicate);
@@ -418,20 +403,13 @@ impl Replicator {
         Ok(())
     }
 
-    fn setup_mining_account(
-        client: &ThinClient,
-        keypair: &Keypair,
-        storage_keypair: &Keypair,
-        entrypoint: &ContactInfo,
-    ) {
+    fn setup_mining_account(client: &ThinClient, keypair: &Keypair, storage_keypair: &Keypair) {
         // make sure replicator has some balance
-        Self::get_airdrop_lamports(client, keypair, entrypoint);
+        Self::get_airdrop_lamports(client, keypair);
 
         // check if the account exists
-        if client
-            .wait_for_balance(&storage_keypair.pubkey(), None)
-            .is_none()
-        {
+        let bal = client.poll_get_balance(&storage_keypair.pubkey());
+        if bal.is_err() || bal.unwrap() == 0 {
             let blockhash = client.get_recent_blockhash().expect("blockhash");
             //TODO the account space needs to be well defined somewhere
             let tx = system_transaction::create_account(
@@ -453,7 +431,7 @@ impl Replicator {
             self.cluster_entrypoint.client_facing_addr(),
             FULLNODE_PORT_RANGE,
         );
-        Self::get_airdrop_lamports(&client, &self.keypair, &self.cluster_entrypoint);
+        Self::get_airdrop_lamports(&client, &self.keypair);
 
         let ix = storage_instruction::mining_proof(
             &self.storage_keypair.pubkey(),
@@ -517,32 +495,16 @@ impl Replicator {
         ))?
     }
 
-    fn get_airdrop_lamports(
-        client: &ThinClient,
-        keypair: &Keypair,
-        cluster_entrypoint: &ContactInfo,
-    ) {
-        if client.wait_for_balance(&keypair.pubkey(), None).is_none() {
-            let mut drone_addr = cluster_entrypoint.tpu;
-            drone_addr.set_port(DRONE_PORT);
-
+    fn get_airdrop_lamports(client: &ThinClient, keypair: &Keypair) {
+        let bal = client.poll_get_balance(&keypair.pubkey());
+        if bal.is_err() || bal.unwrap() == 0 {
             let airdrop_amount = 1;
-
-            let blockhash = client.get_recent_blockhash().expect("blockhash");
-            match request_airdrop_transaction(
-                &drone_addr,
-                &keypair.pubkey(),
-                airdrop_amount,
-                blockhash,
-            ) {
-                Ok(transaction) => {
-                    let signature = client.transfer_signed(&transaction).unwrap();
-                    client.poll_for_signature(&signature).unwrap();
-                }
+            match client.request_airdrop(&keypair.pubkey(), airdrop_amount) {
+                Ok(_) => debug!("airdrop successful: amount: {}", airdrop_amount),
                 Err(err) => {
                     panic!(
-                        "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
-                        err, drone_addr, airdrop_amount
+                        "Error requesting airdrop: {:?}, amount: {}",
+                        err, airdrop_amount
                     );
                 }
             };

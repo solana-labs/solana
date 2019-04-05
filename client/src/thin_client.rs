@@ -73,6 +73,26 @@ impl ThinClient {
         Ok(transaction.signatures[0])
     }
 
+    pub fn retry_airdrop_until_confirmed(
+        &self,
+        to: &Pubkey,
+        lamports: u64,
+        min_confirmed_blocks: usize,
+        retries: u64,
+    ) -> io::Result<Signature> {
+        for _ in 0..retries {
+            if let Ok(s) = self.request_airdrop(to, lamports) {
+                if self
+                    .poll_for_signature_confirmation(&s, min_confirmed_blocks)
+                    .is_ok()
+                {
+                    return Ok(s);
+                }
+            }
+        }
+        Err(io::Error::new(io::ErrorKind::Other, "retry_airdrop failed"))
+    }
+
     /// Retry a sending a signed Transaction to the server for processing.
     pub fn retry_transfer_until_confirmed(
         &self,
@@ -147,6 +167,11 @@ impl ThinClient {
 
     pub fn get_new_blockhash(&self, blockhash: &Hash) -> io::Result<Hash> {
         self.rpc_client.get_new_blockhash(blockhash)
+    }
+
+    pub fn request_airdrop(&self, to: &Pubkey, lamports: u64) -> io::Result<Signature> {
+        let signature = self.rpc_client.request_airdrop(to, lamports)?;
+        Ok(Signature::new(&bs58::decode(signature).into_vec().unwrap()))
     }
 
     pub fn poll_balance_with_timeout(
