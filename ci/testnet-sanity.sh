@@ -48,6 +48,7 @@ shutdown() {
   exit $exitcode
 }
 rm -rf net/{log,-sanity}
+rm -f net/config/config
 trap shutdown EXIT INT
 
 set -x
