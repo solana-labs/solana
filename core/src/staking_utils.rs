@@ -53,9 +53,11 @@ pub fn delegated_stakes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashM
 /// Collect the node account balance and vote states for nodes have non-zero balance in
 /// their corresponding staking accounts
 fn node_staked_accounts(bank: &Bank) -> impl Iterator<Item = (Pubkey, u64, Account)> {
-    bank.vote_accounts().filter_map(|(account_id, account)| {
-        filter_zero_balances(&account).map(|stake| (account_id, stake, account))
-    })
+    bank.vote_accounts()
+        .into_iter()
+        .filter_map(|(account_id, account)| {
+            filter_zero_balances(&account).map(|stake| (account_id, stake, account))
+        })
 }
 
 pub fn node_staked_accounts_at_epoch(
