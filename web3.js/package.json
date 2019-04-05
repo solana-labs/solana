@@ -111,7 +111,7 @@
     "marked": "^0.6.0",
     "prettier": "^1.14.3",
     "rimraf": "2.6.3",
-    "rollup": "1.8.0",
+    "rollup": "1.9.0",
     "rollup-plugin-babel": "^4.3.2",
     "rollup-plugin-commonjs": "9.3.4",
     "rollup-plugin-json": "^4.0.0",
