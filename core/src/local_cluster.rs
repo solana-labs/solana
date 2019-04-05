@@ -435,7 +435,7 @@ mod test {
         let mut fullnode_exit = FullnodeConfig::default();
         fullnode_exit.rpc_config.enable_fullnode_exit = true;
         const NUM_NODES: usize = 1;
-        let num_replicators = 0;
+        let num_replicators = 1;
         let cluster = LocalCluster::new_with_config_replicators(
             &[3; NUM_NODES],
             100,
