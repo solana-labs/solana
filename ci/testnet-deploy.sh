@@ -134,7 +134,7 @@ done
 
 [[ -n $netName ]] || usage
 [[ -n $cloudProvider ]] || usage "Cloud provider not specified"
-[[ -n $zone ]] || usage "Zone not specified"
+[[ -n ${zone[*]} ]] || usage "At least one zone must be specified"
 
 shutdown() {
   exitcode=$?
@@ -156,9 +156,14 @@ trap shutdown EXIT INT
 
 set -x
 
+# Build a string to pass zone opts to $cloudProvider.sh: "-z zone1 -z zone2 ..."
+for val in "${zone[@]}"; do
+  zone_args="-z $val $zone_args"
+done
+
 if ! $skipSetup; then
   echo "--- $cloudProvider.sh delete"
-  time net/"$cloudProvider".sh delete -z "$zone" -p "$netName" ${externalNode:+-x}
+  time net/"$cloudProvider".sh delete "$zone_args" -p "$netName" ${externalNode:+-x}
   if $delete; then
     exit 0
   fi
@@ -166,11 +171,11 @@ if ! $skipSetup; then
   echo "--- $cloudProvider.sh create"
   create_args=(
     -p "$netName"
-    -z "$zone"
     -a "$bootstrapFullNodeAddress"
     -c "$clientNodeCount"
     -n "$additionalFullNodeCount"
   )
+  create_args+=("$zone_args ")
 
   if $blockstreamer; then
     create_args+=(-u)
@@ -205,8 +210,8 @@ else
   echo "--- $cloudProvider.sh config"
   config_args=(
     -p "$netName"
-    -z "$zone"
   )
+  config_args+=("$zone_args ")
   if $publicNetwork; then
     config_args+=(-P)
   fi
