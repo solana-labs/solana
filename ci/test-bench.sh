@@ -40,13 +40,20 @@ fi
 BENCH_FILE=bench_output.log
 BENCH_ARTIFACT=current_bench_results.log
 
+# First remove "BENCH_FILE", if it exists so that the following commands can append
+rm -f "$BENCH_FILE"
+
+# Run sdk benches
+_ cargo +$rust_nightly bench --manifest-path sdk/Cargo.toml ${V:+--verbose} \
+  -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
+
 # Run runtime benches
 _ cargo +$rust_nightly bench --manifest-path runtime/Cargo.toml ${V:+--verbose} \
-  -- -Z unstable-options --format=json | tee "$BENCH_FILE"
+  -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
 
 # Run core benches
 _ cargo +$rust_nightly bench --manifest-path core/Cargo.toml ${V:+--verbose} \
-  -- -Z unstable-options --format=json | tee "$BENCH_FILE"
+  -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
 
 # Run bpf benches
 _ cargo +$rust_nightly bench --manifest-path programs/bpf/Cargo.toml ${V:+--verbose} --features=bpf_c \
