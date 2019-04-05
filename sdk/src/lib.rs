@@ -1,4 +1,5 @@
 pub mod account;
+pub mod async_client;
 pub mod bpf_loader;
 pub mod fee_calculator;
 pub mod genesis_block;

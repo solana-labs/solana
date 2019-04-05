@@ -1,4 +1,5 @@
 use crate::bank::Bank;
+use solana_sdk::async_client::AsyncClient;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
@@ -8,9 +9,46 @@ use solana_sdk::sync_client::SyncClient;
 use solana_sdk::system_instruction;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::transport::Result;
+use std::io;
 
 pub struct BankClient<'a> {
     bank: &'a Bank,
+}
+
+impl<'a> AsyncClient for BankClient<'a> {
+    fn async_send_transaction(&self, transaction: Transaction) -> io::Result<Signature> {
+        // Ignore the result. Client must use get_signature_status() instead.
+        let _ = self.bank.process_transaction(&transaction);
+
+        Ok(transaction.signatures.get(0).cloned().unwrap_or_default())
+    }
+
+    fn async_send_message(&self, keypairs: &[&Keypair], message: Message) -> io::Result<Signature> {
+        let blockhash = self.bank.last_blockhash();
+        let transaction = Transaction::new(&keypairs, message, blockhash);
+        self.async_send_transaction(transaction)
+    }
+
+    fn async_send_instruction(
+        &self,
+        keypair: &Keypair,
+        instruction: Instruction,
+    ) -> io::Result<Signature> {
+        let message = Message::new(vec![instruction]);
+        self.async_send_message(&[keypair], message)
+    }
+
+    /// Transfer `lamports` from `keypair` to `pubkey`
+    fn async_transfer(
+        &self,
+        lamports: u64,
+        keypair: &Keypair,
+        pubkey: &Pubkey,
+    ) -> io::Result<Signature> {
+        let transfer_instruction =
+            system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
+        self.async_send_instruction(keypair, transfer_instruction)
+    }
 }
 
 impl<'a> SyncClient for BankClient<'a> {
@@ -29,8 +67,9 @@ impl<'a> SyncClient for BankClient<'a> {
 
     /// Transfer `lamports` from `keypair` to `pubkey`
     fn transfer(&self, lamports: u64, keypair: &Keypair, pubkey: &Pubkey) -> Result<Signature> {
-        let move_instruction = system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
-        self.send_instruction(keypair, move_instruction)
+        let transfer_instruction =
+            system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
+        self.send_instruction(keypair, transfer_instruction)
     }
 
     fn get_account_data(&self, pubkey: &Pubkey) -> Result<Option<Vec<u8>>> {
