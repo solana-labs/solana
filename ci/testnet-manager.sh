@@ -239,12 +239,14 @@ start() {
         EC2_ZONE_ARGS+=("-z $val")
       done
 
+      # shellcheck disable=SC2068
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
           -t "$CHANNEL_OR_TAG" -n 60 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
           ${maybeReuseLedger:+-r} \
           ${maybeDelete:+-D}
+      # shellcheck disable=SC2068
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
