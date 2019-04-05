@@ -230,11 +230,11 @@ start() {
 
       # Build a string to pass as opts to testnet-deploy.sh: "-z zone1 -z zone2 ..."
       for val in "${GCE_ZONES[@]}"; do
-        GCE_ZONE_ARGS="-z $GCE_ZONE_ARGS $val"
+        GCE_ZONE_ARGS="$GCE_ZONE_ARGS -z $val"
       done
 
       for val in "${EC2_ZONES[@]}"; do
-        EC2_ZONE_ARGS="-z $EC2_ZONE_ARGS $val"
+        EC2_ZONE_ARGS="$EC2_ZONE_ARGS -z $val"
       done
 
       NO_VALIDATOR_SANITY=1 \
