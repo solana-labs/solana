@@ -706,9 +706,11 @@ impl Bank {
             .zip(executed.iter())
             .map(|(tx, res)| {
                 let fee = self.fee_calculator.calculate_fee(tx.message());
+                let message = tx.message();
                 match *res {
                     Err(TransactionError::InstructionError(_, _)) => {
                         // credit the transaction fee even in case of InstructionError
+                        self.withdraw(&message.account_keys[0], fee)?;
                         fees += fee;
                         Ok(())
                     }
