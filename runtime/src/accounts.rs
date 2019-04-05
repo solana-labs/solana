@@ -183,9 +183,6 @@ type AccountStorage = Vec<AccountStorageEntry>;
 
 #[derive(Default, Debug)]
 struct ForkInfo {
-    /// The number of transactions processed without error
-    transaction_count: u64,
-
     /// List of all parents of this fork
     parents: Vec<Fork>,
 
@@ -284,7 +281,6 @@ impl AccountsDB {
             if let Some(parent) = parent {
                 fork_info.parents.push(parent);
                 if let Some(parent_fork_info) = fork_infos.get(&parent) {
-                    fork_info.transaction_count = parent_fork_info.transaction_count;
                     fork_info
                         .parents
                         .extend_from_slice(&parent_fork_info.parents);
@@ -739,20 +735,6 @@ impl AccountsDB {
             .collect()
     }
 
-    pub fn increment_transaction_count(&self, fork: Fork, tx_count: usize) {
-        let mut fork_infos = self.fork_infos.write().unwrap();
-        let fork_info = fork_infos.entry(fork).or_insert(ForkInfo::default());
-        fork_info.transaction_count += tx_count as u64;
-    }
-
-    pub fn transaction_count(&self, fork: Fork) -> u64 {
-        self.fork_infos
-            .read()
-            .unwrap()
-            .get(&fork)
-            .map_or(0, |fork_info| fork_info.transaction_count)
-    }
-
     fn remove_parents(&self, fork: Fork) -> Vec<Fork> {
         let mut squashed_vote_accounts = self.get_vote_accounts(fork);
         squashed_vote_accounts.retain(|_, account| account.lamports != 0);
@@ -993,14 +975,6 @@ impl Accounts {
         loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
     ) {
         self.accounts_db.store_accounts(fork, txs, res, loaded)
-    }
-
-    pub fn increment_transaction_count(&self, fork: Fork, tx_count: usize) {
-        self.accounts_db.increment_transaction_count(fork, tx_count)
-    }
-
-    pub fn transaction_count(&self, fork: Fork) -> u64 {
-        self.accounts_db.transaction_count(fork)
     }
 
     /// accounts starts with an empty data structure for every child/fork
@@ -1913,25 +1887,6 @@ mod tests {
             Err(TransactionError::AccountNotFound)
         );
         assert_eq!(error_counters.account_not_found, 1);
-    }
-
-    #[test]
-    fn test_accountsdb_inherit_tx_count() {
-        let paths = get_tmp_accounts_path!();
-        let accounts = AccountsDB::new(0, &paths.paths);
-        assert_eq!(accounts.transaction_count(0), 0);
-        accounts.increment_transaction_count(0, 1);
-        assert_eq!(accounts.transaction_count(0), 1);
-        // fork and check that tx count is inherited
-        accounts.add_fork(1, Some(0));
-        assert_eq!(accounts.transaction_count(1), 1);
-        // Parent fork shouldn't change
-        accounts.increment_transaction_count(1, 1);
-        assert_eq!(accounts.transaction_count(1), 2);
-        assert_eq!(accounts.transaction_count(0), 1);
-        // Squash shouldn't effect tx count
-        accounts.squash(1);
-        assert_eq!(accounts.transaction_count(1), 2);
     }
 
     #[test]
