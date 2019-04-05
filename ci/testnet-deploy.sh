@@ -27,12 +27,12 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 -N name -C cloud -z zone1 [-z zone2] ... [-z zoneN] [options...]
+usage: $0 -p network-name -C cloud -z zone1 [-z zone2] ... [-z zoneN] [options...]
 
 Deploys a CD testnet
 
   mandatory arguments:
-  -N [name]  - name of the network
+  -p [network-name]  - name of the network
   -C [cloud] - cloud provider to use (gce, ec2)
   -z [zone]  - cloud provider zone to deploy the network into.  Must specify at least one zone
 
@@ -62,12 +62,12 @@ EOF
 
 zone=()
 
-while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:N:C:" opt; do
+while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:" opt; do
   case $opt in
   h | \?)
     usage
     ;;
-  N)
+  p)
     netName=$OPTARG
     ;;
   C)
@@ -158,7 +158,7 @@ set -x
 
 # Build a string to pass zone opts to $cloudProvider.sh: "-z zone1 -z zone2 ..."
 for val in "${zone[@]}"; do
-  zone_args="-z $zone_args $val"
+  zone_args="$zone_args -z $val"
 done
 
 if ! $skipSetup; then
@@ -175,7 +175,7 @@ if ! $skipSetup; then
     -c "$clientNodeCount"
     -n "$additionalFullNodeCount"
   )
-  create_args+=("$zone_args ")
+  create_args+=("$zone_args")
 
   if $blockstreamer; then
     create_args+=(-u)
@@ -211,7 +211,7 @@ else
   config_args=(
     -p "$netName"
   )
-  config_args+=("$zone_args ")
+  config_args+=("$zone_args")
   if $publicNetwork; then
     config_args+=(-P)
   fi
