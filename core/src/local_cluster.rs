@@ -132,7 +132,7 @@ impl LocalCluster {
         let (addr_sender, addr_receiver) = channel();
         drone::run_local_drone(mint_keypair, addr_sender);
         let drone_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
-        fullnode_config.rpc_config.drone_addr = Some(drone_addr.clone());
+        fullnode_config.rpc_config.drone_addr = Some(drone_addr);
 
         let leader_server = Fullnode::new(
             leader_node,
