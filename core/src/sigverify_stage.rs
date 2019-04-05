@@ -49,7 +49,7 @@ impl SigVerifyStage {
 
     fn verifier(
         recvr: &Arc<Mutex<PacketReceiver>>,
-        sendr: &Arc<Mutex<Sender<VerifiedPackets>>>,
+        sendr: &Sender<VerifiedPackets>,
         sigverify_disabled: bool,
     ) -> Result<()> {
         let (batch, len, recv_time) =
@@ -72,12 +72,7 @@ impl SigVerifyStage {
             verified_batch.len()
         );
 
-        if sendr
-            .lock()
-            .expect("lock in fn verify_batch in tpu")
-            .send(verified_batch)
-            .is_err()
-        {
+        if sendr.send(verified_batch).is_err() {
             return Err(Error::SendError);
         }
 
@@ -113,7 +108,7 @@ impl SigVerifyStage {
 
     fn verifier_service(
         packet_receiver: Arc<Mutex<PacketReceiver>>,
-        verified_sender: Arc<Mutex<Sender<VerifiedPackets>>>,
+        verified_sender: Sender<VerifiedPackets>,
         sigverify_disabled: bool,
     ) -> JoinHandle<()> {
         spawn(move || loop {
@@ -135,10 +130,15 @@ impl SigVerifyStage {
         verified_sender: Sender<VerifiedPackets>,
         sigverify_disabled: bool,
     ) -> Vec<JoinHandle<()>> {
-        let sender = Arc::new(Mutex::new(verified_sender));
         let receiver = Arc::new(Mutex::new(packet_receiver));
         (0..4)
-            .map(|_| Self::verifier_service(receiver.clone(), sender.clone(), sigverify_disabled))
+            .map(|_| {
+                Self::verifier_service(
+                    receiver.clone(),
+                    verified_sender.clone(),
+                    sigverify_disabled,
+                )
+            })
             .collect()
     }
 }
