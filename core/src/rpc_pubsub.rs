@@ -13,7 +13,7 @@ use solana_sdk::signature::Signature;
 use std::mem;
 use std::sync::{atomic, Arc};
 
-#[rpc]
+#[rpc(server)]
 pub trait RpcSolPubSub {
     type Metadata;
 
