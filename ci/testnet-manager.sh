@@ -135,14 +135,22 @@ sanity() {
     (
       set -x
       EC2_ZONES=(sa-east-1a us-west-1a ap-northeast-2a eu-central-1a ca-central-1a)
+      ok=true
       for zone in "${EC2_ZONES[@]}"; do
-        ci/testnet-sanity.sh beta-testnet-solana-com ec2 "$zone" || return false
+        if ! $ok; then
+          break
+        fi
+        ci/testnet-sanity.sh beta-testnet-solana-com ec2 "$zone" || ok=false
       done
 
       GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
       for zone in "${GCE_ZONES[@]}"; do
-        ci/testnet-sanity.sh beta-testnet-solana-com gce "$zone" || return false
+        if ! $ok; then
+          break
+        fi
+        ci/testnet-sanity.sh beta-testnet-solana-com gce "$zone" || ok=false
       done
+      $ok
     )
     ;;
   testnet-beta-perf)
