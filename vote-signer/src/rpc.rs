@@ -59,7 +59,7 @@ pub struct Meta {
 }
 impl Metadata for Meta {}
 
-#[rpc]
+#[rpc(server)]
 pub trait VoteSignerRpc {
     type Metadata;
 
