@@ -159,12 +159,12 @@ set -x
 # Build a string to pass zone opts to $cloudProvider.sh: "-z zone1 -z zone2 ..."
 zone_args=()
 for val in "${zone[@]}"; do
-  zone_args+="-z $val "
+  zone_args+=("-z $val")
 done
 
 if ! $skipSetup; then
   echo "--- $cloudProvider.sh delete"
-  time net/"$cloudProvider".sh delete ${zone_args[*]} -p "$netName" ${externalNode:+-x}
+  time net/"$cloudProvider".sh delete ${zone_args[@]} -p "$netName" ${externalNode:+-x}
   if $delete; then
     exit 0
   fi
@@ -176,7 +176,7 @@ if ! $skipSetup; then
     -c "$clientNodeCount"
     -n "$additionalFullNodeCount"
   )
-  create_args+=(${zone_args[*]})
+  create_args+=(${zone_args[@]})
 
   if $blockstreamer; then
     create_args+=(-u)
@@ -212,7 +212,7 @@ else
   config_args=(
     -p "$netName"
   )
-  config_args+=(${zone_args[*]})
+  config_args+=(${zone_args[@]})
   if $publicNetwork; then
     config_args+=(-P)
   fi
