@@ -7,6 +7,7 @@ use crate::pubkey::Pubkey;
 use crate::short_vec;
 use crate::signature::{KeypairUtil, Signature};
 use bincode::serialize;
+use std::result;
 
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -45,6 +46,8 @@ pub enum TransactionError {
     /// Transaction contains an invalid account reference
     InvalidAccountIndex,
 }
+
+pub type Result<T> = result::Result<T, TransactionError>;
 
 /// An atomic transaction
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]

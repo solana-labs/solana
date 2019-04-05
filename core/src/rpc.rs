@@ -10,11 +10,11 @@ use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_client::rpc_signature_status::RpcSignatureStatus;
 use solana_drone::drone::request_airdrop_transaction;
-use solana_runtime::bank;
+use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use solana_sdk::transaction::{Transaction, TransactionError};
+use solana_sdk::transaction::{self, Transaction, TransactionError};
 use std::mem;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -46,7 +46,7 @@ pub struct JsonRpcRequestProcessor {
 }
 
 impl JsonRpcRequestProcessor {
-    fn bank(&self) -> Arc<bank::Bank> {
+    fn bank(&self) -> Arc<Bank> {
         self.bank_forks.read().unwrap().working_bank()
     }
 
@@ -79,7 +79,7 @@ impl JsonRpcRequestProcessor {
         bs58::encode(id).into_string()
     }
 
-    pub fn get_signature_status(&self, signature: Signature) -> Option<bank::Result<()>> {
+    pub fn get_signature_status(&self, signature: Signature) -> Option<transaction::Result<()>> {
         self.get_signature_confirmation_status(signature)
             .map(|x| x.1)
     }
@@ -92,7 +92,7 @@ impl JsonRpcRequestProcessor {
     pub fn get_signature_confirmation_status(
         &self,
         signature: Signature,
-    ) -> Option<(usize, bank::Result<()>)> {
+    ) -> Option<(usize, transaction::Result<()>)> {
         self.bank().get_signature_confirmation_status(&signature)
     }
 
@@ -731,7 +731,7 @@ mod tests {
 
     fn new_bank_forks() -> (Arc<RwLock<BankForks>>, Keypair) {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
-        let bank = bank::Bank::new(&genesis_block);
+        let bank = Bank::new(&genesis_block);
         (
             Arc::new(RwLock::new(BankForks::new(bank.slot(), bank))),
             alice,

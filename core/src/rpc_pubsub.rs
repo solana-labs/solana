@@ -228,12 +228,12 @@ mod tests {
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use solana_budget_api;
     use solana_budget_api::budget_instruction;
-    use solana_runtime::bank::{self, Bank};
+    use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
-    use solana_sdk::transaction::Transaction;
+    use solana_sdk::transaction::{self, Transaction};
     use std::thread::sleep;
     use std::time::Duration;
     use tokio::prelude::{Async, Stream};
@@ -242,7 +242,7 @@ mod tests {
         bank: &Arc<Bank>,
         tx: &Transaction,
         subscriptions: &RpcSubscriptions,
-    ) -> bank::Result<Arc<Bank>> {
+    ) -> transaction::Result<Arc<Bank>> {
         bank.process_transaction(tx)?;
         subscriptions.notify_subscribers(&bank);
 

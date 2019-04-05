@@ -47,7 +47,7 @@ mod tests {
     use crate::id;
     use crate::vote_instruction::{self, Vote};
     use crate::vote_state::VoteState;
-    use solana_runtime::bank::{Bank, Result};
+    use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::instruction::InstructionError;
@@ -56,7 +56,7 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::sync_client::SyncClient;
     use solana_sdk::system_instruction;
-    use solana_sdk::transaction::TransactionError;
+    use solana_sdk::transaction::{Result, TransactionError};
 
     fn create_bank(lamports: u64) -> (Bank, Keypair) {
         let (genesis_block, mint_keypair) = GenesisBlock::new(lamports);
