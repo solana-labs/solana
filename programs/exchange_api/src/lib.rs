@@ -1,7 +1,6 @@
 pub mod exchange_instruction;
 pub mod exchange_processor;
 pub mod exchange_state;
-pub mod exchange_transaction;
 
 use solana_sdk::pubkey::Pubkey;
 
