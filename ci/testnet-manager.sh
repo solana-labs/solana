@@ -226,7 +226,7 @@ start() {
 
       # List of zones to deploy for each cloud provider
       GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
-      EC2_ZONES=(sa-east-1a us-west-1a ap-northeast-2a eu-central-1a ca-central-1a)
+      EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
 
       # Build an array to pass as opts to testnet-deploy.sh: "-z zone1 -z zone2 ..."
       GCE_ZONE_ARGS=()
