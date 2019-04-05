@@ -16,11 +16,11 @@ use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use solana_metrics::counter::Counter;
-use solana_runtime::bank::{self, Bank};
+use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_BLOCKHASHES};
-use solana_sdk::transaction::{Transaction, TransactionError};
+use solana_sdk::transaction::{self, Transaction, TransactionError};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -220,7 +220,7 @@ impl BankingStage {
     fn record_transactions(
         bank_slot: u64,
         txs: &[Transaction],
-        results: &[bank::Result<()>],
+        results: &[transaction::Result<()>],
         poh: &Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
         let processed_transactions: Vec<_> = results

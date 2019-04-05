@@ -1,5 +1,5 @@
-use crate::bank::{Bank, Result};
-use solana_sdk::transaction::Transaction;
+use crate::bank::Bank;
+use solana_sdk::transaction::{Result, Transaction};
 
 // Represents the results of trying to lock a set of accounts
 pub struct LockedAccountsResults<'a, 'b> {

@@ -22,10 +22,9 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_us, MAX_RECENT_BLOCKHASHES};
-use solana_sdk::transaction::{Transaction, TransactionError};
+use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use solana_vote_api::vote_instruction::Vote;
 use solana_vote_api::vote_state::{Lockout, VoteState};
-use std::result;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -105,8 +104,6 @@ impl EpochSchedule {
         }
     }
 }
-
-pub type Result<T> = result::Result<T, TransactionError>;
 
 type BankStatusCache = StatusCache<Result<()>>;
 

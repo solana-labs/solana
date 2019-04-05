@@ -1,5 +1,4 @@
 use crate::append_vec::AppendVec;
-use crate::bank::Result;
 use crate::message_processor::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
@@ -12,6 +11,7 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
 use solana_vote_api;
 use std::collections::BTreeMap;

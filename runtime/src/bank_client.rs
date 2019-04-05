@@ -7,7 +7,7 @@ use solana_sdk::signature::Signature;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::sync_client::SyncClient;
 use solana_sdk::system_instruction;
-use solana_sdk::transaction::Transaction;
+use solana_sdk::transaction::{self, Transaction};
 use solana_sdk::transport::Result;
 use std::io;
 
@@ -78,6 +78,13 @@ impl<'a> SyncClient for BankClient<'a> {
 
     fn get_balance(&self, pubkey: &Pubkey) -> Result<u64> {
         Ok(self.bank.get_balance(pubkey))
+    }
+
+    fn get_signature_status(
+        &self,
+        signature: &Signature,
+    ) -> Result<Option<transaction::Result<()>>> {
+        Ok(self.bank.get_signature_status(signature))
     }
 }
 

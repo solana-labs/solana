@@ -6,6 +6,7 @@ use crate::instruction::Instruction;
 use crate::message::Message;
 use crate::pubkey::Pubkey;
 use crate::signature::{Keypair, Signature};
+use crate::transaction;
 use crate::transport::Result;
 
 pub trait SyncClient {
@@ -26,4 +27,10 @@ pub trait SyncClient {
 
     /// Get account balance or 0 if not found.
     fn get_balance(&self, pubkey: &Pubkey) -> Result<u64>;
+
+    /// Get signature status.
+    fn get_signature_status(
+        &self,
+        signature: &Signature,
+    ) -> Result<Option<transaction::Result<()>>>;
 }
