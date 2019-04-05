@@ -710,6 +710,8 @@ impl Bank {
                 match *res {
                     Err(TransactionError::InstructionError(_, _)) => {
                         // credit the transaction fee even in case of InstructionError
+                        // necessary to withdraw from account[0] here because previous
+                        // work of doing so (in accounts.load()) is ignored by store()
                         self.withdraw(&message.account_keys[0], fee)?;
                         fees += fee;
                         Ok(())
