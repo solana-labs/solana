@@ -403,7 +403,11 @@ impl ReplayStage {
             .map(|bank| {
                 (
                     bank,
-                    locktower.collect_vote_lockouts(bank.slot(), bank.vote_accounts(), &ancestors),
+                    locktower.collect_vote_lockouts(
+                        bank.slot(),
+                        bank.vote_accounts().into_iter(),
+                        &ancestors,
+                    ),
                 )
             })
             .filter(|(b, stake_lockouts)| {

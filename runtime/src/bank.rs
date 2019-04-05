@@ -152,6 +152,9 @@ pub struct Bank {
     /// initialized from genesis
     epoch_schedule: EpochSchedule,
 
+    /// cache of vote_account state for this fork
+    vote_accounts: RwLock<HashMap<Pubkey, Account>>,
+
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule boundary
     epoch_vote_accounts: HashMap<u64, HashMap<Pubkey, Account>>,
@@ -181,7 +184,7 @@ impl Bank {
         bank.process_genesis_block(genesis_block);
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
-        let vote_accounts: HashMap<_, _> = bank.vote_accounts().collect();
+        let vote_accounts = bank.vote_accounts();
         for i in 0..=bank.get_stakers_epoch(bank.slot) {
             bank.epoch_vote_accounts.insert(i, vote_accounts.clone());
         }
@@ -199,6 +202,7 @@ impl Bank {
 
         bank.transaction_count
             .store(parent.transaction_count() as usize, Ordering::Relaxed);
+        bank.vote_accounts = RwLock::new(parent.vote_accounts());
 
         bank.tick_height
             .store(parent.tick_height.load(Ordering::SeqCst), Ordering::SeqCst);
@@ -224,7 +228,7 @@ impl Bank {
             //  if my parent didn't populate for this epoch, we've
             //  crossed a boundary
             if epoch_vote_accounts.get(&epoch).is_none() {
-                epoch_vote_accounts.insert(epoch, bank.vote_accounts().collect());
+                epoch_vote_accounts.insert(epoch, bank.vote_accounts());
             }
             epoch_vote_accounts
         };
@@ -330,8 +334,7 @@ impl Bank {
             .serialize(&mut bootstrap_leader_vote_account.data)
             .unwrap();
 
-        self.accounts.store_slow(
-            self.accounts_id,
+        self.store(
             &genesis_block.bootstrap_leader_vote_account_id,
             &bootstrap_leader_vote_account,
         );
@@ -369,8 +372,7 @@ impl Bank {
     pub fn register_native_instruction_processor(&self, name: &str, program_id: &Pubkey) {
         debug!("Adding native program {} under {:?}", name, program_id);
         let account = native_loader::create_loadable_account(name);
-        self.accounts
-            .store_slow(self.accounts_id, program_id, &account);
+        self.store(program_id, &account);
     }
 
     /// Return the last block hash registered.
@@ -744,6 +746,8 @@ impl Bank {
         self.accounts
             .store_accounts(self.accounts_id, txs, executed, loaded_accounts);
 
+        self.store_vote_accounts(txs, executed, loaded_accounts);
+
         // once committed there is no way to unroll
         let write_elapsed = now.elapsed();
         debug!(
@@ -806,6 +810,19 @@ impl Bank {
         parents
     }
 
+    fn store(&self, pubkey: &Pubkey, account: &Account) {
+        self.accounts.store_slow(self.accounts_id, pubkey, &account);
+
+        if solana_vote_api::check_id(&account.owner) {
+            let mut vote_accounts = self.vote_accounts.write().unwrap();
+            if account.lamports != 0 {
+                vote_accounts.insert(*pubkey, account.clone());
+            } else {
+                vote_accounts.remove(pubkey);
+            }
+        }
+    }
+
     pub fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
         match self.get_account(pubkey) {
             Some(mut account) => {
@@ -814,7 +831,8 @@ impl Bank {
                 }
 
                 account.lamports -= lamports;
-                self.accounts.store_slow(self.accounts_id, pubkey, &account);
+                self.store(pubkey, &account);
+
                 Ok(())
             }
             None => Err(TransactionError::AccountNotFound),
@@ -824,7 +842,7 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, lamports: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
         account.lamports += lamports;
-        self.accounts.store_slow(self.accounts_id, pubkey, &account);
+        self.store(pubkey, &account);
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
@@ -910,9 +928,40 @@ impl Bank {
         self.epoch_schedule.get_stakers_epoch(slot)
     }
 
+    /// a bank-level cache of vote accounts
+    fn store_vote_accounts(
+        &self,
+        txs: &[Transaction],
+        res: &[Result<()>],
+        loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
+    ) {
+        let mut vote_accounts = self.vote_accounts.write().unwrap();
+
+        for (i, raccs) in loaded.iter().enumerate() {
+            if res[i].is_err() || raccs.is_err() {
+                continue;
+            }
+
+            let message = &txs[i].message();
+            let acc = raccs.as_ref().unwrap();
+            for (key, account) in message
+                .account_keys
+                .iter()
+                .zip(acc.0.iter())
+                .filter(|(_, account)| solana_vote_api::check_id(&account.owner))
+            {
+                if account.lamports != 0 {
+                    vote_accounts.insert(*key, account.clone());
+                } else {
+                    vote_accounts.remove(key);
+                }
+            }
+        }
+    }
+
     /// current vote accounts for this bank
-    pub fn vote_accounts(&self) -> impl Iterator<Item = (Pubkey, Account)> {
-        self.accounts.get_vote_accounts(self.accounts_id)
+    pub fn vote_accounts(&self) -> HashMap<Pubkey, Account> {
+        self.vote_accounts.read().unwrap().clone()
     }
 
     ///  vote accounts for the specific epoch
@@ -981,6 +1030,7 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction;
     use solana_sdk::system_transaction;
+    use solana_vote_api::vote_instruction;
 
     #[test]
     fn test_bank_new() {
@@ -1806,6 +1856,40 @@ mod tests {
 
         bank6.squash();
         assert_eq!(bank6.transaction_count(), 1);
+    }
+
+    #[test]
+    fn test_bank_vote_accounts() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(500);
+        let bank = Arc::new(Bank::new(&genesis_block));
+
+        let vote_accounts = bank.vote_accounts();
+        assert_eq!(vote_accounts.len(), 1); // bootstrap leader has
+                                            // to have a vote account
+
+        let vote_keypair = Keypair::new();
+        let instructions =
+            vote_instruction::create_account(&mint_keypair.pubkey(), &vote_keypair.pubkey(), 10);
+
+        let transaction = Transaction::new_signed_instructions(
+            &[&mint_keypair],
+            instructions,
+            bank.last_blockhash(),
+        );
+
+        bank.process_transaction(&transaction).unwrap();
+
+        let vote_accounts = bank.vote_accounts();
+
+        assert_eq!(vote_accounts.len(), 2);
+
+        assert!(vote_accounts.get(&vote_keypair.pubkey()).is_some());
+
+        assert!(bank.withdraw(&vote_keypair.pubkey(), 10).is_ok());
+
+        let vote_accounts = bank.vote_accounts();
+
+        assert_eq!(vote_accounts.len(), 1);
     }
 
 }
