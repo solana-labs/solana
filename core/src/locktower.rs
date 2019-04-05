@@ -170,19 +170,15 @@ impl Locktower {
 
             // Note: It should not be possible for any vote state in this bank to have
             // a vote for a slot >= bank_slot, so we are guaranteed that the last vote in
-            // this vote stack is the simulated vote, so this check should be sufficient
+            // this vote stack is the simulated vote, so this fetch should be sufficient
             // to find the last unsimulated vote.
-            if vote_state.votes.len() > 1 {
-                let last_real_vote = &vote_state.nth_recent_vote(1);
+            assert_eq!(
+                vote_state.nth_recent_vote(0).map(|l| l.slot),
+                Some(bank_slot)
+            );
+            if let Some(vote) = vote_state.nth_recent_vote(1) {
                 // Update all the parents of this last vote with the stake of this vote account
-                if let Some(vote) = last_real_vote {
-                    Self::update_ancestor_stakes(
-                        &mut stake_lockouts,
-                        vote.slot,
-                        lamports,
-                        ancestors,
-                    );
-                }
+                Self::update_ancestor_stakes(&mut stake_lockouts, vote.slot, lamports, ancestors);
             }
         }
         stake_lockouts
@@ -781,7 +777,7 @@ mod test {
         // for slot 0, which is common to all account vote states, so we should pass the
         // threshold check
         let vote_to_evaluate = VOTE_THRESHOLD_DEPTH as u64;
-        for vote in locktower_votes[..locktower_votes.len()].iter() {
+        for vote in &locktower_votes {
             locktower.record_vote(*vote);
         }
         let stakes_lockouts = locktower.collect_vote_lockouts(
