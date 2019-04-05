@@ -164,6 +164,7 @@ done
 
 if ! $skipSetup; then
   echo "--- $cloudProvider.sh delete"
+  # shellcheck disable=SC2068
   time net/"$cloudProvider".sh delete ${zone_args[@]} -p "$netName" ${externalNode:+-x}
   if $delete; then
     exit 0
@@ -176,6 +177,7 @@ if ! $skipSetup; then
     -c "$clientNodeCount"
     -n "$additionalFullNodeCount"
   )
+  # shellcheck disable=SC2206
   create_args+=(${zone_args[@]})
 
   if $blockstreamer; then
@@ -212,6 +214,7 @@ else
   config_args=(
     -p "$netName"
   )
+  # shellcheck disable=SC2206
   config_args+=(${zone_args[@]})
   if $publicNetwork; then
     config_args+=(-P)
