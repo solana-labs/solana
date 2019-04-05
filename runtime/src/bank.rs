@@ -1774,34 +1774,37 @@ mod tests {
     #[test]
     fn test_bank_inherit_tx_count() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(500);
-        let parent = Arc::new(Bank::new(&genesis_block));
+        let bank0 = Arc::new(Bank::new(&genesis_block));
 
         // Bank 1
-        let bank = Arc::new(new_from_parent(&parent));
+        let bank1 = Arc::new(new_from_parent(&bank0));
         // Bank 2
-        let bank2 = Arc::new(new_from_parent(&bank));
-        // Bank 5
-        let bank5 = new_from_parent(&bank);
+        let bank2 = new_from_parent(&bank0);
 
-        let key1 = Keypair::new();
+        // transfer a token
+        assert_eq!(
+            bank1.process_transaction(&system_transaction::transfer(
+                &mint_keypair,
+                &Keypair::new().pubkey(),
+                1,
+                genesis_block.hash(),
+                0
+            )),
+            Ok(())
+        );
 
-        // move a token
-        let tx_move_mint_to_1 =
-            system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
-        assert_eq!(bank2.process_transaction(&tx_move_mint_to_1), Ok(()));
+        assert_eq!(bank0.transaction_count(), 0);
+        assert_eq!(bank2.transaction_count(), 0);
+        assert_eq!(bank1.transaction_count(), 1);
 
-        assert_eq!(bank.transaction_count(), 0);
-        assert_eq!(bank5.transaction_count(), 0);
-        assert_eq!(bank2.transaction_count(), 1);
+        bank1.squash();
 
-        bank2.squash();
+        assert_eq!(bank0.transaction_count(), 0);
+        assert_eq!(bank2.transaction_count(), 0);
+        assert_eq!(bank1.transaction_count(), 1);
 
-        assert_eq!(bank.transaction_count(), 0);
-        assert_eq!(bank5.transaction_count(), 0);
-        assert_eq!(bank2.transaction_count(), 1);
-
-        let bank6 = new_from_parent(&bank2);
-        assert_eq!(bank2.transaction_count(), 1);
+        let bank6 = new_from_parent(&bank1);
+        assert_eq!(bank1.transaction_count(), 1);
         assert_eq!(bank6.transaction_count(), 1);
 
         bank6.squash();
