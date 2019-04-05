@@ -27,13 +27,14 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [name] [cloud] [zone] [options...]
+usage: $0 -N name -C cloud -z zone1 [-z zone2] ... [-z zoneN] [options...]
 
 Deploys a CD testnet
 
-  name  - name of the network
-  cloud - cloud provider to use (gce, ec2)
-  zone  - cloud provider zone to deploy the network into
+  mandatory arguments:
+  -N [name]  - name of the network
+  -C [cloud] - cloud provider to use (gce, ec2)
+  -z [zone]  - cloud provider zone to deploy the network into.  Must specify at least one zone
 
   options:
    -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
@@ -59,18 +60,21 @@ EOF
   exit $exitcode
 }
 
-netName=$1
-cloudProvider=$2
-zone=$3
-[[ -n $netName ]] || usage
-[[ -n $cloudProvider ]] || usage "Cloud provider not specified"
-[[ -n $zone ]] || usage "Zone not specified"
-shift 3
+zone=()
 
-while getopts "h?p:Pn:c:t:gG:a:Dbd:rusx" opt; do
+while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:N:C:" opt; do
   case $opt in
   h | \?)
     usage
+    ;;
+  N)
+    netName=$OPTARG
+    ;;
+  C)
+    cloudProvider=$OPTARG
+    ;;
+  z)
+    zone+=("$OPTARG")
     ;;
   P)
     publicNetwork=true
@@ -127,6 +131,10 @@ while getopts "h?p:Pn:c:t:gG:a:Dbd:rusx" opt; do
     ;;
   esac
 done
+
+[[ -n $netName ]] || usage
+[[ -n $cloudProvider ]] || usage "Cloud provider not specified"
+[[ -n $zone ]] || usage "Zone not specified"
 
 shutdown() {
   exitcode=$?
