@@ -134,7 +134,15 @@ sanity() {
   testnet-beta)
     (
       set -x
-      ci/testnet-sanity.sh beta-testnet-solana-com ec2 us-west-1a
+      EC2_ZONES=(sa-east-1a us-west-1a ap-northeast-2a eu-central-1a ca-central-1a)
+      for zone in "${EC2_ZONES[@]}"; do
+        ci/testnet-sanity.sh beta-testnet-solana-com ec2 "$zone" || return false
+      done
+
+      GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
+      for zone in "${GCE_ZONES[@]}"; do
+        ci/testnet-sanity.sh beta-testnet-solana-com gce "$zone" || return false
+      done
     )
     ;;
   testnet-beta-perf)
