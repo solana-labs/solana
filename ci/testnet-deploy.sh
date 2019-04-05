@@ -158,7 +158,7 @@ set -x
 
 # Build a string to pass zone opts to $cloudProvider.sh: "-z zone1 -z zone2 ..."
 for val in "${zone[@]}"; do
-  zone_args="-z $val $zone_args"
+  zone_args="-z $zone_args $val"
 done
 
 if ! $skipSetup; then
