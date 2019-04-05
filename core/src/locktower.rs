@@ -162,8 +162,24 @@ impl Locktower {
                 };
                 Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
             }
-            // each account hash a stake for all the forks in the active tree for this bank
-            Self::update_ancestor_stakes(&mut stake_lockouts, bank_slot, lamports, ancestors);
+
+            // The last vote in the vote stack is a simulated vote on bank_slot, which
+            // we added to the vote stack earlier in this function by calling process_vote().
+            // We don't want to update the ancestors stakes of this vote b/c it does not
+            // represent an actual vote by the validator.
+
+            // Note: It should not be possible for any vote state in this bank to have
+            // a vote for a slot >= bank_slot, so we are guaranteed that the last vote in
+            // this vote stack is the simulated vote, so this fetch should be sufficient
+            // to find the last unsimulated vote.
+            assert_eq!(
+                vote_state.nth_recent_vote(0).map(|l| l.slot),
+                Some(bank_slot)
+            );
+            if let Some(vote) = vote_state.nth_recent_vote(1) {
+                // Update all the parents of this last vote with the stake of this vote account
+                Self::update_ancestor_stakes(&mut stake_lockouts, vote.slot, lamports, ancestors);
+            }
         }
         stake_lockouts
     }
@@ -727,5 +743,56 @@ mod test {
         assert_eq!(stake_lockouts[&0].stake, 1);
         assert_eq!(stake_lockouts[&1].stake, 1);
         assert_eq!(stake_lockouts[&2].stake, 1);
+    }
+
+    #[test]
+    fn test_check_vote_threshold_forks() {
+        // Create the ancestor relationships
+        let ancestors = (0..=(VOTE_THRESHOLD_DEPTH + 1) as u64)
+            .map(|slot| {
+                let slot_parents: HashSet<_> = (0..slot).collect();
+                (slot, slot_parents)
+            })
+            .collect();
+
+        // Create votes such that
+        // 1) 3/4 of the stake has voted on slot: VOTE_THRESHOLD_DEPTH - 2, lockout: 2
+        // 2) 1/4 of the stake has voted on slot: VOTE_THRESHOLD_DEPTH, lockout: 2^9
+        let total_stake = 4;
+        let threshold_size = 0.67;
+        let threshold_stake = (f64::ceil(total_stake as f64 * threshold_size)) as u64;
+        let locktower_votes: Vec<u64> = (0..VOTE_THRESHOLD_DEPTH as u64).collect();
+        let accounts = gen_accounts(&[
+            (threshold_stake, &[(VOTE_THRESHOLD_DEPTH - 2) as u64]),
+            (total_stake - threshold_stake, &locktower_votes[..]),
+        ]);
+
+        // Initialize locktower
+        let stakes: HashMap<_, _> = accounts.iter().map(|(pk, a)| (*pk, a.lamports)).collect();
+        let epoch_stakes = EpochStakes::new(0, stakes, &Pubkey::default());
+        let mut locktower = Locktower::new(epoch_stakes, VOTE_THRESHOLD_DEPTH, threshold_size);
+
+        // CASE 1: Record the first VOTE_THRESHOLD locktower votes for fork 2. We want to
+        // evaluate a vote on slot VOTE_THRESHOLD_DEPTH. The nth most recent vote should be
+        // for slot 0, which is common to all account vote states, so we should pass the
+        // threshold check
+        let vote_to_evaluate = VOTE_THRESHOLD_DEPTH as u64;
+        for vote in &locktower_votes {
+            locktower.record_vote(*vote);
+        }
+        let stakes_lockouts = locktower.collect_vote_lockouts(
+            vote_to_evaluate,
+            accounts.clone().into_iter(),
+            &ancestors,
+        );
+        assert!(locktower.check_vote_stake_threshold(vote_to_evaluate, &stakes_lockouts));
+
+        // CASE 2: Now we want to evaluate a vote for slot VOTE_THRESHOLD_DEPTH + 1. This slot
+        // will expire the vote in one of the vote accounts, so we should have insufficient
+        // stake to pass the threshold
+        let vote_to_evaluate = VOTE_THRESHOLD_DEPTH as u64 + 1;
+        let stakes_lockouts =
+            locktower.collect_vote_lockouts(vote_to_evaluate, accounts.into_iter(), &ancestors);
+        assert!(!locktower.check_vote_stake_threshold(vote_to_evaluate, &stakes_lockouts));
     }
 }
