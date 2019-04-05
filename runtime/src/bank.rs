@@ -711,7 +711,9 @@ impl Bank {
                 let message = tx.message();
                 match *res {
                     Err(TransactionError::InstructionError(_, _)) => {
-                        // Charge the transaction fee even in case of InstructionError
+                        // credit the transaction fee even in case of InstructionError
+                        // necessary to withdraw from account[0] here because previous
+                        // work of doing so (in accounts.load()) is ignored by store()
                         self.withdraw(&message.account_keys[0], fee)?;
                         fees += fee;
                         Ok(())
@@ -1283,11 +1285,23 @@ mod tests {
 
         bank.fee_calculator.lamports_per_signature = 1;
         let tx = system_transaction::transfer(&key1, &key2.pubkey(), 1, genesis_block.hash(), 0);
+
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(bank.get_balance(&leader), initial_balance + 4);
         assert_eq!(bank.get_balance(&key1.pubkey()), 0);
         assert_eq!(bank.get_balance(&key2.pubkey()), 1);
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5 - 3);
+
+        // verify that an InstructionError collects fees, too
+        let mut tx =
+            system_transaction::transfer(&mint_keypair, &key2.pubkey(), 1, genesis_block.hash(), 0);
+        // send a bogus instruction to system_program, cause an instruction error
+        tx.message.instructions[0].data[0] = 40;
+
+        bank.process_transaction(&tx).is_err(); // fails with an instruction error
+        assert_eq!(bank.get_balance(&leader), initial_balance + 5); // gots our bucks
+        assert_eq!(bank.get_balance(&key2.pubkey()), 1); //  our fee ------V
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5 - 3 - 1);
     }
 
     #[test]
