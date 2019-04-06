@@ -482,13 +482,13 @@ impl Blocktree {
                     }
                 }
                 Err(Error::ErasureError(erasure::ErasureError::CorruptCoding)) => {
-                    let (_, coding_start) = erasure_meta.start_indices();
-                    let coding_end = coding_start + erasure::NUM_DATA as u64;
+                    let start_index = erasure_meta.start_index();
+                    let (_, coding_end_idx) = erasure_meta.end_indexes();
 
                     erasure_meta.coding = 0;
 
-                    for i in coding_start..coding_end {
-                        coding_to_delete.push((slot, i));
+                    for idx in start_index..coding_end_idx {
+                        coding_to_delete.push((slot, idx));
                     }
                 }
                 Err(e) => return Err(e),
@@ -1055,14 +1055,13 @@ impl Blocktree {
     ) -> Result<(Vec<Blob>, Vec<Blob>)> {
         use crate::erasure::{NUM_CODING, NUM_DATA};
 
-        let (data_start, coding_start) = erasure_meta.start_indices();
+        let start_idx = erasure_meta.start_index();
+        let (data_end_idx, coding_end_idx) = erasure_meta.end_indexes();
 
         let mut data = Vec::with_capacity(NUM_DATA);
         let mut coding = Vec::with_capacity(NUM_CODING);
 
-        for i in 0..NUM_DATA as u64 {
-            let idx = i + data_start;
-
+        for idx in start_idx..data_end_idx {
             if erasure_meta.is_data_present(idx) {
                 let blob_data = self
                     .data_cf
@@ -1074,9 +1073,7 @@ impl Blocktree {
             }
         }
 
-        for i in 0..NUM_CODING as u64 {
-            let idx = i + coding_start;
-
+        for idx in start_idx..coding_end_idx {
             if idx == index {
                 coding.push(Some(new_coding_blob.to_vec()));
                 continue;
@@ -1093,7 +1090,7 @@ impl Blocktree {
             }
         }
 
-        erasure::recover_with_blobs(slot, data_start, &data, &coding)
+        erasure::recover_with_blobs(slot, start_idx, &data, &coding)
     }
 
     /// Returns the next consumed index and the number of ticks in the new consumed
@@ -2804,6 +2801,9 @@ pub mod tests {
                     }
                 }
             }
+
+            drop(blocktree);
+            Blocktree::destroy(&path).expect("Blocktree destruction must succeed");
         }
     }
 

@@ -59,9 +59,9 @@ pub struct ErasureMeta {
     /// Which erasure set in the slot this is
     pub set_index: u64,
     /// Bitfield representing presence/absence of data blobs
-    pub data: u16,
+    pub data: u64,
     /// Bitfield representing presence/absence of coding blobs
-    pub coding: u8,
+    pub coding: u64,
 }
 
 #[cfg(feature = "erasure")]
@@ -79,28 +79,22 @@ impl ErasureMeta {
             NUM_DATA - self.data.count_ones() as usize,
             NUM_CODING - self.coding.count_ones() as usize,
         );
-        (data_missing > 0 && data_missing + coding_missing <= NUM_CODING)
+
+        data_missing > 0 && data_missing + coding_missing <= NUM_CODING
     }
 
     pub fn is_coding_present(&self, index: u64) -> bool {
         let set_index = Self::set_index_for(index);
+        let position = index - self.start_index();
 
-        if set_index as u64 == self.set_index {
-            let (_, coding_start) = self.start_indices();
-            let position = index - coding_start;
-
-            self.coding & (1 << position) != 0
-        } else {
-            false
-        }
+        set_index == self.set_index && self.coding & (1 << position) != 0
     }
 
     pub fn set_coding_present(&mut self, index: u64) {
         let set_index = Self::set_index_for(index);
 
         if set_index as u64 == self.set_index {
-            let (_, coding_start) = self.start_indices();
-            let position = index - coding_start;
+            let position = index - self.start_index();
 
             self.coding |= 1 << position;
         }
@@ -108,23 +102,16 @@ impl ErasureMeta {
 
     pub fn is_data_present(&self, index: u64) -> bool {
         let set_index = Self::set_index_for(index);
+        let position = index - self.start_index();
 
-        if set_index as u64 == self.set_index {
-            let (data_start, _) = self.start_indices();
-            let position = index - data_start;
-
-            self.data & (1 << position) != 0
-        } else {
-            false
-        }
+        set_index == self.set_index && self.data & (1 << position) != 0
     }
 
     pub fn set_data_present(&mut self, index: u64) {
         let set_index = Self::set_index_for(index);
 
         if set_index as u64 == self.set_index {
-            let (data_start, _) = self.start_indices();
-            let position = index - data_start;
+            let position = index - self.start_index();
 
             self.data |= 1 << position;
         }
@@ -134,11 +121,14 @@ impl ErasureMeta {
         index / NUM_DATA as u64
     }
 
-    /// returns a tuple of (data_start, coding_start)
-    pub fn start_indices(&self) -> (u64, u64) {
-        let data_start = self.set_index * NUM_DATA as u64;
-        let coding_start = data_start + (NUM_DATA - NUM_CODING) as u64;
-        (data_start, coding_start)
+    pub fn start_index(&self) -> u64 {
+        self.set_index * NUM_DATA as u64
+    }
+
+    /// returns a tuple of (data_end, coding_end)
+    pub fn end_indexes(&self) -> (u64, u64) {
+        let start = self.start_index();
+        (start + NUM_DATA as u64, start + NUM_CODING as u64)
     }
 }
 
