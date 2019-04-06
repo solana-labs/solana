@@ -11,6 +11,7 @@ use solana_runtime::append_vec::{
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::env;
+use std::fs::{create_dir_all, remove_dir_all};
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -31,6 +32,8 @@ fn get_append_vec_bench_path(path: &str) -> PathBuf {
     let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
     let mut buf = PathBuf::new();
     buf.push(&format!("{}/{}", out_dir, path));
+    let _ignored = remove_dir_all(out_dir.clone());
+    create_dir_all(out_dir).expect("Create directory failed");
     buf
 }
 
@@ -203,7 +206,7 @@ fn bench_account_serialize(bencher: &mut Bencher) {
     let account = Account::new(2, 100, &Pubkey::new_rand());
     let len = get_serialized_size(&account);
     let ser_len = align_up!(len + std::mem::size_of::<u64>(), std::mem::size_of::<u64>());
-    let mut memory = vec![0; num * ser_len];
+    let mut memory = test::black_box(vec![0; num * ser_len]);
     bencher.iter(|| {
         for i in 0..num {
             let start = i * ser_len;
@@ -211,12 +214,7 @@ fn bench_account_serialize(bencher: &mut Bencher) {
         }
     });
 
-    // make sure compiler doesn't delete the code.
     let index = thread_rng().gen_range(0, num);
-    if memory[index] != 0 {
-        println!("memory: {}", memory[index]);
-    }
-
     let start = index * ser_len;
     let new_account = deserialize_account(&memory[start..start + ser_len], 0, num * len).unwrap();
     assert_eq!(new_account, account);
@@ -227,7 +225,7 @@ fn bench_account_serialize_bincode(bencher: &mut Bencher) {
     let num: usize = 1000;
     let account = Account::new(2, 100, &Pubkey::new_rand());
     let len = serialized_size(&account).unwrap() as usize;
-    let mut memory = vec![0u8; num * len];
+    let mut memory = test::black_box(vec![0u8; num * len]);
     bencher.iter(|| {
         for i in 0..num {
             let start = i * len;
@@ -236,12 +234,7 @@ fn bench_account_serialize_bincode(bencher: &mut Bencher) {
         }
     });
 
-    // make sure compiler doesn't delete the code.
     let index = thread_rng().gen_range(0, len);
-    if memory[index] != 0 {
-        println!("memory: {}", memory[index]);
-    }
-
     let start = index * len;
     let new_account: Account = deserialize(&memory[start..start + len]).unwrap();
     assert_eq!(new_account, account);
