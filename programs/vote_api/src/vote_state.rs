@@ -150,8 +150,6 @@ impl VoteState {
             // than the max number of confirmations this vote has seen
             if stack_depth > i + v.confirmation_count as usize {
                 v.confirmation_count += 1;
-            } else {
-                break;
             }
         }
     }
@@ -432,8 +430,6 @@ mod tests {
             vote_state.process_vote(vote);
         }
 
-        // Check the lockouts for first and second votes. Lockouts should be
-        // INITIAL_LOCKOUT^3 and INITIAL_LOCKOUT^2 respectively
         check_lockouts(&vote_state);
 
         // Expire the third vote (which was a vote for slot 2). The height of the
@@ -446,6 +442,43 @@ mod tests {
         // double for everybody
         vote_state.process_vote(Vote::new((2 + INITIAL_LOCKOUT + 2) as u64));
         check_lockouts(&vote_state);
+
+        // Vote again, this time the vote stack depth increases, so the lockouts should
+        // double for everybody
+        vote_state.process_vote(Vote::new((2 + INITIAL_LOCKOUT + 3) as u64));
+        check_lockouts(&vote_state);
+    }
+
+    #[test]
+    fn test_expire_multiple_votes() {
+        let voter_id = Pubkey::new_rand();
+        let mut vote_state = VoteState::new(&voter_id);
+
+        for i in 0..3 {
+            let vote = Vote::new(i as u64);
+            vote_state.process_vote(vote);
+        }
+
+        assert_eq!(vote_state.votes[0].confirmation_count, 3);
+
+        // Expire the second and third votes
+        let expire_slot = vote_state.votes[1].slot + vote_state.votes[1].lockout() + 1;
+        vote_state.process_vote(Vote::new(expire_slot));
+        assert_eq!(vote_state.votes.len(), 2);
+
+        // Check that the old votes expired
+        assert_eq!(vote_state.votes[0].slot, 0);
+        assert_eq!(vote_state.votes[1].slot, expire_slot);
+
+        // Process one more vote
+        vote_state.process_vote(Vote::new(expire_slot + 1));
+
+        // Confirmation count for the older first vote should remain unchanged
+        assert_eq!(vote_state.votes[0].confirmation_count, 3);
+
+        // The later votes should still have increasing confirmation counts
+        assert_eq!(vote_state.votes[1].confirmation_count, 2);
+        assert_eq!(vote_state.votes[2].confirmation_count, 1);
     }
 
     #[test]
