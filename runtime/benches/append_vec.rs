@@ -203,7 +203,7 @@ fn bench_account_serialize(bencher: &mut Bencher) {
     let account = Account::new(2, 100, &Pubkey::new_rand());
     let len = get_serialized_size(&account);
     let ser_len = align_up!(len + std::mem::size_of::<u64>(), std::mem::size_of::<u64>());
-    let mut memory = vec![0; num * ser_len];
+    let mut memory = test::black_box(vec![0; num * ser_len]);
     bencher.iter(|| {
         for i in 0..num {
             let start = i * ser_len;
@@ -211,12 +211,7 @@ fn bench_account_serialize(bencher: &mut Bencher) {
         }
     });
 
-    // make sure compiler doesn't delete the code.
     let index = thread_rng().gen_range(0, num);
-    if memory[index] != 0 {
-        println!("memory: {}", memory[index]);
-    }
-
     let start = index * ser_len;
     let new_account = deserialize_account(&memory[start..start + ser_len], 0, num * len).unwrap();
     assert_eq!(new_account, account);
@@ -227,7 +222,7 @@ fn bench_account_serialize_bincode(bencher: &mut Bencher) {
     let num: usize = 1000;
     let account = Account::new(2, 100, &Pubkey::new_rand());
     let len = serialized_size(&account).unwrap() as usize;
-    let mut memory = vec![0u8; num * len];
+    let mut memory = test::black_box(vec![0u8; num * len]);
     bencher.iter(|| {
         for i in 0..num {
             let start = i * len;
@@ -236,12 +231,7 @@ fn bench_account_serialize_bincode(bencher: &mut Bencher) {
         }
     });
 
-    // make sure compiler doesn't delete the code.
     let index = thread_rng().gen_range(0, len);
-    if memory[index] != 0 {
-        println!("memory: {}", memory[index]);
-    }
-
     let start = index * len;
     let new_account: Account = deserialize(&memory[start..start + len]).unwrap();
     assert_eq!(new_account, account);
