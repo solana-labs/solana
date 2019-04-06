@@ -13,7 +13,7 @@ cuda = []
 
 [dependencies]
 dirs = "1.0.5"
-clap = "2.31"
+clap = "2.33"
 solana-sdk = { path = "../sdk", version = "0.13.0" }
 
 [[bin]]

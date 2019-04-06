@@ -8,7 +8,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-clap = "2.32.0"
+clap = "2.33.0"
 solana = { path = "../core", version = "0.13.0" }
 solana-logger = { path = "../logger", version = "0.13.0" }
 solana-netutil = { path = "../netutil", version = "0.13.0" }
