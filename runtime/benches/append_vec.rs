@@ -212,7 +212,10 @@ fn bench_account_serialize(bencher: &mut Bencher) {
     });
 
     // make sure compiler doesn't delete the code.
-    let index = test::black_box(thread_rng().gen_range(0, num));
+    let index = thread_rng().gen_range(0, num);
+    if memory[index] != 0 {
+        println!("memory: {}", memory[index]);
+    }
 
     let start = index * ser_len;
     let new_account = deserialize_account(&memory[start..start + ser_len], 0, num * len).unwrap();
@@ -234,7 +237,10 @@ fn bench_account_serialize_bincode(bencher: &mut Bencher) {
     });
 
     // make sure compiler doesn't delete the code.
-    let index = test::black_box(thread_rng().gen_range(0, num));
+    let index = thread_rng().gen_range(0, len);
+    if memory[index] != 0 {
+        println!("memory: {}", memory[index]);
+    }
 
     let start = index * len;
     let new_account: Account = deserialize(&memory[start..start + len]).unwrap();
