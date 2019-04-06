@@ -66,19 +66,6 @@ impl ThinClient {
         }
     }
 
-    /// Send a signed Transaction to the server for processing. This method
-    /// does not wait for a response.
-    pub fn transfer_signed(&self, transaction: &Transaction) -> io::Result<Signature> {
-        let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
-        let mut wr = std::io::Cursor::new(&mut buf[..]);
-        serialize_into(&mut wr, &transaction)
-            .expect("serialize Transaction in pub fn transfer_signed");
-        assert!(buf.len() < PACKET_DATA_SIZE);
-        self.transactions_socket
-            .send_to(&buf[..], &self.transactions_addr)?;
-        Ok(transaction.signatures[0])
-    }
-
     /// Retry a sending a signed Transaction to the server for processing.
     pub fn retry_transfer_until_confirmed(
         &self,
