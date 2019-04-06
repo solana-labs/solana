@@ -10,7 +10,7 @@ use bincode::serialize;
 use std::result;
 
 /// Reasons a transaction might be rejected.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionError {
     /// This Pubkey is being processed in another transaction
     AccountInUse,
