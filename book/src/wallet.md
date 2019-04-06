@@ -41,7 +41,7 @@ $ solana-wallet balance
 $ solana-wallet confirm <TX_SIGNATURE>
 
 // Return
-"Confirmed" / "Not found"
+"Confirmed" / "Not found" / "Transaction failed with error <ERR>"
 ```
 
 #### Deploy program
@@ -352,4 +352,3 @@ ARGS:
     <PUBKEY>        The pubkey of recipient
     <PROCESS_ID>    The process id of the transfer to unlock
 ```
-
