@@ -6,11 +6,17 @@
 use crate::rpc_client::RpcClient;
 use bincode::{serialize_into, serialized_size};
 use log::*;
+use solana_sdk::async_client::AsyncClient;
 use solana_sdk::hash::Hash;
+use solana_sdk::instruction::Instruction;
+use solana_sdk::message::Message;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, Signature};
-use solana_sdk::transaction::Transaction;
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_sdk::sync_client::SyncClient;
+use solana_sdk::system_instruction;
+use solana_sdk::transaction::{self, Transaction};
+use solana_sdk::transport::Result as TransportResult;
 use std::error;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
@@ -81,8 +87,28 @@ impl ThinClient {
         tries: usize,
         min_confirmed_blocks: usize,
     ) -> io::Result<Signature> {
+        self.send_and_confirm_transaction(&[keypair], transaction, tries, min_confirmed_blocks)
+    }
+
+    /// Retry sending a signed Transaction with one signing Keypair to the server for processing.
+    pub fn retry_transfer(
+        &self,
+        keypair: &Keypair,
+        transaction: &mut Transaction,
+        tries: usize,
+    ) -> io::Result<Signature> {
+        self.send_and_confirm_transaction(&[keypair], transaction, tries, 0)
+    }
+
+    /// Retry sending a signed Transaction to the server for processing
+    pub fn send_and_confirm_transaction(
+        &self,
+        keypairs: &[&Keypair],
+        transaction: &mut Transaction,
+        tries: usize,
+        min_confirmed_blocks: usize,
+    ) -> io::Result<Signature> {
         for x in 0..tries {
-            transaction.sign(&[keypair], self.get_recent_blockhash()?);
             let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
             serialize_into(&mut wr, &transaction)
@@ -96,45 +122,12 @@ impl ThinClient {
                 return Ok(transaction.signatures[0]);
             }
             info!("{} tries failed transfer to {}", x, self.transactions_addr);
+            transaction.sign(keypairs, self.get_recent_blockhash()?);
         }
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "retry_transfer failed",
+            format!("retry_transfer failed in {} retries", tries),
         ))
-    }
-
-    /// Retry a sending a signed Transaction to the server for processing.
-    pub fn retry_transfer(
-        &self,
-        keypair: &Keypair,
-        transaction: &mut Transaction,
-        tries: usize,
-    ) -> io::Result<Signature> {
-        for x in 0..tries {
-            transaction.sign(&[keypair], self.get_recent_blockhash()?);
-            let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
-            let mut wr = std::io::Cursor::new(&mut buf[..]);
-            serialize_into(&mut wr, &transaction)
-                .expect("serialize Transaction in pub fn transfer_signed");
-            self.transactions_socket
-                .send_to(&buf[..], &self.transactions_addr)?;
-            if self.poll_for_signature(&transaction.signatures[0]).is_ok() {
-                return Ok(transaction.signatures[0]);
-            }
-            info!("{} tries failed transfer to {}", x, self.transactions_addr);
-        }
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "retry_transfer failed",
-        ))
-    }
-
-    pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
-        self.rpc_client.get_account_data(pubkey)
-    }
-
-    pub fn get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
-        self.rpc_client.get_balance(pubkey)
     }
 
     pub fn get_transaction_count(&self) -> Result<u64, Box<dyn error::Error>> {
@@ -195,6 +188,96 @@ impl ThinClient {
     ) -> io::Result<usize> {
         self.rpc_client
             .get_num_blocks_since_signature_confirmation(sig)
+    }
+}
+
+impl SyncClient for ThinClient {
+    fn send_message(&self, keypairs: &[&Keypair], message: Message) -> TransportResult<Signature> {
+        let blockhash = self.get_recent_blockhash()?;
+        let mut transaction = Transaction::new(&keypairs, message, blockhash);
+        let signature = self.send_and_confirm_transaction(keypairs, &mut transaction, 5, 0)?;
+        Ok(signature)
+    }
+
+    fn send_instruction(
+        &self,
+        keypair: &Keypair,
+        instruction: Instruction,
+    ) -> TransportResult<Signature> {
+        let message = Message::new(vec![instruction]);
+        self.send_message(&[keypair], message)
+    }
+
+    fn transfer(
+        &self,
+        lamports: u64,
+        keypair: &Keypair,
+        pubkey: &Pubkey,
+    ) -> TransportResult<Signature> {
+        let transfer_instruction =
+            system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
+        self.send_instruction(keypair, transfer_instruction)
+    }
+
+    fn get_account_data(&self, pubkey: &Pubkey) -> TransportResult<Option<Vec<u8>>> {
+        Ok(self.rpc_client.get_account_data(pubkey).ok())
+    }
+
+    fn get_balance(&self, pubkey: &Pubkey) -> TransportResult<u64> {
+        let balance = self.rpc_client.get_balance(pubkey)?;
+        Ok(balance)
+    }
+
+    fn get_signature_status(
+        &self,
+        signature: &Signature,
+    ) -> TransportResult<Option<transaction::Result<()>>> {
+        let status = self
+            .rpc_client
+            .get_signature_status(&signature.to_string())
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("send_transaction failed with error {}", err),
+                )
+            })?;
+        Ok(status)
+    }
+}
+
+impl AsyncClient for ThinClient {
+    fn async_send_transaction(&self, transaction: Transaction) -> io::Result<Signature> {
+        let mut buf = vec![0; serialized_size(&transaction).unwrap() as usize];
+        let mut wr = std::io::Cursor::new(&mut buf[..]);
+        serialize_into(&mut wr, &transaction)
+            .expect("serialize Transaction in pub fn transfer_signed");
+        assert!(buf.len() < PACKET_DATA_SIZE);
+        self.transactions_socket
+            .send_to(&buf[..], &self.transactions_addr)?;
+        Ok(transaction.signatures[0])
+    }
+    fn async_send_message(&self, keypairs: &[&Keypair], message: Message) -> io::Result<Signature> {
+        let blockhash = self.get_recent_blockhash()?;
+        let transaction = Transaction::new(&keypairs, message, blockhash);
+        self.async_send_transaction(transaction)
+    }
+    fn async_send_instruction(
+        &self,
+        keypair: &Keypair,
+        instruction: Instruction,
+    ) -> io::Result<Signature> {
+        let message = Message::new(vec![instruction]);
+        self.async_send_message(&[keypair], message)
+    }
+    fn async_transfer(
+        &self,
+        lamports: u64,
+        keypair: &Keypair,
+        pubkey: &Pubkey,
+    ) -> io::Result<Signature> {
+        let transfer_instruction =
+            system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
+        self.async_send_instruction(keypair, transfer_instruction)
     }
 }
 

@@ -11,6 +11,7 @@ use solana_client::thin_client::ThinClient;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::sync_client::SyncClient;
 use solana_sdk::system_transaction;
 use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
@@ -363,7 +364,7 @@ impl LocalCluster {
 
         info!("Checking for vote account registration");
         let vote_account_user_data = client.get_account_data(&vote_account_pubkey);
-        if let Ok(vote_account_user_data) = vote_account_user_data {
+        if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
             if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
                 if vote_state.delegate_id == delegate_id {
                     return Ok(());

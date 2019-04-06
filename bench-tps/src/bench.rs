@@ -13,6 +13,7 @@ use solana_metrics::influxdb;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::sync_client::SyncClient;
 use solana_sdk::system_instruction;
 use solana_sdk::system_transaction;
 use solana_sdk::timing::timestamp;

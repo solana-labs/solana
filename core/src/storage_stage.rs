@@ -16,6 +16,7 @@ use solana_client::thin_client::{create_client_with_timeout, ThinClient};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_sdk::sync_client::SyncClient;
 use solana_sdk::system_transaction;
 use solana_sdk::transaction::Transaction;
 use solana_storage_api::storage_instruction::{self, StorageInstruction};
