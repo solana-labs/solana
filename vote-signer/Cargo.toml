@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 
 [dependencies]
 bs58 = "0.2.0"
-clap = "2.31"
+clap = "2.33"
 log = "0.4.2"
 jsonrpc-core = "11.0.0"
 jsonrpc-derive = "11.0.0"
