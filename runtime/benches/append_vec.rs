@@ -11,6 +11,7 @@ use solana_runtime::append_vec::{
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::env;
+use std::fs::{create_dir_all, remove_dir_all};
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -31,6 +32,8 @@ fn get_append_vec_bench_path(path: &str) -> PathBuf {
     let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
     let mut buf = PathBuf::new();
     buf.push(&format!("{}/{}", out_dir, path));
+    let _ignored = remove_dir_all(out_dir.clone());
+    create_dir_all(out_dir).expect("Create directory failed");
     buf
 }
 
