@@ -56,9 +56,7 @@ impl SlotMeta {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 /// Erasure coding information
 pub struct ErasureMeta {
-    pub slot: u64,
-    /// Which erasure set in the slot this is.
-    /// Example: Set index `0` covers data indexes `[0, 16)` and coding blobs at `[12,16)`.
+    /// Which erasure set in the slot this is
     pub set_index: u64,
     /// Bitfield representing presence/absence of data blobs
     pub data: u16,
@@ -68,9 +66,8 @@ pub struct ErasureMeta {
 
 #[cfg(feature = "erasure")]
 impl ErasureMeta {
-    pub fn new(slot: u64, set_index: u64) -> ErasureMeta {
+    pub fn new(set_index: u64) -> ErasureMeta {
         ErasureMeta {
-            slot,
             set_index,
             data: 0,
             coding: 0,
@@ -147,10 +144,8 @@ impl ErasureMeta {
 
 #[test]
 fn test_can_recover() {
-    let slot = 0;
     let set_index = 0;
     let mut e_meta = ErasureMeta {
-        slot,
         set_index,
         data: 0,
         coding: 0,

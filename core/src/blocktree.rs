@@ -318,7 +318,7 @@ impl Blocktree {
                         self.erasure_meta_cf
                             .get((blob_slot, set_index))
                             .expect("Expect database get to succeed")
-                            .unwrap_or_else(|| ErasureMeta::new(blob_slot, set_index))
+                            .unwrap_or_else(|| ErasureMeta::new(set_index))
                     });
 
                 erasure_meta_entry.set_data_present(blob.index());
@@ -452,7 +452,7 @@ impl Blocktree {
         let mut erasure_meta = self
             .erasure_meta_cf
             .get((slot, set_index))?
-            .unwrap_or_else(|| ErasureMeta::new(slot, set_index));
+            .unwrap_or_else(|| ErasureMeta::new(set_index));
 
         erasure_meta.set_coding_present(index);
 
@@ -469,8 +469,7 @@ impl Blocktree {
                     blobs_to_write.append(&mut recovered_data);
 
                     if !recovered_coding.is_empty() {
-                        for coding_blob in recovered_coding {
-                            let blob = coding_blob.read().unwrap();
+                        for blob in recovered_coding {
                             let index = blob.index();
 
                             writebatch.put_bytes::<cf::Coding>(
@@ -504,7 +503,7 @@ impl Blocktree {
 
         self.db.write(writebatch)?;
 
-        self.write_shared_blobs(blobs_to_write)?;
+        self.write_blobs(blobs_to_write)?;
 
         Ok(())
     }
@@ -1053,51 +1052,48 @@ impl Blocktree {
         slot: u64,
         index: u64,
         new_coding_blob: &[u8],
-    ) -> Result<(Vec<SharedBlob>, Vec<SharedBlob>)> {
-        use crate::erasure::{ERASURE_SET_SIZE, NUM_DATA};
+    ) -> Result<(Vec<Blob>, Vec<Blob>)> {
+        use crate::erasure::{NUM_CODING, NUM_DATA};
 
         let (data_start, coding_start) = erasure_meta.start_indices();
-        let data_end = data_start + NUM_DATA as u64;
 
-        // Can't use array init syntax [<expr>; N] for non-copy type
-        let mut recovery = [
-            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-            None, None, None, None, None, None,
-        ];
-        assert_eq!(recovery.len(), ERASURE_SET_SIZE);
+        let mut data = Vec::with_capacity(NUM_DATA);
+        let mut coding = Vec::with_capacity(NUM_CODING);
 
-        let recovery_index_for_current_blob = (index - coding_start) as usize + NUM_DATA;
-        recovery[recovery_index_for_current_blob] = Some(new_coding_blob.to_vec());
+        for i in 0..NUM_DATA as u64 {
+            let idx = i + data_start;
 
-        let (data, coding) = recovery.split_at_mut(NUM_DATA);
-
-        for i in data_start..data_end {
-            let position_from_start = i - data_start;
-
-            if erasure_meta.is_data_present(i) {
-                let blob_bytes = self
+            if erasure_meta.is_data_present(idx) {
+                let blob_data = self
                     .data_cf
-                    .get_bytes((slot, i))?
-                    .expect("erasure_meta must have no false positives");
-                data[position_from_start as usize] = Some(blob_bytes);
+                    .get_bytes((slot, idx))?
+                    .expect("Blob must be present according to erasure metadata");
+                data.push(Some(blob_data));
+            } else {
+                data.push(None);
             }
         }
 
-        for i in coding_start..data_end {
-            let position_from_start = i - coding_start;
+        for i in 0..NUM_CODING as u64 {
+            let idx = i + coding_start;
 
-            // Must not try to retrieve the coding blob currently being inserted
-            if erasure_meta.is_coding_present(i) && i != index {
-                let blob_bytes = self
+            if idx == index {
+                coding.push(Some(new_coding_blob.to_vec()));
+                continue;
+            }
+
+            if erasure_meta.is_coding_present(idx) {
+                let blob_data = self
                     .erasure_cf
-                    .get_bytes((slot, i))?
-                    .expect("erasure_meta must have no false positives");
-
-                coding[position_from_start as usize] = Some(blob_bytes);
+                    .get_bytes((slot, idx))?
+                    .expect("Blob must be present according to erasure metadata");
+                coding.push(Some(blob_data));
+            } else {
+                coding.push(None);
             }
         }
 
-        erasure::recover_with_blobs(slot, data_start, &recovery)
+        erasure::recover_with_blobs(slot, data_start, &data, &coding)
     }
 
     /// Returns the next consumed index and the number of ticks in the new consumed
