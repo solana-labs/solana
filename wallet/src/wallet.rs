@@ -311,8 +311,11 @@ fn process_balance(pubkey: &Pubkey, rpc_client: &RpcClient) -> ProcessResult {
 fn process_confirm(rpc_client: &RpcClient, signature: Signature) -> ProcessResult {
     match rpc_client.get_signature_status(&signature.to_string()) {
         Ok(status) => {
-            if status == solana_client::rpc_signature_status::RpcSignatureStatus::Confirmed {
-                Ok("Confirmed".to_string())
+            if let Some(result) = status {
+                match result {
+                    Ok(_) => Ok("Confirmed".to_string()),
+                    Err(err) => Ok(format!("Transaction failed with error {:?}", err)),
+                }
             } else {
                 Ok("Not found".to_string())
             }
@@ -724,6 +727,7 @@ mod tests {
     use serde_json::Value;
     use solana_client::mock_rpc_client_request::SIGNATURE;
     use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
+    use solana_sdk::transaction::TransactionError;
     use std::fs;
     use std::net::{Ipv4Addr, SocketAddr};
     use std::path::{Path, PathBuf};
@@ -1269,11 +1273,23 @@ mod tests {
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
-        // bad_sig_status cases
-        config.rpc_client = Some(RpcClient::new_mock("bad_sig_status".to_string()));
+        // sig_not_found case
+        config.rpc_client = Some(RpcClient::new_mock("sig_not_found".to_string()));
         let missing_signature = Signature::new(&bs58::decode("5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW").into_vec().unwrap());
         config.command = WalletCommand::Confirm(missing_signature);
         assert_eq!(process_command(&config).unwrap(), "Not found");
+
+        // Tx error case
+        config.rpc_client = Some(RpcClient::new_mock("account_in_use".to_string()));
+        let any_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
+        config.command = WalletCommand::Confirm(any_signature);
+        assert_eq!(
+            process_command(&config).unwrap(),
+            format!(
+                "Transaction failed with error {:?}",
+                TransactionError::AccountInUse
+            )
+        );
 
         // Failure cases
         config.rpc_client = Some(RpcClient::new_mock("fails".to_string()));
@@ -1282,10 +1298,6 @@ mod tests {
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::Balance(config.keypair.pubkey());
-        assert!(process_command(&config).is_err());
-
-        let any_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
-        config.command = WalletCommand::Confirm(any_signature);
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::ConfigureStakingAccount(None, Some(bob_pubkey));

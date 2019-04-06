@@ -6,10 +6,10 @@ use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::typed::Subscriber;
 use jsonrpc_pubsub::{Session, SubscriptionId};
-use solana_client::rpc_signature_status::RpcSignatureStatus;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
+use solana_sdk::transaction;
 use std::mem;
 use std::sync::{atomic, Arc};
 
@@ -58,7 +58,12 @@ pub trait RpcSolPubSub {
         subscribe,
         name = "signatureSubscribe"
     )]
-    fn signature_subscribe(&self, _: Self::Metadata, _: Subscriber<RpcSignatureStatus>, _: String);
+    fn signature_subscribe(
+        &self,
+        _: Self::Metadata,
+        _: Subscriber<Option<transaction::Result<()>>>,
+        _: String,
+    );
 
     // Unsubscribe from signature notification subscription.
     #[pubsub(
@@ -178,7 +183,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn signature_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: Subscriber<RpcSignatureStatus>,
+        subscriber: Subscriber<Option<transaction::Result<()>>>,
         signature_str: String,
     ) {
         info!("signature_subscribe");
@@ -283,7 +288,10 @@ mod tests {
         // Test signature confirmation notification
         let string = receiver.poll();
         if let Async::Ready(Some(response)) = string.unwrap() {
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":"Confirmed","subscription":0}}}}"#);
+            let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
+            let expected_res_str =
+                serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":{},"subscription":0}}}}"#, expected_res_str);
             assert_eq!(expected, response);
         }
     }
