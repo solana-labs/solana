@@ -33,7 +33,7 @@ pub fn transfer(
         blockhash
     );
     let transaction = system_transaction::create_user_account(keypair, to, lamports, *blockhash, 0);
-    thin_client.transfer_signed(&transaction)
+    thin_client.async_send_transaction(&transaction)
 }
 
 #[test]
@@ -78,7 +78,7 @@ fn test_bad_sig() {
 
     let tx = system_transaction::create_user_account(&alice, &bob_pubkey, 500, blockhash, 0);
 
-    let _sig = client.transfer_signed(&tx).unwrap();
+    let _sig = client.async_send_transaction(&tx).unwrap();
 
     let blockhash = client.get_recent_blockhash().unwrap();
 
@@ -88,7 +88,7 @@ fn test_bad_sig() {
         *lamports = 502;
     }
     tr2.instructions[0].data = serialize(&instruction2).unwrap();
-    let signature = client.transfer_signed(&tr2).unwrap();
+    let signature = client.async_send_transaction(&tr2).unwrap();
     client.poll_for_signature(&signature).unwrap();
 
     let balance = client.get_balance(&bob_pubkey);
@@ -128,7 +128,7 @@ fn test_register_vote_account() {
         vote_instruction::create_account(&validator_keypair.pubkey(), &vote_account_id, 1);
     let transaction =
         Transaction::new_signed_instructions(&[&validator_keypair], instructions, blockhash);
-    let signature = client.transfer_signed(&transaction).unwrap();
+    let signature = client.async_send_transaction(&transaction).unwrap();
     client.poll_for_signature(&signature).unwrap();
 
     let balance = client

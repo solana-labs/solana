@@ -10,6 +10,7 @@ use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_metrics::influxdb;
+use solana_sdk::async_client::AsyncClient;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -324,7 +325,7 @@ fn send_barrier_transaction(
         let transaction =
             system_transaction::create_user_account(&source_keypair, dest_id, 0, *blockhash, 0);
         let signature = barrier_client
-            .transfer_signed(&transaction)
+            .async_send_transaction(transaction)
             .expect("Unable to send barrier transaction");
 
         let confirmatiom = barrier_client.poll_for_signature(&signature);
@@ -469,7 +470,7 @@ fn do_tx_transfers(
                 if now > tx.1 && now - tx.1 > 1000 * 30 {
                     continue;
                 }
-                client.transfer_signed(&tx.0).unwrap();
+                client.async_send_transaction(tx.0).unwrap();
             }
             shared_tx_thread_count.fetch_add(-1, Ordering::Relaxed);
             total_tx_sent_count.fetch_add(tx_len, Ordering::Relaxed);
@@ -587,7 +588,7 @@ fn fund_keys(client: &ThinClient, source: &Keypair, dests: &[Keypair], lamports:
                 });
 
                 to_fund_txs.iter().for_each(|(_, tx)| {
-                    client.transfer_signed(&tx).expect("transfer");
+                    client.async_send_transaction(tx.clone()).expect("transfer");
                 });
 
                 // retry anything that seems to have dropped through cracks
@@ -621,7 +622,7 @@ fn airdrop_lamports(client: &ThinClient, drone_addr: &SocketAddr, id: &Keypair, 
         let blockhash = client.get_recent_blockhash().unwrap();
         match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, blockhash) {
             Ok(transaction) => {
-                let signature = client.transfer_signed(&transaction).unwrap();
+                let signature = client.async_send_transaction(transaction).unwrap();
                 client.poll_for_signature(&signature).unwrap();
             }
             Err(err) => {

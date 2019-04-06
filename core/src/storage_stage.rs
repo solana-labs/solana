@@ -13,6 +13,7 @@ use bincode::deserialize;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_client::thin_client::{create_client_with_timeout, ThinClient};
+use solana_sdk::async_client::AsyncClient;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
@@ -289,7 +290,7 @@ impl StorageStage {
                         &solana_storage_api::id(),
                         0,
                     );
-                    let signature = client.transfer_signed(&tx).unwrap();
+                    let signature = client.async_send_transaction(tx).unwrap();
                     Self::check_signature(&client, &signature, &exit)?;
                 }
             }
@@ -299,7 +300,7 @@ impl StorageStage {
                 Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;
             }
 
-            if let Ok(signature) = client.transfer_signed(&transaction) {
+            if let Ok(signature) = client.async_send_transaction(transaction.clone()) {
                 Self::check_signature(&client, &signature, &exit)?;
                 return Ok(());
             }
