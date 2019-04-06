@@ -1,6 +1,7 @@
 use crate::generic_rpc_client_request::GenericRpcClientRequest;
 use crate::rpc_request::RpcRequest;
 use serde_json::{Number, Value};
+use solana_sdk::transaction::{self, TransactionError};
 
 pub const PUBKEY: &str = "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8";
 pub const SIGNATURE: &str =
@@ -44,14 +45,14 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
             }
             RpcRequest::GetRecentBlockhash => Value::String(PUBKEY.to_string()),
             RpcRequest::GetSignatureStatus => {
-                let str = if self.url == "account_in_use" {
-                    "AccountInUse"
-                } else if self.url == "bad_sig_status" {
-                    "SignatureNotFound"
+                let response: Option<transaction::Result<()>> = if self.url == "account_in_use" {
+                    Some(Err(TransactionError::AccountInUse))
+                } else if self.url == "sig_not_found" {
+                    None
                 } else {
-                    "Confirmed"
+                    Some(Ok(()))
                 };
-                Value::String(str.to_string())
+                serde_json::to_value(response).unwrap()
             }
             RpcRequest::GetTransactionCount => Value::Number(Number::from(1234)),
             RpcRequest::SendTransaction => Value::String(SIGNATURE.to_string()),

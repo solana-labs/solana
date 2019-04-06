@@ -5,12 +5,11 @@ use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::typed::Sink;
 use jsonrpc_pubsub::SubscriptionId;
-use solana_client::rpc_signature_status::RpcSignatureStatus;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use solana_sdk::transaction::{self, TransactionError};
+use solana_sdk::transaction;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
@@ -18,7 +17,7 @@ type RpcAccountSubscriptions = RwLock<HashMap<Pubkey, HashMap<SubscriptionId, Si
 type RpcProgramSubscriptions =
     RwLock<HashMap<Pubkey, HashMap<SubscriptionId, Sink<(String, Account)>>>>;
 type RpcSignatureSubscriptions =
-    RwLock<HashMap<Signature, HashMap<SubscriptionId, Sink<RpcSignatureStatus>>>>;
+    RwLock<HashMap<Signature, HashMap<SubscriptionId, Sink<Option<transaction::Result<()>>>>>>;
 
 fn add_subscription<K, S>(
     subscriptions: &mut HashMap<K, HashMap<SubscriptionId, Sink<S>>>,
@@ -97,19 +96,10 @@ impl RpcSubscriptions {
     }
 
     pub fn check_signature(&self, signature: &Signature, bank_error: &transaction::Result<()>) {
-        let status = match bank_error {
-            Ok(_) => RpcSignatureStatus::Confirmed,
-            Err(TransactionError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-            Err(TransactionError::InstructionError(_, _)) => {
-                RpcSignatureStatus::ProgramRuntimeError
-            }
-            Err(_) => RpcSignatureStatus::GenericFailure,
-        };
-
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
         if let Some(hashmap) = subscriptions.get(signature) {
             for (_bank_sub_id, sink) in hashmap.iter() {
-                sink.notify(Ok(status)).wait().unwrap();
+                sink.notify(Ok(Some(bank_error.clone()))).wait().unwrap();
             }
         }
         subscriptions.remove(&signature);
@@ -149,7 +139,7 @@ impl RpcSubscriptions {
         &self,
         signature: &Signature,
         sub_id: &SubscriptionId,
-        sink: &Sink<RpcSignatureStatus>,
+        sink: &Sink<Option<transaction::Result<()>>>,
     ) {
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
         add_subscription(&mut subscriptions, signature, sub_id, sink);
@@ -322,7 +312,10 @@ mod tests {
         subscriptions.check_signature(&signature, &Ok(()));
         let string = transport_receiver.poll();
         if let Async::Ready(Some(response)) = string.unwrap() {
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":"Confirmed","subscription":0}}}}"#);
+            let expected_res: Option<transaction::Result<()>> = Some(Ok(()));
+            let expected_res_str =
+                serde_json::to_string(&serde_json::to_value(expected_res).unwrap()).unwrap();
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":{},"subscription":0}}}}"#, expected_res_str);
             assert_eq!(expected, response);
         }
 
