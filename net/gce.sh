@@ -517,8 +517,10 @@ EOF
     fi
     cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
       "$enableGpu" "$fullNodeMachineType" "$zone" "$fullNodeBootDiskSizeInGb" \
-      "$startupScript" "" "$bootDiskType"
+      "$startupScript" "" "$bootDiskType" &
   done
+
+  wait
 
   if [[ $clientNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
