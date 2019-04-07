@@ -134,7 +134,6 @@ sanity() {
   testnet-beta)
     (
       set -x
-      EC2_ZONES=(sa-east-1a us-west-1a ap-northeast-2a eu-central-1a ca-central-1a)
       ok=true
       for zone in "${EC2_ZONES[@]}"; do
         if ! $ok; then
@@ -143,7 +142,6 @@ sanity() {
         ci/testnet-sanity.sh beta-testnet-solana-com ec2 "$zone" || ok=false
       done
 
-      GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
       for zone in "${GCE_ZONES[@]}"; do
         if ! $ok; then
           break
@@ -224,10 +222,6 @@ start() {
     (
       set -x
 
-      # List of zones to deploy for each cloud provider
-      GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
-      EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
-
       # Build an array to pass as opts to testnet-deploy.sh: "-z zone1 -z zone2 ..."
       GCE_ZONE_ARGS=()
       for val in "${GCE_ZONES[@]}"; do
@@ -239,18 +233,21 @@ start() {
         EC2_ZONE_ARGS+=("-z $val")
       done
 
+      [[ -n $EC2_NODE_COUNT ]] || EC2_NODE_COUNT=60
+      [[ -n $GCE_NODE_COUNT ]] || GCE_NODE_COUNT=40
+
       # shellcheck disable=SC2068
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n 60 -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
+          -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
           ${maybeReuseLedger:+-r} \
           ${maybeDelete:+-D}
       # shellcheck disable=SC2068
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n 40 -c 0 -x -P \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -x -P \
           ${maybeReuseLedger:+-r} \
           ${maybeDelete:+-D}
     )
