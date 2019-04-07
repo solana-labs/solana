@@ -3924,10 +3924,10 @@
               ],
               "type": "fill"
             }
-          ],
+          ],  
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-ix\") AS \"repair\" FROM \"$testnet\".\"autogen\".\"cluster-info\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-ix\") AS \"repair\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",

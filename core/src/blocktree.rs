@@ -28,7 +28,7 @@ use std::fs;
 use std::io;
 use std::rc::Rc;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 mod db;
 
@@ -105,6 +105,10 @@ impl SlotMeta {
         self.consumed == self.last_index + 1
     }
 
+    pub fn is_parent_set(&self) -> bool {
+        self.parent_slot != std::u64::MAX
+    }
+
     fn new(slot: u64, parent_slot: u64) -> Self {
         SlotMeta {
             slot,
@@ -124,8 +128,9 @@ pub struct Blocktree {
     meta_cf: LedgerColumn<cf::SlotMeta>,
     data_cf: LedgerColumn<cf::Data>,
     erasure_cf: LedgerColumn<cf::Coding>,
-    detached_heads_cf: LedgerColumn<cf::DetachedHeads>,
+    orphans_cf: LedgerColumn<cf::Orphans>,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
+    pub root_slot: RwLock<u64>,
 }
 
 // Column family for metadata about a leader slot
@@ -134,8 +139,8 @@ pub const META_CF: &str = "meta";
 pub const DATA_CF: &str = "data";
 // Column family for erasure data
 pub const ERASURE_CF: &str = "erasure";
-// Column family for detached heads data
-pub const DETACHED_HEADS_CF: &str = "detached_heads";
+// Column family for orphans data
+pub const ORPHANS_CF: &str = "orphans";
 
 impl Blocktree {
     /// Opens a Ledger in directory, provides "infinite" window of blobs
@@ -157,16 +162,19 @@ impl Blocktree {
         // Create the erasure column family
         let erasure_cf = LedgerColumn::new(&db);
 
-        // Create the detached heads column family
-        let detached_heads_cf = LedgerColumn::new(&db);
+        // Create the orphans column family. An "orphan" is defined as
+        // the head of a detached chain of slots, i.e. a slot with no
+        // known parent
+        let orphans_cf = LedgerColumn::new(&db);
 
         Ok(Blocktree {
             db,
             meta_cf,
             data_cf,
             erasure_cf,
-            detached_heads_cf,
+            orphans_cf,
             new_blobs_signals: vec![],
+            root_slot: RwLock::new(0),
         })
     }
 
@@ -189,8 +197,8 @@ impl Blocktree {
         self.meta_cf.get(slot)
     }
 
-    pub fn detached_head(&self, slot: u64) -> Result<Option<bool>> {
-        self.detached_heads_cf.get(slot)
+    pub fn orphan(&self, slot: u64) -> Result<Option<bool>> {
+        self.orphans_cf.get(slot)
     }
 
     pub fn reset_slot_consumed(&self, slot: u64) -> Result<()> {
@@ -322,11 +330,11 @@ impl Blocktree {
                     .expect("Expect database get to succeed")
                 {
                     let backup = Some(meta.clone());
-                    // If parent_slot == std::u64::MAX, then this is one of the detached heads inserted
+                    // If parent_slot == std::u64::MAX, then this is one of the orphans inserted
                     // during the chaining process, see the function find_slot_meta_in_cached_state()
-                    // for details. Slots that are detached heads are missing a parent_slot, so we should
+                    // for details. Slots that are orphans are missing a parent_slot, so we should
                     // fill in the parent now that we know it.
-                    if Self::is_detached_head(&meta) {
+                    if Self::is_orphan(&meta) {
                         meta.parent_slot = parent_slot;
                     }
 
@@ -691,6 +699,26 @@ impl Blocktree {
         Ok(entries)
     }
 
+    pub fn set_root(&self, root: u64) {
+        *self.root_slot.write().unwrap() = root;
+    }
+
+    pub fn get_orphans(&self, max: Option<usize>) -> Vec<u64> {
+        let mut results = vec![];
+        let mut iter = self.orphans_cf.cursor().unwrap();
+        iter.seek_to_first();
+        while iter.valid() {
+            if let Some(max) = max {
+                if results.len() > max {
+                    break;
+                }
+            }
+            results.push(iter.key().unwrap());
+            iter.next();
+        }
+        results
+    }
+
     fn deserialize_blobs<I>(blob_datas: &[I]) -> Vec<Entry>
     where
         I: Borrow<[u8]>,
@@ -752,8 +780,7 @@ impl Blocktree {
             .expect("Slot must exist in the working_set hashmap");
 
         {
-            let is_detached_head =
-                meta_backup.is_some() && Self::is_detached_head(meta_backup.as_ref().unwrap());
+            let is_orphan = meta_backup.is_some() && Self::is_orphan(meta_backup.as_ref().unwrap());
 
             let mut meta_mut = meta.borrow_mut();
 
@@ -764,10 +791,10 @@ impl Blocktree {
             if slot != 0 {
                 let prev_slot = meta_mut.parent_slot;
 
-                // Check if the slot represented by meta_mut is either a new slot or a detached head.
+                // Check if the slot represented by meta_mut is either a new slot or a orphan.
                 // In both cases we need to run the chaining logic b/c the parent on the slot was
                 // previously unknown.
-                if meta_backup.is_none() || is_detached_head {
+                if meta_backup.is_none() || is_orphan {
                     let prev_slot_meta =
                         self.find_slot_meta_else_create(working_set, new_chained_slots, prev_slot)?;
 
@@ -778,15 +805,15 @@ impl Blocktree {
                         &mut meta_mut,
                     );
 
-                    if Self::is_detached_head(&RefCell::borrow(&*prev_slot_meta)) {
-                        write_batch.put::<cf::DetachedHeads>(prev_slot, &true)?;
+                    if Self::is_orphan(&RefCell::borrow(&*prev_slot_meta)) {
+                        write_batch.put::<cf::Orphans>(prev_slot, &true)?;
                     }
                 }
             }
 
-            // At this point this slot has received a parent, so no longer a detached head
-            if is_detached_head {
-                write_batch.delete::<cf::DetachedHeads>(slot)?;
+            // At this point this slot has received a parent, so no longer a orphan
+            if is_orphan {
+                write_batch.delete::<cf::Orphans>(slot)?;
             }
         }
 
@@ -844,10 +871,10 @@ impl Blocktree {
         Ok(())
     }
 
-    fn is_detached_head(meta: &SlotMeta) -> bool {
-        // If we have children, but no parent, then this is the head of a detached chain of
+    fn is_orphan(meta: &SlotMeta) -> bool {
+        // If we have no parent, then this is the head of a detached chain of
         // slots
-        meta.parent_slot == std::u64::MAX
+        !meta.is_parent_set()
     }
 
     // 1) Chain current_slot to the previous slot defined by prev_slot_meta
@@ -865,14 +892,14 @@ impl Blocktree {
     fn is_newly_completed_slot(slot_meta: &SlotMeta, backup_slot_meta: &Option<SlotMeta>) -> bool {
         slot_meta.is_full()
             && (backup_slot_meta.is_none()
-                || Self::is_detached_head(&backup_slot_meta.as_ref().unwrap())
+                || Self::is_orphan(&backup_slot_meta.as_ref().unwrap())
                 || slot_meta.consumed != backup_slot_meta.as_ref().unwrap().consumed)
     }
 
     // 1) Find the slot metadata in the cache of dirty slot metadata we've previously touched,
     // else:
     // 2) Search the database for that slot metadata. If still no luck, then:
-    // 3) Create a dummy `detached head` slot in the database
+    // 3) Create a dummy orphan slot in the database
     fn find_slot_meta_else_create<'a>(
         &self,
         working_set: &'a HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
@@ -888,7 +915,7 @@ impl Blocktree {
     }
 
     // Search the database for that slot metadata. If still no luck, then
-    // create a dummy `detached head` slot in the database
+    // create a dummy orphan slot in the database
     fn find_slot_meta_in_db_else_create<'a>(
         &self,
         slot: u64,
@@ -898,7 +925,7 @@ impl Blocktree {
             insert_map.insert(slot, Rc::new(RefCell::new(slot_meta)));
             Ok(insert_map.get(&slot).unwrap().clone())
         } else {
-            // If this slot doesn't exist, make a `detached head` slot. This way we
+            // If this slot doesn't exist, make a orphan slot. This way we
             // remember which slots chained to this one when we eventually get a real blob
             // for this slot
             insert_map.insert(
@@ -1939,9 +1966,9 @@ pub mod tests {
             for i in 0..num_slots {
                 // If "i" is the index of a slot we just inserted, then next_slots should be empty
                 // for slot "i" because no slots chain to that slot, because slot i + 1 is missing.
-                // However, if it's a slot we haven't inserted, aka one of the gaps, then one of the slots
-                // we just inserted will chain to that gap, so next_slots for that `detached head`
-                // slot won't be empty, but the parent slot is unknown so should equal std::u64::MAX.
+                // However, if it's a slot we haven't inserted, aka one of the gaps, then one of the
+                // slots we just inserted will chain to that gap, so next_slots for that orphan slot
+                // won't be empty, but the parent slot is unknown so should equal std::u64::MAX.
                 let s = blocktree.meta(i as u64).unwrap().unwrap();
                 if i % 2 == 0 {
                     assert_eq!(s.next_slots, vec![i as u64 + 1]);
@@ -2142,8 +2169,8 @@ pub mod tests {
                 assert_eq!(expected_children, result);
             }
 
-            // Detached heads is empty
-            assert!(blocktree.detached_heads_cf.is_empty().unwrap())
+            // No orphan slots should exist
+            assert!(blocktree.orphans_cf.is_empty().unwrap())
         }
 
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
@@ -2187,8 +2214,8 @@ pub mod tests {
     }
 
     #[test]
-    fn test_detached_head() {
-        let blocktree_path = get_tmp_ledger_path("test_is_detached_head");
+    fn test_orphans() {
+        let blocktree_path = get_tmp_ledger_path("test_orphans");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
@@ -2197,48 +2224,48 @@ pub mod tests {
             let (blobs, _) = make_many_slot_entries(0, 3, entries_per_slot);
 
             // Write slot 2, which chains to slot 1. We're missing slot 0,
-            // so slot 1 is the detached head
+            // so slot 1 is the orphan
             blocktree.write_blobs(once(&blobs[2])).unwrap();
             let meta = blocktree
                 .meta(1)
                 .expect("Expect database get to succeed")
                 .unwrap();
-            assert!(Blocktree::is_detached_head(&meta));
-            assert_eq!(get_detached_heads(&blocktree), vec![1]);
+            assert!(Blocktree::is_orphan(&meta));
+            assert_eq!(blocktree.get_orphans(None), vec![1]);
 
             // Write slot 1 which chains to slot 0, so now slot 0 is the
-            // detached head, and slot 1 is no longer the detached head.
+            // orphan, and slot 1 is no longer the orphan.
             blocktree.write_blobs(once(&blobs[1])).unwrap();
             let meta = blocktree
                 .meta(1)
                 .expect("Expect database get to succeed")
                 .unwrap();
-            assert!(!Blocktree::is_detached_head(&meta));
+            assert!(!Blocktree::is_orphan(&meta));
             let meta = blocktree
                 .meta(0)
                 .expect("Expect database get to succeed")
                 .unwrap();
-            assert!(Blocktree::is_detached_head(&meta));
-            assert_eq!(get_detached_heads(&blocktree), vec![0]);
+            assert!(Blocktree::is_orphan(&meta));
+            assert_eq!(blocktree.get_orphans(None), vec![0]);
 
-            // Write some slot that also chains to existing slots and detached head,
+            // Write some slot that also chains to existing slots and orphan,
             // nothing should change
             let blob4 = &make_slot_entries(4, 0, 1).0[0];
             let blob5 = &make_slot_entries(5, 1, 1).0[0];
             blocktree.write_blobs(vec![blob4, blob5]).unwrap();
-            assert_eq!(get_detached_heads(&blocktree), vec![0]);
+            assert_eq!(blocktree.get_orphans(None), vec![0]);
 
-            // Write zeroth slot, no more detached heads
+            // Write zeroth slot, no more orphans
             blocktree.write_blobs(once(&blobs[0])).unwrap();
             for i in 0..3 {
                 let meta = blocktree
                     .meta(i)
                     .expect("Expect database get to succeed")
                     .unwrap();
-                assert!(!Blocktree::is_detached_head(&meta));
+                assert!(!Blocktree::is_orphan(&meta));
             }
-            // Detached heads is empty
-            assert!(blocktree.detached_heads_cf.is_empty().unwrap())
+            // Orphans cf is empty
+            assert!(blocktree.orphans_cf.is_empty().unwrap())
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
@@ -2501,16 +2528,5 @@ pub mod tests {
         }
 
         (blobs, entries)
-    }
-
-    fn get_detached_heads(blocktree: &Blocktree) -> Vec<u64> {
-        let mut results = vec![];
-        let mut iter = blocktree.detached_heads_cf.cursor().unwrap();
-        iter.seek_to_first();
-        while iter.valid() {
-            results.push(iter.key().unwrap());
-            iter.next();
-        }
-        results
     }
 }

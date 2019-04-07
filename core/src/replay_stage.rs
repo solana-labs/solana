@@ -97,7 +97,9 @@ impl ReplayStage {
         let vote_account = *vote_account;
         let mut ticks_per_slot = 0;
         let mut locktower = Locktower::new_from_forks(&bank_forks.read().unwrap(), &my_id);
-
+        if let Some(root) = locktower.root() {
+            blocktree.set_root(root);
+        }
         // Start the replay stage loop
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -145,6 +147,7 @@ impl ReplayStage {
                             &voting_keypair,
                             &vote_account,
                             &cluster_info,
+                            &blocktree,
                         );
 
                         Self::reset_poh_recorder(
@@ -292,6 +295,7 @@ impl ReplayStage {
         voting_keypair: &Option<Arc<T>>,
         vote_account: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+        blocktree: &Arc<Blocktree>,
     ) where
         T: 'static + KeypairUtil + Send + Sync,
     {
@@ -304,6 +308,7 @@ impl ReplayStage {
             );
             if let Some(new_root) = locktower.record_vote(bank.slot()) {
                 bank_forks.write().unwrap().set_root(new_root);
+                blocktree.set_root(new_root);
                 Self::handle_new_root(&bank_forks, progress);
             }
             locktower.update_epoch(&bank);

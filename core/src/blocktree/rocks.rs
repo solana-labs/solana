@@ -30,7 +30,7 @@ impl Backend for Rocks {
     type Error = rocksdb::Error;
 
     fn open(path: &Path) -> Result<Rocks> {
-        use crate::blocktree::db::columns::{Coding, Data, DetachedHeads, SlotMeta};
+        use crate::blocktree::db::columns::{Coding, Data, Orphans, SlotMeta};
 
         fs::create_dir_all(&path)?;
 
@@ -41,14 +41,13 @@ impl Backend for Rocks {
         let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
         let data_cf_descriptor = ColumnFamilyDescriptor::new(Data::NAME, get_cf_options());
         let erasure_cf_descriptor = ColumnFamilyDescriptor::new(Coding::NAME, get_cf_options());
-        let detached_heads_descriptor =
-            ColumnFamilyDescriptor::new(DetachedHeads::NAME, get_cf_options());
+        let orphans_cf_descriptor = ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options());
 
         let cfs = vec![
             meta_cf_descriptor,
             data_cf_descriptor,
             erasure_cf_descriptor,
-            detached_heads_descriptor,
+            orphans_cf_descriptor,
         ];
 
         // Open the database
@@ -58,14 +57,9 @@ impl Backend for Rocks {
     }
 
     fn columns(&self) -> Vec<&'static str> {
-        use crate::blocktree::db::columns::{Coding, Data, DetachedHeads, SlotMeta};
+        use crate::blocktree::db::columns::{Coding, Data, Orphans, SlotMeta};
 
-        vec![
-            Coding::NAME,
-            Data::NAME,
-            DetachedHeads::NAME,
-            SlotMeta::NAME,
-        ]
+        vec![Coding::NAME, Data::NAME, Orphans::NAME, SlotMeta::NAME]
     }
 
     fn destroy(path: &Path) -> Result<()> {
@@ -148,8 +142,8 @@ impl Column<Rocks> for cf::Data {
     }
 }
 
-impl Column<Rocks> for cf::DetachedHeads {
-    const NAME: &'static str = super::DETACHED_HEADS_CF;
+impl Column<Rocks> for cf::Orphans {
+    const NAME: &'static str = super::ORPHANS_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Vec<u8> {
@@ -163,7 +157,7 @@ impl Column<Rocks> for cf::DetachedHeads {
     }
 }
 
-impl TypedColumn<Rocks> for cf::DetachedHeads {
+impl TypedColumn<Rocks> for cf::Orphans {
     type Type = bool;
 }
 

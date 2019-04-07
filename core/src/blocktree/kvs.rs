@@ -100,8 +100,8 @@ impl Column<Kvs> for cf::Data {
     }
 }
 
-impl Column<Kvs> for cf::DetachedHeads {
-    const NAME: &'static str = super::DETACHED_HEADS_CF;
+impl Column<Kvs> for cf::Orphans {
+    const NAME: &'static str = super::ORPHANS_CF;
     type Index = u64;
 
     fn key(slot: u64) -> Key {
@@ -115,7 +115,7 @@ impl Column<Kvs> for cf::DetachedHeads {
     }
 }
 
-impl TypedColumn<Kvs> for cf::DetachedHeads {
+impl TypedColumn<Kvs> for cf::Orphans {
     type Type = bool;
 }
 

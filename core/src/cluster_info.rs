@@ -20,6 +20,7 @@ use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
 use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote};
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
+use crate::repair_service::RepairType;
 use crate::result::Result;
 use crate::staking_utils;
 use crate::streamer::{BlobReceiver, BlobSender};
@@ -57,6 +58,9 @@ pub const GROW_LAYER_CAPACITY: bool = false;
 
 /// milliseconds we sleep for between gossip requests
 pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
+
+/// the number of slots to respond with when responding to `Orphan` requests
+pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -161,6 +165,7 @@ enum Protocol {
     /// TODO: move this message to a different module
     RequestWindowIndex(ContactInfo, u64, u64),
     RequestHighestWindowIndex(ContactInfo, u64, u64),
+    RequestOrphan(ContactInfo, u64),
 }
 
 impl ClusterInfo {
@@ -308,6 +313,7 @@ impl ClusterInfo {
             .collect();
         let max_ts = votes.iter().map(|x| x.0).max().unwrap_or(since);
         let txs: Vec<Transaction> = votes.into_iter().map(|x| x.1).collect();
+        let votes: Vec<u64> = txs.iter().map(|tx| )
         (txs, max_ts)
     }
 
@@ -746,12 +752,13 @@ impl ClusterInfo {
         Ok(out)
     }
 
-    pub fn window_index_request(
-        &self,
-        slot: u64,
-        blob_index: u64,
-        get_highest: bool,
-    ) -> Result<(SocketAddr, Vec<u8>)> {
+    fn orphan_bytes(&self, slot: u64) -> Result<Vec<u8>> {
+        let req = Protocol::RequestOrphan(self.my_data().clone(), slot);
+        let out = serialize(&req)?;
+        Ok(out)
+    }
+
+    pub fn repair_request(&self, repair_request: &RepairType) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication, as indicated
         //  by a valid tvu port location
         let valid: Vec<_> = self.repair_peers();
@@ -761,18 +768,38 @@ impl ClusterInfo {
         let n = thread_rng().gen::<usize>() % valid.len();
         let addr = valid[n].gossip; // send the request to the peer's gossip port
         let out = {
-            if get_highest {
-                self.window_highest_index_request_bytes(slot, blob_index)?
-            } else {
-                self.window_index_request_bytes(slot, blob_index)?
+            match repair_request {
+                RepairType::Blob(slot, blob_index) => {
+                    submit(
+                        influxdb::Point::new("cluster_info-repair")
+                            .add_field("repair-slot", influxdb::Value::Integer(*slot as i64))
+                            .add_field("repair-ix", influxdb::Value::Integer(*blob_index as i64))
+                            .to_owned(),
+                    );
+                    self.window_index_request_bytes(*slot, *blob_index)?
+                }
+                RepairType::HighestBlob(slot, blob_index) => {
+                    submit(
+                        influxdb::Point::new("cluster_info-repair_highest")
+                            .add_field(
+                                "repair-highest-slot",
+                                influxdb::Value::Integer(*slot as i64),
+                            )
+                            .add_field("repair-highest-ix", influxdb::Value::Integer(*slot as i64))
+                            .to_owned(),
+                    );
+                    self.window_highest_index_request_bytes(*slot, *blob_index)?
+                }
+                RepairType::Orphan(slot) => {
+                    submit(
+                        influxdb::Point::new("cluster_info-repair_orphan")
+                            .add_field("repair-orphan", influxdb::Value::Integer(*slot as i64))
+                            .to_owned(),
+                    );
+                    self.orphan_bytes(*slot)?
+                }
             }
         };
-
-        submit(
-            influxdb::Point::new("cluster-info")
-                .add_field("repair-ix", influxdb::Value::Integer(blob_index as i64))
-                .to_owned(),
-        );
 
         Ok((addr, out))
     }
@@ -966,6 +993,35 @@ impl ClusterInfo {
         vec![]
     }
 
+    fn run_orphan(
+        from_addr: &SocketAddr,
+        blocktree: Option<&Arc<Blocktree>>,
+        mut slot: u64,
+        max_responses: usize,
+    ) -> Vec<SharedBlob> {
+        let mut res = vec![];
+        if let Some(blocktree) = blocktree {
+            // Try to find the next "n" parent slots of the input slot
+            while let Ok(Some(meta)) = blocktree.meta(slot) {
+                if meta.received == 0 {
+                    break;
+                }
+                let blob = blocktree.get_data_blob(slot, meta.received - 1);
+                if let Ok(Some(mut blob)) = blob {
+                    blob.meta.set_addr(from_addr);
+                    res.push(Arc::new(RwLock::new(blob)));
+                }
+                if meta.is_parent_set() && res.len() <= max_responses {
+                    slot = meta.parent_slot;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        res
+    }
+
     //TODO we should first coalesce all the requests
     fn handle_blob(
         obj: &Arc<RwLock<Self>>,
@@ -1082,14 +1138,21 @@ impl ClusterInfo {
             vec![]
         }
     }
-    fn handle_request_window_index(
+
+    fn get_repair_sender(request: &Protocol) -> &ContactInfo {
+        match request {
+            Protocol::RequestWindowIndex(ref from, _, _) => from,
+            Protocol::RequestHighestWindowIndex(ref from, _, _) => from,
+            Protocol::RequestOrphan(ref from, _) => from,
+            _ => panic!("Not a repair request"),
+        }
+    }
+
+    fn handle_repair(
         me: &Arc<RwLock<Self>>,
-        from: &ContactInfo,
-        blocktree: Option<&Arc<Blocktree>>,
-        slot: u64,
-        blob_index: u64,
         from_addr: &SocketAddr,
-        is_get_highest: bool,
+        blocktree: Option<&Arc<Blocktree>>,
+        request: Protocol,
     ) -> Vec<SharedBlob> {
         let now = Instant::now();
 
@@ -1098,12 +1161,13 @@ impl ClusterInfo {
         //TODO verify from is signed
 
         let self_id = me.read().unwrap().gossip.id;
+        let from = Self::get_repair_sender(&request);
         if from.id == me.read().unwrap().gossip.id {
             warn!(
-                "{}: Ignored received RequestWindowIndex from ME {} {} {} ",
-                self_id, from.id, slot, blob_index,
+                "{}: Ignored received repair request from ME {}",
+                self_id, from.id,
             );
-            inc_new_counter_info!("cluster_info-window-request-address-eq", 1);
+            inc_new_counter_info!("cluster_info-handle-repair--eq", 1);
             return vec![];
         }
 
@@ -1113,26 +1177,49 @@ impl ClusterInfo {
             .crds
             .update_record_timestamp(&from.id, timestamp());
         let my_info = me.read().unwrap().my_data().clone();
-        inc_new_counter_info!("cluster_info-window-request-recv", 1);
-        trace!(
-            "{}: received RequestWindowIndex from: {} slot: {}, blob_index: {}",
-            self_id,
-            from.id,
-            slot,
-            blob_index,
-        );
-        let res = {
-            if is_get_highest {
-                Self::run_highest_window_request(&from_addr, blocktree, slot, blob_index)
-            } else {
-                Self::run_window_request(&from, &from_addr, blocktree, &my_info, slot, blob_index)
+
+        let (res, label) = {
+            match &request {
+                Protocol::RequestWindowIndex(from, slot, blob_index) => {
+                    inc_new_counter_info!("cluster_info-request-window-index", 1);
+                    (
+                        Self::run_window_request(
+                            from,
+                            &from_addr,
+                            blocktree,
+                            &my_info,
+                            *slot,
+                            *blob_index,
+                        ),
+                        "RequestWindowIndex",
+                    )
+                }
+
+                Protocol::RequestHighestWindowIndex(_, slot, highest_index) => {
+                    inc_new_counter_info!("cluster_info-request-highest-window-index", 1);
+                    (
+                        Self::run_highest_window_request(
+                            &from_addr,
+                            blocktree,
+                            *slot,
+                            *highest_index,
+                        ),
+                        "RequestHighestWindowIndex",
+                    )
+                }
+                Protocol::RequestOrphan(_, slot) => {
+                    inc_new_counter_info!("cluster_info-request-orphan", 1);
+                    (
+                        Self::run_orphan(&from_addr, blocktree, *slot, MAX_ORPHAN_REPAIR_RESPONSES),
+                        "RequestOrphan",
+                    )
+                }
+                _ => panic!("Not a repair request"),
             }
         };
-        report_time_spent(
-            "RequestWindowIndex",
-            &now.elapsed(),
-            &format!("slot {}, blob_index: {}", slot, blob_index),
-        );
+
+        trace!("{}: received repair request: {:?}", self_id, request);
+        report_time_spent(label, &now.elapsed(), "");
         res
     }
 
@@ -1198,22 +1285,7 @@ impl ClusterInfo {
                 }
                 vec![]
             }
-            Protocol::RequestWindowIndex(from, slot, blob_index) => {
-                Self::handle_request_window_index(
-                    me, &from, blocktree, slot, blob_index, from_addr, false,
-                )
-            }
-            Protocol::RequestHighestWindowIndex(from, slot, highest_index) => {
-                Self::handle_request_window_index(
-                    me,
-                    &from,
-                    blocktree,
-                    slot,
-                    highest_index,
-                    from_addr,
-                    true,
-                )
-            }
+            _ => Self::handle_repair(me, from_addr, blocktree, request),
         }
     }
 
@@ -1522,9 +1594,11 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::tests::make_many_slot_entries;
     use crate::blocktree::Blocktree;
     use crate::crds_value::CrdsValueLabel;
     use crate::packet::BLOB_HEADER_SIZE;
+    use crate::repair_service::RepairType;
     use crate::result::Error;
     use crate::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -1591,7 +1665,7 @@ mod tests {
     fn window_index_request() {
         let me = ContactInfo::new_localhost(&Pubkey::new_rand(), timestamp());
         let mut cluster_info = ClusterInfo::new_with_invalid_keypair(me);
-        let rv = cluster_info.window_index_request(0, 0, false);
+        let rv = cluster_info.repair_request(&RepairType::Blob(0, 0));
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
         let gossip_addr = socketaddr!([127, 0, 0, 1], 1234);
@@ -1607,7 +1681,9 @@ mod tests {
             0,
         );
         cluster_info.insert_info(nxt.clone());
-        let rv = cluster_info.window_index_request(0, 0, false).unwrap();
+        let rv = cluster_info
+            .repair_request(&RepairType::Blob(0, 0))
+            .unwrap();
         assert_eq!(nxt.gossip, gossip_addr);
         assert_eq!(rv.0, nxt.gossip);
 
@@ -1628,7 +1704,9 @@ mod tests {
         let mut two = false;
         while !one || !two {
             //this randomly picks an option, so eventually it should pick both
-            let rv = cluster_info.window_index_request(0, 0, false).unwrap();
+            let rv = cluster_info
+                .repair_request(&RepairType::Blob(0, 0))
+                .unwrap();
             if rv.0 == gossip_addr {
                 one = true;
             }
@@ -1741,6 +1819,42 @@ mod tests {
                 max_index,
             );
             assert!(rv.is_empty());
+        }
+
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn run_orphan() {
+        solana_logger::setup();
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+            let rv = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 2, 0);
+            assert!(rv.is_empty());
+
+            // Create slots 1, 2, 3 with 5 blobs apiece
+            let (blobs, _) = make_many_slot_entries(1, 3, 5);
+
+            blocktree
+                .write_blobs(&blobs)
+                .expect("Expect successful ledger write");
+
+            // We don't have slot 4, so we don't know how to service this requeset
+            let rv = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 4, 5);
+            assert!(rv.is_empty());
+
+            // For slot 3, we should return the highest blobs from slots 3, 2, 1 respectively
+            // for this request
+            let rv: Vec<_> = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 3, 5)
+                .iter()
+                .map(|b| b.read().unwrap().clone())
+                .collect();
+            let expected: Vec<_> = (1..=3)
+                .rev()
+                .map(|slot| blocktree.get_data_blob(slot, 4).unwrap().unwrap())
+                .collect();
+            assert_eq!(rv, expected)
         }
 
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");

@@ -254,6 +254,10 @@ impl Locktower {
         }
     }
 
+    pub fn root(&self) -> Option<u64> {
+        self.lockouts.root_slot
+    }
+
     pub fn calculate_weight(&self, stake_lockouts: &HashMap<u64, StakeLockout>) -> u128 {
         let mut sum = 0u128;
         let root_slot = self.lockouts.root_slot.unwrap_or(0);
