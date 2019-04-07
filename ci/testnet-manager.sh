@@ -134,11 +134,11 @@ sanity() {
   testnet-beta)
     (
       set -x
-      if [[ -n $GCE_ZONES ]]; then
+      if [ -z $GCE_ZONES ]; then
         GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
       fi
 
-      if [[ -n $EC2_ZONES ]]; then
+      if [ -z $EC2_ZONES ]; then
         EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
       fi
 
@@ -231,11 +231,11 @@ start() {
       set -x
 
       # List of zones to deploy for each cloud provider
-      if [[ -n $GCE_ZONES ]]; then
+      if [ -z $GCE_ZONES ]; then
         GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
       fi
 
-      if [[ -n $EC2_ZONES ]]; then
+      if [ -z $EC2_ZONES ]; then
         EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
       fi
 
