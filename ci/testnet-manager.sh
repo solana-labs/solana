@@ -107,6 +107,10 @@ steps:
         TESTNET: "$TESTNET"
         TESTNET_OP: "$TESTNET_OP"
         TESTNET_DB_HOST: "$TESTNET_DB_HOST"
+        EC2_ZONES: "${EC2_ZONES[*]}"
+        EC2_NODE_COUNT: "$EC2_NODE_COUNT"
+        GCE_ZONES: "${GCE_ZONES[*]}"
+        GCE_NODE_COUNT: "$GCE_NODE_COUNT"
 EOF
   ) | buildkite-agent pipeline upload
   exit 0
