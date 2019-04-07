@@ -107,9 +107,7 @@ steps:
         TESTNET: "$TESTNET"
         TESTNET_OP: "$TESTNET_OP"
         TESTNET_DB_HOST: "$TESTNET_DB_HOST"
-        EC2_ZONES: "${EC2_ZONES[*]}"
         EC2_NODE_COUNT: "$EC2_NODE_COUNT"
-        GCE_ZONES: "${GCE_ZONES[*]}"
         GCE_NODE_COUNT: "$GCE_NODE_COUNT"
 EOF
   ) | buildkite-agent pipeline upload
@@ -138,6 +136,7 @@ sanity() {
   testnet-beta)
     (
       set -x
+      EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
       ok=true
       for zone in "${EC2_ZONES[@]}"; do
         if ! $ok; then
@@ -146,6 +145,7 @@ sanity() {
         ci/testnet-sanity.sh beta-testnet-solana-com ec2 "$zone" || ok=false
       done
 
+      GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
       for zone in "${GCE_ZONES[@]}"; do
         if ! $ok; then
           break
@@ -225,6 +225,8 @@ start() {
   testnet-beta)
     (
       set -x
+      EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
+      GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
 
       # Build an array to pass as opts to testnet-deploy.sh: "-z zone1 -z zone2 ..."
       GCE_ZONE_ARGS=()
