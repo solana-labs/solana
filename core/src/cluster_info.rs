@@ -313,7 +313,6 @@ impl ClusterInfo {
             .collect();
         let max_ts = votes.iter().map(|x| x.0).max().unwrap_or(since);
         let txs: Vec<Transaction> = votes.into_iter().map(|x| x.1).collect();
-        let votes: Vec<u64> = txs.iter().map(|tx| )
         (txs, max_ts)
     }
 
@@ -785,7 +784,10 @@ impl ClusterInfo {
                                 "repair-highest-slot",
                                 influxdb::Value::Integer(*slot as i64),
                             )
-                            .add_field("repair-highest-ix", influxdb::Value::Integer(*slot as i64))
+                            .add_field(
+                                "repair-highest-ix",
+                                influxdb::Value::Integer(*blob_index as i64),
+                            )
                             .to_owned(),
                     );
                     self.window_highest_index_request_bytes(*slot, *blob_index)?
