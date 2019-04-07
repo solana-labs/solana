@@ -103,7 +103,7 @@ impl WindowService {
         retransmit: BlobSender,
         repair_socket: Arc<UdpSocket>,
         exit: &Arc<AtomicBool>,
-        repair_slot_range: RepairSlotRange,
+        repair_slot_range: Option<RepairSlotRange>,
     ) -> WindowService {
         let repair_service = RepairService::new(
             blocktree.clone(),
@@ -159,7 +159,6 @@ mod test {
     use crate::blocktree::Blocktree;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::make_consecutive_blobs;
-    use crate::repair_service::RepairSlotRange;
     use crate::service::Service;
     use crate::streamer::{blob_receiver, responder};
     use crate::window_service::WindowService;
@@ -197,7 +196,7 @@ mod test {
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
             &exit,
-            RepairSlotRange::default(),
+            None,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -269,7 +268,7 @@ mod test {
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
             &exit,
-            RepairSlotRange::default(),
+            None,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
