@@ -134,14 +134,6 @@ sanity() {
   testnet-beta)
     (
       set -x
-      if [ -z $GCE_ZONES ]; then
-        GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
-      fi
-
-      if [ -z $EC2_ZONES ]; then
-        EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
-      fi
-
       ok=true
       for zone in "${EC2_ZONES[@]}"; do
         if ! $ok; then
@@ -229,15 +221,6 @@ start() {
   testnet-beta)
     (
       set -x
-
-      # List of zones to deploy for each cloud provider
-      if [ -z $GCE_ZONES ]; then
-        GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
-      fi
-
-      if [ -z $EC2_ZONES ]; then
-        EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
-      fi
 
       # Build an array to pass as opts to testnet-deploy.sh: "-z zone1 -z zone2 ..."
       GCE_ZONE_ARGS=()
