@@ -10,7 +10,7 @@ use std::sync::mpsc::channel;
 fn test_wallet_request_airdrop() {
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender);
+    run_local_drone(alice, sender, None);
     let drone_addr = receiver.recv().unwrap();
 
     let mut bob_config = WalletConfig::default();
