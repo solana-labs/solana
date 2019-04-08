@@ -49,6 +49,9 @@ pub struct VoteState {
     pub votes: VecDeque<Lockout>,
     pub delegate_id: Pubkey,
     pub authorized_voter_id: Pubkey,
+    /// fraction of std::u32::MAX that represents what part of a rewards
+    ///  payout should be given to this VoteAccount
+    pub commission: u32,
     pub root_slot: Option<u64>,
     credits: u64,
 }
@@ -58,11 +61,13 @@ impl VoteState {
         let votes = VecDeque::new();
         let credits = 0;
         let root_slot = None;
+        let commission = 0;
         Self {
             votes,
             delegate_id: *staker_id,
             authorized_voter_id: *staker_id,
             credits,
+            commission,
             root_slot,
         }
     }
@@ -85,6 +90,21 @@ impl VoteState {
             ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
             _ => InstructionError::GenericError,
         })
+    }
+
+    /// returns commission split as (voter_portion, staker_portion) tuple
+    ///
+    ///  if commission calculation is 100% one way or other,
+    ///   indicate with None for the 0% side
+    pub fn commission_split(&self, on: f64) -> (f64, f64, bool) {
+        match self.commission {
+            0 => (0.0, on, false),
+            std::u32::MAX => (on, 0.0, false),
+            split => {
+                let mine = on * f64::from(split) / f64::from(std::u32::MAX);
+                (mine, on - mine, true)
+            }
+        }
     }
 
     pub fn process_vote(&mut self, vote: Vote) {
