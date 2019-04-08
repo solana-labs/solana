@@ -400,13 +400,12 @@ impl RpcClient {
         Ok(())
     }
 
-    /// Check a signature in the bank. This method blocks
-    /// until the server sends a response.
+    /// Check a signature in the bank.
     pub fn check_signature(&self, signature: &Signature) -> bool {
         trace!("check_signature: {:?}", signature);
         let params = json!([format!("{}", signature)]);
 
-        loop {
+        for _ in 0..30 {
             let response =
                 self.client
                     .send(&RpcRequest::ConfirmTransaction, Some(params.clone()), 0);
@@ -426,7 +425,10 @@ impl RpcClient {
                     debug!("check_signature request failed: {:?}", err);
                 }
             };
+            sleep(Duration::from_millis(250));
         }
+
+        panic!("Couldn't check signature of {}", signature);
     }
 
     /// Poll the server to confirm a transaction.
