@@ -114,6 +114,7 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
         num_replicators,
         DEFAULT_TICKS_PER_SLOT,
         DEFAULT_SLOTS_PER_EPOCH,
+        &[],
     );
 
     let cluster_nodes = discover_nodes(
@@ -228,6 +229,7 @@ fn test_account_setup() {
         num_replicators,
         DEFAULT_TICKS_PER_SLOT,
         DEFAULT_SLOTS_PER_EPOCH,
+        &[],
     );
 
     let _ = discover_nodes(

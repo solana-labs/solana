@@ -68,13 +68,14 @@ pub struct LocalCluster {
 impl LocalCluster {
     pub fn new(num_nodes: usize, cluster_lamports: u64, lamports_per_node: u64) -> Self {
         let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
-        Self::new_with_config(&stakes, cluster_lamports, &FullnodeConfig::default())
+        Self::new_with_config(&stakes, cluster_lamports, &FullnodeConfig::default(), &[])
     }
 
     pub fn new_with_config(
         node_stakes: &[u64],
         cluster_lamports: u64,
         fullnode_config: &FullnodeConfig,
+        native_instruction_processors: &[(String, Pubkey)],
     ) -> Self {
         Self::new_with_config_replicators(
             node_stakes,
@@ -83,6 +84,7 @@ impl LocalCluster {
             0,
             DEFAULT_TICKS_PER_SLOT,
             DEFAULT_SLOTS_PER_EPOCH,
+            native_instruction_processors,
         )
     }
 
@@ -92,6 +94,7 @@ impl LocalCluster {
         fullnode_config: &FullnodeConfig,
         ticks_per_slot: u64,
         slots_per_epoch: u64,
+        native_instruction_processors: &[(String, Pubkey)],
     ) -> Self {
         Self::new_with_config_replicators(
             node_stakes,
@@ -100,6 +103,7 @@ impl LocalCluster {
             0,
             ticks_per_slot,
             slots_per_epoch,
+            native_instruction_processors,
         )
     }
 
@@ -110,6 +114,7 @@ impl LocalCluster {
         num_replicators: usize,
         ticks_per_slot: u64,
         slots_per_epoch: u64,
+        native_instruction_processors: &[(String, Pubkey)],
     ) -> Self {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
@@ -118,6 +123,9 @@ impl LocalCluster {
             GenesisBlock::new_with_leader(cluster_lamports, &leader_pubkey, node_stakes[0]);
         genesis_block.ticks_per_slot = ticks_per_slot;
         genesis_block.slots_per_epoch = slots_per_epoch;
+        genesis_block
+            .native_instruction_processors
+            .extend_from_slice(native_instruction_processors);
         let (genesis_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
         let voting_keypair = Keypair::new();
@@ -444,6 +452,7 @@ mod test {
             num_replicators,
             16,
             16,
+            &[],
         );
         assert_eq!(cluster.fullnodes.len(), NUM_NODES);
         assert_eq!(cluster.replicators.len(), num_replicators);

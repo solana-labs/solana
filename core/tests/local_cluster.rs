@@ -60,7 +60,7 @@ fn test_fullnode_exit_2() {
     let num_nodes = 2;
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.rpc_config.enable_fullnode_exit = true;
-    let local = LocalCluster::new_with_config(&[100; 2], 10_000, &fullnode_config);
+    let local = LocalCluster::new_with_config(&[100; 2], 10_000, &fullnode_config, &[]);
     cluster_tests::fullnode_exit(&local.entry_point_info, num_nodes);
 }
 
@@ -71,7 +71,7 @@ fn test_leader_failure_4() {
     let num_nodes = 4;
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.rpc_config.enable_fullnode_exit = true;
-    let local = LocalCluster::new_with_config(&[100; 4], 10_000, &fullnode_config);
+    let local = LocalCluster::new_with_config(&[100; 4], 10_000, &fullnode_config, &[]);
     cluster_tests::kill_entry_and_spend_and_verify_rest(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -93,6 +93,7 @@ fn test_two_unbalanced_stakes() {
         &fullnode_config,
         num_ticks_per_slot,
         num_slots_per_epoch,
+        &[],
     );
     cluster_tests::sleep_n_epochs(
         10.0,
@@ -113,7 +114,7 @@ fn test_forwarding() {
     // Set up a cluster where one node is never the leader, so all txs sent to this node
     // will be have to be forwarded in order to be confirmed
     let fullnode_config = FullnodeConfig::default();
-    let cluster = LocalCluster::new_with_config(&[999_990, 3], 2_000_000, &fullnode_config);
+    let cluster = LocalCluster::new_with_config(&[999_990, 3], 2_000_000, &fullnode_config, &[]);
 
     let cluster_nodes = discover_nodes(&cluster.entry_point_info.gossip, 2).unwrap();
     assert!(cluster_nodes.len() >= 2);
@@ -137,6 +138,7 @@ fn test_restart_node() {
         &fullnode_config,
         ticks_per_slot,
         slots_per_epoch,
+        &[],
     );
     let nodes = cluster.get_node_ids();
     cluster_tests::sleep_n_epochs(

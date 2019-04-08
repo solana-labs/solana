@@ -752,7 +752,7 @@ mod tests {
         let fullnode_config = FullnodeConfig::default();
         const NUM_NODES: usize = 1;
         let cluster =
-            LocalCluster::new_with_config(&[999_990; NUM_NODES], 2_000_000, &fullnode_config);
+            LocalCluster::new_with_config(&[999_990; NUM_NODES], 2_000_000, &fullnode_config, &[]);
 
         let drone_keypair = Keypair::new();
         cluster.transfer(&cluster.funding_keypair, &drone_keypair.pubkey(), 1_000_000);
