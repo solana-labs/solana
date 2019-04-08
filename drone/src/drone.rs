@@ -243,10 +243,18 @@ pub fn request_airdrop_transaction(
 }
 
 // For integration tests. Listens on random open port and reports port to Sender.
-pub fn run_local_drone(mint_keypair: Keypair, sender: Sender<SocketAddr>) {
+pub fn run_local_drone(
+    mint_keypair: Keypair,
+    sender: Sender<SocketAddr>,
+    request_cap_input: Option<u64>,
+) {
     thread::spawn(move || {
         let drone_addr = socketaddr!(0, 0);
-        let drone = Arc::new(Mutex::new(Drone::new(mint_keypair, None, None)));
+        let drone = Arc::new(Mutex::new(Drone::new(
+            mint_keypair,
+            None,
+            request_cap_input,
+        )));
         let socket = TcpListener::bind(&drone_addr).unwrap();
         sender.send(socket.local_addr().unwrap()).unwrap();
         info!("Drone started. Listening on: {}", drone_addr);

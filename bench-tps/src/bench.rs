@@ -758,7 +758,7 @@ mod tests {
         cluster.transfer(&cluster.funding_keypair, &drone_keypair.pubkey(), 1_000_000);
 
         let (addr_sender, addr_receiver) = channel();
-        run_local_drone(drone_keypair, addr_sender);
+        run_local_drone(drone_keypair, addr_sender, None);
         let drone_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
 
         let mut cfg = Config::default();

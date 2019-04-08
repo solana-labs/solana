@@ -23,7 +23,7 @@ fn test_wallet_deploy_program() {
     let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
 
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender);
+    run_local_drone(alice, sender, None);
     let drone_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);

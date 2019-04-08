@@ -24,7 +24,7 @@ fn test_wallet_timestamp_tx() {
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender);
+    run_local_drone(alice, sender, None);
     let drone_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
@@ -88,7 +88,7 @@ fn test_wallet_witness_tx() {
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender);
+    run_local_drone(alice, sender, None);
     let drone_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
@@ -149,7 +149,7 @@ fn test_wallet_cancel_tx() {
     let bob_pubkey = Pubkey::new_rand();
 
     let (sender, receiver) = channel();
-    run_local_drone(alice, sender);
+    run_local_drone(alice, sender, None);
     let drone_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_socket(leader_data.rpc);
