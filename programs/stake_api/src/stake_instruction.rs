@@ -91,7 +91,8 @@ pub fn process_instruction(
             }
             let (stake, vote) = rest.split_at_mut(1);
             let stake = &mut stake[0];
-            let vote = &vote[0];
+            let vote = &mut vote[0];
+
             me.redeem_vote_credits(stake, vote)
         }
     }
