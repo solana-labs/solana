@@ -244,7 +244,7 @@ impl Replicator {
             retransmit_sender,
             repair_socket,
             &exit,
-            repair_slot_range,
+            Some(repair_slot_range),
         );
 
         let client = create_client(cluster_entrypoint.client_facing_addr(), FULLNODE_PORT_RANGE);

@@ -26,6 +26,21 @@ pub enum RepairType {
     Blob(u64, u64),
 }
 
+#[derive(Default)]
+struct RepairInfo {
+    max_slot: u64,
+    repair_tries: u64,
+}
+
+impl RepairInfo {
+    fn new() -> Self {
+        RepairInfo {
+            max_slot: 0,
+            repair_tries: 0,
+        }
+    }
+}
+
 pub struct RepairSlotRange {
     pub start: u64,
     pub end: u64,
@@ -50,15 +65,28 @@ impl RepairService {
         exit: Arc<AtomicBool>,
         repair_socket: &Arc<UdpSocket>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        _repair_slot_range: RepairSlotRange,
+        repair_slot_range: Option<RepairSlotRange>,
     ) {
+        let mut repair_info = RepairInfo::new();
         let id = cluster_info.read().unwrap().id();
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
 
-            let repairs = Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH);
+            let repairs = {
+                if let Some(ref repair_slot_range) = repair_slot_range {
+                    // Strategy used by replicators
+                    Self::generate_repairs_in_range(
+                        blocktree,
+                        MAX_REPAIR_LENGTH,
+                        &mut repair_info,
+                        repair_slot_range,
+                    )
+                } else {
+                    Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH)
+                }
+            };
 
             if let Ok(repairs) = repairs {
                 let reqs: Vec<_> = repairs
@@ -106,7 +134,7 @@ impl RepairService {
         exit: &Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        repair_slot_range: RepairSlotRange,
+        repair_slot_range: Option<RepairSlotRange>,
     ) -> Self {
         let exit = exit.clone();
         let t_repair = Builder::new()
@@ -123,6 +151,66 @@ impl RepairService {
             .unwrap();
 
         RepairService { t_repair }
+    }
+
+    fn generate_repairs_in_range(
+        blocktree: &Blocktree,
+        max_repairs: usize,
+        repair_info: &mut RepairInfo,
+        repair_range: &RepairSlotRange,
+    ) -> Result<(Vec<RepairType>)> {
+        // Slot height and blob indexes for blobs we want to repair
+        let mut repairs: Vec<RepairType> = vec![];
+        let mut current_slot = Some(repair_range.start);
+        while repairs.len() < max_repairs && current_slot.is_some() {
+            if current_slot.unwrap() > repair_range.end {
+                break;
+            }
+
+            if current_slot.unwrap() > repair_info.max_slot {
+                repair_info.repair_tries = 0;
+                repair_info.max_slot = current_slot.unwrap();
+            }
+
+            if let Some(slot) = blocktree.meta(current_slot.unwrap())? {
+                let new_repairs = Self::generate_repairs_for_slot(
+                    blocktree,
+                    current_slot.unwrap(),
+                    &slot,
+                    max_repairs - repairs.len(),
+                );
+                repairs.extend(new_repairs);
+            }
+            current_slot = blocktree.get_next_slot(current_slot.unwrap())?;
+        }
+
+        // Only increment repair_tries if the ledger contains every blob for every slot
+        if repairs.is_empty() {
+            repair_info.repair_tries += 1;
+        }
+
+        // Optimistically try the next slot if we haven't gotten any repairs
+        // for a while
+        if repair_info.repair_tries >= MAX_REPAIR_TRIES {
+            repairs.push(RepairType::HighestBlob(repair_info.max_slot + 1, 0))
+        }
+
+        Ok(repairs)
+    }
+
+    fn generate_repairs(blocktree: &Blocktree, max_repairs: usize) -> Result<(Vec<RepairType>)> {
+        // Slot height and blob indexes for blobs we want to repair
+        let mut repairs: Vec<RepairType> = vec![];
+        let slot = *blocktree.root_slot.read().unwrap();
+        Self::generate_repairs_for_fork(blocktree, &mut repairs, max_repairs, slot);
+
+        // TODO: Incorporate gossip to determine priorities for repair?
+
+        // Try to resolve orphans in blocktree
+        let orphans = blocktree.get_orphans(Some(MAX_ORPHANS));
+
+        Self::generate_repairs_for_orphans(&orphans[..], &mut repairs);
+        Ok(repairs)
     }
 
     fn generate_repairs_for_slot(
@@ -147,21 +235,6 @@ impl RepairService {
                 .map(|i| RepairType::Blob(slot, i))
                 .collect()
         }
-    }
-
-    fn generate_repairs(blocktree: &Blocktree, max_repairs: usize) -> Result<(Vec<RepairType>)> {
-        // Slot height and blob indexes for blobs we want to repair
-        let mut repairs: Vec<RepairType> = vec![];
-        let slot = *blocktree.root_slot.read().unwrap();
-        Self::generate_repairs_for_fork(blocktree, &mut repairs, max_repairs, slot);
-
-        // TODO: Incorporate gossip to determine priorities for repair?
-
-        // Try to resolve orphans in blocktree
-        let orphans = blocktree.get_orphans(Some(MAX_ORPHANS));
-
-        Self::generate_repairs_for_orphans(&orphans[..], &mut repairs);
-        Ok(repairs)
     }
 
     fn generate_repairs_for_orphans(orphans: &[u64], repairs: &mut Vec<RepairType>) {
@@ -325,7 +398,7 @@ mod test {
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
-    /*#[test]
+    #[test]
     pub fn test_repair_range() {
         let blocktree_path = get_tmp_ledger_path!();
         {
@@ -353,11 +426,16 @@ mod test {
             repair_slot_range.end = end;
 
             assert_eq!(
-                RepairService::generate_repairs(&blocktree, std::usize::MAX, &mut repair_info,)
-                    .unwrap(),
+                RepairService::generate_repairs_in_range(
+                    &blocktree,
+                    std::usize::MAX,
+                    &mut repair_info,
+                    &repair_slot_range
+                )
+                .unwrap(),
                 expected
             );
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
-    }*/
+    }
 }

@@ -7,7 +7,6 @@ use crate::cluster_info::{
     NEIGHBORHOOD_SIZE,
 };
 use crate::packet::SharedBlob;
-use crate::repair_service::RepairSlotRange;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
@@ -131,7 +130,7 @@ impl RetransmitStage {
             retransmit_sender,
             repair_socket,
             exit,
-            RepairSlotRange::default(),
+            None,
         );
 
         let thread_hdls = vec![t_retransmit];
