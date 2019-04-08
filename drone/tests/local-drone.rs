@@ -19,7 +19,7 @@ fn test_local_drone() {
     let expected_tx = Transaction::new(&[&keypair], message, blockhash);
 
     let (sender, receiver) = channel();
-    run_local_drone(keypair, sender);
+    run_local_drone(keypair, sender, None);
     let drone_addr = receiver.recv().unwrap();
 
     let result = request_airdrop_transaction(&drone_addr, &to, lamports, blockhash);
