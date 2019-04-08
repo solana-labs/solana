@@ -26,8 +26,7 @@ credit-only by the instructions.
 credit-only accounts have the following properties:
 
 * Can be deposited into:  Deposits can be implemented as a simple `atomic_add`.
-
-* credit-only access to account data.
+* read-only access to account data.
 
 Instructions that debit or modify the credit-only account data will fail.
 
