@@ -69,7 +69,7 @@ impl StakeState {
             return None;
         }
 
-        return Some((voter_rewards as u64, staker_rewards as u64));
+        Some((voter_rewards as u64, staker_rewards as u64))
     }
 }
 

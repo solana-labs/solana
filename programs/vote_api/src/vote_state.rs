@@ -101,7 +101,7 @@ impl VoteState {
             0 => (0.0, on, false),
             std::u32::MAX => (on, 0.0, false),
             split => {
-                let mine = on * split as f64 / std::u32::MAX as f64;
+                let mine = on * f64::from(split) / f64::from(std::u32::MAX);
                 (mine, on - mine, true)
             }
         }
