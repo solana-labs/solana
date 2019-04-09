@@ -324,7 +324,8 @@ impl ClusterInfo {
                         votes
                             .transactions
                             .iter()
-                            .map(|tx| tx.clone())
+                            .cloned()
+                            .map(|tx| tx)
                             .collect::<Vec<_>>(),
                     )
                 })
