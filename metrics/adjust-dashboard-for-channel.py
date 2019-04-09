@@ -45,10 +45,10 @@ else:
     # databases
     data['title'] = 'Testnet Monitor ({})'.format(channel)
     data['uid'] = 'testnet-' + channel
-    data['templating']['list'] = [{'allValue': None,
+    data['templating']['list'] = [{'allValue': ".*",
                                    'current': {'text': 'testnet',
                                                'value': 'testnet'},
-                                   'datasource': 'Solana Metrics (read-only)',
+                                   'datasource': 'Solana Influx Cloud (read-only)',
                                    'hide': 1,
                                    'includeAll': False,
                                    'label': 'Testnet',
@@ -64,8 +64,8 @@ else:
                                    'tagsQuery': '',
                                    'type': 'query',
                                    'useTags': False},
-                                   {'allValue': None,
-                                    'datasource': 'Solana Metrics (read-only)',
+                                   {'allValue': ".*",
+                                    'datasource': 'Solana Influx Cloud (read-only)',
                                     'hide': 0,
                                     'includeAll': True,
                                     'label': 'HostID',
