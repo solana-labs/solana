@@ -75,28 +75,31 @@ source scripts/configure-metrics.sh
 ci/channel-info.sh
 eval "$(ci/channel-info.sh)"
 
-case $TESTNET in
-testnet-edge|testnet-edge-perf)
-  CHANNEL_OR_TAG=edge
-  CHANNEL_BRANCH=$EDGE_CHANNEL
-  ;;
-testnet-beta|testnet-beta-perf)
-  CHANNEL_OR_TAG=beta
-  CHANNEL_BRANCH=$BETA_CHANNEL
-  ;;
-testnet|testnet-perf)
-  CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
-  CHANNEL_BRANCH=$STABLE_CHANNEL
-  ;;
-*)
-  echo "Error: Invalid TESTNET=$TESTNET"
-  exit 1
-  ;;
-esac
+if [[ -n $TESTNET_TAG ]]; then
+  CHANNEL_OR_TAG=$TESTNET_TAG
+else
+  case $TESTNET in
+  testnet-edge|testnet-edge-perf)
+    CHANNEL_OR_TAG=edge
+    CHANNEL_BRANCH=$EDGE_CHANNEL
+    ;;
+  testnet-beta|testnet-beta-perf)
+    CHANNEL_OR_TAG=beta
+    CHANNEL_BRANCH=$BETA_CHANNEL
+    ;;
+  testnet|testnet-perf)
+    CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
+    CHANNEL_BRANCH=$STABLE_CHANNEL
+    ;;
+  *)
+    echo "Error: Invalid TESTNET=$TESTNET"
+    exit 1
+    ;;
+  esac
 
-if [[ $BUILDKITE_BRANCH != "$CHANNEL_BRANCH" ]]; then
-  (
-    cat <<EOF
+  if [[ $BUILDKITE_BRANCH != "$CHANNEL_BRANCH" ]]; then
+    (
+      cat <<EOF
 steps:
   - trigger: "$BUILDKITE_PIPELINE_SLUG"
     async: true
@@ -110,10 +113,10 @@ steps:
         EC2_NODE_COUNT: "$EC2_NODE_COUNT"
         GCE_NODE_COUNT: "$GCE_NODE_COUNT"
 EOF
-  ) | buildkite-agent pipeline upload
-  exit 0
+    ) | buildkite-agent pipeline upload
+    exit 0
+  fi
 fi
-
 
 sanity() {
   echo "--- sanity $TESTNET"
