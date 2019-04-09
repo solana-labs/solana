@@ -198,7 +198,7 @@ startBootstrapLeader() {
          bootstrap-leader \
          $publicNetwork \
          $entrypointIp \
-         ${#fullnodeIpList[@]} \
+         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
          $leaderRotation \
@@ -226,7 +226,7 @@ startNode() {
          $nodeType \
          $publicNetwork \
          $entrypointIp \
-         ${#fullnodeIpList[@]} \
+         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
          $leaderRotation \
@@ -260,12 +260,23 @@ sanity() {
   echo "--- Sanity"
   $metricsWriteDatapoint "testnet-deploy net-sanity-begin=1"
 
-  declare host=${fullnodeIpList[0]}
+  declare bootstrapLeader=${fullnodeIpList[0]}
+  declare blockstreamer=${blockstreamerIpList[0]}
   (
     set -x
+    echo "--- Sanity: $bootstrapLeader"
     # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
-    ssh "${sshOptions[@]}" "$host" \
+    ssh "${sshOptions[@]}" "$bootstrapLeader" \
       "./solana/net/remote/remote-sanity.sh $sanityExtraArgs \"$RUST_LOG\""
+
+    # If there's a blockstreamer node run a reduced sanity check on it as well
+    if [[ -n $blockstreamer ]]; then
+      echo "--- Sanity: $blockstreamer"
+      # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
+      ssh "${sshOptions[@]}" "$blockstreamer" \
+        "./solana/net/remote/remote-sanity.sh $sanityExtraArgs -o noLedgerVerify -o noValidatorSanity \"$RUST_LOG\""
+
+    fi
   ) || ok=false
 
   $metricsWriteDatapoint "testnet-deploy net-sanity-complete=1"
