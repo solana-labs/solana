@@ -708,8 +708,8 @@ impl AccountsDB {
                         stores[account_info.id].add_account();
                     }
                     for (pubkey, account_info) in account_map.iter() {
-                        if maps.insert(*pubkey, account_info.clone()).is_some() {
-                            stores[account_info.id].remove_account();
+                        if let Some(old_account_info) = maps.insert(*pubkey, account_info.clone()) {
+                            stores[old_account_info.id].remove_account();
                         }
                     }
                     *account_map = maps;
@@ -1423,7 +1423,7 @@ mod tests {
         let db = AccountsDB::new(0, &paths.paths);
 
         let mut pubkeys: Vec<Pubkey> = vec![];
-        create_account(&db, &mut pubkeys, 0, 100, 0);
+        create_account(&db, &mut pubkeys, 0, 100, 0, 0);
         for _ in 1..100 {
             let idx = thread_rng().gen_range(0, 99);
             let account = db.load(0, &pubkeys[idx], true).unwrap();
@@ -1465,6 +1465,42 @@ mod tests {
     }
 
     #[test]
+    fn test_accountsdb_squash_merge() {
+        let paths = get_tmp_accounts_path!();
+        let db = AccountsDB::new(0, &paths.paths);
+
+        let mut pubkeys: Vec<Pubkey> = vec![];
+        create_account(
+            &db,
+            &mut pubkeys,
+            0,
+            2,
+            ACCOUNT_DATA_FILE_SIZE as usize / 3,
+            0,
+        );
+        assert!(check_storage(&db, 2));
+
+        db.add_fork(1, Some(0));
+        let pubkey = Pubkey::new_rand();
+        let account = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 3, &pubkey);
+        db.store(1, &pubkey, &account);
+        db.store(1, &pubkeys[0], &account);
+        {
+            let stores = db.storage.read().unwrap();
+            assert_eq!(stores.len(), 2);
+            assert_eq!(stores[0].count.load(Ordering::Relaxed), 2);
+            assert_eq!(stores[1].count.load(Ordering::Relaxed), 2);
+        }
+        db.squash(1);
+        {
+            let stores = db.storage.read().unwrap();
+            assert_eq!(stores.len(), 2);
+            assert_eq!(stores[0].count.load(Ordering::Relaxed), 3);
+            assert_eq!(stores[1].count.load(Ordering::Relaxed), 2);
+        }
+    }
+
+    #[test]
     fn test_accounts_unsquashed() {
         let key = Pubkey::default();
 
@@ -1494,24 +1530,22 @@ mod tests {
         pubkeys: &mut Vec<Pubkey>,
         fork: Fork,
         num: usize,
+        space: usize,
         num_vote: usize,
     ) {
         for t in 0..num {
             let pubkey = Pubkey::new_rand();
-            let mut default_account = Account::default();
+            let account = Account::new((t + 1) as u64, space, &Account::default().owner);
             pubkeys.push(pubkey.clone());
-            default_account.lamports = (t + 1) as u64;
             assert!(accounts.load(fork, &pubkey, true).is_none());
-            accounts.store(fork, &pubkey, &default_account);
+            accounts.store(fork, &pubkey, &account);
         }
         for t in 0..num_vote {
             let pubkey = Pubkey::new_rand();
-            let mut default_account = Account::default();
+            let account = Account::new((num + t + 1) as u64, space, &solana_vote_api::id());
             pubkeys.push(pubkey.clone());
-            default_account.owner = solana_vote_api::id();
-            default_account.lamports = (num + t + 1) as u64;
             assert!(accounts.load(fork, &pubkey, true).is_none());
-            accounts.store(fork, &pubkey, &default_account);
+            accounts.store(fork, &pubkey, &account);
         }
     }
 
@@ -1564,7 +1598,7 @@ mod tests {
         let paths = get_tmp_accounts_path!();
         let accounts = AccountsDB::new(0, &paths.paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
-        create_account(&accounts, &mut pubkeys, 0, 1, 0);
+        create_account(&accounts, &mut pubkeys, 0, 1, 0, 0);
         let account = accounts.load(0, &pubkeys[0], true).unwrap();
         let mut default_account = Account::default();
         default_account.lamports = 1;
@@ -1576,7 +1610,7 @@ mod tests {
         let paths = get_tmp_accounts_path("many0,many1");
         let accounts = AccountsDB::new(0, &paths.paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
-        create_account(&accounts, &mut pubkeys, 0, 100, 0);
+        create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
         check_accounts(&accounts, &pubkeys, 0);
     }
 
@@ -1585,7 +1619,7 @@ mod tests {
         let paths = get_tmp_accounts_path!();
         let accounts = AccountsDB::new(0, &paths.paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
-        create_account(&accounts, &mut pubkeys, 0, 100, 0);
+        create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
         update_accounts(&accounts, &pubkeys, 0, 99);
         assert_eq!(check_storage(&accounts, 100), true);
     }
@@ -1676,11 +1710,11 @@ mod tests {
         let paths = get_tmp_accounts_path!();
         let accounts = AccountsDB::new(0, &paths.paths);
         let mut pubkeys0: Vec<Pubkey> = vec![];
-        create_account(&accounts, &mut pubkeys0, 0, 100, 0);
+        create_account(&accounts, &mut pubkeys0, 0, 100, 0, 0);
         assert_eq!(check_storage(&accounts, 100), true);
         accounts.add_fork(1, Some(0));
         let mut pubkeys1: Vec<Pubkey> = vec![];
-        create_account(&accounts, &mut pubkeys1, 1, 100, 0);
+        create_account(&accounts, &mut pubkeys1, 1, 100, 0, 0);
         assert_eq!(check_storage(&accounts, 200), true);
         accounts.remove_accounts(0);
         check_accounts(&accounts, &pubkeys1, 1);
@@ -1688,7 +1722,7 @@ mod tests {
         assert_eq!(check_storage(&accounts, 100), true);
         accounts.add_fork(2, Some(1));
         let mut pubkeys2: Vec<Pubkey> = vec![];
-        create_account(&accounts, &mut pubkeys2, 2, 100, 0);
+        create_account(&accounts, &mut pubkeys2, 2, 100, 0, 0);
         assert_eq!(check_storage(&accounts, 200), true);
         accounts.remove_accounts(1);
         check_accounts(&accounts, &pubkeys2, 2);
