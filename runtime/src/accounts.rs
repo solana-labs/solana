@@ -565,12 +565,6 @@ impl Accounts {
     pub fn add_root(&self, fork: Fork) {
         self.accounts_db.add_root(fork)
     }
-
-    pub fn compare_accounts(accounts: &Accounts, daccounts: &Accounts) {
-        assert_eq!(accounts.hash_internal_state(0), daccounts.hash_internal_state(0));
-        assert_eq!(accounts.paths, daccounts.paths);
-        assert_eq!(accounts.own_paths, daccounts.own_paths);
-    }
 }
 
 #[cfg(test)]
@@ -579,7 +573,7 @@ mod tests {
 
     use super::*;
     use bincode::{deserialize_from, serialize_into, serialized_size};
-    use rand::{Rng, thread_rng};
+    use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::CompiledInstruction;
@@ -1156,6 +1150,9 @@ mod tests {
         let mut reader = Cursor::new(&mut buf[..]);
         let daccounts: Accounts = deserialize_from(&mut reader).unwrap();
         check_accounts(&daccounts, &pubkeys, 100);
-        Accounts::compare_accounts(&accounts, &daccounts);
+        assert_eq!(
+            accounts.hash_internal_state(0),
+            daccounts.hash_internal_state(0)
+        );
     }
 }

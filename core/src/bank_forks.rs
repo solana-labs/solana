@@ -50,6 +50,7 @@ impl BankForks {
     }
 
     /// Create a map of bank slot id to the set of all of its descendants
+    #[allow(clippy::or_fun_call)]
     pub fn descendants(&self) -> HashMap<u64, HashSet<u64>> {
         let mut descendants = HashMap::new();
         for bank in self.banks.values() {
@@ -227,8 +228,8 @@ mod tests {
         let bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
         bank_forks.insert(bank);
         let descendants = bank_forks.descendants();
-        let children: Vec<u64> = descendants[&0].iter().cloned().collect();
-        assert_eq!(children, vec![2, 1]);
+        let children: HashSet<u64> = [1u64, 2u64].to_vec().into_iter().collect();
+        assert_eq!(children, *descendants.get(&0).unwrap());
         assert!(descendants[&1].is_empty());
         assert!(descendants[&2].is_empty());
     }

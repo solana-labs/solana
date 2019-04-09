@@ -61,6 +61,7 @@ impl<'a> StoredAccount<'a> {
 }
 
 #[derive(Debug)]
+#[allow(clippy::mutex_atomic)]
 pub struct AppendVec {
     path: PathBuf,
     map: MmapMut,
@@ -304,11 +305,8 @@ impl Serialize for AppendVec {
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);
         serialize_into(&mut wr, &self.path).map_err(Error::custom)?;
-        serialize_into(
-            &mut wr,
-            &(self.current_len.load(Ordering::Relaxed) as u64),
-        )
-        .map_err(Error::custom)?;
+        serialize_into(&mut wr, &(self.current_len.load(Ordering::Relaxed) as u64))
+            .map_err(Error::custom)?;
         serialize_into(&mut wr, &self.file_size).map_err(Error::custom)?;
         let len = wr.position() as usize;
         serializer.serialize_bytes(&wr.into_inner()[..len])
@@ -324,6 +322,7 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
         formatter.write_str("Expecting AppendVec")
     }
 
+    #[allow(clippy::mutex_atomic)]
     fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
     where
         E: serde::de::Error,
@@ -435,7 +434,7 @@ pub mod tests {
     fn test_append_vec_serialize() {
         let path = Path::new("append_vec_serialize");
         let av: AppendVec = AppendVec::new(path, true, 1024 * 1024);
-        let account1 = create_test_account(1); 
+        let account1 = create_test_account(1);
         let index1 = av.append_account_test(&account1).unwrap();
         assert_eq!(index1, 0);
         assert_eq!(av.get_account_test(index1).unwrap(), account1);

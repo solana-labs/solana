@@ -1,6 +1,6 @@
 use log::*;
-use solana_sdk::pubkey::Pubkey;
 use serde::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 
 pub type Fork = u64;
@@ -36,7 +36,7 @@ impl<T: Clone> AccountsIndex<T> {
         let mut rv = vec![];
         let mut fork_vec: Vec<(Fork, T)> = vec![];
         {
-            let entry = self.account_maps.entry(*pubkey).or_insert(vec![]);
+            let entry = self.account_maps.entry(*pubkey).or_insert_with(|| vec![]);
             std::mem::swap(entry, &mut fork_vec);
         };
 
@@ -55,7 +55,7 @@ impl<T: Clone> AccountsIndex<T> {
         );
         fork_vec.retain(|(fork, _)| !self.is_purged(*fork));
         {
-            let entry = self.account_maps.entry(*pubkey).or_insert(vec![]);
+            let entry = self.account_maps.entry(*pubkey).or_insert_with(|| vec![]);
             std::mem::swap(entry, &mut fork_vec);
         };
         rv

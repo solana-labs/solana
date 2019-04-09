@@ -84,7 +84,7 @@ impl<T: Clone> StatusCache<T> {
             .entry(*transaction_blockhash)
             .or_insert((fork, HashMap::new()));
         sig_map.0 = std::cmp::max(fork, sig_map.0);
-        let sig_forks = sig_map.1.entry(*sig).or_insert(vec![]);
+        let sig_forks = sig_map.1.entry(*sig).or_insert_with(|| vec![]);
         sig_forks.push((fork, res));
     }
 

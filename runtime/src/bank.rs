@@ -1105,8 +1105,10 @@ impl Bank {
         let sc = self.status_cache.read().unwrap();
         let dsc = dbank.status_cache.read().unwrap();
         assert_eq!(*sc, *dsc);
-
-        Accounts::compare_accounts(&self.accounts, &dbank.accounts);
+        assert_eq!(
+            self.accounts.hash_internal_state(self.slot),
+            dbank.accounts.hash_internal_state(dbank.slot)
+        );
     }
 }
 
