@@ -14,7 +14,7 @@ use rand::{thread_rng, Rng};
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::timing;
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, spawn, JoinHandle};
 use std::time::Instant;
@@ -30,12 +30,12 @@ impl SigVerifyStage {
     pub fn new(
         packet_receiver: Receiver<SharedPackets>,
         sigverify_disabled: bool,
-    ) -> (Self, Receiver<VerifiedPackets>) {
+        verified_sender: Sender<VerifiedPackets>,
+    ) -> Self {
         sigverify::init();
-        let (verified_sender, verified_receiver) = channel();
         let thread_hdls =
             Self::verifier_services(packet_receiver, verified_sender, sigverify_disabled);
-        (Self { thread_hdls }, verified_receiver)
+        Self { thread_hdls }
     }
 
     fn verify_batch(batch: Vec<SharedPackets>, sigverify_disabled: bool) -> VerifiedPackets {
