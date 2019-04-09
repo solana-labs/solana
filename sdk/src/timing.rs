@@ -21,8 +21,8 @@ pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 8;
 /// not be processed by the network.
 pub const MAX_HASH_AGE_IN_SECONDS: usize = 120;
 
-pub const MAX_RECENT_BLOCKHASHES: usize =
-    (NUM_TICKS_PER_SECOND * MAX_HASH_AGE_IN_SECONDS as u64 / DEFAULT_TICKS_PER_SLOT) as usize;
+// This must be <= MAX_HASH_AGE_IN_SECONDS, otherwise there's risk for DuplicateSignature errors
+pub const MAX_RECENT_BLOCKHASHES: usize = MAX_HASH_AGE_IN_SECONDS;
 
 pub fn duration_as_us(d: &Duration) -> u64 {
     (d.as_secs() * 1000 * 1000) + (u64::from(d.subsec_nanos()) / 1_000)
