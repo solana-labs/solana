@@ -1,5 +1,6 @@
 use generic_array::typenum::U32;
 use generic_array::GenericArray;
+use lazy_static::lazy_static;
 use std::error;
 use std::fmt;
 use std::fs::{self, File};
@@ -11,6 +12,16 @@ use std::str::FromStr;
 #[repr(C)]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pubkey(GenericArray<u8, U32>);
+
+lazy_static! {
+    static ref PUBKEY_DEFAULT: Pubkey = Pubkey::default();
+}
+
+impl Default for &Pubkey {
+    fn default() -> Self {
+        &PUBKEY_DEFAULT
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParsePubkeyError {
@@ -135,5 +146,12 @@ mod tests {
         assert_eq!(read, pubkey);
         remove_file(filename)?;
         Ok(())
+    }
+
+    #[test]
+    fn test_pubkey_default_ref() {
+        let xs = vec![Pubkey::new_rand()];
+        assert_ne!(xs.get(0).unwrap_or_default(), &Pubkey::default());
+        assert_eq!(xs.get(1).unwrap_or_default(), &Pubkey::default());
     }
 }
