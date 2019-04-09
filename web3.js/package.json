@@ -73,7 +73,7 @@
     "bs58": "^4.0.1",
     "buffer-layout": "^1.2.0",
     "esdoc-inject-style-plugin": "^1.0.0",
-    "jayson": "^2.0.6",
+    "jayson": "^3.0.1",
     "mz": "^2.7.0",
     "node-fetch": "^2.2.0",
     "rpc-websockets": "^4.3.3",
