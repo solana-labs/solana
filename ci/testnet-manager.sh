@@ -84,9 +84,13 @@ testnet-beta|testnet-beta-perf)
   CHANNEL_OR_TAG=beta
   CHANNEL_BRANCH=$BETA_CHANNEL
   ;;
-testnet|testnet-perf)
+testnet)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
   CHANNEL_BRANCH=$STABLE_CHANNEL
+  ;;
+testnet-perf)
+  CHANNEL_OR_TAG=v0.11.0
+  CHANNEL_BRANCH=v0.11
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
