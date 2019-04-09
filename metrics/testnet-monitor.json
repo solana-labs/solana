@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 399,
-  "iteration": 1553559957575,
+  "iteration": 1554844431880,
   "links": [
     {
       "asDropdown": true,
@@ -54,7 +54,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "decimals": null,
       "format": "none",
       "gauge": {
@@ -124,7 +124,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT ROUND(MEAN(\"sum\")) FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
+          "query": "SELECT ROUND(MEAN(\"sum\")) FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"counter-bank-process_transactions-txs\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -167,7 +167,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -233,9 +233,10 @@
               "type": "fill"
             }
           ],
+          "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT MAX(\"sum\") FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
+          "query": "SELECT MAX(\"sum\") FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"counter-bank-process_transactions-txs\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -278,7 +279,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -344,9 +345,10 @@
               "type": "fill"
             }
           ],
+          "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"transactions\" FROM \"$testnet\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE $timeFilter \n\n",
+          "query": "SELECT sum(\"count\") AS \"transactions\" FROM \"$testnet\".\"autogen\".\"counter-bank-process_transactions-txs\" WHERE $timeFilter \n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -389,7 +391,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -497,7 +499,7 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 7,
@@ -547,7 +549,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"total\" FROM \"$testnet\".\"autogen\".\"vote-native\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
+          "query": "SELECT count(\"count\") AS \"total\" FROM \"$testnet\".\"autogen\".\"vote-native\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -584,7 +586,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \" \" FROM \"$testnet\".\"autogen\".\"counter-validator-vote_sent\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
+          "query": "SELECT count(\"count\") AS \" \" FROM \"$testnet\".\"autogen\".\"counter-validator-vote_sent\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -654,7 +656,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -722,7 +724,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-confirmation\" WHERE $timeFilter \n\n\n",
+          "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"validator-confirmation\" WHERE $timeFilter \n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -765,7 +767,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -833,7 +835,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT median(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-confirmation\" WHERE $timeFilter \n\n\n",
+          "query": "SELECT median(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"validator-confirmation\" WHERE $timeFilter \n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -876,7 +878,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -944,7 +946,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT min(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-confirmation\" WHERE $timeFilter \n\n\n",
+          "query": "SELECT min(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"validator-confirmation\" WHERE $timeFilter \n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -987,7 +989,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -1055,7 +1057,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT max(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-confirmation\" WHERE $timeFilter \n\n\n",
+          "query": "SELECT max(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"validator-confirmation\" WHERE $timeFilter \n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -1098,7 +1100,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -1166,7 +1168,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT percentile(\"duration_ms\", 99) FROM \"$testnet\".\"autogen\".\"leader-confirmation\" WHERE $timeFilter \n\n\n",
+          "query": "SELECT percentile(\"duration_ms\", 99) FROM \"$testnet\".\"autogen\".\"validator-confirmation\" WHERE $timeFilter \n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -1209,7 +1211,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -1321,7 +1323,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -1429,7 +1431,7 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 8,
@@ -1460,44 +1462,6 @@
       "stack": false,
       "steppedLine": false,
       "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "measurement": "counter-cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT sum(\"count\") AS \"transactions\" FROM \"$testnet\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        },
         {
           "groupBy": [
             {
@@ -1619,7 +1583,7 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 7,
@@ -1825,7 +1789,7 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 8,
@@ -1875,7 +1839,7 @@
           "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-confirmation\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"validator-confirmation\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time(1s) FILL(0)\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -1899,7 +1863,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Time since last Confirmation",
+      "title": "Validator Confirmation Time ($hostid)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -1941,7 +1905,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 4,
@@ -2056,10 +2020,10 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
-        "h": 5,
+        "h": 4,
         "w": 10,
         "x": 14,
         "y": 19
@@ -2174,7 +2138,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 24
+        "y": 23
       },
       "id": 19,
       "panels": [],
@@ -2190,7 +2154,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -2203,7 +2167,7 @@
         "h": 6,
         "w": 3,
         "x": 0,
-        "y": 25
+        "y": 24
       },
       "id": 20,
       "interval": null,
@@ -2308,13 +2272,13 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 6,
         "w": 11,
         "x": 3,
-        "y": 25
+        "y": 24
       },
       "id": 21,
       "legend": {
@@ -2469,7 +2433,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -2482,7 +2446,7 @@
         "h": 3,
         "w": 3,
         "x": 14,
-        "y": 25
+        "y": 24
       },
       "id": 22,
       "interval": null,
@@ -2576,13 +2540,13 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 6,
         "w": 7,
         "x": 17,
-        "y": 25
+        "y": 24
       },
       "id": 23,
       "legend": {
@@ -2698,7 +2662,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -2711,7 +2675,7 @@
         "h": 3,
         "w": 3,
         "x": 14,
-        "y": 28
+        "y": 27
       },
       "id": 24,
       "interval": null,
@@ -2802,13 +2766,13 @@
     },
     {
       "columns": [],
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fontSize": "100%",
       "gridPos": {
         "h": 6,
         "w": 17,
         "x": 0,
-        "y": 31
+        "y": 30
       },
       "id": 25,
       "links": [],
@@ -2890,13 +2854,13 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 6,
         "w": 7,
         "x": 17,
-        "y": 31
+        "y": 30
       },
       "id": 26,
       "legend": {
@@ -3009,7 +2973,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 36
       },
       "id": 27,
       "panels": [],
@@ -3021,13 +2985,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 5,
         "w": 7,
         "x": 0,
-        "y": 38
+        "y": 37
       },
       "id": 28,
       "legend": {
@@ -3136,13 +3100,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 5,
         "w": 7,
         "x": 7,
-        "y": 38
+        "y": 37
       },
       "id": 29,
       "legend": {
@@ -3327,13 +3291,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 5,
         "w": 10,
         "x": 14,
-        "y": 38
+        "y": 37
       },
       "id": 30,
       "legend": {
@@ -3443,7 +3407,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 42
       },
       "id": 31,
       "panels": [],
@@ -3456,13 +3420,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 44
+        "y": 43
       },
       "id": 32,
       "legend": {
@@ -3609,13 +3573,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 44
+        "y": 43
       },
       "id": 33,
       "legend": {
@@ -3803,13 +3767,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 49
+        "y": 48
       },
       "id": 34,
       "legend": {
@@ -3850,49 +3814,11 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT last(\"last-recv\") AS \"receive\" FROM \"$testnet\".\"autogen\".\"window-service\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"consumed\") AS \"consumed\" FROM \"$testnet\".\"autogen\".\"window-stage\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-ix\") AS \"repair-ix\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
-          "refId": "B",
+          "refId": "C",
           "resultFormat": "time_series",
           "select": [
             [
@@ -3924,10 +3850,129 @@
               ],
               "type": "fill"
             }
-          ],  
+          ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT last(\"repair-ix\") AS \"repair\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"repair-slot\") AS \"repair-slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Repair slot and index ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {
+        "cluster-info.repair": "#ba43a9",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Solana Influx Cloud (read-only)",
+      "fill": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "id": 47,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "connected",
+      "percentage": false,
+      "pointradius": 1,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT last(\"repair-orphan\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_orphan\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -3951,7 +3996,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Receive/Consume/Repair ($hostid)",
+      "title": "Repair detached heads ($hostid)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -3993,168 +4038,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
-      "fill": 1,
-      "gridPos": {
-        "h": 5,
-        "w": 12,
-        "x": 12,
-        "y": 49
-      },
-      "id": 35,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "rightSide": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 5,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "measurement": "counter-cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT last(\"consumed\") AS \"validator\" FROM \"$testnet\".\"autogen\".\"window-stage\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "measurement": "counter-cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT last(\"transmit-index\") AS \"leader\" FROM \"$testnet\".\"autogen\".\"broadcast-service\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
-          "rawQuery": true,
-          "refId": "B",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Leader broadcast vs Validator consume ($hostid)",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 54
+        "y": 53
       },
       "id": 36,
       "legend": {
@@ -4488,13 +4378,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 54
+        "y": 53
       },
       "id": 37,
       "legend": {
@@ -4719,13 +4609,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 60
+        "y": 59
       },
       "id": 38,
       "legend": {
@@ -4982,6 +4872,8 @@
     {
       "aliasColors": {
         "cluster-info.repair": "#ba43a9",
+        "counter-locktower-observed.squash_account": "#0a437c",
+        "counter-locktower-observed.squash_cache": "#ea6460",
         "counter-replay_stage-new_leader.last": "#00ffbb",
         "window-service.receive": "#b7dbab",
         "window-stage.consumed": "#5195ce"
@@ -4989,15 +4881,15 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 60
+        "y": 59
       },
-      "id": 39,
+      "id": 46,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5008,13 +4900,209 @@
         "total": false,
         "values": false
       },
-      "lines": false,
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "connected",
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "counter-cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"count\") FROM \"$testnet\".\"autogen\".\"counter-bank-forks_set_root_ms\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "counter-cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"squash_accounts_ms\")  AS \"squash_account\" FROM \"$testnet\".\"autogen\".\"counter-locktower-observed\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "measurement": "counter-cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT mean(\"squash_cache_ms\")  AS \"squash_cache\" FROM \"$testnet\".\"autogen\".\"counter-locktower-observed\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Time spent in squashing ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Solana Influx Cloud (read-only)",
+      "fill": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 0,
+        "y": 65
+      },
+      "id": 35,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
       "linewidth": 1,
       "links": [],
       "nullPointMode": "null",
       "percentage": false,
-      "pointradius": 2,
-      "points": true,
+      "pointradius": 5,
+      "points": false,
       "renderer": "flot",
       "seriesOverrides": [],
       "spaceLength": 10,
@@ -5039,9 +5127,47 @@
           "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT last(\"count\") FROM \"$testnet\".\"autogen\".\"counter-replay_stage-new_leader\" WHERE $timeFilter GROUP BY time($__interval)",
+          "query": "SELECT last(\"consumed\") AS \"validator\" FROM \"$testnet\".\"autogen\".\"window-stage\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval) FILL(0)",
           "rawQuery": true,
           "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "counter-cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT last(\"transmit-index\") AS \"leader\" FROM \"$testnet\".\"autogen\".\"broadcast-service\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
+          "rawQuery": true,
+          "refId": "B",
           "resultFormat": "time_series",
           "select": [
             [
@@ -5063,7 +5189,163 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Leader Change",
+      "title": "Leader broadcast vs Validator consume ($hostid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {
+        "cluster-info.repair": "#ba43a9",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Solana Influx Cloud (read-only)",
+      "fill": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 65
+      },
+      "id": 48,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "connected",
+      "percentage": false,
+      "pointradius": 1,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT last(\"repair-highest-slot\") AS \"slot\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_highest\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "C",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT last(\"repair-highest-ix\") AS \"ix\" FROM \"$testnet\".\"autogen\".\"cluster_info-repair_highest\" WHERE host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Repair highest index in slot ($hostid)",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -5110,13 +5392,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 66
+        "y": 70
       },
       "id": 44,
       "legend": {
@@ -5157,6 +5439,7 @@
               "type": "fill"
             }
           ],
+          "hide": false,
           "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
@@ -5175,6 +5458,43 @@
               {
                 "params": [],
                 "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT last(\"slot\") - last(\"root\") FROM \"$testnet\".\"autogen\".\"counter-locktower-observed\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
               }
             ]
           ],
@@ -5232,13 +5552,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 66
+        "y": 70
       },
       "id": 45,
       "legend": {
@@ -5279,6 +5599,7 @@
               "type": "fill"
             }
           ],
+          "hide": false,
           "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
@@ -5297,6 +5618,43 @@
               {
                 "params": [],
                 "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT last(\"root\") FROM \"$testnet\".\"autogen\".\"counter-locktower-observed\" WHERE  host_id =~ /$hostid/ AND $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
               }
             ]
           ],
@@ -5348,13 +5706,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 72
+        "y": 76
       },
       "id": 40,
       "legend": {
@@ -5396,6 +5754,7 @@
               "type": "fill"
             }
           ],
+          "hide": false,
           "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
@@ -5580,13 +5939,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 72
+        "y": 76
       },
       "id": 41,
       "legend": {
@@ -5734,12 +6093,133 @@
       }
     },
     {
+      "aliasColors": {
+        "cluster-info.repair": "#ba43a9",
+        "counter-replay_stage-new_leader.last": "#00ffbb",
+        "window-service.receive": "#b7dbab",
+        "window-stage.consumed": "#5195ce"
+      },
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Solana Influx Cloud (read-only)",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 81
+      },
+      "id": 39,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 2,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "counter-cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT last(\"count\") FROM \"$testnet\".\"autogen\".\"counter-replay_stage-new_leader\" WHERE $timeFilter GROUP BY time($__interval)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Leader Change",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 77
+        "y": 87
       },
       "id": 42,
       "panels": [],
@@ -5751,13 +6231,13 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
+      "datasource": "Solana Influx Cloud (read-only)",
       "fill": 1,
       "gridPos": {
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 78
+        "y": 88
       },
       "id": 43,
       "legend": {
@@ -5871,10 +6351,10 @@
       {
         "allValue": null,
         "current": {
-          "text": "testnet",
-          "value": "testnet"
+          "text": "testnet-beta",
+          "value": "testnet-beta"
         },
-        "datasource": "Solana Metrics (read-only)",
+        "datasource": "Solana Influx Cloud (read-only)",
         "hide": 1,
         "includeAll": false,
         "label": "Testnet",
@@ -5892,8 +6372,12 @@
         "useTags": false
       },
       {
-        "allValue": null,
-        "datasource": "Solana Metrics (read-only)",
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": "Solana Influx Cloud (read-only)",
         "hide": 0,
         "includeAll": true,
         "label": "HostID",
@@ -5944,5 +6428,5 @@
   "timezone": "",
   "title": "Testnet Monitor (edge)",
   "uid": "testnet-edge",
-  "version": 117
+  "version": 118
 }
