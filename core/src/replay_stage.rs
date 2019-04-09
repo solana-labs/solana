@@ -418,7 +418,7 @@ impl ReplayStage {
             .filter(|(b, stake_lockouts)| {
                 let vote_threshold =
                     locktower.check_vote_stake_threshold(b.slot(), &stake_lockouts);
-                Self::confirm_forks(locktower, stake_lockouts, progress);
+                Self::confirm_forks(locktower, stake_lockouts, progress, bank_forks);
                 debug!("bank vote_threshold: {} {}", b.slot(), vote_threshold);
                 vote_threshold
             })
@@ -448,10 +448,18 @@ impl ReplayStage {
         locktower: &Locktower,
         stake_lockouts: &HashMap<u64, StakeLockout>,
         progress: &mut HashMap<u64, ForkProgress>,
+        bank_forks: &Arc<RwLock<BankForks>>,
     ) {
         progress.retain(|slot, prog| {
             let duration = timing::timestamp() - prog.started_ms;
-            if locktower.is_slot_confirmed(*slot, stake_lockouts) {
+            if locktower.is_slot_confirmed(*slot, stake_lockouts)
+                && bank_forks
+                    .read()
+                    .unwrap()
+                    .get(*slot)
+                    .map(|s| s.is_frozen())
+                    .unwrap_or(true)
+            {
                 info!("validator fork confirmed {} {}", *slot, duration);
                 solana_metrics::submit(
                     influxdb::Point::new(&"validator-confirmation")
