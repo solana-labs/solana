@@ -11,18 +11,18 @@ pub enum CrdsValue {
     /// * Merge Strategy - Latest wallclock is picked
     ContactInfo(ContactInfo),
     /// * Merge Strategy - Latest wallclock is picked
-    Vote(Vote),
+    Vote(Votes),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct Vote {
+pub struct Votes {
     pub from: Pubkey,
-    pub transaction: Transaction,
+    pub transactions: Vec<Transaction>,
     pub signature: Signature,
     pub wallclock: u64,
 }
 
-impl Signable for Vote {
+impl Signable for Votes {
     fn pubkey(&self) -> Pubkey {
         self.from
     }
@@ -30,11 +30,11 @@ impl Signable for Vote {
     fn signable_data(&self) -> Vec<u8> {
         #[derive(Serialize)]
         struct SignData {
-            transaction: Transaction,
+            transaction: Vec<Transaction>,
             wallclock: u64,
         }
         let data = SignData {
-            transaction: self.transaction.clone(),
+            transaction: self.transactions.clone(),
             wallclock: self.wallclock,
         };
         serialize(&data).expect("unable to serialize Vote")
@@ -75,11 +75,11 @@ impl CrdsValueLabel {
     }
 }
 
-impl Vote {
-    pub fn new(from: &Pubkey, transaction: Transaction, wallclock: u64) -> Self {
-        Vote {
+impl Votes {
+    pub fn new(from: &Pubkey, transactions: Vec<Transaction>, wallclock: u64) -> Self {
+        Votes {
             from: *from,
-            transaction,
+            transactions,
             signature: Signature::default(),
             wallclock,
         }
@@ -110,9 +110,9 @@ impl CrdsValue {
             _ => None,
         }
     }
-    pub fn vote(&self) -> Option<&Vote> {
+    pub fn votes(&self) -> Option<&Votes> {
         match self {
-            CrdsValue::Vote(vote) => Some(vote),
+            CrdsValue::Vote(votes) => Some(votes),
             _ => None,
         }
     }
@@ -186,9 +186,9 @@ mod test {
         let key = v.clone().contact_info().unwrap().id;
         assert_eq!(v.label(), CrdsValueLabel::ContactInfo(key));
 
-        let v = CrdsValue::Vote(Vote::new(&Pubkey::default(), test_tx(), 0));
+        let v = CrdsValue::Vote(Votes::new(&Pubkey::default(), vec![test_tx()], 0));
         assert_eq!(v.wallclock(), 0);
-        let key = v.clone().vote().unwrap().from;
+        let key = v.clone().votes().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::Vote(key));
     }
     #[test]
@@ -198,7 +198,7 @@ mod test {
         let mut v =
             CrdsValue::ContactInfo(ContactInfo::new_localhost(&keypair.pubkey(), timestamp()));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
-        v = CrdsValue::Vote(Vote::new(&keypair.pubkey(), test_tx(), timestamp()));
+        v = CrdsValue::Vote(Votes::new(&keypair.pubkey(), vec![test_tx()], timestamp()));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
     }
 

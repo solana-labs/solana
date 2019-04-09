@@ -18,7 +18,7 @@ use crate::contact_info::ContactInfo;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote};
+use crate::crds_value::{CrdsValue, CrdsValueLabel, Votes};
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::repair_service::RepairType;
 use crate::result::Result;
@@ -62,6 +62,9 @@ pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 
+// Max vote cache size
+const MAX_CACHED_VOTES: usize = 16;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
     NoPeers,
@@ -80,6 +83,8 @@ pub struct ClusterInfo {
     gossip_leader_id: Pubkey,
     /// The network entrypoint
     entrypoint: Option<ContactInfo>,
+    /// A Vote cache
+    vote_cache: Vec<Transaction>,
 }
 
 #[derive(Default, Clone)]
@@ -180,6 +185,7 @@ impl ClusterInfo {
             keypair,
             gossip_leader_id: Pubkey::default(),
             entrypoint: None,
+            vote_cache: Vec::new(),
         };
         let id = contact_info.id;
         me.gossip.set_self(&id);
@@ -286,9 +292,15 @@ impl ClusterInfo {
     }
 
     pub fn push_vote(&mut self, vote: Transaction) {
+        if self.vote_cache.len() == MAX_CACHED_VOTES {
+            self.vote_cache.remove(0);
+        }
+        self.vote_cache.push(vote);
+
         let now = timestamp();
-        let vote = Vote::new(&self.id(), vote, now);
+        let vote = Votes::new(&self.id(), self.vote_cache.clone(), now);
         let mut entry = CrdsValue::Vote(vote);
+
         entry.sign(&self.keypair);
         self.gossip.process_push_message(&[entry], now);
     }
@@ -306,13 +318,20 @@ impl ClusterInfo {
             .values()
             .filter(|x| x.local_timestamp > since)
             .filter_map(|x| {
-                x.value
-                    .vote()
-                    .map(|v| (x.local_timestamp, v.transaction.clone()))
+                x.value.votes().map(|votes| {
+                    (
+                        x.local_timestamp,
+                        votes
+                            .transactions
+                            .iter()
+                            .map(|tx| tx.clone())
+                            .collect::<Vec<_>>(),
+                    )
+                })
             })
             .collect();
         let max_ts = votes.iter().map(|x| x.0).max().unwrap_or(since);
-        let txs: Vec<Transaction> = votes.into_iter().map(|x| x.1).collect();
+        let txs: Vec<Transaction> = votes.into_iter().map(|x| x.1).flatten().collect();
         (txs, max_ts)
     }
 
