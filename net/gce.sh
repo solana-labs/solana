@@ -404,9 +404,6 @@ delete)
 
 create)
   [[ -n $additionalFullNodeCount ]] || usage "Need number of nodes"
-  if [[ $additionalFullNodeCount -le 0 ]]; then
-    usage "One or more additional fullnodes are required"
-  fi
 
   delete
 
