@@ -48,13 +48,19 @@ impl Tpu {
             transactions_sockets,
             tpu_via_blobs_sockets,
             &exit,
-            &packet_sender.clone(),
+            &packet_sender,
         );
-        let cluster_info_vote_listener =
-            ClusterInfoVoteListener::new(&exit, cluster_info.clone(), packet_sender);
+        let (verified_sender, verified_receiver) = channel();
 
-        let (sigverify_stage, verified_receiver) =
-            SigVerifyStage::new(packet_receiver, sigverify_disabled);
+        let sigverify_stage =
+            SigVerifyStage::new(packet_receiver, sigverify_disabled, verified_sender.clone());
+
+        let cluster_info_vote_listener = ClusterInfoVoteListener::new(
+            &exit,
+            cluster_info.clone(),
+            sigverify_disabled,
+            verified_sender,
+        );
 
         let banking_stage = BankingStage::new(&cluster_info, poh_recorder, verified_receiver);
 
