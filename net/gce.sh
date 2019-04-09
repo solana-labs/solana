@@ -76,7 +76,13 @@ Manage testnet instances
  common options:
    -p [prefix]      - Optional common prefix for instance names to avoid
                       collisions (default: $prefix)
-   -z [zone]        - Zone for the nodes (default: $zone)
+   -z [zone]        - Zone(s) for the nodes (default: $(cloud_DefaultZone))
+                      If specified multiple times, the fullnodes will be evenly
+                      distributed over all specified zones and
+                      client/blockstreamer nodes will be created in the first
+                      zone
+   -x               - append to the existing configuration instead of creating a
+                      new configuration
 
  create-specific options:
    -n [number]      - Number of additional fullnodes (default: $additionalFullNodeCount)
