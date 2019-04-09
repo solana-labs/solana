@@ -13,7 +13,7 @@ RUST_LOG="$6"
 skipSetup="$7"
 leaderRotation="$8"
 set +x
-export RUST_LOG=${RUST_LOG:-solana=warn} # if RUST_LOG is unset, default to warn
+export RUST_LOG
 
 missing() {
   echo "Error: $1 not specified"
@@ -42,7 +42,6 @@ case $deployMethod in
 local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
-  export RUST_LOG
   export SOLANA_METRICS_DISPLAY_HOSTNAME=1
 
   # Setup `/var/snap/solana/current` symlink so rsyncing the genesis
