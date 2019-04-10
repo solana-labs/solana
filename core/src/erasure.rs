@@ -512,6 +512,7 @@ pub mod test {
         }
     }
 
+    // TODO: FIXME: always use multiple threads once fix for erasure init is in
     #[test]
     fn test_recovery_with_model() {
         use std::env;
