@@ -30,6 +30,8 @@ Operate a configured testnet
    -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
                                  specified release channel (edge|beta|stable) or release tag
                                  (vX.Y.Z)
+   -i update_manifest_keypair  - Deploy the tarball using 'solana-install deploy ...'
+                                 (-t option must be supplied as well)
    -f [cargoFeatures]          - List of |cargo --feaures=| to activate
                                  (ignored if -s or -S is specified)
    -r                          - Reuse existing node/ledger configuration from a
@@ -60,12 +62,14 @@ cargoFeatures=
 skipSetup=false
 updateNodes=false
 customPrograms=
+updateManifestKeypairFile=
+updateDownloadUrl=
 
 command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?T:t:o:f:r:D:" opt; do
+while getopts "h?T:t:o:f:r:D:i:" opt; do
   case $opt in
   h | \?)
     usage
@@ -88,6 +92,13 @@ while getopts "h?T:t:o:f:r:D:" opt; do
     ;;
   f)
     cargoFeatures=$OPTARG
+    ;;
+  i)
+    updateManifestKeypairFile=$OPTARG
+    if [[ ! -r $updateManifestKeypairFile ]]; then
+      echo "Error: unable to read the file $updateManifestKeypairFile"
+      exit 1
+    fi
     ;;
   r)
     skipSetup=true
@@ -285,17 +296,45 @@ sanity() {
   $metricsWriteDatapoint "testnet-deploy net-sanity-complete=1"
 }
 
+deployUpdate() {
+  if [[ -z $updateManifestKeypairFile ]]; then
+    return
+  fi
+  [[ $deployMethod = tar ]] || exit 1
+  [[ -n $updateDownloadUrl ]] || exit 1
+
+  declare ok=true
+  declare bootstrapLeader=${fullnodeIpList[0]}
+
+  echo "--- Deploying solana-install update: $updateDownloadUrl"
+  (
+    set -x
+    timeout 30s scp "${sshOptions[@]}" \
+      "$updateManifestKeypairFile" "$bootstrapLeader:solana/update_manifest_keypair.json"
+
+    # shellcheck disable=SC2029 # remote-deploy-update.sh args are expanded on client side intentionally
+    ssh "${sshOptions[@]}" "$bootstrapLeader" \
+      "./solana/net/remote/remote-deploy-update.sh $updateDownloadUrl \"$RUST_LOG\""
+  ) || ok=false
+  $ok || exit 1
+}
+
 start() {
   case $deployMethod in
   tar)
     if [[ -n $releaseChannel ]]; then
       rm -f "$SOLANA_ROOT"/solana-release.tar.bz2
+      updateDownloadUrl=http://solana-release.s3.amazonaws.com/"$releaseChannel"/solana-release-x86_64-unknown-linux-gnu.tar.bz2
       (
         set -x
-        curl -o "$SOLANA_ROOT"/solana-release.tar.bz2 \
-          http://solana-release.s3.amazonaws.com/"$releaseChannel"/solana-release-x86_64-unknown-linux-gnu.tar.bz2
+        curl -o "$SOLANA_ROOT"/solana-release.tar.bz2 "$updateDownloadUrl"
       )
       tarballFilename="$SOLANA_ROOT"/solana-release.tar.bz2
+    else
+      if [[ -n $updateManifestKeypairFile ]]; then
+        echo "Error: -i argument was provided but -t was not"
+        exit 1
+      fi
     fi
     (
       set -x
@@ -400,6 +439,8 @@ start() {
     ;;
   esac
   $metricsWriteDatapoint "testnet-deploy version=\"${networkVersion:0:9}\""
+
+  deployUpdate
 
   echo
   echo "+++ Deployment Successful"
