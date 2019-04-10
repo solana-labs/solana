@@ -1,7 +1,8 @@
 // Support erasure coding
-use crate::packet::SharedBlob;
+use crate::packet::{Blob, SharedBlob};
 use crate::result::{Error, Result};
 use std::cmp;
+use std::sync::{Arc, RwLock};
 
 //TODO(sakridge) pick these values
 pub const NUM_DATA: usize = 16; // number of data blobs
@@ -52,6 +53,21 @@ extern "C" {
         size: i32,
     ) -> i32;
     fn galois_single_divide(a: i32, b: i32, w: i32) -> i32;
+    fn galois_init_default_field(w: i32) -> i32;
+}
+
+use std::sync::Once;
+static ERASURE_W_ONCE: Once = Once::new();
+
+fn w() -> i32 {
+    let w = 32;
+    unsafe {
+        ERASURE_W_ONCE.call_once(|| {
+            galois_init_default_field(w);
+            ()
+        });
+    }
+    w
 }
 
 fn get_matrix(m: i32, k: i32, w: i32) -> Vec<i32> {
@@ -66,8 +82,6 @@ fn get_matrix(m: i32, k: i32, w: i32) -> Vec<i32> {
     matrix
 }
 
-const ERASURE_W: i32 = 32;
-
 // Generate coding blocks into coding
 //   There are some alignment restrictions, blocks should be aligned by 16 bytes
 //   which means their size should be >= 16 bytes
@@ -78,7 +92,7 @@ fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Result<()
     let k = data.len() as i32;
     let m = coding.len() as i32;
     let block_len = data[0].len() as i32;
-    let matrix: Vec<i32> = get_matrix(m, k, ERASURE_W);
+    let matrix: Vec<i32> = get_matrix(m, k, w());
     let mut data_arg = Vec::with_capacity(data.len());
     for block in data {
         if block_len != block.len() as i32 {
@@ -108,7 +122,7 @@ fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Result<()
         jerasure_matrix_encode(
             k,
             m,
-            ERASURE_W,
+            w(),
             matrix.as_ptr(),
             data_arg.as_ptr(),
             coding_arg.as_ptr(),
@@ -131,7 +145,7 @@ pub fn decode_blocks(
         return Ok(());
     }
     let block_len = data[0].len();
-    let matrix: Vec<i32> = get_matrix(coding.len() as i32, data.len() as i32, ERASURE_W);
+    let matrix: Vec<i32> = get_matrix(coding.len() as i32, data.len() as i32, w());
 
     // generate coding pointers, blocks should be the same size
     let mut coding_arg: Vec<*mut u8> = Vec::new();
@@ -154,7 +168,7 @@ pub fn decode_blocks(
         jerasure_matrix_decode(
             data.len() as i32,
             coding.len() as i32,
-            ERASURE_W,
+            w(),
             matrix.as_ptr(),
             0,
             erasures.as_ptr(),
@@ -264,17 +278,15 @@ impl CodingGenerator {
                 let id = data_blob.id();
                 let should_forward = data_blob.should_forward();
 
-                let coding_blob = SharedBlob::default();
-                {
-                    let mut coding_blob = coding_blob.write().unwrap();
-                    coding_blob.set_index(index);
-                    coding_blob.set_slot(slot);
-                    coding_blob.set_id(&id);
-                    coding_blob.forward(should_forward);
-                    coding_blob.set_size(max_data_size);
-                    coding_blob.set_coding();
-                }
-                coding_blobs.push(coding_blob);
+                let mut coding_blob = Blob::default();
+                coding_blob.set_index(index);
+                coding_blob.set_slot(slot);
+                coding_blob.set_id(&id);
+                coding_blob.forward(should_forward);
+                coding_blob.set_size(max_data_size);
+                coding_blob.set_coding();
+
+                coding_blobs.push(Arc::new(RwLock::new(coding_blob)));
             }
 
             {
