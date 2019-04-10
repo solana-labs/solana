@@ -15,7 +15,6 @@ if [[ $1 = -h ]]; then
 fi
 
 extra_fullnode_args=()
-setup_stakes=true
 
 while [[ ${1:0:1} = - ]]; do
   if [[ $1 = --blockstream ]]; then
@@ -27,9 +26,6 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = --init-complete-file ]]; then
     extra_fullnode_args+=("$1" "$2")
     shift 2
-  elif [[ $1 = --only-bootstrap-stake ]]; then
-    setup_stakes=false
-    shift
   elif [[ $1 = --public-address ]]; then
     extra_fullnode_args+=("$1")
     shift
@@ -84,9 +80,5 @@ $program \
   > >($bootstrap_leader_logger) 2>&1 &
 pid=$!
 oom_score_adj "$pid" 1000
-
-if [[ $setup_stakes = true ]] ; then
-  setup_fullnode_staking 127.0.0.1 "$bootstrap_leader_id_path" "$bootstrap_leader_staker_id_path"
-fi
 
 wait "$pid"
