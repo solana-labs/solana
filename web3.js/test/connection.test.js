@@ -338,12 +338,12 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: 'Confirmed',
+      result: {Ok: null},
     },
   ]);
-  await expect(connection.getSignatureStatus(signature)).resolves.toEqual(
-    {'Ok': null},
-  );
+  await expect(connection.getSignatureStatus(signature)).resolves.toEqual({
+    Ok: null,
+  });
 
   mockRpc.push([
     url,
@@ -410,9 +410,9 @@ test('multi-instruction transaction', async () => {
     expect(++i).toBeLessThan(10);
     await sleep(500);
   }
-  await expect(connection.getSignatureStatus(signature)).resolves.toEqual(
-    {'Ok': null},
-  );
+  await expect(connection.getSignatureStatus(signature)).resolves.toEqual({
+    Ok: null,
+  });
 
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(12);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);

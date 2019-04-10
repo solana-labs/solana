@@ -53,12 +53,12 @@ declare module '@solana/web3.js' {
     keyedAccountInfo: KeyedAccountInfo,
   ) => void;
 
-  declare export type SignatureStatus =
-    | 'Confirmed'
-    | 'AccountInUse'
-    | 'SignatureNotFound'
-    | 'ProgramRuntimeError'
-    | 'GenericFailure';
+  declare export type SignatureSuccess = {|
+    Ok: null,
+  |};
+  declare export type TransactionError = {|
+    Err: Object,
+  |};
 
   declare export class Connection {
     constructor(endpoint: string): Connection;
@@ -67,7 +67,7 @@ declare module '@solana/web3.js' {
     confirmTransaction(signature: TransactionSignature): Promise<boolean>;
     getSignatureStatus(
       signature: TransactionSignature,
-    ): Promise<SignatureStatus>;
+    ): Promise<SignatureSuccess | TransactionError | null>;
     getTransactionCount(): Promise<number>;
     getRecentBlockhash(): Promise<Blockhash>;
     requestAirdrop(

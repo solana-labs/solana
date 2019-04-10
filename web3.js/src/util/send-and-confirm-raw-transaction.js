@@ -16,11 +16,11 @@ export async function sendAndConfirmRawTransaction(
   let signature = await connection.sendRawTransaction(rawTransaction);
 
   // Wait up to a couple slots for a confirmation
-  let status = '';
+  let status = null;
   let statusRetries = 6;
   for (;;) {
     status = await connection.getSignatureStatus(signature);
-    if (status !== 'SignatureNotFound') {
+    if (status) {
       break;
     }
 
@@ -32,14 +32,14 @@ export async function sendAndConfirmRawTransaction(
       throw new Error(
         `Raw Transaction '${signature}' was not confirmed in ${duration.toFixed(
           2,
-        )} seconds (${status})`,
+        )} seconds (${JSON.stringify(status)})`,
       );
     }
   }
 
-  if (status === 'Confirmed') {
+  if (status && 'Ok' in status) {
     return signature;
   }
 
-  throw new Error(`Raw transaction ${signature} failed (${status})`);
+  throw new Error(`Raw transaction ${signature} failed (${JSON.stringify(status)})`);
 }

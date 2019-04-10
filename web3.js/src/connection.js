@@ -126,11 +126,8 @@ const ConfirmTransactionRpcResult = jsonRpcResult('boolean');
 const GetSignatureStatusRpcResult = jsonRpcResult(
   struct.union([
     'null',
-    struct.union([
-      struct({Ok: 'null'}),
-      struct({Err: 'string'})
-    ])
-  ])
+    struct.union([struct({Ok: 'null'}), struct({Err: 'object'})]),
+  ]),
 );
 
 /**
@@ -212,16 +209,22 @@ type ProgramAccountSubscriptionInfo = {
 };
 
 /**
- * Possible signature status values
+ * Signature status: Success
  *
- * @typedef {string} SignatureStatus
+ * @typedef {Object} SignatureSuccess
  */
-export type SignatureStatus =
-  | 'Confirmed'
-  | 'AccountInUse'
-  | 'SignatureNotFound'
-  | 'ProgramRuntimeError'
-  | 'GenericFailure';
+export type SignatureSuccess = {|
+  Ok: null,
+|};
+
+/**
+ * Signature status: TransactionError
+ *
+ * @typedef {Object} TransactionError
+ */
+export type TransactionError = {|
+  Err: Object,
+|};
 
 /**
  * A connection to a fullnode JSON RPC endpoint
@@ -338,7 +341,7 @@ export class Connection {
    */
   async getSignatureStatus(
     signature: TransactionSignature,
-  ): Promise<SignatureStatus> {
+  ): Promise<SignatureSuccess | TransactionError | null> {
     const unsafeRes = await this._rpcRequest('getSignatureStatus', [signature]);
     const res = GetSignatureStatusRpcResult(unsafeRes);
     if (res.error) {
