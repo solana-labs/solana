@@ -106,7 +106,7 @@ impl Fullnode {
             bank.last_blockhash(),
         );
         let blocktree = Arc::new(blocktree);
-        let (poh_recorder, entry_receiver) = PohRecorder::new(
+        let (poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
             bank.tick_height(),
             bank.last_blockhash(),
             bank.slot(),
@@ -114,11 +114,10 @@ impl Fullnode {
             bank.ticks_per_slot(),
             &id,
             &blocktree,
+            blocktree.new_blobs_signals.first().cloned(),
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, &exit);
-        poh_recorder.lock().unwrap().clear_bank_signal =
-            blocktree.new_blobs_signals.first().cloned();
         assert_eq!(
             blocktree.new_blobs_signals.len(),
             1,
