@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_vote_serialize() {
-        let mut buffer: Vec<u8> = vec![0; VoteState::max_size()];
+        let mut buffer: Vec<u8> = vec![0; VoteState::size_of()];
         let mut vote_state = VoteState::default();
         vote_state
             .votes
