@@ -294,7 +294,7 @@ impl ClusterInfo {
     }
 
     /// Get votes in the crds
-    /// * since - The timestamp of when the vote inserted must be greater then
+    /// * since - The timestamp of when the vote inserted must be greater than
     /// since. This allows the bank to query for new votes only.
     ///
     /// * return - The votes, and the max timestamp from the new set.
