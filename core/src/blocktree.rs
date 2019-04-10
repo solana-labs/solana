@@ -1151,6 +1151,7 @@ impl Blocktree {
 
                 blob.set_slot(slot);
                 blob.set_index(idx);
+                blob.set_size(data_size);
                 recovered_data.push(blob);
             } else {
                 let mut blob = Blob::new(&coding_ptrs[n - NUM_DATA]);

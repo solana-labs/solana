@@ -304,6 +304,7 @@ pub mod test {
     use crate::packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::borrow::Borrow;
 
     /// Specifies the contents of a 16-data-blob and 4-coding-blob erasure set
     /// Exists to be passed to `generate_blocktree_with_coding`
@@ -511,11 +512,135 @@ pub mod test {
         }
     }
 
+    #[test]
+    fn test_recovery_with_model() {
+        use std::env;
+        use std::sync::{Arc, Mutex};
+        use std::thread;
+
+        const MAX_ERASURE_SETS: u64 = 16;
+        solana_logger::setup();
+        let n_threads: usize = env::var("Z_THREADS")
+            .unwrap_or("1".to_string())
+            .parse()
+            .unwrap();
+
+        let specs = (0..).map(|slot| {
+            let num_erasure_sets = slot % MAX_ERASURE_SETS;
+
+            let set_specs = (0..num_erasure_sets)
+                .map(|set_index| ErasureSpec {
+                    set_index,
+                    num_data: NUM_DATA,
+                    num_coding: NUM_CODING,
+                })
+                .collect();
+
+            SlotSpec { slot, set_specs }
+        });
+
+        let decode_mutex = Arc::new(Mutex::new(()));
+        let mut handles = vec![];
+
+        for i in 0..n_threads {
+            let specs = specs.clone();
+            let decode_mutex = Arc::clone(&decode_mutex);
+
+            let handle = thread::Builder::new()
+                .name(i.to_string())
+                .spawn(move || {
+                    for slot_model in generate_ledger_model(specs) {
+                        for erasure_set in slot_model.chunks {
+                            let erased_coding = erasure_set.coding[0].clone();
+                            let erased_data = erasure_set.data[..3].to_vec();
+
+                            let mut data = Vec::with_capacity(NUM_DATA);
+                            let mut coding = Vec::with_capacity(NUM_CODING);
+                            let erasures = vec![0, 1, 2, NUM_DATA as i32, -1];
+
+                            data.push(SharedBlob::default());
+                            data.push(SharedBlob::default());
+                            data.push(SharedBlob::default());
+                            for blob in erasure_set.data.into_iter().skip(3) {
+                                data.push(blob);
+                            }
+
+                            coding.push(SharedBlob::default());
+                            for blob in erasure_set.coding.into_iter().skip(1) {
+                                coding.push(blob);
+                            }
+
+                            let size = erased_coding.read().unwrap().data_size() as usize;
+
+                            let mut data_locks: Vec<_> =
+                                data.iter().map(|shared| shared.write().unwrap()).collect();
+                            let mut coding_locks: Vec<_> = coding
+                                .iter()
+                                .map(|shared| shared.write().unwrap())
+                                .collect();
+
+                            let mut data_ptrs: Vec<_> = data_locks
+                                .iter_mut()
+                                .map(|blob| &mut blob.data[..size])
+                                .collect();
+                            let mut coding_ptrs: Vec<_> = coding_locks
+                                .iter_mut()
+                                .map(|blob| &mut blob.data_mut()[..size])
+                                .collect();
+
+                            {
+                                let _lock = decode_mutex.lock();
+
+                                decode_blocks(
+                                    data_ptrs.as_mut_slice(),
+                                    coding_ptrs.as_mut_slice(),
+                                    &erasures,
+                                )
+                                .expect("decoding must succeed");
+                            }
+
+                            drop(coding_locks);
+                            drop(data_locks);
+
+                            for (expected, recovered) in erased_data.iter().zip(data.iter()) {
+                                let expected = expected.read().unwrap();
+                                let mut recovered = recovered.write().unwrap();
+                                let data_size = recovered.data_size() as usize - BLOB_HEADER_SIZE;
+                                recovered.set_size(data_size);
+                                let corrupt = data_size > BLOB_DATA_SIZE;
+                                assert!(!corrupt, "CORRUPTION");
+                                assert_eq!(&*expected, &*recovered);
+                            }
+
+                            assert_eq!(
+                                erased_coding.read().unwrap().data(),
+                                coding[0].read().unwrap().data()
+                            );
+
+                            debug!("passed set: {}", erasure_set.set_index);
+                        }
+                        debug!("passed slot: {}", slot_model.slot);
+                    }
+                })
+                .expect("thread build error");
+
+            handles.push(handle);
+        }
+
+        handles.into_iter().for_each(|h| h.join().unwrap());
+    }
+
     /// Generates a model of a ledger containing certain data and coding blobs according to a spec
-    pub fn generate_ledger_model<'a>(
-        specs: &'a [SlotSpec],
-    ) -> impl Iterator<Item = SlotModel> + Clone + 'a {
-        specs.iter().map(|spec| {
+    pub fn generate_ledger_model<'a, I, IntoIt, S>(
+        specs: I,
+    ) -> impl Iterator<Item = SlotModel> + Clone + 'a
+    where
+        I: IntoIterator<Item = S, IntoIter = IntoIt>,
+        IntoIt: Iterator<Item = S> + Clone + 'a,
+        S: Borrow<SlotSpec>,
+    {
+        specs.into_iter().map(|spec| {
+            let spec = spec.borrow();
             let slot = spec.slot;
 
             let chunks = spec
