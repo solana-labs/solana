@@ -341,8 +341,8 @@ test('transaction', async () => {
       result: 'Confirmed',
     },
   ]);
-  await expect(connection.getSignatureStatus(signature)).resolves.toBe(
-    'Confirmed',
+  await expect(connection.getSignatureStatus(signature)).resolves.toEqual(
+    {'Ok': null},
   );
 
   mockRpc.push([
@@ -410,8 +410,8 @@ test('multi-instruction transaction', async () => {
     expect(++i).toBeLessThan(10);
     await sleep(500);
   }
-  await expect(connection.getSignatureStatus(signature)).resolves.toBe(
-    'Confirmed',
+  await expect(connection.getSignatureStatus(signature)).resolves.toEqual(
+    {'Ok': null},
   );
 
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(12);
@@ -466,7 +466,7 @@ test('account change notification', async () => {
 
   await connection.removeAccountChangeListener(subscriptionId);
 
-  expect(mockCallback.mock.calls[0][0].lamports).toBe(41);
+  expect(mockCallback.mock.calls[0][0].lamports).toBe(42);
   expect(mockCallback.mock.calls[0][0].owner).toEqual(BpfLoader.programId);
   expect(mockCallback.mock.calls[0][0].executable).toBe(false);
   expect(mockCallback.mock.calls[0][0].data).toEqual(Buffer.from([1, 2, 3]));
@@ -523,7 +523,7 @@ test('program account change notification', async () => {
   expect(mockCallback.mock.calls[0][0].accountId).toEqual(
     programAccount.publicKey.toString(),
   );
-  expect(mockCallback.mock.calls[0][0].accountInfo.lamports).toBe(41);
+  expect(mockCallback.mock.calls[0][0].accountInfo.lamports).toBe(42);
   expect(mockCallback.mock.calls[0][0].accountInfo.owner).toEqual(
     BpfLoader.programId,
   );

@@ -124,13 +124,13 @@ const ConfirmTransactionRpcResult = jsonRpcResult('boolean');
  * Expected JSON RPC response for the "getSignatureStatus" message
  */
 const GetSignatureStatusRpcResult = jsonRpcResult(
-  struct.enum([
-    'AccountInUse',
-    'Confirmed',
-    'GenericFailure',
-    'ProgramRuntimeError',
-    'SignatureNotFound',
-  ]),
+  struct.union([
+    'null',
+    struct.union([
+      struct({Ok: 'null'}),
+      struct({Err: 'string'})
+    ])
+  ])
 );
 
 /**
