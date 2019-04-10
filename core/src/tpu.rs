@@ -60,6 +60,7 @@ impl Tpu {
             cluster_info.clone(),
             sigverify_disabled,
             verified_sender,
+            &poh_recorder,
         );
 
         let banking_stage = BankingStage::new(&cluster_info, poh_recorder, verified_receiver);
