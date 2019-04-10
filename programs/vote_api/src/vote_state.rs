@@ -318,6 +318,7 @@ mod tests {
         vote_state
             .votes
             .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
+        assert!(vote_state.serialize(&mut buffer[0..4]).is_err());
         vote_state.serialize(&mut buffer).unwrap();
         assert_eq!(VoteState::deserialize(&buffer).unwrap(), vote_state);
     }

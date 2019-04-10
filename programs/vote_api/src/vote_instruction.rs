@@ -168,6 +168,23 @@ mod tests {
     }
 
     #[test]
+    fn test_vote_via_bank_authorize_voter() {
+        let (bank, mallory_keypair) = create_bank(10_000);
+        let bank_client = BankClient::new(&bank);
+
+        let vote_keypair = Keypair::new();
+        let vote_id = vote_keypair.pubkey();
+
+        create_vote_account(&bank_client, &mallory_keypair, &vote_id, 100).unwrap();
+
+        let mallory_id = mallory_keypair.pubkey();
+        let vote_ix = vote_instruction::authorize_voter(&vote_id, &mallory_id);
+
+        let message = Message::new(vec![vote_ix]);
+        assert!(bank_client.send_message(&[&vote_keypair], message).is_ok());
+    }
+
+    #[test]
     fn test_vote_via_bank_with_no_signature() {
         let (bank, mallory_keypair) = create_bank(10_000);
         let bank_client = BankClient::new(&bank);
