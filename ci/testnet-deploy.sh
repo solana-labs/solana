@@ -257,9 +257,20 @@ if ! $skipStart; then
       op=start
     fi
 
-    # shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
+    maybeUpdateManifestKeypairFile=
+    # shellcheck disable=SC2154 # SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu comes from .buildkite/env/
+    if [[ -n $SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu ]]; then
+      echo "$SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu" > update_manifest_keypair.json
+      maybeUpdateManifestKeypairFile="-i update_manifest_keypair.json"
+    fi
+
+    # shellcheck disable=SC2086 # Don't want to double quote the $maybeXYZ variables
     time net/net.sh $op -t "$tarChannelOrTag" \
-      $maybeSkipSetup $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
+      $maybeUpdateManifestKeypairFile \
+      $maybeSkipSetup \
+      $maybeRejectExtraNodes \
+      $maybeNoValidatorSanity \
+      $maybeNoLedgerVerify
   ) || ok=false
 
   net/net.sh logs
