@@ -23,8 +23,7 @@ use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
-use solana_vote_api::vote_instruction::Vote;
-use solana_vote_api::vote_state::{Lockout, VoteState};
+use solana_vote_api::vote_state::{self, Vote};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -321,19 +320,19 @@ impl Bank {
 
         // Construct a vote account for the bootstrap_leader such that the leader_scheduler
         // will be forced to select it as the leader for height 0
-        let mut bootstrap_leader_vote_account = Account {
-            lamports: bootstrap_leader_stake,
-            data: vec![0; VoteState::max_size() as usize],
-            owner: solana_vote_api::id(),
-            executable: false,
-        };
+        let mut bootstrap_leader_vote_account = vote_state::create_account(
+            &genesis_block.bootstrap_leader_vote_account_id,
+            &genesis_block.bootstrap_leader_id,
+            0,
+            bootstrap_leader_stake,
+        );
 
-        let mut vote_state = VoteState::new(&genesis_block.bootstrap_leader_id);
-        vote_state.votes.push_back(Lockout::new(&Vote::new(0)));
-        vote_state.authorized_voter_id = genesis_block.bootstrap_leader_vote_account_id;
-        vote_state
-            .serialize(&mut bootstrap_leader_vote_account.data)
-            .unwrap();
+        vote_state::vote(
+            &genesis_block.bootstrap_leader_vote_account_id,
+            &mut bootstrap_leader_vote_account,
+            &Vote::new(0),
+        )
+        .unwrap();
 
         self.store(
             &genesis_block.bootstrap_leader_vote_account_id,
@@ -1037,6 +1036,7 @@ mod tests {
     use solana_sdk::system_instruction;
     use solana_sdk::system_transaction;
     use solana_vote_api::vote_instruction;
+    use solana_vote_api::vote_state::VoteState;
 
     #[test]
     fn test_bank_new() {
@@ -1654,7 +1654,7 @@ mod tests {
                 .iter()
                 .filter_map(|(pubkey, account)| {
                     if let Ok(vote_state) = VoteState::deserialize(&account.data) {
-                        if vote_state.delegate_id == leader_id {
+                        if vote_state.node_id == leader_id {
                             Some((*pubkey, true))
                         } else {
                             None
@@ -1886,8 +1886,13 @@ mod tests {
                                             // to have a vote account
 
         let vote_keypair = Keypair::new();
-        let instructions =
-            vote_instruction::create_account(&mint_keypair.pubkey(), &vote_keypair.pubkey(), 10);
+        let instructions = vote_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &vote_keypair.pubkey(),
+            &mint_keypair.pubkey(),
+            0,
+            10,
+        );
 
         let transaction = Transaction::new_signed_instructions(
             &[&mint_keypair],

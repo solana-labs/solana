@@ -5,8 +5,7 @@ use solana_metrics::influxdb;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
-use solana_vote_api::vote_instruction::Vote;
-use solana_vote_api::vote_state::{Lockout, VoteState, MAX_LOCKOUT_HISTORY};
+use solana_vote_api::vote_state::{Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY};
 use std::sync::Arc;
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
@@ -117,7 +116,7 @@ impl Locktower {
                 .expect("bank should always have valid VoteState data");
 
             if key == self.epoch_stakes.delegate_id
-                || vote_state.delegate_id == self.epoch_stakes.delegate_id
+                || vote_state.node_id == self.epoch_stakes.delegate_id
             {
                 debug!("vote state {:?}", vote_state);
                 debug!(
@@ -141,7 +140,7 @@ impl Locktower {
                 );
             }
             let start_root = vote_state.root_slot;
-            vote_state.process_vote(Vote { slot: bank_slot });
+            vote_state.process_vote(&Vote { slot: bank_slot });
             for vote in &vote_state.votes {
                 Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
             }
@@ -237,7 +236,7 @@ impl Locktower {
 
     pub fn record_vote(&mut self, slot: u64) -> Option<u64> {
         let root_slot = self.lockouts.root_slot;
-        self.lockouts.process_vote(Vote { slot });
+        self.lockouts.process_vote(&Vote { slot });
         solana_metrics::submit(
             influxdb::Point::new("counter-locktower-vote")
                 .add_field("latest", influxdb::Value::Integer(slot as i64))
@@ -281,7 +280,7 @@ impl Locktower {
 
     pub fn is_locked_out(&self, slot: u64, descendants: &HashMap<u64, HashSet<u64>>) -> bool {
         let mut lockouts = self.lockouts.clone();
-        lockouts.process_vote(Vote { slot });
+        lockouts.process_vote(&Vote { slot });
         for vote in &lockouts.votes {
             if vote.slot == slot {
                 continue;
@@ -303,7 +302,7 @@ impl Locktower {
         stake_lockouts: &HashMap<u64, StakeLockout>,
     ) -> bool {
         let mut lockouts = self.lockouts.clone();
-        lockouts.process_vote(Vote { slot });
+        lockouts.process_vote(&Vote { slot });
         let vote = lockouts.nth_recent_vote(self.threshold_depth);
         if let Some(vote) = vote {
             if let Some(fork_stake) = stake_lockouts.get(&vote.slot) {
@@ -398,7 +397,7 @@ mod test {
             account.lamports = *lamports;
             let mut vote_state = VoteState::default();
             for slot in *votes {
-                vote_state.process_vote(Vote { slot: *slot });
+                vote_state.process_vote(&Vote { slot: *slot });
             }
             vote_state
                 .serialize(&mut account.data)

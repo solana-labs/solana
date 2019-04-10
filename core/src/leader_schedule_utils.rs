@@ -100,7 +100,7 @@ mod tests {
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::tests::make_slot_entries;
     use crate::staking_utils;
-    use crate::voting_keypair::tests::new_vote_account_with_delegate;
+    use crate::voting_keypair::tests::new_vote_account;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::Arc;
@@ -224,7 +224,7 @@ mod tests {
 
         // Create new vote account
         let new_voting_keypair = Keypair::new();
-        new_vote_account_with_delegate(
+        new_vote_account(
             &mint_keypair,
             &new_voting_keypair,
             &delegate_id,

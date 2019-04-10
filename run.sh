@@ -87,12 +87,7 @@ trap abort INT TERM EXIT
 solana-wallet --keypair "$dataDir"/config/leader-keypair.json airdrop 42
 solana-wallet \
   --keypair "$dataDir"/config/leader-keypair.json  \
-  create-staking-account "$leaderStakingAccountPubkey" 42
-solana-wallet \
-  --keypair "$dataDir"/config/leader-staking-account-keypair.json  \
-  configure-staking-account \
-  --delegate-account "$leaderPubkey" \
-  --authorize-voter "$leaderStakingAccountPubkey"
+   create-vote-account "$leaderStakingAccountPubkey" "$leaderPubkey" 42
 solana-wallet --keypair "$dataDir"/config/leader-keypair.json balance
 
 wait "$fullnode"

@@ -36,8 +36,8 @@ pub enum WalletCommand {
     Cancel(Pubkey),
     Confirm(Signature),
     // ConfigureStakingAccount(delegate_id, authorized_voter_id)
-    ConfigureStakingAccount(Option<Pubkey>, Option<Pubkey>),
-    CreateStakingAccount(Pubkey, u64),
+    AuthorizeVoter(Pubkey),
+    CreateVoteAccount(Pubkey, Pubkey, u32, u64),
     Deploy(String),
     GetTransactionCount,
     // Pay(lamports, to, timestamp, timestamp_pubkey, witness(es), cancelable)
@@ -164,19 +164,23 @@ pub fn parse_command(
                 Err(WalletError::BadParameter("Invalid signature".to_string()))
             }
         }
-        ("configure-staking-account", Some(staking_config_matches)) => {
-            let delegate_id = pubkey_of(staking_config_matches, "delegate");
-            let authorized_voter_id = pubkey_of(staking_config_matches, "authorize");
-            Ok(WalletCommand::ConfigureStakingAccount(
-                delegate_id,
-                authorized_voter_id,
-            ))
+        ("authorize-voter", Some(matches)) => {
+            let authorized_voter_id = pubkey_of(matches, "authorized_voter_id").unwrap();
+            Ok(WalletCommand::AuthorizeVoter(authorized_voter_id))
         }
-        ("create-staking-account", Some(staking_matches)) => {
-            let voting_account_id = pubkey_of(staking_matches, "voting_account_id").unwrap();
-            let lamports = staking_matches.value_of("lamports").unwrap().parse()?;
-            Ok(WalletCommand::CreateStakingAccount(
+        ("create-vote-account", Some(matches)) => {
+            let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
+            let node_id = pubkey_of(matches, "node_id").unwrap();
+            let commission = if let Some(commission) = matches.value_of("commission") {
+                commission.parse()?
+            } else {
+                0
+            };
+            let lamports = matches.value_of("lamports").unwrap().parse()?;
+            Ok(WalletCommand::CreateVoteAccount(
                 voting_account_id,
+                node_id,
+                commission,
                 lamports,
             ))
         }
@@ -327,26 +331,17 @@ fn process_confirm(rpc_client: &RpcClient, signature: Signature) -> ProcessResul
     }
 }
 
-fn process_configure_staking(
+fn process_authorize_voter(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    delegate_option: Option<Pubkey>,
-    authorized_voter_option: Option<Pubkey>,
+    authorized_voter_id: Pubkey,
 ) -> ProcessResult {
     let recent_blockhash = rpc_client.get_recent_blockhash()?;
-    let mut ixs = vec![];
-    if let Some(delegate_id) = delegate_option {
-        ixs.push(vote_instruction::delegate_stake(
-            &config.keypair.pubkey(),
-            &delegate_id,
-        ));
-    }
-    if let Some(authorized_voter_id) = authorized_voter_option {
-        ixs.push(vote_instruction::authorize_voter(
-            &config.keypair.pubkey(),
-            &authorized_voter_id,
-        ));
-    }
+    let ixs = vec![vote_instruction::authorize_voter(
+        &config.keypair.pubkey(),
+        &authorized_voter_id,
+    )];
+
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
     Ok(signature_str.to_string())
@@ -356,11 +351,18 @@ fn process_create_staking(
     rpc_client: &RpcClient,
     config: &WalletConfig,
     voting_account_id: &Pubkey,
+    node_id: &Pubkey,
+    commission: u32,
     lamports: u64,
 ) -> ProcessResult {
     let recent_blockhash = rpc_client.get_recent_blockhash()?;
-    let ixs =
-        vote_instruction::create_account(&config.keypair.pubkey(), voting_account_id, lamports);
+    let ixs = vote_instruction::create_account(
+        &config.keypair.pubkey(),
+        voting_account_id,
+        node_id,
+        commission,
+        lamports,
+    );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
     Ok(signature_str.to_string())
@@ -617,18 +619,20 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
 
         // Configure staking account already created
-        WalletCommand::ConfigureStakingAccount(delegate_option, authorized_voter_option) => {
-            process_configure_staking(
-                &rpc_client,
-                config,
-                delegate_option,
-                authorized_voter_option,
-            )
+        WalletCommand::AuthorizeVoter(authorized_voter_id) => {
+            process_authorize_voter(&rpc_client, config, authorized_voter_id)
         }
 
         // Create staking account
-        WalletCommand::CreateStakingAccount(voting_account_id, lamports) => {
-            process_create_staking(&rpc_client, config, &voting_account_id, lamports)
+        WalletCommand::CreateVoteAccount(voting_account_id, node_id, commission, lamports) => {
+            process_create_staking(
+                &rpc_client,
+                config,
+                &voting_account_id,
+                &node_id,
+                commission,
+                lamports,
+            )
         }
 
         // Deploy a custom program to the chain
@@ -723,7 +727,7 @@ pub fn request_and_confirm_airdrop(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::{App, Arg, ArgGroup, SubCommand};
+    use clap::{App, Arg, SubCommand};
     use serde_json::Value;
     use solana_client::mock_rpc_client_request::SIGNATURE;
     use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
@@ -802,31 +806,19 @@ mod tests {
                     ),
             )
             .subcommand(
-                SubCommand::with_name("configure-staking-account")
+                SubCommand::with_name("authorize-voter")
                     .about("Configure staking account for node")
-                    .group(
-                        ArgGroup::with_name("options")
-                            .args(&["delegate", "authorize"])
-                            .multiple(true)
-                            .required(true),
-                    )
                     .arg(
-                        Arg::with_name("delegate")
-                            .long("delegate-account")
+                        Arg::with_name("authorized_voter_id")
+                            .index(1)
                             .value_name("PUBKEY")
                             .takes_value(true)
+                            .required(true)
                             .help("Address to delegate this vote account to"),
-                    )
-                    .arg(
-                        Arg::with_name("authorize")
-                            .long("authorize-voter")
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .help("Vote signer to authorize"),
                     ),
             )
             .subcommand(
-                SubCommand::with_name("create-staking-account")
+                SubCommand::with_name("create-vote-account")
                     .about("Create staking account for node")
                     .arg(
                         Arg::with_name("voting_account_id")
@@ -837,12 +829,27 @@ mod tests {
                             .help("Staking account address to fund"),
                     )
                     .arg(
-                        Arg::with_name("lamports")
+                        Arg::with_name("node_id")
                             .index(2)
+                            .value_name("PUBKEY")
+                            .takes_value(true)
+                            .required(true)
+                            .help("Node that will vote in this account"),
+                    )
+                    .arg(
+                        Arg::with_name("lamports")
+                            .index(3)
                             .value_name("NUM")
                             .takes_value(true)
                             .required(true)
                             .help("The number of lamports to send to staking account"),
+                    )
+                    .arg(
+                        Arg::with_name("commission")
+                            .long("commission")
+                            .value_name("NUM")
+                            .takes_value(true)
+                            .help("The commission taken on reward redemption"),
                     ),
             )
             .subcommand(
@@ -1004,42 +1011,42 @@ mod tests {
             .get_matches_from(vec!["test", "confirm", "deadbeef"]);
         assert!(parse_command(&pubkey, &test_bad_signature).is_err());
 
-        // Test ConfigureStakingAccount Subcommand
-        let second_pubkey = Pubkey::new_rand();
-        let second_pubkey_string = format!("{}", second_pubkey);
-        let test_configure_staking_account = test_commands.clone().get_matches_from(vec![
-            "test",
-            "configure-staking-account",
-            "--delegate-account",
-            &pubkey_string,
-            "--authorize-voter",
-            &second_pubkey_string,
-        ]);
+        // Test AuthorizeVoter Subcommand
+        let test_authorize_voter =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "authorize-voter", &pubkey_string]);
         assert_eq!(
-            parse_command(&pubkey, &test_configure_staking_account).unwrap(),
-            WalletCommand::ConfigureStakingAccount(Some(pubkey), Some(second_pubkey))
-        );
-        let test_configure_staking_account = test_commands.clone().get_matches_from(vec![
-            "test",
-            "configure-staking-account",
-            "--delegate-account",
-            &pubkey_string,
-        ]);
-        assert_eq!(
-            parse_command(&pubkey, &test_configure_staking_account).unwrap(),
-            WalletCommand::ConfigureStakingAccount(Some(pubkey), None)
+            parse_command(&pubkey, &test_authorize_voter).unwrap(),
+            WalletCommand::AuthorizeVoter(pubkey)
         );
 
-        // Test CreateStakingAccount SubCommand
-        let test_create_staking_account = test_commands.clone().get_matches_from(vec![
+        // Test CreateVoteAccount SubCommand
+        let node_id = Pubkey::new_rand();
+        let node_id_string = format!("{}", node_id);
+        let test_create_vote_account = test_commands.clone().get_matches_from(vec![
             "test",
-            "create-staking-account",
+            "create-vote-account",
             &pubkey_string,
+            &node_id_string,
+            "50",
+            "--commission",
+            "10",
+        ]);
+        assert_eq!(
+            parse_command(&pubkey, &test_create_vote_account).unwrap(),
+            WalletCommand::CreateVoteAccount(pubkey, node_id, 10, 50)
+        );
+        let test_create_vote_account2 = test_commands.clone().get_matches_from(vec![
+            "test",
+            "create-vote-account",
+            &pubkey_string,
+            &node_id_string,
             "50",
         ]);
         assert_eq!(
-            parse_command(&pubkey, &test_create_staking_account).unwrap(),
-            WalletCommand::CreateStakingAccount(pubkey, 50)
+            parse_command(&pubkey, &test_create_vote_account2).unwrap(),
+            WalletCommand::CreateVoteAccount(pubkey, node_id, 0, 50)
         );
 
         // Test Deploy Subcommand
@@ -1191,11 +1198,12 @@ mod tests {
         assert_eq!(process_command(&config).unwrap(), "Confirmed");
 
         let bob_pubkey = Pubkey::new_rand();
-        config.command = WalletCommand::ConfigureStakingAccount(None, Some(bob_pubkey));
+        config.command = WalletCommand::AuthorizeVoter(bob_pubkey);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
-        config.command = WalletCommand::CreateStakingAccount(bob_pubkey, 10);
+        let node_id = Pubkey::new_rand();
+        config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_id, 0, 10);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -1300,10 +1308,10 @@ mod tests {
         config.command = WalletCommand::Balance(config.keypair.pubkey());
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::ConfigureStakingAccount(None, Some(bob_pubkey));
+        config.command = WalletCommand::AuthorizeVoter(bob_pubkey);
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::CreateStakingAccount(bob_pubkey, 10);
+        config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_id, 0, 10);
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::GetTransactionCount;

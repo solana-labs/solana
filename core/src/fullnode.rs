@@ -28,7 +28,8 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::timestamp;
 use solana_sdk::transaction::Transaction;
-use solana_vote_api::vote_instruction::{self, Vote};
+use solana_vote_api::vote_instruction;
+use solana_vote_api::vote_state::Vote;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
@@ -334,6 +335,8 @@ pub fn make_active_set_entries(
     let new_vote_account_ixs = vote_instruction::create_account(
         &active_keypair.pubkey(),
         &vote_account_id,
+        &active_keypair.pubkey(),
+        0,
         stake.saturating_sub(2),
     );
     let new_vote_account_tx = Transaction::new_signed_instructions(
