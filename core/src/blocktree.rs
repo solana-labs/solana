@@ -1053,44 +1053,130 @@ impl Blocktree {
         index: u64,
         new_coding_blob: &[u8],
     ) -> Result<(Vec<Blob>, Vec<Blob>)> {
-        use crate::erasure::{NUM_CODING, NUM_DATA};
+        use crate::erasure::{ErasureError, NUM_CODING, NUM_DATA};
+        use crate::packet::BLOB_DATA_SIZE;
+        use std::cmp::max;
 
         let start_idx = erasure_meta.start_index();
         let (data_end_idx, coding_end_idx) = erasure_meta.end_indexes();
 
         let mut data = Vec::with_capacity(NUM_DATA);
         let mut coding = Vec::with_capacity(NUM_CODING);
+        let mut erasures = Vec::with_capacity(NUM_CODING + 1);
 
-        for idx in start_idx..data_end_idx {
-            if erasure_meta.is_data_present(idx) {
-                let blob_data = self
-                    .data_cf
-                    .get_bytes((slot, idx))?
-                    .expect("Blob must be present according to erasure metadata");
-                data.push(Some(blob_data));
-            } else {
-                data.push(None);
-            }
-        }
+        let mut size = new_coding_blob.len() - BLOB_HEADER_SIZE;
 
-        for idx in start_idx..coding_end_idx {
-            if idx == index {
-                coding.push(Some(new_coding_blob.to_vec()));
-                continue;
-            }
-
-            if erasure_meta.is_coding_present(idx) {
-                let blob_data = self
+        for i in start_idx..coding_end_idx {
+            // Must not try to retrieve the coding blob currently being inserted
+            if i == index {
+                coding.push(new_coding_blob.to_vec());
+            } else if erasure_meta.is_coding_present(i) {
+                let blob_bytes = self
                     .erasure_cf
-                    .get_bytes((slot, idx))?
-                    .expect("Blob must be present according to erasure metadata");
-                coding.push(Some(blob_data));
+                    .get_bytes((slot, i))?
+                    .expect("erasure_meta must have no false positives");
+
+                size = max(size, blob_bytes.len() - BLOB_HEADER_SIZE);
+
+                coding.push(blob_bytes);
             } else {
-                coding.push(None);
+                let position_from_start = i - start_idx;
+                coding.push(vec![0; new_coding_blob.len()]);
+                erasures.push((position_from_start + NUM_DATA as u64) as i32);
             }
         }
 
-        erasure::recover_with_blobs(slot, start_idx, &data, &coding)
+        for i in start_idx..data_end_idx {
+            if erasure_meta.is_data_present(i) {
+                let mut blob_bytes = self
+                    .data_cf
+                    .get_bytes((slot, i))?
+                    .expect("erasure_meta must have no false positives");
+
+                // If data is too short, extend it with zeroes
+                if blob_bytes.len() < size {
+                    blob_bytes.resize(size, 0u8);
+                }
+
+                data.push(blob_bytes);
+            } else {
+                let position_from_start = i - start_idx;
+                data.push(vec![0; new_coding_blob.len()]);
+                //erasures.push(position_from_start as i32);
+                // data erasures must come before any coding erasures if present
+                erasures.insert(0, position_from_start as i32);
+            }
+        }
+
+        let mut coding_ptrs: Vec<_> = coding
+            .iter_mut()
+            .map(|coding_bytes| &mut coding_bytes[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + size])
+            .collect();
+
+        let mut data_ptrs: Vec<_> = data
+            .iter_mut()
+            .map(|data_bytes| &mut data_bytes[..size])
+            .collect();
+
+        // Marks the end
+        erasures.push(-1);
+        debug!("erasures: {:?}, size: {}", erasures, size);
+
+        erasure::decode_blocks(
+            data_ptrs.as_mut_slice(),
+            coding_ptrs.as_mut_slice(),
+            &erasures,
+        )?;
+
+        // Create the missing blobs from the reconstructed data
+        let block_start_idx = erasure_meta.start_index();
+        let (mut recovered_data, mut recovered_coding) = (vec![], vec![]);
+
+        for i in &erasures[..erasures.len() - 1] {
+            let n = *i as usize;
+
+            let (data_size, idx, first_byte);
+
+            if n < NUM_DATA {
+                let mut blob = Blob::new(&data_ptrs[n]);
+
+                data_size = blob.data_size() as usize - BLOB_HEADER_SIZE;
+                idx = n as u64 + block_start_idx;
+                first_byte = blob.data[0];
+
+                if data_size > BLOB_DATA_SIZE {
+                    error!("corrupt data blob[{}] data_size: {}", idx, data_size);
+                    return Err(Error::ErasureError(ErasureError::CorruptCoding));
+                }
+
+                blob.set_slot(slot);
+                blob.set_index(idx);
+                recovered_data.push(blob);
+            } else {
+                let mut blob = Blob::new(&coding_ptrs[n - NUM_DATA]);
+
+                idx = (n - NUM_DATA) as u64 + block_start_idx;
+                data_size = size;
+                first_byte = blob.data[0];
+
+                if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
+                    error!("corrupt coding blob[{}] data_size: {}", idx, data_size);
+                    return Err(Error::ErasureError(ErasureError::CorruptCoding));
+                }
+
+                blob.set_slot(slot);
+                blob.set_index(idx);
+                blob.set_size(size);
+                recovered_coding.push(blob);
+            }
+
+            debug!(
+                "erasures[{}] ({}) size: {} data[0]: {}",
+                *i, idx, data_size, first_byte,
+            );
+        }
+
+        Ok((recovered_data, recovered_coding))
     }
 
     /// Returns the next consumed index and the number of ticks in the new consumed

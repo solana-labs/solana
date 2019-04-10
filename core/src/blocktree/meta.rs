@@ -132,6 +132,7 @@ impl ErasureMeta {
     }
 }
 
+#[cfg(feature = "erasure")]
 #[test]
 fn test_can_recover() {
     let set_index = 0;
