@@ -59,6 +59,7 @@
   - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
   - [Cluster Software Installation and Updates](installer.md)
   - [Deterministic Transaction Fees](transaction-fees.md)
+  - [Hashed Time-Locked Contract Transactions](htlc.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
   - [Fork Selection](fork-selection.md)
