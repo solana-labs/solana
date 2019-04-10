@@ -58,10 +58,10 @@
   - [Testing Programs](testing-programs.md)
   - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
   - [Cluster Software Installation and Updates](installer.md)
-  - [Testnet Participation](testnet-participation.md)
   - [Deterministic Transaction Fees](transaction-fees.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
+  - [Fork Selection](fork-selection.md)
   - [Leader-to-Leader Transition](leader-leader-transition.md)
   - [Leader-to-Validator Transition](leader-validator-transition.md)
-  - [Fork Selection](fork-selection.md)
+  - [Testnet Participation](testnet-participation.md)
