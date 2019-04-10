@@ -236,11 +236,13 @@ export class Token {
     await sendAndConfirmTransaction(connection, transaction, owner);
 
     transaction = new Transaction().add({
-      keys: [tokenAccount.publicKey, initialAccountPublicKey],
+      keys: [
+        {pubkey: tokenAccount.publicKey, isSigner: true},
+        {pubkey: initialAccountPublicKey, isSigner: false},
+      ],
       programId,
       data,
     });
-    transaction.fee = 0; // TODO: Batch with the `SystemProgram.createAccount` and remove this line
     await sendAndConfirmTransaction(connection, transaction, tokenAccount);
 
     return [token, initialAccountPublicKey];
@@ -284,16 +286,19 @@ export class Token {
     await sendAndConfirmTransaction(this.connection, transaction, owner);
 
     // Initialize the token account
-    const keys = [tokenAccount.publicKey, owner.publicKey, this.token];
+    const keys = [
+      {pubkey: tokenAccount.publicKey, isSigner: true},
+      {pubkey: owner.publicKey, isSigner: false},
+      {pubkey: this.token, isSigner: false},
+    ];
     if (source) {
-      keys.push(source);
+      keys.push({pubkey: source, isSigner: false});
     }
     transaction = new Transaction().add({
       keys,
       programId: this.programId,
       data,
     });
-    transaction.fee = 0; // TODO: Batch with the `SystemProgram.createAccount` and remove this line
     await sendAndConfirmTransaction(this.connection, transaction, tokenAccount);
 
     return tokenAccount.publicKey;
@@ -480,9 +485,13 @@ export class Token {
       data,
     );
 
-    const keys = [owner, source, destination];
+    const keys = [
+      {pubkey: owner, isSigner: true},
+      {pubkey: source, isSigner: false},
+      {pubkey: destination, isSigner: false},
+    ];
     if (accountInfo.source) {
-      keys.push(accountInfo.source);
+      keys.push({pubkey: accountInfo.source, isSigner: false});
     }
     return new TransactionInstruction({
       keys,
@@ -520,7 +529,11 @@ export class Token {
     );
 
     return new TransactionInstruction({
-      keys: [owner, account, delegate],
+      keys: [
+        {pubkey: owner, isSigner: true},
+        {pubkey: account, isSigner: false},
+        {pubkey: delegate, isSigner: false},
+      ],
       programId: this.programId,
       data,
     });
@@ -564,7 +577,11 @@ export class Token {
     );
 
     return new TransactionInstruction({
-      keys: [owner, account, newOwner],
+      keys: [
+        {pubkey: owner, isSigner: true},
+        {pubkey: account, isSigner: false},
+        {pubkey: newOwner, isSigner: false},
+      ],
       programId: this.programId,
       data,
     });

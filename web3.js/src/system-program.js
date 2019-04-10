@@ -48,7 +48,10 @@ export class SystemProgram {
     );
 
     return new Transaction().add({
-      keys: [from, newAccount],
+      keys: [
+        {pubkey: from, isSigner: true},
+        {pubkey: newAccount, isSigner: false},
+      ],
       programId: SystemProgram.programId,
       data,
     });
@@ -73,7 +76,7 @@ export class SystemProgram {
     );
 
     return new Transaction().add({
-      keys: [from, to],
+      keys: [{pubkey: from, isSigner: true}, {pubkey: to, isSigner: false}],
       programId: SystemProgram.programId,
       data,
     });
@@ -98,7 +101,7 @@ export class SystemProgram {
     );
 
     return new Transaction().add({
-      keys: [from],
+      keys: [{pubkey: from, isSigner: true}],
       programId: SystemProgram.programId,
       data,
     });

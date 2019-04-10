@@ -607,4 +607,3 @@ test('set owner', async () => {
 
   await testToken.setOwner(newOwner, account, owner.publicKey);
 });
-

@@ -203,7 +203,7 @@ export class BudgetProgram {
         }
 
         return new Transaction().add({
-          keys: [from, to],
+          keys: [{pubkey: from, isSigner: true}, {pubkey: to, isSigner: false}],
           programId: this.programId,
           data: data.slice(0, pos),
         });
@@ -223,7 +223,11 @@ export class BudgetProgram {
         }
 
         return new Transaction().add({
-          keys: [from, program, to],
+          keys: [
+            {pubkey: from, isSigner: true},
+            {pubkey: program, isSigner: false},
+            {pubkey: to, isSigner: false},
+          ],
           programId: this.programId,
           data: data.slice(0, pos),
         });
@@ -243,7 +247,11 @@ export class BudgetProgram {
         }
 
         return new Transaction().add({
-          keys: [from, program, to],
+          keys: [
+            {pubkey: from, isSigner: true},
+            {pubkey: program, isSigner: false},
+            {pubkey: to, isSigner: false},
+          ],
           programId: this.programId,
           data: data.slice(0, pos),
         });
@@ -287,7 +295,11 @@ export class BudgetProgram {
     pos += paymentData.length;
 
     return new Transaction().add({
-      keys: [from, program, to],
+      keys: [
+        {pubkey: from, isSigner: true},
+        {pubkey: program, isSigner: false},
+        {pubkey: to, isSigner: false},
+      ],
       programId: this.programId,
       data: data.slice(0, pos),
     });
@@ -310,7 +322,11 @@ export class BudgetProgram {
     whenData.copy(data, 4);
 
     return new Transaction().add({
-      keys: [from, program, to],
+      keys: [
+        {pubkey: from, isSigner: true},
+        {pubkey: program, isSigner: false},
+        {pubkey: to, isSigner: false},
+      ],
       programId: this.programId,
       data,
     });
@@ -336,7 +352,11 @@ export class BudgetProgram {
     );
 
     return new Transaction().add({
-      keys: [from, program, to],
+      keys: [
+        {pubkey: from, isSigner: true},
+        {pubkey: program, isSigner: false},
+        {pubkey: to, isSigner: false},
+      ],
       programId: this.programId,
       data,
     });

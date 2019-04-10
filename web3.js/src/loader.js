@@ -75,7 +75,7 @@ export class Loader {
       );
 
       const transaction = new Transaction().add({
-        keys: [program.publicKey],
+        keys: [{pubkey: program.publicKey, isSigner: true}],
         programId: this.programId,
         data,
       });
@@ -119,7 +119,7 @@ export class Loader {
     );
 
     const transaction = new Transaction().add({
-      keys: [program.publicKey],
+      keys: [{pubkey: program.publicKey, isSigner: true}],
       programId: this.programId,
       data,
     });

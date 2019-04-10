@@ -25,7 +25,7 @@ test('load native program', async () => {
   const from = await newAccountWithLamports(connection, 1024);
   const programId = await NativeLoader.load(connection, from, 'noop');
   const transaction = new Transaction().add({
-    keys: [from.publicKey],
+    keys: [{pubkey: from.publicKey, isSigner: true}],
     programId,
   });
 
