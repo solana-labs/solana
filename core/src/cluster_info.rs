@@ -304,11 +304,11 @@ impl ClusterInfo {
             .crds
             .table
             .values()
-            .filter(|x| x.local_timestamp > since)
+            .filter(|x| x.insert_timestamp > since)
             .filter_map(|x| {
                 x.value
                     .vote()
-                    .map(|v| (x.local_timestamp, v.transaction.clone()))
+                    .map(|v| (x.insert_timestamp, v.transaction.clone()))
             })
             .collect();
         let max_ts = votes.iter().map(|x| x.0).max().unwrap_or(since);
