@@ -26,7 +26,7 @@ Blake2 and Shake message digest algorithms.
 
 We could implement these two instructions in Solana as [system instructions] as follows:
 
-```rust
+```rust,ignore
 pub enum SystemInstruction {
   /// Evaluates to true if period_in_seconds becomes zero.
   /// Counter doesn't start until transaction is confirmed.
@@ -54,7 +54,7 @@ arbitrary conditionals including message digest verification. If we were to impl
 HTLC in the [budget program] we'll need to extend the [Condition enum] to include
 message digest verification as follows:
 
-```rust
+```rust,ignore
 pub enum Condition {
   /// Evaluate whether a message digest of some data matches a particular hash.
   MDVerify { data: &[u8], hash: &[u8] },
