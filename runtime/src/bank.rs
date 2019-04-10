@@ -403,19 +403,17 @@ impl Bank {
                         );
                     }
                 }
-                Err(TransactionError::BlockhashNotFound) => (),
-                Err(TransactionError::DuplicateSignature) => (),
-                Err(TransactionError::AccountNotFound) => (),
-                Err(e) => {
+                Err(TransactionError::InstructionError(b, e)) => {
                     if !tx.signatures.is_empty() {
                         status_cache.insert(
                             &tx.message().recent_blockhash,
                             &tx.signatures[0],
                             self.slot(),
-                            Err(e.clone()),
+                            Err(TransactionError::InstructionError(*b, e.clone())),
                         );
                     }
                 }
+                Err(_) => (),
             }
         }
     }
