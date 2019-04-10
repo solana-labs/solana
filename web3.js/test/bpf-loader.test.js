@@ -28,7 +28,7 @@ test('load BPF program', async () => {
   const data = await fs.readFile('test/fixtures/noop/noop.so');
   const programId = await BpfLoader.load(connection, from, data);
   const transaction = new Transaction().add({
-    keys: [from.publicKey],
+    keys: [{pubkey: from.publicKey, isSigner: true}],
     programId,
   });
   await sendAndConfirmTransaction(connection, transaction, from);

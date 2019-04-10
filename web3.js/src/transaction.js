@@ -30,7 +30,7 @@ export const PACKET_DATA_SIZE = 512;
  * @property {?Buffer} data
  */
 type TransactionInstructionCtorFields = {|
-  keys?: Array<PublicKey>,
+  keys?: Array<{pubkey: PublicKey, isSigner: boolean}>,
   programId?: PublicKey,
   data?: Buffer,
 |};
@@ -41,8 +41,9 @@ type TransactionInstructionCtorFields = {|
 export class TransactionInstruction {
   /**
    * Public keys to include in this transaction
+   * Boolean represents whether this pubkey needs to sign the transaction
    */
-  keys: Array<PublicKey> = [];
+  keys: Array<{pubkey: PublicKey, isSigner: boolean}> = [];
 
   /**
    * Program Id to execute
@@ -71,13 +72,11 @@ type SignaturePubkeyPair = {|
  * List of Transaction object fields that may be initialized at construction
  *
  * @typedef {Object} TransactionCtorFields
- * @property {?number} fee
  * @property (?recentBlockhash} A recent block hash
  * @property (?signatures} One or more signatures
  *
  */
 type TransactionCtorFields = {|
-  fee?: number,
   recentBlockhash?: Blockhash,
   signatures?: Array<SignaturePubkeyPair>,
 |};
@@ -111,11 +110,6 @@ export class Transaction {
    * A recent transaction id.  Must be populated by the caller
    */
   recentBlockhash: ?Blockhash;
-
-  /**
-   * Fee for this transaction
-   */
-  fee: number = 1;
 
   /**
    * Construct an empty Transaction
@@ -158,6 +152,7 @@ export class Transaction {
     }
 
     const keys = this.signatures.map(({publicKey}) => publicKey.toString());
+    let numRequiredSignatures = 0;
 
     const programIds = [];
     this.instructions.forEach(instruction => {
@@ -166,13 +161,15 @@ export class Transaction {
         programIds.push(programId);
       }
 
-      instruction.keys
-        .map(key => key.toString())
-        .forEach(key => {
-          if (!keys.includes(key)) {
-            keys.push(key);
-          }
-        });
+      instruction.keys.forEach(keySignerPair => {
+        const keyStr = keySignerPair.pubkey.toString();
+        if (keySignerPair.isSigner) {
+          numRequiredSignatures += 1;
+        }
+        if (!keys.includes(keyStr)) {
+          keys.push(keyStr);
+        }
+      });
     });
 
     let keyCount = [];
@@ -191,7 +188,9 @@ export class Transaction {
         programIdIndex: programIds.indexOf(programId.toString()),
         keyIndicesCount: Buffer.from(keyIndicesCount),
         keyIndices: Buffer.from(
-          instruction.keys.map(key => keys.indexOf(key.toString())),
+          instruction.keys.map(keyObj =>
+            keys.indexOf(keyObj.pubkey.toString()),
+          ),
         ),
         dataLength: Buffer.from(dataCount),
         data,
@@ -239,10 +238,10 @@ export class Transaction {
     instructionBuffer = instructionBuffer.slice(0, instructionBufferLength);
 
     const signDataLayout = BufferLayout.struct([
+      BufferLayout.blob(1, 'numRequiredSignatures'),
       BufferLayout.blob(keyCount.length, 'keyCount'),
       BufferLayout.seq(Layout.publicKey('key'), keys.length, 'keys'),
       Layout.publicKey('recentBlockhash'),
-      BufferLayout.ns64('fee'),
 
       BufferLayout.blob(programIdCount.length, 'programIdCount'),
       BufferLayout.seq(
@@ -253,10 +252,10 @@ export class Transaction {
     ]);
 
     const transaction = {
+      numRequiredSignatures: Buffer.from([numRequiredSignatures]),
       keyCount: Buffer.from(keyCount),
       keys: keys.map(key => new PublicKey(key).toBuffer()),
       recentBlockhash: Buffer.from(bs58.decode(recentBlockhash)),
-      fee: this.fee,
       programIdCount: Buffer.from(programIdCount),
       programIds: programIds.map(programId =>
         new PublicKey(programId).toBuffer(),
@@ -389,7 +388,7 @@ export class Transaction {
    */
   get keys(): Array<PublicKey> {
     invariant(this.instructions.length === 1);
-    return this.instructions[0].keys;
+    return this.instructions[0].keys.map(keyObj => keyObj.pubkey);
   }
 
   /**
@@ -430,6 +429,8 @@ export class Transaction {
       signatures.push(signature);
     }
 
+    byteArray = byteArray.slice(1); // Skip numRequiredSignatures byte
+
     const accountCount = shortvec.decodeLength(byteArray);
     let accounts = [];
     for (let i = 0; i < accountCount; i++) {
@@ -440,11 +441,6 @@ export class Transaction {
 
     const recentBlockhash = byteArray.slice(0, PUBKEY_LENGTH);
     byteArray = byteArray.slice(PUBKEY_LENGTH);
-
-    let fee = 0;
-    for (let i = 0; i < 8; i++) {
-      fee += byteArray.shift() >> (8 * i);
-    }
 
     const programIdCount = shortvec.decodeLength(byteArray);
     let programs = [];
@@ -470,7 +466,6 @@ export class Transaction {
 
     // Populate Transaction object
     transaction.recentBlockhash = new PublicKey(recentBlockhash).toBase58();
-    transaction.fee = fee;
     for (let i = 0; i < signatureCount; i++) {
       const sigPubkeyPair = {
         signature: Buffer.from(signatures[i]),
@@ -485,9 +480,13 @@ export class Transaction {
         data: Buffer.from(instructions[i].data),
       };
       for (let j = 0; j < instructions[i].accountIndex.length; j++) {
-        instructionData.keys.push(
-          new PublicKey(accounts[instructions[i].accountIndex[j]]),
-        );
+        const pubkey = new PublicKey(accounts[instructions[i].accountIndex[j]]);
+        instructionData.keys.push({
+          pubkey,
+          isSigner: transaction.signatures.some(
+            keyObj => keyObj.publicKey.toString() === pubkey.toString(),
+          ),
+        });
       }
       let instruction = new TransactionInstruction(instructionData);
       transaction.instructions.push(instruction);
