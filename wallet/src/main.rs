@@ -1,6 +1,5 @@
 use clap::{
-    crate_description, crate_name, crate_version, App, AppSettings, Arg,ArgMatches,
-    SubCommand,
+    crate_description, crate_name, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
@@ -214,7 +213,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .required(true)                        
+                        .required(true)
                         .validator(is_pubkey)
                         .help("Vote signer to authorize"),
                 ),
