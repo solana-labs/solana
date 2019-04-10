@@ -24,7 +24,7 @@ export async function sendAndConfirmTransaction(
     signature = await connection.sendTransaction(transaction, ...signers);
 
     // Wait up to a couple slots for a confirmation
-    let status = 'SignatureNotFound';
+    let status = null;
     let statusRetries = 6;
     for (;;) {
       status = await connection.getSignatureStatus(signature);
@@ -39,7 +39,7 @@ export async function sendAndConfirmTransaction(
       await sleep((500 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
     }
 
-    if ('Ok' in status) {
+    if (status && 'Ok' in status) {
       break;
     }
     if (--sendRetries <= 0) {
@@ -47,12 +47,12 @@ export async function sendAndConfirmTransaction(
       throw new Error(
         `Transaction '${signature}' was not confirmed in ${duration.toFixed(
           2,
-        )} seconds (${status})`,
+        )} seconds (${JSON.stringify(status)})`,
       );
     }
 
-    if ('Err' in status && !status.includes('AccountInUse')) {
-      throw new Error(`Transaction ${signature} failed (${status})`);
+    if (status && status.Err && !('AccountInUse' in status.Err)) {
+      throw new Error(`Transaction ${signature} failed (${JSON.stringify(status)})`);
     }
 
     // Retry in 0..100ms to try to avoid another AccountInUse collision

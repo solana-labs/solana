@@ -11,7 +11,7 @@ import {sleep} from '../src/util/sleep';
 // The default of 5 seconds is too slow for live testing sometimes
 jest.setTimeout(60000);
 
-function mockGetSignatureStatus(result: string = 'Confirmed') {
+function mockGetSignatureStatus(result: Object = {Ok: null}) {
   mockRpc.push([
     url,
     {
@@ -58,7 +58,7 @@ test('create new token', async () => {
 
     // mock Token.newAccount() transaction
     mockSendTransaction();
-    mockGetSignatureStatus('SignatureNotFound');
+    mockGetSignatureStatus(null);
     mockGetSignatureStatus();
 
     // mock SystemProgram.createAccount transaction for Token.createNewToken()
@@ -67,7 +67,7 @@ test('create new token', async () => {
 
     // mock Token.createNewToken() transaction
     mockSendTransaction();
-    mockGetSignatureStatus('SignatureNotFound');
+    mockGetSignatureStatus(null);
     mockGetSignatureStatus();
   }
 
