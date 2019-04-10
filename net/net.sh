@@ -255,32 +255,34 @@ startClient() {
 }
 
 sanity() {
-  declare ok=true
-
-  echo "--- Sanity"
   $metricsWriteDatapoint "testnet-deploy net-sanity-begin=1"
 
+  declare ok=true
   declare bootstrapLeader=${fullnodeIpList[0]}
   declare blockstreamer=${blockstreamerIpList[0]}
+
+  echo "--- Sanity: $bootstrapLeader"
   (
     set -x
-    echo "--- Sanity: $bootstrapLeader"
     # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
     ssh "${sshOptions[@]}" "$bootstrapLeader" \
       "./solana/net/remote/remote-sanity.sh $sanityExtraArgs \"$RUST_LOG\""
+  ) || ok=false
+  $ok || exit 1
 
+  if [[ -n $blockstreamer ]]; then
     # If there's a blockstreamer node run a reduced sanity check on it as well
-    if [[ -n $blockstreamer ]]; then
-      echo "--- Sanity: $blockstreamer"
+    echo "--- Sanity: $blockstreamer"
+    (
+      set -x
       # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
       ssh "${sshOptions[@]}" "$blockstreamer" \
         "./solana/net/remote/remote-sanity.sh $sanityExtraArgs -o noLedgerVerify -o noValidatorSanity \"$RUST_LOG\""
-
-    fi
-  ) || ok=false
+    ) || ok=false
+    $ok || exit 1
+  fi
 
   $metricsWriteDatapoint "testnet-deploy net-sanity-complete=1"
-  $ok || exit 1
 }
 
 start() {
