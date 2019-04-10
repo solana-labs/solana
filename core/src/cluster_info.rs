@@ -294,10 +294,10 @@ impl ClusterInfo {
     }
 
     /// Get votes in the crds
-    /// * since - The local timestamp when the vote was updated or inserted must be greater then
+    /// * since - The timestamp of when the vote inserted must be greater then
     /// since. This allows the bank to query for new votes only.
     ///
-    /// * return - The votes, and the max local timestamp from the new set.
+    /// * return - The votes, and the max timestamp from the new set.
     pub fn get_votes(&self, since: u64) -> (Vec<Transaction>, u64) {
         let votes: Vec<_> = self
             .gossip
