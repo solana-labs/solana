@@ -116,6 +116,7 @@ impl LocalCluster {
         slots_per_epoch: u64,
         native_instruction_processors: &[(String, Pubkey)],
     ) -> Self {
+        let voting_keypair = Keypair::new();
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
@@ -126,9 +127,9 @@ impl LocalCluster {
         genesis_block
             .native_instruction_processors
             .extend_from_slice(native_instruction_processors);
+        genesis_block.bootstrap_leader_vote_account_id = voting_keypair.pubkey();
         let (genesis_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
-        let voting_keypair = Keypair::new();
         let leader_contact_info = leader_node.info.clone();
 
         let leader_server = Fullnode::new(
@@ -457,4 +458,5 @@ mod test {
         assert_eq!(cluster.fullnodes.len(), NUM_NODES);
         assert_eq!(cluster.replicators.len(), num_replicators);
     }
+
 }

@@ -58,6 +58,7 @@ solana-genesis \
   --lamports 1000000000 \
   --mint "$dataDir"/config/drone-keypair.json \
   --bootstrap-leader-keypair "$dataDir"/config/leader-keypair.json \
+  --bootstrap-stake-keypair "$dataDir"/config/leader-staking-account-keypair.json \
   --ledger "$dataDir"/ledger
 
 solana-drone --keypair "$dataDir"/config/drone-keypair.json &
