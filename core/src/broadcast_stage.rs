@@ -126,6 +126,18 @@ impl Broadcast {
         // Send out data
         ClusterInfo::broadcast(&self.id, contains_last_tick, &broadcast_table, sock, &blobs)?;
 
+        const BROADCAST_REDUNDICATOR_RATIO: f64 = 1.0 / 4.0;
+        {
+            use rand::{thread_rng, Rng};
+            // Send out some amount of redundant data
+            let redundant_blobs: Vec<_> = blobs
+                .iter()
+                .cloned()
+                .filter(|_| thread_rng().gen_bool(BROADCAST_REDUNDICATOR_RATIO))
+                .collect();
+            ClusterInfo::broadcast(&self.id, false, &broadcast_table, sock, &redundant_blobs)?;
+        }
+
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
 
         // Fill in the coding blob data from the window data blobs
