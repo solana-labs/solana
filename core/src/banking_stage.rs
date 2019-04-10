@@ -207,7 +207,7 @@ impl BankingStage {
                     &buffered_packets,
                 )
                 .map(|packets| buffered_packets = packets)
-                .unwrap_or(buffered_packets.clear());
+                .unwrap_or_else(|_| buffered_packets.clear());
             }
 
             match Self::process_packets(&verified_receiver, &poh_recorder, recv_start) {
@@ -389,7 +389,7 @@ impl BankingStage {
         bank: &Arc<Bank>,
         poh: &Arc<Mutex<PohRecorder>>,
         msgs: &Arc<RwLock<Packets>>,
-        vers: &Vec<u8>,
+        vers: &[u8],
         offset: usize,
     ) -> Result<(usize, usize, usize)> {
         debug!("banking-stage-tx bank {}", bank.slot());
@@ -428,8 +428,8 @@ impl BankingStage {
 
         let processed = Self::process_transactions(&bank, &verified_transactions, poh)?;
         Ok((
-            verified_transactions.len(),
             processed,
+            verified_transactions.len(),
             verified_transaction_index[processed],
         ))
     }
