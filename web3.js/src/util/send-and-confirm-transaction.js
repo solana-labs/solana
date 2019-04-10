@@ -28,7 +28,7 @@ export async function sendAndConfirmTransaction(
     let statusRetries = 6;
     for (;;) {
       status = await connection.getSignatureStatus(signature);
-      if (status !== 'SignatureNotFound') {
+      if (status) {
         break;
       }
 
@@ -39,7 +39,7 @@ export async function sendAndConfirmTransaction(
       await sleep((500 * DEFAULT_TICKS_PER_SLOT) / NUM_TICKS_PER_SECOND);
     }
 
-    if (status === 'Confirmed') {
+    if ('Ok' in status) {
       break;
     }
     if (--sendRetries <= 0) {
@@ -51,7 +51,7 @@ export async function sendAndConfirmTransaction(
       );
     }
 
-    if (status !== 'AccountInUse' && status !== 'SignatureNotFound') {
+    if ('Err' in status && !status.includes('AccountInUse')) {
       throw new Error(`Transaction ${signature} failed (${status})`);
     }
 
