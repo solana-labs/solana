@@ -29,24 +29,31 @@ MacOS or WSL users may build from source.
 The shell commands in this section assume the following environment variables are
 set:
 ```bash
-$ export release=0.12.4
 $ export ip=$(dig +short beta.testnet.solana.com)
 ```
 
 #### Obtaining The Software
-Prebuilt binaries are available for Linux x86_64 systems.  Download and install by running:
+##### Download Prebuilt Binaries
+Binaries are available for Linux x86_64 systems.  Download the binaries by navigating to:
+
+> https://github.com/solana-labs/solana/releases/latest
+
+Download the binary file from our latest release tag:
+
+> solana-release-x86_64-unknown-linux-gnu.tar.bz2
+
+Extract the package:
 ```bash
-$ wget https://github.com/solana-labs/solana/releases/download/v${release:?}/solana-release-x86_64-unknown-linux-gnu.tar.bz2 -O solana-release.tar.bz2
-$ tar jxf solana-release.tar.bz2
+$ tar jxf solana-release-x86_64-unknown-linux-gnu.tar.bz2
 $ cd solana-release/
 $ export PATH=$PWD/bin:$PATH
 ```
+##### Build From Source
+If you are unable to use the prebuilt binaries or prefer to build it yourself from source, navigate to:
+> https://github.com/solana-labs/solana/releases/latest
 
-If you are unable to use the prebuilt binaries or prefer to build it yourself from source:
+Download the source code tarball (solana-*[release]*.tar.gz) from our latest release tag.  Extract the code and build the binaries with:
 ```bash
-$ wget https://github.com/solana-labs/solana/archive/v${release:?}.tar.gz -O solana-release.tar.gz
-$ tar zxf solana-release.tar.gz
-$ cd solana-${release:?}
 $ ./scripts/cargo-install-all.sh .
 $ export PATH=$PWD/bin:$PATH
 ```
@@ -75,7 +82,7 @@ Run the following command to join the gossip network and view all the other node
 $ RUST_LOG=info solana-gossip --network ${ip:?}:8001
 ```
 
-#### Starting The Validator
+### Starting The Validator
 The following command will start a new validator node:
 ```bash
 $ RUST_LOG=warn USE_INSTALL=1 ./multinode-demo/fullnode-x.sh --public-address --poll-for-new-genesis-block ${ip:?}
@@ -89,7 +96,7 @@ $ RUST_LOG=info solana-gossip --network ${ip:?}:8001
 
 Congratulations, you're now participating in the testnet cluster!
 
-#### Sharing Metrics From Your Validator
+### Sharing Metrics From Your Validator
 If you'd like to share metrics perform the following steps before starting the
 validator node:
 ```bash
