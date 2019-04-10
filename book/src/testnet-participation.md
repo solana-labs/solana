@@ -29,7 +29,6 @@ MacOS or WSL users may build from source.
 The shell commands in this section assume the following environment variables are
 set:
 ```bash
-$ export release=0.12.4
 $ export ip=$(dig +short beta.testnet.solana.com)
 $ export USE_INSTALL=1
 ```
@@ -37,7 +36,7 @@ $ export USE_INSTALL=1
 #### Obtaining The Software
 Prebuilt binaries are available for Linux x86_64 systems.  Download and install by running:
 ```bash
-$ wget https://github.com/solana-labs/solana/releases/download/v${release:?}/solana-release-x86_64-unknown-linux-gnu.tar.bz2 -O solana-release.tar.bz2
+$ curl -i https://api.github.com/repos/solana-labs/solana/releases/latest | grep browser_download_url | cut -d : -f 2,3 | xargs wget -O solana-release.tar.bz2
 $ tar jxf solana-release.tar.bz2
 $ cd solana-release/
 $ export PATH=$PWD/bin:$PATH
@@ -45,9 +44,9 @@ $ export PATH=$PWD/bin:$PATH
 
 If you are unable to use the prebuilt binaries or prefer to build it yourself from source:
 ```bash
-$ wget https://github.com/solana-labs/solana/archive/v${release:?}.tar.gz -O solana-release.tar.gz
-$ tar zxf solana-release.tar.gz
-$ cd solana-${release:?}
+$ curl -i https://api.github.com/repos/solana-labs/solana/releases/latest | grep tarball_url | cut -d : -f 2,3 | tr -d \", | xargs wget -O solana-release.tar.gz
+$ mkdir solana-release && tar xzf solana-release.tar.gz -C solana-release --strip-components 1
+$ cd solana-release
 $ ./scripts/cargo-install-all.sh .
 $ export PATH=$PWD/bin:$PATH
 ```
