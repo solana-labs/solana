@@ -101,7 +101,6 @@ mod tests {
     use crate::id;
     use crate::vote_instruction;
     use crate::vote_state::{Vote, VoteState};
-    use bincode::deserialize;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
@@ -164,7 +163,7 @@ mod tests {
         submit_vote(&bank_client, &vote_keypair, 0).unwrap();
 
         let vote_account_data = bank_client.get_account_data(&vote_id).unwrap().unwrap();
-        let vote_state: VoteState = deserialize(&vote_account_data).unwrap();
+        let vote_state = VoteState::deserialize(&vote_account_data).unwrap();
         assert_eq!(vote_state.votes.len(), 1);
     }
 
@@ -191,7 +190,7 @@ mod tests {
 
         // And ensure there's no vote.
         let vote_account_data = bank_client.get_account_data(&vote_id).unwrap().unwrap();
-        let vote_state: VoteState = deserialize(&vote_account_data).unwrap();
+        let vote_state = VoteState::deserialize(&vote_account_data).unwrap();
         assert_eq!(vote_state.votes.len(), 0);
 
         assert_eq!(

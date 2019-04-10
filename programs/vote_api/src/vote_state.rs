@@ -1,7 +1,7 @@
 //! Vote state, vote program
 //! Receive and processes votes from validators
 use crate::id;
-use bincode::serialized_size;
+use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::{Account, KeyedAccount};
 use solana_sdk::instruction::InstructionError;
@@ -89,6 +89,17 @@ impl VoteState {
         vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_LOCKOUT_HISTORY]);
         vote_state.root_slot = Some(std::u64::MAX);
         serialized_size(&vote_state).unwrap() as usize
+    }
+
+    pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
+        deserialize(input).map_err(|_| InstructionError::InvalidAccountData)
+    }
+
+    pub fn serialize(&self, output: &mut [u8]) -> Result<(), InstructionError> {
+        serialize_into(output, self).map_err(|err| match *err {
+            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
+            _ => InstructionError::GenericError,
+        })
     }
 
     /// returns commission split as (voter_portion, staker_portion) tuple
@@ -298,6 +309,17 @@ mod tests {
             vote_id,
             vote_state::create_account(&vote_id, &Pubkey::new_rand(), 0, 100),
         )
+    }
+
+    #[test]
+    fn test_vote_serialize() {
+        let mut buffer: Vec<u8> = vec![0; VoteState::max_size()];
+        let mut vote_state = VoteState::default();
+        vote_state
+            .votes
+            .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
+        vote_state.serialize(&mut buffer).unwrap();
+        assert_eq!(VoteState::deserialize(&buffer).unwrap(), vote_state);
     }
 
     #[test]
