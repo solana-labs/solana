@@ -31,7 +31,6 @@ set:
 ```bash
 $ export release=0.12.4
 $ export ip=$(dig +short beta.testnet.solana.com)
-$ export USE_INSTALL=1
 ```
 
 #### Obtaining The Software
@@ -79,7 +78,7 @@ $ RUST_LOG=info solana-gossip --network ${ip:?}:8001
 #### Starting The Validator
 The following command will start a new validator node:
 ```bash
-$ RUST_LOG=warn ./multinode-demo/fullnode-x.sh --public-address --poll-for-new-genesis-block ${ip:?}
+$ RUST_LOG=warn USE_INSTALL=1 ./multinode-demo/fullnode-x.sh --public-address --poll-for-new-genesis-block ${ip:?}
 ```
 
 Then from another console, confirm the IP address if your node is now visible in
