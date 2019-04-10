@@ -1,5 +1,5 @@
 // Support erasure coding
-use crate::packet::{SharedBlob, BLOB_HEADER_SIZE};
+use crate::packet::SharedBlob;
 use crate::result::{Error, Result};
 use std::cmp;
 
@@ -301,7 +301,7 @@ pub mod test {
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::Blocktree;
     use crate::entry::{make_tiny_test_entries, EntrySlice};
-    use crate::packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE};
+    use crate::packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
 

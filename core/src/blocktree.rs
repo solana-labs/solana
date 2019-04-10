@@ -1120,7 +1120,7 @@ impl Blocktree {
 
         // Marks the end
         erasures.push(-1);
-        debug!("erasures: {:?}, size: {}", erasures, size);
+        trace!("erasures: {:?}, size: {}", erasures, size);
 
         erasure::decode_blocks(
             data_ptrs.as_mut_slice(),
@@ -1140,8 +1140,8 @@ impl Blocktree {
             if n < NUM_DATA {
                 let mut blob = Blob::new(&data_ptrs[n]);
 
-                data_size = blob.data_size() as usize - BLOB_HEADER_SIZE;
                 idx = n as u64 + block_start_idx;
+                data_size = blob.data_size() as usize - BLOB_HEADER_SIZE;
                 first_byte = blob.data[0];
 
                 if data_size > BLOB_DATA_SIZE {
@@ -1166,13 +1166,16 @@ impl Blocktree {
 
                 blob.set_slot(slot);
                 blob.set_index(idx);
-                blob.set_size(size);
+                blob.set_data_size(data_size as u64);
                 recovered_coding.push(blob);
             }
 
-            debug!(
+            trace!(
                 "erasures[{}] ({}) size: {} data[0]: {}",
-                *i, idx, data_size, first_byte,
+                *i,
+                idx,
+                data_size,
+                first_byte,
             );
         }
 
