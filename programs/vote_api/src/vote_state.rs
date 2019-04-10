@@ -1,7 +1,7 @@
 //! Vote state, vote program
 //! Receive and processes votes from validators
 use crate::id;
-use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
+use bincode::serialized_size;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::{Account, KeyedAccount};
 use solana_sdk::instruction::InstructionError;
@@ -82,24 +82,13 @@ impl VoteState {
         }
     }
 
-    pub fn max_size() -> usize {
+    pub fn size_of() -> usize {
         // Upper limit on the size of the Vote State. Equal to
-        // sizeof(VoteState) when votes.len() is MAX_LOCKOUT_HISTORY
+        // size_of(VoteState) when votes.len() is MAX_LOCKOUT_HISTORY
         let mut vote_state = Self::default();
         vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_LOCKOUT_HISTORY]);
         vote_state.root_slot = Some(std::u64::MAX);
         serialized_size(&vote_state).unwrap() as usize
-    }
-
-    pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
-        deserialize(input).map_err(|_| InstructionError::InvalidAccountData)
-    }
-
-    pub fn serialize(&self, output: &mut [u8]) -> Result<(), InstructionError> {
-        serialize_into(output, self).map_err(|err| match *err {
-            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
-            _ => InstructionError::GenericError,
-        })
     }
 
     /// returns commission split as (voter_portion, staker_portion) tuple
@@ -256,7 +245,7 @@ pub fn create_account(
     commission: u32,
     lamports: u64,
 ) -> Account {
-    let mut vote_account = Account::new(lamports, VoteState::max_size(), &id());
+    let mut vote_account = Account::new(lamports, VoteState::size_of(), &id());
 
     initialize_account(
         &mut KeyedAccount::new(vote_id, false, &mut vote_account),
@@ -289,7 +278,7 @@ mod tests {
     #[test]
     fn test_initialize_vote_account() {
         let vote_account_id = Pubkey::new_rand();
-        let mut vote_account = Account::new(100, VoteState::max_size(), &id());
+        let mut vote_account = Account::new(100, VoteState::size_of(), &id());
 
         let node_id = Pubkey::new_rand();
 
@@ -309,17 +298,6 @@ mod tests {
             vote_id,
             vote_state::create_account(&vote_id, &Pubkey::new_rand(), 0, 100),
         )
-    }
-
-    #[test]
-    fn test_vote_serialize() {
-        let mut buffer: Vec<u8> = vec![0; VoteState::max_size()];
-        let mut vote_state = VoteState::default();
-        vote_state
-            .votes
-            .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
-        vote_state.serialize(&mut buffer).unwrap();
-        assert_eq!(VoteState::deserialize(&buffer).unwrap(), vote_state);
     }
 
     #[test]
@@ -416,7 +394,7 @@ mod tests {
     #[test]
     fn test_vote_without_initialization() {
         let vote_id = Pubkey::new_rand();
-        let mut vote_account = Account::new(100, VoteState::max_size(), &id());
+        let mut vote_account = Account::new(100, VoteState::size_of(), &id());
 
         let res = vote_state::vote(&vote_id, &mut vote_account, &Vote::new(1));
         assert_eq!(res, Err(InstructionError::UninitializedAccount));
