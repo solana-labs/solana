@@ -36,13 +36,13 @@ $ export USE_INSTALL=1
 #### Obtaining The Software
 ##### Download Prebuilt Binaries
 Binaries are available for Linux x86_64 systems.  Download the binaries by navigating to:
-```
-https://github.com/solana-labs/solana/releases/latest
-```
+
+> https://github.com/solana-labs/solana/releases/latest
+
 Download the binary file from our latest release tag:
-```
-solana-release-x86_64-unknown-linux-gnu.tar.bz2
-```
+
+> solana-release-x86_64-unknown-linux-gnu.tar.bz2
+
 Extract the package:
 ```bash
 $ tar jxf solana-release-x86_64-unknown-linux-gnu.tar.bz2
@@ -51,9 +51,8 @@ $ export PATH=$PWD/bin:$PATH
 ```
 ##### Build From Source
 If you are unable to use the prebuilt binaries or prefer to build it yourself from source, navigate to:
-```
-https://github.com/solana-labs/solana/releases/latest
-```
+> https://github.com/solana-labs/solana/releases/latest
+
 Download the source code tarball (solana-*[release]*.tar.gz) from our latest release tag.  Extract the code and build the binaries with:
 ```bash
 $ ./scripts/cargo-install-all.sh .
