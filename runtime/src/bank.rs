@@ -330,6 +330,7 @@ impl Bank {
 
         let mut vote_state = VoteState::new(&genesis_block.bootstrap_leader_id);
         vote_state.votes.push_back(Lockout::new(&Vote::new(0)));
+        vote_state.authorized_voter_id = genesis_block.bootstrap_leader_vote_account_id;
         vote_state
             .serialize(&mut bootstrap_leader_vote_account.data)
             .unwrap();
@@ -345,6 +346,9 @@ impl Bank {
             .genesis_hash(&genesis_block.hash());
 
         self.ticks_per_slot = genesis_block.ticks_per_slot;
+
+        // make bank 0 votable
+        self.is_delta.store(true, Ordering::Relaxed);
 
         self.epoch_schedule = EpochSchedule::new(
             genesis_block.slots_per_epoch,
