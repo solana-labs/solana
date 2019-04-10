@@ -17,7 +17,7 @@ use solana_runtime::bank::Bank;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{KeypairUtil, Signature};
+use solana_sdk::signature::Signature;
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES};
 use std::iter;
@@ -46,8 +46,8 @@ fn check_txs(receiver: &Receiver<WorkingBankEntries>, ref_tx_count: usize) {
 }
 
 #[bench]
-#[ignore]
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
+    solana_logger::setup();
     let num_threads = BankingStage::num_threads() as usize;
     //   a multiple of packet chunk  2X duplicates to avoid races
     let txes = 192 * 50 * num_threads * 2;
@@ -56,13 +56,15 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
+    let to_pubkey = Pubkey::new_rand();
     let dummy = system_transaction::transfer(
         &mint_keypair,
-        &mint_keypair.pubkey(),
+        &to_pubkey,
         1,
         genesis_block.hash(),
         0,
     );
+    println!("txs: {}", txes);
     let transactions: Vec<_> = (0..txes)
         .into_par_iter()
         .map(|_| {
@@ -119,21 +121,28 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
         poh_recorder.lock().unwrap().set_bank(&bank);
 
-        let mut id = genesis_block.hash();
+        /*let mut id = genesis_block.hash();
         for _ in 0..(MAX_RECENT_BLOCKHASHES * DEFAULT_TICKS_PER_SLOT as usize) {
             id = hash(&id.as_ref());
             bank.register_tick(&id);
-        }
+        }*/
 
         let half_len = verified.len() / 2;
         let mut start = 0;
         bencher.iter(move || {
             // make sure the transactions are still valid
-            bank.register_tick(&genesis_block.hash());
+            //println!("register {}", genesis_block.hash());
+            for _ in 0..DEFAULT_TICKS_PER_SLOT {
+                bank.register_tick(&genesis_block.hash());
+            }
+            /*for i in 0..verified.len() {
+                verified_sender.send(verified[i..i+1].to_vec()).unwrap();
+                verified.message.blockhash = bank.get_recent_blockhash();
+            }*/
             for v in verified[start..start + half_len].chunks(verified.len() / num_threads) {
                 verified_sender.send(v.to_vec()).unwrap();
             }
-            check_txs(&signal_receiver, txes / 2);
+            //check_txs(&signal_receiver, txes / 2);
             bank.clear_signatures();
             start += half_len;
             start %= verified.len();
@@ -145,7 +154,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 }
 
 #[bench]
-#[ignore]
 fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let progs = 4;
     let num_threads = BankingStage::num_threads() as usize;
@@ -156,9 +164,10 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
+    let to_pubkey = Pubkey::new_rand();
     let dummy = system_transaction::transfer(
         &mint_keypair,
-        &mint_keypair.pubkey(),
+        &to_pubkey,
         1,
         genesis_block.hash(),
         0,
