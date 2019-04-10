@@ -41,8 +41,8 @@ pub struct WorkingBank {
 }
 
 pub struct PohRecorder {
-    pub poh: Poh,
-    pub clear_bank_signal: Option<SyncSender<bool>>,
+    poh: Poh,
+    clear_bank_signal: Option<SyncSender<bool>>,
     start_slot: u64,
     start_tick: u64,
     tick_cache: Vec<(Entry, u64)>,
@@ -56,7 +56,7 @@ pub struct PohRecorder {
 }
 
 impl PohRecorder {
-    pub fn clear_bank(&mut self) {
+    fn clear_bank(&mut self) {
         if let Some(working_bank) = self.working_bank.take() {
             let bank = working_bank.bank;
             let next_leader_slot = leader_schedule_utils::next_leader_slot(
@@ -269,6 +269,43 @@ impl PohRecorder {
         self.record_and_send_txs(bank_slot, mixin, txs)
     }
 
+    pub fn new_with_clear_signal(
+        tick_height: u64,
+        last_entry_hash: Hash,
+        start_slot: u64,
+        my_leader_slot_index: Option<u64>,
+        ticks_per_slot: u64,
+        id: &Pubkey,
+        blocktree: &Arc<Blocktree>,
+        clear_bank_signal: Option<SyncSender<bool>>,
+    ) -> (Self, Receiver<WorkingBankEntries>) {
+        let poh = Poh::new(last_entry_hash, tick_height);
+        let (sender, receiver) = channel();
+        let max_last_leader_grace_ticks = ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR;
+        let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
+            &my_leader_slot_index,
+            ticks_per_slot,
+            max_last_leader_grace_ticks,
+        );
+        (
+            Self {
+                poh,
+                tick_cache: vec![],
+                working_bank: None,
+                sender,
+                clear_bank_signal,
+                start_slot,
+                start_tick: tick_height + 1,
+                start_leader_at_tick,
+                last_leader_tick,
+                max_last_leader_grace_ticks,
+                id: *id,
+                blocktree: blocktree.clone(),
+            },
+            receiver,
+        )
+    }
+
     /// A recorder to synchronize PoH with the following data structures
     /// * bank - the LastId's queue is updated on `tick` and `record` events
     /// * sender - the Entry channel that outputs to the ledger
@@ -281,30 +318,15 @@ impl PohRecorder {
         id: &Pubkey,
         blocktree: &Arc<Blocktree>,
     ) -> (Self, Receiver<WorkingBankEntries>) {
-        let poh = Poh::new(last_entry_hash, tick_height);
-        let (sender, receiver) = channel();
-        let max_last_leader_grace_ticks = ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR;
-        let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
-            &my_leader_slot_index,
+        Self::new_with_clear_signal(
+            tick_height,
+            last_entry_hash,
+            start_slot,
+            my_leader_slot_index,
             ticks_per_slot,
-            max_last_leader_grace_ticks,
-        );
-        (
-            PohRecorder {
-                poh,
-                tick_cache: vec![],
-                working_bank: None,
-                sender,
-                clear_bank_signal: None,
-                start_slot,
-                start_tick: tick_height + 1,
-                start_leader_at_tick,
-                last_leader_tick,
-                max_last_leader_grace_ticks,
-                id: *id,
-                blocktree: blocktree.clone(),
-            },
-            receiver,
+            id,
+            blocktree,
+            None,
         )
     }
 
@@ -876,7 +898,8 @@ mod tests {
                 Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
             let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
             let bank = Arc::new(Bank::new(&genesis_block));
-            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+            let (sender, receiver) = sync_channel(1);
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new_with_clear_signal(
                 0,
                 Hash::default(),
                 0,
@@ -884,10 +907,9 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                Some(sender),
             );
-            let (sender, receiver) = sync_channel(1);
             poh_recorder.set_bank(&bank);
-            poh_recorder.clear_bank_signal = Some(sender);
             poh_recorder.clear_bank();
             assert!(receiver.try_recv().is_ok());
         }
