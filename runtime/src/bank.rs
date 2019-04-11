@@ -1924,26 +1924,4 @@ mod tests {
         bank.tick_height.store(max_tick_height, Ordering::Relaxed);
         assert!(bank.is_votable());
     }
-
-    #[test]
-    fn test_genesis_vote_processing() {
-        let bootstrap_leader = Keypair::new();
-        let voting_keypair = Keypair::new();
-        let (mut genesis_block, _) =
-            GenesisBlock::new_with_leader(500, &bootstrap_leader.pubkey(), 100);
-        genesis_block.bootstrap_leader_vote_account_id = voting_keypair.pubkey();
-        let mut bank = Bank::new(&genesis_block);
-        bank.add_instruction_processor(
-            solana_vote_api::id(),
-            vote_instruction::process_instruction,
-        );
-        let instructions = vote_instruction::vote(&voting_keypair.pubkey(), Vote::new(1));
-        let transaction = Transaction::new_signed_instructions(
-            &[&voting_keypair],
-            vec![instructions],
-            bank.last_blockhash(),
-        );
-        bank.process_transaction(&transaction).unwrap()
-    }
-
 }
