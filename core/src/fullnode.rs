@@ -347,7 +347,8 @@ pub fn make_active_set_entries(
     let new_vote_account_entry = next_entry_mut(&mut last_entry_hash, 1, vec![new_vote_account_tx]);
 
     // 3) Create vote entry
-    let vote_ix = vote_instruction::vote(&voting_keypair.pubkey(), Vote::new(slot_to_vote_on));
+    let vote_ix =
+        vote_instruction::vote(&voting_keypair.pubkey(), vec![Vote::new(slot_to_vote_on)]);
     let vote_tx =
         Transaction::new_signed_instructions(&[&voting_keypair], vec![vote_ix], *blockhash);
     let vote_entry = next_entry_mut(&mut last_entry_hash, 1, vec![vote_tx]);

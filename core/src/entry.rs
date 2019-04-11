@@ -475,7 +475,7 @@ mod tests {
 
     fn create_sample_vote(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
-        let ix = vote_instruction::vote(&pubkey, Vote::new(1));
+        let ix = vote_instruction::vote(&pubkey, vec![Vote::new(1)]);
         Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
     }
 
