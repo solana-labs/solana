@@ -117,9 +117,8 @@ impl VoteState {
         }
     }
 
-    pub fn process_votes(&mut self, mut votes: Vec<Vote>) {
-        votes.sort_by(|l, r| l.slot.cmp(&r.slot));
-        votes.into_iter().for_each(|v| self.process_vote(&v));;
+    pub fn process_votes(&mut self, votes: &[Vote]) {
+        votes.iter().for_each(|v| self.process_vote(v));;
     }
 
     pub fn process_vote(&mut self, vote: &Vote) {
@@ -250,7 +249,7 @@ pub fn process_vote(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    vote_state.process_votes(votes);
+    vote_state.process_votes(&votes);
     vote_account.set_state(&vote_state)
 }
 
@@ -290,10 +289,8 @@ pub fn vote(
 mod tests {
     use super::*;
     use crate::vote_state;
-    use rand::{thread_rng, Rng};
-    use std::cmp;
 
-    const NUM_RECENT: usize = 16;
+    const MAX_RECENT_VOTES: usize = 16;
 
     #[test]
     fn test_initialize_vote_account() {
@@ -582,25 +579,10 @@ mod tests {
     }
 
     fn recent_votes(vote_state: &VoteState) -> Vec<Vote> {
-        (0..cmp::min(vote_state.votes.len(), NUM_RECENT))
-            .into_iter()
+        let start = vote_state.votes.len().saturating_sub(MAX_RECENT_VOTES);
+        (start..vote_state.votes.len())
             .map(|i| Vote::new(vote_state.votes.get(i).unwrap().slot))
             .collect()
-    }
-
-    /// check that votes are always sorted before processing
-    #[test]
-    fn test_process_shuffle() {
-        let voter_id = Pubkey::new_rand();
-        let mut vote_state = VoteState::new(&voter_id, &Pubkey::new_rand(), 0);
-        let expected: Vec<_> = (0..NUM_RECENT)
-            .into_iter()
-            .map(|i| Vote::new(i as u64))
-            .collect();
-        let mut shuffled = expected.clone();
-        thread_rng().shuffle(&mut shuffled);
-        vote_state.process_votes(shuffled);
-        assert_eq!(expected, recent_votes(&vote_state))
     }
 
     /// check that two accounts with different data can be brought to the same state with one vote submission
@@ -613,16 +595,16 @@ mod tests {
 
         // process some votes on account a
         let votes_a: Vec<_> = (0..5).into_iter().map(|i| Vote::new(i)).collect();
-        vote_state_a.process_votes(votes_a);
+        vote_state_a.process_votes(&votes_a);
         assert_ne!(recent_votes(&vote_state_a), recent_votes(&vote_state_b));
 
         // as long as b has missed less than "NUM_RECENT" votes both accounts should be in sync
-        let votes: Vec<_> = (0..NUM_RECENT)
+        let votes: Vec<_> = (0..MAX_RECENT_VOTES)
             .into_iter()
             .map(|i| Vote::new(i as u64))
             .collect();
-        vote_state_a.process_votes(votes.clone());
-        vote_state_b.process_votes(votes);
+        vote_state_a.process_votes(&votes);
+        vote_state_b.process_votes(&votes);
         assert_eq!(recent_votes(&vote_state_a), recent_votes(&vote_state_b));
     }
 }

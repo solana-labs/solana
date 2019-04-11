@@ -307,9 +307,7 @@ impl ReplayStage {
                 Self::handle_new_root(&bank_forks, progress);
             }
             // Send our last few votes along with the new one
-            let mut current_votes = vec![Vote::new(bank.slot())];
-            current_votes.append(&mut locktower.recent_votes());
-            let vote_ix = vote_instruction::vote(vote_account_pubkey, current_votes);
+            let vote_ix = vote_instruction::vote(vote_account_pubkey, locktower.recent_votes());
             let vote_tx = Transaction::new_signed_instructions(
                 &[voting_keypair.as_ref()],
                 vec![vote_ix],

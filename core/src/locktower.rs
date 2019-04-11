@@ -6,12 +6,11 @@ use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::{Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY};
-use std::cmp;
 use std::sync::Arc;
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
-const NUM_RECENT: usize = 16;
+const MAX_RECENT_VOTES: usize = 16;
 
 #[derive(Default)]
 pub struct EpochStakes {
@@ -256,9 +255,9 @@ impl Locktower {
     }
 
     pub fn recent_votes(&self) -> Vec<Vote> {
-        (0..cmp::min(self.lockouts.votes.len(), NUM_RECENT))
-            .into_iter()
-            .map(|i| Vote::new(self.lockouts.votes.get(i).unwrap().slot))
+        let start = self.lockouts.votes.len().saturating_sub(MAX_RECENT_VOTES);
+        (start..self.lockouts.votes.len())
+            .map(|i| Vote::new(self.lockouts.votes[i].slot))
             .collect()
     }
 
@@ -810,10 +809,8 @@ mod test {
 
     fn vote_and_check_recent(num_votes: usize) {
         let mut locktower = Locktower::new(EpochStakes::new_for_tests(2), 1, 0.67);
-        let expected: Vec<_> = (0..cmp::min(num_votes, NUM_RECENT))
-            .into_iter()
-            .map(|i| Vote::new(i as u64))
-            .collect();
+        let start = num_votes.saturating_sub(MAX_RECENT_VOTES);
+        let expected: Vec<_> = (start..num_votes).map(|i| Vote::new(i as u64)).collect();
         for i in 0..num_votes {
             locktower.record_vote(i as u64);
         }
@@ -832,6 +829,6 @@ mod test {
 
     #[test]
     fn test_recent_votes_exact() {
-        vote_and_check_recent(NUM_RECENT)
+        vote_and_check_recent(MAX_RECENT_VOTES)
     }
 }
