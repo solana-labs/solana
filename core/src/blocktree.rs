@@ -17,6 +17,7 @@ use hashbrown::HashMap;
 #[cfg(not(feature = "kvstore"))]
 use rocksdb;
 
+#[cfg(feature = "erasure")]
 use solana_metrics::counter::Counter;
 
 use solana_sdk::genesis_block::GenesisBlock;
