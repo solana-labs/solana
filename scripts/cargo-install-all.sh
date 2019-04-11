@@ -50,7 +50,7 @@ for crate in "${BIN_CRATES[@]}"; do
 done
 
 for dir in programs/*; do
-  for program in echo target/release/deps/lib{,solana_}"$(basename "$dir")"{,_program}.{so,dylib,dll}; do
+  for program in echo target/release/deps/libsolana_"$(basename "$dir")".{so,dylib,dll}; do
     if [[ -f $program ]]; then
       mkdir -p "$installDir/bin/deps"
       rm -f "$installDir/bin/deps/$(basename "$program")"
