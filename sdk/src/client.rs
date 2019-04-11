@@ -1,5 +1,10 @@
-//! Defines a trait for non-blocking (asynchronous) communication with a Solana server.
-//! Implementations are expected to create tranasctions, sign them, and send
+//! Defines traits for blocking (synchronous) and non-blocking (asynchronous)
+//! communication with a Solana server as well a a trait that encompasses both.
+//!
+//! //! Synchronous implementations are expected to create transactions, sign them, and send
+//! them with multiple retries, updating blockhashes and resigning as-needed.
+//!
+//! Asynchronous implementations are expected to create transactions, sign them, and send
 //! them but without waiting to see if the server accepted it.
 
 use crate::hash::Hash;
