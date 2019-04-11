@@ -12,7 +12,7 @@ use solana_sdk::transaction::TransactionError;
 fn test_program_native_failure() {
     let (genesis_block, alice_keypair) = GenesisBlock::new(50);
     let bank = Bank::new(&genesis_block);
-    let bank_client = BankClient::new(&bank);
+    let bank_client = BankClient::new(bank);
 
     let program = "solana_failure_program".as_bytes().to_vec();
     let program_id = load_program(&bank_client, &alice_keypair, &native_loader::id(), program);

@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn test_vote_bank_basic() {
         let (bank, from_keypair) = create_bank(10_000);
-        let bank_client = BankClient::new(&bank);
+        let bank_client = BankClient::new(bank);
 
         let vote_keypair = Keypair::new();
         let vote_id = vote_keypair.pubkey();
@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn test_vote_via_bank_authorize_voter() {
         let (bank, mallory_keypair) = create_bank(10_000);
-        let bank_client = BankClient::new(&bank);
+        let bank_client = BankClient::new(bank);
 
         let vote_keypair = Keypair::new();
         let vote_id = vote_keypair.pubkey();
@@ -187,7 +187,7 @@ mod tests {
     #[test]
     fn test_vote_via_bank_with_no_signature() {
         let (bank, mallory_keypair) = create_bank(10_000);
-        let bank_client = BankClient::new(&bank);
+        let bank_client = BankClient::new(bank);
 
         let vote_keypair = Keypair::new();
         let vote_id = vote_keypair.pubkey();

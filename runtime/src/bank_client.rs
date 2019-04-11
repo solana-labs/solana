@@ -11,11 +11,11 @@ use solana_sdk::transaction::{self, Transaction};
 use solana_sdk::transport::Result;
 use std::io;
 
-pub struct BankClient<'a> {
-    bank: &'a Bank,
+pub struct BankClient {
+    bank: Bank,
 }
 
-impl<'a> AsyncClient for BankClient<'a> {
+impl AsyncClient for BankClient {
     fn async_send_transaction(&self, transaction: Transaction) -> io::Result<Signature> {
         // Ignore the result. Client must use get_signature_status() instead.
         let _ = self.bank.process_transaction(&transaction);
@@ -57,7 +57,7 @@ impl<'a> AsyncClient for BankClient<'a> {
     }
 }
 
-impl<'a> SyncClient for BankClient<'a> {
+impl SyncClient for BankClient {
     fn send_message(&self, keypairs: &[&Keypair], message: Message) -> Result<Signature> {
         let blockhash = self.bank.last_blockhash();
         let transaction = Transaction::new(&keypairs, message, blockhash);
@@ -103,8 +103,8 @@ impl<'a> SyncClient for BankClient<'a> {
     }
 }
 
-impl<'a> BankClient<'a> {
-    pub fn new(bank: &'a Bank) -> Self {
+impl BankClient {
+    pub fn new(bank: Bank) -> Self {
         Self { bank }
     }
 }
@@ -123,7 +123,7 @@ mod tests {
         let jane_pubkey = jane_doe_keypair.pubkey();
         let doe_keypairs = vec![&john_doe_keypair, &jane_doe_keypair];
         let bank = Bank::new(&genesis_block);
-        let bank_client = BankClient::new(&bank);
+        let bank_client = BankClient::new(bank);
 
         // Create 2-2 Multisig Transfer instruction.
         let bob_pubkey = Pubkey::new_rand();

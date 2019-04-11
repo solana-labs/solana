@@ -42,7 +42,7 @@ mod bpf {
 
             let (genesis_block, alice_keypair) = GenesisBlock::new(50);
             let bank = Bank::new(&genesis_block);
-            let bank_client = BankClient::new(&bank);
+            let bank_client = BankClient::new(bank);
 
             // Call user program
             let program_id = load_program(&bank_client, &alice_keypair, &bpf_loader::id(), elf);
@@ -73,7 +73,7 @@ mod bpf {
 
                 let (genesis_block, alice_keypair) = GenesisBlock::new(50);
                 let bank = Bank::new(&genesis_block);
-                let bank_client = BankClient::new(&bank);
+                let bank_client = BankClient::new(bank);
 
                 let loader_id = load_program(
                     &bank_client,
@@ -118,7 +118,7 @@ mod bpf {
 
                 let (genesis_block, alice_keypair) = GenesisBlock::new(50);
                 let bank = Bank::new(&genesis_block);
-                let bank_client = BankClient::new(&bank);
+                let bank_client = BankClient::new(bank);
 
                 let loader_id = load_program(
                     &bank_client,
