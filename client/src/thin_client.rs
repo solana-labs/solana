@@ -6,18 +6,16 @@
 use crate::rpc_client::RpcClient;
 use bincode::{serialize_into, serialized_size};
 use log::*;
-use solana_sdk::async_client::AsyncClient;
+use solana_sdk::client::{AsyncClient, Client, SyncClient};
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::message::Message;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::sync_client::SyncClient;
 use solana_sdk::system_instruction;
 use solana_sdk::transaction::{self, Transaction};
 use solana_sdk::transport::Result as TransportResult;
-use std::error;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
 use std::time::Duration;
@@ -109,20 +107,12 @@ impl ThinClient {
                 return Ok(transaction.signatures[0]);
             }
             info!("{} tries failed transfer to {}", x, self.transactions_addr);
-            transaction.sign(keypairs, self.get_recent_blockhash()?);
+            transaction.sign(keypairs, self.rpc_client.get_recent_blockhash()?);
         }
         Err(io::Error::new(
             io::ErrorKind::Other,
             format!("retry_transfer failed in {} retries", tries),
         ))
-    }
-
-    pub fn get_transaction_count(&self) -> Result<u64, Box<dyn error::Error>> {
-        self.rpc_client.get_transaction_count()
-    }
-
-    pub fn get_recent_blockhash(&self) -> io::Result<Hash> {
-        self.rpc_client.get_recent_blockhash()
     }
 
     pub fn get_new_blockhash(&self, blockhash: &Hash) -> io::Result<Hash> {
@@ -178,6 +168,8 @@ impl ThinClient {
     }
 }
 
+impl Client for ThinClient {}
+
 impl SyncClient for ThinClient {
     fn send_message(&self, keypairs: &[&Keypair], message: Message) -> TransportResult<Signature> {
         let blockhash = self.get_recent_blockhash()?;
@@ -230,6 +222,16 @@ impl SyncClient for ThinClient {
             })?;
         Ok(status)
     }
+
+    fn get_recent_blockhash(&self) -> TransportResult<Hash> {
+        let recent_blockhash = self.rpc_client.get_recent_blockhash()?;
+        Ok(recent_blockhash)
+    }
+
+    fn get_transaction_count(&self) -> TransportResult<u64> {
+        let transaction_count = self.rpc_client.get_transaction_count()?;
+        Ok(transaction_count)
+    }
 }
 
 impl AsyncClient for ThinClient {
@@ -243,28 +245,34 @@ impl AsyncClient for ThinClient {
             .send_to(&buf[..], &self.transactions_addr)?;
         Ok(transaction.signatures[0])
     }
-    fn async_send_message(&self, keypairs: &[&Keypair], message: Message) -> io::Result<Signature> {
-        let blockhash = self.get_recent_blockhash()?;
-        let transaction = Transaction::new(&keypairs, message, blockhash);
+    fn async_send_message(
+        &self,
+        keypairs: &[&Keypair],
+        message: Message,
+        recent_blockhash: Hash,
+    ) -> io::Result<Signature> {
+        let transaction = Transaction::new(&keypairs, message, recent_blockhash);
         self.async_send_transaction(transaction)
     }
     fn async_send_instruction(
         &self,
         keypair: &Keypair,
         instruction: Instruction,
+        recent_blockhash: Hash,
     ) -> io::Result<Signature> {
         let message = Message::new(vec![instruction]);
-        self.async_send_message(&[keypair], message)
+        self.async_send_message(&[keypair], message, recent_blockhash)
     }
     fn async_transfer(
         &self,
         lamports: u64,
         keypair: &Keypair,
         pubkey: &Pubkey,
+        recent_blockhash: Hash,
     ) -> io::Result<Signature> {
         let transfer_instruction =
             system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
-        self.async_send_instruction(keypair, transfer_instruction)
+        self.async_send_instruction(keypair, transfer_instruction, recent_blockhash)
     }
 }
 

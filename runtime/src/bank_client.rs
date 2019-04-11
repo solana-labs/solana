@@ -1,11 +1,11 @@
 use crate::bank::Bank;
-use solana_sdk::async_client::AsyncClient;
+use solana_sdk::client::{AsyncClient, SyncClient};
+use solana_sdk::hash::Hash;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::sync_client::SyncClient;
 use solana_sdk::system_instruction;
 use solana_sdk::transaction::{self, Transaction};
 use solana_sdk::transport::Result;
@@ -23,9 +23,13 @@ impl<'a> AsyncClient for BankClient<'a> {
         Ok(transaction.signatures.get(0).cloned().unwrap_or_default())
     }
 
-    fn async_send_message(&self, keypairs: &[&Keypair], message: Message) -> io::Result<Signature> {
-        let blockhash = self.bank.last_blockhash();
-        let transaction = Transaction::new(&keypairs, message, blockhash);
+    fn async_send_message(
+        &self,
+        keypairs: &[&Keypair],
+        message: Message,
+        recent_blockhash: Hash,
+    ) -> io::Result<Signature> {
+        let transaction = Transaction::new(&keypairs, message, recent_blockhash);
         self.async_send_transaction(transaction)
     }
 
@@ -33,9 +37,10 @@ impl<'a> AsyncClient for BankClient<'a> {
         &self,
         keypair: &Keypair,
         instruction: Instruction,
+        recent_blockhash: Hash,
     ) -> io::Result<Signature> {
         let message = Message::new(vec![instruction]);
-        self.async_send_message(&[keypair], message)
+        self.async_send_message(&[keypair], message, recent_blockhash)
     }
 
     /// Transfer `lamports` from `keypair` to `pubkey`
@@ -44,10 +49,11 @@ impl<'a> AsyncClient for BankClient<'a> {
         lamports: u64,
         keypair: &Keypair,
         pubkey: &Pubkey,
+        recent_blockhash: Hash,
     ) -> io::Result<Signature> {
         let transfer_instruction =
             system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
-        self.async_send_instruction(keypair, transfer_instruction)
+        self.async_send_instruction(keypair, transfer_instruction, recent_blockhash)
     }
 }
 
@@ -85,6 +91,15 @@ impl<'a> SyncClient for BankClient<'a> {
         signature: &Signature,
     ) -> Result<Option<transaction::Result<()>>> {
         Ok(self.bank.get_signature_status(signature))
+    }
+
+    fn get_recent_blockhash(&self) -> Result<Hash> {
+        let last_blockhash = self.bank.last_blockhash();
+        Ok(last_blockhash)
+    }
+
+    fn get_transaction_count(&self) -> Result<u64> {
+        Ok(self.bank.transaction_count())
     }
 }
 

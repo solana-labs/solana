@@ -28,8 +28,8 @@ mod bpf {
     mod bpf_c {
         use super::*;
         use solana_sdk::bpf_loader;
+        use solana_sdk::client::SyncClient;
         use solana_sdk::signature::KeypairUtil;
-        use solana_sdk::sync_client::SyncClient;
         use std::io::Read;
 
         #[test]
@@ -100,8 +100,8 @@ mod bpf {
     #[cfg(feature = "bpf_rust")]
     mod bpf_rust {
         use super::*;
+        use solana_sdk::client::SyncClient;
         use solana_sdk::signature::KeypairUtil;
-        use solana_sdk::sync_client::SyncClient;
         use std::io::Read;
 
         #[test]

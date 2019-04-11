@@ -107,10 +107,10 @@ mod tests {
     use crate::bank::Bank;
     use crate::bank_client::BankClient;
     use solana_sdk::account::Account;
+    use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::sync_client::SyncClient;
     use solana_sdk::system_program;
     use solana_sdk::transaction::TransactionError;
 

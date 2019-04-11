@@ -19,7 +19,8 @@ use rand::Rng;
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_client::thin_client::{create_client, ThinClient};
-use solana_sdk::async_client::AsyncClient;
+use solana_sdk::client::{AsyncClient, SyncClient};
+
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction;
