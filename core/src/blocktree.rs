@@ -17,6 +17,8 @@ use hashbrown::HashMap;
 #[cfg(not(feature = "kvstore"))]
 use rocksdb;
 
+use solana_metrics::counter::Counter;
+
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -369,7 +371,9 @@ impl Blocktree {
         for ((slot, set_index), erasure_meta) in erasure_meta_working_set.into_iter() {
             if erasure_meta.can_recover() {
                 match self.recover(slot, set_index) {
-                    Ok(_) => {}
+                    Ok(recovered) => {
+                        inc_new_counter_info!("erasures-recovered", recovered);
+                    }
                     Err(Error::ErasureError(erasure::ErasureError::CorruptCoding)) => {
                         let mut erasure_meta = self
                             .erasure_meta_cf
@@ -501,7 +505,10 @@ impl Blocktree {
 
         if erasure_meta.can_recover() {
             match self.recover(slot, set_index) {
-                Ok(_) => return Ok(()),
+                Ok(recovered) => {
+                    inc_new_counter_info!("erasures-recovered", recovered);
+                    return Ok(());
+                }
                 Err(Error::ErasureError(erasure::ErasureError::CorruptCoding)) => {
                     let start_index = erasure_meta.start_index();
                     let (_, coding_end_idx) = erasure_meta.end_indexes();
@@ -1082,7 +1089,7 @@ impl Blocktree {
 
     #[cfg(feature = "erasure")]
     /// Attempts recovery using erasure coding
-    fn recover(&self, slot: u64, set_index: u64) -> Result<()> {
+    fn recover(&self, slot: u64, set_index: u64) -> Result<usize> {
         use crate::erasure::{ErasureError, NUM_CODING, NUM_DATA};
         use crate::packet::BLOB_DATA_SIZE;
 
@@ -1215,7 +1222,7 @@ impl Blocktree {
             self.put_coding_blob_bytes_raw(slot, blob.index(), &blob.data[..])?;
         }
 
-        Ok(())
+        Ok(erasures.len())
     }
 
     /// Returns the next consumed index and the number of ticks in the new consumed
