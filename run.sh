@@ -43,11 +43,6 @@ solana-keygen -o "$dataDir"/config/leader-keypair.json
 solana-keygen -o "$dataDir"/config/leader-vote-account-keypair.json
 solana-keygen -o "$dataDir"/config/drone-keypair.json
 
-leaderPubkey=$(\
-  solana-wallet \
-    --keypair "$dataDir"/config/leader-keypair.json  \
-    address \
-)
 leaderVoteAccountPubkey=$(\
   solana-wallet \
     --keypair "$dataDir"/config/leader-vote-account-keypair.json  \
