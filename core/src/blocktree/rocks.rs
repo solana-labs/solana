@@ -30,6 +30,8 @@ impl Backend for Rocks {
     type Error = rocksdb::Error;
 
     fn open(path: &Path) -> Result<Rocks> {
+        #[cfg(feature = "erasure")]
+        use crate::blocktree::db::columns::ErasureMeta;
         use crate::blocktree::db::columns::{Coding, Data, Orphans, SlotMeta};
 
         fs::create_dir_all(&path)?;
@@ -41,12 +43,17 @@ impl Backend for Rocks {
         let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
         let data_cf_descriptor = ColumnFamilyDescriptor::new(Data::NAME, get_cf_options());
         let erasure_cf_descriptor = ColumnFamilyDescriptor::new(Coding::NAME, get_cf_options());
+        #[cfg(feature = "erasure")]
+        let erasure_meta_cf_descriptor =
+            ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options());
         let orphans_cf_descriptor = ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options());
 
         let cfs = vec![
             meta_cf_descriptor,
             data_cf_descriptor,
             erasure_cf_descriptor,
+            #[cfg(feature = "erasure")]
+            erasure_meta_cf_descriptor,
             orphans_cf_descriptor,
         ];
 
@@ -57,9 +64,18 @@ impl Backend for Rocks {
     }
 
     fn columns(&self) -> Vec<&'static str> {
+        #[cfg(feature = "erasure")]
+        use crate::blocktree::db::columns::ErasureMeta;
         use crate::blocktree::db::columns::{Coding, Data, Orphans, SlotMeta};
 
-        vec![Coding::NAME, Data::NAME, Orphans::NAME, SlotMeta::NAME]
+        vec![
+            Coding::NAME,
+            #[cfg(feature = "erasure")]
+            ErasureMeta::NAME,
+            Data::NAME,
+            Orphans::NAME,
+            SlotMeta::NAME,
+        ]
     }
 
     fn destroy(path: &Path) -> Result<()> {
@@ -178,6 +194,31 @@ impl Column<Rocks> for cf::SlotMeta {
 
 impl TypedColumn<Rocks> for cf::SlotMeta {
     type Type = super::SlotMeta;
+}
+
+#[cfg(feature = "erasure")]
+impl Column<Rocks> for cf::ErasureMeta {
+    const NAME: &'static str = super::ERASURE_META_CF;
+    type Index = (u64, u64);
+
+    fn index(key: &[u8]) -> (u64, u64) {
+        let slot = BigEndian::read_u64(&key[..8]);
+        let set_index = BigEndian::read_u64(&key[8..]);
+
+        (slot, set_index)
+    }
+
+    fn key((slot, set_index): (u64, u64)) -> Vec<u8> {
+        let mut key = vec![0; 16];
+        BigEndian::write_u64(&mut key[..8], slot);
+        BigEndian::write_u64(&mut key[8..], set_index);
+        key
+    }
+}
+
+#[cfg(feature = "erasure")]
+impl TypedColumn<Rocks> for cf::ErasureMeta {
+    type Type = super::ErasureMeta;
 }
 
 impl DbCursor<Rocks> for DBRawIterator {

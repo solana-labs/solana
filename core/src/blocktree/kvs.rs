@@ -138,6 +138,30 @@ impl TypedColumn<Kvs> for cf::SlotMeta {
     type Type = super::SlotMeta;
 }
 
+#[cfg(feature = "erasure")]
+impl Column<Kvs> for cf::ErasureMeta {
+    const NAME: &'static str = super::ERASURE_META_CF;
+    type Index = (u64, u64);
+
+    fn key((slot, set_index): (u64, u64)) -> Key {
+        let mut key = Key::default();
+        BigEndian::write_u64(&mut key.0[8..16], slot);
+        BigEndian::write_u64(&mut key.0[16..], set_index);
+        key
+    }
+
+    fn index(key: &Key) -> (u64, u64) {
+        let slot = BigEndian::read_u64(&key.0[8..16]);
+        let set_index = BigEndian::read_u64(&key.0[16..]);
+        (slot, set_index)
+    }
+}
+
+#[cfg(feature = "erasure")]
+impl TypedColumn<Kvs> for cf::ErasureMeta {
+    type Type = super::ErasureMeta;
+}
+
 impl DbCursor<Kvs> for Dummy {
     fn valid(&self) -> bool {
         unimplemented!()
