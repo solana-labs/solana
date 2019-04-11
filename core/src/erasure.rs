@@ -297,6 +297,11 @@ impl CodingGenerator {
         let mut next_coding =
             Vec::with_capacity((self.leftover.len() + next_data.len()) / NUM_DATA * NUM_CODING);
 
+        if self.leftover.len() > 0 && next_data.len() > 0 {
+            if self.leftover[0].read().unwrap().slot() != next_data[0].read().unwrap().slot() {
+                self.leftover.clear(); // reset on slot boundaries
+            }
+        }
         let next_data: Vec<_> = self.leftover.iter().chain(next_data).cloned().collect();
 
         for data_blobs in next_data.chunks(NUM_DATA) {
@@ -639,6 +644,24 @@ pub mod test {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_erasure_generate_coding_reset_on_new_slot() {
+        solana_logger::setup();
+
+        let mut coding_generator = CodingGenerator::new();
+
+        // test coding by iterating one blob at a time
+        let data_blobs = generate_test_blobs(0, NUM_DATA * 2);
+
+        for i in NUM_DATA..NUM_DATA * 2 {
+            data_blobs[i].write().unwrap().set_slot(1);
+        }
+
+        let coding = coding_generator.next(&data_blobs[1..]).unwrap();
+
+        assert_eq!(coding.len(), NUM_CODING);
     }
 
     #[test]
