@@ -524,7 +524,10 @@ pub mod test {
         }
     }
 
-    // TODO: FIXME: always use multiple threads once fix for erasure init is in
+    /// This test is ignored because if successful, it never stops running. It is useful for
+    /// dicovering an initialization race-condition in the erasure FFI bindings. If this bug
+    /// re-emerges, running with `Z_THREADS = N` where `N > 1` should crash fairly rapidly.
+    #[ignore]
     #[test]
     fn test_recovery_with_model() {
         use std::env;
@@ -707,11 +710,10 @@ pub mod test {
                 for shared_coding_blob in erasure_set.coding.into_iter() {
                     let blob = shared_coding_blob.read().unwrap();
                     blocktree
-                        .write_coding_blob(
+                        .put_coding_blob_bytes_raw(
                             slot,
                             blob.index(),
                             &blob.data[..blob.size() + BLOB_HEADER_SIZE],
-                            false,
                         )
                         .unwrap();
                 }
