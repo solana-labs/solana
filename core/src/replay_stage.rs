@@ -22,7 +22,6 @@ use solana_sdk::signature::KeypairUtil;
 use solana_sdk::timing::{self, duration_as_ms};
 use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction;
-use solana_vote_api::vote_state::Vote;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, RwLock};
