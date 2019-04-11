@@ -2826,7 +2826,7 @@ pub mod tests {
         fn test_recovery_multi_slot_multi_thread() {
             use std::thread;
 
-            const USE_THREADS: bool = false;
+            const USE_THREADS: bool = true;
             let slots = vec![0, 3, 5, 50, 100];
             let max_erasure_sets = 16;
             solana_logger::setup();
