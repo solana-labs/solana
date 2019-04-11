@@ -54,10 +54,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Path to file containing keys of the mint"),
         )
         .arg(
-            Arg::with_name("bootstrap_stake_keypair_file")
+            Arg::with_name("bootstrap_vote_keypair_file")
                 .short("s")
-                .long("bootstrap-stake-keypair")
-                .value_name("BOOTSTRAP STAKE KEYPAIR")
+                .long("bootstrap-vote-keypair")
+                .value_name("BOOTSTRAP VOTE KEYPAIR")
                 .takes_value(true)
                 .required(true)
                 .help("Path to file containing the bootstrap leader's staking keypair"),
@@ -65,13 +65,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .get_matches();
 
     let bootstrap_leader_keypair_file = matches.value_of("bootstrap_leader_keypair_file").unwrap();
-    let bootstrap_stake_keypair_file = matches.value_of("bootstrap_stake_keypair_file").unwrap();
+    let bootstrap_vote_keypair_file = matches.value_of("bootstrap_vote_keypair_file").unwrap();
     let ledger_path = matches.value_of("ledger_path").unwrap();
     let mint_keypair_file = matches.value_of("mint_keypair_file").unwrap();
     let lamports = value_t_or_exit!(matches, "lamports", u64);
 
     let bootstrap_leader_keypair = read_keypair(bootstrap_leader_keypair_file)?;
-    let bootstrap_stake_keypair = read_keypair(bootstrap_stake_keypair_file)?;
+    let bootstrap_vote_keypair = read_keypair(bootstrap_vote_keypair_file)?;
     let mint_keypair = read_keypair(mint_keypair_file)?;
 
     let (mut genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(
@@ -80,7 +80,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         BOOTSTRAP_LEADER_LAMPORTS,
     );
     genesis_block.mint_id = mint_keypair.pubkey();
-    genesis_block.bootstrap_leader_vote_account_id = bootstrap_stake_keypair.pubkey();
+    genesis_block.bootstrap_leader_vote_account_id = bootstrap_vote_keypair.pubkey();
     genesis_block
         .native_instruction_processors
         .extend_from_slice(&[

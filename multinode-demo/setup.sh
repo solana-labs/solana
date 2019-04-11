@@ -79,7 +79,7 @@ if $bootstrap_leader; then
     $solana_keygen -o "$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-id.json
     $solana_genesis \
       --bootstrap-leader-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json \
-      --bootstrap-stake-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-staker-id.json \
+      --bootstrap-vote-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-id.json \
       --ledger "$SOLANA_RSYNC_CONFIG_DIR"/ledger \
       --mint "$SOLANA_CONFIG_DIR"/mint-id.json \
       --lamports "$lamports"
