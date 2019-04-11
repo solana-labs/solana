@@ -934,7 +934,7 @@ mod tests {
         ka: &Vec<(Pubkey, Account)>,
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(Vec<Account>, Vec<Vec<(Pubkey, Account)>>)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         let accounts = Accounts::new(0, None);
         for ka in ka.iter() {
             accounts.store_slow(0, &ka.0, &ka.1);
@@ -948,7 +948,7 @@ mod tests {
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(Vec<Account>, Vec<Vec<(Pubkey, Account)>>)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         let fee_calculator = FeeCalculator::default();
         load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
     }

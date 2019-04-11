@@ -7,6 +7,8 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
+//Data is aligned at the next 64 byte offset. Without alignment loading the memory may
+//crash on some architectures.
 macro_rules! align_up {
     ($addr: expr, $align: expr) => {
         ($addr + ($align - 1)) & !($align - 1)
@@ -80,6 +82,8 @@ impl AppendVec {
     }
 
     fn append_ptr(&self, offset: &mut usize, src: *const u8, len: usize) {
+        //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
+        //crash on some architectures.
         let pos = align_up!(*offset as usize, mem::size_of::<u64>());
         let data = &self.map[pos..(pos + len)];
         unsafe {
@@ -95,6 +99,8 @@ impl AppendVec {
         let mut offset = self.append_offset.lock().unwrap();
         let mut end = *offset;
         for val in vals {
+            //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
+            //crash on some architectures.
             end = align_up!(end, mem::size_of::<u64>());
             end += val.1;
         }
@@ -103,6 +109,8 @@ impl AppendVec {
             return None;
         }
 
+        //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
+        //crash on some architectures.
         let pos = align_up!(*offset, mem::size_of::<u64>());
         for val in vals {
             self.append_ptr(&mut offset, val.0, val.1)
@@ -117,6 +125,8 @@ impl AppendVec {
             let data = self.get_slice(offset, mem::size_of::<Account>());
             unsafe { std::mem::transmute::<*const u8, *mut Account>(data.as_ptr()) }
         };
+        //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
+        //crash on some architectures.
         let data_at = align_up!(offset + mem::size_of::<Account>(), mem::size_of::<u64>());
         let account_ref: &mut Account = unsafe { &mut *account };
         let data = self.get_slice(data_at, account_ref.data.len());
@@ -131,12 +141,16 @@ impl AppendVec {
     pub fn accounts(&self, mut start: usize) -> Vec<&Account> {
         let mut accounts = vec![];
         loop {
+            //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
+            //crash on some architectures.
             let end = align_up!(start + mem::size_of::<Account>(), mem::size_of::<u64>());
             if end > self.len() {
                 break;
             }
             let first = self.get_account(start);
             accounts.push(first);
+            //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
+            //crash on some architectures.
             let data_at = align_up!(start + mem::size_of::<Account>(), mem::size_of::<u64>());
             let next = align_up!(data_at + first.data.len(), mem::size_of::<u64>());
             start = next;
@@ -156,54 +170,67 @@ impl AppendVec {
     }
 }
 
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-    use log::*;
-    use rand::{thread_rng, Rng};
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::timing::duration_as_ms;
+pub mod test_utils {
     use std::fs::{create_dir_all, remove_dir_all};
     use std::path::PathBuf;
-    use std::time::Instant;
 
-    fn get_append_vec_path(path: &str) -> PathBuf {
+    pub struct TempFile {
+        pub path: PathBuf,
+    }
+
+    impl Drop for TempFile {
+        fn drop(&mut self) {
+            let mut path = PathBuf::new();
+            std::mem::swap(&mut path, &mut self.path);
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+
+    pub fn get_append_vec_path(path: &str) -> TempFile {
         let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
         let mut buf = PathBuf::new();
         buf.push(&format!("{}/{}", out_dir, path));
         let _ignored = remove_dir_all(out_dir.clone());
         create_dir_all(out_dir).expect("Create directory failed");
-        buf
+        TempFile { path: buf }
     }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::test_utils::*;
+    use super::*;
+    use log::*;
+    use rand::{thread_rng, Rng};
+    use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::timing::duration_as_ms;
+    use std::time::Instant;
 
     #[test]
     fn test_append_vec() {
         let path = get_append_vec_path("test_append");
-        let av = AppendVec::new(&path, true, 1024 * 1024);
-        let val = test_account(0);
-        let index = av.append_account(&val).unwrap();
-        assert_eq!(*av.get_account(index), val);
-        std::fs::remove_file(path).unwrap();
+        let av = AppendVec::new(&path.path, true, 1024 * 1024);
+        let account = create_test_account(0);
+        let index = av.append_account(&account).unwrap();
+        assert_eq!(*av.get_account(index), account);
     }
 
     #[test]
     fn test_append_vec_data() {
         let path = get_append_vec_path("test_append_data");
-        let av = AppendVec::new(&path, true, 1024 * 1024);
-        let val = test_account(5);
-        let index = av.append_account(&val).unwrap();
-        let account = av.get_account(index);
-        assert_eq!(*account, val);
-        let val1 = test_account(6);
-        let index1 = av.append_account(&val1).unwrap();
-        assert_eq!(*av.get_account(index), val);
-        assert_eq!(*av.get_account(index1), val1);
-        std::fs::remove_file(path).unwrap();
+        let av = AppendVec::new(&path.path, true, 1024 * 1024);
+        let account = create_test_account(5);
+        let index = av.append_account(&account).unwrap();
+        assert_eq!(*av.get_account(index), account);
+        let account1 = create_test_account(6);
+        let index1 = av.append_account(&account1).unwrap();
+        assert_eq!(*av.get_account(index), account);
+        assert_eq!(*av.get_account(index1), account1);
     }
 
-    pub fn test_account(ix: usize) -> Account {
-        let data_len = ix % 256;
-        let mut account = Account::new(ix as u64, 0, &Pubkey::default());
+    pub fn create_test_account(sample: usize) -> Account {
+        let data_len = sample % 256;
+        let mut account = Account::new(sample as u64, 0, &Pubkey::default());
         account.data = (0..data_len).into_iter().map(|_| data_len as u8).collect();
         account
     }
@@ -211,23 +238,23 @@ pub mod tests {
     #[test]
     fn test_append_vec_append_many() {
         let path = get_append_vec_path("test_append_many");
-        let av = AppendVec::new(&path, true, 1024 * 1024);
+        let av = AppendVec::new(&path.path, true, 1024 * 1024);
         let size = 1000;
         let mut indexes = vec![];
         let now = Instant::now();
-        for ix in 0..size {
-            let val = test_account(ix);
-            let pos = av.append_account(&val).unwrap();
-            assert_eq!(*av.get_account(pos), val);
+        for sample in 0..size {
+            let account = create_test_account(sample);
+            let pos = av.append_account(&account).unwrap();
+            assert_eq!(*av.get_account(pos), account);
             indexes.push(pos)
         }
         trace!("append time: {} ms", duration_as_ms(&now.elapsed()),);
 
         let now = Instant::now();
         for _ in 0..size {
-            let ix = thread_rng().gen_range(0, indexes.len());
-            let val = test_account(ix);
-            assert_eq!(*av.get_account(indexes[ix]), val);
+            let sample = thread_rng().gen_range(0, indexes.len());
+            let account = create_test_account(sample);
+            assert_eq!(*av.get_account(indexes[sample]), account);
         }
         trace!("random read time: {} ms", duration_as_ms(&now.elapsed()),);
 
@@ -236,14 +263,13 @@ pub mod tests {
         assert_eq!(indexes[0], 0);
         let accounts = av.accounts(indexes[0]);
         assert_eq!(accounts.len(), size);
-        for (ix, v) in accounts.iter().enumerate() {
-            let val = test_account(ix);
-            assert_eq!(**v, val)
+        for (sample, v) in accounts.iter().enumerate() {
+            let account = create_test_account(sample);
+            assert_eq!(**v, account)
         }
         trace!(
             "sequential read time: {} ms",
             duration_as_ms(&now.elapsed()),
         );
-        std::fs::remove_file(path).unwrap();
     }
 }
