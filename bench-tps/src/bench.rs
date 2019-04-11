@@ -7,10 +7,9 @@ use solana::contact_info::ContactInfo;
 use solana::gen_keys::GenKeys;
 use solana::gossip_service::discover_nodes;
 use solana_client::thin_client::create_client;
-use solana_client::thin_client::ThinClient;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_metrics::influxdb;
-use solana_sdk::client::{AsyncClient, SyncClient};
+use solana_sdk::client::{AsyncClient, Client, SyncClient};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction;
 use solana_sdk::system_transaction;
@@ -86,7 +85,7 @@ pub fn do_bench_tps(config: Config) {
     // Sample the first keypair, see if it has lamports, if so then resume
     // to avoid lamport loss
     let keypair0_balance = client
-        .poll_get_balance(&gen_keypairs.last().unwrap().pubkey())
+        .get_balance(&gen_keypairs.last().unwrap().pubkey())
         .unwrap_or(0);
 
     if num_lamports_per_account > keypair0_balance {
@@ -156,7 +155,7 @@ pub fn do_bench_tps(config: Config) {
     let mut reclaim_lamports_back_to_source_account = false;
     let mut i = keypair0_balance;
     while start.elapsed() < duration {
-        let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
+        let balance = client.get_balance(&id.pubkey()).unwrap_or(0);
         metrics_submit_lamport_balance(balance);
 
         // ping-pong between source and destination accounts for each loop iteration
@@ -204,7 +203,7 @@ pub fn do_bench_tps(config: Config) {
         }
     }
 
-    let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
+    let balance = client.get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_lamport_balance(balance);
 
     compute_and_report_stats(
@@ -399,7 +398,7 @@ fn do_tx_transfers(
     }
 }
 
-fn verify_funding_transfer(client: &ThinClient, tx: &Transaction, amount: u64) -> bool {
+fn verify_funding_transfer<T: Client>(client: &T, tx: &Transaction, amount: u64) -> bool {
     for a in &tx.message().account_keys[1..] {
         if client.get_balance(a).unwrap_or(0) >= amount {
             return true;
@@ -412,7 +411,7 @@ fn verify_funding_transfer(client: &ThinClient, tx: &Transaction, amount: u64) -
 /// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
 /// on every iteration.  This allows us to replay the transfers because the source is either empty,
 /// or full
-fn fund_keys(client: &ThinClient, source: &Keypair, dests: &[Keypair], lamports: u64) {
+fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Keypair], lamports: u64) {
     let total = lamports * dests.len() as u64;
     let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
     let mut notfunded: Vec<&Keypair> = dests.iter().collect();
@@ -514,8 +513,8 @@ fn fund_keys(client: &ThinClient, source: &Keypair, dests: &[Keypair], lamports:
     }
 }
 
-fn airdrop_lamports(client: &ThinClient, drone_addr: &SocketAddr, id: &Keypair, tx_count: u64) {
-    let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
+fn airdrop_lamports<T: Client>(client: &T, drone_addr: &SocketAddr, id: &Keypair, tx_count: u64) {
+    let starting_balance = client.get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_lamport_balance(starting_balance);
     println!("starting balance {}", starting_balance);
 
@@ -532,7 +531,7 @@ fn airdrop_lamports(client: &ThinClient, drone_addr: &SocketAddr, id: &Keypair, 
         match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, blockhash) {
             Ok(transaction) => {
                 let signature = client.async_send_transaction(transaction).unwrap();
-                client.poll_for_signature(&signature).unwrap();
+                client.get_signature_status(&signature).unwrap();
             }
             Err(err) => {
                 panic!(
@@ -542,7 +541,7 @@ fn airdrop_lamports(client: &ThinClient, drone_addr: &SocketAddr, id: &Keypair, 
             }
         };
 
-        let current_balance = client.poll_get_balance(&id.pubkey()).unwrap_or_else(|e| {
+        let current_balance = client.get_balance(&id.pubkey()).unwrap_or_else(|e| {
             println!("airdrop error {}", e);
             starting_balance
         });
