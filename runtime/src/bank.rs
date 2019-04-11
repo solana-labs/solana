@@ -1097,11 +1097,9 @@ mod tests {
         assert_eq!(bank.get_balance(&key1), 1);
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(bank.get_signature_status(&t1.signatures[0]), Some(Ok(())));
-        // TODO: Transactions that fail to pay a fee could be dropped silently
-        assert_eq!(
-            bank.get_signature_status(&t2.signatures[0]),
-            Some(Err(TransactionError::AccountInUse))
-        );
+        // TODO: Transactions that fail to pay a fee could be dropped silently.
+        // Non-instruction errors don't get logged in the signature cache
+        assert_eq!(bank.get_signature_status(&t2.signatures[0]), None);
     }
 
     #[test]
