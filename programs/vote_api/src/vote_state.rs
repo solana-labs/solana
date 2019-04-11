@@ -117,6 +117,10 @@ impl VoteState {
         }
     }
 
+    pub fn process_votes(&mut self, votes: &[Vote]) {
+        votes.iter().for_each(|v| self.process_vote(v));;
+    }
+
     pub fn process_vote(&mut self, vote: &Vote) {
         // Ignore votes for slots earlier than we already have votes for
         if self
@@ -227,7 +231,7 @@ pub fn initialize_account(
 pub fn process_vote(
     vote_account: &mut KeyedAccount,
     other_signers: &[KeyedAccount],
-    vote: &Vote,
+    votes: &[Vote],
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
@@ -245,7 +249,7 @@ pub fn process_vote(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    vote_state.process_vote(vote);
+    vote_state.process_votes(&votes);
     vote_account.set_state(&vote_state)
 }
 
@@ -276,7 +280,7 @@ pub fn vote(
     process_vote(
         &mut KeyedAccount::new(vote_id, true, vote_account),
         &[],
-        vote,
+        &[vote.clone()],
     )?;
     vote_account.state()
 }
@@ -285,6 +289,8 @@ pub fn vote(
 mod tests {
     use super::*;
     use crate::vote_state;
+
+    const MAX_RECENT_VOTES: usize = 16;
 
     #[test]
     fn test_initialize_vote_account() {
@@ -346,7 +352,7 @@ mod tests {
     fn test_vote_signature() {
         let (vote_id, mut vote_account) = create_test_account();
 
-        let vote = Vote::new(1);
+        let vote = vec![Vote::new(1)];
 
         // unsigned
         let res = process_vote(
@@ -392,7 +398,7 @@ mod tests {
         assert_eq!(res, Ok(()));
 
         // not signed by authorized voter
-        let vote = Vote::new(2);
+        let vote = vec![Vote::new(2)];
         let res = process_vote(
             &mut KeyedAccount::new(&vote_id, true, &mut vote_account),
             &[],
@@ -401,7 +407,7 @@ mod tests {
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         // signed by authorized voter
-        let vote = Vote::new(2);
+        let vote = vec![Vote::new(2)];
         let res = process_vote(
             &mut KeyedAccount::new(&vote_id, false, &mut vote_account),
             &[KeyedAccount::new(
@@ -570,5 +576,35 @@ mod tests {
                 INITIAL_LOCKOUT.pow(num_lockouts as u32) as u64
             );
         }
+    }
+
+    fn recent_votes(vote_state: &VoteState) -> Vec<Vote> {
+        let start = vote_state.votes.len().saturating_sub(MAX_RECENT_VOTES);
+        (start..vote_state.votes.len())
+            .map(|i| Vote::new(vote_state.votes.get(i).unwrap().slot))
+            .collect()
+    }
+
+    /// check that two accounts with different data can be brought to the same state with one vote submission
+    #[test]
+    fn test_process_missed_votes() {
+        let account_a = Pubkey::new_rand();
+        let mut vote_state_a = VoteState::new(&account_a, &Pubkey::new_rand(), 0);
+        let account_b = Pubkey::new_rand();
+        let mut vote_state_b = VoteState::new(&account_b, &Pubkey::new_rand(), 0);
+
+        // process some votes on account a
+        let votes_a: Vec<_> = (0..5).into_iter().map(|i| Vote::new(i)).collect();
+        vote_state_a.process_votes(&votes_a);
+        assert_ne!(recent_votes(&vote_state_a), recent_votes(&vote_state_b));
+
+        // as long as b has missed less than "NUM_RECENT" votes both accounts should be in sync
+        let votes: Vec<_> = (0..MAX_RECENT_VOTES)
+            .into_iter()
+            .map(|i| Vote::new(i as u64))
+            .collect();
+        vote_state_a.process_votes(&votes);
+        vote_state_b.process_votes(&votes);
+        assert_eq!(recent_votes(&vote_state_a), recent_votes(&vote_state_b));
     }
 }

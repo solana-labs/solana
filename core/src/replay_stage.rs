@@ -22,7 +22,6 @@ use solana_sdk::signature::KeypairUtil;
 use solana_sdk::timing::{self, duration_as_ms};
 use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction;
-use solana_vote_api::vote_state::Vote;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, RwLock};
@@ -294,24 +293,25 @@ impl ReplayStage {
         locktower: &mut Locktower,
         progress: &mut HashMap<u64, ForkProgress>,
         voting_keypair: &Option<Arc<T>>,
-        vote_account: &Pubkey,
+        vote_account_pubkey: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: &Arc<Blocktree>,
     ) where
         T: 'static + KeypairUtil + Send + Sync,
     {
         if let Some(ref voting_keypair) = voting_keypair {
-            let vote_ix = vote_instruction::vote(&vote_account, Vote::new(bank.slot()));
-            let vote_tx = Transaction::new_signed_instructions(
-                &[voting_keypair.as_ref()],
-                vec![vote_ix],
-                bank.last_blockhash(),
-            );
             if let Some(new_root) = locktower.record_vote(bank.slot()) {
                 bank_forks.write().unwrap().set_root(new_root);
                 blocktree.set_root(new_root);
                 Self::handle_new_root(&bank_forks, progress);
             }
+            // Send our last few votes along with the new one
+            let vote_ix = vote_instruction::vote(vote_account_pubkey, locktower.recent_votes());
+            let vote_tx = Transaction::new_signed_instructions(
+                &[voting_keypair.as_ref()],
+                vec![vote_ix],
+                bank.last_blockhash(),
+            );
             locktower.update_epoch(&bank);
             cluster_info.write().unwrap().push_vote(vote_tx);
         }
@@ -604,6 +604,7 @@ mod test {
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_vote_api::vote_state::Vote;
     use std::fs::remove_dir_all;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -652,8 +653,7 @@ mod test {
                 &poh_recorder,
                 ledger_writer_sender,
             );
-
-            let vote_ix = vote_instruction::vote(&voting_keypair.pubkey(), Vote::new(0));
+            let vote_ix = vote_instruction::vote(&voting_keypair.pubkey(), vec![Vote::new(0)]);
             let vote_tx = Transaction::new_signed_instructions(
                 &[voting_keypair.as_ref()],
                 vec![vote_ix],

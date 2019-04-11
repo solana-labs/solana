@@ -138,7 +138,7 @@ pub mod tests {
     }
 
     pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot: u64) {
-        let ix = vote_instruction::vote(&voting_keypair.pubkey(), Vote::new(slot));
+        let ix = vote_instruction::vote(&voting_keypair.pubkey(), vec![Vote::new(slot)]);
         process_instructions(bank, &[voting_keypair], vec![ix]);
     }
 
@@ -158,7 +158,10 @@ pub mod tests {
             0,
             lamports,
         );
-        ixs.push(vote_instruction::vote(&voting_pubkey, Vote::new(slot)));
+        ixs.push(vote_instruction::vote(
+            &voting_pubkey,
+            vec![Vote::new(slot)],
+        ));
         process_instructions(bank, &[from_keypair, voting_keypair], ixs);
     }
 }

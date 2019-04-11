@@ -20,7 +20,8 @@ pub enum VoteInstruction {
     /// Authorize a voter to send signed votes.
     AuthorizeVoter(Pubkey),
 
-    Vote(Vote),
+    /// A Vote instruction with recent votes
+    Vote(Vec<Vote>),
 }
 
 fn initialize_account(vote_id: &Pubkey, node_id: &Pubkey, commission: u32) -> Instruction {
@@ -54,9 +55,9 @@ pub fn authorize_voter(vote_id: &Pubkey, authorized_voter_id: &Pubkey) -> Instru
     )
 }
 
-pub fn vote(vote_id: &Pubkey, vote: Vote) -> Instruction {
+pub fn vote(vote_id: &Pubkey, recent_votes: Vec<Vote>) -> Instruction {
     let account_metas = vec![AccountMeta::new(*vote_id, true)];
-    Instruction::new(id(), &VoteInstruction::Vote(vote), account_metas)
+    Instruction::new(id(), &VoteInstruction::Vote(recent_votes), account_metas)
 }
 
 pub fn process_instruction(
@@ -144,7 +145,7 @@ mod tests {
         vote_keypair: &Keypair,
         tick_height: u64,
     ) -> Result<()> {
-        let vote_ix = vote_instruction::vote(&vote_keypair.pubkey(), Vote::new(tick_height));
+        let vote_ix = vote_instruction::vote(&vote_keypair.pubkey(), vec![Vote::new(tick_height)]);
         bank_client
             .send_instruction(vote_keypair, vote_ix)
             .map_err(|err| err.unwrap())?;
@@ -195,7 +196,7 @@ mod tests {
         create_vote_account(&bank_client, &mallory_keypair, &vote_id, 100).unwrap();
 
         let mallory_id = mallory_keypair.pubkey();
-        let mut vote_ix = vote_instruction::vote(&vote_id, Vote::new(0));
+        let mut vote_ix = vote_instruction::vote(&vote_id, vec![Vote::new(0)]);
         vote_ix.accounts[0].is_signer = false; // <--- attack!! No signer required.
 
         // Sneak in an instruction so that the transaction is signed but
