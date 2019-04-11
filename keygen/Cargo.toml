@@ -10,6 +10,7 @@ edition = "2018"
 
 [features]
 cuda = []
+erasure = []
 
 [dependencies]
 dirs = "1.0.5"

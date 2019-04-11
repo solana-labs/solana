@@ -10,6 +10,7 @@ homepage = "https://solana.com/"
 
 [features]
 cuda = []
+erasure = []
 
 [dependencies]
 bincode = "1.1.3"
