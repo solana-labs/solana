@@ -10,6 +10,7 @@ use crate::gossip_service::discover_nodes;
 use crate::locktower::VOTE_THRESHOLD_DEPTH;
 use crate::poh_service::PohServiceConfig;
 use solana_client::thin_client::create_client;
+use solana_sdk::client::SyncClient;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction;

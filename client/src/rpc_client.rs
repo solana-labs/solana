@@ -266,7 +266,7 @@ impl RpcClient {
 
     /// Request the transaction count.  If the response packet is dropped by the network,
     /// this method will try again 5 times.
-    pub fn get_transaction_count(&self) -> Result<u64, Box<dyn error::Error>> {
+    pub fn get_transaction_count(&self) -> io::Result<u64> {
         debug!("get_transaction_count");
 
         let mut num_retries = 5;

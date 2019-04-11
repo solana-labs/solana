@@ -33,10 +33,10 @@ mod tests {
     use serde_derive::{Deserialize, Serialize};
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
+    use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::message::Message;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::sync_client::SyncClient;
     use solana_sdk::system_instruction;
 
     #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]

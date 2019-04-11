@@ -1,6 +1,6 @@
 pub mod account;
-pub mod async_client;
 pub mod bpf_loader;
+pub mod client;
 pub mod fee_calculator;
 pub mod genesis_block;
 pub mod hash;
@@ -14,7 +14,6 @@ pub mod pubkey;
 pub mod rpc_port;
 pub mod short_vec;
 pub mod signature;
-pub mod sync_client;
 pub mod system_instruction;
 pub mod system_program;
 pub mod system_transaction;
