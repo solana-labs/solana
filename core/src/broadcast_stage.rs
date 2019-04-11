@@ -126,7 +126,7 @@ impl Broadcast {
         // Send out data
         ClusterInfo::broadcast(&self.id, contains_last_tick, &broadcast_table, sock, &blobs)?;
 
-        const BROADCAST_REDUNDICATOR_RATIO: f64 = 1.0 / 4.0;
+        const BROADCAST_REDUNDICATOR_RATIO: f64 = 1.0 / 1.0;
         {
             use rand::{thread_rng, Rng};
             // Send out some amount of redundant data
