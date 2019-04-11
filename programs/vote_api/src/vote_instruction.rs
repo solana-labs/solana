@@ -91,7 +91,7 @@ pub fn process_instruction(
             let (vote_account, other_signers) = keyed_accounts.split_at_mut(1);
             let vote_account = &mut vote_account[0];
 
-            vote_state::process_vote(vote_account, other_signers, vote)
+            vote_state::process_vote(vote_account, other_signers, &vote)
         }
     }
 }

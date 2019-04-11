@@ -231,7 +231,7 @@ pub fn initialize_account(
 pub fn process_vote(
     vote_account: &mut KeyedAccount,
     other_signers: &[KeyedAccount],
-    votes: Vec<Vote>,
+    votes: &[Vote],
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
@@ -280,7 +280,7 @@ pub fn vote(
     process_vote(
         &mut KeyedAccount::new(vote_id, true, vote_account),
         &[],
-        vec![vote.clone()],
+        &[vote.clone()],
     )?;
     vote_account.state()
 }
@@ -358,7 +358,7 @@ mod tests {
         let res = process_vote(
             &mut KeyedAccount::new(&vote_id, false, &mut vote_account),
             &[],
-            vote.clone(),
+            &vote,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
@@ -366,7 +366,7 @@ mod tests {
         let res = process_vote(
             &mut KeyedAccount::new(&vote_id, true, &mut vote_account),
             &[],
-            vote,
+            &vote,
         );
         assert_eq!(res, Ok(()));
 
@@ -402,7 +402,7 @@ mod tests {
         let res = process_vote(
             &mut KeyedAccount::new(&vote_id, true, &mut vote_account),
             &[],
-            vote,
+            &vote,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
@@ -415,7 +415,7 @@ mod tests {
                 true,
                 &mut Account::default(),
             )],
-            vote,
+            &vote,
         );
         assert_eq!(res, Ok(()));
     }
