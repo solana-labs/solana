@@ -553,9 +553,9 @@ mod test {
         (bank, mint_keypair)
     }
 
-    fn create_client(bank: &Bank, mint_keypair: Keypair) -> (BankClient, Keypair) {
+    fn create_client(bank: Bank, mint_keypair: Keypair) -> (BankClient, Keypair) {
         let owner = Keypair::new();
-        let bank_client = BankClient::new(&bank);
+        let bank_client = BankClient::new(bank);
         bank_client
             .transfer(42, &mint_keypair, &owner.pubkey())
             .unwrap();
@@ -649,7 +649,7 @@ mod test {
     fn test_exchange_new_account() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
-        let (client, owner) = create_client(&bank, mint_keypair);
+        let (client, owner) = create_client(bank, mint_keypair);
 
         let new = create_token_account(&client, &owner);
         let new_account_data = client.get_account_data(&new).unwrap().unwrap();
@@ -668,7 +668,7 @@ mod test {
     fn test_exchange_new_account_not_unallocated() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
-        let (client, owner) = create_client(&bank, mint_keypair);
+        let (client, owner) = create_client(bank, mint_keypair);
 
         let new = create_token_account(&client, &owner);
         let instruction = exchange_instruction::account_request(&owner.pubkey(), &new);
@@ -681,7 +681,7 @@ mod test {
     fn test_exchange_new_transfer_request() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
-        let (client, owner) = create_client(&bank, mint_keypair);
+        let (client, owner) = create_client(bank, mint_keypair);
 
         let new = create_token_account(&client, &owner);
 
@@ -707,7 +707,7 @@ mod test {
     fn test_exchange_new_trade_request() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
-        let (client, owner) = create_client(&bank, mint_keypair);
+        let (client, owner) = create_client(bank, mint_keypair);
 
         let (trade, src, dst) = trade(
             &client,
@@ -756,7 +756,7 @@ mod test {
     fn test_exchange_new_swap_request() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
-        let (client, owner) = create_client(&bank, mint_keypair);
+        let (client, owner) = create_client(bank, mint_keypair);
 
         let swap = create_account(&client, &owner);
         let profit = create_token_account(&client, &owner);

@@ -284,7 +284,7 @@ mod tests {
 
         // Fund to account to bypass AccountNotFound error
         let bank = Bank::new(&genesis_block);
-        let bank_client = BankClient::new(&bank);
+        let bank_client = BankClient::new(bank);
         bank_client
             .transfer(50, &alice_keypair, &mallory_pubkey)
             .unwrap();

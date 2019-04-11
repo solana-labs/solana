@@ -65,13 +65,13 @@ mod tests {
         (bank, mint_keypair)
     }
 
-    fn create_config_client(bank: &Bank, mint_keypair: Keypair) -> (BankClient, Keypair, Keypair) {
+    fn create_config_client(bank: Bank, mint_keypair: Keypair) -> (BankClient, Keypair, Keypair) {
         let from_keypair = Keypair::new();
         let from_pubkey = from_keypair.pubkey();
         let config_keypair = Keypair::new();
         let config_pubkey = config_keypair.pubkey();
 
-        let bank_client = BankClient::new(&bank);
+        let bank_client = BankClient::new(bank);
         bank_client
             .transfer(42, &mint_keypair, &from_pubkey)
             .unwrap();
@@ -94,12 +94,14 @@ mod tests {
     fn test_process_create_ok() {
         solana_logger::setup();
         let (bank, from_keypair) = create_bank(10_000);
-        let (_bank_client, _, config_keypair) = create_config_client(&bank, from_keypair);
-        let config_account = bank.get_account(&config_keypair.pubkey()).unwrap();
-        assert_eq!(id(), config_account.owner);
+        let (bank_client, _, config_keypair) = create_config_client(bank, from_keypair);
+        let config_account_data = bank_client
+            .get_account_data(&config_keypair.pubkey())
+            .unwrap()
+            .unwrap();
         assert_eq!(
             MyConfig::default(),
-            MyConfig::deserialize(&config_account.data).unwrap()
+            MyConfig::deserialize(&config_account_data).unwrap()
         );
     }
 
@@ -107,7 +109,7 @@ mod tests {
     fn test_process_store_ok() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
-        let (bank_client, from_keypair, config_keypair) = create_config_client(&bank, mint_keypair);
+        let (bank_client, from_keypair, config_keypair) = create_config_client(bank, mint_keypair);
         let config_pubkey = config_keypair.pubkey();
 
         let my_config = MyConfig::new(42);
@@ -132,7 +134,7 @@ mod tests {
     fn test_process_store_fail_instruction_data_too_large() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
-        let (bank_client, from_keypair, config_keypair) = create_config_client(&bank, mint_keypair);
+        let (bank_client, from_keypair, config_keypair) = create_config_client(bank, mint_keypair);
 
         let my_config = MyConfig::new(42);
 
@@ -154,7 +156,7 @@ mod tests {
         let system_keypair = Keypair::new();
         let system_pubkey = system_keypair.pubkey();
         bank.transfer(42, &mint_keypair, &system_pubkey).unwrap();
-        let (bank_client, from_keypair, config_keypair) = create_config_client(&bank, mint_keypair);
+        let (bank_client, from_keypair, config_keypair) = create_config_client(bank, mint_keypair);
 
         let move_instruction = system_instruction::transfer(&system_pubkey, &Pubkey::default(), 42);
         let my_config = MyConfig::new(42);
