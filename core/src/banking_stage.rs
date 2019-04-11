@@ -156,13 +156,17 @@ impl BankingStage {
                 }
                 let bank = bank.unwrap();
 
-                let (processed, tx_len, new_offset) =
+                let (processed, verified_txs, verified_indexes) =
                     Self::process_received_packets(&bank, &poh_recorder, &msgs, &vers, *offset)?;
 
-                if processed < tx_len {
+                if processed < verified_txs.len() {
                     bank_shutdown = true;
                     // Collect any unprocessed transactions in this batch for forwarding
-                    unprocessed_packets.push((msgs.to_owned(), new_offset, vers.to_owned()));
+                    unprocessed_packets.push((
+                        msgs.to_owned(),
+                        verified_indexes[processed],
+                        vers.to_owned(),
+                    ));
                 }
             }
         }
@@ -391,7 +395,7 @@ impl BankingStage {
         msgs: &Arc<RwLock<Packets>>,
         vers: &[u8],
         offset: usize,
-    ) -> Result<(usize, usize, usize)> {
+    ) -> Result<(usize, Vec<Transaction>, Vec<usize>)> {
         debug!("banking-stage-tx bank {}", bank.slot());
         let transactions = Self::deserialize_transactions(&Packets::new(
             msgs.read().unwrap().packets[offset..].to_owned(),
@@ -404,7 +408,7 @@ impl BankingStage {
             bank.slot(),
             transactions.len()
         );
-        let (verified_transactions, verified_transaction_index): (Vec<_>, Vec<_>) = transactions
+        let (verified_transactions, verified_indexes): (Vec<_>, Vec<_>) = transactions
             .into_iter()
             .zip(vers)
             .zip(0..)
@@ -427,11 +431,8 @@ impl BankingStage {
         );
 
         let processed = Self::process_transactions(&bank, &verified_transactions, poh)?;
-        Ok((
-            processed,
-            verified_transactions.len(),
-            verified_transaction_index[processed],
-        ))
+
+        Ok((processed, verified_transactions, verified_indexes))
     }
 
     /// Process the incoming packets
@@ -472,13 +473,13 @@ impl BankingStage {
             }
             let bank = bank.unwrap();
 
-            let (processed, tx_len, offset) =
+            let (processed, verified_txs, verified_indexes) =
                 Self::process_received_packets(&bank, &poh, &msgs, &vers, 0)?;
 
-            if processed < tx_len {
+            if processed < verified_txs.len() {
                 bank_shutdown = true;
                 // Collect any unprocessed transactions in this batch for forwarding
-                unprocessed_packets.push((msgs, offset, vers));
+                unprocessed_packets.push((msgs, verified_indexes[processed], vers));
             }
             new_tx_count += processed;
         }
