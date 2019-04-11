@@ -171,6 +171,8 @@ impl AppendVec {
 }
 
 pub mod test_utils {
+    use solana_sdk::account::Account;
+    use solana_sdk::pubkey::Pubkey;
     use std::fs::{create_dir_all, remove_dir_all};
     use std::path::PathBuf;
 
@@ -194,6 +196,13 @@ pub mod test_utils {
         create_dir_all(out_dir).expect("Create directory failed");
         TempFile { path: buf }
     }
+
+    pub fn create_test_account(sample: usize) -> Account {
+        let data_len = sample % 256;
+        let mut account = Account::new(sample as u64, 0, &Pubkey::default());
+        account.data = (0..data_len).into_iter().map(|_| data_len as u8).collect();
+        account
+    }
 }
 
 #[cfg(test)]
@@ -202,7 +211,6 @@ pub mod tests {
     use super::*;
     use log::*;
     use rand::{thread_rng, Rng};
-    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::timing::duration_as_ms;
     use std::time::Instant;
 
@@ -226,13 +234,6 @@ pub mod tests {
         let index1 = av.append_account(&account1).unwrap();
         assert_eq!(*av.get_account(index), account);
         assert_eq!(*av.get_account(index1), account1);
-    }
-
-    pub fn create_test_account(sample: usize) -> Account {
-        let data_len = sample % 256;
-        let mut account = Account::new(sample as u64, 0, &Pubkey::default());
-        account.data = (0..data_len).into_iter().map(|_| data_len as u8).collect();
-        account
     }
 
     #[test]
