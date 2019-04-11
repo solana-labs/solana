@@ -15,3 +15,4 @@ solana-netutil = { path = "../netutil", version = "0.13.0" }
 
 [features]
 cuda = ["solana/cuda"]
+erasure = []

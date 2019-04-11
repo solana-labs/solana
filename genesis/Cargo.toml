@@ -26,3 +26,4 @@ solana-vote-api = { path = "../programs/vote_api", version = "0.13.0" }
 
 [features]
 cuda = ["solana/cuda"]
+erasure = []

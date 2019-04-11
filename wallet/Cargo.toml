@@ -30,3 +30,4 @@ solana = { path = "../core", version = "0.13.0" }
 
 [features]
 cuda = []
+erasure = []
