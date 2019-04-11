@@ -54,7 +54,7 @@ impl SigVerifyStage {
     ) -> Result<()> {
         let (batch, len, recv_time) =
             streamer::recv_batch(&recvr.lock().expect("'recvr' lock in fn verifier"))?;
-        inc_new_counter_info!("sigverify_stage-entries_received", len);
+        inc_new_counter_info!("sigverify_stage-packets_received", len);
 
         let now = Instant::now();
         let batch_len = batch.len();
@@ -67,10 +67,7 @@ impl SigVerifyStage {
         );
 
         let verified_batch = Self::verify_batch(batch, sigverify_disabled);
-        inc_new_counter_info!(
-            "sigverify_stage-verified_entries_send",
-            verified_batch.len()
-        );
+        inc_new_counter_info!("sigverify_stage-verified_packets_send", len);
 
         if sendr.send(verified_batch).is_err() {
             return Err(Error::SendError);
