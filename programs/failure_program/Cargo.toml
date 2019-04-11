@@ -1,5 +1,5 @@
 [package]
-name = "solana-failure"
+name = "solana-failure-program"
 version = "0.13.0"
 description = "Solana failure program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
@@ -16,6 +16,6 @@ log = "0.4.2"
 solana-runtime = { path = "../../runtime", version = "0.13.0" }
 
 [lib]
-name = "failure"
+name = "solana_failure_program"
 crate-type = ["cdylib"]
 

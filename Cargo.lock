@@ -2338,7 +2338,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-failure"
+name = "solana-failure-program"
 version = "0.13.0"
 dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2491,7 +2491,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-noop"
+name = "solana-noop-program"
 version = "0.13.0"
 dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",

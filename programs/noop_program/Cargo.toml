@@ -1,5 +1,5 @@
 [package]
-name = "solana-noop"
+name = "solana-noop-program"
 version = "0.13.0"
 description = "Solana noop program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
@@ -17,6 +17,6 @@ log = "0.4.2"
 solana-runtime = { path = "../../runtime", version = "0.13.0" }
 
 [lib]
-name = "noop"
+name = "solana_noop_program"
 crate-type = ["cdylib"]
 
