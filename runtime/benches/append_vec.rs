@@ -23,6 +23,8 @@ fn get_append_vec_bench_path(path: &str) -> PathBuf {
     let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
     let mut buf = PathBuf::new();
     buf.push(&format!("{}/{}", out_dir, path));
+    let _ignored = remove_dir_all(out_dir.clone());
+    create_dir_all(out_dir).expect("Create directory failed");
     buf
 }
 
