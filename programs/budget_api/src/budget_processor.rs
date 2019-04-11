@@ -2,7 +2,7 @@
 use crate::budget_expr::Witness;
 use crate::budget_instruction::BudgetInstruction;
 use crate::budget_state::{BudgetError, BudgetState};
-use bincode::{deserialize, serialize};
+use bincode::deserialize;
 use chrono::prelude::{DateTime, Utc};
 use log::*;
 use solana_sdk::account::KeyedAccount;
@@ -115,7 +115,7 @@ pub fn process_instruction(
             }
             trace!("apply timestamp");
             apply_timestamp(&mut budget_state, keyed_accounts, dt)
-                .map_err(|e| InstructionError::CustomError(serialize(&e).unwrap()))?;
+                .map_err(|e| InstructionError::CustomError(e as u32))?;
             trace!("apply timestamp committed");
             budget_state.serialize(&mut keyed_accounts[1].account.data)
         }
@@ -133,7 +133,7 @@ pub fn process_instruction(
             }
             trace!("apply signature");
             apply_signature(&mut budget_state, keyed_accounts)
-                .map_err(|e| InstructionError::CustomError(serialize(&e).unwrap()))?;
+                .map_err(|e| InstructionError::CustomError(e as u32))?;
             trace!("apply signature committed");
             budget_state.serialize(&mut keyed_accounts[1].account.data)
         }
@@ -312,7 +312,7 @@ mod tests {
                 .unwrap(),
             TransactionError::InstructionError(
                 0,
-                InstructionError::CustomError(serialize(&BudgetError::DestinationMissing).unwrap())
+                InstructionError::CustomError(BudgetError::DestinationMissing as u32)
             )
         );
         assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);

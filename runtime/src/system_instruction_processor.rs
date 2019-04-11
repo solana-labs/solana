@@ -1,4 +1,3 @@
-use bincode::serialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
@@ -94,7 +93,7 @@ pub fn process_instruction(
             }
             SystemInstruction::Transfer { lamports } => move_lamports(keyed_accounts, lamports),
         }
-        .map_err(|e| InstructionError::CustomError(serialize(&e).unwrap()))
+        .map_err(|e| InstructionError::CustomError(e as u32))
     } else {
         debug!("Invalid instruction data: {:?}", data);
         Err(InstructionError::InvalidInstructionData)
@@ -106,6 +105,7 @@ mod tests {
     use super::*;
     use crate::bank::Bank;
     use crate::bank_client::BankClient;
+    use bincode::serialize;
     use solana_sdk::account::Account;
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_block::GenesisBlock;
