@@ -137,7 +137,7 @@ impl Broadcast {
 
             // send out erasures
             ClusterInfo::broadcast(&self.id, false, &broadcast_table, sock, &coding)?;
-        } 
+        }
 
         let broadcast_elapsed = duration_as_ms(&broadcast_start.elapsed());
 
