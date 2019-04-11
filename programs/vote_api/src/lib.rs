@@ -1,5 +1,4 @@
 pub mod vote_instruction;
-pub mod vote_processor;
 pub mod vote_state;
 
 use solana_sdk::pubkey::Pubkey;

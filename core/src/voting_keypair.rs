@@ -110,7 +110,8 @@ pub mod tests {
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
-    use solana_vote_api::vote_instruction::{self, Vote};
+    use solana_vote_api::vote_instruction;
+    use solana_vote_api::vote_state::Vote;
 
     fn process_instructions<T: KeypairUtil>(bank: &Bank, keypairs: &[&T], ixs: Vec<Instruction>) {
         let blockhash = bank.last_blockhash();
@@ -120,26 +121,20 @@ pub mod tests {
 
     pub fn new_vote_account(
         from_keypair: &Keypair,
-        voting_pubkey: &Pubkey,
-        bank: &Bank,
-        lamports: u64,
-    ) {
-        let ixs = vote_instruction::create_account(&from_keypair.pubkey(), voting_pubkey, lamports);
-        process_instructions(bank, &[from_keypair], ixs);
-    }
-
-    pub fn new_vote_account_with_delegate(
-        from_keypair: &Keypair,
         voting_keypair: &Keypair,
-        delegate: &Pubkey,
+        node_id: &Pubkey,
         bank: &Bank,
         lamports: u64,
     ) {
         let voting_pubkey = voting_keypair.pubkey();
-        let mut ixs =
-            vote_instruction::create_account(&from_keypair.pubkey(), &voting_pubkey, lamports);
-        ixs.push(vote_instruction::delegate_stake(&voting_pubkey, delegate));
-        process_instructions(bank, &[from_keypair, voting_keypair], ixs);
+        let ixs = vote_instruction::create_account(
+            &from_keypair.pubkey(),
+            &voting_pubkey,
+            node_id,
+            0,
+            lamports,
+        );
+        process_instructions(bank, &[from_keypair], ixs);
     }
 
     pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot: u64) {
@@ -150,13 +145,19 @@ pub mod tests {
     pub fn new_vote_account_with_vote<T: KeypairUtil>(
         from_keypair: &T,
         voting_keypair: &T,
+        node_id: &Pubkey,
         bank: &Bank,
         lamports: u64,
         slot: u64,
     ) {
         let voting_pubkey = voting_keypair.pubkey();
-        let mut ixs =
-            vote_instruction::create_account(&from_keypair.pubkey(), &voting_pubkey, lamports);
+        let mut ixs = vote_instruction::create_account(
+            &from_keypair.pubkey(),
+            &voting_pubkey,
+            node_id,
+            0,
+            lamports,
+        );
         ixs.push(vote_instruction::vote(&voting_pubkey, Vote::new(slot)));
         process_instructions(bank, &[from_keypair, voting_keypair], ixs);
     }

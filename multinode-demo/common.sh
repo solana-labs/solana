@@ -142,42 +142,32 @@ airdrop() {
   return 0
 }
 
-setup_fullnode_staking() {
+setup_vote_account() {
   declare drone_address=$1
-  declare fullnode_id_path=$2
-  declare staker_id_path=$3
+  declare node_id_path=$2
+  declare vote_id_path=$3
 
-  declare fullnode_id
-  fullnode_id=$($solana_wallet --keypair "$fullnode_id_path" address)
+  declare node_id
+  node_id=$($solana_wallet --keypair "$node_id_path" address)
 
-  declare staker_id
-  staker_id=$($solana_wallet --keypair "$staker_id_path" address)
+  declare vote_id
+  vote_id=$($solana_wallet --keypair "$vote_id_path" address)
 
-  if [[ -f "$staker_id_path".configured ]]; then
-    echo "Staking account has already been configured"
+  if [[ -f "$vote_id_path".configured ]]; then
+    echo "Vote account has already been configured"
     return 0
   fi
 
   # A fullnode requires 43 lamports to function:
   # - one lamport to keep the node identity public key valid. TODO: really??
-  # - 42 more for the staker account we fund
-  airdrop "$fullnode_id_path" "$drone_address" 43 || return $?
+  # - 42 more for the vote account we fund
+  airdrop "$node_id_path" "$drone_address" 43 || return $?
 
-  # A little wrong, fund the staking account from the
-  #  to the node.  Maybe next time consider doing this the opposite
-  #  way or use an ephemeral account
-  $solana_wallet --keypair "$fullnode_id_path" --host "$drone_address" \
-               create-staking-account "$staker_id" 42 || return $?
+  # Fund the vote account from the node, with the node as the node_id
+  $solana_wallet --keypair "$node_id_path" --host "$drone_address" \
+               create-vote-account "$vote_id" "$node_id"  42 || return $?
 
-  # as the staker, set the node as the delegate and the staker as
-  #  the vote-signer
-  $solana_wallet --keypair "$staker_id_path" --host "$drone_address" \
-                 configure-staking-account \
-                 --delegate-account "$fullnode_id" \
-                 --authorize-voter "$staker_id"  || return $?
-
-
-  touch "$staker_id_path".configured
+  touch "$vote_id_path".configured
   return 0
 }
 

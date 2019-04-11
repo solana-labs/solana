@@ -1,6 +1,5 @@
 use clap::{
-    crate_description, crate_name, crate_version, App, AppSettings, Arg, ArgGroup, ArgMatches,
-    SubCommand,
+    crate_description, crate_name, crate_version, App, AppSettings, Arg, ArgMatches, SubCommand,
 };
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
@@ -207,33 +206,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("configure-staking-account")
-                .about("Configure staking account for node")
-                .group(
-                    ArgGroup::with_name("options")
-                        .args(&["delegate", "authorize"])
-                        .multiple(true)
-                        .required(true),
-                )
+            SubCommand::with_name("authorize-voter")
+                .about("Authorize a different voter for this account")
                 .arg(
-                    Arg::with_name("delegate")
-                        .long("delegate-account")
+                    Arg::with_name("authorized-voter-id")
+                        .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .validator(is_pubkey)
-                        .help("Address to delegate this vote account to"),
-                )
-                .arg(
-                    Arg::with_name("authorize")
-                        .long("authorize-voter")
-                        .value_name("PUBKEY")
-                        .takes_value(true)
+                        .required(true)
                         .validator(is_pubkey)
                         .help("Vote signer to authorize"),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("create-staking-account")
+            SubCommand::with_name("create-vote-account")
                 .about("Create staking account for node")
                 .arg(
                     Arg::with_name("voting_account_id")
@@ -245,13 +231,29 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Staking account address to fund"),
                 )
                 .arg(
-                    Arg::with_name("lamports")
+                    Arg::with_name("node_id")
                         .index(2)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Staking account address to fund"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(3)
                         .value_name("NUM")
                         .takes_value(true)
                         .required(true)
                         .help("The number of lamports to send to staking account"),
+                )
+                .arg(
+                    Arg::with_name("commission")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .help("The commission on rewards this vote account should take, defaults to zero")
                 ),
+
         )
         .subcommand(
             SubCommand::with_name("deploy")

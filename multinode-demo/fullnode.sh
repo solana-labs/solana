@@ -114,16 +114,16 @@ if ((!self_setup)); then
     exit 1
   }
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id.json
-  fullnode_staker_id_path=$SOLANA_CONFIG_DIR/fullnode-staker-id.json
+  fullnode_vote_id_path=$SOLANA_CONFIG_DIR/fullnode-vote-id.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts
 else
   mkdir -p "$SOLANA_CONFIG_DIR"
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id-x$self_setup_label.json
-  fullnode_staker_id_path=$SOLANA_CONFIG_DIR/fullnode-staker-id-x$self_setup_label.json
+  fullnode_vote_id_path=$SOLANA_CONFIG_DIR/fullnode-vote-id-x$self_setup_label.json
 
   [[ -f "$fullnode_id_path" ]] || $solana_keygen -o "$fullnode_id_path"
-  [[ -f "$fullnode_staker_id_path" ]] || $solana_keygen -o "$fullnode_staker_id_path"
+  [[ -f "$fullnode_vote_id_path" ]] || $solana_keygen -o "$fullnode_vote_id_path"
 
   echo "Finding a port.."
   # Find an available port in the range 9100-9899
@@ -141,8 +141,7 @@ else
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts-x$self_setup_label
 fi
 
-fullnode_id=$($solana_wallet --keypair "$fullnode_id_path" address)
-fullnode_staker_id=$($solana_wallet --keypair "$fullnode_staker_id_path" address)
+fullnode_vote_id=$($solana_wallet --keypair "$fullnode_vote_id_path" address)
 
 
 [[ -r $fullnode_id_path ]] || {
@@ -192,8 +191,8 @@ while true; do
   $program \
     --gossip-port "$gossip_port" \
     --identity "$fullnode_id_path" \
-    --voting-keypair "$fullnode_staker_id_path" \
-    --staking-account "$fullnode_staker_id" \
+    --voting-keypair "$fullnode_vote_id_path" \
+    --vote-account "$fullnode_vote_id" \
     --network "$leader_address" \
     --ledger "$ledger_config_dir" \
     --accounts "$accounts_config_dir" \
@@ -204,7 +203,7 @@ while true; do
   oom_score_adj "$pid" 1000
 
   if ((setup_stakes)); then
-    setup_fullnode_staking "${leader_address%:*}" "$fullnode_id_path" "$fullnode_staker_id_path"
+    setup_vote_account "${leader_address%:*}" "$fullnode_id_path" "$fullnode_vote_id_path"
   fi
   set +x
 

@@ -76,10 +76,10 @@ if $bootstrap_leader; then
     set -x
     $solana_keygen -o "$SOLANA_CONFIG_DIR"/mint-id.json
     $solana_keygen -o "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json
-    $solana_keygen -o "$SOLANA_CONFIG_DIR"/bootstrap-leader-staker-id.json
+    $solana_keygen -o "$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-id.json
     $solana_genesis \
       --bootstrap-leader-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json \
-      --bootstrap-stake-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-staker-id.json \
+      --bootstrap-vote-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-id.json \
       --ledger "$SOLANA_RSYNC_CONFIG_DIR"/ledger \
       --mint "$SOLANA_CONFIG_DIR"/mint-id.json \
       --lamports "$lamports"
@@ -91,6 +91,6 @@ if $fullnode; then
   (
     set -x
     $solana_keygen -o "$SOLANA_CONFIG_DIR"/fullnode-id.json
-    $solana_keygen -o "$SOLANA_CONFIG_DIR"/fullnode-staker-id.json
+    $solana_keygen -o "$SOLANA_CONFIG_DIR"/fullnode-vote-id.json
   )
 fi

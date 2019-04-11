@@ -76,7 +76,7 @@ pub fn node_staked_accounts_at_epoch(
 
 fn filter_no_delegate(account_id: &Pubkey, account: &Account) -> bool {
     VoteState::deserialize(&account.data)
-        .map(|vote_state| vote_state.delegate_id != *account_id)
+        .map(|vote_state| vote_state.node_id != *account_id)
         .unwrap_or(false)
 }
 
@@ -104,7 +104,7 @@ fn to_delegated_stakes(
 ) -> HashMap<Pubkey, u64> {
     let mut map: HashMap<Pubkey, u64> = HashMap::new();
     node_staked_accounts.for_each(|(stake, state)| {
-        let delegate = &state.delegate_id;
+        let delegate = &state.node_id;
         map.entry(*delegate)
             .and_modify(|s| *s += stake)
             .or_insert(stake);
@@ -200,7 +200,7 @@ mod tests {
 
         // Make a mint vote account. Because the mint has nonzero stake, this
         // should show up in the active set
-        voting_keypair_tests::new_vote_account_with_delegate(
+        voting_keypair_tests::new_vote_account(
             &mint_keypair,
             &bank_voter,
             &mint_keypair.pubkey(),
@@ -283,11 +283,11 @@ mod tests {
 
         // Delegate 1 has stake of 3
         for i in 0..3 {
-            stakes.push((i, VoteState::new(&delegate1)));
+            stakes.push((i, VoteState::new(&Pubkey::new_rand(), &delegate1, 0)));
         }
 
         // Delegate 1 has stake of 5
-        stakes.push((5, VoteState::new(&delegate2)));
+        stakes.push((5, VoteState::new(&Pubkey::new_rand(), &delegate2, 0)));
 
         let result = to_delegated_stakes(stakes.into_iter());
         assert_eq!(result.len(), 2);

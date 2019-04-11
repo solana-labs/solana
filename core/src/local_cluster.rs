@@ -334,13 +334,15 @@ impl LocalCluster {
         amount: u64,
     ) -> Result<()> {
         let vote_account_pubkey = vote_account.pubkey();
-        let delegate_id = from_account.pubkey();
+        let node_id = from_account.pubkey();
         // Create the vote account if necessary
         if client.poll_get_balance(&vote_account_pubkey).unwrap_or(0) == 0 {
             // 1) Create vote account
             let instructions = vote_instruction::create_account(
                 &from_account.pubkey(),
                 &vote_account_pubkey,
+                &node_id,
+                0,
                 amount,
             );
             let mut transaction = Transaction::new_signed_instructions(
@@ -355,27 +357,12 @@ impl LocalCluster {
             client
                 .wait_for_balance(&vote_account_pubkey, Some(amount))
                 .expect("get balance");
-
-            // 2) Set delegate for new vote account
-            let vote_instruction =
-                vote_instruction::delegate_stake(&vote_account_pubkey, &delegate_id);
-
-            let mut transaction = Transaction::new_signed_instructions(
-                &[vote_account],
-                vec![vote_instruction],
-                client.get_recent_blockhash().unwrap(),
-            );
-
-            client
-                .retry_transfer(&vote_account, &mut transaction, 5)
-                .expect("client transfer 2");
         }
-
         info!("Checking for vote account registration");
         let vote_account_user_data = client.get_account_data(&vote_account_pubkey);
         if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
             if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
-                if vote_state.delegate_id == delegate_id {
+                if vote_state.node_id == node_id {
                     return Ok(());
                 }
             }

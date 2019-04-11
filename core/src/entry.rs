@@ -451,7 +451,8 @@ mod tests {
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
-    use solana_vote_api::vote_instruction::{self, Vote};
+    use solana_vote_api::vote_instruction;
+    use solana_vote_api::vote_state::Vote;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     fn create_sample_payment(keypair: &Keypair, hash: Hash) -> Transaction {

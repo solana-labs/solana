@@ -153,20 +153,21 @@ mod tests {
     use super::*;
     use crate::id;
     use solana_sdk::account::Account;
+    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_api::vote_instruction::Vote;
-    use solana_vote_api::vote_state::create_vote_account;
+    use solana_vote_api::vote_state::{self, Vote};
 
     #[test]
     fn test_stake_delegate_stake() {
         let vote_keypair = Keypair::new();
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
-            vote_state.process_vote(Vote::new(i));
+            vote_state.process_vote(&Vote::new(i));
         }
 
         let vote_pubkey = vote_keypair.pubkey();
-        let mut vote_account = create_vote_account(100);
+        let mut vote_account =
+            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&vote_state).unwrap();
 
@@ -206,7 +207,7 @@ mod tests {
 
         // put a credit in the vote_state
         while vote_state.credits() == 0 {
-            vote_state.process_vote(Vote::new(vote_i));
+            vote_state.process_vote(&Vote::new(vote_i));
             vote_i += 1;
         }
         // this guy can't collect now, not enough stake to get paid on 1 credit
@@ -225,7 +226,7 @@ mod tests {
 
         // put more credit in the vote_state
         while vote_state.credits() < 10 {
-            vote_state.process_vote(Vote::new(vote_i));
+            vote_state.process_vote(&Vote::new(vote_i));
             vote_i += 1;
         }
         vote_state.commission = 0;
@@ -252,11 +253,12 @@ mod tests {
         let vote_keypair = Keypair::new();
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
-            vote_state.process_vote(Vote::new(i));
+            vote_state.process_vote(&Vote::new(i));
         }
 
         let vote_pubkey = vote_keypair.pubkey();
-        let mut vote_account = create_vote_account(100);
+        let mut vote_account =
+            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&vote_state).unwrap();
 
@@ -294,7 +296,7 @@ mod tests {
             .is_ok());
 
         // move the vote account forward
-        vote_state.process_vote(Vote::new(1000));
+        vote_state.process_vote(&Vote::new(1000));
         vote_keyed_account.set_state(&vote_state).unwrap();
 
         // now, no lamports in the pool!
@@ -322,11 +324,12 @@ mod tests {
         let vote_keypair = Keypair::new();
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
-            vote_state.process_vote(Vote::new(i));
+            vote_state.process_vote(&Vote::new(i));
         }
 
         let vote_pubkey = vote_keypair.pubkey();
-        let mut vote_account = create_vote_account(100);
+        let mut vote_account =
+            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
         let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_keyed_account.set_state(&vote_state).unwrap();
 
@@ -349,7 +352,7 @@ mod tests {
         let mut vote_state = VoteState::default();
         for i in 0..100 {
             // go back in time, previous state had 1000 votes
-            vote_state.process_vote(Vote::new(i));
+            vote_state.process_vote(&Vote::new(i));
         }
         vote_keyed_account.set_state(&vote_state).unwrap();
         // voter credits lower than stake_delegate credits...  TODO: is this an error?
@@ -361,7 +364,8 @@ mod tests {
 
         let vote1_keypair = Keypair::new();
         let vote1_pubkey = vote1_keypair.pubkey();
-        let mut vote1_account = create_vote_account(100);
+        let mut vote1_account =
+            vote_state::create_account(&vote1_pubkey, &Pubkey::new_rand(), 0, 100);
         let mut vote1_keyed_account = KeyedAccount::new(&vote1_pubkey, false, &mut vote1_account);
         vote1_keyed_account.set_state(&vote_state).unwrap();
 
