@@ -128,7 +128,9 @@ impl Broadcast {
 
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
 
-        // Fill in the coding blob data from the window data blobs
+        // generate and transmit any erasure coding blobs.  if erasure isn't supported, just send everything again
+        #[cfg(not(feature = "erasure"))]
+        ClusterInfo::broadcast(&self.id, contains_last_tick, &broadcast_table, sock, &blobs)?;
         #[cfg(feature = "erasure")]
         {
             let coding = self.coding_generator.next(&blobs)?;
