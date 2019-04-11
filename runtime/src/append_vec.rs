@@ -163,6 +163,7 @@ pub mod tests {
     use rand::{thread_rng, Rng};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::timing::duration_as_ms;
+    use std::fs::{create_dir_all, remove_dir_all};
     use std::path::PathBuf;
     use std::time::Instant;
 
