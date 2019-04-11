@@ -200,7 +200,7 @@ pub mod test_utils {
     pub fn create_test_account(sample: usize) -> Account {
         let data_len = sample % 256;
         let mut account = Account::new(sample as u64, 0, &Pubkey::default());
-        account.data = (0..data_len).into_iter().map(|_| data_len as u8).collect();
+        account.data = (0..data_len).map(|_| data_len as u8).collect();
         account
     }
 }
