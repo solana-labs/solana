@@ -116,6 +116,41 @@ impl BankingStage {
         Ok(())
     }
 
+    fn process_buffered_packets(
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        buffered_packets: &[(SharedPackets, usize, Vec<u8>)],
+    ) -> Result<UnprocessedPackets> {
+        let mut unprocessed_packets = vec![];
+        let mut bank_shutdown = false;
+        for (msgs, offset, vers) in buffered_packets {
+            if bank_shutdown {
+                unprocessed_packets.push((msgs.to_owned(), *offset, vers.to_owned()));
+                continue;
+            }
+
+            let bank = poh_recorder.lock().unwrap().bank();
+            if bank.is_none() {
+                unprocessed_packets.push((msgs.to_owned(), *offset, vers.to_owned()));
+                continue;
+            }
+            let bank = bank.unwrap();
+
+            let (processed, verified_txs, verified_indexes) =
+                Self::process_received_packets(&bank, &poh_recorder, &msgs, &vers, *offset)?;
+
+            if processed < verified_txs.len() {
+                bank_shutdown = true;
+                // Collect any unprocessed transactions in this batch for forwarding
+                unprocessed_packets.push((
+                    msgs.to_owned(),
+                    verified_indexes[processed],
+                    vers.to_owned(),
+                ));
+            }
+        }
+        Ok(unprocessed_packets)
+    }
+
     fn handle_buffered_packets(
         socket: &std::net::UdpSocket,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -124,53 +159,34 @@ impl BankingStage {
     ) -> Result<UnprocessedPackets> {
         let rcluster_info = cluster_info.read().unwrap();
 
-        // If there's a bank, and leader is available, forward the buffered packets
-        // or, if the current node is not the leader, forward the buffered packets
-        let (forward, consume) = match poh_recorder.lock().unwrap().bank() {
-            Some(_) => (false, rcluster_info.leader_data().is_some()),
-            None => rcluster_info
-                .leader_data()
-                .map(|x| (x.id != rcluster_info.id(), x.id == rcluster_info.id()))
-                .unwrap_or((false, false)),
-        };
-
-        let mut unprocessed_packets = vec![];
-        if forward {
-            let _ = Self::forward_unprocessed_packets(
-                &socket,
-                &rcluster_info.leader_data().unwrap().tpu_via_blobs,
-                &buffered_packets,
-            );
-        } else if consume {
-            let mut bank_shutdown = false;
-            for (msgs, offset, vers) in buffered_packets {
-                if bank_shutdown {
-                    unprocessed_packets.push((msgs.to_owned(), 0, vers.to_owned()));
-                    continue;
-                }
-
-                let bank = poh_recorder.lock().unwrap().bank();
-                if bank.is_none() {
-                    unprocessed_packets.push((msgs.to_owned(), 0, vers.to_owned()));
-                    continue;
-                }
-                let bank = bank.unwrap();
-
-                let (processed, verified_txs, verified_indexes) =
-                    Self::process_received_packets(&bank, &poh_recorder, &msgs, &vers, *offset)?;
-
-                if processed < verified_txs.len() {
-                    bank_shutdown = true;
-                    // Collect any unprocessed transactions in this batch for forwarding
-                    unprocessed_packets.push((
-                        msgs.to_owned(),
-                        verified_indexes[processed],
-                        vers.to_owned(),
-                    ));
-                }
+        // If there's a bank, and leader is available, this node "is" the leader
+        // process the buffered packets
+        if poh_recorder.lock().unwrap().bank().is_some() {
+            if rcluster_info.leader_data().is_some() {
+                return Self::process_buffered_packets(poh_recorder, buffered_packets);
             }
+
+            return Ok(buffered_packets.to_vec());
         }
-        Ok(unprocessed_packets)
+
+        // If leader is not known, return the buffered packets as is
+        // else process the packets
+        rcluster_info
+            .leader_data()
+            .map_or(Ok(buffered_packets.to_vec()), |x| {
+                if x.id == rcluster_info.id() {
+                    // If the current node is the leader, process the buffered packets
+                    Self::process_buffered_packets(poh_recorder, buffered_packets)
+                } else {
+                    // If the current node is not the leader, forward the buffered packets
+                    let _ = Self::forward_unprocessed_packets(
+                        &socket,
+                        &rcluster_info.leader_data().unwrap().tpu_via_blobs,
+                        &buffered_packets,
+                    );
+                    Ok(vec![])
+                }
+            })
     }
 
     fn should_buffer_packets(
