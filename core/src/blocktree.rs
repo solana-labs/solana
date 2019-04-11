@@ -1223,7 +1223,7 @@ impl Blocktree {
             self.put_coding_blob_bytes_raw(slot, blob.index(), &blob.data[..])?;
         }
 
-        Ok(erasures.len())
+        Ok(erasures.len() - 1)
     }
 
     /// Returns the next consumed index and the number of ticks in the new consumed
