@@ -53,7 +53,7 @@ impl Broadcast {
         let mut last_tick = entries.last().map(|v| v.1).unwrap_or(0);
         ventries.push(entries);
 
-        assert!(last_tick <= max_tick_height,);
+        assert!(last_tick <= max_tick_height);
         if last_tick != max_tick_height {
             while let Ok((same_bank, entries)) = receiver.try_recv() {
                 // If the bank changed, that implies the previous slot was interrupted and we do not have to
