@@ -84,10 +84,4 @@ abort() {
 }
 trap abort INT TERM EXIT
 
-solana-wallet --keypair "$dataDir"/config/leader-keypair.json airdrop 42
-solana-wallet \
-  --keypair "$dataDir"/config/leader-keypair.json  \
-   create-vote-account "$leaderVoteAccountPubkey" "$leaderPubkey" 42
-solana-wallet --keypair "$dataDir"/config/leader-keypair.json balance
-
 wait "$fullnode"
