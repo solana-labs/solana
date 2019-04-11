@@ -53,17 +53,14 @@ pub enum InstructionError {
     DuplicateAccountIndex,
 
     /// CustomError allows on-chain programs to implement program-specific error types and see
-    /// them returned by the Solana runtime. A CustomError may be any type that is serialized
-    /// to a Vec of bytes, max length 32 bytes. Any CustomError Vec greater than this length will
-    /// be truncated by the runtime.
-    CustomError(Vec<u8>),
+    /// them returned by the Solana runtime. A CustomError may be any type that is represented
+    /// as or serialized to a u32 integer.
+    CustomError(u32),
 }
 
 impl InstructionError {
     pub fn new_result_with_negative_lamports() -> Self {
-        let serialized_error =
-            bincode::serialize(&SystemError::ResultWithNegativeLamports).unwrap();
-        InstructionError::CustomError(serialized_error)
+        InstructionError::CustomError(SystemError::ResultWithNegativeLamports as u32)
     }
 }
 

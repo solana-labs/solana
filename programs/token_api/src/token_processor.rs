@@ -1,5 +1,4 @@
 use crate::token_state::TokenState;
-use bincode::serialize;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
@@ -15,6 +14,6 @@ pub fn process_instruction(
 
     TokenState::process(program_id, info, input).map_err(|e| {
         error!("error: {:?}", e);
-        InstructionError::CustomError(serialize(&e).unwrap())
+        InstructionError::CustomError(e as u32)
     })
 }

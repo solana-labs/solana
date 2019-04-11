@@ -72,16 +72,6 @@ fn verify_instruction(
     Ok(())
 }
 
-fn verify_error(err: InstructionError) -> InstructionError {
-    match err {
-        InstructionError::CustomError(mut error) => {
-            error.truncate(32);
-            InstructionError::CustomError(error)
-        }
-        e => e,
-    }
-}
-
 pub type ProcessInstruction =
     fn(&Pubkey, &mut [KeyedAccount], &[u8], u64) -> Result<(), InstructionError>;
 
@@ -185,8 +175,7 @@ impl MessageProcessor {
             executable_accounts,
             program_accounts,
             tick_height,
-        )
-        .map_err(verify_error)?;
+        )?;
 
         // Verify the instruction
         for ((pre_program_id, pre_lamports, pre_data), post_account) in
@@ -320,20 +309,5 @@ mod tests {
             Err(InstructionError::ExternalAccountDataModified),
             "malicious Mallory should not be able to change the account data"
         );
-    }
-
-    #[test]
-    fn test_verify_error() {
-        let short_error = InstructionError::CustomError(vec![1, 2, 3]);
-        let expected_short_error = short_error.clone(); // short CustomError errors should be untouched
-        assert_eq!(verify_error(short_error), expected_short_error);
-
-        let long_error = InstructionError::CustomError(vec![8; 40]);
-        let expected_long_error = InstructionError::CustomError(vec![8; 32]); // long CustomError errors should be truncated
-        assert_eq!(verify_error(long_error), expected_long_error);
-
-        let other_error = InstructionError::GenericError;
-        let expected_other_error = other_error.clone(); // non-CustomError errors should be untouched
-        assert_eq!(verify_error(other_error), expected_other_error);
     }
 }
