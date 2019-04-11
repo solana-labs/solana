@@ -51,7 +51,7 @@ fn append_vec_random_read(bencher: &mut Bencher) {
     let path = get_append_vec_path("random_read");
     let vec = AppendVec::new(&path.path, true, 64 * 1024);
     let size = 1_000;
-    let mut indexes = add_test_accounts(&vec, size);
+    let indexes = add_test_accounts(&vec, size);
     bencher.iter(|| {
         let random_index: usize = thread_rng().gen_range(0, indexes.len());
         let (sample, pos) = &indexes[random_index];
