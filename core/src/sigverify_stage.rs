@@ -10,13 +10,12 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify;
 use crate::streamer::{self, PacketReceiver};
-use rand::{thread_rng, Rng};
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::timing;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread::{self, spawn, JoinHandle};
+use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 
 pub type VerifiedPackets = Vec<(SharedPackets, Vec<u8>)>;
@@ -51,6 +50,7 @@ impl SigVerifyStage {
         recvr: &Arc<Mutex<PacketReceiver>>,
         sendr: &Sender<VerifiedPackets>,
         sigverify_disabled: bool,
+        id: usize,
     ) -> Result<()> {
         let (batch, len, recv_time) =
             streamer::recv_batch(&recvr.lock().expect("'recvr' lock in fn verifier"))?;
@@ -58,12 +58,11 @@ impl SigVerifyStage {
 
         let now = Instant::now();
         let batch_len = batch.len();
-        let rand_id = thread_rng().gen_range(0, 100);
-        info!(
+        debug!(
             "@{:?} verifier: verifying: {} id: {}",
             timing::timestamp(),
             batch.len(),
-            rand_id
+            id
         );
 
         let verified_batch = Self::verify_batch(batch, sigverify_disabled);
@@ -79,12 +78,12 @@ impl SigVerifyStage {
             "sigverify_stage-time_ms",
             (total_time_ms + recv_time) as usize
         );
-        info!(
+        debug!(
             "@{:?} verifier: done. batches: {} total verify time: {:?} id: {} verified: {} v/s {}",
             timing::timestamp(),
             batch_len,
             total_time_ms,
-            rand_id,
+            id,
             len,
             (len as f32 / total_time_s)
         );
@@ -107,19 +106,25 @@ impl SigVerifyStage {
         packet_receiver: Arc<Mutex<PacketReceiver>>,
         verified_sender: Sender<VerifiedPackets>,
         sigverify_disabled: bool,
+        id: usize,
     ) -> JoinHandle<()> {
-        spawn(move || loop {
-            if let Err(e) = Self::verifier(&packet_receiver, &verified_sender, sigverify_disabled) {
-                match e {
-                    Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                    Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                    Error::SendError => {
-                        break;
+        Builder::new()
+            .name(format!("solana-verifier-{}", id))
+            .spawn(move || loop {
+                if let Err(e) =
+                    Self::verifier(&packet_receiver, &verified_sender, sigverify_disabled, id)
+                {
+                    match e {
+                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        Error::SendError => {
+                            break;
+                        }
+                        _ => error!("{:?}", e),
                     }
-                    _ => error!("{:?}", e),
                 }
-            }
-        })
+            })
+            .unwrap()
     }
 
     fn verifier_services(
@@ -129,11 +134,12 @@ impl SigVerifyStage {
     ) -> Vec<JoinHandle<()>> {
         let receiver = Arc::new(Mutex::new(packet_receiver));
         (0..4)
-            .map(|_| {
+            .map(|id| {
                 Self::verifier_service(
                     receiver.clone(),
                     verified_sender.clone(),
                     sigverify_disabled,
+                    id,
                 )
             })
             .collect()
