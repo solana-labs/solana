@@ -58,9 +58,9 @@ export class SystemProgram {
   }
 
   /**
-   * Generate a Transaction that moves lamports from one account to another
+   * Generate a Transaction that transfers lamports from one account to another
    */
-  static move(from: PublicKey, to: PublicKey, amount: number): Transaction {
+  static transfer(from: PublicKey, to: PublicKey, amount: number): Transaction {
     const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('amount'),

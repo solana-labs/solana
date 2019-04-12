@@ -20,12 +20,12 @@ test('createAccount', () => {
   // TODO: Validate transaction contents more
 });
 
-test('move', () => {
+test('transfer', () => {
   const from = new Account();
   const to = new Account();
   let transaction;
 
-  transaction = SystemProgram.move(from.publicKey, to.publicKey, 123);
+  transaction = SystemProgram.transfer(from.publicKey, to.publicKey, 123);
 
   expect(transaction.keys).toHaveLength(2);
   expect(transaction.programId).toEqual(SystemProgram.programId);

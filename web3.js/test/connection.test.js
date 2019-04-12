@@ -296,7 +296,7 @@ test('transaction', async () => {
     },
   ]);
 
-  const transaction = SystemProgram.move(
+  const transaction = SystemProgram.transfer(
     accountFrom.publicKey,
     accountTo.publicKey,
     10,
@@ -390,11 +390,11 @@ test('multi-instruction transaction', async () => {
 
   // 1. Move(accountFrom, accountTo)
   // 2. Move(accountTo, accountFrom)
-  const transaction = SystemProgram.move(
+  const transaction = SystemProgram.transfer(
     accountFrom.publicKey,
     accountTo.publicKey,
     10,
-  ).add(SystemProgram.move(accountTo.publicKey, accountFrom.publicKey, 10));
+  ).add(SystemProgram.transfer(accountTo.publicKey, accountFrom.publicKey, 10));
   const signature = await connection.sendTransaction(
     transaction,
     accountFrom,

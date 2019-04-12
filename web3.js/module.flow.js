@@ -102,7 +102,7 @@ declare module '@solana/web3.js' {
       space: number,
       programId: PublicKey,
     ): Transaction;
-    static move(from: PublicKey, to: PublicKey, amount: number): Transaction;
+    static transfer(from: PublicKey, to: PublicKey, amount: number): Transaction;
     static assign(from: PublicKey, programId: PublicKey): Transaction;
   }
 
