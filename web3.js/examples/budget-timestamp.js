@@ -50,7 +50,7 @@ function showBalance() {
 function confirmTransaction(signature) {
   console.log('Confirming transaction:', signature);
   return connection.getSignatureStatus(signature).then(confirmation => {
-    if (confirmation !== 'Confirmed') {
+    if (confirmation && 'Ok' in confirmation) {
       throw new Error(`Transaction was not confirmed (${confirmation})`);
     }
     console.log('Transaction confirmed');
