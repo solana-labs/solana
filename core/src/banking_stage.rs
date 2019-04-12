@@ -190,7 +190,7 @@ impl BankingStage {
 
         match Self::process_or_forward_packets(
             rcluster_info.leader_data(),
-            rcluster_info.leader_data().is_some(),
+            poh_recorder.lock().unwrap().bank().is_some(),
             &rcluster_info.id(),
         ) {
             BufferedPacketsDecision::Consume => {
