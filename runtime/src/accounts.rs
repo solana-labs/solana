@@ -18,7 +18,7 @@ use std::env;
 use std::fs::{create_dir_all, remove_dir_all};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Mutex, RwLock};
 
 pub type InstructionAccounts = Vec<Account>;
 pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
@@ -101,7 +101,7 @@ struct AccountInfo {
     id: AppendVecId,
 
     /// offset into the storage
-    offset: u64,
+    offset: usize,
 
     /// lamports in the account used when squashing kept for optimization
     /// purposes to remove accounts with zero balance.
@@ -127,7 +127,7 @@ struct AccountIndex {
 /// Persistent storage structure holding the accounts
 struct AccountStorageEntry {
     /// storage holding the accounts
-    accounts: Arc<RwLock<AppendVec<Account>>>,
+    accounts: AppendVec,
 
     /// Keeps track of the number of accounts stored in a specific AppendVec.
     /// This is periodically checked to reuse the stores that do not have
@@ -139,17 +139,12 @@ struct AccountStorageEntry {
 }
 
 impl AccountStorageEntry {
-    pub fn new(path: &str, id: usize, file_size: u64, inc_size: u64) -> Self {
+    pub fn new(path: &str, id: usize, file_size: u64) -> Self {
         let p = format!("{}/{}", path, id);
         let path = Path::new(&p);
         let _ignored = remove_dir_all(path);
         create_dir_all(path).expect("Create directory failed");
-        let accounts = Arc::new(RwLock::new(AppendVec::<Account>::new(
-            &path.join(ACCOUNT_DATA_FILE),
-            true,
-            file_size,
-            inc_size,
-        )));
+        let accounts = AppendVec::new(&path.join(ACCOUNT_DATA_FILE), true, file_size as usize);
 
         AccountStorageEntry {
             accounts,
@@ -172,7 +167,7 @@ impl AccountStorageEntry {
 
     fn remove_account(&self) {
         if self.count.fetch_sub(1, Ordering::Relaxed) == 1 {
-            self.accounts.write().unwrap().reset();
+            self.accounts.reset();
             self.set_status(AccountStorageStatus::StorageAvailable);
         }
     }
@@ -200,9 +195,6 @@ pub struct AccountsDB {
 
     /// Starting file size of appendvecs
     file_size: u64,
-
-    /// Increment size of appendvecs
-    inc_size: u64,
 }
 
 /// This structure handles synchronization for db
@@ -241,7 +233,7 @@ impl Drop for Accounts {
 }
 
 impl AccountsDB {
-    pub fn new_with_file_size(fork: Fork, paths: &str, file_size: u64, inc_size: u64) -> Self {
+    pub fn new_with_file_size(fork: Fork, paths: &str, file_size: u64) -> Self {
         let account_index = AccountIndex {
             account_maps: RwLock::new(HashMap::new()),
         };
@@ -253,7 +245,6 @@ impl AccountsDB {
             parents_map: RwLock::new(HashMap::new()),
             paths,
             file_size,
-            inc_size,
         };
         accounts_db.add_storage(&accounts_db.paths);
         accounts_db.add_fork(fork, None);
@@ -261,7 +252,7 @@ impl AccountsDB {
     }
 
     pub fn new(fork: Fork, paths: &str) -> Self {
-        Self::new_with_file_size(fork, paths, ACCOUNT_DATA_FILE_SIZE, 0)
+        Self::new_with_file_size(fork, paths, ACCOUNT_DATA_FILE_SIZE)
     }
 
     pub fn add_fork(&self, fork: Fork, parent: Option<Fork>) {
@@ -287,7 +278,6 @@ impl AccountsDB {
             path,
             self.next_id.fetch_add(1, Ordering::Relaxed),
             self.file_size,
-            self.inc_size,
         )
     }
 
@@ -329,10 +319,11 @@ impl AccountsDB {
         Some(hash(&serialize(&ordered_accounts).unwrap()))
     }
 
-    fn get_account(&self, id: AppendVecId, offset: u64) -> Account {
-        let accounts = &self.storage.read().unwrap()[id].accounts;
-        let av = accounts.read().unwrap();
-        av.get_account(offset).unwrap()
+    fn get_account(&self, id: AppendVecId, offset: usize) -> Account {
+        self.storage.read().unwrap()[id]
+            .accounts
+            .get_account(offset)
+            .clone()
     }
 
     fn load(&self, fork: Fork, pubkey: &Pubkey, walk_back: bool) -> Option<Account> {
@@ -440,8 +431,8 @@ impl AccountsDB {
         id
     }
 
-    fn append_account(&self, account: &Account) -> (usize, u64) {
-        let offset: u64;
+    fn append_account(&self, account: &Account) -> (usize, usize) {
+        let offset: usize;
         let start = self.next_id.fetch_add(1, Ordering::Relaxed);
         let mut id = self.get_storage_id(start, std::usize::MAX);
 
@@ -454,10 +445,10 @@ impl AccountsDB {
         }
 
         loop {
-            let result: Option<u64>;
+            let result: Option<usize>;
             {
                 let av = &self.storage.read().unwrap()[id].accounts;
-                result = av.read().unwrap().append_account(acc);
+                result = av.append_account(acc);
             }
             if let Some(val) = result {
                 offset = val;
@@ -1628,7 +1619,7 @@ mod tests {
     fn test_account_grow_many() {
         let paths = get_tmp_accounts_path("many2,many3");
         let size = 4096;
-        let accounts = AccountsDB::new_with_file_size(0, &paths.paths, size, 0);
+        let accounts = AccountsDB::new_with_file_size(0, &paths.paths, size);
         let mut keys = vec![];
         for i in 0..9 {
             let key = Pubkey::new_rand();
