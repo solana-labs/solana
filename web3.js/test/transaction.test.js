@@ -10,12 +10,12 @@ test('signPartial', () => {
   const account1 = new Account();
   const account2 = new Account();
   const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
-  const move = SystemProgram.move(account1.publicKey, account2.publicKey, 123);
+  const transfer = SystemProgram.transfer(account1.publicKey, account2.publicKey, 123);
 
-  const transaction = new Transaction({recentBlockhash}).add(move);
+  const transaction = new Transaction({recentBlockhash}).add(transfer);
   transaction.sign(account1, account2);
 
-  const partialTransaction = new Transaction({recentBlockhash}).add(move);
+  const partialTransaction = new Transaction({recentBlockhash}).add(transfer);
   partialTransaction.signPartial(account1, account2.publicKey);
   expect(partialTransaction.signatures[1].signature).toBeNull();
   partialTransaction.addSigner(account2);
@@ -27,16 +27,16 @@ test('transfer signatures', () => {
   const account1 = new Account();
   const account2 = new Account();
   const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
-  const move1 = SystemProgram.move(account1.publicKey, account2.publicKey, 123);
-  const move2 = SystemProgram.move(account2.publicKey, account1.publicKey, 123);
+  const transfer1 = SystemProgram.transfer(account1.publicKey, account2.publicKey, 123);
+  const transfer2 = SystemProgram.transfer(account2.publicKey, account1.publicKey, 123);
 
-  const orgTransaction = new Transaction({recentBlockhash}).add(move1, move2);
+  const orgTransaction = new Transaction({recentBlockhash}).add(transfer1, transfer2);
   orgTransaction.sign(account1, account2);
 
   const newTransaction = new Transaction({
     recentBlockhash: orgTransaction.recentBlockhash,
     signatures: orgTransaction.signatures,
-  }).add(move1, move2);
+  }).add(transfer1, transfer2);
 
   expect(newTransaction).toEqual(orgTransaction);
 });
@@ -50,8 +50,8 @@ test('parse wire format and serialize', () => {
   const recipient = new PublicKey(
     'J3dxNj7nDRRqRRXuEMynDG57DkZK4jYRuv3Garmb1i99',
   ); // Arbitrary known public key
-  const move = SystemProgram.move(sender.publicKey, recipient, 49);
-  const expectedTransaction = new Transaction({recentBlockhash}).add(move);
+  const transfer = SystemProgram.transfer(sender.publicKey, recipient, 49);
+  const expectedTransaction = new Transaction({recentBlockhash}).add(transfer);
   expectedTransaction.sign(sender);
 
   const wireTransaction = Buffer.from([
