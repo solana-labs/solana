@@ -160,7 +160,7 @@ impl BankingStage {
     }
 
     fn process_or_forward_packets(
-        leader_data: &Option<&ContactInfo>,
+        leader_data: Option<&ContactInfo>,
         bank_is_available: bool,
         my_id: &Pubkey,
     ) -> BufferedPacketsDecision {
@@ -189,7 +189,7 @@ impl BankingStage {
         let rcluster_info = cluster_info.read().unwrap();
 
         match Self::process_or_forward_packets(
-            &rcluster_info.leader_data(),
+            rcluster_info.leader_data(),
             rcluster_info.leader_data().is_some(),
             &rcluster_info.id(),
         ) {
@@ -905,34 +905,34 @@ mod tests {
         let my_id1 = Pubkey::new_rand();
 
         assert_eq!(
-            BankingStage::process_or_forward_packets(&None, true, &my_id),
+            BankingStage::process_or_forward_packets(None, true, &my_id),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::process_or_forward_packets(&None, false, &my_id),
+            BankingStage::process_or_forward_packets(None, false, &my_id),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::process_or_forward_packets(&None, false, &my_id1),
+            BankingStage::process_or_forward_packets(None, false, &my_id1),
             BufferedPacketsDecision::Hold
         );
 
         let mut contact_info = ContactInfo::default();
         contact_info.id = my_id1;
         assert_eq!(
-            BankingStage::process_or_forward_packets(&Some(&contact_info), false, &my_id),
+            BankingStage::process_or_forward_packets(Some(&contact_info), false, &my_id),
             BufferedPacketsDecision::Forward
         );
         assert_eq!(
-            BankingStage::process_or_forward_packets(&Some(&contact_info), true, &my_id),
+            BankingStage::process_or_forward_packets(Some(&contact_info), true, &my_id),
             BufferedPacketsDecision::Consume
         );
         assert_eq!(
-            BankingStage::process_or_forward_packets(&Some(&contact_info), false, &my_id1),
+            BankingStage::process_or_forward_packets(Some(&contact_info), false, &my_id1),
             BufferedPacketsDecision::Consume
         );
         assert_eq!(
-            BankingStage::process_or_forward_packets(&Some(&contact_info), true, &my_id1),
+            BankingStage::process_or_forward_packets(Some(&contact_info), true, &my_id1),
             BufferedPacketsDecision::Consume
         );
     }
