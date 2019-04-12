@@ -30,10 +30,10 @@ if [[ -n $USE_INSTALL || ! -f "$(dirname "${BASH_SOURCE[0]}")"/../Cargo.toml ]];
 else
   solana_program() {
     declare program="$1"
-    declare features=""
+    declare features="--features="
     if [[ "$program" =~ ^(.*)-cuda$ ]]; then
       program=${BASH_REMATCH[1]}
-      features="--features=cuda"
+      features+="cuda,"
     fi
 
     if [[ -r "$(dirname "${BASH_SOURCE[0]}")"/../"$program"/Cargo.toml ]]; then
@@ -45,17 +45,9 @@ else
     declare manifest_path="--manifest-path=$program/Cargo.toml"
     printf "cargo run $manifest_path $maybe_release $maybe_package --bin solana-%s %s -- " "$program" "$features"
   }
-  if [[ -n $SOLANA_CUDA ]]; then
-    # shellcheck disable=2154 # 'here' is referenced but not assigned
-    if [[ -z $here ]]; then
-      echo "|here| is not defined"
-      exit 1
-    fi
-
-    # Locate perf libs downloaded by |./fetch-perf-libs.sh|
-    LD_LIBRARY_PATH=$(cd "$here" && dirname "$PWD"/target/perf-libs):$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH
-  fi
+  # shellcheck disable=2154 # 'here' is referenced but not assigned
+  LD_LIBRARY_PATH=$(cd "$here/../target/perf-libs" && pwd):$LD_LIBRARY_PATH
+  export LD_LIBRARY_PATH
 fi
 
 solana_bench_tps=$(solana_program bench-tps)
