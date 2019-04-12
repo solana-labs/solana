@@ -12,7 +12,7 @@ pub struct Config {
     pub current_update_manifest: Option<UpdateManifest>,
     pub update_poll_secs: u64,
     releases_dir: PathBuf,
-    bin_dir: PathBuf,
+    active_release_dir: PathBuf,
 }
 
 impl Config {
@@ -23,7 +23,7 @@ impl Config {
             current_update_manifest: None,
             update_poll_secs: 60, // check for updates once a minute
             releases_dir: PathBuf::from(data_dir).join("releases"),
-            bin_dir: PathBuf::from(data_dir).join("bin"),
+            active_release_dir: PathBuf::from(data_dir).join("active_release"),
         }
     }
 
@@ -56,8 +56,12 @@ impl Config {
             .map_err(|err| format!("Unable to save {}: {:?}", config_file, err))
     }
 
-    pub fn bin_dir(&self) -> &PathBuf {
-        &self.bin_dir
+    pub fn active_release_dir(&self) -> &PathBuf {
+        &self.active_release_dir
+    }
+
+    pub fn active_release_bin_dir(&self) -> PathBuf {
+        self.active_release_dir.join("bin")
     }
 
     pub fn release_dir(&self, release_sha256: &str) -> PathBuf {
