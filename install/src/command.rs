@@ -246,14 +246,15 @@ fn get_update_manifest(
     Ok(signed_update_manifest.manifest)
 }
 
-/// Bug the user if bin_dir is not in their PATH
+/// Bug the user if active_release_bin_dir is not in their PATH
 fn check_env_path_for_bin_dir(config: &Config) {
     use std::env;
 
+    let bin_dir = config.active_release_bin_dir();
     let found = match env::var_os("PATH") {
         Some(paths) => env::split_paths(&paths).any(|path| {
             if let Ok(path) = path.canonicalize() {
-                if path == *config.bin_dir() {
+                if path == bin_dir {
                     return true;
                 }
             }
@@ -265,7 +266,7 @@ fn check_env_path_for_bin_dir(config: &Config) {
     if !found {
         println!(
             "\nPlease update your PATH environment variable to include the solana programs:\n    PATH=\"{}:$PATH\"\n",
-            config.bin_dir().to_str().unwrap()
+            bin_dir.to_str().unwrap()
         );
     }
 }
@@ -284,7 +285,7 @@ pub fn init(
     let mut modified_rcfiles = false;
     let shell_export_string = format!(
         r#"export PATH="{}:$PATH""#,
-        config.bin_dir().to_str().unwrap()
+        config.active_release_bin_dir().to_str().unwrap()
     );
 
     if !no_modify_path {
@@ -362,7 +363,7 @@ pub fn init(
     if modified_rcfiles {
         println!(
             "\n{}\n  {}\n",
-            style("Close and reopen your terminal to apply the PATH changes or run the following to use it now:").bold().blue(),
+            style("Close and reopen your terminal to apply the PATH changes or run the following in your existing shell:").bold().blue(),
             shell_export_string
        );
     } else {
@@ -561,16 +562,16 @@ pub fn update(config_file: &str) -> Result<bool, String> {
         Err(format!("Incompatible update target: {}", release_target))?;
     }
 
-    let _ = fs::remove_dir_all(config.bin_dir());
+    let _ = fs::remove_dir_all(config.active_release_dir());
     std::os::unix::fs::symlink(
-        release_dir.join("solana-release").join("bin"),
-        config.bin_dir(),
+        release_dir.join("solana-release"),
+        config.active_release_dir(),
     )
     .map_err(|err| {
         format!(
             "Unable to symlink {:?} to {:?}: {}",
             release_dir,
-            config.bin_dir(),
+            config.active_release_dir(),
             err
         )
     })?;
@@ -589,7 +590,7 @@ pub fn run(
 ) -> Result<(), String> {
     let config = Config::load(config_file)?;
 
-    let full_program_path = config.bin_dir().join(program_name);
+    let full_program_path = config.active_release_bin_dir().join(program_name);
     if !full_program_path.exists() {
         Err(format!(
             "{} does not exist",
