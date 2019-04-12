@@ -66,6 +66,15 @@ echo --- Creating tarball
   cp solana-release-cuda/bin/solana-fullnode solana-release/bin/solana-fullnode-cuda
   cp -a scripts multinode-demo solana-release/
 
+  cat > solana-release/bin/fullnode-x.sh <<'EOF'
+#!/usr/bin/env bash
+set -e
+cd "$(dirname "$0")"/..
+export USE_INSTALL=1
+exec multinode-demo/fullnode-x.sh "$@"
+EOF
+  chmod +x solana-release/bin/fullnode-x.sh
+
   tar jvcf solana-release-$TARGET.tar.bz2 solana-release/
   cp solana-release/bin/solana-install solana-install-$TARGET
 )
