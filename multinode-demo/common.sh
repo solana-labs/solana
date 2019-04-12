@@ -43,7 +43,8 @@ else
       maybe_release=--release
     fi
     declare manifest_path="--manifest-path=$program/Cargo.toml"
-    printf "cargo run $manifest_path $maybe_release $maybe_package --bin solana-%s %s -- " "$program" "$features"
+    #printf "cargo run $manifest_path $maybe_release $maybe_package --bin solana-%s %s -- " "$program" "$features"
+    printf "target/release/solana-%s" "$program"
   }
   # shellcheck disable=2154 # 'here' is referenced but not assigned
   LD_LIBRARY_PATH=$(cd "$here/../target/perf-libs" && pwd):$LD_LIBRARY_PATH
