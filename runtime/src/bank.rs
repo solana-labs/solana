@@ -383,7 +383,7 @@ impl Bank {
         self.blockhash_queue.read().unwrap().last_hash()
     }
     /// Return the root bank's blockhash
-    pub fn get_confirmed_blockhash(&self) -> Hash {
+    pub fn confirmed_last_blockhash(&self) -> Hash {
         if let Some(bank) = self.parents().last() {
             bank.last_blockhash()
         } else {
