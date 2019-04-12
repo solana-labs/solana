@@ -299,12 +299,13 @@ impl ReplayStage {
     ) where
         T: 'static + KeypairUtil + Send + Sync,
     {
+        if let Some(new_root) = locktower.record_vote(bank.slot()) {
+            bank_forks.write().unwrap().set_root(new_root);
+            blocktree.set_root(new_root);
+            Self::handle_new_root(&bank_forks, progress);
+        }
+        locktower.update_epoch(&bank);
         if let Some(ref voting_keypair) = voting_keypair {
-            if let Some(new_root) = locktower.record_vote(bank.slot()) {
-                bank_forks.write().unwrap().set_root(new_root);
-                blocktree.set_root(new_root);
-                Self::handle_new_root(&bank_forks, progress);
-            }
             // Send our last few votes along with the new one
             let vote_ix = vote_instruction::vote(vote_account_pubkey, locktower.recent_votes());
             let vote_tx = Transaction::new_signed_instructions(
@@ -312,7 +313,6 @@ impl ReplayStage {
                 vec![vote_ix],
                 bank.last_blockhash(),
             );
-            locktower.update_epoch(&bank);
             cluster_info.write().unwrap().push_vote(vote_tx);
         }
     }

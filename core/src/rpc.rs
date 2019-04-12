@@ -74,7 +74,7 @@ impl JsonRpcRequestProcessor {
     }
 
     fn get_recent_blockhash(&self) -> String {
-        let id = self.bank().last_blockhash();
+        let id = self.bank().get_confirmed_blockhash();
         bs58::encode(id).into_string()
     }
 
@@ -329,7 +329,7 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .bank()
-            .last_blockhash();
+            .get_confirmed_blockhash();
         let transaction = request_airdrop_transaction(&drone_addr, &pubkey, lamports, blockhash)
             .map_err(|err| {
                 info!("request_airdrop_transaction failed: {:?}", err);
@@ -450,7 +450,7 @@ mod tests {
         let bank = bank_forks.read().unwrap().working_bank();
         let exit = Arc::new(AtomicBool::new(false));
 
-        let blockhash = bank.last_blockhash();
+        let blockhash = bank.get_confirmed_blockhash();
         let tx = system_transaction::transfer(&alice, pubkey, 20, blockhash, 0);
         bank.process_transaction(&tx).expect("process transaction");
 
@@ -493,7 +493,7 @@ mod tests {
             &exit,
         );
         thread::spawn(move || {
-            let blockhash = bank.last_blockhash();
+            let blockhash = bank.get_confirmed_blockhash();
             let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash, 0);
             bank.process_transaction(&tx).expect("process transaction");
         })

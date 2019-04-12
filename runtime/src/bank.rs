@@ -382,6 +382,14 @@ impl Bank {
     pub fn last_blockhash(&self) -> Hash {
         self.blockhash_queue.read().unwrap().last_hash()
     }
+    /// Return the root bank's blockhash
+    pub fn get_confirmed_blockhash(&self) -> Hash {
+        if let Some(bank) = self.parents().last() {
+            bank.last_blockhash()
+        } else {
+            self.last_blockhash()
+        }
+    }
 
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
