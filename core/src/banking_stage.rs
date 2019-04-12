@@ -3,6 +3,7 @@
 //! can do its processing in parallel with signature verification on the GPU.
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
+use crate::contact_info::ContactInfo;
 use crate::entry;
 use crate::entry::{hash_transactions, Entry};
 use crate::leader_schedule_utils;
@@ -38,6 +39,13 @@ pub const NUM_THREADS: u32 = 10;
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<()>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum BufferedPacketsDecision {
+    Consume,
+    Forward,
+    Hold,
 }
 
 impl BankingStage {
@@ -151,6 +159,27 @@ impl BankingStage {
         Ok(unprocessed_packets)
     }
 
+    fn process_or_forward_packets(
+        leader_data: &Option<&ContactInfo>,
+        bank_is_available: bool,
+        my_id: &Pubkey,
+    ) -> BufferedPacketsDecision {
+        leader_data.map_or(
+            // If leader is not known, return the buffered packets as is
+            BufferedPacketsDecision::Hold,
+            // else process the packets
+            |x| {
+                if x.id == *my_id || bank_is_available {
+                    // If the current node is the leader, process the buffered packets
+                    BufferedPacketsDecision::Consume
+                } else {
+                    // If the current node is not the leader, forward the buffered packets
+                    BufferedPacketsDecision::Forward
+                }
+            },
+        )
+    }
+
     fn handle_buffered_packets(
         socket: &std::net::UdpSocket,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -159,34 +188,24 @@ impl BankingStage {
     ) -> Result<UnprocessedPackets> {
         let rcluster_info = cluster_info.read().unwrap();
 
-        // If there's a bank, and leader is available, this node "is" the leader
-        // process the buffered packets
-        if poh_recorder.lock().unwrap().bank().is_some() {
-            if rcluster_info.leader_data().is_some() {
-                return Self::process_buffered_packets(poh_recorder, buffered_packets);
+        match Self::process_or_forward_packets(
+            &rcluster_info.leader_data(),
+            rcluster_info.leader_data().is_some(),
+            &rcluster_info.id(),
+        ) {
+            BufferedPacketsDecision::Consume => {
+                Self::process_buffered_packets(poh_recorder, buffered_packets)
             }
-
-            return Ok(buffered_packets.to_vec());
+            BufferedPacketsDecision::Forward => {
+                let _ = Self::forward_unprocessed_packets(
+                    &socket,
+                    &rcluster_info.leader_data().unwrap().tpu_via_blobs,
+                    &buffered_packets,
+                );
+                Ok(vec![])
+            }
+            _ => Ok(buffered_packets.to_vec()),
         }
-
-        // If leader is not known, return the buffered packets as is
-        // else process the packets
-        rcluster_info
-            .leader_data()
-            .map_or(Ok(buffered_packets.to_vec()), |x| {
-                if x.id == rcluster_info.id() {
-                    // If the current node is the leader, process the buffered packets
-                    Self::process_buffered_packets(poh_recorder, buffered_packets)
-                } else {
-                    // If the current node is not the leader, forward the buffered packets
-                    let _ = Self::forward_unprocessed_packets(
-                        &socket,
-                        &rcluster_info.leader_data().unwrap().tpu_via_blobs,
-                        &buffered_packets,
-                    );
-                    Ok(vec![])
-                }
-            })
     }
 
     fn should_buffer_packets(
@@ -878,6 +897,44 @@ mod tests {
             assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
         }
         Blocktree::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_should_process_or_forward_packets() {
+        let my_id = Pubkey::new_rand();
+        let my_id1 = Pubkey::new_rand();
+
+        assert_eq!(
+            BankingStage::process_or_forward_packets(&None, true, &my_id),
+            BufferedPacketsDecision::Hold
+        );
+        assert_eq!(
+            BankingStage::process_or_forward_packets(&None, false, &my_id),
+            BufferedPacketsDecision::Hold
+        );
+        assert_eq!(
+            BankingStage::process_or_forward_packets(&None, false, &my_id1),
+            BufferedPacketsDecision::Hold
+        );
+
+        let mut contact_info = ContactInfo::default();
+        contact_info.id = my_id1;
+        assert_eq!(
+            BankingStage::process_or_forward_packets(&Some(&contact_info), false, &my_id),
+            BufferedPacketsDecision::Forward
+        );
+        assert_eq!(
+            BankingStage::process_or_forward_packets(&Some(&contact_info), true, &my_id),
+            BufferedPacketsDecision::Consume
+        );
+        assert_eq!(
+            BankingStage::process_or_forward_packets(&Some(&contact_info), false, &my_id1),
+            BufferedPacketsDecision::Consume
+        );
+        assert_eq!(
+            BankingStage::process_or_forward_packets(&Some(&contact_info), true, &my_id1),
+            BufferedPacketsDecision::Consume
+        );
     }
 
     #[test]
