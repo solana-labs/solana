@@ -1,6 +1,6 @@
 ## Testnet Participation
 This document describes how to participate in a public testnet as a
-validator node using the *Beacons v0.12* release.
+validator node using the *Grandview v0.13* release.
 
 Please note some of the information and instructions described here may change
 in future releases.
@@ -33,16 +33,32 @@ $ export ip=$(dig +short beta.testnet.solana.com)
 ```
 
 #### Obtaining The Software
+
+##### Bootstrap with `solana-install`
+
+The `solana-install` tool can be used to easily install and upgrade the cluster
+software on Linux x86_64 systems.
+
+Install the latest release with a single shell command:
+```bash
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.13.0/install/solana-install-init.sh | \
+  sh -c - --url https://api.beta.testnet.solana.com
+```
+
+Alternatively build the `solana-install` program from source and run the
+following command to obtain the same result:
+```bash
+$ solana-install init --url https://api.beta.testnet.solana.com
+```
+
+After a successful install, `solana-install update` may be used to easily update the cluster
+software to a newer version.
+
 ##### Download Prebuilt Binaries
-Binaries are available for Linux x86_64 systems.  Download the binaries by navigating to:
+Binaries are available for Linux x86_64 systems.
 
-> https://github.com/solana-labs/solana/releases/latest
-
-Download the binary file from our latest release tag:
-
-> solana-release-x86_64-unknown-linux-gnu.tar.bz2
-
-Extract the package:
+Download the binaries by navigating to https://github.com/solana-labs/solana/releases/latest, download
+**solana-release-x86_64-unknown-linux-gnu.tar.bz2**, then extract the archive:
 ```bash
 $ tar jxf solana-release-x86_64-unknown-linux-gnu.tar.bz2
 $ cd solana-release/
@@ -83,9 +99,22 @@ $ RUST_LOG=info solana-gossip --network ${ip:?}:8001
 ```
 
 ### Starting The Validator
-The following command will start a new validator node:
+The following command will start a new validator node.
+
+If this is a `solana-install`-installation:
 ```bash
-$ RUST_LOG=warn USE_INSTALL=1 ./multinode-demo/fullnode-x.sh --public-address --poll-for-new-genesis-block ${ip:?}
+$ fullnode-x.sh --public-address --poll-for-new-genesis-block ${ip:?}
+```
+
+Alternatively, the `solana-install run` command can be used to run the validator
+node while periodically checking for and applying software updates:
+```bash
+$ solana-install run fullnode-x.sh --public-address --poll-for-new-genesis-block ${ip:?}
+```
+
+When not using `solana-install`:
+```bash
+$ USE_INSTALL=1 ./multinode-demo/fullnode-x.sh --public-address --poll-for-new-genesis-block ${ip:?}
 ```
 
 Then from another console, confirm the IP address if your node is now visible in
