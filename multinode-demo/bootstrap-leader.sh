@@ -71,7 +71,7 @@ bootstrap_leader_vote_id=$($solana_wallet --keypair "$bootstrap_leader_vote_id_p
 
 #trap 'kill "$pid" && wait "$pid"' INT TERM ERR
 #$program \
-sudo LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH perf record -g $program \
+sudo LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH perf record -g --call-graph=lbr $program \
   --identity "$bootstrap_leader_id_path" \
   --voting-keypair "$bootstrap_leader_vote_id_path" \
   --vote-account  "$bootstrap_leader_vote_id" \
