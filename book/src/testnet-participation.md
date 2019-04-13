@@ -1,6 +1,6 @@
 ## Testnet Participation
-This document describes how to participate in a public testnet as a
-validator node using the *Grandview v0.13* release.
+This document describes how to participate in the beta testnet as a
+validator node.
 
 Please note some of the information and instructions described here may change
 in future releases.
@@ -124,6 +124,12 @@ $ RUST_LOG=info solana-gossip --network ${ip:?}:8001
 ```
 
 Congratulations, you're now participating in the testnet cluster!
+
+#### Controlling local network port allocation
+By default the validator will dynamically select available network ports in the
+8000-10000 range, and may be overridden with `--dynamic-port-range`.  For
+example, `fullnode-x.sh --dynamic-port-range 11000-11010 ...` will restrict the
+validator to ports 11000-11011.
 
 ### Sharing Metrics From Your Validator
 If you'd like to share metrics perform the following steps before starting the

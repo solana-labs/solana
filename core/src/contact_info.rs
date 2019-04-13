@@ -1,7 +1,10 @@
 use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
+#[cfg(test)]
 use solana_sdk::rpc_port;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
+#[cfg(test)]
+use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Signable, Signature};
 use solana_sdk::timing::timestamp;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -141,16 +144,19 @@ impl ContactInfo {
             0,
         )
     }
-    fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
-        let mut nxt_addr = *addr;
-        nxt_addr.set_port(addr.port() + nxt);
-        nxt_addr
-    }
+
+    #[cfg(test)]
     fn new_with_pubkey_socketaddr(pubkey: &Pubkey, bind_addr: &SocketAddr) -> Self {
+        fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
+            let mut nxt_addr = *addr;
+            nxt_addr.set_port(addr.port() + nxt);
+            nxt_addr
+        }
+
         let tpu_addr = *bind_addr;
-        let gossip_addr = Self::next_port(&bind_addr, 1);
-        let tvu_addr = Self::next_port(&bind_addr, 2);
-        let tpu_via_blobs_addr = Self::next_port(&bind_addr, 3);
+        let gossip_addr = next_port(&bind_addr, 1);
+        let tvu_addr = next_port(&bind_addr, 2);
+        let tpu_via_blobs_addr = next_port(&bind_addr, 3);
         let rpc_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
         let rpc_pubsub_addr = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
         Self::new(
@@ -165,7 +171,9 @@ impl ContactInfo {
             timestamp(),
         )
     }
-    pub fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
+
+    #[cfg(test)]
+    pub(crate) fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
         let keypair = Keypair::new();
         Self::new_with_pubkey_socketaddr(&keypair.pubkey(), bind_addr)
     }
@@ -185,11 +193,13 @@ impl ContactInfo {
             timestamp(),
         )
     }
+
     fn is_valid_ip(addr: IpAddr) -> bool {
         !(addr.is_unspecified() || addr.is_multicast())
         // || (addr.is_loopback() && !cfg_test))
         // TODO: boot loopback in production networks
     }
+
     /// port must not be 0
     /// ip must be specified and not mulitcast
     /// loopback ip is only allowed in tests

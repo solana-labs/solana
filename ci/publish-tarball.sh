@@ -66,6 +66,19 @@ echo --- Creating tarball
   cp solana-release-cuda/bin/solana-fullnode solana-release/bin/solana-fullnode-cuda
   cp -a scripts multinode-demo solana-release/
 
+  # Add a wrapper script for fullnode.sh
+  # TODO: Remove multinode/... from tarball
+  cat > solana-release/bin/fullnode.sh <<'EOF'
+#!/usr/bin/env bash
+set -e
+cd "$(dirname "$0")"/..
+export USE_INSTALL=1
+exec multinode-demo/fullnode.sh "$@"
+EOF
+  chmod +x solana-release/bin/fullnode.sh
+
+  # Add a wrapper script for fullnode-x.sh
+  # TODO: Remove multinode/... from tarball
   cat > solana-release/bin/fullnode-x.sh <<'EOF'
 #!/usr/bin/env bash
 set -e

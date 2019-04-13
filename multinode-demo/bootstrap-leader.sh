@@ -35,6 +35,9 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = --rpc-port ]]; then
     extra_fullnode_args+=("$1" "$2")
     shift 2
+  elif [[ $1 = --dynamic-port-range ]]; then
+    extra_fullnode_args+=("$1" "$2")
+    shift 2
   else
     echo "Unknown argument: $1"
     exit 1
@@ -74,6 +77,7 @@ $program \
   --vote-account  "$bootstrap_leader_vote_id" \
   --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger \
   --accounts "$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts \
+  --gossip-port 8001 \
   --rpc-port 8899 \
   --rpc-drone-address 127.0.0.1:9900 \
   "${extra_fullnode_args[@]}" \

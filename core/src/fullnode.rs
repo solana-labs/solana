@@ -142,24 +142,32 @@ impl Fullnode {
 
         let storage_state = StorageState::new();
 
-        let rpc_service = JsonRpcService::new(
-            &cluster_info,
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
-            storage_state.clone(),
-            config.rpc_config.clone(),
-            bank_forks.clone(),
-            &exit,
-        );
+        let rpc_service = if node.info.rpc.port() == 0 {
+            None
+        } else {
+            Some(JsonRpcService::new(
+                &cluster_info,
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
+                storage_state.clone(),
+                config.rpc_config.clone(),
+                bank_forks.clone(),
+                &exit,
+            ))
+        };
 
         let subscriptions = Arc::new(RpcSubscriptions::default());
-        let rpc_pubsub_service = PubSubService::new(
-            &subscriptions,
-            SocketAddr::new(
-                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                node.info.rpc_pubsub.port(),
-            ),
-            &exit,
-        );
+        let rpc_pubsub_service = if node.info.rpc_pubsub.port() == 0 {
+            None
+        } else {
+            Some(PubSubService::new(
+                &subscriptions,
+                SocketAddr::new(
+                    IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                    node.info.rpc_pubsub.port(),
+                ),
+                &exit,
+            ))
+        };
 
         let gossip_service = GossipService::new(
             &cluster_info,
@@ -243,8 +251,8 @@ impl Fullnode {
         Self {
             id,
             gossip_service,
-            rpc_service: Some(rpc_service),
-            rpc_pubsub_service: Some(rpc_pubsub_service),
+            rpc_service,
+            rpc_pubsub_service,
             tpu,
             tvu,
             exit,

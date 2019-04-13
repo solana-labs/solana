@@ -17,6 +17,8 @@ pub struct UdpSocketPair {
     pub sender: UdpSocket,   // Locally bound socket to send via public address
 }
 
+pub type PortRange = (u16, u16);
+
 /// Tries to determine the public IP address of this machine
 pub fn get_public_ip_addr() -> Result<IpAddr, String> {
     let body = reqwest::get("http://ifconfig.co/ip")
@@ -46,6 +48,26 @@ pub fn parse_port_or_addr(optstr: Option<&str>, default_port: u16) -> SocketAddr
     } else {
         daddr
     }
+}
+
+pub fn parse_port_range(port_range: &str) -> Option<PortRange> {
+    let ports: Vec<&str> = port_range.split('-').collect();
+    if ports.len() != 2 {
+        return None;
+    }
+
+    let start_port = ports[0].parse();
+    let end_port = ports[1].parse();
+
+    if start_port.is_err() || end_port.is_err() {
+        return None;
+    }
+    let start_port = start_port.unwrap();
+    let end_port = end_port.unwrap();
+    if end_port < start_port {
+        return None;
+    }
+    Some((start_port, end_port))
 }
 
 fn find_eth0ish_ip_addr(
@@ -122,7 +144,7 @@ fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
     Ok(sock)
 }
 
-pub fn bind_in_range(range: (u16, u16)) -> io::Result<(u16, UdpSocket)> {
+pub fn bind_in_range(range: PortRange) -> io::Result<(u16, UdpSocket)> {
     let sock = udp_socket(false)?;
 
     let (start, end) = range;
@@ -151,7 +173,7 @@ pub fn bind_in_range(range: (u16, u16)) -> io::Result<(u16, UdpSocket)> {
 }
 
 // binds many sockets to the same port in a range
-pub fn multi_bind_in_range(range: (u16, u16), num: usize) -> io::Result<(u16, Vec<UdpSocket>)> {
+pub fn multi_bind_in_range(range: PortRange, num: usize) -> io::Result<(u16, Vec<UdpSocket>)> {
     let mut sockets = Vec::with_capacity(num);
 
     let port = {
@@ -176,7 +198,7 @@ pub fn bind_to(port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
     }
 }
 
-pub fn find_available_port_in_range(range: (u16, u16)) -> io::Result<u16> {
+pub fn find_available_port_in_range(range: PortRange) -> io::Result<u16> {
     let (start, end) = range;
     let mut tries_left = end - start;
     let mut rand_port = thread_rng().gen_range(start, end);
@@ -301,6 +323,15 @@ mod tests {
         assert_eq!(p2.port(), 1);
         let p3 = parse_port_or_addr(None, 1);
         assert_eq!(p3.port(), 1);
+    }
+
+    #[test]
+    fn test_parse_port_range() {
+        assert_eq!(parse_port_range("garbage"), None);
+        assert_eq!(parse_port_range("1-"), None);
+        assert_eq!(parse_port_range("1-2"), Some((1, 2)));
+        assert_eq!(parse_port_range("1-2-3"), None);
+        assert_eq!(parse_port_range("2-1"), None);
     }
 
     #[test]
