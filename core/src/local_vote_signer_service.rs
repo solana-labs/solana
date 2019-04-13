@@ -1,7 +1,7 @@
 //! The `local_vote_signer_service` can be started locally to sign fullnode votes
 
-use crate::cluster_info::FULLNODE_PORT_RANGE;
 use crate::service::Service;
+use solana_netutil::PortRange;
 use solana_vote_signer::rpc::VoteSignerRpcService;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,8 +24,8 @@ impl Service for LocalVoteSignerService {
 
 impl LocalVoteSignerService {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new() -> (Self, SocketAddr) {
-        let addr = match solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE) {
+    pub fn new(port_range: PortRange) -> (Self, SocketAddr) {
+        let addr = match solana_netutil::find_available_port_in_range(port_range) {
             Ok(port) => SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port),
             Err(_e) => panic!("Failed to find an available port for local vote signer service"),
         };

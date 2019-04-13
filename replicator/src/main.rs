@@ -1,5 +1,5 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
-use solana::cluster_info::Node;
+use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
 use solana::replicator::Replicator;
 use solana::socketaddr;
@@ -67,7 +67,8 @@ fn main() {
         }
         addr
     };
-    let node = Node::new_replicator_with_external_ip(&keypair.pubkey(), &gossip_addr);
+    let node =
+        Node::new_replicator_with_external_ip(&keypair.pubkey(), &gossip_addr, FULLNODE_PORT_RANGE);
 
     println!(
         "replicating the data with keypair={:?} gossip_addr={:?}",

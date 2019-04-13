@@ -13,7 +13,7 @@ if [[ $1 = -h ]]; then
   fullnode_usage "$@"
 fi
 
-gossip_port=9000
+gossip_port=
 extra_fullnode_args=()
 self_setup=0
 setup_stakes=1
@@ -51,8 +51,12 @@ while [[ ${1:0:1} = - ]]; do
     shift
   elif [[ $1 = --gossip-port ]]; then
     gossip_port=$2
+    extra_fullnode_args+=("$1" "$2")
     shift 2
   elif [[ $1 = --rpc-port ]]; then
+    extra_fullnode_args+=("$1" "$2")
+    shift 2
+  elif [[ $1 = --dynamic-port-range ]]; then
     extra_fullnode_args+=("$1" "$2")
     shift 2
   else
@@ -117,26 +121,16 @@ if ((!self_setup)); then
   fullnode_vote_id_path=$SOLANA_CONFIG_DIR/fullnode-vote-id.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts
+
+  if [[ -z $gossip_port ]]; then
+    extra_fullnode_args+=("--gossip-port" 9000)
+  fi
 else
   mkdir -p "$SOLANA_CONFIG_DIR"
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id-x$self_setup_label.json
   fullnode_vote_id_path=$SOLANA_CONFIG_DIR/fullnode-vote-id-x$self_setup_label.json
-
   [[ -f "$fullnode_id_path" ]] || $solana_keygen -o "$fullnode_id_path"
   [[ -f "$fullnode_vote_id_path" ]] || $solana_keygen -o "$fullnode_vote_id_path"
-
-  echo "Finding a port.."
-  # Find an available port in the range 9100-9899
-  (( gossip_port = 9100 + ($$ % 800) ))
-  while true; do
-    (( gossip_port = gossip_port >= 9900 ? 9100 : ++gossip_port ))
-    echo "Testing $gossip_port"
-    if ! nc -w 10 -z 127.0.0.1 $gossip_port; then
-      echo "Selected gossip_port $gossip_port"
-      break;
-    fi
-    echo "Port $gossip_port is in use"
-  done
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger-x$self_setup_label
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts-x$self_setup_label
 fi
@@ -188,7 +182,6 @@ while true; do
 
   trap 'kill "$pid" && wait "$pid"' INT TERM ERR
   $program \
-    --gossip-port "$gossip_port" \
     --identity "$fullnode_id_path" \
     --voting-keypair "$fullnode_vote_id_path" \
     --vote-account "$fullnode_vote_id" \

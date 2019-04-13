@@ -5,14 +5,26 @@ use solana::contact_info::ContactInfo;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
+use solana_netutil::parse_port_range;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::fs::File;
 use std::process::exit;
 use std::sync::Arc;
 
+fn port_range_validator(port_range: String) -> Result<(), String> {
+    if parse_port_range(&port_range).is_some() {
+        Ok(())
+    } else {
+        Err("Invalid port range".to_string())
+    }
+}
+
 fn main() {
     solana_logger::setup();
     solana_metrics::set_panic_hook("fullnode");
+
+    let default_dynamic_port_range =
+        &format!("{}-{}", FULLNODE_PORT_RANGE.0, FULLNODE_PORT_RANGE.1);
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(crate_version!())
@@ -131,6 +143,15 @@ fn main() {
                 .takes_value(true)
                 .help("Gossip port number for the node"),
         )
+        .arg(
+            clap::Arg::with_name("dynamic_port_range")
+                .long("dynamic-port-range")
+                .value_name("MIN_PORT-MAX_PORT")
+                .takes_value(true)
+                .default_value(default_dynamic_port_range)
+                .validator(port_range_validator)
+                .help("Range to use for dynamically assigned ports"),
+        )
         .get_matches();
 
     let mut fullnode_config = FullnodeConfig::default();
@@ -170,10 +191,14 @@ fn main() {
         .value_of("rpc_drone_address")
         .map(|address| address.parse().expect("failed to parse drone address"));
 
+    let dynamic_port_range = parse_port_range(matches.value_of("dynamic_port_range").unwrap())
+        .expect("invalid dynamic_port_range");
+
     let gossip_addr = {
         let mut addr = solana_netutil::parse_port_or_addr(
             matches.value_of("gossip_port"),
-            FULLNODE_PORT_RANGE.0 + 1,
+            solana_netutil::find_available_port_in_range(dynamic_port_range)
+                .expect("unable to allocate gossip_port"),
         );
         if matches.is_present("public_address") {
             addr.set_ip(solana_netutil::get_public_ip_addr().unwrap());
@@ -199,31 +224,23 @@ fn main() {
         )
     } else {
         // Run a local vote signer if a vote signer service address was not provided
-        let (signer_service, signer_addr) = LocalVoteSignerService::new();
+        let (signer_service, signer_addr) = LocalVoteSignerService::new(dynamic_port_range);
         (Some(signer_service), signer_addr)
-    };
-    let (rpc_port, rpc_pubsub_port) = if let Some(port) = matches.value_of("rpc_port") {
-        let port_number = port.to_string().parse().expect("integer");
-        if port_number == 0 {
-            eprintln!("Invalid RPC port requested: {:?}", port);
-            exit(1);
-        }
-        (port_number, port_number + 1)
-    } else {
-        (
-            solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE)
-                .expect("unable to allocate rpc_port"),
-            solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE)
-                .expect("unable to allocate rpc_pubsub_port"),
-        )
     };
     let init_complete_file = matches.value_of("init_complete_file");
     fullnode_config.blockstream = matches.value_of("blockstream").map(|s| s.to_string());
 
     let keypair = Arc::new(keypair);
-    let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr);
-    node.info.rpc.set_port(rpc_port);
-    node.info.rpc_pubsub.set_port(rpc_pubsub_port);
+    let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr, dynamic_port_range);
+    if let Some(port) = matches.value_of("rpc_port") {
+        let port_number = port.to_string().parse().expect("integer");
+        if port_number == 0 {
+            eprintln!("Invalid RPC port requested: {:?}", port);
+            exit(1);
+        }
+        node.info.rpc.set_port(port_number);
+        node.info.rpc_pubsub.set_port(port_number + 1);
+    };
 
     let fullnode = Fullnode::new(
         node,

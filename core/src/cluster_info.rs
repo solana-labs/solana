@@ -31,11 +31,12 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
-use solana_netutil::{bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range};
+use solana_netutil::{
+    bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range, PortRange,
+};
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::rpc_port;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use solana_sdk::transaction::Transaction;
@@ -48,7 +49,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
-pub const FULLNODE_PORT_RANGE: (u16, u16) = (8000, 10_000);
+pub const FULLNODE_PORT_RANGE: PortRange = (8000, 10_000);
 
 /// The fanout for Ledger Replication
 pub const DATA_PLANE_FANOUT: usize = 200;
@@ -1510,7 +1511,7 @@ impl Node {
             },
         }
     }
-    fn get_gossip_port(gossip_addr: &SocketAddr) -> (u16, UdpSocket) {
+    fn get_gossip_port(gossip_addr: &SocketAddr, port_range: PortRange) -> (u16, UdpSocket) {
         if gossip_addr.port() != 0 {
             (
                 gossip_addr.port(),
@@ -1519,27 +1520,29 @@ impl Node {
                 }),
             )
         } else {
-            Self::bind()
+            Self::bind(port_range)
         }
     }
-    fn bind() -> (u16, UdpSocket) {
-        bind_in_range(FULLNODE_PORT_RANGE).expect("Failed to bind")
+    fn bind(port_range: PortRange) -> (u16, UdpSocket) {
+        bind_in_range(port_range).expect("Failed to bind")
     }
-    pub fn new_with_external_ip(pubkey: &Pubkey, gossip_addr: &SocketAddr) -> Node {
-        let (gossip_port, gossip) = Self::get_gossip_port(gossip_addr);
+    pub fn new_with_external_ip(
+        pubkey: &Pubkey,
+        gossip_addr: &SocketAddr,
+        port_range: PortRange,
+    ) -> Node {
+        let (gossip_port, gossip) = Self::get_gossip_port(gossip_addr, port_range);
 
-        let (tvu_port, tvu_sockets) =
-            multi_bind_in_range(FULLNODE_PORT_RANGE, 8).expect("tvu multi_bind");
+        let (tvu_port, tvu_sockets) = multi_bind_in_range(port_range, 8).expect("tvu multi_bind");
 
-        let (tpu_port, tpu_sockets) =
-            multi_bind_in_range(FULLNODE_PORT_RANGE, 32).expect("tpu multi_bind");
+        let (tpu_port, tpu_sockets) = multi_bind_in_range(port_range, 32).expect("tpu multi_bind");
 
         let (tpu_via_blobs_port, tpu_via_blobs_sockets) =
-            multi_bind_in_range(FULLNODE_PORT_RANGE, 8).expect("tpu multi_bind");
+            multi_bind_in_range(port_range, 8).expect("tpu multi_bind");
 
-        let (_, repair) = Self::bind();
-        let (_, broadcast) = Self::bind();
-        let (_, retransmit) = Self::bind();
+        let (_, repair) = Self::bind(port_range);
+        let (_, broadcast) = Self::bind(port_range);
+        let (_, retransmit) = Self::bind(port_range);
 
         let info = ContactInfo::new(
             pubkey,
@@ -1547,9 +1550,9 @@ impl Node {
             SocketAddr::new(gossip_addr.ip(), tvu_port),
             SocketAddr::new(gossip_addr.ip(), tpu_port),
             SocketAddr::new(gossip_addr.ip(), tpu_via_blobs_port),
-            "0.0.0.0:0".parse().unwrap(),
-            SocketAddr::new(gossip_addr.ip(), rpc_port::DEFAULT_RPC_PORT),
-            SocketAddr::new(gossip_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT),
+            socketaddr_any!(),
+            socketaddr_any!(),
+            socketaddr_any!(),
             0,
         );
         trace!("new ContactInfo: {:?}", info);
@@ -1568,14 +1571,18 @@ impl Node {
             },
         }
     }
-    pub fn new_replicator_with_external_ip(pubkey: &Pubkey, gossip_addr: &SocketAddr) -> Node {
-        let mut new = Self::new_with_external_ip(pubkey, gossip_addr);
-        let (storage_port, storage_socket) = Self::bind();
+    pub fn new_replicator_with_external_ip(
+        pubkey: &Pubkey,
+        gossip_addr: &SocketAddr,
+        port_range: PortRange,
+    ) -> Node {
+        let mut new = Self::new_with_external_ip(pubkey, gossip_addr, port_range);
+        let (storage_port, storage_socket) = Self::bind(port_range);
 
         new.info.storage_addr = SocketAddr::new(gossip_addr.ip(), storage_port);
         new.sockets.storage = Some(storage_socket);
 
-        let empty = "0.0.0.0:0".parse().unwrap();
+        let empty = socketaddr_any!();
         new.info.tpu = empty;
         new.info.tpu_via_blobs = empty;
         new.sockets.tpu = vec![];
@@ -1904,7 +1911,11 @@ mod tests {
     #[test]
     fn new_with_external_ip_test_random() {
         let ip = Ipv4Addr::from(0);
-        let node = Node::new_with_external_ip(&Pubkey::new_rand(), &socketaddr!(ip, 0));
+        let node = Node::new_with_external_ip(
+            &Pubkey::new_rand(),
+            &socketaddr!(ip, 0),
+            FULLNODE_PORT_RANGE,
+        );
 
         check_node_sockets(&node, IpAddr::V4(ip), FULLNODE_PORT_RANGE);
     }
@@ -1917,7 +1928,11 @@ mod tests {
                 .expect("Failed to bind")
                 .0
         };
-        let node = Node::new_with_external_ip(&Pubkey::new_rand(), &socketaddr!(0, port));
+        let node = Node::new_with_external_ip(
+            &Pubkey::new_rand(),
+            &socketaddr!(0, port),
+            FULLNODE_PORT_RANGE,
+        );
 
         check_node_sockets(&node, ip, FULLNODE_PORT_RANGE);
 
@@ -1927,7 +1942,11 @@ mod tests {
     #[test]
     fn new_replicator_external_ip_test() {
         let ip = Ipv4Addr::from(0);
-        let node = Node::new_replicator_with_external_ip(&Pubkey::new_rand(), &socketaddr!(ip, 0));
+        let node = Node::new_replicator_with_external_ip(
+            &Pubkey::new_rand(),
+            &socketaddr!(ip, 0),
+            FULLNODE_PORT_RANGE,
+        );
 
         let ip = IpAddr::V4(ip);
         check_socket(&node.sockets.storage.unwrap(), ip, FULLNODE_PORT_RANGE);
