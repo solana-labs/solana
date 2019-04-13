@@ -169,12 +169,15 @@ impl BankingStage {
             BufferedPacketsDecision::Hold,
             // else process the packets
             |x| {
-                if x.id == *my_id || bank_is_available {
-                    // If the current node is the leader, process the buffered packets
+                if bank_is_available {
+                    // If the bank is available, this node is the leader
                     BufferedPacketsDecision::Consume
-                } else {
+                } else if x.id != *my_id {
                     // If the current node is not the leader, forward the buffered packets
                     BufferedPacketsDecision::Forward
+                } else {
+                    // We don't know the leader. Hold the packets for now
+                    BufferedPacketsDecision::Hold
                 }
             },
         )
@@ -929,7 +932,7 @@ mod tests {
         );
         assert_eq!(
             BankingStage::process_or_forward_packets(Some(&contact_info), false, &my_id1),
-            BufferedPacketsDecision::Consume
+            BufferedPacketsDecision::Hold
         );
         assert_eq!(
             BankingStage::process_or_forward_packets(Some(&contact_info), true, &my_id1),
