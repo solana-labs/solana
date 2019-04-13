@@ -141,8 +141,7 @@ else
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts-x$self_setup_label
 fi
 
-fullnode_vote_id=$($solana_wallet --keypair "$fullnode_vote_id_path" address)
-
+fullnode_vote_id=$($solana_keygen pubkey "$fullnode_vote_id_path")
 
 [[ -r $fullnode_id_path ]] || {
   echo "$fullnode_id_path does not exist"
