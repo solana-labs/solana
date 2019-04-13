@@ -65,7 +65,7 @@ $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger verify
 
 bootstrap_leader_id_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json
 bootstrap_leader_vote_id_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-id.json
-bootstrap_leader_vote_id=$($solana_wallet --keypair "$bootstrap_leader_vote_id_path" address)
+bootstrap_leader_vote_id=$($solana_keygen pubkey "$bootstrap_leader_vote_id_path")
 
 trap 'kill "$pid" && wait "$pid"' INT TERM ERR
 $program \
