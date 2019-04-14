@@ -1405,6 +1405,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_accountsdb_count_stores() {
         let paths = get_tmp_accounts_path!();
         let db = AccountsDB::new(&paths.paths);
@@ -1593,6 +1594,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_account_grow() {
         let paths = get_tmp_accounts_path!();
         let accounts = AccountsDB::new(&paths.paths);
