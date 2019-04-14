@@ -14,7 +14,7 @@ bs58 = "0.2.0"
 hex = "0.3.2"
 byteorder = "1.2.1"
 chrono = { version = "0.4.0", features = ["serde"] }
-generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
+generic-array = { version = "0.13.0", default-features = false, features = ["serde"] }
 itertools = "0.8.0"
 log = "0.4.2"
 rand = "0.6.5"
