@@ -15,7 +15,8 @@ fn pubkey_validator(pubkey: String) -> Result<(), String> {
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    solana_logger::setup();
+    env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info")).init();
+
     let mut network_addr = SocketAddr::from(([127, 0, 0, 1], 8001));
     let network_string = network_addr.to_string();
     let matches = App::new(crate_name!())
