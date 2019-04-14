@@ -76,6 +76,10 @@ impl<T: Clone> AccountsIndex<T> {
         self.roots.contains(&fork)
     }
     pub fn add_root(&mut self, fork: Fork) {
+        if self.roots.contains(&fork) {
+            trace!("duplicate add root {} {}", fork, self.last_root);
+            return;
+        }
         assert!(self.last_root == 0 || fork > self.last_root);
         self.last_root = fork;
         self.roots.insert(fork);
