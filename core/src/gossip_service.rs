@@ -68,6 +68,7 @@ pub fn discover(
     let exit = Arc::new(AtomicBool::new(false));
     let (gossip_service, spy_ref) = make_spy_node(gossip_addr, &exit);
     let id = spy_ref.read().unwrap().keypair.pubkey();
+    info!("Gossip entry point: {:?}", gossip_addr);
     trace!(
         "discover: spy_node {} looking for at least {:?} nodes",
         id,
