@@ -21,7 +21,7 @@ solana-exchange-api = { path = "../programs/exchange_api", version = "0.13.0" }
 
 
 [dev-dependencies]
-hashbrown = "0.2.0"
+hashbrown = "0.2.1"
 solana-vote-api = { path = "../programs/vote_api", version = "0.13.0" }
 
 [features]
