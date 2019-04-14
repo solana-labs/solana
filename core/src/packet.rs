@@ -15,6 +15,7 @@ use std::io::Cursor;
 use std::io::Write;
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
@@ -24,6 +25,7 @@ pub type SharedBlobs = Vec<SharedBlob>;
 pub const NUM_PACKETS: usize = 1024 * 8;
 pub const BLOB_SIZE: usize = (64 * 1024 - 128); // wikipedia says there should be 20b for ipv4 headers
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - (BLOB_HEADER_SIZE * 2);
+pub const BLOB_DATA_ALIGN: usize = 64;
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -71,7 +73,7 @@ impl Default for Packet {
 
 impl PartialEq for Packet {
     fn eq(&self, other: &Packet) -> bool {
-        self.data.iter().zip(other.data.iter()).all(|(a, b)| a == b) && self.meta == other.meta
+        self.meta == other.meta && self.data.as_ref() == other.data.as_ref()
     }
 }
 
@@ -141,16 +143,49 @@ impl Packets {
     }
 }
 
-#[derive(Clone)]
-pub struct Blob {
+#[repr(align(64))] // 64 === BLOB_DATA_ALIGN
+pub struct BlobData {
     pub data: [u8; BLOB_SIZE],
-    pub meta: Meta,
 }
 
-impl PartialEq for Blob {
-    fn eq(&self, other: &Blob) -> bool {
-        self.data.iter().zip(other.data.iter()).all(|(a, b)| a == b) && self.meta == other.meta
+impl Clone for BlobData {
+    fn clone(&self) -> Self {
+        BlobData { data: self.data }
     }
+}
+
+impl Default for BlobData {
+    fn default() -> Self {
+        BlobData {
+            data: [0u8; BLOB_SIZE],
+        }
+    }
+}
+
+impl PartialEq for BlobData {
+    fn eq(&self, other: &BlobData) -> bool {
+        self.data.as_ref() == other.data.as_ref()
+    }
+}
+
+// this code hides _data, maps it to _data.data
+impl Deref for Blob {
+    type Target = BlobData;
+
+    fn deref(&self) -> &Self::Target {
+        &self._data
+    }
+}
+impl DerefMut for Blob {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self._data
+    }
+}
+
+#[derive(Clone, Default, PartialEq)]
+pub struct Blob {
+    _data: BlobData, // hidden member, passed through by Deref
+    pub meta: Meta,
 }
 
 impl fmt::Debug for Blob {
@@ -161,16 +196,6 @@ impl fmt::Debug for Blob {
             self.meta.size,
             self.meta.addr()
         )
-    }
-}
-
-//auto derive doesn't support large arrays
-impl Default for Blob {
-    fn default() -> Blob {
-        Blob {
-            data: [0u8; BLOB_SIZE],
-            meta: Meta::default(),
-        }
     }
 }
 
@@ -343,11 +368,11 @@ const SIZE_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, u64);
 
 macro_rules! align {
     ($x:expr, $align:expr) => {
-        $x + ($align * 8 - 1) & !($align * 8 - 1)
+        $x + ($align - 1) & !($align - 1)
     };
 }
 
-pub const BLOB_HEADER_SIZE: usize = align!(SIZE_RANGE.end, 8);
+pub const BLOB_HEADER_SIZE: usize = align!(SIZE_RANGE.end, BLOB_DATA_ALIGN);
 
 pub const BLOB_FLAG_IS_LAST_IN_SLOT: u32 = 0x2;
 
@@ -785,4 +810,29 @@ mod tests {
 
         assert_eq!(result, packets);
     }
+
+    #[test]
+    fn test_blob_data_align() {
+        assert_eq!(std::mem::align_of::<BlobData>(), BLOB_DATA_ALIGN);
+    }
+
+    #[test]
+    fn test_packet_partial_eq() {
+        let p1 = Packet::default();
+        let mut p2 = Packet::default();
+
+        assert!(p1 == p2);
+        p2.data[1] = 4;
+        assert!(p1 != p2);
+    }
+    #[test]
+    fn test_blob_partial_eq() {
+        let p1 = Blob::default();
+        let mut p2 = Blob::default();
+
+        assert!(p1 == p2);
+        p2.data[1] = 4;
+        assert!(p1 != p2);
+    }
+
 }
