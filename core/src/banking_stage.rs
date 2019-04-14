@@ -191,11 +191,13 @@ impl BankingStage {
     ) -> Result<UnprocessedPackets> {
         let rcluster_info = cluster_info.read().unwrap();
 
-        match Self::process_or_forward_packets(
+        let decision = Self::process_or_forward_packets(
             rcluster_info.leader_data(),
             poh_recorder.lock().unwrap().bank().is_some(),
             &rcluster_info.id(),
-        ) {
+        );
+
+        match decision {
             BufferedPacketsDecision::Consume => {
                 Self::process_buffered_packets(poh_recorder, buffered_packets)
             }
