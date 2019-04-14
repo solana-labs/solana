@@ -254,7 +254,18 @@ impl BankingStage {
                 .unwrap_or_else(|_| buffered_packets.clear());
             }
 
-            match Self::process_packets(&verified_receiver, &poh_recorder, recv_start) {
+            let recv_timeout = if !buffered_packets.is_empty() {
+                // If packets are buffered, let's wait for less time on recv from the channel.
+                // This helps detect the next leader faster, and processing the buffered
+                // packets quickly
+                Duration::from_millis(10)
+            } else {
+                // Default wait time
+                Duration::from_millis(100)
+            };
+
+            match Self::process_packets(&verified_receiver, &poh_recorder, recv_start, recv_timeout)
+            {
                 Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                 Ok(unprocessed_packets) => {
                     if Self::should_buffer_packets(poh_recorder, cluster_info) {
@@ -480,11 +491,12 @@ impl BankingStage {
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
         poh: &Arc<Mutex<PohRecorder>>,
         recv_start: &mut Instant,
+        recv_timeout: Duration,
     ) -> Result<UnprocessedPackets> {
         let mms = verified_receiver
             .lock()
             .unwrap()
-            .recv_timeout(Duration::from_millis(100))?;
+            .recv_timeout(recv_timeout)?;
 
         let mms_len = mms.len();
         let count = mms.iter().map(|x| x.1.len()).sum();
