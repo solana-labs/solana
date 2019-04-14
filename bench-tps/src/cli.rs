@@ -117,14 +117,14 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     let mut args = Config::default();
 
     if let Some(addr) = matches.value_of("network") {
-        args.network_addr = addr.parse().unwrap_or_else(|e| {
-            eprintln!("failed to parse network: {}", e);
+        args.network_addr = solana_netutil::parse_host_port(addr).unwrap_or_else(|e| {
+            eprintln!("failed to parse network address: {}", e);
             exit(1)
         });
     }
 
     if let Some(addr) = matches.value_of("drone") {
-        args.drone_addr = addr.parse().unwrap_or_else(|e| {
+        args.drone_addr = solana_netutil::parse_host_port(addr).unwrap_or_else(|e| {
             eprintln!("failed to parse drone address: {}", e);
             exit(1)
         });

@@ -67,8 +67,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .get_matches();
 
     if let Some(addr) = matches.value_of("network") {
-        network_addr = addr.parse().unwrap_or_else(|e| {
-            eprintln!("failed to parse network: {}", e);
+        network_addr = solana_netutil::parse_host_port(addr).unwrap_or_else(|e| {
+            eprintln!("failed to parse network address: {}", e);
             exit(1)
         });
     }

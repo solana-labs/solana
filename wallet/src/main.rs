@@ -7,28 +7,31 @@ use solana_wallet::wallet::{parse_command, process_command, WalletConfig, Wallet
 use std::error;
 
 pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn error::Error>> {
-    let host = matches
-        .value_of("host")
-        .unwrap()
-        .parse()
-        .or_else(|_| Err(WalletError::BadParameter("Invalid host".to_string())))?;
+    let host = solana_netutil::parse_host(matches.value_of("host").unwrap()).or_else(|err| {
+        Err(WalletError::BadParameter(format!(
+            "Invalid host: {:?}",
+            err
+        )))
+    })?;
 
     let drone_host = if let Some(drone_host) = matches.value_of("drone_host") {
-        Some(
-            drone_host
-                .parse()
-                .or_else(|_| Err(WalletError::BadParameter("Invalid drone host".to_string())))?,
-        )
+        Some(solana_netutil::parse_host(drone_host).or_else(|err| {
+            Err(WalletError::BadParameter(format!(
+                "Invalid drone host: {:?}",
+                err
+            )))
+        })?)
     } else {
         None
     };
 
     let rpc_host = if let Some(rpc_host) = matches.value_of("rpc_host") {
-        Some(
-            rpc_host
-                .parse()
-                .or_else(|_| Err(WalletError::BadParameter("Invalid rpc host".to_string())))?,
-        )
+        Some(solana_netutil::parse_host(rpc_host).or_else(|err| {
+            Err(WalletError::BadParameter(format!(
+                "Invalid rpc host: {:?}",
+                err
+            )))
+        })?)
     } else {
         None
     };
@@ -37,13 +40,23 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         .value_of("drone_port")
         .unwrap()
         .parse()
-        .or_else(|_| Err(WalletError::BadParameter("Invalid drone port".to_string())))?;
+        .or_else(|err| {
+            Err(WalletError::BadParameter(format!(
+                "Invalid drone port: {:?}",
+                err
+            )))
+        })?;
 
     let rpc_port = matches
         .value_of("rpc_port")
         .unwrap()
         .parse()
-        .or_else(|_| Err(WalletError::BadParameter("Invalid rpc port".to_string())))?;
+        .or_else(|err| {
+            Err(WalletError::BadParameter(format!(
+                "Invalid rpc port: {:?}",
+                err
+            )))
+        })?;
 
     let mut path = dirs::home_dir().expect("home directory");
     let id_path = if matches.is_present("keypair") {

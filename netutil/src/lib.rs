@@ -7,7 +7,7 @@ use rand::{thread_rng, Rng};
 use reqwest;
 use socket2::{Domain, SockAddr, Socket, Type};
 use std::io;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, ToSocketAddrs, UdpSocket};
 use std::os::unix::io::AsRawFd;
 
 /// A data type representing a public Udp socket
@@ -68,6 +68,31 @@ pub fn parse_port_range(port_range: &str) -> Option<PortRange> {
         return None;
     }
     Some((start_port, end_port))
+}
+
+pub fn parse_host(host: &str) -> Result<IpAddr, String> {
+    let ips: Vec<_> = (host, 0)
+        .to_socket_addrs()
+        .map_err(|err| err.to_string())?
+        .map(|socket_address| socket_address.ip())
+        .collect();
+    if ips.is_empty() {
+        Err(format!("Unable to resolve host: {}", host))
+    } else {
+        Ok(ips[0])
+    }
+}
+
+pub fn parse_host_port(host_port: &str) -> Result<SocketAddr, String> {
+    let addrs: Vec<_> = host_port
+        .to_socket_addrs()
+        .map_err(|err| err.to_string())?
+        .collect();
+    if addrs.is_empty() {
+        Err(format!("Unable to resolve host: {}", host_port))
+    } else {
+        Ok(addrs[0])
+    }
 }
 
 fn find_eth0ish_ip_addr(
@@ -332,6 +357,22 @@ mod tests {
         assert_eq!(parse_port_range("1-2"), Some((1, 2)));
         assert_eq!(parse_port_range("1-2-3"), None);
         assert_eq!(parse_port_range("2-1"), None);
+    }
+
+    #[test]
+    fn test_parse_host() {
+        parse_host("localhost:1234").unwrap_err();
+        parse_host("localhost").unwrap();
+        parse_host("127.0.0.0:1234").unwrap_err();
+        parse_host("127.0.0.0").unwrap();
+    }
+
+    #[test]
+    fn test_parse_host_port() {
+        parse_host_port("localhost:1234").unwrap();
+        parse_host_port("localhost").unwrap_err();
+        parse_host_port("127.0.0.0:1234").unwrap();
+        parse_host_port("127.0.0.0").unwrap_err();
     }
 
     #[test]

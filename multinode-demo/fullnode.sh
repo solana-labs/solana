@@ -78,19 +78,7 @@ find_leader() {
     leader_address=127.0.0.1:8001 # Default to local leader
   elif [[ -z $2 ]]; then
     leader=$1
-
-    declare leader_ip
-    if [[ $leader =~ ^[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}$ ]]; then
-      leader_ip=$leader
-    else
-      leader_ip=$(dig +short "${leader%:*}" | head -n1)
-
-      if [[ -z $leader_ip ]]; then
-          usage "Error: unable to resolve IP address for $leader"
-      fi
-    fi
-
-    leader_address=$leader_ip:8001
+    leader_address=$leader:8001
     shift=1
   else
     leader=$1

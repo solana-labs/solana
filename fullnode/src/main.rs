@@ -187,9 +187,9 @@ fn main() {
     if matches.is_present("enable_rpc_exit") {
         fullnode_config.rpc_config.enable_fullnode_exit = true;
     }
-    fullnode_config.rpc_config.drone_addr = matches
-        .value_of("rpc_drone_address")
-        .map(|address| address.parse().expect("failed to parse drone address"));
+    fullnode_config.rpc_config.drone_addr = matches.value_of("rpc_drone_address").map(|address| {
+        solana_netutil::parse_host_port(address).expect("failed to parse drone address")
+    });
 
     let dynamic_port_range = parse_port_range(matches.value_of("dynamic_port_range").unwrap())
         .expect("invalid dynamic_port_range");
@@ -214,7 +214,8 @@ fn main() {
         fullnode_config.account_paths = None;
     }
     let cluster_entrypoint = matches.value_of("network").map(|network| {
-        let gossip_addr = network.parse().expect("failed to parse network address");
+        let gossip_addr =
+            solana_netutil::parse_host_port(network).expect("failed to parse network address");
         ContactInfo::new_gossip_entry_point(&gossip_addr)
     });
     let (_signer_service, _signer_addr) = if let Some(signer_addr) = matches.value_of("signer") {
