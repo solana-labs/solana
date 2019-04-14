@@ -26,14 +26,7 @@ Prebuilt binaries are available for Linux x86_64 (Ubuntu 18.04 recommended).
 MacOS or WSL users may build from source.
 
 ### Validator Setup
-The shell commands in this section assume the following environment variables are
-set:
-```bash
-$ export ip=$(dig +short beta.testnet.solana.com)
-```
-
 #### Obtaining The Software
-
 ##### Bootstrap with `solana-install`
 
 The `solana-install` tool can be used to easily install and upgrade the cluster
@@ -82,8 +75,8 @@ just restarting itself before debugging further.
 
 Receive an airdrop of lamports from the testnet drone:
 ```bash
-$ solana-wallet -n ${ip:?} airdrop 123
-$ solana-wallet -n ${ip:?} balance
+$ solana-wallet -n beta.testnet.solana.com airdrop 123
+$ solana-wallet -n beta.testnet.solana.com balance
 ```
 
 Fetch the current testnet transaction count over JSON RPC:
@@ -95,7 +88,7 @@ Inspect the blockexplorer at http://beta.testnet.solana.com/ for activity.
 
 Run the following command to join the gossip network and view all the other nodes in the cluster:
 ```bash
-$ RUST_LOG=info solana-gossip --network ${ip:?}:8001
+$ solana-gossip --network beta.testnet.solana.com:8001
 ```
 
 ### Starting The Validator
@@ -103,24 +96,24 @@ The following command will start a new validator node.
 
 If this is a `solana-install`-installation:
 ```bash
-$ fullnode-x.sh --public-address --poll-for-new-genesis-block ${ip:?}
+$ fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com:8001
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ solana-install run fullnode-x.sh --public-address --poll-for-new-genesis-block ${ip:?}
+$ solana-install run fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com:8001
 ```
 
 When not using `solana-install`:
 ```bash
-$ USE_INSTALL=1 ./multinode-demo/fullnode-x.sh --public-address --poll-for-new-genesis-block ${ip:?}
+$ USE_INSTALL=1 ./multinode-demo/fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com:8001
 ```
 
 Then from another console, confirm the IP address if your node is now visible in
 the gossip network by running:
 ```bash
-$ RUST_LOG=info solana-gossip --network ${ip:?}:8001
+$ solana-gossip --network beta.testnet.solana.com:8001
 ```
 
 Congratulations, you're now participating in the testnet cluster!

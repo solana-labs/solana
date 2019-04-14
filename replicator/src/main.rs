@@ -78,7 +78,9 @@ fn main() {
 
     let network_addr = matches
         .value_of("network")
-        .map(|network| network.parse().expect("failed to parse network address"))
+        .map(|network| {
+            solana_netutil::parse_host_port(network).expect("failed to parse network address")
+        })
         .unwrap();
 
     let leader_info = ContactInfo::new_gossip_entry_point(&network_addr);
@@ -94,6 +96,5 @@ fn main() {
     .unwrap();
 
     replicator.run();
-
     replicator.close();
 }
