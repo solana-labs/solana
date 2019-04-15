@@ -46,10 +46,17 @@ and longer descriptions detailing what problem it solves and how it solves it.
 Draft Pull Requests
 ---
 
-If you want early feedback on your PR, use GitHub's "Draft Pull Request" mechanism. Draft
-PRs are a convenient way to collaborate with the Solana maintainers without triggering
-notifications as you make changes. When you feel your PR is ready for a broader audience,
-you can transition your draft PR to a standard PR with the click of a button.
+If you want early feedback on your PR, use GitHub's "Draft Pull Request"
+mechanism. Draft PRs are a convenient way to collaborate with the Solana
+maintainers without triggering notifications as you make changes. When you feel
+your PR is ready for a broader audience, you can transition your draft PR to a
+standard PR with the click of a button.
+
+Do not add reviewers to draft PRs.  GitHub doesn't automatically clear approvals
+when you click "Ready for Review", so a review that meant "I approve of the
+direction" suddenly has the appearance of "I approve of these changes." Instead,
+add a comment that mentions the usernames that you would like a review from. Ask
+explicitly what you would like feedback on.
 
 Rust coding conventions
 ---
