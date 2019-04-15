@@ -246,7 +246,7 @@ impl ClusterInfo {
     pub fn contact_info_trace(&self) -> String {
         let leader_id = self.gossip_leader_id;
         let nodes: Vec<_> = self
-            .rpc_peers()
+            .tvu_peers()
             .into_iter()
             .map(|node| {
                 let mut annotation = String::new();
@@ -262,7 +262,11 @@ impl ClusterInfo {
                     node.id,
                     annotation,
                     node.tpu.to_string(),
-                    node.rpc.to_string()
+                    if ContactInfo::is_valid_address(&node.rpc) {
+                        node.rpc.to_string()
+                    } else {
+                        "none".to_string()
+                    }
                 )
             })
             .collect();
