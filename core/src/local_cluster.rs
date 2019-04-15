@@ -172,9 +172,7 @@ impl LocalCluster {
             voting_disabled: true,
             ..config.fullnode_config.clone()
         };
-        (0..config.num_listeners)
-            .into_iter()
-            .for_each(|_| cluster.add_validator(&listener_config, 0));
+        (0..config.num_listeners).for_each(|_| cluster.add_validator(&listener_config, 0));
 
         discover_nodes(
             &cluster.entry_point_info.gossip,
