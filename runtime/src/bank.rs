@@ -136,6 +136,9 @@ pub struct Bank {
     /// Bank tick height
     tick_height: AtomicUsize, // TODO: Use AtomicU64 if/when available
 
+    // Bank max_tick_height
+    max_tick_height: u64,
+
     /// The number of ticks in each slot.
     ticks_per_slot: u64,
 
@@ -209,6 +212,8 @@ impl Bank {
         bank.epoch_schedule = parent.epoch_schedule;
 
         bank.slot = slot;
+        bank.max_tick_height = (bank.slot + 1) * bank.ticks_per_slot - 1;
+
         bank.parent = RwLock::new(Some(parent.clone()));
         bank.parent_hash = parent.hash();
         bank.collector_id = *collector_id;
@@ -345,6 +350,7 @@ impl Bank {
             .genesis_hash(&genesis_block.hash());
 
         self.ticks_per_slot = genesis_block.ticks_per_slot;
+        self.max_tick_height = (self.slot + 1) * self.ticks_per_slot - 1;
 
         // make bank 0 votable
         self.is_delta.store(true, Ordering::Relaxed);
@@ -926,6 +932,11 @@ impl Bank {
         // Until we can switch to AtomicU64, fail if usize is not the same as u64
         assert_eq!(std::usize::MAX, 0xFFFF_FFFF_FFFF_FFFF);
         self.tick_height.load(Ordering::SeqCst) as u64
+    }
+
+    /// Return this bank's max_tick_height
+    pub fn max_tick_height(&self) -> u64 {
+        self.max_tick_height
     }
 
     /// Return the number of slots per epoch for the given epoch

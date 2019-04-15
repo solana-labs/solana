@@ -45,7 +45,7 @@ impl Broadcast {
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let (mut bank, entries) = receiver.recv_timeout(timer)?;
-        let mut max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
+        let mut max_tick_height = bank.max_tick_height();
 
         let now = Instant::now();
         let mut num_entries = entries.len();
@@ -62,7 +62,7 @@ impl Broadcast {
                     num_entries = 0;
                     ventries.clear();
                     bank = same_bank.clone();
-                    max_tick_height = (bank.slot() + 1) * bank.ticks_per_slot() - 1;
+                    max_tick_height = bank.max_tick_height();
                 }
                 num_entries += entries.len();
                 last_tick = entries.last().map(|v| v.1).unwrap_or(0);
