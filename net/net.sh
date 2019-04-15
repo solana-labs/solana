@@ -69,7 +69,7 @@ command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?T:t:o:f:r:D:i:" opt; do
+while getopts "h?T:t:o:f:rD:i:" opt; do
   case $opt in
   h | \?)
     usage
