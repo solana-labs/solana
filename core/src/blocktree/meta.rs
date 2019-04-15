@@ -1,4 +1,3 @@
-#[cfg(feature = "erasure")]
 use crate::erasure::{NUM_CODING, NUM_DATA};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
@@ -59,7 +58,6 @@ impl SlotMeta {
     }
 }
 
-#[cfg(feature = "erasure")]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 /// Erasure coding information
 pub struct ErasureMeta {
@@ -71,7 +69,6 @@ pub struct ErasureMeta {
     pub coding: u64,
 }
 
-#[cfg(feature = "erasure")]
 impl ErasureMeta {
     pub fn new(set_index: u64) -> ErasureMeta {
         ErasureMeta {
@@ -139,7 +136,6 @@ impl ErasureMeta {
     }
 }
 
-#[cfg(feature = "erasure")]
 #[test]
 fn test_meta_coding_present() {
     let set_index = 0;

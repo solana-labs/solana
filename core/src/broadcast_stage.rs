@@ -3,7 +3,6 @@
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT};
 use crate::entry::{EntrySender, EntrySlice};
-#[cfg(feature = "erasure")]
 use crate::erasure::CodingGenerator;
 use crate::packet::index_blobs;
 use crate::poh_recorder::WorkingBankEntries;
@@ -30,7 +29,6 @@ pub enum BroadcastStageReturnType {
 struct Broadcast {
     id: Pubkey,
 
-    #[cfg(feature = "erasure")]
     coding_generator: CodingGenerator,
 }
 
@@ -119,7 +117,6 @@ impl Broadcast {
 
         blocktree.write_shared_blobs(&blobs)?;
 
-        #[cfg(feature = "erasure")]
         let coding = self.coding_generator.next(&blobs);
 
         let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
@@ -129,14 +126,10 @@ impl Broadcast {
         // Send out data
         ClusterInfo::broadcast(&self.id, contains_last_tick, &broadcast_table, sock, &blobs)?;
 
-        #[cfg(feature = "erasure")]
-        ClusterInfo::broadcast(&self.id, false, &broadcast_table, sock, &coding)?;
-
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
 
-        // generate and transmit any erasure coding blobs.  if erasure isn't supported, just send everything again
-        #[cfg(not(feature = "erasure"))]
-        ClusterInfo::broadcast(&self.id, contains_last_tick, &broadcast_table, sock, &blobs)?;
+        // send out erasures
+        ClusterInfo::broadcast(&self.id, false, &broadcast_table, sock, &coding)?;
 
         let broadcast_elapsed = duration_as_ms(&broadcast_start.elapsed());
 
@@ -197,7 +190,6 @@ impl BroadcastStage {
 
         let mut broadcast = Broadcast {
             id: me.id,
-            #[cfg(feature = "erasure")]
             coding_generator: CodingGenerator::new(),
         };
 
