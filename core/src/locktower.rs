@@ -14,7 +14,7 @@ const MAX_RECENT_VOTES: usize = 16;
 
 #[derive(Default)]
 pub struct EpochStakes {
-    slot: u64,
+    epoch: u64,
     stakes: HashMap<Pubkey, u64>,
     self_staked: u64,
     total_staked: u64,
@@ -36,11 +36,11 @@ pub struct Locktower {
 }
 
 impl EpochStakes {
-    pub fn new(slot: u64, stakes: HashMap<Pubkey, u64>, delegate_id: &Pubkey) -> Self {
+    pub fn new(epoch: u64, stakes: HashMap<Pubkey, u64>, delegate_id: &Pubkey) -> Self {
         let total_staked = stakes.values().sum();
         let self_staked = *stakes.get(&delegate_id).unwrap_or(&0);
         Self {
-            slot,
+            epoch,
             stakes,
             total_staked,
             self_staked,
@@ -54,9 +54,9 @@ impl EpochStakes {
             &Pubkey::default(),
         )
     }
-    pub fn new_from_stake_accounts(slot: u64, accounts: &[(Pubkey, Account)]) -> Self {
+    pub fn new_from_stake_accounts(epoch: u64, accounts: &[(Pubkey, Account)]) -> Self {
         let stakes = accounts.iter().map(|(k, v)| (*k, v.lamports)).collect();
-        Self::new(slot, stakes, &accounts[0].0)
+        Self::new(epoch, stakes, &accounts[0].0)
     }
     pub fn new_from_bank(bank: &Bank, my_id: &Pubkey) -> Self {
         let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
@@ -87,7 +87,7 @@ impl Locktower {
 
         let bank = locktower.find_heaviest_bank(bank_forks).unwrap();
         locktower.lockouts =
-            Self::initialize_lockouts_from_bank(&bank, locktower.epoch_stakes.slot);
+            Self::initialize_lockouts_from_bank(&bank, locktower.epoch_stakes.epoch);
         locktower
     }
     pub fn new(epoch_stakes: EpochStakes, threshold_depth: usize, threshold_size: f64) -> Self {
@@ -195,32 +195,32 @@ impl Locktower {
 
     pub fn is_recent_epoch(&self, bank: &Bank) -> bool {
         let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
-        bank_epoch >= self.epoch_stakes.slot
+        bank_epoch >= self.epoch_stakes.epoch
     }
 
     pub fn update_epoch(&mut self, bank: &Bank) {
         trace!(
-            "updating bank epoch {} {}",
+            "updating bank epoch slot: {} epoch: {}",
             bank.slot(),
-            self.epoch_stakes.slot
+            self.epoch_stakes.epoch
         );
         let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
-        if bank_epoch != self.epoch_stakes.slot {
+        if bank_epoch != self.epoch_stakes.epoch {
             assert!(
                 self.is_recent_epoch(bank),
                 "epoch_stakes cannot move backwards"
             );
             info!(
-                "Locktower updated epoch bank {} {}",
+                "Locktower updated epoch bank slot: {} epoch: {}",
                 bank.slot(),
-                self.epoch_stakes.slot
+                self.epoch_stakes.epoch
             );
             self.epoch_stakes = EpochStakes::new_from_bank(bank, &self.epoch_stakes.delegate_id);
             solana_metrics::submit(
                 influxdb::Point::new("counter-locktower-epoch")
                     .add_field(
-                        "slot",
-                        influxdb::Value::Integer(self.epoch_stakes.slot as i64),
+                        "epoch",
+                        influxdb::Value::Integer(self.epoch_stakes.epoch as i64),
                     )
                     .add_field(
                         "self_staked",
