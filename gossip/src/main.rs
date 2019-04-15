@@ -1,4 +1,4 @@
-//! A command-line executable for monitoring a network's gossip plane.
+//! A command-line executable for monitoring a cluster's gossip plane.
 
 use clap::{crate_description, crate_name, crate_version, App, Arg};
 use solana::gossip_service::discover;
@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .default_value(&network_string)
-                .help("Rendezvous with the network at this gossip entry point; defaults to 127.0.0.1:8001"),
+                .help("Rendezvous with the cluster at this gossip entry point"),
         )
         .arg(
             Arg::with_name("num_nodes")
@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .long("timeout")
                 .value_name("SECS")
                 .takes_value(true)
-                .help("Seconds to wait for cluster to converge, then exit; default is forever"),
+                .help("Maximum time to wait for cluster to converge [default: wait forever]"),
         )
         .get_matches();
 
