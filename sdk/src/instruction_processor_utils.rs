@@ -2,6 +2,7 @@ use crate::account::{Account, KeyedAccount};
 use crate::instruction::InstructionError;
 use crate::pubkey::Pubkey;
 use bincode::ErrorKind;
+use num_traits::FromPrimitive;
 
 // All native programs export a symbol named process()
 pub const ENTRYPOINT: &str = "process";
@@ -62,5 +63,41 @@ where
     }
     fn set_state(&mut self, state: &T) -> Result<(), InstructionError> {
         self.account.set_state(state)
+    }
+}
+
+pub trait DecodeError<E> {
+    fn decode_custom_error_to_enum(int: u32) -> Option<E>
+    where
+        E: FromPrimitive,
+    {
+        E::from_u32(int)
+    }
+    fn type_of(&self) -> &'static str;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use num_derive::FromPrimitive;
+
+    #[test]
+    fn test_decode_custom_error_to_enum() {
+        #[derive(Debug, FromPrimitive, PartialEq)]
+        enum TestEnum {
+            A,
+            B,
+            C,
+        }
+        impl<T> DecodeError<T> for TestEnum {
+            fn type_of(&self) -> &'static str {
+                "TestEnum"
+            }
+        }
+        assert_eq!(TestEnum::decode_custom_error_to_enum(0), Some(TestEnum::A));
+        assert_eq!(TestEnum::decode_custom_error_to_enum(1), Some(TestEnum::B));
+        assert_eq!(TestEnum::decode_custom_error_to_enum(2), Some(TestEnum::C));
+        let option: Option<TestEnum> = TestEnum::decode_custom_error_to_enum(3);
+        assert_eq!(option, None);
     }
 }
