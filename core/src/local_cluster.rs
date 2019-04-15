@@ -165,12 +165,16 @@ impl LocalCluster {
         };
 
         for stake in &config.node_stakes[1..] {
-            cluster.add_validator(config.fullnode_config.clone(), *stake);
+            cluster.add_validator(&config.fullnode_config, *stake);
         }
 
+        let listener_config = FullnodeConfig {
+            voting_disabled: true,
+            ..config.fullnode_config.clone()
+        };
         (0..config.num_listeners)
             .into_iter()
-            .for_each(|_| cluster.add_validator(config.fullnode_config.clone(), 0));
+            .for_each(|_| cluster.add_validator(&listener_config, 0));
 
         discover_nodes(
             &cluster.entry_point_info.gossip,
@@ -208,7 +212,7 @@ impl LocalCluster {
         }
     }
 
-    fn add_validator(&mut self, mut fullnode_config: FullnodeConfig, stake: u64) {
+    fn add_validator(&mut self, fullnode_config: &FullnodeConfig, stake: u64) {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,
@@ -220,9 +224,12 @@ impl LocalCluster {
         let validator_pubkey = validator_keypair.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let ledger_path = tmp_copy_blocktree!(&self.genesis_ledger_path);
-        let should_stake = stake > 2;
 
-        if should_stake {
+        if fullnode_config.voting_disabled {
+            // setup as a listener
+            info!("listener {} ", validator_pubkey,);
+        } else {
+            assert!(stake > 2);
             // Send each validator some lamports to vote
             let validator_balance = Self::transfer_with_client(
                 &client,
@@ -242,10 +249,6 @@ impl LocalCluster {
                 stake - 1,
             )
             .unwrap();
-        } else {
-            // setup as a listener
-            info!("listener {} ", validator_pubkey,);
-            fullnode_config.voting_disabled = true;
         }
 
         let validator_server = Fullnode::new(
@@ -260,13 +263,13 @@ impl LocalCluster {
 
         self.fullnodes
             .insert(validator_keypair.pubkey(), validator_server);
-        if should_stake {
-            self.fullnode_infos.insert(
+        if fullnode_config.voting_disabled {
+            self.listener_infos.insert(
                 validator_keypair.pubkey(),
                 FullnodeInfo::new(validator_keypair.clone(), ledger_path),
             );
         } else {
-            self.listener_infos.insert(
+            self.fullnode_infos.insert(
                 validator_keypair.pubkey(),
                 FullnodeInfo::new(validator_keypair.clone(), ledger_path),
             );
@@ -461,12 +464,12 @@ mod test {
     #[test]
     fn test_local_cluster_start_and_exit_with_config() {
         solana_logger::setup();
-        let mut fullnode_exit = FullnodeConfig::default();
-        fullnode_exit.rpc_config.enable_fullnode_exit = true;
+        let mut fullnode_config = FullnodeConfig::default();
+        fullnode_config.rpc_config.enable_fullnode_exit = true;
         const NUM_NODES: usize = 1;
         let num_replicators = 1;
         let config = ClusterConfig {
-            fullnode_config: fullnode_exit,
+            fullnode_config,
             num_replicators: 1,
             node_stakes: vec![3; NUM_NODES],
             cluster_lamports: 100,
