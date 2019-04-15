@@ -28,7 +28,7 @@ launchTestnet() {
     -d pd-ssd \
     -n "$nodeCount" -c "$CLIENT_COUNT" \
     -G "$LEADER_CPU_MACHINE_TYPE" \
-    -p "$TESTNET_TAG" "$TESTNET_ZONES" "$ADDITIONAL_FLAGS"
+    -p "$TESTNET_TAG" $TESTNET_ZONES $ADDITIONAL_FLAGS
 
   echo --- configure database
   net/init-metrics.sh -e
