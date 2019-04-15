@@ -3,8 +3,8 @@ use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
 
-solana_entrypoint!(entrypoint);
-fn entrypoint(
+solana_entrypoint!(process_instruction);
+pub fn process_instruction(
     _program_id: &Pubkey,
     _keyed_accounts: &mut [KeyedAccount],
     _data: &[u8],

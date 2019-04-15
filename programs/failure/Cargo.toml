@@ -1,7 +1,7 @@
 [package]
-name = "solana-failure-program"
+name = "solana-failure-processor"
 version = "0.13.0"
-description = "Solana failure program"
+description = "Solana failure instruction processor"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -16,6 +16,5 @@ log = "0.4.2"
 solana-runtime = { path = "../../runtime", version = "0.13.0" }
 
 [lib]
-name = "solana_failure_program"
-crate-type = ["cdylib"]
-
+name = "solana_failure_processor"
+crate-type = ["lib"]
