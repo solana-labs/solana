@@ -221,7 +221,7 @@ impl SyncClient for ThinClient {
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("send_transaction failed with error {}", err),
+                    format!("send_transaction failed with error {:?}", err),
                 )
             })?;
         Ok(status)

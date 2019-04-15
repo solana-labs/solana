@@ -1,3 +1,4 @@
+use crate::client_error::ClientError;
 use crate::generic_rpc_client_request::GenericRpcClientRequest;
 use crate::mock_rpc_client_request::MockRpcClientRequest;
 use crate::rpc_client_request::RpcClientRequest;
@@ -46,10 +47,7 @@ impl RpcClient {
         }
     }
 
-    pub fn send_transaction(
-        &self,
-        transaction: &Transaction,
-    ) -> Result<String, Box<dyn error::Error>> {
+    pub fn send_transaction(&self, transaction: &Transaction) -> Result<String, ClientError> {
         let serialized = serialize(transaction).unwrap();
         let params = json!([serialized]);
         let signature = self
@@ -67,7 +65,7 @@ impl RpcClient {
     pub fn get_signature_status(
         &self,
         signature: &str,
-    ) -> Result<Option<transaction::Result<()>>, Box<dyn error::Error>> {
+    ) -> Result<Option<transaction::Result<()>>, ClientError> {
         let params = json!([signature.to_string()]);
         let signature_status =
             self.client
@@ -81,7 +79,7 @@ impl RpcClient {
         &self,
         transaction: &mut Transaction,
         signer: &T,
-    ) -> Result<String, Box<dyn error::Error>> {
+    ) -> Result<String, ClientError> {
         let mut send_retries = 5;
         loop {
             let mut status_retries = 4;
@@ -117,10 +115,14 @@ impl RpcClient {
                 send_retries - 1
             };
             if send_retries == 0 {
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Transaction {:?} failed: {:?}", signature_str, status),
-                ))?;
+                if status.is_some() {
+                    status.unwrap()?
+                } else {
+                    Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Transaction {:?} failed: {:?}", signature_str, status),
+                    ))?;
+                }
             }
         }
     }
@@ -201,7 +203,7 @@ impl RpcClient {
         &self,
         tx: &mut Transaction,
         signer_key: &T,
-    ) -> Result<(), Box<dyn error::Error>> {
+    ) -> Result<(), ClientError> {
         let blockhash = self.get_new_blockhash(&tx.message().recent_blockhash)?;
         tx.sign(&[signer_key], blockhash);
         Ok(())
@@ -482,7 +484,7 @@ impl RpcClient {
             )
             .map_err(|error| {
                 debug!(
-                    "Response get_num_blocks_since_signature_confirmation: {}",
+                    "Response get_num_blocks_since_signature_confirmation: {:?}",
                     error
                 );
                 io::Error::new(
@@ -526,7 +528,7 @@ impl RpcClient {
         request: &RpcRequest,
         params: Option<Value>,
         retries: usize,
-    ) -> Result<Value, Box<dyn error::Error>> {
+    ) -> Result<Value, ClientError> {
         self.client.send(request, params, retries)
     }
 }

@@ -1,3 +1,4 @@
+use crate::client_error::ClientError;
 use crate::generic_rpc_client_request::GenericRpcClientRequest;
 use crate::rpc_request::{RpcError, RpcRequest};
 use log::*;
@@ -36,7 +37,7 @@ impl GenericRpcClientRequest for RpcClientRequest {
         request: &RpcRequest,
         params: Option<serde_json::Value>,
         mut retries: usize,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    ) -> Result<serde_json::Value, ClientError> {
         // Concurrent requests are not supported so reuse the same request id for all requests
         let request_id = 1;
 

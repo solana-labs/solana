@@ -1,3 +1,4 @@
+use crate::client_error::ClientError;
 use crate::generic_rpc_client_request::GenericRpcClientRequest;
 use crate::rpc_request::RpcRequest;
 use serde_json::{Number, Value};
@@ -23,7 +24,7 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
         request: &RpcRequest,
         params: Option<serde_json::Value>,
         _retries: usize,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    ) -> Result<serde_json::Value, ClientError> {
         if self.url == "fails" {
             return Ok(Value::Null);
         }
