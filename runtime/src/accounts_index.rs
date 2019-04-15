@@ -87,3 +87,64 @@ impl<T: Clone> AccountsIndex<T> {
         self.roots.remove(&fork);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+
+    #[test]
+    fn test_get_empty() {
+        let key = Keypair::new();
+        let index = AccountsIndex::<bool>::default();
+        let ancestors = HashMap::new();
+        assert_eq!(index.get(&key.pubkey(), &ancestors), None);
+    }
+
+    #[test]
+    fn test_insert_no_ancestors() {
+        let key = Keypair::new();
+        let mut index = AccountsIndex::<bool>::default();
+        let gc = index.insert(0, &key.pubkey(), true);
+        assert!(gc.is_empty());
+
+        let ancestors = HashMap::new();
+        assert_eq!(index.get(&key.pubkey(), &ancestors), None);
+    }
+
+    #[test]
+    fn test_insert_wrong_ancestors() {
+        let key = Keypair::new();
+        let mut index = AccountsIndex::<bool>::default();
+        let gc = index.insert(0, &key.pubkey(), true);
+        assert!(gc.is_empty());
+
+        let ancestors = vec![(1,1)].into_iter().collect();
+        assert_eq!(index.get(&key.pubkey(), &ancestors), None);
+    }
+
+    #[test]
+    fn test_insert_with_ancestors() {
+        let key = Keypair::new();
+        let mut index = AccountsIndex::<bool>::default();
+        let gc = index.insert(0, &key.pubkey(), true);
+        assert!(gc.is_empty());
+
+        let ancestors = vec![(0,0)].into_iter().collect();
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
+    }
+
+    #[test]
+    fn test_insert_with_root() {
+        let key = Keypair::new();
+        let mut index = AccountsIndex::<bool>::default();
+        let gc = index.insert(0, &key.pubkey(), true);
+        assert!(gc.is_empty());
+
+        let ancestors = vec![].into_iter().collect();
+        index.add_root(0);
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
+    }
+
+}
+ 
