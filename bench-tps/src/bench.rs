@@ -726,7 +726,7 @@ fn should_switch_directions(num_lamports_per_account: u64, i: u64) -> bool {
 mod tests {
     use super::*;
     use solana::fullnode::FullnodeConfig;
-    use solana::local_cluster::LocalCluster;
+    use solana::local_cluster::{ClusterConfig, LocalCluster};
     use solana_drone::drone::run_local_drone;
     use std::sync::mpsc::channel;
 
@@ -750,8 +750,12 @@ mod tests {
     fn test_bench_tps() {
         let fullnode_config = FullnodeConfig::default();
         const NUM_NODES: usize = 1;
-        let cluster =
-            LocalCluster::new_with_config(&[999_990; NUM_NODES], 2_000_000, &fullnode_config, &[]);
+        let cluster = LocalCluster::new(&ClusterConfig {
+            node_stakes: vec![999_990; NUM_NODES],
+            cluster_lamports: 2_000_000,
+            fullnode_config,
+            ..ClusterConfig::default()
+        });
 
         let drone_keypair = Keypair::new();
         cluster.transfer(&cluster.funding_keypair, &drone_keypair.pubkey(), 1_000_000);

@@ -10,7 +10,7 @@ use solana::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
 use solana::fullnode::FullnodeConfig;
 use solana::gossip_service::discover_nodes;
-use solana::local_cluster::LocalCluster;
+use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::replicator::Replicator;
 use solana::replicator::ReplicatorRequest;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
@@ -19,8 +19,6 @@ use solana_client::thin_client::create_client;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
-use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use std::fs::remove_dir_all;
 use std::net::SocketAddr;
 use std::net::UdpSocket;
@@ -107,15 +105,14 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
 
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
-    let cluster = LocalCluster::new_with_config_replicators(
-        &vec![100; num_nodes],
-        10_000,
-        &fullnode_config,
-        num_replicators,
-        DEFAULT_TICKS_PER_SLOT,
-        DEFAULT_SLOTS_PER_EPOCH,
-        &[],
-    );
+    let config = ClusterConfig {
+        fullnode_config,
+        num_replicators: num_replicators as u64,
+        node_stakes: vec![100; num_nodes],
+        cluster_lamports: 10_000,
+        ..ClusterConfig::default()
+    };
+    let cluster = LocalCluster::new(&config);
 
     let cluster_nodes = discover_nodes(
         &cluster.entry_point_info.gossip,
@@ -193,7 +190,7 @@ fn test_replicator_startup_ledger_hang() {
     info!("starting replicator test");
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
-    let cluster = LocalCluster::new(2, 10_000, 100);;
+    let cluster = LocalCluster::new_with_equal_stakes(2, 10_000, 100);;
 
     info!("starting replicator node");
     let bad_keys = Arc::new(Keypair::new());
@@ -222,19 +219,18 @@ fn test_account_setup() {
     let num_replicators = 1;
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
-    let cluster = LocalCluster::new_with_config_replicators(
-        &vec![100; num_nodes],
-        10_000,
-        &fullnode_config,
+    let config = ClusterConfig {
+        fullnode_config,
         num_replicators,
-        DEFAULT_TICKS_PER_SLOT,
-        DEFAULT_SLOTS_PER_EPOCH,
-        &[],
-    );
+        node_stakes: vec![100; num_nodes],
+        cluster_lamports: 10_000,
+        ..ClusterConfig::default()
+    };
+    let cluster = LocalCluster::new(&config);
 
     let _ = discover_nodes(
         &cluster.entry_point_info.gossip,
-        num_nodes + num_replicators,
+        num_nodes + num_replicators as usize,
     )
     .unwrap();
     // now check that the cluster actually has accounts for the replicator.
