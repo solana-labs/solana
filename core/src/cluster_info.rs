@@ -227,7 +227,7 @@ impl ClusterInfo {
         self.gossip
             .crds
             .lookup(&entry)
-            .and_then(|x| x.contact_info())
+            .and_then(CrdsValue::contact_info)
     }
 
     pub fn my_data(&self) -> ContactInfo {
@@ -847,7 +847,7 @@ impl ClusterInfo {
                 self.gossip
                     .crds
                     .lookup(&peer_label)
-                    .and_then(|v| v.contact_info())
+                    .and_then(CrdsValue::contact_info)
                     .map(|peer_info| (peer, filter, peer_info.gossip, self_info))
             })
             .collect();
@@ -873,7 +873,7 @@ impl ClusterInfo {
                 self.gossip
                     .crds
                     .lookup(&peer_label)
-                    .and_then(|v| v.contact_info())
+                    .and_then(CrdsValue::contact_info)
                     .map(|p| p.gossip)
             })
             .map(|peer| (peer, Protocol::PushMessage(self_id, msgs.clone())))

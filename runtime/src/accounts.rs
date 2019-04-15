@@ -214,7 +214,7 @@ pub struct Accounts {
 }
 
 fn get_paths_vec(paths: &str) -> Vec<String> {
-    paths.split(',').map(|s| s.to_string()).collect()
+    paths.split(',').map(ToString::to_string).collect()
 }
 
 impl Drop for Accounts {

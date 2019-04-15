@@ -13,8 +13,8 @@
 #   $ source ci/rust-version.sh
 #
 
-export rust_stable=1.33.0
-export rust_stable_docker_image=solanalabs/rust:1.33.0
+export rust_stable=1.34.0
+export rust_stable_docker_image=solanalabs/rust:1.34.0
 
 export rust_nightly=nightly-2019-03-14
 export rust_nightly_docker_image=solanalabs/rust-nightly:2019-03-14
