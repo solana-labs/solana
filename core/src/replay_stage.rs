@@ -9,7 +9,7 @@ use crate::leader_schedule_utils;
 use crate::locktower::{Locktower, StakeLockout};
 use crate::packet::BlobError;
 use crate::poh_recorder::PohRecorder;
-use crate::result;
+use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use hashbrown::HashMap;
@@ -50,7 +50,7 @@ impl Drop for Finalizer {
 }
 
 pub struct ReplayStage {
-    t_replay: JoinHandle<result::Result<()>>,
+    t_replay: JoinHandle<Result<()>>,
 }
 
 #[derive(Default)]
@@ -98,7 +98,9 @@ impl ReplayStage {
         let mut ticks_per_slot = 0;
         let mut locktower = Locktower::new_from_forks(&bank_forks.read().unwrap(), &my_id);
         if let Some(root) = locktower.root() {
-            blocktree.set_root(root);
+            blocktree
+                .set_root(root)
+                .expect("blocktree.set_root() failed at replay_stage startup");
         }
         // Start the replay stage loop
         let t_replay = Builder::new()
@@ -148,7 +150,7 @@ impl ReplayStage {
                             &vote_account,
                             &cluster_info,
                             &blocktree,
-                        );
+                        )?;
 
                         Self::reset_poh_recorder(
                             &my_id,
@@ -271,7 +273,7 @@ impl ReplayStage {
         blocktree: &Blocktree,
         progress: &mut HashMap<u64, ForkProgress>,
         forward_entry_sender: &EntrySender,
-    ) -> result::Result<()> {
+    ) -> Result<()> {
         let (entries, num) = Self::load_blocktree_entries(bank, blocktree, progress)?;
         let len = entries.len();
         let result =
@@ -296,12 +298,13 @@ impl ReplayStage {
         vote_account_pubkey: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: &Arc<Blocktree>,
-    ) where
+    ) -> Result<()>
+    where
         T: 'static + KeypairUtil + Send + Sync,
     {
         if let Some(new_root) = locktower.record_vote(bank.slot()) {
             bank_forks.write().unwrap().set_root(new_root);
-            blocktree.set_root(new_root);
+            blocktree.set_root(new_root)?;
             Self::handle_new_root(&bank_forks, progress);
         }
         locktower.update_epoch(&bank);
@@ -315,6 +318,7 @@ impl ReplayStage {
             );
             cluster_info.write().unwrap().push_vote(vote_tx);
         }
+        Ok(())
     }
 
     fn reset_poh_recorder(
@@ -349,7 +353,7 @@ impl ReplayStage {
         progress: &mut HashMap<u64, ForkProgress>,
         forward_entry_sender: &EntrySender,
         slot_full_sender: &Sender<(u64, Pubkey)>,
-    ) -> result::Result<()> {
+    ) -> Result<()> {
         let active_banks = bank_forks.read().unwrap().active_banks();
         trace!("active banks {:?}", active_banks);
 
@@ -484,7 +488,7 @@ impl ReplayStage {
         bank: &Bank,
         blocktree: &Blocktree,
         progress: &mut HashMap<u64, ForkProgress>,
-    ) -> result::Result<(Vec<Entry>, usize)> {
+    ) -> Result<(Vec<Entry>, usize)> {
         let bank_slot = bank.slot();
         let bank_progress = &mut progress
             .entry(bank_slot)
@@ -498,7 +502,7 @@ impl ReplayStage {
         progress: &mut HashMap<u64, ForkProgress>,
         forward_entry_sender: &EntrySender,
         num: usize,
-    ) -> result::Result<()> {
+    ) -> Result<()> {
         let bank_progress = &mut progress
             .entry(bank.slot())
             .or_insert(ForkProgress::new(bank.last_blockhash()));
@@ -517,7 +521,7 @@ impl ReplayStage {
         bank: &Bank,
         entries: &[Entry],
         last_entry: &Hash,
-    ) -> result::Result<()> {
+    ) -> Result<()> {
         if !entries.verify(last_entry) {
             trace!(
                 "entry verification failed {} {} {} {}",
@@ -526,7 +530,7 @@ impl ReplayStage {
                 last_entry,
                 bank.last_blockhash()
             );
-            return Err(result::Error::BlobError(BlobError::VerificationFailed));
+            return Err(Error::BlobError(BlobError::VerificationFailed));
         }
         blocktree_processor::process_entries(bank, entries)?;
 

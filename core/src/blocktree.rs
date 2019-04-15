@@ -160,20 +160,6 @@ impl Blocktree {
         self.orphans_cf.get(slot)
     }
 
-    pub fn reset_slot_consumed(&self, slot: u64) -> Result<()> {
-        if let Some(mut meta) = self.meta_cf.get(slot)? {
-            for index in 0..meta.received {
-                self.data_cf.delete((slot, index))?;
-            }
-            meta.consumed = 0;
-            meta.received = 0;
-            meta.last_index = std::u64::MAX;
-            meta.next_slots = vec![];
-            self.meta_cf.put(0, &meta)?;
-        }
-        Ok(())
-    }
-
     pub fn get_next_slot(&self, slot: u64) -> Result<Option<u64>> {
         let mut db_iterator = self.db.cursor::<cf::SlotMeta>()?;
         db_iterator.seek(slot + 1);
@@ -771,8 +757,22 @@ impl Blocktree {
         Ok(entries)
     }
 
-    pub fn set_root(&self, root: u64) {
-        *self.root_slot.write().unwrap() = root;
+    pub fn is_root(&self, slot: u64) -> bool {
+        if let Ok(Some(meta)) = self.meta(slot) {
+            meta.is_root
+        } else {
+            false
+        }
+    }
+
+    pub fn set_root(&self, slot: u64) -> Result<()> {
+        *self.root_slot.write().unwrap() = slot;
+
+        if let Some(mut meta) = self.meta_cf.get(slot)? {
+            meta.is_root = true;
+            self.meta_cf.put(slot, &meta)?;
+        }
+        Ok(())
     }
 
     pub fn get_orphans(&self, max: Option<usize>) -> Vec<u64> {
@@ -1479,35 +1479,6 @@ pub mod tests {
             );
         }
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
-    }
-
-    #[test]
-    fn test_overwrite_entries() {
-        solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path!();
-
-        let ticks_per_slot = 10;
-        let num_ticks = 2;
-        let mut ticks = create_ticks(num_ticks * 2, Hash::default());
-        let ticks2 = ticks.split_off(num_ticks as usize);
-        assert_eq!(ticks.len(), ticks2.len());
-        {
-            let ledger = Blocktree::open(&ledger_path).unwrap();
-
-            ledger
-                .write_entries(0, 0, 0, ticks_per_slot, &ticks)
-                .unwrap();
-            ledger.reset_slot_consumed(0).unwrap();
-            ledger
-                .write_entries(0, 0, 0, ticks_per_slot, &ticks2)
-                .unwrap();
-
-            let ledger_ticks = ledger.get_slot_entries(0, 0, None).unwrap();
-
-            assert_eq!(ledger_ticks.len(), ticks2.len());
-            assert_eq!(ledger_ticks, ticks2);
-        }
-        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
