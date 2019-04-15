@@ -8,9 +8,9 @@ lockout period.
 Another way to look at HTLC is that it is a protocol to eliminate [counterparty
 risk] where one side of a trade could default on their obligation.
 
-The key requirements for HTLC is that a ledger supports time-locked transactions,
-meaning a transaction that won't be executed until at a later point in time. And
-conditional transactions with message digest instructions.
+The key requirements for HTLC is that a DLT supports time-locked transactions,
+meaning a transaction that won't be executed until a later point in time. And
+also supports message digest verification instruction.
 
 ## Atomic Swaps
 
@@ -19,7 +19,7 @@ parties wanting to exchange their DLT tokens or coins without having to trust
 a third party or a centralized exchange.
 
 A solution to this problem was [first suggested by Tier Nolan on the Bitcoin forum]
-where he described a risk-free within a time bound interactive protocol to exchange
+where he described a risk-free time-bounded interactive protocol to exchange
 tokens across different DLTs.
 
 The protocol goes as follows:
@@ -71,9 +71,10 @@ and `OP_SHA256` in bitcoin [Script].
 
 ### New Instructions
 
-In order to be compatible with many other DLTs HTLC implementations we have to
+In order to be compatible with many other HTLC implementations we have to
 support at least 2 message digest algorithms, SHA-256 and Keccak-256 (SHA-3).
-It is recommended to also implement Blake2 and Shake algorithms.
+It is noticable that newer DLTs also use Blake2 and Shake algorithms (e.g., Tezos),
+so for forward compatibility we might need to support these two algorithms.
 
 The [budget program] currently lacks time-locking capability and message digest
 verification. If we were to implement HTLC in the [budget program] we'll need to
@@ -82,11 +83,15 @@ time-locking as follows:
 
 ```rust,ignore
 pub enum Condition {
-  /// Evaluate whether a message digest of some data matches a particular hash.
+  /// Evaluate whether a message digest of input data matches a hash.
+  /// e.g., within a transaction it should be possible for a user to
+  /// specify that a transaction will execute if the conditional
+  /// MDVerify(input_data, "abc3234efab31....") evaluates to true.
   MDVerify { data: &[u8], hash: &[u8] },
 
-  /// Evaluate whether a condition has expired.
-  HasExpired { expiry_date: DateTime<Utc> },
+  /// Evaluate whether a certain number of ticks has elapsed since the
+  /// transaction was first confirmed.
+  HasElapsed { ticks: u64 },
 
   // ... other possible conditional types.
 }
