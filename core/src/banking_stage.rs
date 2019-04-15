@@ -243,7 +243,7 @@ impl BankingStage {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = vec![];
         loop {
-            if !buffered_packets.is_empty() {
+            if buffered_packets.len() > 0 {
                 Self::handle_buffered_packets(
                     &socket,
                     poh_recorder,
@@ -254,7 +254,7 @@ impl BankingStage {
                 .unwrap_or_else(|_| buffered_packets.clear());
             }
 
-            let recv_timeout = if !buffered_packets.is_empty() {
+            let recv_timeout = if buffered_packets.len() > 0 {
                 // If packets are buffered, let's wait for less time on recv from the channel.
                 // This helps detect the next leader faster, and processing the buffered
                 // packets quickly
@@ -324,7 +324,7 @@ impl BankingStage {
             .collect();
         debug!("processed: {} ", processed_transactions.len());
         // unlock all the accounts with errors which are filtered by the above `filter_map`
-        if !processed_transactions.is_empty() {
+        if processed_transactions.len() > 0 {
             let hash = hash_transactions(&processed_transactions);
             // record and unlock will unlock all the successfull transactions
             poh.lock()
