@@ -229,7 +229,7 @@ fn main() {
         (Some(signer_service), signer_addr)
     };
     let init_complete_file = matches.value_of("init_complete_file");
-    fullnode_config.blockstream = matches.value_of("blockstream").map(|s| s.to_string());
+    fullnode_config.blockstream = matches.value_of("blockstream").map(ToString::to_string);
 
     let keypair = Arc::new(keypair);
     let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr, dynamic_port_range);
