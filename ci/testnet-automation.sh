@@ -21,7 +21,7 @@ source ci/upload-ci-artifact.sh
 [[ -n $CHANNEL ]] || CHANNEL=beta
 [[ -n $ADDITIONAL_FLAGS ]] || ADDITIONAL_FLAGS=""
 
-TESTNET_CLOUD_ZONES=(); while read -r -d, ; do TESTNET_CLOUD_ZONES+=( $REPLY ); done <<< "${TESTNET_ZONES},"
+TESTNET_CLOUD_ZONES=(); while read -r -d, ; do TESTNET_CLOUD_ZONES+=( "$REPLY" ); done <<< "${TESTNET_ZONES},"
 
 launchTestnet() {
   declare nodeCount=$1
