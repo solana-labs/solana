@@ -205,11 +205,10 @@ start() {
   testnet-edge)
     (
       set -x
-      NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh -p edge-testnet-solana-com -C ec2 -z us-west-1a \
-          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0ccd4f2239886fa94 \
-          ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-D}
+      ci/testnet-deploy.sh -p edge-testnet-solana-com -C ec2 -z us-west-1a \
+        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0ccd4f2239886fa94 \
+        ${maybeReuseLedger:+-r} \
+        ${maybeDelete:+-D}
     )
     ;;
   testnet-edge-perf)
@@ -246,17 +245,15 @@ start() {
       [[ -n $GCE_NODE_COUNT ]] || GCE_NODE_COUNT=40
 
       # shellcheck disable=SC2068
-      NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
-          ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-D}
+      ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
+        -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
+        ${maybeReuseLedger:+-r} \
+        ${maybeDelete:+-D}
       # shellcheck disable=SC2068
-      NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -x -P \
-          ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-D}
+      ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
+        -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -x -P \
+        ${maybeReuseLedger:+-r} \
+        ${maybeDelete:+-D}
     )
     ;;
   testnet-beta-perf)
