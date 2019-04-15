@@ -593,7 +593,13 @@ fn fund_keys(client: &ThinClient, source: &Keypair, dests: &[Keypair], lamports:
                 // retry anything that seems to have dropped through cracks
                 //  again since these txs are all or nothing, they're fine to
                 //  retry
-                to_fund_txs.retain(|(_, tx)| !verify_funding_transfer(client, &tx, amount));
+                for _ in 0..10 {
+                    to_fund_txs.retain(|(_, tx)| !verify_funding_transfer(client, &tx, amount));
+                    if to_fund_txs.is_empty() {
+                        break;
+                    }
+                    sleep(Duration::from_millis(100));
+                }
 
                 tries += 1;
             }
