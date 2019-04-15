@@ -2760,7 +2760,7 @@ pub mod tests {
             assert_eq!(erasure_meta.coding, 0x0);
 
             let mut coding_generator = CodingGenerator::new();
-            let coding_blobs = coding_generator.next(&shared_blobs[..NUM_DATA]).unwrap();
+            let coding_blobs = coding_generator.next(&shared_blobs[..NUM_DATA]);
 
             for shared_coding_blob in coding_blobs {
                 let blob = shared_coding_blob.read().unwrap();
@@ -2799,7 +2799,7 @@ pub mod tests {
 
             for (set_index, data_blobs) in data_blobs.chunks_exact(NUM_DATA).enumerate() {
                 let focused_index = (set_index + 1) * NUM_DATA - 1;
-                let coding_blobs = coding_generator.next(&data_blobs).unwrap();
+                let coding_blobs = coding_generator.next(&data_blobs);
                 assert_eq!(coding_blobs.len(), NUM_CODING);
 
                 let deleted_data = data_blobs[NUM_DATA - 1].clone();
