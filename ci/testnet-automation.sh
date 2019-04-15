@@ -26,6 +26,8 @@ TESTNET_CLOUD_ZONES=(); while read -r -d, ; do TESTNET_CLOUD_ZONES+=( "$REPLY" )
 launchTestnet() {
   declare nodeCount=$1
   echo --- setup "$nodeCount" node test
+
+  # shellcheck disable=SC2068
   net/gce.sh create \
     -d pd-ssd \
     -n "$nodeCount" -c "$CLIENT_COUNT" \
