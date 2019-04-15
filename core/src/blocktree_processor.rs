@@ -185,8 +185,11 @@ pub fn process_blocktree(
             entry_height += entries.len() as u64;
         }
 
-        // TODO merge with locktower, voting, bank.vote_accounts()...
-        bank.squash();
+        bank.freeze(); // all banks handled by this routine are created from complete slots
+
+        if blocktree.is_root(slot) {
+            bank.squash();
+        }
 
         if meta.next_slots.is_empty() {
             // Reached the end of this fork.  Record the final entry height and last entry.hash
@@ -354,7 +357,7 @@ mod tests {
 
                  slot 0
                    |
-                 slot 1
+                 slot 1  <-- set_root(true)
                  /   \
             slot 2   |
                /     |
@@ -381,6 +384,9 @@ mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
+        blocktree.set_root(0).unwrap();
+        blocktree.set_root(1).unwrap();
+
         let (bank_forks, bank_forks_info) =
             process_blocktree(&genesis_block, &blocktree, None).unwrap();
 
@@ -393,15 +399,30 @@ mod tests {
             }
         );
         assert_eq!(
+            &bank_forks[3]
+                .parents()
+                .iter()
+                .map(|bank| bank.slot())
+                .collect::<Vec<_>>(),
+            &[2, 1]
+        );
+        assert_eq!(
             bank_forks_info[1],
             BankForksInfo {
                 bank_slot: 4, // Fork 2's head is slot 4
                 entry_height: ticks_per_slot * 3,
             }
         );
+        assert_eq!(
+            &bank_forks[4]
+                .parents()
+                .iter()
+                .map(|bank| bank.slot())
+                .collect::<Vec<_>>(),
+            &[1]
+        );
 
-        // Ensure bank_forks holds the right banks, and that everything's
-        //  frozen
+        // Ensure bank_forks holds the right banks
         for info in bank_forks_info {
             assert_eq!(bank_forks[info.bank_slot].slot(), info.bank_slot);
             assert!(bank_forks[info.bank_slot].is_frozen());

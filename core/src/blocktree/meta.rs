@@ -24,6 +24,8 @@ pub struct SlotMeta {
     // True if this slot is full (consumed == last_index + 1) and if every
     // slot that is a parent of this slot is also connected.
     pub is_connected: bool,
+    // True if this slot is a root
+    pub is_root: bool,
 }
 
 impl SlotMeta {
@@ -51,6 +53,7 @@ impl SlotMeta {
             parent_slot,
             next_slots: vec![],
             is_connected: slot == 0,
+            is_root: false,
             last_index: std::u64::MAX,
         }
     }
