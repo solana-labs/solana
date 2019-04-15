@@ -1,13 +1,28 @@
 //! budget state
 use crate::budget_expr::BudgetExpr;
 use bincode::{self, deserialize, serialize_into};
+use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_processor_utils::DecodeError;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive)]
 pub enum BudgetError {
     DestinationMissing,
 }
+
+impl<T> DecodeError<T> for BudgetError {
+    fn type_of(&self) -> &'static str {
+        "BudgetError"
+    }
+}
+
+impl std::fmt::Display for BudgetError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "error")
+    }
+}
+impl std::error::Error for BudgetError {}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct BudgetState {

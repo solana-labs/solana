@@ -1,13 +1,21 @@
 use log::*;
+use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::instruction_processor_utils::DecodeError;
 use solana_sdk::pubkey::Pubkey;
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Debug, PartialEq, FromPrimitive)]
 pub enum TokenError {
     InvalidArgument,
     InsufficentFunds,
     NotOwner,
+}
+
+impl<T> DecodeError<T> for TokenError {
+    fn type_of(&self) -> &'static str {
+        "TokenError"
+    }
 }
 
 impl std::fmt::Display for TokenError {
