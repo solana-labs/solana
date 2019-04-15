@@ -138,6 +138,35 @@ impl ErasureMeta {
 
 #[cfg(feature = "erasure")]
 #[test]
+fn test_meta_coding_present() {
+    let set_index = 0;
+    let mut e_meta = ErasureMeta {
+        set_index,
+        data: 0,
+        coding: 0,
+    };
+
+    for i in 0..NUM_CODING as u64 {
+        e_meta.set_coding_present(i);
+        assert_eq!(e_meta.is_coding_present(i), true);
+    }
+    for i in NUM_CODING as u64..NUM_DATA as u64 {
+        assert_eq!(e_meta.is_coding_present(i), false);
+    }
+
+    e_meta.set_index = ErasureMeta::set_index_for((NUM_DATA * 17) as u64);
+
+    for i in (NUM_DATA * 17) as u64..((NUM_DATA * 17) + NUM_CODING) as u64 {
+        e_meta.set_coding_present(i);
+        assert_eq!(e_meta.is_coding_present(i), true);
+    }
+    for i in (NUM_DATA * 17 + NUM_CODING) as u64..((NUM_DATA * 17) + NUM_DATA) as u64 {
+        assert_eq!(e_meta.is_coding_present(i), false);
+    }
+}
+
+#[cfg(feature = "erasure")]
+#[test]
 fn test_can_recover() {
     let set_index = 0;
     let mut e_meta = ErasureMeta {
