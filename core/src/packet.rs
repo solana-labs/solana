@@ -25,7 +25,7 @@ pub type SharedBlobs = Vec<SharedBlob>;
 pub const NUM_PACKETS: usize = 1024 * 8;
 pub const BLOB_SIZE: usize = (64 * 1024 - 128); // wikipedia says there should be 20b for ipv4 headers
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - (BLOB_HEADER_SIZE * 2);
-pub const BLOB_DATA_ALIGN: usize = 64;
+pub const BLOB_DATA_ALIGN: usize = 16; // safe for erasure input pointers, gf.c needs 16byte-aligned buffers
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -143,7 +143,7 @@ impl Packets {
     }
 }
 
-#[repr(align(64))] // 64 === BLOB_DATA_ALIGN
+#[repr(align(16))] // 16 === BLOB_DATA_ALIGN
 pub struct BlobData {
     pub data: [u8; BLOB_SIZE],
 }
@@ -372,7 +372,7 @@ macro_rules! align {
     };
 }
 
-pub const BLOB_HEADER_SIZE: usize = align!(SIZE_RANGE.end, BLOB_DATA_ALIGN);
+pub const BLOB_HEADER_SIZE: usize = align!(SIZE_RANGE.end, BLOB_DATA_ALIGN); // make sure data() is safe for erasure
 
 pub const BLOB_FLAG_IS_LAST_IN_SLOT: u32 = 0x2;
 

@@ -9,8 +9,6 @@ pub const NUM_DATA: usize = 16; // number of data blobs
 pub const NUM_CODING: usize = 4; // number of coding blobs, also the maximum number that can go missing
 pub const ERASURE_SET_SIZE: usize = NUM_DATA + NUM_CODING; // total number of blobs in an erasure set, includes data and coding blobs
 
-pub const JERASURE_ALIGN: usize = 4; // data size has to be a multiple of 4 bytes
-
 macro_rules! align {
     ($x:expr, $align:expr) => {
         $x + ($align - 1) & !($align - 1)
@@ -59,6 +57,7 @@ extern "C" {
 use std::sync::Once;
 static ERASURE_W_ONCE: Once = Once::new();
 
+// jerasure word size of 32
 fn w() -> i32 {
     let w = 32;
     unsafe {
@@ -68,6 +67,11 @@ fn w() -> i32 {
         });
     }
     w
+}
+
+// jerasure checks that arrays are a multiple of w()/8 in length
+fn wb() -> usize {
+    (w() / 8) as usize
 }
 
 fn get_matrix(m: i32, k: i32, w: i32) -> Vec<i32> {
@@ -243,6 +247,7 @@ impl CodingGenerator {
     }
 
     // must be called with consecutive data blobs from previous invocation
+    // blobs from a new slot not start halfway through next_data
     pub fn next(&mut self, next_data: &[SharedBlob]) -> Vec<SharedBlob> {
         let mut next_coding =
             Vec::with_capacity((self.leftover.len() + next_data.len()) / NUM_DATA * NUM_CODING);
@@ -261,12 +266,12 @@ impl CodingGenerator {
             }
             self.leftover.clear();
 
-            // find max_data_size for the chunk
+            // find max_data_size for the chunk, round length up to a multiple of wb()
             let max_data_size = align!(
                 data_blobs
                     .iter()
                     .fold(0, |max, blob| cmp::max(blob.read().unwrap().meta.size, max)),
-                JERASURE_ALIGN
+                wb()
             );
 
             let data_locks: Vec<_> = data_blobs.iter().map(|b| b.read().unwrap()).collect();
@@ -514,7 +519,7 @@ pub mod test {
     }
 
     #[test]
-    fn test_generate_blocktree_with_coding() {
+    fn test_erasure_generate_blocktree_with_coding() {
         let cases = vec![
             (NUM_DATA, NUM_CODING, 7, 5),
             (NUM_DATA - 6, NUM_CODING - 1, 5, 7),
