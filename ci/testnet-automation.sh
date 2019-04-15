@@ -17,9 +17,11 @@ source ci/upload-ci-artifact.sh
   LEADER_CPU_MACHINE_TYPE="n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
 [[ -n $CLIENT_COUNT ]] || CLIENT_COUNT=2
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
-[[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="-z us-west1-b"
+[[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-b"
 [[ -n $CHANNEL ]] || CHANNEL=beta
 [[ -n $ADDITIONAL_FLAGS ]] || ADDITIONAL_FLAGS=""
+
+IFS=, TESTNET_CLOUD_ZONES=( {$TESTNET_ZONES} )
 
 launchTestnet() {
   declare nodeCount=$1
@@ -28,7 +30,7 @@ launchTestnet() {
     -d pd-ssd \
     -n "$nodeCount" -c "$CLIENT_COUNT" \
     -G "$LEADER_CPU_MACHINE_TYPE" \
-    -p "$TESTNET_TAG" $TESTNET_ZONES $ADDITIONAL_FLAGS
+    -p "$TESTNET_TAG" "${TESTNET_CLOUD_ZONES[@]/#/-z }" "$ADDITIONAL_FLAGS"
 
   echo --- configure database
   net/init-metrics.sh -e
