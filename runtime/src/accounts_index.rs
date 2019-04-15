@@ -46,28 +46,18 @@ impl<T: Clone> AccountsIndex<T> {
         // add the new entry
         fork_vec.push((fork, account_info));
 
-        // do some cleanup
-        let mut max = 0;
-        for (fork, _) in fork_vec.iter() {
-            if *fork >= max && self.is_root(*fork) {
-                max = *fork;
-            }
-        }
         rv.extend(
             fork_vec
                 .iter()
-                .filter(|(fork, _)| !self.is_valid(max, *fork))
+                .filter(|(fork, _)| self.is_purged(*fork))
                 .cloned(),
         );
-        fork_vec.retain(|(fork, _)| self.is_valid(max, *fork));
+        fork_vec.retain(|(fork, _)| !self.is_purged(*fork));
         {
             let entry = self.account_maps.entry(*pubkey).or_insert(vec![]);
             std::mem::swap(entry, &mut fork_vec);
         };
         rv
-    }
-    fn is_valid(&self, max: u64, fork: u64) -> bool {
-        fork >= max && !self.is_purged(fork)
     }
     fn is_purged(&self, fork: Fork) -> bool {
         !self.is_root(fork) && fork < self.last_root
@@ -119,7 +109,7 @@ mod tests {
         let gc = index.insert(0, &key.pubkey(), true);
         assert!(gc.is_empty());
 
-        let ancestors = vec![(1,1)].into_iter().collect();
+        let ancestors = vec![(1, 1)].into_iter().collect();
         assert_eq!(index.get(&key.pubkey(), &ancestors), None);
     }
 
@@ -130,7 +120,7 @@ mod tests {
         let gc = index.insert(0, &key.pubkey(), true);
         assert!(gc.is_empty());
 
-        let ancestors = vec![(0,0)].into_iter().collect();
+        let ancestors = vec![(0, 0)].into_iter().collect();
         assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
     }
 
@@ -195,13 +185,40 @@ mod tests {
     fn test_update_last_wins() {
         let key = Keypair::new();
         let mut index = AccountsIndex::<bool>::default();
-        let ancestors = vec![].into_iter().collect();
+        let ancestors = vec![(0, 0)].into_iter().collect();
         let gc = index.insert(0, &key.pubkey(), true);
         assert!(gc.is_empty());
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
+
         let gc = index.insert(0, &key.pubkey(), false);
         assert_eq!(gc, vec![(0, true)]);
         assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&false));
     }
 
+    #[test]
+    fn test_update_new_fork() {
+        let key = Keypair::new();
+        let mut index = AccountsIndex::<bool>::default();
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let gc = index.insert(0, &key.pubkey(), true);
+        assert!(gc.is_empty());
+        let gc = index.insert(1, &key.pubkey(), false);
+        assert!(gc.is_empty());
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
+        let ancestors = vec![(1, 0)].into_iter().collect();
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&false));
+    }
+
+    #[test]
+    fn test_update_gc_purged_fork() {
+        let key = Keypair::new();
+        let mut index = AccountsIndex::<bool>::default();
+        let gc = index.insert(0, &key.pubkey(), true);
+        assert!(gc.is_empty());
+        index.add_root(1);
+        let gc = index.insert(1, &key.pubkey(), false);
+        assert_eq!(gc, vec![(0, true)]);
+        let ancestors = vec![].into_iter().collect();
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&false));
+    }
 }
- 
