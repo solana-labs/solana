@@ -2,10 +2,13 @@ use bs58;
 use chrono::prelude::*;
 use clap::ArgMatches;
 use log::*;
+use num_traits::FromPrimitive;
 use serde_json;
 use serde_json::json;
 use solana_budget_api;
 use solana_budget_api::budget_instruction;
+use solana_budget_api::budget_state::BudgetError;
+use solana_client::client_error::ClientError;
 use solana_client::rpc_client::{get_rpc_request_str, RpcClient};
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
@@ -14,12 +17,15 @@ use solana_drone::drone::DRONE_PORT;
 use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::bpf_loader;
 use solana_sdk::hash::Hash;
+use solana_sdk::instruction::InstructionError;
+use solana_sdk::instruction_processor_utils::DecodeError;
 use solana_sdk::loader_instruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::rpc_port::DEFAULT_RPC_PORT;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_sdk::system_instruction::SystemError;
 use solana_sdk::system_transaction;
-use solana_sdk::transaction::Transaction;
+use solana_sdk::transaction::{Transaction, TransactionError};
 use solana_vote_api::vote_instruction;
 use std::fs::File;
 use std::io::Read;
@@ -448,11 +454,10 @@ fn process_deploy(
         0,
     );
     trace!("Creating program account");
-    rpc_client
-        .send_and_confirm_transaction(&mut tx, &config.keypair)
-        .map_err(|_| {
-            WalletError::DynamicProgramError("Program allocate space failed".to_string())
-        })?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+    log_instruction_custom_error::<SystemError>(result).map_err(|_| {
+        WalletError::DynamicProgramError("Program allocate space failed".to_string())
+    })?;
 
     trace!("Writing program data");
     let write_transactions: Vec<_> = program_data
@@ -499,7 +504,8 @@ fn process_pay(
 
     if timestamp == None && *witnesses == None {
         let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash, 0);
-        let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+        let signature_str = log_instruction_custom_error::<SystemError>(result)?;
         Ok(signature_str.to_string())
     } else if *witnesses == None {
         let dt = timestamp.unwrap();
@@ -521,7 +527,8 @@ fn process_pay(
             lamports,
         );
         let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, blockhash);
-        let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+        let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
         Ok(json!({
             "signature": signature_str,
@@ -551,7 +558,8 @@ fn process_pay(
             lamports,
         );
         let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, blockhash);
-        let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+        let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
         Ok(json!({
             "signature": signature_str,
@@ -571,7 +579,8 @@ fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey
         &config.keypair.pubkey(),
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+    let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
     Ok(signature_str.to_string())
 }
 
@@ -598,7 +607,8 @@ fn process_time_elapsed(
 
     let ix = budget_instruction::apply_timestamp(&config.keypair.pubkey(), pubkey, to, dt);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+    let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
     Ok(signature_str.to_string())
 }
@@ -619,7 +629,8 @@ fn process_witness(
     let blockhash = rpc_client.get_recent_blockhash()?;
     let ix = budget_instruction::apply_signature(&config.keypair.pubkey(), pubkey, to);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+    let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
     Ok(signature_str.to_string())
 }
@@ -766,8 +777,37 @@ pub fn request_and_confirm_airdrop(
     let blockhash = rpc_client.get_recent_blockhash()?;
     let keypair = DroneKeypair::new_keypair(drone_addr, to_pubkey, lamports, blockhash)?;
     let mut tx = keypair.airdrop_transaction();
-    rpc_client.send_and_confirm_transaction(&mut tx, &keypair)?;
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &keypair);
+    log_instruction_custom_error::<SystemError>(result)?;
     Ok(())
+}
+
+fn log_instruction_custom_error<E>(result: Result<String, ClientError>) -> ProcessResult
+where
+    E: 'static + std::error::Error + DecodeError<E> + FromPrimitive,
+{
+    if result.is_err() {
+        let err = result.unwrap_err();
+        if let ClientError::TransactionError(TransactionError::InstructionError(
+            _,
+            InstructionError::CustomError(code),
+        )) = err
+        {
+            if let Some(specific_error) = E::decode_custom_error_to_enum(code) {
+                error!(
+                    "{:?}: {}::{:?}",
+                    err,
+                    specific_error.type_of(),
+                    specific_error
+                );
+                Err(specific_error)?
+            }
+        }
+        error!("{:?}", err);
+        Err(err)?
+    } else {
+        Ok(result.unwrap())
+    }
 }
 
 #[cfg(test)]

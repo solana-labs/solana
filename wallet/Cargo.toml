@@ -15,6 +15,7 @@ clap = "2.33.0"
 chrono = { version = "0.4.0", features = ["serde"] }
 dirs = "1.0.5"
 log = "0.4.2"
+num-traits = "0.2"
 serde_json = "1.0.39"
 solana-budget-api = { path = "../programs/budget_api", version = "0.14.0" }
 solana-client = { path = "../client", version = "0.14.0" }
