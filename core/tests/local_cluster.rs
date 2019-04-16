@@ -92,6 +92,7 @@ fn test_leader_failure_4() {
 }
 #[test]
 fn test_two_unbalanced_stakes() {
+    solana_logger::setup();
     let mut fullnode_config = FullnodeConfig::default();
     let num_ticks_per_second = 100;
     let num_ticks_per_slot = 160;
