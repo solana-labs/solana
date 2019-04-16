@@ -420,7 +420,7 @@ mod tests {
 
     fn get_tmp_accounts_path(paths: &str) -> TempPaths {
         let vpaths = get_paths_vec(paths);
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+        let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
         let vpaths: Vec<_> = vpaths
             .iter()
             .map(|path| format!("{}/{}", out_dir, path))
@@ -428,6 +428,20 @@ mod tests {
         TempPaths {
             paths: vpaths.join(","),
         }
+    }
+
+    #[macro_export]
+    macro_rules! tmp_accounts_name {
+        () => {
+            &format!("{}-{}", file!(), line!())
+        };
+    }
+
+    #[macro_export]
+    macro_rules! get_tmp_accounts_path {
+        () => {
+            get_tmp_accounts_path(tmp_accounts_name!())
+        };
     }
 
     #[test]

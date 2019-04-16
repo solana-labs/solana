@@ -1,12 +1,12 @@
 use crate::accounts_db::{
-    get_paths_vec, AccountInfo, AccountsDB, ErrorCounters, InstructionAccounts, InstructionLoaders,
- AccountStorageSlice,
+    get_paths_vec, AccountInfo, AccountStorageSlice, AccountsDB, ErrorCounters,
+    InstructionAccounts, InstructionLoaders,
 };
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::StoredAccount;
+use crate::message_processor::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
-use crate::message_processor::has_duplicates;
 use log::*;
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
