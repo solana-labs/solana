@@ -69,11 +69,7 @@ pub fn discover(
     let (gossip_service, spy_ref) = make_spy_node(gossip_addr, &exit);
     let id = spy_ref.read().unwrap().keypair.pubkey();
     info!("Gossip entry point: {:?}", gossip_addr);
-    trace!(
-        "discover: spy_node {} looking for at least {:?} nodes",
-        id,
-        num_nodes
-    );
+    info!("Spy node id: {:?}", id);
 
     let (met_criteria, secs, tvu_peers) = spy(spy_ref.clone(), num_nodes, timeout, find_node);
 
