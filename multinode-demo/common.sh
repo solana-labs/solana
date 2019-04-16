@@ -138,6 +138,7 @@ setup_vote_account() {
   declare drone_address=$1
   declare node_id_path=$2
   declare vote_id_path=$3
+  declare stake=$4
 
   declare node_id
   node_id=$($solana_wallet --keypair "$node_id_path" address)
@@ -153,11 +154,11 @@ setup_vote_account() {
   # A fullnode requires 43 lamports to function:
   # - one lamport to keep the node identity public key valid. TODO: really??
   # - 42 more for the vote account we fund
-  airdrop "$node_id_path" "$drone_address" 43 || return $?
+  airdrop "$node_id_path" "$drone_address" "$stake" || return $?
 
   # Fund the vote account from the node, with the node as the node_id
   $solana_wallet --keypair "$node_id_path" --host "$drone_address" \
-               create-vote-account "$vote_id" "$node_id"  42 || return $?
+    create-vote-account "$vote_id" "$node_id" $((stake - 1)) || return $?
 
   touch "$vote_id_path".configured
   return 0
@@ -169,7 +170,7 @@ fullnode_usage() {
     echo
   fi
   cat <<EOF
-usage: $0 [-x] [--blockstream PATH] [--init-complete-file FILE] [--no-stake] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
+usage: $0 [-x] [--blockstream PATH] [--init-complete-file FILE] [--stake LAMPORTS] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
 
 Start a full node on the specified network
 
@@ -178,7 +179,7 @@ Start a full node on the specified network
                               the specified label. Does not apply to the bootstrap leader
   --blockstream PATH        - open blockstream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
-  --no-stake                - Only stake the bootstrap leader, effectively disabling leader rotation
+  --stake LAMPORTS          - Number of lamports to stake
   --public-address          - advertise public machine address in gossip.  By default the local machine address is advertised
   --no-voting               - start node without vote signer
   --rpc-port port           - custom RPC port for this node
