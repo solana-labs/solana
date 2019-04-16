@@ -253,7 +253,7 @@ impl AccountsDB {
     // PERF: Sequentially read each storage entry in parallel
     pub fn scan_account_storage<F, B>(&self, fork_id: Fork, scan_func: F) -> Vec<B>
     where
-        F: Fn(&StoredAccount, &mut B) -> (),
+        F: Fn(&mut StoredAccount, &mut B) -> (),
         F: Send + Sync,
         B: Send + Default,
     {
@@ -268,10 +268,10 @@ impl AccountsDB {
         storage_maps
             .into_par_iter()
             .map(|storage| {
-                let accounts = storage.accounts.accounts(0);
+                let mut accounts = storage.accounts.accounts(0);
                 let mut retval = B::default();
                 accounts
-                    .iter()
+                    .iter_mut()
                     .for_each(|stored_account| scan_func(stored_account, &mut retval));
                 retval
             })
@@ -290,7 +290,7 @@ impl AccountsDB {
     pub fn hash_internal_state(&self, fork_id: Fork) -> Option<Hash> {
         let accumulator: Vec<Vec<(Pubkey, u64, Hash)>> = self.scan_account_storage(
             fork_id,
-            |stored_account: &StoredAccount, accum: &mut Vec<(Pubkey, u64, Hash)>| {
+            |stored_account: &mut StoredAccount, accum: &mut Vec<(Pubkey, u64, Hash)>| {
                 accum.push((
                     stored_account.meta.pubkey,
                     stored_account.meta.write_version,
@@ -701,7 +701,7 @@ impl Accounts {
     pub fn load_by_program(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
         let accumulator: Vec<Vec<(Pubkey, u64, Account)>> = self.accounts_db.scan_account_storage(
             fork,
-            |stored_account: &StoredAccount, accum: &mut Vec<(Pubkey, u64, Account)>| {
+            |stored_account: &mut StoredAccount, accum: &mut Vec<(Pubkey, u64, Account)>| {
                 if stored_account.account.owner == *program_id {
                     let val = (
                         stored_account.meta.pubkey,

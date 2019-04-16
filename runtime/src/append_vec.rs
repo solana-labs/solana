@@ -33,7 +33,7 @@ pub struct StoredAccount<'a> {
 }
 
 impl<'a> StoredAccount<'a> {
-    pub fn clone_account(&self) -> Account {
+    pub fn clone_account(&mut self) -> Account {
         let mut account = self.account.clone();
         let mut data: Vec<u8> = unsafe {
             Vec::from_raw_parts(self.data.as_mut_ptr(), self.data.len(), self.data.len())
