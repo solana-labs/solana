@@ -26,24 +26,33 @@ pub struct StorageMeta {
     pub data_len: u64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Default, Eq, PartialEq)]
+pub struct AccountBalance {
+    /// lamports in the account
+    pub lamports: u64,
+    /// the program that owns this account. If executable, the program that loads this account.
+    pub owner: Pubkey,
+    /// this account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+}
+
 /// References to Memory Mapped memory
 /// The Account is stored separately from its data, so getting the actual account requires a clone
 pub struct StoredAccount<'a> {
     pub meta: &'a StorageMeta,
     /// account data
-    pub account: &'a Account,
-    pub data: &'a mut [u8],
+    pub balance: &'a AccountBalance,
+    pub data: &'a [u8],
 }
 
 impl<'a> StoredAccount<'a> {
-    pub fn clone_account(&mut self) -> Account {
-        let mut account = self.account.clone();
-        let mut data: Vec<u8> = unsafe {
-            Vec::from_raw_parts(self.data.as_mut_ptr(), self.data.len(), self.data.len())
-        };
-        std::mem::swap(&mut account.data, &mut data);
-        std::mem::forget(data);
-        account
+    pub fn clone_account(&self) -> Account {
+        Account {
+            lamports: self.balance.lamports,
+            owner: self.balance.owner,
+            executable: self.balance.executable,
+            data: self.data.to_vec(),
+        }
     }
 }
 
@@ -101,8 +110,7 @@ impl AppendVec {
     }
 
     // The reason for the `mut` is to allow Vec::from_raw_parts
-    #[allow(clippy::mut_from_ref)]
-    fn get_slice(&self, offset: usize, size: usize) -> Option<(&mut [u8], usize)> {
+    fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
         let len = self.len();
         if len < offset + size {
             return None;
@@ -112,10 +120,7 @@ impl AppendVec {
         //crash on some architectures.
         let next = align_up!(offset + size, mem::size_of::<u64>());
         Some((
-            unsafe {
-                let dst = data.as_ptr() as *mut u8;
-                std::slice::from_raw_parts_mut(dst, size)
-            },
+            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, size) },
             next,
         ))
     }
@@ -166,19 +171,19 @@ impl AppendVec {
 
     pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccount<'a>, usize)> {
         let (meta, next): (&'a StorageMeta, _) = self.get_type(offset)?;
-        let (account, next): (&'a Account, _) = self.get_type(next)?;
+        let (balance, next): (&'a AccountBalance, _) = self.get_type(next)?;
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
         Some((
             StoredAccount {
                 meta,
-                account,
+                balance,
                 data,
             },
             next,
         ))
     }
     pub fn get_account_test(&self, offset: usize) -> Option<(StorageMeta, Account)> {
-        let mut stored = self.get_account(offset)?;
+        let stored = self.get_account(offset)?;
         let meta = stored.0.meta.clone();
         Some((meta, stored.0.clone_account()))
     }
@@ -194,12 +199,17 @@ impl AppendVec {
 
     pub fn append_account(&self, storage_meta: StorageMeta, account: &Account) -> Option<usize> {
         let meta_ptr = &storage_meta as *const StorageMeta;
-        let account_ptr = account as *const Account;
+        let balance = AccountBalance {
+            lamports: account.lamports,
+            owner: account.owner,
+            executable: account.executable,
+        };
+        let balance_ptr = &balance as *const AccountBalance;
         let data_len = account.data.len();
         let data_ptr = account.data.as_ptr();
         let ptrs = [
             (meta_ptr as *const u8, mem::size_of::<StorageMeta>()),
-            (account_ptr as *const u8, mem::size_of::<Account>()),
+            (balance_ptr as *const u8, mem::size_of::<AccountBalance>()),
             (data_ptr, data_len),
         ];
         self.append_ptrs(&ptrs)
@@ -263,7 +273,7 @@ pub mod tests {
     use std::time::Instant;
 
     #[test]
-    fn test_append_vec() {
+    fn test_append_vec_one() {
         let path = get_append_vec_path("test_append");
         let av = AppendVec::new(&path.path, true, 1024 * 1024);
         let account = create_test_account(0);
