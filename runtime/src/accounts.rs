@@ -281,7 +281,7 @@ impl AccountsDB {
     fn hash_account(stored_account: &StoredAccount) -> Hash {
         let mut hasher = Hasher::default();
         hasher.hash(&serialize(&stored_account.balance).unwrap());
-        hasher.hash(&serialize(&stored_account.data).unwrap());
+        hasher.hash(stored_account.data);
         hasher.result()
     }
 

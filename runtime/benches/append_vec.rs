@@ -15,8 +15,8 @@ fn append_vec_append(bencher: &mut Bencher) {
     let path = get_append_vec_path("bench_append");
     let vec = AppendVec::new(&path.path, true, 64 * 1024);
     bencher.iter(|| {
-        let account = create_test_account(0);
-        if vec.append_account(&account).is_none() {
+        let (meta, account) = create_test_account(0);
+        if vec.append_account(meta, &account).is_none() {
             vec.reset();
         }
     });
@@ -26,8 +26,8 @@ fn add_test_accounts(vec: &AppendVec, size: usize) -> Vec<(usize, usize)> {
     (0..size)
         .into_iter()
         .filter_map(|sample| {
-            let account = create_test_account(sample);
-            vec.append_account(&account).map(|pos| (sample, pos))
+            let (meta, account) = create_test_account(sample);
+            vec.append_account(meta, &account).map(|pos| (sample, pos))
         })
         .collect()
 }
@@ -40,9 +40,9 @@ fn append_vec_sequential_read(bencher: &mut Bencher) {
     let mut indexes = add_test_accounts(&vec, size);
     bencher.iter(|| {
         let (sample, pos) = indexes.pop().unwrap();
-        let account = vec.get_account(pos);
-        let test = create_test_account(sample);
-        assert_eq!(*account, test);
+        let (account, _next) = vec.get_account(pos).unwrap();
+        let (_meta, test) = create_test_account(sample);
+        assert_eq!(account.data, test.data.as_slice());
         indexes.push((sample, pos));
     });
 }
@@ -55,9 +55,9 @@ fn append_vec_random_read(bencher: &mut Bencher) {
     bencher.iter(|| {
         let random_index: usize = thread_rng().gen_range(0, indexes.len());
         let (sample, pos) = &indexes[random_index];
-        let account = vec.get_account(*pos);
-        let test = create_test_account(*sample);
-        assert_eq!(*account, test);
+        let (account, _next) = vec.get_account(*pos).unwrap();
+        let (_meta, test) = create_test_account(*sample);
+        assert_eq!(account.data, test.data.as_slice());
     });
 }
 
@@ -70,8 +70,8 @@ fn append_vec_concurrent_append_read(bencher: &mut Bencher) {
     let indexes1 = indexes.clone();
     spawn(move || loop {
         let sample = indexes1.lock().unwrap().len();
-        let account = create_test_account(sample);
-        if let Some(pos) = vec1.append_account(&account) {
+        let (meta, account) = create_test_account(sample);
+        if let Some(pos) = vec1.append_account(meta, &account) {
             indexes1.lock().unwrap().push((sample, pos))
         } else {
             break;
@@ -84,9 +84,9 @@ fn append_vec_concurrent_append_read(bencher: &mut Bencher) {
         let len = indexes.lock().unwrap().len();
         let random_index: usize = thread_rng().gen_range(0, len);
         let (sample, pos) = indexes.lock().unwrap().get(random_index).unwrap().clone();
-        let account = vec.get_account(pos);
-        let test = create_test_account(sample);
-        assert_eq!(*account, test);
+        let (account, _next) = vec.get_account(pos).unwrap();
+        let (_meta, test) = create_test_account(sample);
+        assert_eq!(account.data, test.data.as_slice());
     });
 }
 
@@ -106,14 +106,14 @@ fn append_vec_concurrent_read_append(bencher: &mut Bencher) {
             .get(random_index % len)
             .unwrap()
             .clone();
-        let account = vec1.get_account(pos);
-        let test = create_test_account(sample);
-        assert_eq!(*account, test);
+        let (account, _next) = vec1.get_account(pos).unwrap();
+        let (_meta, test) = create_test_account(sample);
+        assert_eq!(account.data, test.data.as_slice());
     });
     bencher.iter(|| {
         let sample: usize = thread_rng().gen_range(0, 256);
-        let account = create_test_account(sample);
-        if let Some(pos) = vec.append_account(&account) {
+        let (meta, account) = create_test_account(sample);
+        if let Some(pos) = vec.append_account(meta, &account) {
             indexes.lock().unwrap().push((sample, pos))
         }
     });
