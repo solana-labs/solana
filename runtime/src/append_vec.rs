@@ -15,6 +15,7 @@ macro_rules! align_up {
         ($addr + ($align - 1)) & !($align - 1)
     };
 }
+#[derive(Clone, PartialEq, Debug)]
 pub struct StorageMeta {
     /// global write version
     pub write_version: u64,
@@ -24,7 +25,6 @@ pub struct StorageMeta {
 }
 //TODO: This structure should contain references
 /// StoredAccount contains enough context to recover the index from storage itself
-#[derive(Clone, PartialEq, Debug)]
 pub struct StoredAccount<'a> {
     pub meta: &'a StorageMeta,
     /// account data
@@ -35,7 +35,9 @@ pub struct StoredAccount<'a> {
 impl<'a> StoredAccount<'a> {
     pub fn clone_account(&self) -> Account {
         let mut account = self.account.clone();
-        let data = unsafe { Vec::from_raw_parts(self.data, self.data.len(), self.data.len()) };
+        let mut data: Vec<u8> = unsafe {
+            Vec::from_raw_parts(self.data.as_mut_ptr(), self.data.len(), self.data.len())
+        };
         std::mem::swap(&mut account.data, &mut data);
         std::mem::forget(data);
         account
@@ -160,12 +162,12 @@ impl AppendVec {
     }
 
     pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccount<'a>, usize)> {
-        let (storage_meta, next): (&'a StorageMeta, _) = self.get_type(offset)?;
+        let (meta, next): (&'a StorageMeta, _) = self.get_type(offset)?;
         let (account, next): (&'a Account, _) = self.get_type(next)?;
-        let (data, next) = self.get_slice(next, storage_meta.data_len)?;
+        let (data, next) = self.get_slice(next, meta.data_len as usize)?;
         Some((
             StoredAccount {
-                storage_meta,
+                meta,
                 account,
                 data,
             },
@@ -198,13 +200,13 @@ impl AppendVec {
         ];
         self.append_ptrs(&ptrs)
     }
-    pub fn append_account_test(&self, data: &(storage_meta: StorageMeta, account: Account)) -> Option<usize> {
-        self.append_account(data.storage_meta, &data.account)
+    pub fn append_account_test(&self, data: &(StorageMeta, Account)) -> Option<usize> {
+        self.append_account(data.0.clone(), &data.1)
     }
 }
 
 pub mod test_utils {
-    use super::StoredAccount;
+    use super::StorageMeta;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
@@ -241,7 +243,7 @@ pub mod test_utils {
         let storage_meta = StorageMeta {
             write_version: 0,
             pubkey: Pubkey::default(),
-            data_len,
+            data_len: data_len as u64,
         };
         (storage_meta, account)
     }
