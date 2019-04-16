@@ -130,6 +130,7 @@ impl AppendVec {
         //crash on some architectures.
         let pos = align_up!(*offset as usize, mem::size_of::<u64>());
         let data = &self.map[pos..(pos + len)];
+        //this mut append is safe because only 1 thread can append at a time
         unsafe {
             let dst = data.as_ptr() as *mut u8;
             std::ptr::copy(src, dst, len);
