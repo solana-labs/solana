@@ -78,8 +78,8 @@ launchTestnet() {
       FROM "testnet-automation"."autogen"."validator-confirmation"
       WHERE time > now() - 300s'
 
-  curl -G "${INFLUX_HOST}/query?u=ro&p=${INFLUX_PASSWORD}" \
-    --data-urlencode "db=$INFLUX_DATABASE" \
+  curl -G "${INFLUX_HOST}/query?u=ro&p=topsecret" \
+    --data-urlencode "db=testnet-automation" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
     python ci/testnet-automation-json-parser.py >>TPS"$nodeCount".log
 
