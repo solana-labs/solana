@@ -112,7 +112,7 @@ impl AppendVec {
         self.file_size
     }
 
-    fn get_slice<'a>(&'a self, offset: usize, size: usize) -> Option<(&'a [u8], usize)> {
+    fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
         let len = self.len();
         if len < offset + size {
             return None;
