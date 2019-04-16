@@ -109,7 +109,7 @@ impl Transaction {
     ) -> Self {
         let mut account_keys: Vec<_> = from_keypairs
             .iter()
-            .map(|keypair| keypair.pubkey())
+            .map(|keypair| (*keypair).pubkey())
             .collect();
         account_keys.extend_from_slice(keys);
         let message = Message::new_with_compiled_instructions(

@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum PohServiceConfig {
     /// * `Tick` - Run full PoH thread.  Tick is a rough estimate of how many hashes to roll before
     ///            transmitting a new entry.

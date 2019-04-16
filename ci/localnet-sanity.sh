@@ -55,7 +55,7 @@ while getopts "ch?i:k:brxR" opt; do
     restartInterval=$OPTARG
     ;;
   b)
-    maybeNoLeaderRotation="--only-bootstrap-stake"
+    maybeNoLeaderRotation="--no-stake"
     ;;
   x)
     extraNodes=$((extraNodes + 1))
@@ -78,7 +78,6 @@ source scripts/configure-metrics.sh
 nodes=(
   "multinode-demo/drone.sh"
   "multinode-demo/bootstrap-leader.sh \
-    $maybeNoLeaderRotation \
     --enable-rpc-exit \
     --init-complete-file init-complete-node1.log"
   "multinode-demo/fullnode.sh \

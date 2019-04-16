@@ -213,7 +213,7 @@ fn main() -> Result<(), String> {
             let program_name = matches.value_of("program_name").unwrap();
             let program_arguments = matches
                 .values_of("program_arguments")
-                .map(|iter| iter.collect())
+                .map(Iterator::collect)
                 .unwrap_or_else(|| vec![]);
 
             command::run(config_file, program_name, program_arguments)

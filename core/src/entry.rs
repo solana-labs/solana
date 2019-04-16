@@ -265,7 +265,7 @@ impl EntrySlice for [Entry] {
     }
 
     fn to_single_entry_blobs(&self) -> Vec<Blob> {
-        self.iter().map(|entry| entry.to_blob()).collect()
+        self.iter().map(Entry::to_blob).collect()
     }
 }
 

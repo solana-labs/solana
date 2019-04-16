@@ -44,7 +44,7 @@ $ source $HOME/.cargo/env
 $ rustup component add rustfmt-preview
 ```
 
-If your rustc version is lower than 1.33.0, please update it:
+If your rustc version is lower than 1.34.0, please update it:
 
 ```bash
 $ rustup update

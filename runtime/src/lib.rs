@@ -1,4 +1,5 @@
 mod accounts;
+mod accounts_index;
 pub mod append_vec;
 pub mod bank;
 pub mod bank_client;

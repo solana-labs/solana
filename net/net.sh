@@ -129,7 +129,7 @@ build() {
   declare MAYBE_DOCKER=
   if [[ $(uname) != Linux ]]; then
     source ci/rust-version.sh
-    MAYBE_DOCKER="ci/docker-run.sh +$rust_stable_docker_image"
+    MAYBE_DOCKER="ci/docker-run.sh $rust_stable_docker_image"
   fi
   SECONDS=0
   (

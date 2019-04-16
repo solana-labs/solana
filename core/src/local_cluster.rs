@@ -51,13 +51,46 @@ impl ReplicatorInfo {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ClusterConfig {
+    /// The fullnode config that should be applied to every node in the cluster
+    pub fullnode_config: FullnodeConfig,
+    /// Number of replicators in the cluster
+    pub num_replicators: u64,
+    /// Number of nodes that are unstaked and not voting (a.k.a listening)
+    pub num_listeners: u64,
+    /// The stakes of each node
+    pub node_stakes: Vec<u64>,
+    /// The total lamports available to the cluster
+    pub cluster_lamports: u64,
+    pub ticks_per_slot: u64,
+    pub slots_per_epoch: u64,
+    pub native_instruction_processors: Vec<(String, Pubkey)>,
+}
+
+impl Default for ClusterConfig {
+    fn default() -> Self {
+        ClusterConfig {
+            fullnode_config: FullnodeConfig::default(),
+            num_replicators: 0,
+            num_listeners: 0,
+            node_stakes: vec![],
+            cluster_lamports: 0,
+            ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
+            slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
+            native_instruction_processors: vec![],
+        }
+    }
+}
+
 pub struct LocalCluster {
-    /// Keypair with funding to particpiate in the network
+    /// Keypair with funding to participate in the network
     pub funding_keypair: Keypair,
     pub fullnode_config: FullnodeConfig,
     /// Entry point from which the rest of the network can be discovered
     pub entry_point_info: ContactInfo,
     pub fullnode_infos: HashMap<Pubkey, FullnodeInfo>,
+    pub listener_infos: HashMap<Pubkey, FullnodeInfo>,
     fullnodes: HashMap<Pubkey, Fullnode>,
     genesis_ledger_path: String,
     pub genesis_block: GenesisBlock,
@@ -66,67 +99,35 @@ pub struct LocalCluster {
 }
 
 impl LocalCluster {
-    pub fn new(num_nodes: usize, cluster_lamports: u64, lamports_per_node: u64) -> Self {
+    pub fn new_with_equal_stakes(
+        num_nodes: usize,
+        cluster_lamports: u64,
+        lamports_per_node: u64,
+    ) -> Self {
         let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
-        Self::new_with_config(&stakes, cluster_lamports, &FullnodeConfig::default(), &[])
-    }
-
-    pub fn new_with_config(
-        node_stakes: &[u64],
-        cluster_lamports: u64,
-        fullnode_config: &FullnodeConfig,
-        native_instruction_processors: &[(String, Pubkey)],
-    ) -> Self {
-        Self::new_with_config_replicators(
-            node_stakes,
+        let config = ClusterConfig {
+            node_stakes: stakes,
             cluster_lamports,
-            fullnode_config,
-            0,
-            DEFAULT_TICKS_PER_SLOT,
-            DEFAULT_SLOTS_PER_EPOCH,
-            native_instruction_processors,
-        )
+            ..ClusterConfig::default()
+        };
+        Self::new(&config)
     }
 
-    pub fn new_with_tick_config(
-        node_stakes: &[u64],
-        cluster_lamports: u64,
-        fullnode_config: &FullnodeConfig,
-        ticks_per_slot: u64,
-        slots_per_epoch: u64,
-        native_instruction_processors: &[(String, Pubkey)],
-    ) -> Self {
-        Self::new_with_config_replicators(
-            node_stakes,
-            cluster_lamports,
-            fullnode_config,
-            0,
-            ticks_per_slot,
-            slots_per_epoch,
-            native_instruction_processors,
-        )
-    }
-
-    pub fn new_with_config_replicators(
-        node_stakes: &[u64],
-        cluster_lamports: u64,
-        fullnode_config: &FullnodeConfig,
-        num_replicators: usize,
-        ticks_per_slot: u64,
-        slots_per_epoch: u64,
-        native_instruction_processors: &[(String, Pubkey)],
-    ) -> Self {
+    pub fn new(config: &ClusterConfig) -> Self {
         let voting_keypair = Keypair::new();
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
-        let (mut genesis_block, mint_keypair) =
-            GenesisBlock::new_with_leader(cluster_lamports, &leader_pubkey, node_stakes[0]);
-        genesis_block.ticks_per_slot = ticks_per_slot;
-        genesis_block.slots_per_epoch = slots_per_epoch;
+        let (mut genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
+            config.cluster_lamports,
+            &leader_pubkey,
+            config.node_stakes[0],
+        );
+        genesis_block.ticks_per_slot = config.ticks_per_slot;
+        genesis_block.slots_per_epoch = config.slots_per_epoch;
         genesis_block
             .native_instruction_processors
-            .extend_from_slice(native_instruction_processors);
+            .extend_from_slice(&config.native_instruction_processors);
         genesis_block.bootstrap_leader_vote_account_id = voting_keypair.pubkey();
         let (genesis_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
@@ -139,7 +140,7 @@ impl LocalCluster {
             &voting_keypair.pubkey(),
             voting_keypair,
             None,
-            fullnode_config,
+            &config.fullnode_config,
         );
 
         let mut fullnodes = HashMap::new();
@@ -159,22 +160,33 @@ impl LocalCluster {
             genesis_block,
             fullnode_infos,
             replicator_infos: HashMap::new(),
-            fullnode_config: fullnode_config.clone(),
+            fullnode_config: config.fullnode_config.clone(),
+            listener_infos: HashMap::new(),
         };
 
-        for stake in &node_stakes[1..] {
-            cluster.add_validator(&fullnode_config, *stake);
+        for stake in &config.node_stakes[1..] {
+            cluster.add_validator(&config.fullnode_config, *stake);
         }
 
-        discover_nodes(&cluster.entry_point_info.gossip, node_stakes.len()).unwrap();
+        let listener_config = FullnodeConfig {
+            voting_disabled: true,
+            ..config.fullnode_config.clone()
+        };
+        (0..config.num_listeners).for_each(|_| cluster.add_validator(&listener_config, 0));
 
-        for _ in 0..num_replicators {
+        discover_nodes(
+            &cluster.entry_point_info.gossip,
+            config.node_stakes.len() + config.num_listeners as usize,
+        )
+        .unwrap();
+
+        for _ in 0..config.num_replicators {
             cluster.add_replicator();
         }
 
         discover_nodes(
             &cluster.entry_point_info.gossip,
-            node_stakes.len() + num_replicators,
+            config.node_stakes.len() + config.num_replicators as usize,
         )
         .unwrap();
 
@@ -205,23 +217,37 @@ impl LocalCluster {
         );
 
         // Must have enough tokens to fund vote account and set delegate
-        assert!(stake > 2);
         let validator_keypair = Arc::new(Keypair::new());
         let voting_keypair = Keypair::new();
         let validator_pubkey = validator_keypair.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let ledger_path = tmp_copy_blocktree!(&self.genesis_ledger_path);
 
-        // Send each validator some lamports to vote
-        let validator_balance =
-            Self::transfer_with_client(&client, &self.funding_keypair, &validator_pubkey, stake);
-        info!(
-            "validator {} balance {}",
-            validator_pubkey, validator_balance
-        );
+        if fullnode_config.voting_disabled {
+            // setup as a listener
+            info!("listener {} ", validator_pubkey,);
+        } else {
+            assert!(stake > 2);
+            // Send each validator some lamports to vote
+            let validator_balance = Self::transfer_with_client(
+                &client,
+                &self.funding_keypair,
+                &validator_pubkey,
+                stake,
+            );
+            info!(
+                "validator {} balance {}",
+                validator_pubkey, validator_balance
+            );
 
-        Self::create_and_fund_vote_account(&client, &voting_keypair, &validator_keypair, stake - 1)
+            Self::create_and_fund_vote_account(
+                &client,
+                &voting_keypair,
+                &validator_keypair,
+                stake - 1,
+            )
             .unwrap();
+        }
 
         let validator_server = Fullnode::new(
             validator_node,
@@ -230,15 +256,22 @@ impl LocalCluster {
             &voting_keypair.pubkey(),
             voting_keypair,
             Some(&self.entry_point_info),
-            fullnode_config,
+            &fullnode_config,
         );
 
         self.fullnodes
             .insert(validator_keypair.pubkey(), validator_server);
-        self.fullnode_infos.insert(
-            validator_keypair.pubkey(),
-            FullnodeInfo::new(validator_keypair.clone(), ledger_path),
-        );
+        if fullnode_config.voting_disabled {
+            self.listener_infos.insert(
+                validator_keypair.pubkey(),
+                FullnodeInfo::new(validator_keypair.clone(), ledger_path),
+            );
+        } else {
+            self.fullnode_infos.insert(
+                validator_keypair.pubkey(),
+                FullnodeInfo::new(validator_keypair.clone(), ledger_path),
+            );
+        }
     }
 
     fn add_replicator(&mut self) {
@@ -376,6 +409,10 @@ impl LocalCluster {
 }
 
 impl Cluster for LocalCluster {
+    fn get_node_ids(&self) -> Vec<Pubkey> {
+        self.fullnodes.keys().cloned().collect()
+    }
+
     fn restart_node(&mut self, pubkey: Pubkey) {
         // Shut down the fullnode
         let node = self.fullnodes.remove(&pubkey).unwrap();
@@ -401,10 +438,6 @@ impl Cluster for LocalCluster {
 
         self.fullnodes.insert(pubkey, restarted_node);
     }
-
-    fn get_node_ids(&self) -> Vec<Pubkey> {
-        self.fullnodes.keys().cloned().collect()
-    }
 }
 
 impl Drop for LocalCluster {
@@ -421,7 +454,7 @@ mod test {
     fn test_local_cluster_start_and_exit() {
         solana_logger::setup();
         let num_nodes = 1;
-        let cluster = LocalCluster::new(num_nodes, 100, 3);
+        let cluster = LocalCluster::new_with_equal_stakes(num_nodes, 100, 3);
         assert_eq!(cluster.fullnodes.len(), num_nodes);
         assert_eq!(cluster.replicators.len(), 0);
     }
@@ -429,19 +462,20 @@ mod test {
     #[test]
     fn test_local_cluster_start_and_exit_with_config() {
         solana_logger::setup();
-        let mut fullnode_exit = FullnodeConfig::default();
-        fullnode_exit.rpc_config.enable_fullnode_exit = true;
+        let mut fullnode_config = FullnodeConfig::default();
+        fullnode_config.rpc_config.enable_fullnode_exit = true;
         const NUM_NODES: usize = 1;
         let num_replicators = 1;
-        let cluster = LocalCluster::new_with_config_replicators(
-            &[3; NUM_NODES],
-            100,
-            &fullnode_exit,
-            num_replicators,
-            16,
-            16,
-            &[],
-        );
+        let config = ClusterConfig {
+            fullnode_config,
+            num_replicators: 1,
+            node_stakes: vec![3; NUM_NODES],
+            cluster_lamports: 100,
+            ticks_per_slot: 16,
+            slots_per_epoch: 16,
+            ..ClusterConfig::default()
+        };
+        let cluster = LocalCluster::new(&config);
         assert_eq!(cluster.fullnodes.len(), NUM_NODES);
         assert_eq!(cluster.replicators.len(), num_replicators);
     }

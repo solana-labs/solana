@@ -593,7 +593,13 @@ fn fund_keys(client: &ThinClient, source: &Keypair, dests: &[Keypair], lamports:
                 // retry anything that seems to have dropped through cracks
                 //  again since these txs are all or nothing, they're fine to
                 //  retry
-                to_fund_txs.retain(|(_, tx)| !verify_funding_transfer(client, &tx, amount));
+                for _ in 0..10 {
+                    to_fund_txs.retain(|(_, tx)| !verify_funding_transfer(client, &tx, amount));
+                    if to_fund_txs.is_empty() {
+                        break;
+                    }
+                    sleep(Duration::from_millis(100));
+                }
 
                 tries += 1;
             }
@@ -726,7 +732,7 @@ fn should_switch_directions(num_lamports_per_account: u64, i: u64) -> bool {
 mod tests {
     use super::*;
     use solana::fullnode::FullnodeConfig;
-    use solana::local_cluster::LocalCluster;
+    use solana::local_cluster::{ClusterConfig, LocalCluster};
     use solana_drone::drone::run_local_drone;
     use std::sync::mpsc::channel;
 
@@ -750,8 +756,12 @@ mod tests {
     fn test_bench_tps() {
         let fullnode_config = FullnodeConfig::default();
         const NUM_NODES: usize = 1;
-        let cluster =
-            LocalCluster::new_with_config(&[999_990; NUM_NODES], 2_000_000, &fullnode_config, &[]);
+        let cluster = LocalCluster::new(&ClusterConfig {
+            node_stakes: vec![999_990; NUM_NODES],
+            cluster_lamports: 2_000_000,
+            fullnode_config,
+            ..ClusterConfig::default()
+        });
 
         let drone_keypair = Keypair::new();
         cluster.transfer(&cluster.funding_keypair, &drone_keypair.pubkey(), 1_000_000);

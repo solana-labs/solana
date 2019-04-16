@@ -1,5 +1,6 @@
 use memmap::MmapMut;
 use solana_sdk::account::Account;
+use solana_sdk::pubkey::Pubkey;
 use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
 use std::mem;
@@ -13,6 +14,18 @@ macro_rules! align_up {
     ($addr: expr, $align: expr) => {
         ($addr + ($align - 1)) & !($align - 1)
     };
+}
+
+//TODO: This structure should contain references
+/// StoredAccount contains enough context to recover the index from storage itself
+#[derive(Clone, PartialEq, Debug)]
+pub struct StoredAccount {
+    /// global write version
+    pub write_version: u64,
+    /// key for the account
+    pub pubkey: Pubkey,
+    /// account data
+    pub account: Account,
 }
 
 pub struct AppendVec {
@@ -119,31 +132,40 @@ impl AppendVec {
         Some(pos)
     }
 
+    //TODO: Make this safer
+    //StoredAccount should be a struct of references with the same lifetime as &self
+    //The structure should have a method to clone the account out
     #[allow(clippy::transmute_ptr_to_ptr)]
-    pub fn get_account(&self, offset: usize) -> &Account {
-        let account: *mut Account = {
-            let data = self.get_slice(offset, mem::size_of::<Account>());
-            unsafe { std::mem::transmute::<*const u8, *mut Account>(data.as_ptr()) }
+    pub fn get_account(&self, offset: usize) -> &StoredAccount {
+        let account: *mut StoredAccount = {
+            let data = self.get_slice(offset, mem::size_of::<StoredAccount>());
+            unsafe { std::mem::transmute::<*const u8, *mut StoredAccount>(data.as_ptr()) }
         };
         //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
         //crash on some architectures.
-        let data_at = align_up!(offset + mem::size_of::<Account>(), mem::size_of::<u64>());
-        let account_ref: &mut Account = unsafe { &mut *account };
-        let data = self.get_slice(data_at, account_ref.data.len());
+        let data_at = align_up!(
+            offset + mem::size_of::<StoredAccount>(),
+            mem::size_of::<u64>()
+        );
+        let account_ref: &mut StoredAccount = unsafe { &mut *account };
+        let data = self.get_slice(data_at, account_ref.account.data.len());
         unsafe {
             let mut new_data = Vec::from_raw_parts(data.as_mut_ptr(), data.len(), data.len());
-            std::mem::swap(&mut account_ref.data, &mut new_data);
+            std::mem::swap(&mut account_ref.account.data, &mut new_data);
             std::mem::forget(new_data);
         };
         account_ref
     }
 
-    pub fn accounts(&self, mut start: usize) -> Vec<&Account> {
+    pub fn accounts(&self, mut start: usize) -> Vec<&StoredAccount> {
         let mut accounts = vec![];
         loop {
             //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
             //crash on some architectures.
-            let end = align_up!(start + mem::size_of::<Account>(), mem::size_of::<u64>());
+            let end = align_up!(
+                start + mem::size_of::<StoredAccount>(),
+                mem::size_of::<u64>()
+            );
             if end > self.len() {
                 break;
             }
@@ -151,19 +173,22 @@ impl AppendVec {
             accounts.push(first);
             //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
             //crash on some architectures.
-            let data_at = align_up!(start + mem::size_of::<Account>(), mem::size_of::<u64>());
-            let next = align_up!(data_at + first.data.len(), mem::size_of::<u64>());
+            let data_at = align_up!(
+                start + mem::size_of::<StoredAccount>(),
+                mem::size_of::<u64>()
+            );
+            let next = align_up!(data_at + first.account.data.len(), mem::size_of::<u64>());
             start = next;
         }
         accounts
     }
 
-    pub fn append_account(&self, account: &Account) -> Option<usize> {
-        let acc_ptr = account as *const Account;
-        let data_len = account.data.len();
-        let data_ptr = account.data.as_ptr();
+    pub fn append_account(&self, account: &StoredAccount) -> Option<usize> {
+        let acc_ptr = account as *const StoredAccount;
+        let data_len = account.account.data.len();
+        let data_ptr = account.account.data.as_ptr();
         let ptrs = [
-            (acc_ptr as *const u8, mem::size_of::<Account>()),
+            (acc_ptr as *const u8, mem::size_of::<StoredAccount>()),
             (data_ptr, data_len),
         ];
         self.append_ptrs(&ptrs)
@@ -171,6 +196,7 @@ impl AppendVec {
 }
 
 pub mod test_utils {
+    use super::StoredAccount;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
@@ -200,11 +226,15 @@ pub mod test_utils {
         TempFile { path: buf }
     }
 
-    pub fn create_test_account(sample: usize) -> Account {
+    pub fn create_test_account(sample: usize) -> StoredAccount {
         let data_len = sample % 256;
         let mut account = Account::new(sample as u64, 0, &Pubkey::default());
         account.data = (0..data_len).map(|_| data_len as u8).collect();
-        account
+        StoredAccount {
+            write_version: 0,
+            pubkey: Pubkey::default(),
+            account,
+        }
     }
 }
 

@@ -8,6 +8,7 @@ use solana::service::Service;
 use solana_netutil::parse_port_range;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::fs::File;
+use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::Arc;
 
@@ -229,7 +230,7 @@ fn main() {
         (Some(signer_service), signer_addr)
     };
     let init_complete_file = matches.value_of("init_complete_file");
-    fullnode_config.blockstream = matches.value_of("blockstream").map(|s| s.to_string());
+    fullnode_config.blockstream = matches.value_of("blockstream").map(ToString::to_string);
 
     let keypair = Arc::new(keypair);
     let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr, dynamic_port_range);
@@ -239,8 +240,8 @@ fn main() {
             eprintln!("Invalid RPC port requested: {:?}", port);
             exit(1);
         }
-        node.info.rpc.set_port(port_number);
-        node.info.rpc_pubsub.set_port(port_number + 1);
+        node.info.rpc = SocketAddr::new(gossip_addr.ip(), port_number);
+        node.info.rpc_pubsub = SocketAddr::new(gossip_addr.ip(), port_number + 1);
     };
 
     let fullnode = Fullnode::new(

@@ -36,7 +36,7 @@ use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::Result;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FullnodeConfig {
     pub sigverify_disabled: bool,
     pub voting_disabled: bool,

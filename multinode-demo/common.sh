@@ -169,7 +169,7 @@ fullnode_usage() {
     echo
   fi
   cat <<EOF
-usage: $0 [-x] [--blockstream PATH] [--init-complete-file FILE] [--only-bootstrap-stake] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
+usage: $0 [-x] [--blockstream PATH] [--init-complete-file FILE] [--no-stake] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
 
 Start a full node on the specified network
 
@@ -178,7 +178,7 @@ Start a full node on the specified network
                               the specified label. Does not apply to the bootstrap leader
   --blockstream PATH        - open blockstream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
-  --only-bootstrap-stake    - Only stake the bootstrap leader, effectively disabling leader rotation
+  --no-stake                - Only stake the bootstrap leader, effectively disabling leader rotation
   --public-address          - advertise public machine address in gossip.  By default the local machine address is advertised
   --no-voting               - start node without vote signer
   --rpc-port port           - custom RPC port for this node
