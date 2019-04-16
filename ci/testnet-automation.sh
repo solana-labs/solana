@@ -47,6 +47,8 @@ launchTestnet() {
   echo --- wait "$ITERATION_WAIT" seconds to complete test
   sleep "$ITERATION_WAIT"
 
+  set -x
+
   declare q_mean_tps='
     SELECT round(mean("sum_count")) AS "mean_tps" FROM (
       SELECT sum("count") AS "sum_count"
@@ -76,7 +78,7 @@ launchTestnet() {
       FROM "testnet-automation"."autogen"."validator-confirmation"
       WHERE time > now() - 300s'
 
-  curl -G "${INFLUX_HOST}/query?u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}" \
+  curl -G "${INFLUX_HOST}/query?u=ro&p=${INFLUX_PASSWORD}" \
     --data-urlencode "db=$INFLUX_DATABASE" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
     python ci/testnet-automation-json-parser.py >>TPS"$nodeCount".log
