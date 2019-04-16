@@ -16,7 +16,7 @@ fi
 gossip_port=
 extra_fullnode_args=()
 self_setup=0
-setup_stakes=1
+stake=43 # number of lamports to assign as stake
 poll_for_new_genesis_block=0
 
 while [[ ${1:0:1} = - ]]; do
@@ -32,7 +32,7 @@ while [[ ${1:0:1} = - ]]; do
     poll_for_new_genesis_block=1
     shift
   elif [[ $1 = --blockstream ]]; then
-    setup_stakes=0
+    stake=0
     extra_fullnode_args+=("$1" "$2")
     shift 2
   elif [[ $1 = --enable-rpc-exit ]]; then
@@ -41,9 +41,9 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = --init-complete-file ]]; then
     extra_fullnode_args+=("$1" "$2")
     shift 2
-  elif [[ $1 = --no-stake ]]; then
-    setup_stakes=0
-    shift
+  elif [[ $1 = --stake ]]; then
+    stake="$2"
+    shift 2
   elif [[ $1 = --public-address ]]; then
     extra_fullnode_args+=("$1")
     shift
@@ -183,8 +183,8 @@ while true; do
   pid=$!
   oom_score_adj "$pid" 1000
 
-  if ((setup_stakes)); then
-    setup_vote_account "${leader_address%:*}" "$fullnode_id_path" "$fullnode_vote_id_path"
+  if ((stake)); then
+    setup_vote_account "${leader_address%:*}" "$fullnode_id_path" "$fullnode_vote_id_path" "$stake"
   fi
   set +x
 

@@ -42,7 +42,7 @@ pub fn vote_account_balances_at_epoch(
     node_staked_accounts.map(|epoch_state| epoch_state.map(|(id, stake, _)| (*id, stake)).collect())
 }
 
-/// At the specified epoch, collect the delgate account balance and vote states for delegates
+/// At the specified epoch, collect the delegate account balance and vote states for delegates
 /// that have non-zero balance in any of their managed staking accounts
 pub fn delegated_stakes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashMap<Pubkey, u64>> {
     let node_staked_accounts = node_staked_accounts_at_epoch(bank, epoch_height);

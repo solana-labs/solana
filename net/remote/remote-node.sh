@@ -91,7 +91,7 @@ local|tar)
 
     args=()
     if ! $leaderRotation; then
-      args+=("--no-stake")
+      args+=("--stake" 0)
     fi
     if $publicNetwork; then
       args+=("--public-address")
