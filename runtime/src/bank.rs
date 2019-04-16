@@ -3,7 +3,8 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
-use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
+use crate::accounts::Accounts;
+use crate::accounts_db::{ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::blockhash_queue::BlockhashQueue;
 use crate::locked_accounts_results::LockedAccountsResults;
 use crate::message_processor::{MessageProcessor, ProcessInstruction};
