@@ -69,7 +69,7 @@ pub type InstructionAccounts = Vec<Account>;
 pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
 #[derive(Debug, PartialEq)]
-enum AccountStorageStatus {
+pub enum AccountStorageStatus {
     StorageAvailable = 0,
     StorageFull = 1,
 }
@@ -86,7 +86,7 @@ impl From<usize> for AccountStorageStatus {
 }
 
 /// Persistent storage structure holding the accounts
-struct AccountStorageEntry {
+pub struct AccountStorageEntry {
     fork_id: Fork,
 
     /// storage holding the accounts

@@ -1,7 +1,7 @@
 mod accounts;
 mod accounts_db;
 mod accounts_index;
-mod append_vec;
+pub mod append_vec;
 pub mod bank;
 pub mod bank_client;
 mod blockhash_queue;
