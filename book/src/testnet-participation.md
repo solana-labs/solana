@@ -96,18 +96,18 @@ The following command will start a new validator node.
 
 If this is a `solana-install`-installation:
 ```bash
-$ fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com:8001
+$ fullnode-x.sh --public-address --no-stake --poll-for-new-genesis-block beta.testnet.solana.com:8001
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ solana-install run fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com:8001
+$ solana-install run fullnode-x.sh --public-address --no-stake --poll-for-new-genesis-block beta.testnet.solana.com:8001
 ```
 
 When not using `solana-install`:
 ```bash
-$ USE_INSTALL=1 ./multinode-demo/fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com:8001
+$ USE_INSTALL=1 ./multinode-demo/fullnode-x.sh --public-address --no-stake --poll-for-new-genesis-block beta.testnet.solana.com:8001
 ```
 
 Then from another console, confirm the IP address if your node is now visible in

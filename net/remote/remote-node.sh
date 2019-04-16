@@ -73,16 +73,12 @@ local|tar)
     fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
 
-    maybeNoLeaderRotation=
-    if ! $leaderRotation; then
-      maybeNoLeaderRotation="--only-bootstrap-stake"
-    fi
     maybePublicAddress=
     if $publicNetwork; then
       maybePublicAddress="--public-address"
     fi
 
-    ./multinode-demo/bootstrap-leader.sh $maybeNoLeaderRotation $maybePublicAddress > bootstrap-leader.log 2>&1 &
+    ./multinode-demo/bootstrap-leader.sh $maybePublicAddress > bootstrap-leader.log 2>&1 &
     ln -sTf bootstrap-leader.log fullnode.log
     ;;
   fullnode|blockstreamer)
@@ -95,7 +91,7 @@ local|tar)
 
     args=()
     if ! $leaderRotation; then
-      args+=("--only-bootstrap-stake")
+      args+=("--no-stake")
     fi
     if $publicNetwork; then
       args+=("--public-address")
