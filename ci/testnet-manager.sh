@@ -250,7 +250,7 @@ start() {
 
       # shellcheck disable=SC2068
       [[ -z $GCE_NODE_COUNT ]] || ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-        -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -x -P \
+        -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P \
         ${maybeReuseLedger:+-r} \
         ${maybeDelete:+-D} \
         ${EC2_NODE_COUNT:+-x}
