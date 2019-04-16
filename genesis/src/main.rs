@@ -14,6 +14,7 @@ use std::error;
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 43;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
+    let default_bootstrap_leader_lamports = &BOOTSTRAP_LEADER_LAMPORTS.to_string();
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
@@ -62,6 +63,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .required(true)
                 .help("Path to file containing the bootstrap leader's staking keypair"),
         )
+        .arg(
+            Arg::with_name("bootstrap_leader_lamports")
+                .long("bootstrap-leader-lamports")
+                .value_name("LAMPORTS")
+                .takes_value(true)
+                .default_value(default_bootstrap_leader_lamports)
+                .required(true)
+                .help("Number of lamports to assign to the bootstrap leader"),
+        )
         .get_matches();
 
     let bootstrap_leader_keypair_file = matches.value_of("bootstrap_leader_keypair_file").unwrap();
@@ -69,6 +79,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let ledger_path = matches.value_of("ledger_path").unwrap();
     let mint_keypair_file = matches.value_of("mint_keypair_file").unwrap();
     let lamports = value_t_or_exit!(matches, "lamports", u64);
+    let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
 
     let bootstrap_leader_keypair = read_keypair(bootstrap_leader_keypair_file)?;
     let bootstrap_vote_keypair = read_keypair(bootstrap_vote_keypair_file)?;
@@ -77,7 +88,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let (mut genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(
         lamports,
         &bootstrap_leader_keypair.pubkey(),
-        BOOTSTRAP_LEADER_LAMPORTS,
+        bootstrap_leader_lamports,
     );
     genesis_block.mint_id = mint_keypair.pubkey();
     genesis_block.bootstrap_leader_vote_account_id = bootstrap_vote_keypair.pubkey();
