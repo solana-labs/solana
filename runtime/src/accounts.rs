@@ -890,12 +890,12 @@ mod tests {
             Err(TransactionError::AccountNotFound)
         );
         assert_eq!(error_counters.account_not_found, 1);
-    } 
+    }
 
     #[test]
     fn test_accounts_empty_hash_internal_state() {
         let accounts = Accounts::new(None);
         assert_eq!(accounts.hash_internal_state(0), None);
     }
- 
+
 }

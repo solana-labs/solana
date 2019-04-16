@@ -622,8 +622,6 @@ mod tests {
         // original account
         let ancestors = vec![(0, 0), (1, 1)].into_iter().collect();
         assert_eq!(db0.load_slow(&ancestors, &key), Some(account1));
-
-        assert_eq!(db0.load_slow(&ancestors, &key), None);
         let ancestors = vec![(0, 0)].into_iter().collect();
         assert_eq!(db0.load_slow(&ancestors, &key), Some(account0));
     }
@@ -832,6 +830,5 @@ mod tests {
         accounts.purge_fork(0);
         assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_some());
     }
-
 
 }
