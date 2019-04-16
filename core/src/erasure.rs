@@ -28,15 +28,13 @@ pub fn encode(data: &[&[u8]], parity: &mut [&mut [u8]]) -> Result<()> {
 /// * `erasures` - list of indices in data where blocks should be recovered
 pub fn decode_blocks(
     blocks: &mut [&mut [u8]],
-    erasures: &[usize],
+    present: &[bool],
     data_count: usize,
     coding_count: usize,
 ) -> Result<()> {
     let rs = ReedSolomon::new(data_count, coding_count)?;
 
-    let present: Vec<_> = (0..blocks.len()).map(|i| !erasures.contains(&i)).collect();
-
-    rs.reconstruct(blocks, &present)?;
+    rs.reconstruct(blocks, present)?;
 
     Ok(())
 }
@@ -47,7 +45,7 @@ pub fn decode_blocks(
 /// return an error or garbage data
 pub fn reconstruct_blobs<B>(
     blobs: &mut [B],
-    erasures: &[usize],
+    present: &[bool],
     size: usize,
     block_start_idx: u64,
     slot: u64,
@@ -57,25 +55,25 @@ where
 {
     let mut blocks: Vec<&mut [u8]> = blobs.iter_mut().map(AsMut::as_mut).collect();
 
-    trace!(
-        "[reconstruct_blobs] erasures: {:?}, size: {}",
-        erasures,
-        size,
-    );
+    trace!("[reconstruct_blobs] present: {:?}, size: {}", present, size,);
 
     // Decode the blocks
-    decode_blocks(blocks.as_mut_slice(), &erasures, NUM_DATA, NUM_CODING)?;
+    decode_blocks(blocks.as_mut_slice(), &present, NUM_DATA, NUM_CODING)?;
+
     let mut recovered_data = vec![];
     let mut recovered_coding = vec![];
 
-    // Create the missing blobs from the reconstructed data
-    for i in erasures {
-        let n = *i as usize;
-        //let mut blob = Blob::new(blobs[n]);
+    let erasures = present
+        .iter()
+        .enumerate()
+        .filter_map(|(i, present)| if *present { None } else { Some(i) });
 
+    // Create the missing blobs from the reconstructed data
+    for n in erasures {
         let data_size;
         let idx;
         let first_byte;
+
         if n < NUM_DATA {
             let mut blob = Blob::new(&blocks[n]);
 
@@ -100,7 +98,7 @@ where
 
         trace!(
             "[reconstruct_blobs] erasures[{}] ({}) data_size: {} data[0]: {}",
-            *i,
+            n,
             idx,
             data_size,
             first_byte
@@ -285,24 +283,20 @@ pub mod test {
 
     #[test]
     fn test_coding() {
-        let num_data = 4;
-        let num_coding = 2;
+        const N_DATA: usize = 4;
+        const N_CODING: usize = 2;
 
-        let mut vs: Vec<Vec<u8>> = (0..num_data as u8)
-            .map(|i| (i..(16 + i)).collect())
-            .collect();
+        let mut vs: Vec<Vec<u8>> = (0..N_DATA as u8).map(|i| (i..(16 + i)).collect()).collect();
         let v_orig: Vec<u8> = vs[0].clone();
 
-        let mut coding_blocks: Vec<_> = (0..num_coding).map(|_| vec![0u8; 16]).collect();
+        let mut coding_blocks: Vec<_> = (0..N_CODING).map(|_| vec![0u8; 16]).collect();
 
-        {
-            let mut coding_blocks_slices: Vec<_> =
-                coding_blocks.iter_mut().map(Vec::as_mut_slice).collect();
-            let v_slices: Vec<_> = vs.iter().map(Vec::as_slice).collect();
+        let mut coding_blocks_slices: Vec<_> =
+            coding_blocks.iter_mut().map(Vec::as_mut_slice).collect();
+        let v_slices: Vec<_> = vs.iter().map(Vec::as_slice).collect();
 
-            encode(v_slices.as_slice(), coding_blocks_slices.as_mut_slice())
-                .expect("encoding must succeed");
-        }
+        encode(v_slices.as_slice(), coding_blocks_slices.as_mut_slice())
+            .expect("encoding must succeed");
 
         trace!("test_coding: coding blocks:");
         for b in &coding_blocks {
@@ -310,26 +304,21 @@ pub mod test {
         }
 
         let erasure: usize = 1;
-        let erasures = vec![erasure];
+        let present = &mut [true; N_DATA + N_CODING];
+        present[erasure] = false;
         let erased = vs[erasure].clone();
+
         // clear an entry
         vs[erasure as usize].copy_from_slice(&[0; 16]);
 
-        {
-            let mut blocks: Vec<_> = vs
-                .iter_mut()
-                .chain(coding_blocks.iter_mut())
-                .map(Vec::as_mut_slice)
-                .collect();
+        let mut blocks: Vec<_> = vs
+            .iter_mut()
+            .chain(coding_blocks.iter_mut())
+            .map(Vec::as_mut_slice)
+            .collect();
 
-            decode_blocks(
-                blocks.as_mut_slice(),
-                erasures.as_slice(),
-                num_data,
-                num_coding,
-            )
+        decode_blocks(blocks.as_mut_slice(), present, N_DATA, N_CODING)
             .expect("decoding must succeed");
-        }
 
         trace!("test_coding: vs:");
         for v in &vs {
@@ -346,9 +335,6 @@ pub mod test {
     ) {
         let size = coding_blobs[0].read().unwrap().size();
 
-        // toss one data and one coding
-        let erasures = vec![0, NUM_DATA];
-
         let mut blobs: Vec<SharedBlob> = Vec::with_capacity(ERASURE_SET_SIZE);
 
         blobs.push(SharedBlob::default()); // empty data, erasure at zero
@@ -356,13 +342,19 @@ pub mod test {
             // skip first blob
             blobs.push(blob.clone());
         }
+
         blobs.push(SharedBlob::default()); // empty coding, erasure at zero
         for blob in &coding_blobs[1..NUM_CODING] {
             blobs.push(blob.clone());
         }
 
+        // toss one data and one coding
+        let mut present = vec![true; blobs.len()];
+        present[0] = false;
+        present[NUM_DATA] = false;
+
         let (recovered_data, recovered_coding) =
-            reconstruct_shared_blobs(&mut blobs, &erasures, size, block_start_idx as u64, 0)
+            reconstruct_shared_blobs(&mut blobs, &present, size, block_start_idx as u64, 0)
                 .expect("reconstruction must succeed");
 
         assert_eq!(recovered_data.len(), 1);
@@ -536,7 +528,6 @@ pub mod test {
                             let erased_data = erasure_set.data[..3].to_vec();
 
                             let mut blobs = Vec::with_capacity(ERASURE_SET_SIZE);
-                            let erasures = vec![0, 1, 2, NUM_DATA];
 
                             blobs.push(SharedBlob::default());
                             blobs.push(SharedBlob::default());
@@ -552,9 +543,15 @@ pub mod test {
 
                             let size = erased_coding.read().unwrap().data_size() as usize;
 
+                            let mut present = vec![true; ERASURE_SET_SIZE];
+                            present[0] = false;
+                            present[1] = false;
+                            present[2] = false;
+                            present[NUM_DATA] = false;
+
                             reconstruct_shared_blobs(
                                 &mut blobs,
-                                &erasures,
+                                &present,
                                 size,
                                 erasure_set.set_index * NUM_DATA as u64,
                                 slot_model.slot,
@@ -675,7 +672,7 @@ pub mod test {
 
     fn reconstruct_shared_blobs(
         blobs: &mut [SharedBlob],
-        erasures: &[usize],
+        present: &[bool],
         size: usize,
         block_start_idx: u64,
         slot: u64,
@@ -697,7 +694,7 @@ pub mod test {
             })
             .collect();
 
-        reconstruct_blobs(&mut slices, erasures, size, block_start_idx, slot)
+        reconstruct_blobs(&mut slices, present, size, block_start_idx, slot)
     }
 
 }

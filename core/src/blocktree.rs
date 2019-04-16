@@ -1025,15 +1025,15 @@ impl Blocktree {
 
     /// Attempts recovery using erasure coding
     fn recover(&self, slot: u64, set_index: u64) -> Result<usize> {
-        use crate::erasure::{NUM_CODING, NUM_DATA};
+        use crate::erasure::{ERASURE_SET_SIZE, NUM_DATA};
 
         let erasure_meta = self.erasure_meta_cf.get((slot, set_index))?.unwrap();
 
         let start_idx = erasure_meta.start_index();
         let (data_end_idx, coding_end_idx) = erasure_meta.end_indexes();
 
-        let mut erasures = Vec::with_capacity(NUM_CODING + 1);
-        let (mut data, mut coding) = (vec![], vec![]);
+        let present = &mut [true; ERASURE_SET_SIZE];
+        let mut blobs = Vec::with_capacity(ERASURE_SET_SIZE);
         let mut size = 0;
 
         for i in start_idx..coding_end_idx {
@@ -1049,17 +1049,19 @@ impl Blocktree {
                     size = blob_bytes.len();
                 }
 
-                coding.push(blob_bytes);
+                blobs.push(blob_bytes);
             } else {
-                let set_relative_idx = (i - start_idx) + NUM_DATA as u64;
-                coding.push(vec![0; size]);
-                erasures.push(set_relative_idx as usize);
+                let set_relative_idx = (i - start_idx) as usize + NUM_DATA;
+                blobs.push(vec![0; size]);
+                present[set_relative_idx] = false;
             }
         }
 
         assert_ne!(size, 0);
 
         for i in start_idx..data_end_idx {
+            let set_relative_idx = (i - start_idx) as usize;
+
             if erasure_meta.is_data_present(i) {
                 let mut blob_bytes = self
                     .data_cf
@@ -1069,19 +1071,18 @@ impl Blocktree {
                 // If data is too short, extend it with zeroes
                 blob_bytes.resize(size, 0u8);
 
-                data.push(blob_bytes);
+                blobs.insert(set_relative_idx, blob_bytes);
             } else {
-                let set_relative_index = i - start_idx;
-                data.push(vec![0u8; size]);
+                blobs.insert(set_relative_idx, vec![0u8; size]);
                 // data erasures must come before any coding erasures if present
-                erasures.insert(0, set_relative_index as usize);
+                present[set_relative_idx] = false;
             }
         }
 
-        let mut slices: Vec<_> = data.iter_mut().chain(coding.iter_mut()).collect();
-
         let (recovered_data, recovered_coding) =
-            erasure::reconstruct_blobs(&mut slices, &erasures, size, start_idx, slot)?;
+            erasure::reconstruct_blobs(&mut blobs, present, size, start_idx, slot)?;
+
+        let amount_recovered = recovered_data.len() + recovered_coding.len();
 
         trace!(
             "[recover] reconstruction OK slot: {}, indexes: [{},{})",
@@ -1096,7 +1097,7 @@ impl Blocktree {
             self.put_coding_blob_bytes_raw(slot, blob.index(), &blob.data[..])?;
         }
 
-        Ok(erasures.len() - 1)
+        Ok(amount_recovered)
     }
 
     /// Returns the next consumed index and the number of ticks in the new consumed
