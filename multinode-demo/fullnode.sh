@@ -41,7 +41,7 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = --init-complete-file ]]; then
     extra_fullnode_args+=("$1" "$2")
     shift 2
-  elif [[ $1 = --only-bootstrap-stake ]]; then
+  elif [[ $1 = --no-stake ]]; then
     setup_stakes=0
     shift
   elif [[ $1 = --public-address ]]; then
