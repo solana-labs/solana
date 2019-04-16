@@ -1,5 +1,5 @@
 use crate::bank::Bank;
-use solana_sdk::client::{AsyncClient, SyncClient};
+use solana_sdk::client::{AsyncClient, Client, SyncClient};
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::message::Message;
@@ -10,17 +10,24 @@ use solana_sdk::system_instruction;
 use solana_sdk::transaction::{self, Transaction};
 use solana_sdk::transport::Result;
 use std::io;
+use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
+use std::sync::Arc;
+use std::thread::{sleep, Builder};
+use std::time::Duration;
 
+#[derive(Clone)]
 pub struct BankClient {
-    bank: Bank,
+    bank: Arc<Bank>,
+    transaction_sender: Sender<Transaction>,
 }
+
+impl Client for BankClient {}
 
 impl AsyncClient for BankClient {
     fn async_send_transaction(&self, transaction: Transaction) -> io::Result<Signature> {
-        // Ignore the result. Client must use get_signature_status() instead.
-        let _ = self.bank.process_transaction(&transaction);
-
-        Ok(transaction.signatures.get(0).cloned().unwrap_or_default())
+        let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
+        self.transaction_sender.send(transaction).unwrap();
+        Ok(signature)
     }
 
     fn async_send_message(
@@ -104,8 +111,40 @@ impl SyncClient for BankClient {
 }
 
 impl BankClient {
+    fn run(bank: &Bank, transaction_receiver: Receiver<Transaction>) {
+        loop {
+            let mut transactions = vec![];
+            loop {
+                match transaction_receiver.try_recv() {
+                    Ok(transaction) => {
+                        transactions.push(transaction);
+                    }
+                    Err(TryRecvError::Empty) => {
+                        break;
+                    }
+                    Err(TryRecvError::Disconnected) => {
+                        return;
+                    }
+                }
+            }
+            let _ = bank.process_transactions(&transactions);
+            sleep(Duration::from_millis(1000));
+        }
+    }
+
     pub fn new(bank: Bank) -> Self {
-        Self { bank }
+        let bank = Arc::new(bank);
+        let (transaction_sender, transaction_receiver) = channel();
+        let thread_bank = bank.clone();
+        let bank = bank.clone();
+        Builder::new()
+            .name("solana-broadcaster".to_string())
+            .spawn(move || Self::run(&thread_bank, transaction_receiver))
+            .unwrap();
+        Self {
+            bank: bank,
+            transaction_sender,
+        }
     }
 }
 
@@ -135,5 +174,25 @@ mod tests {
         let message = Message::new(vec![move_instruction]);
         bank_client.send_message(&doe_keypairs, message).unwrap();
         assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 42);
+    }
+
+    fn do_work<F, T>(client_ctor: F)
+    where
+        F: Fn() -> T,
+        F: 'static + std::marker::Sync + std::marker::Send,
+        T: Client,
+    {
+        let client = client_ctor();
+        println!("tx count: {:?}", client.get_transaction_count());
+    }
+
+    #[test]
+    fn test_bank_client_pass_client_in_closure() {
+        solana_logger::setup();
+        let (genesis_block, root_keypair) = GenesisBlock::new(100_000_000_000_000);
+        let bank = Bank::new(&genesis_block);
+        let bank_client = BankClient::new(bank);
+        let client_ctor = move || -> BankClient { bank_client.clone() };
+        do_work(client_ctor);
     }
 }
