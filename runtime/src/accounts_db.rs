@@ -395,11 +395,6 @@ mod tests {
     use super::*;
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::instruction::CompiledInstruction;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::transaction::Result;
-    use solana_sdk::transaction::{Transaction, TransactionError};
 
     fn cleanup_paths(paths: &str) {
         let paths = get_paths_vec(&paths);
@@ -838,32 +833,5 @@ mod tests {
         assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_some());
     }
 
-    #[test]
-    fn test_accounts_empty_hash_internal_state() {
-        let paths = get_tmp_accounts_path!();
-        let accounts = AccountsDB::new(&paths.paths);
-        assert_eq!(accounts.hash_internal_state(0), None);
-    }
 
-    #[test]
-    fn test_accountsdb_account_not_found() {
-        let paths = get_tmp_accounts_path!();
-        let accounts = AccountsDB::new(&paths.paths);
-        let mut error_counters = ErrorCounters::default();
-        let ancestors = vec![(0, 0)].into_iter().collect();
-
-        let accounts_index = accounts.accounts_index.read().unwrap();
-        let storage = accounts.storage.read().unwrap();
-        assert_eq!(
-            AccountsDB::load_executable_accounts(
-                &storage,
-                &ancestors,
-                &accounts_index,
-                &Pubkey::new_rand(),
-                &mut error_counters
-            ),
-            Err(TransactionError::AccountNotFound)
-        );
-        assert_eq!(error_counters.account_not_found, 1);
-    }
 }

@@ -441,19 +441,11 @@ mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
 
     use super::*;
-    use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::CompiledInstruction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
-
-    fn cleanup_paths(paths: &str) {
-        let paths = get_paths_vec(&paths);
-        paths.iter().for_each(|p| {
-            let _ignored = remove_dir_all(p);
-        });
-    }
 
     fn load_accounts_with_fee(
         tx: Transaction,
@@ -878,4 +870,32 @@ mod tests {
         let loaded = accounts.load_by_program(0, &Pubkey::new(&[4; 32]));
         assert_eq!(loaded, vec![]);
     }
+
+    #[test]
+    fn test_accounts_account_not_found() {
+        let accounts = Accounts::new(None);
+        let mut error_counters = ErrorCounters::default();
+        let ancestors = vec![(0, 0)].into_iter().collect();
+
+        let accounts_index = accounts.accounts_db.accounts_index.read().unwrap();
+        let storage = accounts.accounts_db.storage.read().unwrap();
+        assert_eq!(
+            Accounts::load_executable_accounts(
+                &storage,
+                &ancestors,
+                &accounts_index,
+                &Pubkey::new_rand(),
+                &mut error_counters
+            ),
+            Err(TransactionError::AccountNotFound)
+        );
+        assert_eq!(error_counters.account_not_found, 1);
+    } 
+
+    #[test]
+    fn test_accounts_empty_hash_internal_state() {
+        let accounts = Accounts::new(None);
+        assert_eq!(accounts.hash_internal_state(0), None);
+    }
+ 
 }
