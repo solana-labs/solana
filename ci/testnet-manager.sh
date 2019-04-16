@@ -241,19 +241,19 @@ start() {
         EC2_ZONE_ARGS+=("-z $val")
       done
 
-      [[ -n $EC2_NODE_COUNT ]] || EC2_NODE_COUNT=60
-      [[ -n $GCE_NODE_COUNT ]] || GCE_NODE_COUNT=40
+      # shellcheck disable=SC2068
+      [[ -z $EC2_NODE_COUNT ]] || ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
+        -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
+        ${maybeReuseLedger:+-r} \
+        ${maybeDelete:+-D} \
+        ${GCE_NODE_COUNT:+-s}
 
       # shellcheck disable=SC2068
-      ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
-        -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -s -u -P -a eipalloc-0f286cf8a0771ce35 \
+      [[ -z $GCE_NODE_COUNT ]] || ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
+        -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P \
         ${maybeReuseLedger:+-r} \
-        ${maybeDelete:+-D}
-      # shellcheck disable=SC2068
-      ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-        -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -x -P \
-        ${maybeReuseLedger:+-r} \
-        ${maybeDelete:+-D}
+        ${maybeDelete:+-D} \
+        ${EC2_NODE_COUNT:+-x}
     )
     ;;
   testnet-beta-perf)
