@@ -177,6 +177,11 @@ impl AppendVec {
             next,
         ))
     }
+    pub fn get_account_test(&self, offset: usize) -> Option<(StorageMeta, Account)> {
+        let mut stored = self.get_account(offset)?;
+        let meta = stored.0.meta.clone();
+        Some((meta, stored.0.clone_account()))
+    }
 
     pub fn accounts<'a>(&'a self, mut start: usize) -> Vec<StoredAccount<'a>> {
         let mut accounts = vec![];
@@ -263,7 +268,7 @@ pub mod tests {
         let av = AppendVec::new(&path.path, true, 1024 * 1024);
         let account = create_test_account(0);
         let index = av.append_account_test(&account).unwrap();
-        assert_eq!(*av.get_account(index), account);
+        assert_eq!(av.get_account_test(index).unwrap(), account);
     }
 
     #[test]
@@ -272,11 +277,11 @@ pub mod tests {
         let av = AppendVec::new(&path.path, true, 1024 * 1024);
         let account = create_test_account(5);
         let index = av.append_account_test(&account).unwrap();
-        assert_eq!(*av.get_account(index), account);
+        assert_eq!(av.get_account_test(index).unwrap(), account);
         let account1 = create_test_account(6);
         let index1 = av.append_account_test(&account1).unwrap();
-        assert_eq!(*av.get_account(index), account);
-        assert_eq!(*av.get_account(index1), account1);
+        assert_eq!(av.get_account_test(index).unwrap(), account);
+        assert_eq!(av.get_account_test(index1).unwrap(), account1);
     }
 
     #[test]
@@ -289,7 +294,7 @@ pub mod tests {
         for sample in 0..size {
             let account = create_test_account(sample);
             let pos = av.append_account_test(&account).unwrap();
-            assert_eq!(*av.get_account(pos), account);
+            assert_eq!(av.get_account_test(pos).unwrap(), account);
             indexes.push(pos)
         }
         trace!("append time: {} ms", duration_as_ms(&now.elapsed()),);
@@ -298,18 +303,19 @@ pub mod tests {
         for _ in 0..size {
             let sample = thread_rng().gen_range(0, indexes.len());
             let account = create_test_account(sample);
-            assert_eq!(*av.get_account(indexes[sample]), account);
+            assert_eq!(av.get_account_test(indexes[sample]).unwrap(), account);
         }
         trace!("random read time: {} ms", duration_as_ms(&now.elapsed()),);
 
         let now = Instant::now();
         assert_eq!(indexes.len(), size);
         assert_eq!(indexes[0], 0);
-        let accounts = av.accounts(indexes[0]);
+        let mut accounts = av.accounts(indexes[0]);
         assert_eq!(accounts.len(), size);
-        for (sample, v) in accounts.iter().enumerate() {
+        for (sample, v) in accounts.iter_mut().enumerate() {
             let account = create_test_account(sample);
-            assert_eq!(**v, account)
+            let recovered = v.clone_account();
+            assert_eq!(recovered, account.1)
         }
         trace!(
             "sequential read time: {} ms",
