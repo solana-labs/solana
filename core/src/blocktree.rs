@@ -79,6 +79,7 @@ pub struct Blocktree {
     erasure_cf: LedgerColumn<cf::Coding>,
     erasure_meta_cf: LedgerColumn<cf::ErasureMeta>,
     orphans_cf: LedgerColumn<cf::Orphans>,
+    session: Arc<erasure::Session>,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
     pub root_slot: RwLock<u64>,
 }
@@ -120,6 +121,9 @@ impl Blocktree {
         // known parent
         let orphans_cf = LedgerColumn::new(&db);
 
+        // setup erasure
+        let session = Arc::new(erasure::Session::default());
+
         Ok(Blocktree {
             db,
             meta_cf,
@@ -127,6 +131,7 @@ impl Blocktree {
             erasure_cf,
             erasure_meta_cf,
             orphans_cf,
+            session,
             new_blobs_signals: vec![],
             root_slot: RwLock::new(0),
         })
@@ -1079,8 +1084,9 @@ impl Blocktree {
             }
         }
 
-        let (recovered_data, recovered_coding) =
-            erasure::reconstruct_blobs(&mut blobs, present, size, start_idx, slot)?;
+        let (recovered_data, recovered_coding) = self
+            .session
+            .reconstruct_blobs(&mut blobs, present, size, start_idx, slot)?;
 
         let amount_recovered = recovered_data.len() + recovered_coding.len();
 
@@ -2542,7 +2548,7 @@ pub mod tests {
     mod erasure {
         use super::*;
         use crate::erasure::test::{generate_ledger_model, ErasureSpec, SlotSpec};
-        use crate::erasure::{CodingGenerator, NUM_CODING, NUM_DATA};
+        use crate::erasure::{NUM_CODING, NUM_DATA};
         use rand::{thread_rng, Rng};
         use std::sync::RwLock;
 
@@ -2603,8 +2609,10 @@ pub mod tests {
             assert_eq!(erasure_meta.data, 0x00FF);
             assert_eq!(erasure_meta.coding, 0x0);
 
-            let mut coding_generator = CodingGenerator::new();
-            let coding_blobs = coding_generator.next(&shared_blobs[..NUM_DATA]);
+            let coding_blobs = blocktree
+                .session
+                .generate_coding_shared(&shared_blobs[..NUM_DATA])
+                .unwrap();
 
             for shared_coding_blob in coding_blobs {
                 let blob = shared_coding_blob.read().unwrap();
@@ -2639,11 +2647,12 @@ pub mod tests {
                 .map(Blob::into)
                 .collect::<Vec<_>>();
 
-            let mut coding_generator = CodingGenerator::new();
-
             for (set_index, data_blobs) in data_blobs.chunks_exact(NUM_DATA).enumerate() {
                 let focused_index = (set_index + 1) * NUM_DATA - 1;
-                let coding_blobs = coding_generator.next(&data_blobs);
+                let coding_blobs = blocktree
+                    .session
+                    .generate_coding_shared(&data_blobs)
+                    .unwrap();
                 assert_eq!(coding_blobs.len(), NUM_CODING);
 
                 let deleted_data = data_blobs[NUM_DATA - 1].clone();
