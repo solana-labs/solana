@@ -16,16 +16,44 @@ macro_rules! align_up {
     };
 }
 
-//TODO: This structure should contain references
-/// StoredAccount contains enough context to recover the index from storage itself
+/// StorageMeta contains enough context to recover the index from storage itself
 #[derive(Clone, PartialEq, Debug)]
-pub struct StoredAccount {
+pub struct StorageMeta {
     /// global write version
     pub write_version: u64,
     /// key for the account
     pub pubkey: Pubkey,
+    pub data_len: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default, Eq, PartialEq)]
+pub struct AccountBalance {
+    /// lamports in the account
+    pub lamports: u64,
+    /// the program that owns this account. If executable, the program that loads this account.
+    pub owner: Pubkey,
+    /// this account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+}
+
+/// References to Memory Mapped memory
+/// The Account is stored separately from its data, so getting the actual account requires a clone
+pub struct StoredAccount<'a> {
+    pub meta: &'a StorageMeta,
     /// account data
-    pub account: Account,
+    pub balance: &'a AccountBalance,
+    pub data: &'a [u8],
+}
+
+impl<'a> StoredAccount<'a> {
+    pub fn clone_account(&self) -> Account {
+        Account {
+            lamports: self.balance.lamports,
+            owner: self.balance.owner,
+            executable: self.balance.executable,
+            data: self.data.to_vec(),
+        }
+    }
 }
 
 pub struct AppendVec {
@@ -81,17 +109,20 @@ impl AppendVec {
         self.file_size
     }
 
-    // The reason for the `mut` is to allow the account data pointer to be fixed up after
-    // the structure is loaded
-    #[allow(clippy::mut_from_ref)]
-    fn get_slice(&self, offset: usize, size: usize) -> &mut [u8] {
+    // The reason for the `mut` is to allow Vec::from_raw_parts
+    fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
         let len = self.len();
-        assert!(len >= offset + size);
-        let data = &self.map[offset..offset + size];
-        unsafe {
-            let dst = data.as_ptr() as *mut u8;
-            std::slice::from_raw_parts_mut(dst, size)
+        if len < offset + size {
+            return None;
         }
+        let data = &self.map[offset..offset + size];
+        //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
+        //crash on some architectures.
+        let next = align_up!(offset + size, mem::size_of::<u64>());
+        Some((
+            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, size) },
+            next,
+        ))
     }
 
     fn append_ptr(&self, offset: &mut usize, src: *const u8, len: usize) {
@@ -99,6 +130,7 @@ impl AppendVec {
         //crash on some architectures.
         let pos = align_up!(*offset as usize, mem::size_of::<u64>());
         let data = &self.map[pos..(pos + len)];
+        //this mut append is safe because only 1 thread can append at a time
         unsafe {
             let dst = data.as_ptr() as *mut u8;
             std::ptr::copy(src, dst, len);
@@ -132,71 +164,64 @@ impl AppendVec {
         Some(pos)
     }
 
-    //TODO: Make this safer
-    //StoredAccount should be a struct of references with the same lifetime as &self
-    //The structure should have a method to clone the account out
-    #[allow(clippy::transmute_ptr_to_ptr)]
-    pub fn get_account(&self, offset: usize) -> &StoredAccount {
-        let account: *mut StoredAccount = {
-            let data = self.get_slice(offset, mem::size_of::<StoredAccount>());
-            unsafe { std::mem::transmute::<*const u8, *mut StoredAccount>(data.as_ptr()) }
-        };
-        //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
-        //crash on some architectures.
-        let data_at = align_up!(
-            offset + mem::size_of::<StoredAccount>(),
-            mem::size_of::<u64>()
-        );
-        let account_ref: &mut StoredAccount = unsafe { &mut *account };
-        let data = self.get_slice(data_at, account_ref.account.data.len());
-        unsafe {
-            let mut new_data = Vec::from_raw_parts(data.as_mut_ptr(), data.len(), data.len());
-            std::mem::swap(&mut account_ref.account.data, &mut new_data);
-            std::mem::forget(new_data);
-        };
-        account_ref
+    fn get_type<T>(&self, offset: usize) -> Option<(&T, usize)> {
+        let (data, next) = self.get_slice(offset, mem::size_of::<T>())?;
+        let ptr: *const T = data.as_ptr() as *const T;
+        Some((unsafe { &*ptr }, next))
     }
 
-    pub fn accounts(&self, mut start: usize) -> Vec<&StoredAccount> {
+    pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccount<'a>, usize)> {
+        let (meta, next): (&'a StorageMeta, _) = self.get_type(offset)?;
+        let (balance, next): (&'a AccountBalance, _) = self.get_type(next)?;
+        let (data, next) = self.get_slice(next, meta.data_len as usize)?;
+        Some((
+            StoredAccount {
+                meta,
+                balance,
+                data,
+            },
+            next,
+        ))
+    }
+    pub fn get_account_test(&self, offset: usize) -> Option<(StorageMeta, Account)> {
+        let stored = self.get_account(offset)?;
+        let meta = stored.0.meta.clone();
+        Some((meta, stored.0.clone_account()))
+    }
+
+    pub fn accounts<'a>(&'a self, mut start: usize) -> Vec<StoredAccount<'a>> {
         let mut accounts = vec![];
-        loop {
-            //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
-            //crash on some architectures.
-            let end = align_up!(
-                start + mem::size_of::<StoredAccount>(),
-                mem::size_of::<u64>()
-            );
-            if end > self.len() {
-                break;
-            }
-            let first = self.get_account(start);
-            accounts.push(first);
-            //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
-            //crash on some architectures.
-            let data_at = align_up!(
-                start + mem::size_of::<StoredAccount>(),
-                mem::size_of::<u64>()
-            );
-            let next = align_up!(data_at + first.account.data.len(), mem::size_of::<u64>());
+        while let Some((account, next)) = self.get_account(start) {
+            accounts.push(account);
             start = next;
         }
         accounts
     }
 
-    pub fn append_account(&self, account: &StoredAccount) -> Option<usize> {
-        let acc_ptr = account as *const StoredAccount;
-        let data_len = account.account.data.len();
-        let data_ptr = account.account.data.as_ptr();
+    pub fn append_account(&self, storage_meta: StorageMeta, account: &Account) -> Option<usize> {
+        let meta_ptr = &storage_meta as *const StorageMeta;
+        let balance = AccountBalance {
+            lamports: account.lamports,
+            owner: account.owner,
+            executable: account.executable,
+        };
+        let balance_ptr = &balance as *const AccountBalance;
+        let data_len = account.data.len();
+        let data_ptr = account.data.as_ptr();
         let ptrs = [
-            (acc_ptr as *const u8, mem::size_of::<StoredAccount>()),
+            (meta_ptr as *const u8, mem::size_of::<StorageMeta>()),
+            (balance_ptr as *const u8, mem::size_of::<AccountBalance>()),
             (data_ptr, data_len),
         ];
         self.append_ptrs(&ptrs)
     }
+    pub fn append_account_test(&self, data: &(StorageMeta, Account)) -> Option<usize> {
+        self.append_account(data.0.clone(), &data.1)
+    }
 }
 
 pub mod test_utils {
-    use super::StoredAccount;
+    use super::StorageMeta;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
@@ -226,15 +251,16 @@ pub mod test_utils {
         TempFile { path: buf }
     }
 
-    pub fn create_test_account(sample: usize) -> StoredAccount {
+    pub fn create_test_account(sample: usize) -> (StorageMeta, Account) {
         let data_len = sample % 256;
         let mut account = Account::new(sample as u64, 0, &Pubkey::default());
         account.data = (0..data_len).map(|_| data_len as u8).collect();
-        StoredAccount {
+        let storage_meta = StorageMeta {
             write_version: 0,
             pubkey: Pubkey::default(),
-            account,
-        }
+            data_len: data_len as u64,
+        };
+        (storage_meta, account)
     }
 }
 
@@ -248,12 +274,12 @@ pub mod tests {
     use std::time::Instant;
 
     #[test]
-    fn test_append_vec() {
+    fn test_append_vec_one() {
         let path = get_append_vec_path("test_append");
         let av = AppendVec::new(&path.path, true, 1024 * 1024);
         let account = create_test_account(0);
-        let index = av.append_account(&account).unwrap();
-        assert_eq!(*av.get_account(index), account);
+        let index = av.append_account_test(&account).unwrap();
+        assert_eq!(av.get_account_test(index).unwrap(), account);
     }
 
     #[test]
@@ -261,12 +287,12 @@ pub mod tests {
         let path = get_append_vec_path("test_append_data");
         let av = AppendVec::new(&path.path, true, 1024 * 1024);
         let account = create_test_account(5);
-        let index = av.append_account(&account).unwrap();
-        assert_eq!(*av.get_account(index), account);
+        let index = av.append_account_test(&account).unwrap();
+        assert_eq!(av.get_account_test(index).unwrap(), account);
         let account1 = create_test_account(6);
-        let index1 = av.append_account(&account1).unwrap();
-        assert_eq!(*av.get_account(index), account);
-        assert_eq!(*av.get_account(index1), account1);
+        let index1 = av.append_account_test(&account1).unwrap();
+        assert_eq!(av.get_account_test(index).unwrap(), account);
+        assert_eq!(av.get_account_test(index1).unwrap(), account1);
     }
 
     #[test]
@@ -278,8 +304,8 @@ pub mod tests {
         let now = Instant::now();
         for sample in 0..size {
             let account = create_test_account(sample);
-            let pos = av.append_account(&account).unwrap();
-            assert_eq!(*av.get_account(pos), account);
+            let pos = av.append_account_test(&account).unwrap();
+            assert_eq!(av.get_account_test(pos).unwrap(), account);
             indexes.push(pos)
         }
         trace!("append time: {} ms", duration_as_ms(&now.elapsed()),);
@@ -288,18 +314,19 @@ pub mod tests {
         for _ in 0..size {
             let sample = thread_rng().gen_range(0, indexes.len());
             let account = create_test_account(sample);
-            assert_eq!(*av.get_account(indexes[sample]), account);
+            assert_eq!(av.get_account_test(indexes[sample]).unwrap(), account);
         }
         trace!("random read time: {} ms", duration_as_ms(&now.elapsed()),);
 
         let now = Instant::now();
         assert_eq!(indexes.len(), size);
         assert_eq!(indexes[0], 0);
-        let accounts = av.accounts(indexes[0]);
+        let mut accounts = av.accounts(indexes[0]);
         assert_eq!(accounts.len(), size);
-        for (sample, v) in accounts.iter().enumerate() {
+        for (sample, v) in accounts.iter_mut().enumerate() {
             let account = create_test_account(sample);
-            assert_eq!(**v, account)
+            let recovered = v.clone_account();
+            assert_eq!(recovered, account.1)
         }
         trace!(
             "sequential read time: {} ms",

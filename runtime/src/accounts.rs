@@ -19,7 +19,7 @@
 //! commit for each fork entry would be indexed.
 
 use crate::accounts_index::{AccountsIndex, Fork};
-use crate::append_vec::{AppendVec, StoredAccount};
+use crate::append_vec::{AppendVec, StorageMeta, StoredAccount};
 use crate::message_processor::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
@@ -29,7 +29,7 @@ use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
-use solana_sdk::hash::{hash, Hash, Hasher};
+use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -278,14 +278,21 @@ impl AccountsDB {
             .collect()
     }
 
+    fn hash_account(stored_account: &StoredAccount) -> Hash {
+        let mut hasher = Hasher::default();
+        hasher.hash(&serialize(&stored_account.balance).unwrap());
+        hasher.hash(stored_account.data);
+        hasher.result()
+    }
+
     pub fn hash_internal_state(&self, fork_id: Fork) -> Option<Hash> {
         let accumulator: Vec<Vec<(Pubkey, u64, Hash)>> = self.scan_account_storage(
             fork_id,
             |stored_account: &StoredAccount, accum: &mut Vec<(Pubkey, u64, Hash)>| {
                 accum.push((
-                    stored_account.pubkey,
-                    stored_account.write_version,
-                    hash(&serialize(&stored_account.account).unwrap()),
+                    stored_account.meta.pubkey,
+                    stored_account.meta.write_version,
+                    Self::hash_account(stored_account),
                 ));
             },
         );
@@ -313,7 +320,7 @@ impl AccountsDB {
         //TODO: thread this as a ref
         storage
             .get(info.id)
-            .map(|store| store.accounts.get_account(info.offset).account.clone())
+            .and_then(|store| Some(store.accounts.get_account(info.offset)?.0.clone_account()))
     }
 
     fn load_tx_accounts(
@@ -530,13 +537,12 @@ impl AccountsDB {
             {
                 let accounts = &self.storage.read().unwrap()[id];
                 let write_version = self.write_version.fetch_add(1, Ordering::Relaxed) as u64;
-                let stored_account = StoredAccount {
+                let meta = StorageMeta {
                     write_version,
                     pubkey: *pubkey,
-                    //TODO: fix all this copy
-                    account: account.clone(),
+                    data_len: account.data.len() as u64,
                 };
-                result = accounts.accounts.append_account(&stored_account);
+                result = accounts.accounts.append_account(meta, account);
                 accounts.add_account();
             }
             if let Some(val) = result {
@@ -691,21 +697,24 @@ impl Accounts {
     }
 
     pub fn load_by_program(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
-        let accumulator: Vec<Vec<StoredAccount>> = self.accounts_db.scan_account_storage(
+        let accumulator: Vec<Vec<(Pubkey, u64, Account)>> = self.accounts_db.scan_account_storage(
             fork,
-            |stored_account: &StoredAccount, accum: &mut Vec<StoredAccount>| {
-                if stored_account.account.owner == *program_id {
-                    accum.push(stored_account.clone())
+            |stored_account: &StoredAccount, accum: &mut Vec<(Pubkey, u64, Account)>| {
+                if stored_account.balance.owner == *program_id {
+                    let val = (
+                        stored_account.meta.pubkey,
+                        stored_account.meta.write_version,
+                        stored_account.clone_account(),
+                    );
+                    accum.push(val)
                 }
             },
         );
-        let mut versions: Vec<StoredAccount> = accumulator.into_iter().flat_map(|x| x).collect();
-        versions.sort_by_key(|s| (s.pubkey, (s.write_version as i64).neg()));
-        versions.dedup_by_key(|s| s.pubkey);
-        versions
-            .into_iter()
-            .map(|s| (s.pubkey, s.account))
-            .collect()
+        let mut versions: Vec<(Pubkey, u64, Account)> =
+            accumulator.into_iter().flat_map(|x| x).collect();
+        versions.sort_by_key(|s| (s.0, (s.1 as i64).neg()));
+        versions.dedup_by_key(|s| s.0);
+        versions.into_iter().map(|s| (s.0, s.2)).collect()
     }
 
     /// Slow because lock is held for 1 operation instead of many
