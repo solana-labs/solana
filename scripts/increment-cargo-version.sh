@@ -89,7 +89,7 @@ for Cargo_toml in "${Cargo_tomls[@]}"; do
     (
       set -x
       sed -i "$Cargo_toml" -e "
-        s/^$crate = .*path = \"\([^\"]*\)\".*\$/$crate = \{ path = \"\1\", version = \"$newVersion\" \}/
+        s/^$crate = { *path *= *\"\([^\"]*\)\" *, *version *= *\"[^\"]*\"\(.*\)} *\$/$crate = \{ path = \"\1\", version = \"$newVersion\"\2 \}/
       "
     )
   done
