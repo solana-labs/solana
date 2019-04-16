@@ -13,16 +13,16 @@ clap = "2.33.0"
 serde_json = "1.0.39"
 solana = { path = "../core", version = "0.14.0" }
 solana-sdk = { path = "../sdk", version = "0.14.0" }
-solana-budget-api = { path = "../programs/budget_api", version = "0.14.0" }
-solana-storage-api = { path = "../programs/storage_api", version = "0.14.0" }
-solana-token-api = { path = "../programs/token_api", version = "0.14.0" }
-solana-config-api = { path = "../programs/config_api", version = "0.14.0" }
-solana-exchange-api = { path = "../programs/exchange_api", version = "0.14.0" }
+solana-budget-api = { path = "../instruction-processors/budget_api", version = "0.14.0" }
+solana-storage-api = { path = "../instruction-processors/storage_api", version = "0.14.0" }
+solana-token-api = { path = "../instruction-processors/token_api", version = "0.14.0" }
+solana-config-api = { path = "../instruction-processors/config_api", version = "0.14.0" }
+solana-exchange-api = { path = "../instruction-processors/exchange_api", version = "0.14.0" }
 
 
 [dev-dependencies]
 hashbrown = "0.2.2"
-solana-vote-api = { path = "../programs/vote_api", version = "0.14.0" }
+solana-vote-api = { path = "../instruction-processors/vote_api", version = "0.14.0" }
 
 [features]
 cuda = ["solana/cuda"]
