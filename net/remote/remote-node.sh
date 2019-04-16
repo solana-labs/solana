@@ -15,6 +15,14 @@ leaderRotation="$8"
 set +x
 export RUST_LOG
 
+# Use a very large stake (relative to the default multinode-demo/ stake of 43)
+# for the testnet fullnodes setup by net/.  This make it less likely that
+# low-staked ephemeral validator a random user may attach to testnet will cause
+# trouble
+#
+# Ref: https://github.com/solana-labs/solana/issues/3798
+stake=424243
+
 missing() {
   echo "Error: $1 not specified"
   exit 1
@@ -69,7 +77,7 @@ local|tar)
     fi
     set -x
     if [[ $skipSetup != true ]]; then
-      ./multinode-demo/setup.sh -t bootstrap-leader
+      ./multinode-demo/setup.sh -t bootstrap-leader -b $stake
     fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
 
@@ -90,9 +98,6 @@ local|tar)
     fi
 
     args=()
-    if ! $leaderRotation; then
-      args+=("--no-stake")
-    fi
     if $publicNetwork; then
       args+=("--public-address")
     fi
@@ -100,7 +105,14 @@ local|tar)
       args+=(
         --blockstream /tmp/solana-blockstream.sock
         --no-voting
+        --stake 0
       )
+    else
+      if $leaderRotation; then
+        args+=("--stake" "$stake")
+      else
+        args+=("--stake" 0)
+      fi
     fi
 
     args+=(

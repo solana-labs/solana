@@ -29,8 +29,10 @@ EOF
 
 lamports=1000000000
 bootstrap_leader=true
+bootstrap_leader_lamports=
+
 fullnode=true
-while getopts "h?n:lpt:" opt; do
+while getopts "h?n:b:lpt:" opt; do
   case $opt in
   h|\?)
     usage
@@ -38,6 +40,9 @@ while getopts "h?n:lpt:" opt; do
     ;;
   n)
     lamports="$OPTARG"
+    ;;
+  b)
+    bootstrap_leader_lamports="$OPTARG"
     ;;
   t)
     node_type="$OPTARG"
@@ -77,12 +82,20 @@ if $bootstrap_leader; then
     $solana_keygen -o "$SOLANA_CONFIG_DIR"/mint-id.json
     $solana_keygen -o "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json
     $solana_keygen -o "$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-id.json
-    $solana_genesis \
-      --bootstrap-leader-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json \
-      --bootstrap-vote-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-id.json \
-      --ledger "$SOLANA_RSYNC_CONFIG_DIR"/ledger \
-      --mint "$SOLANA_CONFIG_DIR"/mint-id.json \
+
+    args=(
+      --bootstrap-leader-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json
+      --bootstrap-vote-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-id.json
+      --ledger "$SOLANA_RSYNC_CONFIG_DIR"/ledger
+      --mint "$SOLANA_CONFIG_DIR"/mint-id.json
       --lamports "$lamports"
+    )
+
+    if [[ -n $bootstrap_leader_lamports ]]; then
+      args+=(--bootstrap-leader-lamports "$bootstrap_leader_lamports")
+    fi
+
+    $solana_genesis "${args[@]}"
     cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
   )
 fi

@@ -55,7 +55,7 @@ while getopts "ch?i:k:brxR" opt; do
     restartInterval=$OPTARG
     ;;
   b)
-    maybeNoLeaderRotation="--no-stake"
+    maybeNoLeaderRotation="--stake 0"
     ;;
   x)
     extraNodes=$((extraNodes + 1))
