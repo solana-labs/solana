@@ -3,7 +3,7 @@
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT};
 use crate::entry::{EntrySender, EntrySlice};
-use crate::erasure;
+use crate::erasure::CodingGenerator;
 use crate::packet::index_blobs;
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
@@ -28,7 +28,7 @@ pub enum BroadcastStageReturnType {
 
 struct Broadcast {
     id: Pubkey,
-    session: erasure::Session,
+    coding_generator: CodingGenerator,
 }
 
 impl Broadcast {
@@ -116,7 +116,7 @@ impl Broadcast {
 
         blocktree.write_shared_blobs(&blobs)?;
 
-        let coding = self.session.generate_coding_shared(&blobs)?;
+        let coding = self.coding_generator.next(&blobs);
 
         let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 
@@ -186,9 +186,12 @@ impl BroadcastStage {
         storage_entry_sender: EntrySender,
     ) -> BroadcastStageReturnType {
         let me = cluster_info.read().unwrap().my_data().clone();
-        let session = erasure::Session::default();
+        let coding_generator = CodingGenerator::default();
 
-        let mut broadcast = Broadcast { id: me.id, session };
+        let mut broadcast = Broadcast {
+            id: me.id,
+            coding_generator,
+        };
 
         loop {
             if let Err(e) = broadcast.run(

@@ -61,6 +61,14 @@ pub const ERASURE_SET_SIZE: usize = NUM_DATA + NUM_CODING;
 #[derive(Debug, Clone)]
 pub struct Session(ReedSolomon);
 
+/// Generates coding blobs on demand given data blobs
+#[derive(Debug, Clone)]
+pub struct CodingGenerator {
+    /// SharedBlobs that couldn't be used in last call to next()
+    leftover: Vec<SharedBlob>,
+    session: Arc<Session>,
+}
+
 impl Session {
     pub fn new(data_count: usize, coding_count: usize) -> Result<Session> {
         let rs = ReedSolomon::new(data_count, coding_count)?;
@@ -84,6 +92,11 @@ impl Session {
         self.0.reconstruct(blocks, present)?;
 
         Ok(())
+    }
+
+    /// Returns `(number_of_data_blobs, number_of_coding_blobs)`
+    pub fn dimensions(&self) -> (usize, usize) {
+        (self.0.data_shard_count(), self.0.parity_shard_count())
     }
 
     /// Reconstruct any missing blobs in this erasure set if possible
@@ -155,76 +168,110 @@ impl Session {
 
         Ok((recovered_data, recovered_coding))
     }
+}
 
-    /// Convenience wrapper over `Session::generate_coding` to return shared blobs
-    pub fn generate_coding_shared(&self, data_blobs: &[SharedBlob]) -> Result<Vec<SharedBlob>> {
-        let blobs = self.generate_coding(data_blobs)?;
-        let shared_blobs = blobs
-            .into_iter()
-            .map(|b| Arc::new(RwLock::new(b)))
-            .collect();
-
-        Ok(shared_blobs)
+impl CodingGenerator {
+    pub fn new(session: Arc<Session>) -> Self {
+        CodingGenerator {
+            leftover: Vec::with_capacity(session.0.data_shard_count()),
+            session,
+        }
     }
 
-    /// Generate the coding blobs for a given erasure set
-    pub fn generate_coding(&self, data_blobs: &[SharedBlob]) -> Result<Vec<Blob>> {
-        use crate::result::Error;
-        use reed_solomon_erasure::Error as RseError;
+    /// Yields next set of coding blobs, if any.
+    /// Must be called with consecutive data blobs within a slot.
+    ///
+    /// Passing in a slice with the first blob having a new slot will cause internal state to
+    /// reset, so the above concern does not apply to slot boundaries, only indexes within a slot
+    /// must be consecutive.
+    ///
+    /// If used improperly, it my return garbage coding blobs, but will not give an
+    /// error.
+    pub fn next(&mut self, next_data: &[SharedBlob]) -> Vec<SharedBlob> {
+        let (num_data, num_coding) = self.session.dimensions();
+        let mut next_coding =
+            Vec::with_capacity((self.leftover.len() + next_data.len()) / num_data * num_coding);
 
-        let required_count = self.0.data_shard_count();
-        let n_data_blobs = data_blobs.len();
-
-        if n_data_blobs > required_count {
-            return Err(Error::ErasureError(RseError::TooManyDataShards));
-        } else if n_data_blobs < required_count {
-            return Err(Error::ErasureError(RseError::TooFewDataShards));
+        if !self.leftover.is_empty()
+            && !next_data.is_empty()
+            && self.leftover[0].read().unwrap().slot() != next_data[0].read().unwrap().slot()
+        {
+            self.leftover.clear();
         }
 
-        // find max_data_size for the chunk, round length up to a multiple of wb()
-        let max_data_size = data_blobs
-            .iter()
-            .fold(0, |max, blob| cmp::max(blob.read().unwrap().meta.size, max));
+        let next_data: Vec<_> = self.leftover.iter().chain(next_data).cloned().collect();
 
-        let data_locks: Vec<_> = data_blobs.iter().map(|b| b.read().unwrap()).collect();
-        let data_ptrs: Vec<_> = data_locks
-            .iter()
-            .map(|l| &l.data[..max_data_size])
-            .collect();
+        for data_blobs in next_data.chunks(num_data) {
+            if data_blobs.len() < num_data {
+                self.leftover = data_blobs.to_vec();
+                break;
+            }
+            self.leftover.clear();
 
-        let mut coding_blobs = Vec::with_capacity(self.0.parity_shard_count());
+            // find max_data_size for the erasure set
+            let max_data_size = data_blobs
+                .iter()
+                .fold(0, |max, blob| cmp::max(blob.read().unwrap().meta.size, max));
 
-        for data_blob in &data_locks[..NUM_CODING] {
-            let index = data_blob.index();
-            let slot = data_blob.slot();
-            let id = data_blob.id();
-            let should_forward = data_blob.should_forward();
+            let data_locks: Vec<_> = data_blobs.iter().map(|b| b.read().unwrap()).collect();
+            let data_ptrs: Vec<_> = data_locks
+                .iter()
+                .map(|l| &l.data[..max_data_size])
+                .collect();
 
-            let mut coding_blob = Blob::default();
-            coding_blob.set_index(index);
-            coding_blob.set_slot(slot);
-            coding_blob.set_id(&id);
-            coding_blob.forward(should_forward);
-            coding_blob.set_size(max_data_size);
-            coding_blob.set_coding();
+            let mut coding_blobs = Vec::with_capacity(num_coding);
 
-            coding_blobs.push(coding_blob);
+            for data_blob in &data_locks[..num_coding] {
+                let index = data_blob.index();
+                let slot = data_blob.slot();
+                let id = data_blob.id();
+                let should_forward = data_blob.should_forward();
+
+                let mut coding_blob = Blob::default();
+                coding_blob.set_index(index);
+                coding_blob.set_slot(slot);
+                coding_blob.set_id(&id);
+                coding_blob.forward(should_forward);
+                coding_blob.set_size(max_data_size);
+                coding_blob.set_coding();
+
+                coding_blobs.push(coding_blob);
+            }
+
+            if {
+                let mut coding_ptrs: Vec<_> = coding_blobs
+                    .iter_mut()
+                    .map(|blob| &mut blob.data_mut()[..max_data_size])
+                    .collect();
+
+                self.session.encode(&data_ptrs, coding_ptrs.as_mut_slice())
+            }
+            .is_ok()
+            {
+                next_coding.append(&mut coding_blobs);
+            }
         }
 
-        let mut coding_ptrs: Vec<_> = coding_blobs
-            .iter_mut()
-            .map(|blob| &mut blob.data_mut()[..max_data_size])
-            .collect();
-
-        self.encode(&data_ptrs, coding_ptrs.as_mut_slice())?;
-
-        Ok(coding_blobs)
+        next_coding
+            .into_iter()
+            .map(|blob| Arc::new(RwLock::new(blob)))
+            .collect()
     }
 }
 
 impl Default for Session {
     fn default() -> Session {
         Session::new(NUM_DATA, NUM_CODING).unwrap()
+    }
+}
+
+impl Default for CodingGenerator {
+    fn default() -> Self {
+        let session = Session::default();
+        CodingGenerator {
+            leftover: Vec::with_capacity(session.0.data_shard_count()),
+            session: Arc::new(session),
+        }
     }
 }
 
@@ -385,20 +432,20 @@ pub mod test {
         solana_logger::setup();
 
         // trivial case
-        let session = Arc::new(Session::default());
+        let mut coding_generator = CodingGenerator::default();
         let blobs = Vec::new();
         for _ in 0..NUM_DATA * 2 {
-            let coding = session.generate_coding(&blobs);
-            assert!(coding.is_err());
+            let coding = coding_generator.next(&blobs);
+            assert!(coding.is_empty());
         }
 
         // test coding by iterating one blob at a time
         let data_blobs = generate_test_blobs(0, NUM_DATA * 2);
 
-        for i in 0..data_blobs.len() {
-            let coding_blobs_result = session.generate_coding_shared(&data_blobs[0..NUM_DATA - 1]);
+        for (i, blob) in data_blobs.iter().cloned().enumerate() {
+            let coding_blobs = coding_generator.next(&[blob]);
 
-            if let Ok(coding_blobs) = coding_blobs_result {
+            if !coding_blobs.is_empty() {
                 assert_eq!(i % NUM_DATA, NUM_DATA - 1);
                 assert_eq!(coding_blobs.len(), NUM_CODING);
 
@@ -408,7 +455,12 @@ pub mod test {
                         ((i / NUM_DATA) * NUM_DATA + j) as u64
                     );
                 }
-                test_toss_and_recover(&session, &data_blobs, &coding_blobs, i - (i % NUM_DATA));
+                test_toss_and_recover(
+                    &coding_generator.session,
+                    &data_blobs,
+                    &coding_blobs,
+                    i - (i % NUM_DATA),
+                );
             }
         }
     }
@@ -417,7 +469,7 @@ pub mod test {
     fn test_erasure_generate_coding_reset_on_new_slot() {
         solana_logger::setup();
 
-        let session = Arc::new(Session::default());
+        let mut coding_generator = CodingGenerator::default();
 
         // test coding by iterating one blob at a time
         let data_blobs = generate_test_blobs(0, NUM_DATA * 2);
@@ -426,16 +478,19 @@ pub mod test {
             data_blobs[i].write().unwrap().set_slot(1);
         }
 
-        let coding_blobs = session.generate_coding_shared(&data_blobs[0..NUM_DATA - 1]);
-        assert!(coding_blobs.is_err());
+        let coding_blobs = coding_generator.next(&data_blobs[0..NUM_DATA - 1]);
+        assert!(coding_blobs.is_empty());
 
-        let coding_blobs = session
-            .generate_coding_shared(&data_blobs[NUM_DATA..])
-            .unwrap();
+        let coding_blobs = coding_generator.next(&data_blobs[NUM_DATA..]);
 
         assert_eq!(coding_blobs.len(), NUM_CODING);
 
-        test_toss_and_recover(&session, &data_blobs, &coding_blobs, NUM_DATA);
+        test_toss_and_recover(
+            &coding_generator.session,
+            &data_blobs,
+            &coding_blobs,
+            NUM_DATA,
+        );
     }
 
     #[test]
@@ -599,7 +654,7 @@ pub mod test {
         IntoIt: Iterator<Item = S> + Clone + 'a,
         S: Borrow<SlotSpec>,
     {
-        let session = Session::default();
+        let mut coding_generator = CodingGenerator::default();
 
         specs.into_iter().map(move |spec| {
             let spec = spec.borrow();
@@ -621,7 +676,7 @@ pub mod test {
                         0,
                     );
 
-                    let mut coding_blobs = session.generate_coding_shared(&blobs).unwrap();
+                    let mut coding_blobs = coding_generator.next(&blobs);
 
                     blobs.drain(erasure_spec.num_data..);
                     coding_blobs.drain(erasure_spec.num_coding..);
