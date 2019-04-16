@@ -180,13 +180,9 @@ impl AppendVec {
 
     pub fn accounts<'a>(&'a self, mut start: usize) -> Vec<StoredAccount<'a>> {
         let mut accounts = vec![];
-        loop {
-            if let Some((account, next)) = self.get_account(start) {
-                accounts.push(account);
-                start = next;
-            } else {
-                break;
-            }
+        while let Some((account, next)) = self.get_account(start) {
+            accounts.push(account);
+            start = next;
         }
         accounts
     }
