@@ -15,6 +15,8 @@ macro_rules! align_up {
         ($addr + ($align - 1)) & !($align - 1)
     };
 }
+
+/// StorageMeta contains enough context to recover the index from storage itself
 #[derive(Clone, PartialEq, Debug)]
 pub struct StorageMeta {
     /// global write version
@@ -23,8 +25,9 @@ pub struct StorageMeta {
     pub pubkey: Pubkey,
     pub data_len: u64,
 }
-//TODO: This structure should contain references
-/// StoredAccount contains enough context to recover the index from storage itself
+
+/// References to Memory Mapped memory
+/// The Account is stored separately from its data, so getting the actual account requires a clone
 pub struct StoredAccount<'a> {
     pub meta: &'a StorageMeta,
     /// account data
