@@ -78,11 +78,13 @@ impl AppendVec {
         data.write_all(&[0]).unwrap();
         data.seek(SeekFrom::Start(0)).unwrap();
         data.flush().unwrap();
+        //UNSAFE: Required to create a Mmap
         let map = unsafe { MmapMut::map_mut(&data).expect("failed to map the data file") };
 
         AppendVec {
             map,
             // This mutex forces append to be single threaded, but concurrent with reads
+            // See UNSAFE usage in `append_ptr`
             append_offset: Mutex::new(0),
             current_len: AtomicUsize::new(0),
             file_size: size as u64,
@@ -92,6 +94,7 @@ impl AppendVec {
     #[allow(clippy::mutex_atomic)]
     pub fn reset(&self) {
         // This mutex forces append to be single threaded, but concurrent with reads
+        // See UNSAFE usage in `append_ptr`
         let mut offset = self.append_offset.lock().unwrap();
         self.current_len.store(0, Ordering::Relaxed);
         *offset = 0;
@@ -109,7 +112,6 @@ impl AppendVec {
         self.file_size
     }
 
-    // The reason for the `mut` is to allow Vec::from_raw_parts
     fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
         let len = self.len();
         if len < offset + size {
@@ -120,6 +122,8 @@ impl AppendVec {
         //crash on some architectures.
         let next = align_up!(offset + size, mem::size_of::<u64>());
         Some((
+            //UNSAFE: This unsafe creates a slice that represents a chunk of self.map memory
+            //The lifetime of this slice is tied to &self, since it points to self.map memory
             unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, size) },
             next,
         ))
@@ -130,7 +134,9 @@ impl AppendVec {
         //crash on some architectures.
         let pos = align_up!(*offset as usize, mem::size_of::<u64>());
         let data = &self.map[pos..(pos + len)];
-        //this mut append is safe because only 1 thread can append at a time
+        //UNSAFE: This mut append is safe because only 1 thread can append at a time
+        //Mutex<append_offset> guarantees exclusive write access to the memory occupied in
+        //the range.
         unsafe {
             let dst = data.as_ptr() as *mut u8;
             std::ptr::copy(src, dst, len);
@@ -141,6 +147,7 @@ impl AppendVec {
     #[allow(clippy::mutex_atomic)]
     fn append_ptrs(&self, vals: &[(*const u8, usize)]) -> Option<usize> {
         // This mutex forces append to be single threaded, but concurrent with reads
+        // See UNSAFE usage in `append_ptr`
         let mut offset = self.append_offset.lock().unwrap();
         let mut end = *offset;
         for val in vals {
@@ -164,9 +171,11 @@ impl AppendVec {
         Some(pos)
     }
 
-    fn get_type<T>(&self, offset: usize) -> Option<(&T, usize)> {
+    fn get_type<'a, T>(&self, offset: usize) -> Option<(&'a T, usize)> {
         let (data, next) = self.get_slice(offset, mem::size_of::<T>())?;
         let ptr: *const T = data.as_ptr() as *const T;
+        //UNSAFE: The cast is safe because the slice is aligned and fits into the memory
+        //and the lifetime of he &T is tied to self, which holds the underlying memory map
         Some((unsafe { &*ptr }, next))
     }
 
