@@ -170,6 +170,11 @@ while true; do
   fi
 
   trap 'kill "$pid" && wait "$pid"' INT TERM ERR
+
+  if ((stake)); then
+    setup_vote_account "${leader_address%:*}" "$fullnode_id_path" "$fullnode_vote_id_path" "$stake"
+  fi
+
   $program \
     --identity "$fullnode_id_path" \
     --voting-keypair "$fullnode_vote_id_path" \
@@ -183,9 +188,6 @@ while true; do
   pid=$!
   oom_score_adj "$pid" 1000
 
-  if ((stake)); then
-    setup_vote_account "${leader_address%:*}" "$fullnode_id_path" "$fullnode_vote_id_path" "$stake"
-  fi
   set +x
 
   while true; do
