@@ -16,7 +16,7 @@ fi
 gossip_port=
 extra_fullnode_args=()
 self_setup=0
-stake=43 # number of lamports to assign as stake
+stake=43 # number of lamports to assign as stake (plus transaction fee to setup the stake)
 poll_for_new_genesis_block=0
 
 while [[ ${1:0:1} = - ]]; do
