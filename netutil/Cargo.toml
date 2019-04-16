@@ -1,6 +1,6 @@
 [package]
 name = "solana-netutil"
-version = "0.13.0"
+version = "0.14.0"
 description = "Solana Network Utilities"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -18,7 +18,7 @@ reqwest = "0.9.0"
 socket2 = "0.3.8"
 
 [dev-dependencies]
-solana-logger = { path = "../logger", version = "0.13.0" }
+solana-logger = { path = "../logger", version = "0.14.0" }
 
 [lib]
 name = "solana_netutil"
