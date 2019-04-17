@@ -5,7 +5,7 @@
 //! transaction. All processing is done on the CPU by default and on a GPU
 //! if the `cuda` feature is enabled with `--features=cuda`.
 
-use crate::packet::SharedPackets;
+use crate::packet::Packets;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify;
@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 
-pub type VerifiedPackets = Vec<(SharedPackets, Vec<u8>)>;
+pub type VerifiedPackets = Vec<(Packets, Vec<u8>)>;
 
 pub struct SigVerifyStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -27,7 +27,7 @@ pub struct SigVerifyStage {
 impl SigVerifyStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
-        packet_receiver: Receiver<SharedPackets>,
+        packet_receiver: Receiver<Packets>,
         sigverify_disabled: bool,
         verified_sender: Sender<VerifiedPackets>,
     ) -> Self {
@@ -37,7 +37,7 @@ impl SigVerifyStage {
         Self { thread_hdls }
     }
 
-    fn verify_batch(batch: Vec<SharedPackets>, sigverify_disabled: bool) -> VerifiedPackets {
+    fn verify_batch(batch: Vec<Packets>, sigverify_disabled: bool) -> VerifiedPackets {
         let r = if sigverify_disabled {
             sigverify::ed25519_verify_disabled(&batch)
         } else {

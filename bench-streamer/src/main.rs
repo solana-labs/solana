@@ -1,5 +1,5 @@
 use clap::{crate_description, crate_name, crate_version, App, Arg};
-use solana::packet::{Packet, SharedPackets, BLOB_SIZE, PACKET_DATA_SIZE};
+use solana::packet::{Packet, Packets, BLOB_SIZE, PACKET_DATA_SIZE};
 use solana::result::Result;
 use solana::streamer::{receiver, PacketReceiver};
 use std::cmp::max;
@@ -14,19 +14,19 @@ use std::time::SystemTime;
 
 fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     let send = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let msgs = SharedPackets::default();
-    let msgs_ = msgs.clone();
-    msgs.write().unwrap().packets.resize(10, Packet::default());
-    for w in &mut msgs.write().unwrap().packets {
+    let mut msgs = Packets::default();
+    msgs.packets.resize(10, Packet::default());
+    for w in &mut msgs.packets {
         w.meta.size = PACKET_DATA_SIZE;
         w.meta.set_addr(&addr);
     }
+    let msgs_ = msgs.clone();
     spawn(move || loop {
         if exit.load(Ordering::Relaxed) {
             return;
         }
         let mut num = 0;
-        for p in &msgs_.read().unwrap().packets {
+        for p in &msgs_.packets {
             let a = p.meta.addr();
             assert!(p.meta.size < BLOB_SIZE);
             send.send_to(&p.data[..p.meta.size], &a).unwrap();
@@ -43,7 +43,7 @@ fn sink(exit: Arc<AtomicBool>, rvs: Arc<AtomicUsize>, r: PacketReceiver) -> Join
         }
         let timer = Duration::new(1, 0);
         if let Ok(msgs) = r.recv_timeout(timer) {
-            rvs.fetch_add(msgs.read().unwrap().packets.len(), Ordering::Relaxed);
+            rvs.fetch_add(msgs.packets.len(), Ordering::Relaxed);
         }
     })
 }

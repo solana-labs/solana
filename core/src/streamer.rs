@@ -2,7 +2,7 @@
 //!
 
 use crate::packet::{
-    deserialize_packets_in_blob, Blob, Meta, Packets, SharedBlobs, SharedPackets, PACKET_DATA_SIZE,
+    deserialize_packets_in_blob, Blob, Meta, Packets, SharedBlobs, PACKET_DATA_SIZE,
 };
 use crate::result::{Error, Result};
 use bincode;
@@ -10,12 +10,12 @@ use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
-pub type PacketReceiver = Receiver<SharedPackets>;
-pub type PacketSender = Sender<SharedPackets>;
+pub type PacketReceiver = Receiver<Packets>;
+pub type PacketSender = Sender<Packets>;
 pub type BlobSender = Sender<SharedBlobs>;
 pub type BlobReceiver = Receiver<SharedBlobs>;
 
@@ -29,7 +29,7 @@ fn recv_loop(sock: &UdpSocket, exit: Arc<AtomicBool>, channel: &PacketSender) ->
                 return Ok(());
             }
             if let Ok(_len) = msgs.recv_from(sock) {
-                channel.send(Arc::new(RwLock::new(msgs)))?;
+                channel.send(msgs)?;
                 break;
             }
         }
@@ -61,16 +61,16 @@ fn recv_send(sock: &UdpSocket, r: &BlobReceiver) -> Result<()> {
     Ok(())
 }
 
-pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<SharedPackets>, usize, u64)> {
+pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<Packets>, usize, u64)> {
     let timer = Duration::new(1, 0);
     let msgs = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
     trace!("got msgs");
-    let mut len = msgs.read().unwrap().packets.len();
+    let mut len = msgs.packets.len();
     let mut batch = vec![msgs];
     while let Ok(more) = recvr.try_recv() {
         trace!("got more msgs");
-        len += more.read().unwrap().packets.len();
+        len += more.packets.len();
         batch.push(more);
 
         if len > 100_000 {
@@ -154,7 +154,7 @@ fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender) -> Result<()> {
         }
 
         let packets = packets?;
-        s.send(Arc::new(RwLock::new(Packets::new(packets))))?;
+        s.send(Packets::new(packets))?;
     }
 
     Ok(())
@@ -199,7 +199,7 @@ mod test {
         for _ in 0..10 {
             let m = r.recv_timeout(Duration::new(1, 0))?;
 
-            *num -= m.read().unwrap().packets.len();
+            *num -= m.packets.len();
 
             if *num == 0 {
                 break;

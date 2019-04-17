@@ -18,7 +18,6 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 
-pub type SharedPackets = Arc<RwLock<Packets>>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
 pub type SharedBlobs = Vec<SharedBlob>;
 
@@ -117,7 +116,7 @@ impl Meta {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Packets {
     pub packets: Vec<Packet>,
 }
@@ -254,15 +253,12 @@ impl Packets {
     }
 }
 
-pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<SharedPackets> {
+pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<Packets> {
     let mut out = vec![];
     for x in xs.chunks(chunks) {
-        let p = SharedPackets::default();
-        p.write()
-            .unwrap()
-            .packets
-            .resize(x.len(), Packet::default());
-        for (i, o) in x.iter().zip(p.write().unwrap().packets.iter_mut()) {
+        let mut p = Packets::default();
+        p.packets.resize(x.len(), Packet::default());
+        for (i, o) in x.iter().zip(p.packets.iter_mut()) {
             let mut wr = io::Cursor::new(&mut o.data[..]);
             bincode::serialize_into(&mut wr, &i).expect("serialize request");
             let len = wr.position() as usize;
@@ -273,7 +269,7 @@ pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<SharedPa
     out
 }
 
-pub fn to_packets<T: Serialize>(xs: &[T]) -> Vec<SharedPackets> {
+pub fn to_packets<T: Serialize>(xs: &[T]) -> Vec<Packets> {
     to_packets_chunked(xs, NUM_PACKETS)
 }
 
@@ -642,16 +638,16 @@ mod tests {
         let tx = system_transaction::create_user_account(&keypair, &keypair.pubkey(), 1, hash, 0);
         let rv = to_packets(&vec![tx.clone(); 1]);
         assert_eq!(rv.len(), 1);
-        assert_eq!(rv[0].read().unwrap().packets.len(), 1);
+        assert_eq!(rv[0].packets.len(), 1);
 
         let rv = to_packets(&vec![tx.clone(); NUM_PACKETS]);
         assert_eq!(rv.len(), 1);
-        assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
+        assert_eq!(rv[0].packets.len(), NUM_PACKETS);
 
         let rv = to_packets(&vec![tx.clone(); NUM_PACKETS + 1]);
         assert_eq!(rv.len(), 2);
-        assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
-        assert_eq!(rv[1].read().unwrap().packets.len(), 1);
+        assert_eq!(rv[0].packets.len(), NUM_PACKETS);
+        assert_eq!(rv[1].packets.len(), 1);
     }
 
     #[test]

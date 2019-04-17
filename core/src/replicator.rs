@@ -139,7 +139,7 @@ fn create_request_processor(
     let t_processor = spawn(move || loop {
         let packets = r_reader.recv_timeout(Duration::from_secs(1));
         if let Ok(packets) = packets {
-            for packet in &packets.read().unwrap().packets {
+            for packet in &packets.packets {
                 let req: result::Result<ReplicatorRequest, Box<bincode::ErrorKind>> =
                     deserialize(&packet.data[..packet.meta.size]);
                 match req {
