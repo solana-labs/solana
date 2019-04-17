@@ -376,11 +376,7 @@ pub const BLOB_FLAG_IS_CODING: u32 = 0x1;
 impl Blob {
     pub fn new(data: &[u8]) -> Self {
         let mut blob = Self::default();
-
-        assert!(data.len() <= blob.data.len());
-
         let data_len = cmp::min(data.len(), blob.data.len());
-
         let bytes = &data[..data_len];
         blob.data[..data_len].copy_from_slice(bytes);
         blob.meta.size = blob.data_size() as usize;
@@ -467,8 +463,8 @@ impl Blob {
         LittleEndian::read_u64(&self.data[SIZE_RANGE])
     }
 
-    pub fn set_data_size(&mut self, size: u64) {
-        LittleEndian::write_u64(&mut self.data[SIZE_RANGE], size);
+    pub fn set_data_size(&mut self, ix: u64) {
+        LittleEndian::write_u64(&mut self.data[SIZE_RANGE], ix);
     }
 
     pub fn data(&self) -> &[u8] {
