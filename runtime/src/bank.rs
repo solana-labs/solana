@@ -146,6 +146,9 @@ pub struct Bank {
     /// Bank fork (i.e. slot, i.e. block)
     slot: u64,
 
+    /// Bank height in term of banks
+    bank_height: u64,
+
     /// The pubkey to send transactions fees to.
     collector_id: Pubkey,
 
@@ -203,6 +206,7 @@ impl Bank {
         let mut bank = Self::default();
         bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
         bank.status_cache = parent.status_cache.clone();
+        bank.bank_height = parent.bank_height + 1;
 
         bank.transaction_count
             .store(parent.transaction_count() as usize, Ordering::Relaxed);
@@ -215,6 +219,15 @@ impl Bank {
 
         bank.slot = slot;
         bank.max_tick_height = (bank.slot + 1) * bank.ticks_per_slot - 1;
+        solana_metrics::submit(
+            influxdb::Point::new("bank-new_from_parent-heights")
+                .add_field("slot_height", influxdb::Value::Integer(slot as i64))
+                .add_field(
+                    "bank_height",
+                    influxdb::Value::Integer(bank.bank_height as i64),
+                )
+                .to_owned(),
+        );
 
         bank.parent = RwLock::new(Some(parent.clone()));
         bank.parent_hash = parent.hash();
