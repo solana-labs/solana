@@ -156,7 +156,7 @@ setup_vote_account() {
       create-vote-account "$vote_id" "$node_id" $((stake - 1)) || return $?
   fi
 
-  $solana_wallet --host "$drone_address" show-vote-account "$vote_id"
+  $solana_wallet --keypair "$node_id_path" --host "$drone_address" show-vote-account "$vote_id"
   return 0
 }
 
