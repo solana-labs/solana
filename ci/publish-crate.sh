@@ -54,7 +54,7 @@ for crate in "${CRATES[@]}"; do
     exit 1
   fi
   echo "-- $crate"
-  grep -q "^version = \"$expectedCrateVersion\"$" $crate/Cargo.toml || {
+  grep -q "^version = \"$expectedCrateVersion\"$" "$crate"/Cargo.toml || {
     echo "Error: $crate/Cargo.toml version is not $expectedCrateVersion"
     exit 1
   }
