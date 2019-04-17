@@ -19,12 +19,10 @@ CRATES=(
   metrics
   client
   drone
-  instruction-processors/vote_api
+  programs/{budget_api,config_api,stake_api,storage_api,token_api,vote_api,exchange_api}
+  programs/{vote_program,budget_program,bpf_loader,config_program,exchange_program,failure_program}
+  programs/{noop_program,stake_program,storage_program,token_program}
   runtime
-  instruction-processors/{budget_api,config_api,storage_api,token_api,vote_signer,exchange_api}
-  instruction-processors/{vote_program,budget_program,bpf_loader,bpf,config_program,exchange_program,failure_program}
-  instruction-processors/{noop_program,stake_api,stake_program,storage_program,token_program}
-  instruction-processors/bpf_loader
   vote-signer
   core
   fullnode
