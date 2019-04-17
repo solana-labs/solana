@@ -69,6 +69,13 @@ pub struct ErasureMeta {
     pub coding: u64,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum ErasureMetaStatus {
+    CanRecover,
+    DataFull,
+    StillNeed(usize),
+}
+
 impl ErasureMeta {
     pub fn new(set_index: u64) -> ErasureMeta {
         ErasureMeta {
@@ -78,13 +85,18 @@ impl ErasureMeta {
         }
     }
 
-    pub fn can_recover(&self) -> bool {
+    pub fn status(&self) -> ErasureMetaStatus {
         let (data_missing, coding_missing) = (
             NUM_DATA - self.data.count_ones() as usize,
             NUM_CODING - self.coding.count_ones() as usize,
         );
-
-        data_missing > 0 && data_missing + coding_missing <= NUM_CODING
+        if data_missing > 0 && data_missing + coding_missing <= NUM_CODING {
+            ErasureMetaStatus::CanRecover
+        } else if data_missing == 0 {
+            ErasureMetaStatus::DataFull
+        } else {
+            ErasureMetaStatus::StillNeed(data_missing + coding_missing - NUM_CODING)
+        }
     }
 
     pub fn is_coding_present(&self, index: u64) -> bool {
@@ -208,7 +220,7 @@ fn test_meta_coding_present() {
 }
 
 #[test]
-fn test_can_recover() {
+fn test_erasure_meta_status() {
     let set_index = 0;
     let mut e_meta = ErasureMeta {
         set_index,
@@ -216,38 +228,37 @@ fn test_can_recover() {
         coding: 0,
     };
 
-    assert!(!e_meta.can_recover());
+    assert_eq!(e_meta.status(), ErasureMetaStatus::StillNeed(NUM_DATA));
 
     e_meta.data = 0b1111_1111_1111_1111;
     e_meta.coding = 0x00;
 
-    assert!(!e_meta.can_recover());
+    assert_eq!(e_meta.status(), ErasureMetaStatus::DataFull);
 
     e_meta.coding = 0x0e;
-    assert_eq!(0x0fu8, 0b0000_1111u8);
-    assert!(!e_meta.can_recover());
+    assert_eq!(e_meta.status(), ErasureMetaStatus::DataFull);
 
     e_meta.data = 0b0111_1111_1111_1111;
-    assert!(e_meta.can_recover());
+    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
 
     e_meta.data = 0b0111_1111_1111_1110;
-    assert!(e_meta.can_recover());
+    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
 
     e_meta.data = 0b0111_1111_1011_1110;
-    assert!(e_meta.can_recover());
+    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
 
     e_meta.data = 0b0111_1011_1011_1110;
-    assert!(!e_meta.can_recover());
+    assert_eq!(e_meta.status(), ErasureMetaStatus::StillNeed(1));
 
     e_meta.data = 0b0111_1011_1011_1110;
-    assert!(!e_meta.can_recover());
+    assert_eq!(e_meta.status(), ErasureMetaStatus::StillNeed(1));
 
     e_meta.coding = 0b0000_1110;
     e_meta.data = 0b1111_1111_1111_1100;
-    assert!(e_meta.can_recover());
+    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
 
     e_meta.data = 0b1111_1111_1111_1000;
-    assert!(e_meta.can_recover());
+    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
 }
 
 #[test]

@@ -280,7 +280,6 @@ pub mod test {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::Blocktree;
-    use crate::entry::{make_tiny_test_entries, EntrySlice};
     use crate::packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -599,7 +598,7 @@ pub mod test {
                                 blobs.push(blob);
                             }
 
-                            let size = erased_coding.read().unwrap().data_size() as usize;
+                            let size = erased_coding.read().unwrap().size() as usize;
 
                             let mut present = vec![true; ERASURE_SET_SIZE];
                             present[0] = false;
@@ -667,7 +666,7 @@ pub mod test {
                     let set_index = erasure_spec.set_index as usize;
                     let start_index = set_index * NUM_DATA;
 
-                    let mut blobs = make_tiny_test_entries(NUM_DATA).to_single_entry_shared_blobs();
+                    let mut blobs = generate_test_blobs(0, NUM_DATA);
                     index_blobs(
                         &blobs,
                         &Keypair::new().pubkey(),
@@ -723,10 +722,30 @@ pub mod test {
         blocktree
     }
 
+    //    fn verify_test_blobs(offset: usize, blobs: &[SharedBlob]) -> bool {
+    //        let data: Vec<_> = (0..BLOB_DATA_SIZE).into_iter().map(|i| i as u8).collect();
+    //
+    //        blobs.iter().enumerate().all(|(i, blob)| {
+    //            let blob = blob.read().unwrap();
+    //            blob.index() as usize == i + offset && blob.data() == &data[..]
+    //        })
+    //    }
+    //
     fn generate_test_blobs(offset: usize, num_blobs: usize) -> Vec<SharedBlob> {
-        let blobs = make_tiny_test_entries(num_blobs).to_single_entry_shared_blobs();
+        let data: Vec<_> = (0..BLOB_DATA_SIZE).into_iter().map(|i| i as u8).collect();
+
+        let blobs: Vec<_> = (0..num_blobs)
+            .into_iter()
+            .map(|_| {
+                let mut blob = Blob::default();
+                blob.data_mut()[..data.len()].copy_from_slice(&data);
+                blob.set_size(data.len());
+                Arc::new(RwLock::new(blob))
+            })
+            .collect();
 
         index_blobs(&blobs, &Pubkey::new_rand(), offset as u64, 0, 0);
+
         blobs
     }
 

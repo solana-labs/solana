@@ -348,10 +348,7 @@ impl Blocktree {
         }
 
         for ((slot, set_index), erasure_meta) in erasure_meta_working_set.into_iter() {
-            if erasure_meta.can_recover() {
-                let amount_recovered = self.recover(slot, set_index)?;
-                inc_new_counter_info!("erasures-recovered", amount_recovered);
-            }
+            self.try_erasure_recover(&erasure_meta, slot, set_index)?;
         }
 
         Ok(())
@@ -474,11 +471,25 @@ impl Blocktree {
 
         self.db.write(writebatch)?;
 
-        if erasure_meta.can_recover() {
-            let amount_recovered = self.recover(slot, set_index)?;
-            inc_new_counter_info!("erasures-recovered", amount_recovered);
-        }
+        self.try_erasure_recover(&erasure_meta, slot, set_index)
+    }
 
+    fn try_erasure_recover(
+        &self,
+        erasure_meta: &ErasureMeta,
+        slot: u64,
+        set_index: u64,
+    ) -> Result<()> {
+        match erasure_meta.status() {
+            ErasureMetaStatus::CanRecover => {
+                let recovered = self.recover(slot, set_index)?;
+                inc_new_counter_info!("blocktree-erasure-blobs_recovered", recovered);
+            }
+            ErasureMetaStatus::StillNeed(needed) => {
+                inc_new_counter_info!("blocktree-erasure-blobs_needed", needed)
+            }
+            ErasureMetaStatus::DataFull => inc_new_counter_info!("blocktree-erasure-complete", 1),
+        }
         Ok(())
     }
 
@@ -2646,7 +2657,7 @@ pub mod tests {
                 .expect("DB get must succeed")
                 .unwrap();
 
-            assert!(!erasure_meta.can_recover());
+            assert_eq!(erasure_meta.status(), ErasureMetaStatus::DataFull);
             assert_eq!(erasure_meta.data, 0xFFFF);
             assert_eq!(erasure_meta.coding, 0x0);
         }
@@ -2851,7 +2862,7 @@ pub mod tests {
                     );
 
                     // all possibility for recovery should be exhausted
-                    assert!(!erasure_meta.can_recover());
+                    assert_eq!(erasure_meta.status(), ErasureMetaStatus::DataFull);
                     // Should have all data
                     assert_eq!(erasure_meta.data, 0xFFFF);
                     if set_index % 2 == 0 {
