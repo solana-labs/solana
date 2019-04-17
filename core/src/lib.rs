@@ -31,6 +31,7 @@ pub mod cluster;
 pub mod cluster_info;
 pub mod cluster_tests;
 pub mod entry;
+#[cfg(feature = "erasure")]
 pub mod erasure;
 pub mod fetch_stage;
 pub mod fullnode;
