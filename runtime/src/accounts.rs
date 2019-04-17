@@ -29,7 +29,10 @@ const ACCOUNTSDB_DIR: &str = "accountsdb";
 const NUM_ACCOUNT_DIRS: usize = 4;
 
 type AccountLocks = (
+    // Locks for the current bank
     Arc<Mutex<HashSet<Pubkey>>>,
+    // Any unreleased locks from all parent/grandparent banks. We use Arc<Mutex> to
+    // avoid copies when calling new_from_parent().
     Vec<Arc<Mutex<HashSet<Pubkey>>>>,
 );
 
@@ -111,9 +114,20 @@ impl Accounts {
         let parent_locks: Vec<_> = {
             let (ref parent_locks, ref mut grandparent_locks) =
                 *parent.account_locks.lock().unwrap();
-            grandparent_locks.retain(|g| !g.lock().unwrap().is_empty());
+
+            // Copy all unreleased parent locks and the much more unlikely (but still possible)
+            // grandparent account locks into the new child. Note that by the time this function
+            // is called, no further transactions will be recorded on the parent bank, so even if
+            // banking threads grab account locks on this parent bank, none of those results will
+            // be committed.
+            // Thus:
+            // 1) The child doesn't need to care about potential "future" account locks on its parent
+            // bank that the parent does not currently hold.
+            // 2) The parent doesn't need to retain any of the locks other than the ones it owns so
+            // that unlock() can be called later (the grandparent locks can be given to the child).
             once(parent_locks.clone())
                 .chain(grandparent_locks.drain(..))
+                .filter(|a| !a.lock().unwrap().is_empty())
                 .collect()
         };
 
@@ -319,7 +333,9 @@ impl Accounts {
             if fork_locks.contains(k) {
                 is_locked = true;
             } else {
-                // Check parent locks
+                // Check parent locks. As soon as a set of parent locks is empty,
+                // we can remove it from the list b/c that means the parent has
+                // released the locks.
                 parent_locks.retain(|p| {
                     let p = p.lock().unwrap();
                     if p.contains(k) {
@@ -929,4 +945,70 @@ mod tests {
         assert_eq!(accounts.hash_internal_state(0), None);
     }
 
+    #[test]
+    fn test_parent_locked_accounts() {
+        let mut parent = Accounts::new(None);
+        let locked_pubkey = Keypair::new().pubkey();
+        let mut locked_accounts = HashSet::new();
+        locked_accounts.insert(locked_pubkey);
+        parent.account_locks = Mutex::new((Arc::new(Mutex::new(locked_accounts.clone())), vec![]));
+
+        let child = Accounts::new_from_parent(&parent);
+
+        // Make sure child contains the parent's locked accounts
+        {
+            let (_, ref mut parent_account_locks) = *child.account_locks.lock().unwrap();
+            assert_eq!(parent_account_locks.len(), 1);
+            assert_eq!(locked_accounts, *parent_account_locks[0].lock().unwrap());
+        }
+
+        // Make sure locking on same account in the child fails
+        assert_eq!(
+            Accounts::lock_account(
+                &mut child.account_locks.lock().unwrap(),
+                &vec![locked_pubkey],
+                &mut ErrorCounters::default()
+            ),
+            Err(TransactionError::AccountInUse)
+        );
+
+        // Unlock the accounts in the parent
+        {
+            let (ref parent_accounts, _) = *parent.account_locks.lock().unwrap();
+            parent_accounts.lock().unwrap().clear();
+        }
+
+        // Make sure child removes the parent locked_accounts after the parent has
+        // released all its locks
+        assert!(Accounts::lock_account(
+            &mut child.account_locks.lock().unwrap(),
+            &vec![locked_pubkey],
+            &mut ErrorCounters::default()
+        )
+        .is_ok());
+        {
+            let child_account_locks = child.account_locks.lock().unwrap();
+            assert_eq!(child_account_locks.0.lock().unwrap().len(), 1);
+            assert!(child_account_locks.1.is_empty());
+            // Clear the account we just locked from our locks
+            child_account_locks.0.lock().unwrap().clear();
+        }
+
+        // Make sure new_from_parent() also cleans up old locked parent accounts, in
+        // case the child doesn't call lock_account() after a parent has released their
+        // account locks
+        {
+            // Mock an empty parent locked_accounts HashSet
+            let (_, ref mut parent_account_locks) = *child.account_locks.lock().unwrap();
+            parent_account_locks.push(Arc::new(Mutex::new(HashSet::new())));
+        }
+        // Call new_from_parent, make sure the empty parent locked_accounts is purged
+        let child2 = Accounts::new_from_parent(&child);
+        {
+            let (_, ref mut parent_account_locks) = *child.account_locks.lock().unwrap();
+            assert!(parent_account_locks.is_empty());
+            let (_, ref mut parent_account_locks2) = *child2.account_locks.lock().unwrap();
+            assert!(parent_account_locks2.is_empty());
+        }
+    }
 }
