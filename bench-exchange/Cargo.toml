@@ -24,8 +24,8 @@ serde_json = "1.0.38"
 solana = { path = "../core", version = "0.14.0" }
 solana-client = { path = "../client", version = "0.14.0" }
 solana-drone = { path = "../drone", version = "0.14.0" }
-solana-exchange-api = { path = "../instruction-processors/exchange_api", version = "0.14.0" }
-solana-exchange-program = { path = "../instruction-processors/exchange_program", version = "0.14.0" }
+solana-exchange-api = { path = "../programs/exchange_api", version = "0.14.0" }
+solana-exchange-program = { path = "../programs/exchange_program", version = "0.14.0" }
 solana-logger = { path = "../logger", version = "0.14.0" }
 solana-metrics = { path = "../metrics", version = "0.14.0" }
 solana-netutil = { path = "../netutil", version = "0.14.0" }
