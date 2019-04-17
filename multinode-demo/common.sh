@@ -148,19 +148,15 @@ setup_vote_account() {
 
   if [[ -f "$vote_id_path".configured ]]; then
     echo "Vote account has already been configured"
-    return 0
+  else
+    airdrop "$node_id_path" "$drone_address" "$stake" || return $?
+
+    # Fund the vote account from the node, with the node as the node_id
+    $solana_wallet --keypair "$node_id_path" --host "$drone_address" \
+      create-vote-account "$vote_id" "$node_id" $((stake - 1)) || return $?
   fi
 
-  # A fullnode requires 43 lamports to function:
-  # - one lamport to keep the node identity public key valid. TODO: really??
-  # - 42 more for the vote account we fund
-  airdrop "$node_id_path" "$drone_address" "$stake" || return $?
-
-  # Fund the vote account from the node, with the node as the node_id
-  $solana_wallet --keypair "$node_id_path" --host "$drone_address" \
-    create-vote-account "$vote_id" "$node_id" $((stake - 1)) || return $?
-
-  touch "$vote_id_path".configured
+  $solana_wallet --host "$drone_address" show-vote-account "$vote_id"
   return 0
 }
 

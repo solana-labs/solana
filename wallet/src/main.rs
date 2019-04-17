@@ -269,6 +269,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         )
         .subcommand(
+            SubCommand::with_name("show-vote-account")
+                .about("Show the contents of a vote account")
+                .arg(
+                    Arg::with_name("voting_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Vote account pubkey"),
+                )
+        )
+        .subcommand(
             SubCommand::with_name("deploy")
                 .about("Deploy a program")
                 .arg(
