@@ -38,6 +38,7 @@ pub enum WalletCommand {
     // ConfigureStakingAccount(delegate_id, authorized_voter_id)
     AuthorizeVoter(Pubkey),
     CreateVoteAccount(Pubkey, Pubkey, u32, u64),
+    ShowVoteAccount(Pubkey),
     Deploy(String),
     GetTransactionCount,
     // Pay(lamports, to, timestamp, timestamp_pubkey, witness(es), cancelable)
@@ -183,6 +184,10 @@ pub fn parse_command(
                 commission,
                 lamports,
             ))
+        }
+        ("show-vote-account", Some(matches)) => {
+            let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
+            Ok(WalletCommand::ShowVoteAccount(voting_account_id))
         }
         ("deploy", Some(deploy_matches)) => Ok(WalletCommand::Deploy(
             deploy_matches
@@ -366,6 +371,43 @@ fn process_create_staking(
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
     Ok(signature_str.to_string())
+}
+
+fn process_show_staking(
+    rpc_client: &RpcClient,
+    _config: &WalletConfig,
+    voting_account_id: &Pubkey,
+) -> ProcessResult {
+    use solana_vote_api::vote_state::VoteState;
+    let vote_account_lamports = rpc_client.retry_get_balance(voting_account_id, 5)?;
+    let vote_account_data = rpc_client.get_account_data(voting_account_id)?;
+    let vote_state = VoteState::deserialize(&vote_account_data).unwrap();
+
+    println!("account lamports: {}", vote_account_lamports.unwrap());
+    println!("node id: {}", vote_state.node_id);
+    println!("authorized voter id: {}", vote_state.authorized_voter_id);
+    println!("credits: {}", vote_state.credits());
+    println!(
+        "commission: {}%",
+        f64::from(vote_state.commission) / f64::from(std::u32::MAX)
+    );
+    println!(
+        "root slot: {}",
+        match vote_state.root_slot {
+            Some(slot) => slot.to_string(),
+            None => "~".to_string(),
+        }
+    );
+    if !vote_state.votes.is_empty() {
+        println!("votes:");
+        for vote in vote_state.votes {
+            println!(
+                "- slot={}, confirmation count={}",
+                vote.slot, vote.confirmation_count
+            );
+        }
+    }
+    Ok("".to_string())
 }
 
 fn process_deploy(
@@ -633,6 +675,10 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
                 commission,
                 lamports,
             )
+        }
+
+        WalletCommand::ShowVoteAccount(voting_account_id) => {
+            process_show_staking(&rpc_client, config, &voting_account_id)
         }
 
         // Deploy a custom program to the chain
