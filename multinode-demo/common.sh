@@ -7,6 +7,8 @@
 # shellcheck disable=2034
 #
 
+solana_root="$(dirname "${BASH_SOURCE[0]}")/.."
+
 rsync=rsync
 bootstrap_leader_logger="tee bootstrap-leader.log"
 fullnode_logger="tee fullnode.log"
@@ -22,7 +24,7 @@ if [[ $(uname) != Linux ]]; then
 fi
 
 
-if [[ -n $USE_INSTALL || ! -f "$(dirname "${BASH_SOURCE[0]}")"/../Cargo.toml ]]; then
+if [[ -n $USE_INSTALL || ! -f "$solana_root"/Cargo.toml ]]; then
   solana_program() {
     declare program="$1"
     printf "solana-%s" "$program"
@@ -36,13 +38,13 @@ else
       features+="cuda,"
     fi
 
-    if [[ -r "$(dirname "${BASH_SOURCE[0]}")"/../"$program"/Cargo.toml ]]; then
+    if [[ -r "$solana_root"/"$program"/Cargo.toml ]]; then
       maybe_package="--package solana-$program"
     fi
     if [[ -n $NDEBUG ]]; then
       maybe_release=--release
     fi
-    declare manifest_path="--manifest-path=$program/Cargo.toml"
+    declare manifest_path="--manifest-path=$solana_root/$program/Cargo.toml"
     printf "cargo run $manifest_path $maybe_release $maybe_package --bin solana-%s %s -- " "$program" "$features"
   }
   # shellcheck disable=2154 # 'here' is referenced but not assigned
@@ -64,14 +66,14 @@ export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
 
 # shellcheck source=scripts/configure-metrics.sh
-source "$(dirname "${BASH_SOURCE[0]}")"/../scripts/configure-metrics.sh
+source "$solana_root"/scripts/configure-metrics.sh
 
 tune_system() {
   # Skip in CI
   [[ -z $CI ]] || return 0
 
   # shellcheck source=scripts/ulimit-n.sh
-  source "$(dirname "${BASH_SOURCE[0]}")"/../scripts/ulimit-n.sh
+  source "$solana_root"/scripts/ulimit-n.sh
 
   # Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
   if [[ $(uname) = Linux ]]; then
