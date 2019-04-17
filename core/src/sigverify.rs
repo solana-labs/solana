@@ -188,7 +188,7 @@ pub fn generate_offsets(batches: &[SharedPackets]) -> Result<TxOffsets> {
 pub fn ed25519_verify_cpu(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
-    info!("CPU ECDSA for {}", batch_size(batches));
+    debug!("CPU ECDSA for {}", batch_size(batches));
     let rv = batches
         .into_par_iter()
         .map(|p| {
@@ -207,7 +207,7 @@ pub fn ed25519_verify_cpu(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
 pub fn ed25519_verify_disabled(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
-    info!("disabled ECDSA for {}", batch_size(batches));
+    debug!("disabled ECDSA for {}", batch_size(batches));
     let rv = batches
         .into_par_iter()
         .map(|p| {
@@ -251,7 +251,7 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     let (signature_offsets, pubkey_offsets, msg_start_offsets, msg_sizes, sig_lens) =
         generate_offsets(batches).unwrap();
 
-    info!("CUDA ECDSA for {}", batch_size(batches));
+    debug!("CUDA ECDSA for {}", batch_size(batches));
     let mut out = Vec::new();
     let mut elems = Vec::new();
     let mut locks = Vec::new();
