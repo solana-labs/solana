@@ -1,6 +1,7 @@
 [workspace]
 members = [
     ".",
+    "bench-exchange",
     "bench-streamer",
     "bench-tps",
     "drone",
