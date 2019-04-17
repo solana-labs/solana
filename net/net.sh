@@ -26,17 +26,17 @@ Operate a configured testnet
  logs     - Fetch remote logs from each network node
 
  start/update-specific options:
-   -T [tarFilename]            - Deploy the specified release tarball
-   -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
-                                 specified release channel (edge|beta|stable) or release tag
-                                 (vX.Y.Z)
-   -i update_manifest_keypair  - Deploy the tarball using 'solana-install deploy ...'
-                                 (-t option must be supplied as well)
-   -f [cargoFeatures]          - List of |cargo --feaures=| to activate
-                                 (ignored if -s or -S is specified)
-   -r                          - Reuse existing node/ledger configuration from a
-                                 previous |start| (ie, don't run ./multinode-demo/setup.sh).
-   -D /path/to/programs        - Deploy custom programs from this location
+   -T [tarFilename]                    - Deploy the specified release tarball
+   -t edge|beta|stable|vX.Y.Z          - Deploy the latest tarball release for the
+                                        specified release channel (edge|beta|stable) or release tag
+                                        (vX.Y.Z)
+   -i update_manifest_keypair          - Deploy the tarball using 'solana-install deploy ...'
+                                         (-t option must be supplied as well)
+   -f [cargoFeatures]                  - List of |cargo --feaures=| to activate
+                                        (ignored if -s or -S is specified)
+   -r                                  - Reuse existing node/ledger configuration from a
+                                         previous |start| (ie, don't run ./multinode-demo/setup.sh).
+   -D /path/to/instruction-processors  - Deploy custom programs from this location
 
  sanity/start/update-specific options:
    -o noLedgerVerify    - Skip ledger verification
