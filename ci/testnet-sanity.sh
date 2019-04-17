@@ -11,13 +11,13 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [name] [cloud] [zone]
+usage: $0 [name] [cloud] [zone1] ... [zoneN]
 
-Sanity check a CD testnet
+Sanity check a testnet
 
-  name  - name of the network
-  cloud - cloud provider to use (gce, ec2)
-  zone  - cloud provider zone of the network
+  name            - name of the network
+  cloud           - cloud provider to use (gce, ec2)
+  zone1 .. zoneN  - cloud provider zones to check
 
   Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
         metrics
@@ -27,10 +27,10 @@ EOF
 
 netName=$1
 cloudProvider=$2
-zone=$3
 [[ -n $netName ]] || usage ""
 [[ -n $cloudProvider ]] || usage "Cloud provider not specified"
-[[ -n $zone ]] || usage "Zone not specified"
+shift 2
+[[ -n $1 ]] || usage "zone1 not specified"
 
 shutdown() {
   exitcode=$?
@@ -52,17 +52,19 @@ rm -f net/config/config
 trap shutdown EXIT INT
 
 set -x
-echo "--- $cloudProvider.sh config"
-timeout 5m net/"$cloudProvider".sh config -p "$netName" -z "$zone"
-net/init-metrics.sh -e
-echo "+++ $cloudProvider.sh info"
-net/"$cloudProvider".sh info
-echo --- net.sh sanity
-ok=true
-timeout 5m net/net.sh sanity \
-  ${NO_LEDGER_VERIFY:+-o noLedgerVerify} \
-  ${NO_VALIDATOR_SANITY:+-o noValidatorSanity} \
-  ${REJECT_EXTRA_NODES:+-o rejectExtraNodes} || ok=false
+for zone in "$@"; do
+  echo "--- $cloudProvider config [$zone]"
+  timeout 5m net/"$cloudProvider".sh config -p "$netName" -z "$zone"
+  net/init-metrics.sh -e
+  echo "+++ $cloudProvider.sh info"
+  net/"$cloudProvider".sh info
+  echo "--- net.sh sanity [$cloudProvider:$zone]"
+  ok=true
+  timeout 5m net/net.sh sanity $zone \
+    ${NO_LEDGER_VERIFY:+-o noLedgerVerify} \
+    ${NO_VALIDATOR_SANITY:+-o noValidatorSanity} \
+    ${REJECT_EXTRA_NODES:+-o rejectExtraNodes} || ok=false
 
-net/net.sh logs
-$ok
+  net/net.sh logs
+  $ok
+done

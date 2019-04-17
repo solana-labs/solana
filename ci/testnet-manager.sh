@@ -72,6 +72,9 @@ export SOLANA_METRICS_CONFIG="db=$TESTNET,$SOLANA_METRICS_PARTIAL_CONFIG"
 echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
 source scripts/configure-metrics.sh
 
+EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
+GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
+
 ci/channel-info.sh
 eval "$(ci/channel-info.sh)"
 
@@ -139,22 +142,19 @@ sanity() {
   testnet-beta)
     (
       set -x
-      EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
-      ok=true
-      for zone in "${EC2_ZONES[@]}"; do
-        if ! $ok; then
-          break
-        fi
-        ci/testnet-sanity.sh beta-testnet-solana-com ec2 "$zone" || ok=false
-      done
 
-      GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
-      for zone in "${GCE_ZONES[@]}"; do
-        if ! $ok; then
-          break
+      ok=true
+      if [[ -n $EC2_NODE_COUNT ]]; then
+        ci/testnet-sanity.sh beta-testnet-solana-com ec2 "${EC2_ZONES[0]}" || ok=false
+      fi
+
+      if $ok && [[ -n $GCE_NODE_COUNT ]]; then
+        if [[ -n $EC2_NODE_COUNT ]]; then
+          echo "TODO: Fix testnet-sanity.sh to work with a multinode testnet.  It needs an '-x'-like argument"
+          exit 1
         fi
-        ci/testnet-sanity.sh beta-testnet-solana-com gce "$zone" || ok=false
-      done
+        ci/testnet-sanity.sh beta-testnet-solana-com gce "${GCE_ZONES[0]}" || ok=false
+      fi
       $ok
     )
     ;;
@@ -227,8 +227,6 @@ start() {
   testnet-beta)
     (
       set -x
-      EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
-      GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
 
       # Build an array to pass as opts to testnet-deploy.sh: "-z zone1 -z zone2 ..."
       GCE_ZONE_ARGS=()
@@ -241,19 +239,23 @@ start() {
         EC2_ZONE_ARGS+=("-z $val")
       done
 
-      # shellcheck disable=SC2068
-      [[ -z $EC2_NODE_COUNT ]] || ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
-        -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
-        ${maybeReuseLedger:+-r} \
-        ${maybeDelete:+-D} \
-        ${GCE_NODE_COUNT:+-s}
+      if [[ -n $EC2_NODE_COUNT ]]; then
+        # shellcheck disable=SC2068
+        ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
+          -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
+          ${maybeReuseLedger:+-r} \
+          ${maybeDelete:+-D} \
+          ${GCE_NODE_COUNT:+-s}
+      fi
 
-      # shellcheck disable=SC2068
-      [[ -z $GCE_NODE_COUNT ]] || ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-        -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P \
-        ${maybeReuseLedger:+-r} \
-        ${maybeDelete:+-D} \
-        ${EC2_NODE_COUNT:+-x}
+      if [[ -n $GCE_NODE_COUNT ]]; then
+        # shellcheck disable=SC2068
+        ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P \
+          ${maybeReuseLedger:+-r} \
+          ${maybeDelete:+-D} \
+          ${EC2_NODE_COUNT:+-x}
+      fi
     )
     ;;
   testnet-beta-perf)
