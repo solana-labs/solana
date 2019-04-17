@@ -1016,7 +1016,6 @@ mod tests {
     use std::sync::mpsc::channel;
 
     #[test]
-    #[ignore] // TODO Issue #3825
     fn test_exchange_local_cluster() {
         solana_logger::setup();
 
