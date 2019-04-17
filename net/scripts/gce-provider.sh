@@ -161,7 +161,7 @@ cloud_CreateInstances() {
   args+=(--image $imageName)
 
   # shellcheck disable=SC2206 # Do not want to quote $machineType as it may contain extra args
-  args+=(--machine-type $machineType)
+  args+=($machineType)
   if [[ -n $optionalBootDiskSize ]]; then
     args+=(
       --boot-disk-size "${optionalBootDiskSize}GB"

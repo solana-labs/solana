@@ -12,12 +12,12 @@ gce)
   # shellcheck source=net/scripts/gce-provider.sh
   source "$here"/scripts/gce-provider.sh
 
-  cpuBootstrapLeaderMachineType=n1-standard-16
+  cpuBootstrapLeaderMachineType="--machine-type n1-standard-16"
   gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80"
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
-  clientMachineType=n1-standard-16
-  blockstreamerMachineType=n1-standard-8
+  clientMachineType="--custom-cpu 16 --custom-memory 20GB"
+  blockstreamerMachineType="--machine-type n1-standard-8"
   ;;
 ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
@@ -91,7 +91,7 @@ Manage testnet instances
    -P               - Use public network IP addresses (default: $publicNetwork)
    -g               - Enable GPU (default: $enableGpu)
    -G               - Enable GPU, and set count/type of GPUs to use
-                      (e.g $cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80)
+                      (e.g $gpuBootstrapLeaderMachineType)
    -a [address]     - Address to be be assigned to the Blockstreamer if present,
                       otherwise the bootstrap fullnode.
                       * For GCE, [address] is the "name" of the desired External
