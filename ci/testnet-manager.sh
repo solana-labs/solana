@@ -127,7 +127,8 @@ sanity() {
   testnet-edge)
     (
       set -x
-      ci/testnet-sanity.sh edge-testnet-solana-com ec2 us-west-1a
+      NO_LEDGER_VERIFY=1 \
+        ci/testnet-sanity.sh edge-testnet-solana-com ec2 us-west-1a
     )
     ;;
   testnet-edge-perf)
@@ -145,9 +146,11 @@ sanity() {
 
       ok=true
       if [[ -n $EC2_NODE_COUNT ]]; then
-        ci/testnet-sanity.sh beta-testnet-solana-com ec2 "${EC2_ZONES[0]}" || ok=false
+        NO_LEDGER_VERIFY=1 \
+          ci/testnet-sanity.sh beta-testnet-solana-com ec2 "${EC2_ZONES[0]}" || ok=false
       elif [[ -n $GCE_NODE_COUNT ]]; then
-        ci/testnet-sanity.sh beta-testnet-solana-com gce "${GCE_ZONES[0]}" || ok=false
+        NO_LEDGER_VERIFY=1 \
+          ci/testnet-sanity.sh beta-testnet-solana-com gce "${GCE_ZONES[0]}" || ok=false
       else
         echo "Error: no EC2 or GCE nodes"
         ok=false
@@ -167,7 +170,8 @@ sanity() {
   testnet)
     (
       set -x
-      ci/testnet-sanity.sh testnet-solana-com ec2 us-west-1a
+      NO_LEDGER_VERIFY=1 \
+        ci/testnet-sanity.sh testnet-solana-com ec2 us-west-1a
       #ci/testnet-sanity.sh testnet-solana-com gce us-east1-c
     )
     ;;
