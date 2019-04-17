@@ -329,22 +329,25 @@ impl Accounts {
         // Copy all the accounts
         let mut fork_locks = fork_locks.lock().unwrap();
         for k in keys {
-            let mut is_locked = false;
-            if fork_locks.contains(k) {
-                is_locked = true;
-            } else {
-                // Check parent locks. As soon as a set of parent locks is empty,
-                // we can remove it from the list b/c that means the parent has
-                // released the locks.
-                parent_locks.retain(|p| {
-                    let p = p.lock().unwrap();
-                    if p.contains(k) {
-                        is_locked = true;
-                    }
+            let is_locked = {
+                if fork_locks.contains(k) {
+                    true
+                } else {
+                    // Check parent locks. As soon as a set of parent locks is empty,
+                    // we can remove it from the list b/c that means the parent has
+                    // released the locks.
+                    let mut is_locked = false;
+                    parent_locks.retain(|p| {
+                        let p = p.lock().unwrap();
+                        if p.contains(k) {
+                            is_locked = true;
+                        }
 
-                    !p.is_empty()
-                });
-            }
+                        !p.is_empty()
+                    });
+                    is_locked
+                }
+            };
             if is_locked {
                 error_counters.account_in_use += 1;
                 debug!("Account in use: {:?}", k);
