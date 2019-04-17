@@ -90,7 +90,7 @@ nodes=(
 for i in $(seq 1 $extraNodes); do
   nodes+=(
     "multinode-demo/fullnode.sh \
-      -X dyn$i \
+      --label dyn$i \
       --init-complete-file init-complete-node$((2 + i)).log \
       $maybeNoLeaderRotation"
   )

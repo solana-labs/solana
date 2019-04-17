@@ -13,21 +13,15 @@ if [[ $1 = -h ]]; then
   fullnode_usage "$@"
 fi
 
-gossip_port=
 extra_fullnode_args=()
-self_setup=0
 stake=43 # number of lamports to assign as stake (plus transaction fee to setup the stake)
 poll_for_new_genesis_block=0
+label=
 
 while [[ ${1:0:1} = - ]]; do
-  if [[ $1 = -X ]]; then
-    self_setup=1
-    self_setup_label=$2
+  if [[ $1 = --label ]]; then
+    label="-$2"
     shift 2
-  elif [[ $1 = -x ]]; then
-    self_setup=1
-    self_setup_label=$$
-    shift
   elif [[ $1 = --poll-for-new-genesis-block ]]; then
     poll_for_new_genesis_block=1
     shift
@@ -51,7 +45,6 @@ while [[ ${1:0:1} = - ]]; do
     extra_fullnode_args+=("$1")
     shift
   elif [[ $1 = --gossip-port ]]; then
-    gossip_port=$2
     extra_fullnode_args+=("$1" "$2")
     shift 2
   elif [[ $1 = --rpc-port ]]; then
@@ -99,37 +92,26 @@ else
   program=$solana_fullnode
 fi
 
-if ((!self_setup)); then
-  [[ -f $SOLANA_CONFIG_DIR/fullnode-id.json ]] || {
-    echo "$SOLANA_CONFIG_DIR/fullnode-id.json not found, create it by running:"
-    echo
-    echo "  ${here}/setup.sh"
-    exit 1
-  }
-  fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id.json
-  fullnode_vote_id_path=$SOLANA_CONFIG_DIR/fullnode-vote-id.json
-  ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger
-  accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts
+fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id$label.json
+fullnode_vote_id_path=$SOLANA_CONFIG_DIR/fullnode-vote-id$label.json
+ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger$label
+accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts$label
 
-  if [[ -z $gossip_port ]]; then
-    extra_fullnode_args+=("--gossip-port" 9000)
-  fi
-else
-  mkdir -p "$SOLANA_CONFIG_DIR"
-  fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id-x$self_setup_label.json
-  fullnode_vote_id_path=$SOLANA_CONFIG_DIR/fullnode-vote-id-x$self_setup_label.json
-  [[ -f "$fullnode_id_path" ]] || $solana_keygen -o "$fullnode_id_path"
-  [[ -f "$fullnode_vote_id_path" ]] || $solana_keygen -o "$fullnode_vote_id_path"
-  ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger-x$self_setup_label
-  accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts-x$self_setup_label
-fi
+mkdir -p "$SOLANA_CONFIG_DIR"
+[[ -r "$fullnode_id_path" ]] || $solana_keygen -o "$fullnode_id_path"
+[[ -r "$fullnode_vote_id_path" ]] || $solana_keygen -o "$fullnode_vote_id_path"
 
+fullnode_id=$($solana_keygen pubkey "$fullnode_id_path")
 fullnode_vote_id=$($solana_keygen pubkey "$fullnode_vote_id_path")
 
-[[ -r $fullnode_id_path ]] || {
-  echo "$fullnode_id_path does not exist"
-  exit 1
-}
+cat <<EOF
+======================[ Fullnode configuration ]======================
+node id: $fullnode_id
+vote id: $fullnode_vote_id
+ledger: $ledger_config_dir
+accounts: $accounts_config_dir
+======================================================================
+EOF
 
 tune_system
 
@@ -152,10 +134,65 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   echo "rsync://$url"
 }
 
+airdrop() {
+  declare keypair_file=$1
+  declare host=$2
+  declare amount=$3
 
-rsync_leader_url=$(rsync_url "$leader")
+  declare address
+  address=$($solana_wallet --keypair "$keypair_file" address)
+
+  # TODO: Until https://github.com/solana-labs/solana/issues/2355 is resolved
+  # a fullnode needs N lamports as its vote account gets re-created on every
+  # node restart, costing it lamports
+  declare retries=5
+
+  while ! $solana_wallet --keypair "$keypair_file" --host "$host" airdrop "$amount"; do
+
+    # TODO: Consider moving this retry logic into `solana-wallet airdrop`
+    #   itself, currently it does not retry on "Connection refused" errors.
+    ((retries--))
+    if [[ $retries -le 0 ]]; then
+        echo "Airdrop to $address failed."
+        return 1
+    fi
+    echo "Airdrop to $address failed. Remaining retries: $retries"
+    sleep 1
+  done
+
+  return 0
+}
+
+setup_vote_account() {
+  declare drone_address=$1
+  declare node_id_path=$2
+  declare vote_id_path=$3
+  declare stake=$4
+
+  declare node_id
+  node_id=$($solana_wallet --keypair "$node_id_path" address)
+
+  declare vote_id
+  vote_id=$($solana_wallet --keypair "$vote_id_path" address)
+
+  if [[ -f "$vote_id_path".configured ]]; then
+    echo "Vote account has already been configured"
+  else
+    airdrop "$node_id_path" "$drone_address" "$stake" || return $?
+
+    # Fund the vote account from the node, with the node as the node_id
+    $solana_wallet --keypair "$node_id_path" --host "$drone_address" \
+      create-vote-account "$vote_id" "$node_id" $((stake - 1)) || return $?
+
+    touch "$vote_id_path".configured
+  fi
+
+  $solana_wallet --keypair "$node_id_path" --host "$drone_address" show-vote-account "$vote_id"
+  return 0
+}
+
 set -e
-
+rsync_leader_url=$(rsync_url "$leader")
 secs_to_next_genesis_poll=0
 PS4="$(basename "$0"): "
 while true; do
@@ -204,9 +241,9 @@ while true; do
         $rsync -r "$rsync_leader_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR" || true
         if [[ -n $(diff "$SOLANA_RSYNC_CONFIG_DIR"/ledger/genesis.json "$ledger_config_dir"/genesis.json 2>&1) ]]; then
           echo "############## New genesis detected, restarting fullnode ##############"
-          rm -rf "$ledger_config_dir"
           kill "$pid" || true
           wait "$pid" || true
+          rm -rf "$ledger_config_dir" "$accounts_config_dir" "$vote_id_path".configured
           break
         fi
       fi

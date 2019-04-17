@@ -77,16 +77,16 @@ exec multinode-demo/fullnode.sh "$@"
 EOF
   chmod +x solana-release/bin/fullnode.sh
 
-  # Add a wrapper script for fullnode-x.sh
+  # Add a wrapper script for clear-fullnode-config.sh
   # TODO: Remove multinode/... from tarball
-  cat > solana-release/bin/fullnode-x.sh <<'EOF'
+  cat > solana-release/bin/clear-fullnode-config.sh <<'EOF'
 #!/usr/bin/env bash
 set -e
 cd "$(dirname "$0")"/..
 export USE_INSTALL=1
-exec multinode-demo/fullnode-x.sh "$@"
+exec multinode-demo/clear-fullnode-config.sh "$@"
 EOF
-  chmod +x solana-release/bin/fullnode-x.sh
+  chmod +x solana-release/bin/clear-fullnode-config.sh
 
   tar jvcf solana-release-$TARGET.tar.bz2 solana-release/
   cp solana-release/bin/solana-install solana-install-$TARGET

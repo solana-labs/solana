@@ -77,7 +77,7 @@ local|tar)
     fi
     set -x
     if [[ $skipSetup != true ]]; then
-      ./multinode-demo/setup.sh -t bootstrap-leader -b $stake
+      ./multinode-demo/setup.sh -b $stake
     fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
 
@@ -122,7 +122,7 @@ local|tar)
 
     set -x
     if [[ $skipSetup != true ]]; then
-      ./multinode-demo/setup.sh -t fullnode
+      ./multinode-demo/clear-fullnode-config.sh
     fi
 
     if [[ $nodeType = blockstreamer ]]; then
