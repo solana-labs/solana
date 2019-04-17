@@ -426,6 +426,7 @@ impl BankingStage {
                 poh,
             );
             trace!("process_transcations: {:?}", result);
+            chunk_start = chunk_end;
             if let Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) = result {
                 info!(
                     "process transactions: max height reached slot: {} height: {}",
@@ -435,7 +436,6 @@ impl BankingStage {
                 break;
             }
             result?;
-            chunk_start = chunk_end;
         }
         Ok(chunk_start)
     }
