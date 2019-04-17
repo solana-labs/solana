@@ -310,7 +310,7 @@ impl Blocktree {
                         .unwrap_or_else(|| ErasureMeta::new(set_index))
                 });
 
-            erasure_meta_entry.set_data_present(blob.index());
+            erasure_meta_entry.set_data_present(blob.index(), true);
 
             let _ = self.insert_data_blob(
                 blob,
@@ -421,9 +421,26 @@ impl Blocktree {
     pub fn get_coding_blob_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
         self.erasure_cf.get_bytes((slot, index))
     }
+
     pub fn delete_coding_blob(&self, slot: u64, index: u64) -> Result<()> {
-        self.erasure_cf.delete((slot, index))
+        let set_index = ErasureMeta::set_index_for(index);
+
+        let mut erasure_meta = self
+            .erasure_meta_cf
+            .get((slot, set_index))?
+            .unwrap_or_else(|| ErasureMeta::new(set_index));
+
+        erasure_meta.set_coding_present(index, false);
+
+        let mut batch = self.db.batch()?;
+
+        batch.delete::<cf::Coding>((slot, index))?;
+        batch.put::<cf::ErasureMeta>((slot, set_index), &erasure_meta)?;
+
+        self.db.write(batch)?;
+        Ok(())
     }
+
     pub fn get_data_blob_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
         self.data_cf.get_bytes((slot, index))
     }
@@ -441,7 +458,7 @@ impl Blocktree {
             .get((slot, set_index))?
             .unwrap_or_else(|| ErasureMeta::new(set_index));
 
-        erasure_meta.set_coding_present(index);
+        erasure_meta.set_coding_present(index, true);
 
         let mut writebatch = self.db.batch()?;
 
@@ -457,14 +474,6 @@ impl Blocktree {
         }
 
         Ok(())
-    }
-
-    pub fn put_data_raw(&self, slot: u64, index: u64, value: &[u8]) -> Result<()> {
-        self.data_cf.put_bytes((slot, index), value)
-    }
-
-    pub fn put_data_blob_bytes(&self, slot: u64, index: u64, bytes: &[u8]) -> Result<()> {
-        self.data_cf.put_bytes((slot, index), bytes)
     }
 
     pub fn get_data_blob(&self, slot: u64, blob_index: u64) -> Result<Option<Blob>> {
@@ -560,20 +569,6 @@ impl Blocktree {
         max_missing: usize,
     ) -> Vec<u64> {
         if let Ok(mut db_iterator) = self.data_cf.cursor() {
-            Self::find_missing_indexes(&mut db_iterator, slot, start_index, end_index, max_missing)
-        } else {
-            vec![]
-        }
-    }
-
-    pub fn find_missing_coding_indexes(
-        &self,
-        slot: u64,
-        start_index: u64,
-        end_index: u64,
-        max_missing: usize,
-    ) -> Vec<u64> {
-        if let Ok(mut db_iterator) = self.erasure_cf.cursor() {
             Self::find_missing_indexes(&mut db_iterator, slot, start_index, end_index, max_missing)
         } else {
             vec![]
@@ -1701,44 +1696,47 @@ pub mod tests {
         let blocktree_path = get_tmp_ledger_path("test_insert_data_blobs_consecutive");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
-            let slot = 0;
-            let parent_slot = 0;
-            // Write entries
-            let num_entries = 21 as u64;
-            let (blobs, original_entries) = make_slot_entries(slot, parent_slot, num_entries);
+            for i in 0..4 {
+                let slot = i;
+                let parent_slot = if i == 0 { 0 } else { i - 1 };
+                // Write entries
+                let num_entries = 21 as u64 * (i + 1);
+                let (blobs, original_entries) = make_slot_entries(slot, parent_slot, num_entries);
 
-            blocktree
-                .write_blobs(blobs.iter().skip(1).step_by(2))
-                .unwrap();
+                blocktree
+                    .write_blobs(blobs.iter().skip(1).step_by(2))
+                    .unwrap();
 
-            assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), vec![]);
+                assert_eq!(blocktree.get_slot_entries(slot, 0, None).unwrap(), vec![]);
 
-            let meta = blocktree.meta_cf.get(slot).unwrap().unwrap();
-            if num_entries % 2 == 0 {
+                let meta = blocktree.meta_cf.get(slot).unwrap().unwrap();
+                if num_entries % 2 == 0 {
+                    assert_eq!(meta.received, num_entries);
+                } else {
+                    debug!("got here");
+                    assert_eq!(meta.received, num_entries - 1);
+                }
+                assert_eq!(meta.consumed, 0);
+                assert_eq!(meta.parent_slot, parent_slot);
+                if num_entries % 2 == 0 {
+                    assert_eq!(meta.last_index, num_entries - 1);
+                } else {
+                    assert_eq!(meta.last_index, std::u64::MAX);
+                }
+
+                blocktree.write_blobs(blobs.iter().step_by(2)).unwrap();
+
+                assert_eq!(
+                    blocktree.get_slot_entries(slot, 0, None).unwrap(),
+                    original_entries,
+                );
+
+                let meta = blocktree.meta_cf.get(slot).unwrap().unwrap();
                 assert_eq!(meta.received, num_entries);
-            } else {
-                assert_eq!(meta.received, num_entries - 1);
-            }
-            assert_eq!(meta.consumed, 0);
-            assert_eq!(meta.parent_slot, 0);
-            if num_entries % 2 == 0 {
+                assert_eq!(meta.consumed, num_entries);
+                assert_eq!(meta.parent_slot, parent_slot);
                 assert_eq!(meta.last_index, num_entries - 1);
-            } else {
-                assert_eq!(meta.last_index, std::u64::MAX);
             }
-
-            blocktree.write_blobs(blobs.iter().step_by(2)).unwrap();
-
-            assert_eq!(
-                blocktree.get_slot_entries(0, 0, None).unwrap(),
-                original_entries,
-            );
-
-            let meta = blocktree.meta_cf.get(slot).unwrap().unwrap();
-            assert_eq!(meta.received, num_entries);
-            assert_eq!(meta.consumed, num_entries);
-            assert_eq!(meta.parent_slot, 0);
-            assert_eq!(meta.last_index, num_entries - 1);
         }
 
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
@@ -2628,6 +2626,23 @@ pub mod tests {
 
             assert_eq!(erasure_meta.data, 0xFFFF);
             assert_eq!(erasure_meta.coding, 0x0F);
+
+            let (start_idx, coding_end_idx) =
+                (erasure_meta.start_index(), erasure_meta.end_indexes().1);
+
+            for idx in start_idx..coding_end_idx {
+                blocktree.delete_coding_blob(slot, idx).unwrap();
+            }
+
+            let erasure_meta = blocktree
+                .erasure_meta_cf
+                .get((slot, 0))
+                .expect("DB get must succeed")
+                .unwrap();
+
+            assert!(!erasure_meta.can_recover());
+            assert_eq!(erasure_meta.data, 0xFFFF);
+            assert_eq!(erasure_meta.coding, 0x0);
         }
 
         #[test]
@@ -2701,13 +2716,12 @@ pub mod tests {
             Blocktree::destroy(&ledger_path).expect("Expect successful Blocktree destruction");
         }
 
-        /// FIXME: JERASURE Threading: see Issue
-        /// [#3725](https://github.com/solana-labs/solana/issues/3725)
         #[test]
         fn test_recovery_multi_slot_multi_thread() {
+            use rand::rngs::SmallRng;
+            use rand::SeedableRng;
             use std::thread;
 
-            const USE_THREADS: bool = true;
             let slots = vec![0, 3, 5, 50, 100];
             let max_erasure_sets = 16;
             solana_logger::setup();
@@ -2717,7 +2731,7 @@ pub mod tests {
 
             // Specification should generate a ledger where each slot has an random number of
             // erasure sets. Odd erasure sets will have all data blobs and no coding blobs, and even ones
-            // will have between 1-4 data blobs missing and all coding blobs
+            // will have between 1 data blob missing and 1 coding blob
             let specs = slots
                 .iter()
                 .map(|&slot| {
@@ -2728,7 +2742,7 @@ pub mod tests {
                             let (num_data, num_coding) = if set_index % 2 == 0 {
                                 (NUM_DATA - rng.gen_range(1, 5), NUM_CODING)
                             } else {
-                                (NUM_DATA, 0)
+                                (NUM_DATA - 1, NUM_CODING - 1)
                             };
                             ErasureSpec {
                                 set_index,
@@ -2753,35 +2767,60 @@ pub mod tests {
             for slot_model in model.clone() {
                 let blocktree = Arc::clone(&blocktree);
                 let slot = slot_model.slot;
-                let closure = move || {
+                let mut rng = SmallRng::from_rng(&mut rng).unwrap();
+                let handle = thread::spawn(move || {
                     for erasure_set in slot_model.chunks {
-                        blocktree
-                            .write_shared_blobs(erasure_set.data)
-                            .expect("Writing data blobs must succeed");
-                        debug!(
-                            "multislot: wrote data: slot: {}, erasure_set: {}",
-                            slot, erasure_set.set_index
-                        );
-
-                        for shared_coding_blob in erasure_set.coding {
-                            let blob = shared_coding_blob.read().unwrap();
-                            let size = blob.size() + BLOB_HEADER_SIZE;
+                        // for even sets, write data blobs first, then write coding blobs, which
+                        // should trigger recovery since all coding blobs will be inserted and
+                        // between 1-4 data blobs are missing
+                        if rng.gen() {
                             blocktree
-                                .put_coding_blob_bytes(slot, blob.index(), &blob.data[..size])
-                                .expect("Writing coding blobs must succeed");
-                        }
-                        debug!(
-                            "multislot: wrote coding: slot: {}, erasure_set: {}",
-                            slot, erasure_set.set_index
-                        );
-                    }
-                };
+                                .write_shared_blobs(erasure_set.data)
+                                .expect("Writing data blobs must succeed");
+                            debug!(
+                                "multislot: wrote data: slot: {}, erasure_set: {}",
+                                slot, erasure_set.set_index
+                            );
 
-                if USE_THREADS {
-                    handles.push(thread::spawn(closure));
-                } else {
-                    closure();
-                }
+                            for shared_coding_blob in erasure_set.coding {
+                                let blob = shared_coding_blob.read().unwrap();
+                                let size = blob.size() + BLOB_HEADER_SIZE;
+                                blocktree
+                                    .put_coding_blob_bytes(slot, blob.index(), &blob.data[..size])
+                                    .expect("Writing coding blobs must succeed");
+                            }
+                            debug!(
+                                "multislot: wrote coding: slot: {}, erasure_set: {}",
+                                slot, erasure_set.set_index
+                            );
+                        } else {
+                            // for odd sets, write coding blobs first, then write the data blobs.
+                            // writing the data blobs should trigger recovery, since 3/4 coding and
+                            // 15/16 data blobs will be present
+                            for shared_coding_blob in erasure_set.coding {
+                                let blob = shared_coding_blob.read().unwrap();
+                                let size = blob.size() + BLOB_HEADER_SIZE;
+                                blocktree
+                                    .put_coding_blob_bytes(slot, blob.index(), &blob.data[..size])
+                                    .expect("Writing coding blobs must succeed");
+                            }
+                            debug!(
+                                "multislot: wrote coding: slot: {}, erasure_set: {}",
+                                slot, erasure_set.set_index
+                            );
+
+                            blocktree
+                                .write_shared_blobs(erasure_set.data)
+                                .expect("Writing data blobs must succeed");
+                            debug!(
+                                "multislot: wrote data: slot: {}, erasure_set: {}",
+                                slot, erasure_set.set_index
+                            );
+                        }
+                    }
+                });
+
+                handles.push(handle);
             }
 
             handles

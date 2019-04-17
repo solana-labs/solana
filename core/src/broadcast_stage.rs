@@ -276,9 +276,9 @@ mod test {
     use crate::entry::create_ticks;
     use crate::service::Service;
     use solana_runtime::bank::Bank;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -313,7 +313,9 @@ mod test {
 
         let exit_sender = Arc::new(AtomicBool::new(false));
         let (storage_sender, _receiver) = channel();
-        let bank = Arc::new(Bank::default());
+
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Arc::new(Bank::new(&genesis_block));
 
         // Start up the broadcast stage
         let broadcast_service = BroadcastStage::new(
@@ -333,15 +335,13 @@ mod test {
     }
 
     #[test]
-    #[ignore]
-    //TODO this test won't work since broadcast stage no longer edits the ledger
     fn test_broadcast_ledger() {
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path("test_broadcast_ledger");
+
         {
             // Create the leader scheduler
             let leader_keypair = Keypair::new();
-            let start_tick_height = 0;
-            let max_tick_height = start_tick_height + DEFAULT_TICKS_PER_SLOT;
 
             let (entry_sender, entry_receiver) = channel();
             let broadcast_service = setup_dummy_broadcast_service(
@@ -350,6 +350,9 @@ mod test {
                 entry_receiver,
             );
             let bank = broadcast_service.bank.clone();
+            let start_tick_height = bank.tick_height();
+            let max_tick_height = bank.max_tick_height();
+            let ticks_per_slot = bank.ticks_per_slot();
 
             let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
             for (i, tick) in ticks.into_iter().enumerate() {
@@ -359,15 +362,23 @@ mod test {
             }
 
             sleep(Duration::from_millis(2000));
+
+            trace!(
+                "[broadcast_ledger] max_tick_height: {}, start_tick_height: {}, ticks_per_slot: {}",
+                max_tick_height,
+                start_tick_height,
+                ticks_per_slot,
+            );
+
             let blocktree = broadcast_service.blocktree;
             let mut blob_index = 0;
             for i in 0..max_tick_height - start_tick_height {
-                let slot = (start_tick_height + i + 1) / DEFAULT_TICKS_PER_SLOT;
+                let slot = (start_tick_height + i + 1) / ticks_per_slot;
 
                 let result = blocktree.get_data_blob(slot, blob_index).unwrap();
 
                 blob_index += 1;
-                assert!(result.is_some());
+                result.expect("expect blob presence");
             }
 
             drop(entry_sender);
