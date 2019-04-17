@@ -94,7 +94,6 @@ pub fn read_keypair(path: &str) -> Result<Keypair, Box<error::Error>> {
     Ok(keypair)
 }
 
-//pub fn gen_keypair_file(outfile: String) -> Result<String, Box<dyn error::Error>> {
 pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
     let keypair_bytes = Keypair::new().to_bytes();
     let serialized = serde_json::to_string(&keypair_bytes.to_vec())?;
@@ -107,4 +106,36 @@ pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
         f.write_all(&serialized.clone().into_bytes())?;
     }
     Ok(serialized)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::mem;
+
+    fn tmp_file_path(name: &str) -> String {
+        use std::env;
+        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+        let keypair = Keypair::new();
+
+        format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey()).to_string()
+    }
+
+    #[test]
+    fn test_gen_keypair_file() {
+        let outfile = tmp_file_path("test_gen_keypair_file.json");
+        let serialized_keypair = gen_keypair_file(outfile.to_string()).unwrap();
+        let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
+        assert!(Path::new(&outfile).exists());
+        assert_eq!(
+            keypair_vec,
+            read_keypair(&outfile).unwrap().to_bytes().to_vec()
+        );
+        assert_eq!(
+            read_keypair(&outfile).unwrap().pubkey().as_ref().len(),
+            mem::size_of::<Pubkey>()
+        );
+        fs::remove_file(&outfile).unwrap();
+        assert!(!Path::new(&outfile).exists());
+    }
 }
