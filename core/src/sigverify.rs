@@ -237,14 +237,10 @@ pub fn ed25519_verify(batches: &[Packets]) -> Vec<Vec<u8>> {
     debug!("CUDA ECDSA for {}", batch_size(batches));
     let mut out = Vec::new();
     let mut elems = Vec::new();
-    let mut locks = Vec::new();
     let mut rvs = Vec::new();
 
-    for packets in batches {
-        locks.push(packets.read().unwrap());
-    }
     let mut num_packets = 0;
-    for p in locks {
+    for p in batches {
         elems.push(Elems {
             elems: p.packets.as_ptr(),
             num: p.packets.len() as u32,
