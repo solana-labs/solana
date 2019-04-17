@@ -26,6 +26,28 @@ traversal issues.  A cloud-hosted machine works best.  Ensure that IP ports
 Prebuilt binaries are available for Linux x86_64 (Ubuntu 18.04 recommended).
 MacOS or WSL users may build from source.
 
+#### Confirm The Testnet Is Reachable
+Before attaching a validator node, sanity check that the cluster is accessible
+to your machine by running some simple wallet commands.  If any of these
+commands fail, please retry 5-10 minutes later to confirm the testnet is not
+just restarting itself before debugging further.
+
+Fetch the current testnet transaction count over JSON RPC:
+```bash
+$ curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://beta.testnet.solana.com:8899
+```
+
+Inspect the blockexplorer at [http://beta.testnet.solana.com/](http://beta.testnet.solana.com/) for activity.
+
+Run the following command to join the gossip network and view all the other nodes in the cluster:
+```bash
+$ solana-gossip --network beta.testnet.solana.com:8001
+```
+
+View the [metrics dashboard](
+https://metrics.solana.com:3000/d/U9-26Cqmk/testnet-monitor-cloud?refresh=60s&orgId=2&var-testnet=testnet-beta&var-hostid=All)
+for more detail on cluster activity.
+
 ### Validator Setup
 #### Obtaining The Software
 ##### Bootstrap with `solana-install`
@@ -68,32 +90,16 @@ $ ./scripts/cargo-install-all.sh .
 $ export PATH=$PWD/bin:$PATH
 ```
 
-#### Confirm The Testnet Is Reachable
-Before attaching a validator node, sanity check that the cluster is accessible
-to your machine by running some simple wallet commands.  If any of these
-commands fail, please retry 5-10 minutes later to confirm the testnet is not
-just restarting itself before debugging further.
+### Starting The Validator
 
-Receive an airdrop of lamports from the testnet drone:
+Sanity check that you are able to interact with the cluster by receiving a small
+airdrop of lamports from the testnet drone:
 ```bash
 $ solana-wallet -n beta.testnet.solana.com airdrop 123
 $ solana-wallet -n beta.testnet.solana.com balance
 ```
 
-Fetch the current testnet transaction count over JSON RPC:
-```bash
-$ curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://beta.testnet.solana.com:8899
-```
-
-Inspect the blockexplorer at [http://beta.testnet.solana.com/](http://beta.testnet.solana.com/) for activity.
-
-Run the following command to join the gossip network and view all the other nodes in the cluster:
-```bash
-$ solana-gossip --network beta.testnet.solana.com:8001
-```
-
-### Starting The Validator
-The following command will start a new validator node.
+Then the following command will start a new validator node.
 
 If this is a `solana-install`-installation:
 ```bash
@@ -103,7 +109,7 @@ $ fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solan
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ solana-install run fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com
+$ solana-install run fullnode-x.sh -- --public-address --poll-for-new-genesis-block beta.testnet.solana.com
 ```
 
 When not using `solana-install`:
@@ -134,5 +140,3 @@ export p="password obtained from the Solana maintainers"
 export SOLANA_METRICS_CONFIG="db=testnet-beta,u=${u:?},p=${p:?}"
 source scripts/configure-metrics.sh
 ```
-Inspect for your contributions to our [metrics dashboard](
-https://metrics.solana.com:3000/d/U9-26Cqmk/testnet-monitor-cloud?refresh=60s&orgId=2&var-testnet=testnet-beta&var-hostid=All).
