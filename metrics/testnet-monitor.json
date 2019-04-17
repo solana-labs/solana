@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 399,
-  "iteration": 1554844431880,
+  "iteration": 1554844431890,
   "links": [
     {
       "asDropdown": true,
@@ -124,7 +124,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT ROUND(MEAN(\"sum\")) FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"counter-bank-process_transactions-txs\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
+          "query": "SELECT ROUND(MEAN(\"sum\")) FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -236,7 +236,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT MAX(\"sum\") FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"counter-bank-process_transactions-txs\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
+          "query": "SELECT MAX(\"sum\") FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -348,7 +348,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"transactions\" FROM \"$testnet\".\"autogen\".\"counter-bank-process_transactions-txs\" WHERE $timeFilter \n\n",
+          "query": "SELECT sum(\"count\") AS \"transactions\" FROM \"$testnet\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE $timeFilter \n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -1479,7 +1479,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"transactions\" FROM \"$testnet\".\"autogen\".\"counter-bank-process_transactions-txs\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "query": "SELECT sum(\"count\") AS \"transactions\" FROM \"$testnet\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
@@ -4238,7 +4238,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \"count\" FROM \"$testnet\".\"autogen\".\"fetch-stage\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
+          "query": "SELECT sum(\"count\") AS \"count\" FROM \"$testnet\".\"autogen\".\"counter-packets-recv_count\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
           "rawQuery": true,
           "refId": "G",
           "resultFormat": "time_series",
@@ -6428,5 +6428,5 @@
   "timezone": "",
   "title": "Testnet Monitor (edge)",
   "uid": "testnet-edge",
-  "version": 118
+  "version": 119
 }
