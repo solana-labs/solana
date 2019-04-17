@@ -127,7 +127,8 @@ sanity() {
   testnet-edge)
     (
       set -x
-      ci/testnet-sanity.sh edge-testnet-solana-com ec2 us-west-1a
+      NO_LEDGER_VERIFY=1 \
+        ci/testnet-sanity.sh edge-testnet-solana-com ec2 us-west-1a
     )
     ;;
   testnet-edge-perf)
@@ -145,7 +146,8 @@ sanity() {
 
       ok=true
       if [[ -n $EC2_NODE_COUNT ]]; then
-        ci/testnet-sanity.sh beta-testnet-solana-com ec2 "${EC2_ZONES[0]}" || ok=false
+        NO_LEDGER_VERIFY=1 \
+          ci/testnet-sanity.sh beta-testnet-solana-com ec2 "${EC2_ZONES[0]}" || ok=false
       fi
 
       if $ok && [[ -n $GCE_NODE_COUNT ]]; then
@@ -153,7 +155,8 @@ sanity() {
           echo "TODO: Fix testnet-sanity.sh to work with a multinode testnet.  It needs an '-x'-like argument"
           exit 1
         fi
-        ci/testnet-sanity.sh beta-testnet-solana-com gce "${GCE_ZONES[0]}" || ok=false
+        NO_LEDGER_VERIFY=1 \
+          ci/testnet-sanity.sh beta-testnet-solana-com gce "${GCE_ZONES[0]}" || ok=false
       fi
       $ok
     )
@@ -170,7 +173,8 @@ sanity() {
   testnet)
     (
       set -x
-      ci/testnet-sanity.sh testnet-solana-com ec2 us-west-1a
+      NO_LEDGER_VERIFY=1 \
+        ci/testnet-sanity.sh testnet-solana-com ec2 us-west-1a
       #ci/testnet-sanity.sh testnet-solana-com gce us-east1-c
     )
     ;;
