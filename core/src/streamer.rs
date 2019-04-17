@@ -35,11 +35,6 @@ fn recv_loop(
                 return Ok(());
             }
             if let Ok(len) = msgs.recv_from(sock) {
-                submit(
-                    influxdb::Point::new(channel_tag)
-                        .add_field("count", influxdb::Value::Integer(len as i64))
-                        .to_owned(),
-                );
                 channel.send(Arc::new(RwLock::new(msgs)))?;
                 break;
             }
