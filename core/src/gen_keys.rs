@@ -4,7 +4,6 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rayon::prelude::*;
 use solana_sdk::signature::Keypair;
-use untrusted::Input;
 
 pub struct GenKeys {
     generator: ChaChaRng,
@@ -29,7 +28,7 @@ impl GenKeys {
     pub fn gen_n_keypairs(&mut self, n: u64) -> Vec<Keypair> {
         self.gen_n_seeds(n)
             .into_par_iter()
-            .map(|seed| Keypair::from_seed_unchecked(Input::from(&seed)).unwrap())
+            .map(|seed| Keypair::generate(&mut ChaChaRng::from_seed(seed)))
             .collect()
     }
 }

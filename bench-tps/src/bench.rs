@@ -68,7 +68,7 @@ pub fn do_bench_tps(config: Config) {
     let client = create_client(cluster_entrypoint.client_facing_addr(), FULLNODE_PORT_RANGE);
 
     let mut seed = [0u8; 32];
-    seed.copy_from_slice(&id.public_key_bytes()[..32]);
+    seed.copy_from_slice(&id.to_bytes()[..32]);
     let mut rnd = GenKeys::new(seed);
 
     println!("Creating {} keypairs...", tx_count * 2);
