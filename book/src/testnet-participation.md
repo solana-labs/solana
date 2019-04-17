@@ -9,7 +9,8 @@ in future releases.
 The beta testnet features a validator running at beta.testnet.solana.com, which
 serves as the entrypoint to the cluster for your validator.
 
-Additionally there is a blockexplorer available at http://beta.testnet.solana.com/.
+Additionally there is a blockexplorer available at
+[http://beta.testnet.solana.com/](http://beta.testnet.solana.com/).
 
 The beta testnet is configured to reset the ledger every 24hours, or sooner
 should an hourly automated sanity test fail.
@@ -35,7 +36,7 @@ software on Linux x86_64 systems.
 Install the latest release with a single shell command:
 ```bash
 $ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.13.0/install/solana-install-init.sh | \
-  sh -c - --url https://api.beta.testnet.solana.com
+  sh -s - --url https://api.beta.testnet.solana.com
 ```
 
 Alternatively build the `solana-install` program from source and run the
@@ -84,7 +85,7 @@ Fetch the current testnet transaction count over JSON RPC:
 $ curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://beta.testnet.solana.com:8899
 ```
 
-Inspect the blockexplorer at http://beta.testnet.solana.com/ for activity.
+Inspect the blockexplorer at [http://beta.testnet.solana.com/](http://beta.testnet.solana.com/) for activity.
 
 Run the following command to join the gossip network and view all the other nodes in the cluster:
 ```bash
@@ -96,18 +97,18 @@ The following command will start a new validator node.
 
 If this is a `solana-install`-installation:
 ```bash
-$ fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com:8001
+$ fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ solana-install run fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com:8001
+$ solana-install run fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com
 ```
 
 When not using `solana-install`:
 ```bash
-$ USE_INSTALL=1 ./multinode-demo/fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com:8001
+$ USE_INSTALL=1 ./multinode-demo/fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com
 ```
 
 Then from another console, confirm the IP address if your node is now visible in
@@ -133,4 +134,5 @@ export p="password obtained from the Solana maintainers"
 export SOLANA_METRICS_CONFIG="db=testnet-beta,u=${u:?},p=${p:?}"
 source scripts/configure-metrics.sh
 ```
-Inspect for your contributions to our [metrics dashboard](https://metrics.solana.com:3000/d/U9-26Cqmk/testnet-monitor-cloud?refresh=60s&orgId=2&var-hostid=All).
+Inspect for your contributions to our [metrics dashboard](
+https://metrics.solana.com:3000/d/U9-26Cqmk/testnet-monitor-cloud?refresh=60s&orgId=2&var-testnet=testnet-beta&var-hostid=All).
