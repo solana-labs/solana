@@ -52,14 +52,14 @@ launchTestnet() {
   declare q_mean_tps='
     SELECT round(mean("sum_count")) AS "mean_tps" FROM (
       SELECT sum("count") AS "sum_count"
-        FROM "testnet-automation"."autogen"."counter-bank-process_transactions-txs"
+        FROM "testnet-automation"."autogen"."counter-banking_stage-process_transactions"
         WHERE time > now() - 300s GROUP BY time(1s)
     )'
 
   declare q_max_tps='
     SELECT round(max("sum_count")) AS "max_tps" FROM (
       SELECT sum("count") AS "sum_count"
-        FROM "testnet-automation"."autogen"."counter-bank-process_transactions-txs"
+        FROM "testnet-automation"."autogen"."counter-banking_stage-process_transactions"
         WHERE time > now() - 300s GROUP BY time(1s)
     )'
 

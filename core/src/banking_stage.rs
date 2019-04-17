@@ -149,7 +149,7 @@ impl BankingStage {
             let (processed, verified_txs, verified_indexes) =
                 Self::process_received_packets(&bank, &poh_recorder, &msgs, &vers, *offset)?;
             inc_new_counter_info!("banking_stage-consumed_buffered_packets", processed);
-
+            inc_new_counter_info!("banking_stage-process_transactions", processed);
             inc_new_counter_info!(
                 "banking_stage-rebuffered_packets",
                 verified_txs.len() - processed
@@ -229,14 +229,14 @@ impl BankingStage {
 
         // Buffer the packets if I am the next leader
         // or, if it was getting sent to me
+        // or, the next leader is unknown
         let leader_id = match poh_recorder.lock().unwrap().bank() {
             Some(bank) => {
                 leader_schedule_utils::slot_leader_at(bank.slot() + 1, &bank).unwrap_or_default()
             }
             None => rcluster_info
                 .leader_data()
-                .map(|x| x.id)
-                .unwrap_or_default(),
+                .map_or(rcluster_info.id(), |x| x.id),
         };
 
         leader_id == rcluster_info.id()
@@ -441,6 +441,7 @@ impl BankingStage {
                 poh,
             );
             trace!("process_transcations: {:?}", result);
+            chunk_start = chunk_end;
             if let Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) = result {
                 info!(
                     "process transactions: max height reached slot: {} height: {}",
@@ -450,7 +451,6 @@ impl BankingStage {
                 break;
             }
             result?;
-            chunk_start = chunk_end;
         }
         Ok(chunk_start)
     }
