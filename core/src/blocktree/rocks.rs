@@ -30,7 +30,9 @@ impl Backend for Rocks {
     type Error = rocksdb::Error;
 
     fn open(path: &Path) -> Result<Rocks> {
-        use crate::blocktree::db::columns::{Coding, Data, ErasureMeta, Orphans, SlotMeta};
+        #[cfg(feature = "erasure")]
+        use crate::blocktree::db::columns::ErasureMeta;
+        use crate::blocktree::db::columns::{Coding, Data, Orphans, SlotMeta};
 
         fs::create_dir_all(&path)?;
 
@@ -41,6 +43,7 @@ impl Backend for Rocks {
         let meta_cf_descriptor = ColumnFamilyDescriptor::new(SlotMeta::NAME, get_cf_options());
         let data_cf_descriptor = ColumnFamilyDescriptor::new(Data::NAME, get_cf_options());
         let erasure_cf_descriptor = ColumnFamilyDescriptor::new(Coding::NAME, get_cf_options());
+        #[cfg(feature = "erasure")]
         let erasure_meta_cf_descriptor =
             ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options());
         let orphans_cf_descriptor = ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options());
@@ -49,6 +52,7 @@ impl Backend for Rocks {
             meta_cf_descriptor,
             data_cf_descriptor,
             erasure_cf_descriptor,
+            #[cfg(feature = "erasure")]
             erasure_meta_cf_descriptor,
             orphans_cf_descriptor,
         ];
@@ -60,10 +64,13 @@ impl Backend for Rocks {
     }
 
     fn columns(&self) -> Vec<&'static str> {
-        use crate::blocktree::db::columns::{Coding, Data, ErasureMeta, Orphans, SlotMeta};
+        #[cfg(feature = "erasure")]
+        use crate::blocktree::db::columns::ErasureMeta;
+        use crate::blocktree::db::columns::{Coding, Data, Orphans, SlotMeta};
 
         vec![
             Coding::NAME,
+            #[cfg(feature = "erasure")]
             ErasureMeta::NAME,
             Data::NAME,
             Orphans::NAME,
@@ -189,6 +196,7 @@ impl TypedColumn<Rocks> for cf::SlotMeta {
     type Type = super::SlotMeta;
 }
 
+#[cfg(feature = "erasure")]
 impl Column<Rocks> for cf::ErasureMeta {
     const NAME: &'static str = super::ERASURE_META_CF;
     type Index = (u64, u64);
@@ -208,6 +216,7 @@ impl Column<Rocks> for cf::ErasureMeta {
     }
 }
 
+#[cfg(feature = "erasure")]
 impl TypedColumn<Rocks> for cf::ErasureMeta {
     type Type = super::ErasureMeta;
 }
