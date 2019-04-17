@@ -322,16 +322,18 @@ EOF
     cloud_ForEachInstance waitForStartupComplete
   fi
 
-  echo "Looking for additional fullnode instances..."
-  for zone in "${zones[@]}"; do
-    cloud_FindInstances "$prefix-$zone-fullnode"
-    [[ ${#instances[@]} -gt 0 ]] || {
-      echo "Unable to find additional fullnodes"
-      exit 1
-    }
-    cloud_ForEachInstance recordInstanceIp fullnodeIpList
-    cloud_ForEachInstance waitForStartupComplete
-  done
+  if [[ $additionalFullNodeCount -gt 0 ]]; then
+    echo "Looking for additional fullnode instances..."
+    for zone in "${zones[@]}"; do
+      cloud_FindInstances "$prefix-$zone-fullnode"
+      [[ ${#instances[@]} -gt 0 ]] || {
+        echo "Unable to find additional fullnodes"
+        exit 1
+      }
+      cloud_ForEachInstance recordInstanceIp fullnodeIpList
+      cloud_ForEachInstance waitForStartupComplete
+    done
+  fi
 
   if $externalNodes; then
     echo "Let's not reset the current client configuration"
@@ -510,20 +512,22 @@ EOF
       "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType"
   fi
 
-  num_zones=${#zones[@]}
-  numNodesPerZone=$((additionalFullNodeCount / num_zones))
-  numLeftOverNodes=$((additionalFullNodeCount % num_zones))
-  for ((i=0; i < "$num_zones"; i++)); do
-    zone=${zones[i]}
-    if [[ $i -eq $((num_zones - 1)) ]]; then
-      numNodesPerZone=$((numNodesPerZone + numLeftOverNodes))
-    fi
-    cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
-      "$enableGpu" "$fullNodeMachineType" "$zone" "$fullNodeBootDiskSizeInGb" \
-      "$startupScript" "" "$bootDiskType" &
-  done
+  if [[ $additionalFullNodeCount -gt 0 ]]; then
+    num_zones=${#zones[@]}
+    numNodesPerZone=$((additionalFullNodeCount / num_zones))
+    numLeftOverNodes=$((additionalFullNodeCount % num_zones))
+    for ((i=0; i < "$num_zones"; i++)); do
+      zone=${zones[i]}
+      if [[ $i -eq $((num_zones - 1)) ]]; then
+        numNodesPerZone=$((numNodesPerZone + numLeftOverNodes))
+      fi
+      cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
+        "$enableGpu" "$fullNodeMachineType" "$zone" "$fullNodeBootDiskSizeInGb" \
+        "$startupScript" "" "$bootDiskType" &
+    done
 
-  wait
+    wait
+  fi
 
   if [[ $clientNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
