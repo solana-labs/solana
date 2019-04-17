@@ -83,7 +83,7 @@ fn test_replay() {
 
     let tvu_addr = target1.info.tvu;
 
-    let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
+    let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver, leader_schedule_cache) =
         fullnode::new_banks_from_blocktree(&blocktree_path, None);
     let bank = bank_forks.working_bank();
     assert_eq!(
@@ -91,6 +91,7 @@ fn test_replay() {
         starting_mint_balance
     );
 
+    let leader_schedule_cache = Arc::new(leader_schedule_cache);
     // start cluster_info1
     let bank_forks = Arc::new(RwLock::new(bank_forks));
     let mut cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
@@ -126,6 +127,7 @@ fn test_replay() {
             &poh_recorder,
             storage_sender,
             storage_receiver,
+            &leader_schedule_cache,
             &exit,
         );
 
