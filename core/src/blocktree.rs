@@ -445,6 +445,8 @@ impl Blocktree {
         self.data_cf.get_bytes((slot, index))
     }
 
+    /// For benchmarks, testing, and setup.
+    /// Does no metadata tracking. Use with care.
     pub fn put_data_blob_bytes(&self, slot: u64, index: u64, bytes: &[u8]) -> Result<()> {
         self.data_cf.put_bytes((slot, index), bytes)
     }
