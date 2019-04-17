@@ -6,7 +6,6 @@ use crate::packet::{
 };
 use crate::result::{Error, Result};
 use bincode;
-use solana_metrics::{influxdb, submit};
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,12 +19,7 @@ pub type PacketSender = Sender<SharedPackets>;
 pub type BlobSender = Sender<SharedBlobs>;
 pub type BlobReceiver = Receiver<SharedBlobs>;
 
-fn recv_loop(
-    sock: &UdpSocket,
-    exit: Arc<AtomicBool>,
-    channel: &PacketSender,
-    channel_tag: &'static str,
-) -> Result<()> {
+fn recv_loop(sock: &UdpSocket, exit: Arc<AtomicBool>, channel: &PacketSender) -> Result<()> {
     loop {
         let mut msgs = Packets::default();
         loop {
@@ -34,7 +28,7 @@ fn recv_loop(
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            if let Ok(len) = msgs.recv_from(sock) {
+            if let Ok(_len) = msgs.recv_from(sock) {
                 channel.send(Arc::new(RwLock::new(msgs)))?;
                 break;
             }
@@ -46,7 +40,6 @@ pub fn receiver(
     sock: Arc<UdpSocket>,
     exit: &Arc<AtomicBool>,
     packet_sender: PacketSender,
-    sender_tag: &'static str,
 ) -> JoinHandle<()> {
     let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
     if res.is_err() {
@@ -56,7 +49,7 @@ pub fn receiver(
     Builder::new()
         .name("solana-receiver".to_string())
         .spawn(move || {
-            let _ = recv_loop(&sock, exit, &packet_sender, sender_tag);
+            let _ = recv_loop(&sock, exit, &packet_sender);
         })
         .unwrap()
 }
@@ -230,7 +223,7 @@ mod test {
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(Arc::new(read), &exit, s_reader, "streamer-test");
+        let t_receiver = receiver(Arc::new(read), &exit, s_reader);
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);

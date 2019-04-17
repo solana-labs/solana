@@ -129,12 +129,7 @@ fn create_request_processor(
     let (s_reader, r_reader) = channel();
     let (s_responder, r_responder) = channel();
     let storage_socket = Arc::new(socket);
-    let t_receiver = receiver(
-        storage_socket.clone(),
-        exit,
-        s_reader,
-        "replicator-receiver",
-    );
+    let t_receiver = receiver(storage_socket.clone(), exit, s_reader);
     thread_handles.push(t_receiver);
 
     let t_responder = responder("replicator-responder", storage_socket.clone(), r_responder);

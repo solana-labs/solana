@@ -83,7 +83,7 @@ fn main() -> Result<()> {
 
         let (s_reader, r_reader) = channel();
         read_channels.push(r_reader);
-        read_threads.push(receiver(Arc::new(read), &exit, s_reader, "bench-streamer"));
+        read_threads.push(receiver(Arc::new(read), &exit, s_reader));
     }
 
     let t_producer1 = producer(&addr, exit.clone());
