@@ -219,8 +219,15 @@ impl Bank {
 
         bank.slot = slot;
         bank.max_tick_height = (bank.slot + 1) * bank.ticks_per_slot - 1;
-        inc_new_counter_info!("bank-new_from_parent-slot_height", slot);
-        inc_new_counter_info!("bank-new_from_parent-bank_height", bank.bank_height);
+        solana_metrics::submit(
+            influxdb::Point::new("bank-new_from_parent-heights")
+                .add_field("slot_height", influxdb::Value::Integer(slot as i64))
+                .add_field(
+                    "bank_height",
+                    influxdb::Value::Integer(bank.bank_height as i64),
+                )
+                .to_owned(),
+        );
 
         bank.parent = RwLock::new(Some(parent.clone()));
         bank.parent_hash = parent.hash();
