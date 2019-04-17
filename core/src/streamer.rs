@@ -27,21 +27,20 @@ fn recv_loop(
     channel_tag: &'static str,
 ) -> Result<()> {
     loop {
-        let msgs = SharedPackets::default();
+        let mut msgs = Packets::default();
         loop {
             // Check for exit signal, even if socket is busy
             // (for instance the leader trasaction socket)
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            if msgs.write().unwrap().recv_from(sock).is_ok() {
-                let len = msgs.read().unwrap().packets.len();
+            if let Ok(len) = msgs.recv_from(sock) {
                 submit(
                     influxdb::Point::new(channel_tag)
                         .add_field("count", influxdb::Value::Integer(len as i64))
                         .to_owned(),
                 );
-                channel.send(msgs)?;
+                channel.send(Arc::new(RwLock::new(msgs)))?;
                 break;
             }
         }
