@@ -146,14 +146,11 @@ sanity() {
       ok=true
       if [[ -n $EC2_NODE_COUNT ]]; then
         ci/testnet-sanity.sh beta-testnet-solana-com ec2 "${EC2_ZONES[0]}" || ok=false
-      fi
-
-      if $ok && [[ -n $GCE_NODE_COUNT ]]; then
-        if [[ -n $EC2_NODE_COUNT ]]; then
-          echo "TODO: Fix testnet-sanity.sh to work with a multinode testnet.  It needs an '-x'-like argument"
-          exit 1
-        fi
+      elif [[ -n $GCE_NODE_COUNT ]]; then
         ci/testnet-sanity.sh beta-testnet-solana-com gce "${GCE_ZONES[0]}" || ok=false
+      else
+        echo "Error: no EC2 or GCE nodes"
+        ok=false
       fi
       $ok
     )
