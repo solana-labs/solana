@@ -445,6 +445,10 @@ impl Blocktree {
         self.data_cf.get_bytes((slot, index))
     }
 
+    pub fn put_data_blob_bytes(&self, slot: u64, index: u64, bytes: &[u8]) -> Result<()> {
+        self.data_cf.put_bytes((slot, index), bytes)
+    }
+
     pub fn put_coding_blob_bytes_raw(&self, slot: u64, index: u64, bytes: &[u8]) -> Result<()> {
         self.erasure_cf.put_bytes((slot, index), bytes)
     }
