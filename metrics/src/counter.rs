@@ -39,6 +39,13 @@ macro_rules! inc_counter {
 }
 
 #[macro_export]
+macro_rules! inc_counter_info {
+    ($name:expr, $count:expr) => {
+        unsafe { $name.inc(log::Level::Info, $count) };
+    };
+}
+
+#[macro_export]
 macro_rules! inc_new_counter {
     ($name:expr, $count:expr, $level:expr, $lograte:expr) => {{
         static mut INC_NEW_COUNTER: Counter = create_counter!($name, $lograte);
@@ -89,7 +96,7 @@ impl Counter {
             self.lograte.store(lograte, Ordering::Relaxed);
         }
         if times % lograte == 0 && times > 0 && log_enabled!(level) {
-            info!(
+            log!(level,
                 "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
                 self.name,
                 counts + events,

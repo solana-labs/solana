@@ -65,7 +65,7 @@ impl fmt::Debug for Packet {
 impl Default for Packet {
     fn default() -> Packet {
         Packet {
-            data: [0u8; PACKET_DATA_SIZE],
+            data: unsafe { std::mem::uninitialized() },
             meta: Meta::default(),
         }
     }
@@ -126,7 +126,7 @@ pub struct Packets {
 impl Default for Packets {
     fn default() -> Packets {
         Packets {
-            packets: vec![Packet::default(); NUM_PACKETS],
+            packets: Vec::with_capacity(NUM_RCVMMSGS),
         }
     }
 }
@@ -208,8 +208,7 @@ pub enum BlobError {
 }
 
 impl Packets {
-    fn run_read_from(&mut self, socket: &UdpSocket) -> Result<usize> {
-        self.packets.resize(NUM_PACKETS, Packet::default());
+    pub fn recv_from(&mut self, socket: &UdpSocket) -> Result<usize> {
         let mut i = 0;
         //DOCUMENTED SIDE-EFFECT
         //Performance out of the IO without poll
@@ -220,11 +219,10 @@ impl Packets {
         socket.set_nonblocking(false)?;
         trace!("receiving on {}", socket.local_addr().unwrap());
         loop {
+            self.packets.resize(i + NUM_RCVMMSGS, Packet::default());
             match recv_mmsg(socket, &mut self.packets[i..]) {
                 Err(_) if i > 0 => {
-                    inc_new_counter_info!("packets-recv_count", i);
-                    debug!("got {:?} messages on {}", i, socket.local_addr().unwrap());
-                    return Ok(i);
+                    break;
                 }
                 Err(e) => {
                     trace!("recv_from err {:?}", e);
@@ -237,19 +235,16 @@ impl Packets {
                     trace!("got {} packets", npkts);
                     i += npkts;
                     if npkts != NUM_RCVMMSGS || i >= 1024 {
-                        inc_new_counter_info!("packets-recv_count", i);
-                        return Ok(i);
+                        break;
                     }
                 }
             }
         }
+        self.packets.truncate(i);
+        inc_new_counter_info!("packets-recv_count", i);
+        Ok(i)
     }
-    pub fn recv_from(&mut self, socket: &UdpSocket) -> Result<()> {
-        let sz = self.run_read_from(socket)?;
-        self.packets.resize(sz, Packet::default());
-        debug!("recv_from: {}", sz);
-        Ok(())
-    }
+
     pub fn send_to(&self, socket: &UdpSocket) -> Result<()> {
         for p in &self.packets {
             let a = p.meta.addr();
@@ -615,19 +610,26 @@ mod tests {
 
     #[test]
     pub fn packet_send_recv() {
-        let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let addr = reader.local_addr().unwrap();
-        let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let saddr = sender.local_addr().unwrap();
-        let p = SharedPackets::default();
-        p.write().unwrap().packets.resize(10, Packet::default());
-        for m in p.write().unwrap().packets.iter_mut() {
+        solana_logger::setup();
+        let recv_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let addr = recv_socket.local_addr().unwrap();
+        let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let saddr = send_socket.local_addr().unwrap();
+        let mut p = Packets::default();
+
+        p.packets.resize(10, Packet::default());
+
+        for m in p.packets.iter_mut() {
             m.meta.set_addr(&addr);
             m.meta.size = PACKET_DATA_SIZE;
         }
-        p.read().unwrap().send_to(&sender).unwrap();
-        p.write().unwrap().recv_from(&reader).unwrap();
-        for m in p.write().unwrap().packets.iter_mut() {
+        p.send_to(&send_socket).unwrap();
+
+        let recvd = p.recv_from(&recv_socket).unwrap();
+
+        assert_eq!(recvd, p.packets.len());
+
+        for m in p.packets {
             assert_eq!(m.meta.size, PACKET_DATA_SIZE);
             assert_eq!(m.meta.addr(), saddr);
         }

@@ -44,7 +44,7 @@ impl FetchStage {
     ) -> Self {
         let tpu_threads = sockets
             .into_iter()
-            .map(|socket| streamer::receiver(socket, &exit, sender.clone(), "fetch-stage"));
+            .map(|socket| streamer::receiver(socket, &exit, sender.clone()));
 
         let tpu_via_blobs_threads = tpu_via_blobs_sockets
             .into_iter()
