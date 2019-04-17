@@ -37,7 +37,7 @@ test-stable-perf)
     Cargo.toml$ \
     ci/test-stable-perf.sh \
     ci/test-stable.sh \
-    ^instruction-processors/ \
+    ^programs/ \
     ^sdk/ \
   || {
     annotate --style info \
@@ -46,10 +46,10 @@ test-stable-perf)
   }
 
   # BPF program tests
-  _ make -C instruction-processors/bpf/c tests
-  _ instruction-processors/bpf/rust/noop/build.sh # Must be built out of band
+  _ make -C programs/bpf/c tests
+  _ programs/bpf/rust/noop/build.sh # Must be built out of band
   _ cargo +"$rust_stable" test \
-    --manifest-path instruction-processors/bpf/Cargo.toml \
+    --manifest-path programs/bpf/Cargo.toml \
     --no-default-features --features=bpf_c,bpf_rust
 
   # Run root package tests with these features
