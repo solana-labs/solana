@@ -1,10 +1,15 @@
-/target/
-/ledger-tool/target/
-/wallet/target/
-/core/target/
+/bench-exchange/target/
+/bench-tps/target/
 /book/html/
 /book/src/img/
 /book/src/tests.ok
+/core/target/
+/farf/
+/ledger-tool/target/
+/solana-release/
+solana-release.tar.bz2
+/target/
+/wallet/target/
 
 **/*.rs.bk
 .cargo
