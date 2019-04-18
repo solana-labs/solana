@@ -874,8 +874,6 @@ impl ClusterInfo {
             .collect();
         if pr.is_empty() {
             self.add_entrypoint(&mut pr);
-        } else {
-            self.entrypoint = None;
         }
         pr.into_iter()
             .map(|(peer, filter, gossip, self_info)| {
@@ -1092,21 +1090,16 @@ impl ClusterInfo {
             .process_pull_request(caller, filter, now);
         let len = data.len();
         trace!("get updates since response {}", len);
-        if data.is_empty() {
-            trace!("no updates me {}", self_id);
-            vec![]
-        } else {
-            let rsp = Protocol::PullResponse(self_id, data);
-            // the remote side may not know his public IP:PORT, record what he looks like to us
-            //  this may or may not be correct for everybody but it's better than leaving him with
-            //  an unspecified address in our table
-            if from.gossip.ip().is_unspecified() {
-                inc_new_counter_info!("cluster_info-window-request-updates-unspec-gossip", 1);
-                from.gossip = *from_addr;
-            }
-            inc_new_counter_info!("cluster_info-pull_request-rsp", len);
-            to_shared_blob(rsp, from.gossip).ok().into_iter().collect()
+        let rsp = Protocol::PullResponse(self_id, data);
+        // The remote node may not know its public IP:PORT. Record what it looks like to us.
+        // This may or may not be correct for everybody, but it's better than leaving the remote with
+        // an unspecified address in our table
+        if from.gossip.ip().is_unspecified() {
+            inc_new_counter_info!("cluster_info-window-request-updates-unspec-gossip", 1);
+            from.gossip = *from_addr;
         }
+        inc_new_counter_info!("cluster_info-pull_request-rsp", len);
+        to_shared_blob(rsp, from.gossip).ok().into_iter().collect()
     }
     fn handle_pull_response(me: &Arc<RwLock<Self>>, from: &Pubkey, data: Vec<CrdsValue>) {
         let len = data.len();
@@ -2221,5 +2214,5 @@ fn test_add_entrypoint() {
         .unwrap()
         .new_pull_requests(&HashMap::new());
     assert_eq!(1, pulls.len());
-    assert_eq!(cluster_info.read().unwrap().entrypoint, None);
+    assert_eq!(cluster_info.read().unwrap().entrypoint, Some(entrypoint));
 }
