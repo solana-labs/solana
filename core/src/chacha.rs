@@ -1,5 +1,4 @@
 use crate::blocktree::Blocktree;
-use rand_chacha::ChaChaRng;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
@@ -95,7 +94,7 @@ mod tests {
     use crate::blocktree::Blocktree;
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::entry::Entry;
-    use ed25519_dalek;
+    use crate::gen_keys::GenKeys;
     use solana_sdk::hash::{hash, Hash, Hasher};
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::system_transaction;
@@ -109,9 +108,9 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
 
-        let mut seed = [2u8; 32];
+        let seed = [2u8; 32];
         let mut rnd = GenKeys::new(seed);
-        let keypair = rnd.gen_n_keypairs(1)[0];
+        let keypair = rnd.gen_keypair();
 
         let mut id = one;
         let mut num_hashes = 0;
