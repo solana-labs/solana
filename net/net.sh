@@ -128,7 +128,8 @@ loadConfigFile
 build() {
   declare MAYBE_DOCKER=
   if [[ $(uname) != Linux ]]; then
-    source ci/rust-version.sh
+    # shellcheck source=ci/rust-version.sh 
+    source ../ci/rust-version.sh
     MAYBE_DOCKER="ci/docker-run.sh $rust_stable_docker_image"
   fi
   SECONDS=0
@@ -244,7 +245,7 @@ startNode() {
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
-  ln -sfT "fullnode-$ipAddress.log" "$netLogDir/fullnode-$pid.log"
+  ln -sf "fullnode-$ipAddress.log" "$netLogDir/fullnode-$pid.log"
   pids+=("$pid")
 }
 
