@@ -12,7 +12,7 @@
 //!
 use crate::blocktree::Blocktree;
 use crate::entry::Entry;
-use crate::leader_schedule_utils;
+use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::poh::Poh;
 use crate::result::{Error, Result};
 use solana_runtime::bank::Bank;
@@ -53,13 +53,14 @@ pub struct PohRecorder {
     max_last_leader_grace_ticks: u64,
     id: Pubkey,
     blocktree: Arc<Blocktree>,
+    leader_schedule_cache: Arc<LeaderScheduleCache>,
 }
 
 impl PohRecorder {
     fn clear_bank(&mut self) {
         if let Some(working_bank) = self.working_bank.take() {
             let bank = working_bank.bank;
-            let next_leader_slot = leader_schedule_utils::next_leader_slot(
+            let next_leader_slot = self.leader_schedule_cache.next_leader_slot(
                 &self.id,
                 bank.slot(),
                 &bank,
@@ -278,6 +279,7 @@ impl PohRecorder {
         id: &Pubkey,
         blocktree: &Arc<Blocktree>,
         clear_bank_signal: Option<SyncSender<bool>>,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) -> (Self, Receiver<WorkingBankEntries>) {
         let poh = Poh::new(last_entry_hash, tick_height);
         let (sender, receiver) = channel();
@@ -301,6 +303,7 @@ impl PohRecorder {
                 max_last_leader_grace_ticks,
                 id: *id,
                 blocktree: blocktree.clone(),
+                leader_schedule_cache: leader_schedule_cache.clone(),
             },
             receiver,
         )
@@ -317,6 +320,7 @@ impl PohRecorder {
         ticks_per_slot: u64,
         id: &Pubkey,
         blocktree: &Arc<Blocktree>,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) -> (Self, Receiver<WorkingBankEntries>) {
         Self::new_with_clear_signal(
             tick_height,
@@ -327,6 +331,7 @@ impl PohRecorder {
             id,
             blocktree,
             None,
+            leader_schedule_cache,
         )
     }
 
@@ -376,6 +381,7 @@ impl PohRecorder {
 mod tests {
     use super::*;
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
+    use crate::leader_schedule_cache::LeaderScheduleCache;
     use crate::test_tx::test_tx;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
@@ -399,6 +405,7 @@ mod tests {
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::default()),
             );
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 1);
@@ -424,6 +431,7 @@ mod tests {
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::default()),
             );
             poh_recorder.tick();
             poh_recorder.tick();
@@ -448,6 +456,7 @@ mod tests {
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::default()),
             );
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 1);
@@ -474,6 +483,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
 
             let working_bank = WorkingBank {
@@ -506,6 +516,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
 
             let working_bank = WorkingBank {
@@ -550,6 +561,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
 
             poh_recorder.tick();
@@ -592,6 +604,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
 
             let working_bank = WorkingBank {
@@ -628,6 +641,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
 
             let working_bank = WorkingBank {
@@ -666,6 +680,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
 
             let working_bank = WorkingBank {
@@ -711,6 +726,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
 
             let working_bank = WorkingBank {
@@ -753,6 +769,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
 
             let working_bank = WorkingBank {
@@ -786,6 +803,7 @@ mod tests {
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::default()),
             );
             poh_recorder.tick();
             poh_recorder.tick();
@@ -816,6 +834,7 @@ mod tests {
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::default()),
             );
             poh_recorder.tick();
             poh_recorder.tick();
@@ -846,6 +865,7 @@ mod tests {
                 DEFAULT_TICKS_PER_SLOT,
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::default()),
             );
             poh_recorder.tick();
             poh_recorder.tick();
@@ -876,6 +896,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
             let ticks_per_slot = bank.ticks_per_slot();
             let working_bank = WorkingBank {
@@ -908,6 +929,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blocktree),
                 Some(sender),
+                &Arc::new(LeaderScheduleCache::default()),
             );
             poh_recorder.set_bank(&bank);
             poh_recorder.clear_bank();
@@ -936,6 +958,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
 
             let end_slot = 3;
@@ -980,6 +1003,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
 
             // Test that with no leader slot, we don't reach the leader tick

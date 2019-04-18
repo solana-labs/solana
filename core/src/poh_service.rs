@@ -98,6 +98,7 @@ impl Service for PohService {
 mod tests {
     use super::*;
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
+    use crate::leader_schedule_cache::LeaderScheduleCache;
     use crate::poh_recorder::WorkingBank;
     use crate::result::Result;
     use crate::test_tx::test_tx;
@@ -123,6 +124,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
             let exit = Arc::new(AtomicBool::new(false));

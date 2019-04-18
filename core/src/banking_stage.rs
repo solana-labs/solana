@@ -629,6 +629,7 @@ pub fn create_test_recorder(
         bank.ticks_per_slot(),
         &Pubkey::default(),
         blocktree,
+        &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
     );
     poh_recorder.set_bank(&bank);
 
@@ -956,6 +957,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
@@ -1063,6 +1065,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &pubkey,
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 

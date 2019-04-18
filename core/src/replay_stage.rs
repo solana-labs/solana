@@ -165,6 +165,7 @@ impl ReplayStage {
                             &bank,
                             &poh_recorder,
                             ticks_per_slot,
+                            &leader_schedule_cache,
                         );
 
                         is_tpu_bank_active = false;
@@ -336,9 +337,10 @@ impl ReplayStage {
         bank: &Arc<Bank>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         ticks_per_slot: u64,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) {
         let next_leader_slot =
-            leader_schedule_utils::next_leader_slot(&my_id, bank.slot(), &bank, Some(blocktree));
+            leader_schedule_cache.next_leader_slot(&my_id, bank.slot(), &bank, Some(blocktree));
         poh_recorder.lock().unwrap().reset(
             bank.tick_height(),
             bank.last_blockhash(),
