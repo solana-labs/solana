@@ -36,7 +36,6 @@ local|tar)
   source ./target/perf-libs/env.sh
 
   net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
-  solana_bench_tps=solana-bench-tps
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -51,7 +50,7 @@ scripts/net-stats.sh  > net-stats.log 2>&1 &
 ! tmux list-sessions || tmux kill-session
 
 clientCommand="\
-  $solana_bench_tps \
+  solana-bench-tps \
     --network $entrypointIp:8001 \
     --drone $entrypointIp:9900 \
     --duration 7500 \
