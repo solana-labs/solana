@@ -659,8 +659,7 @@ mod tests {
     fn test_banking_stage_shutdown1() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let leader_schedule_cache =
-            Arc::new(LeaderScheduleCache::new(bank.epoch_schedule().clone()));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let (verified_sender, verified_receiver) = channel();
         let (vote_sender, vote_receiver) = channel();
         let ledger_path = get_tmp_ledger_path!();
@@ -694,8 +693,7 @@ mod tests {
         let (mut genesis_block, _mint_keypair) = GenesisBlock::new(2);
         genesis_block.ticks_per_slot = 4;
         let bank = Arc::new(Bank::new(&genesis_block));
-        let leader_schedule_cache =
-            Arc::new(LeaderScheduleCache::new(bank.epoch_schedule().clone()));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
         let (vote_sender, vote_receiver) = channel();
@@ -742,8 +740,7 @@ mod tests {
         solana_logger::setup();
         let (genesis_block, mint_keypair) = GenesisBlock::new(10);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let leader_schedule_cache =
-            Arc::new(LeaderScheduleCache::new(bank.epoch_schedule().clone()));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
         let (vote_sender, vote_receiver) = channel();
@@ -883,8 +880,7 @@ mod tests {
             let entry_receiver = {
                 // start a banking_stage to eat verified receiver
                 let bank = Arc::new(Bank::new(&genesis_block));
-                let leader_schedule_cache =
-                    Arc::new(LeaderScheduleCache::new(bank.epoch_schedule().clone()));
+                let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
                 let blocktree = Arc::new(
                     Blocktree::open(&ledger_path)
                         .expect("Expected to be able to open database ledger"),

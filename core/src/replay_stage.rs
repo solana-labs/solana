@@ -772,8 +772,7 @@ mod test {
 
             let genesis_block = GenesisBlock::new(10_000).0;
             let bank0 = Bank::new(&genesis_block);
-            let leader_schedule_cache =
-                Arc::new(LeaderScheduleCache::new(bank0.epoch_schedule().clone()));
+            let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
             let mut bank_forks = BankForks::new(0, bank0);
             bank_forks.working_bank().freeze();
 

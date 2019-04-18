@@ -138,8 +138,7 @@ pub fn process_blocktree(
         vec![(slot, meta, bank, entry_height, last_entry_hash)]
     };
 
-    let leader_schedule_cache =
-        LeaderScheduleCache::new(pending_slots[0].2.epoch_schedule().clone());
+    let leader_schedule_cache = LeaderScheduleCache::new(*pending_slots[0].2.epoch_schedule());
 
     let mut fork_info = vec![];
     while !pending_slots.is_empty() {

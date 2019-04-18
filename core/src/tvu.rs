@@ -217,8 +217,7 @@ pub mod tests {
             create_test_recorder(&bank, &blocktree);
         let voting_keypair = Keypair::new();
         let (storage_entry_sender, storage_entry_receiver) = channel();
-        let leader_schedule_cache =
-            Arc::new(LeaderScheduleCache::new(bank.epoch_schedule().clone()));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
             Some(Arc::new(voting_keypair)),

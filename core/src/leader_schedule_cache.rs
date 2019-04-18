@@ -3,21 +3,23 @@ use crate::leader_schedule::LeaderSchedule;
 use crate::leader_schedule_utils;
 use solana_runtime::bank::{Bank, EpochSchedule};
 use solana_sdk::pubkey::Pubkey;
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, RwLock};
 
+type CachedSchedules = (HashMap<u64, Arc<LeaderSchedule>>, VecDeque<u64>);
 const MAX_SCHEDULES: usize = 10;
 
 #[derive(Default)]
 pub struct LeaderScheduleCache {
     // Map from an epoch to a leader schedule for that epoch
-    pub cached_schedules: RwLock<(HashMap<u64, Arc<LeaderSchedule>>, VecDeque<u64>)>,
+    pub cached_schedules: RwLock<CachedSchedules>,
     epoch_schedule: EpochSchedule,
 }
 
 impl LeaderScheduleCache {
     pub fn new_from_bank(bank: &Bank) -> Self {
-        Self::new(bank.epoch_schedule().clone())
+        Self::new(*bank.epoch_schedule())
     }
 
     pub fn new(epoch_schedule: EpochSchedule) -> Self {
@@ -97,13 +99,7 @@ impl LeaderScheduleCache {
         epoch: u64,
         bank: &Bank,
     ) -> Option<Arc<LeaderSchedule>> {
-        let epoch_schedule = self
-            .cached_schedules
-            .read()
-            .unwrap()
-            .0
-            .get(&epoch)
-            .map(|e| e.clone());
+        let epoch_schedule = self.cached_schedules.read().unwrap().0.get(&epoch).cloned();
 
         if epoch_schedule.is_some() {
             epoch_schedule
@@ -121,8 +117,9 @@ impl LeaderScheduleCache {
             let (ref mut cached_schedules, ref mut order) = *self.cached_schedules.write().unwrap();
             // Check to see if schedule exists in case somebody already inserted in the time we were
             // waiting for the lock
-            if !cached_schedules.contains_key(&epoch) {
-                cached_schedules.insert(epoch, leader_schedule.clone());
+            let entry = cached_schedules.entry(epoch);
+            if let Entry::Vacant(v) = entry {
+                v.insert(leader_schedule.clone());
                 order.push_back(epoch);
                 Self::retain_latest(cached_schedules, order);
             }
@@ -248,7 +245,7 @@ mod tests {
         genesis_block.epoch_warmup = false;
 
         let bank = Bank::new(&genesis_block);
-        let cache = LeaderScheduleCache::new(bank.epoch_schedule().clone());
+        let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         assert_eq!(
             cache
@@ -291,7 +288,7 @@ mod tests {
         genesis_block.epoch_warmup = false;
 
         let bank = Bank::new(&genesis_block);
-        let cache = LeaderScheduleCache::new(bank.epoch_schedule().clone());
+        let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree = Arc::new(
@@ -364,7 +361,7 @@ mod tests {
         genesis_block.epoch_warmup = false;
 
         let bank = Bank::new(&genesis_block);
-        let cache = LeaderScheduleCache::new(bank.epoch_schedule().clone());
+        let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let delegate_id = Pubkey::new_rand();
 
         // Create new vote account
