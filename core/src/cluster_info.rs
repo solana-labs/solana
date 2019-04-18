@@ -63,6 +63,9 @@ pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 /// the number of slots to respond with when responding to `Orphan` requests
 pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
 
+/// Listen thread stack size set to 4MB
+const LISTEN_STACK_SIZE: usize = 4 * 1024 * 1024;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
     NoPeers,
@@ -1331,6 +1334,7 @@ impl ClusterInfo {
     ) -> JoinHandle<()> {
         let exit = exit.clone();
         Builder::new()
+            .stack_size(LISTEN_STACK_SIZE)
             .name("solana-listen".to_string())
             .spawn(move || loop {
                 let e = Self::run_listen(
