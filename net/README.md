@@ -20,7 +20,7 @@ $ aws configure
 ```
 More information on AWS CLI configuration can be found [here](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html#cli-quick-configuration)
 
-### Metrics configuration
+### Metrics configuration (Optional)
 Ensure that `$(whoami)` is the name of an InfluxDB user account with enough
 access to create a new InfluxDB database.  Ask mvines@ for help if needed.
 
