@@ -55,7 +55,6 @@ clientCommand="\
     --network $entrypointIp:8001 \
     --drone $entrypointIp:9900 \
     --duration 7500 \
-    --sustained \
     --threads $threadCount \
 "
 

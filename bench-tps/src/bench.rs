@@ -189,16 +189,17 @@ pub fn do_bench_tps(config: Config) {
             while shared_tx_active_thread_count.load(Ordering::Relaxed) > 0 {
                 sleep(Duration::from_millis(100));
             }
+        } else {
+            // It's not feasible (would take too much time) to confirm each of the `tx_count / 2`
+            // transactions sent by `generate_txs()` so instead send and confirm a single transaction
+            // to validate the network is still functional.
+            send_barrier_transaction(
+                &mut barrier_client,
+                &mut blockhash,
+                &barrier_source_keypair,
+                &barrier_dest_id,
+            );
         }
-        // It's not feasible (would take too much time) to confirm each of the `tx_count / 2`
-        // transactions sent by `generate_txs()` so instead send and confirm a single transaction
-        // to validate the network is still functional.
-        send_barrier_transaction(
-            &mut barrier_client,
-            &mut blockhash,
-            &barrier_source_keypair,
-            &barrier_dest_id,
-        );
 
         i += 1;
         if should_switch_directions(num_lamports_per_account, i) {
