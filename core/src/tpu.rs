@@ -55,15 +55,21 @@ impl Tpu {
         let sigverify_stage =
             SigVerifyStage::new(packet_receiver, sigverify_disabled, verified_sender.clone());
 
+        let (verified_vote_sender, verified_vote_receiver) = channel();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
             &exit,
             cluster_info.clone(),
             sigverify_disabled,
-            verified_sender,
+            verified_vote_sender,
             &poh_recorder,
         );
 
-        let banking_stage = BankingStage::new(&cluster_info, poh_recorder, verified_receiver);
+        let banking_stage = BankingStage::new(
+            &cluster_info,
+            poh_recorder,
+            verified_receiver,
+            verified_vote_receiver,
+        );
 
         let broadcast_stage = BroadcastStage::new(
             broadcast_socket,

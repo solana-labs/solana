@@ -55,6 +55,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let (genesis_block, mint_keypair) = GenesisBlock::new(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
+    let (vote_sender, vote_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
     let dummy = system_transaction::transfer(
         &mint_keypair,
@@ -116,7 +117,12 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             create_test_recorder(&bank, &blocktree);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
-        let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
+        let _banking_stage = BankingStage::new(
+            &cluster_info,
+            &poh_recorder,
+            verified_receiver,
+            vote_receiver,
+        );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
         let mut id = genesis_block.hash();
@@ -138,6 +144,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             start += half_len;
             start %= verified.len();
         });
+        drop(vote_sender);
         exit.store(true, Ordering::Relaxed);
         poh_service.join().unwrap();
     }
@@ -155,6 +162,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let (genesis_block, mint_keypair) = GenesisBlock::new(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
+    let (vote_sender, vote_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
     let dummy = system_transaction::transfer(
         &mint_keypair,
@@ -232,7 +240,12 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             create_test_recorder(&bank, &blocktree);
         let cluster_info = ClusterInfo::new_with_invalid_keypair(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
-        let _banking_stage = BankingStage::new(&cluster_info, &poh_recorder, verified_receiver);
+        let _banking_stage = BankingStage::new(
+            &cluster_info,
+            &poh_recorder,
+            verified_receiver,
+            vote_receiver,
+        );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
         let mut id = genesis_block.hash();
@@ -254,6 +267,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             start += half_len;
             start %= verified.len();
         });
+        drop(vote_sender);
         exit.store(true, Ordering::Relaxed);
         poh_service.join().unwrap();
     }
