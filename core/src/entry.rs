@@ -51,7 +51,7 @@ pub struct Entry {
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
     pub fn new(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Self {
-        assert!(Self::to_blob_size(&transactions) <= BLOB_DATA_SIZE as u64);
+        assert!(Self::serialized_to_blob_size(&transactions) <= BLOB_DATA_SIZE as u64);
 
         if num_hashes == 0 && transactions.is_empty() {
             Entry {
@@ -92,7 +92,7 @@ impl Entry {
 
     /// return serialized_size of a vector with a single Entry for given TXs
     ///  since Blobs carry Vec<Entry>
-    pub fn to_blob_size(transactions: &[Transaction]) -> u64 {
+    pub fn serialized_to_blob_size(transactions: &[Transaction]) -> u64 {
         let txs_size: u64 = transactions
             .iter()
             .map(|tx| serialized_size(tx).unwrap())
@@ -112,7 +112,7 @@ impl Entry {
         num_hashes: &mut u64,
         transactions: Vec<Transaction>,
     ) -> Self {
-        assert!(Self::to_blob_size(&transactions) <= BLOB_DATA_SIZE as u64);
+        assert!(Self::serialized_to_blob_size(&transactions) <= BLOB_DATA_SIZE as u64);
 
         let entry = Self::new(start_hash, *num_hashes, transactions);
         *start_hash = entry.hash;
@@ -340,7 +340,7 @@ fn next_entries_mut(
     split_serializable_chunks(
         &transactions[..],
         BLOB_DATA_SIZE as u64,
-        &Entry::to_blob_size,
+        &Entry::serialized_to_blob_size,
         &mut |txs: &[Transaction]| Entry::new_mut(start_hash, num_hashes, txs.to_vec()),
     )
 }
@@ -553,7 +553,7 @@ mod tests {
         let tx = system_transaction::create_user_account(&keypair, &keypair.pubkey(), 0, zero, 0);
         let entry = next_entry(&zero, 1, vec![tx.clone()]);
         assert_eq!(
-            Entry::to_blob_size(&[tx]),
+            Entry::serialized_to_blob_size(&[tx]),
             serialized_size(&vec![entry]).unwrap() // blobs are Vec<Entry>
         );
     }
@@ -619,7 +619,7 @@ mod tests {
 
         let blobs = entries.to_blobs();
         for blob in &blobs {
-            assert!(blob.size() <= BLOB_DATA_SIZE);
+            assert_eq!(blob.size(), BLOB_DATA_SIZE);
         }
 
         assert_eq!(reconstruct_entries_from_blobs(blobs).unwrap().0, entries);
