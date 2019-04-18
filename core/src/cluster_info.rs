@@ -19,7 +19,7 @@ use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
 use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote};
-use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
+use crate::packet::{to_blob, Blob, BLOB_SIZE};
 use crate::repair_service::RepairType;
 use crate::result::Result;
 use crate::staking_utils;
@@ -602,7 +602,7 @@ impl ClusterInfo {
         contains_last_tick: bool,
         broadcast_table: &[ContactInfo],
         s: &UdpSocket,
-        blobs: &[SharedBlob],
+        blobs: &[Blob],
     ) -> Result<()> {
         if broadcast_table.is_empty() {
             debug!("{}:not enough peers in cluster_info table", id);
@@ -634,7 +634,7 @@ impl ClusterInfo {
     pub fn retransmit_to(
         obj: &Arc<RwLock<Self>>,
         peers: &[ContactInfo],
-        blob: &SharedBlob,
+        blob: &Blob,
         s: &UdpSocket,
     ) -> Result<()> {
         let (me, orders): (ContactInfo, &[ContactInfo]) = {
@@ -642,7 +642,6 @@ impl ClusterInfo {
             let s = obj.read().unwrap();
             (s.my_data().clone(), peers)
         };
-        let rblob = blob.read().unwrap();
         trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders
             .par_iter()
@@ -650,13 +649,13 @@ impl ClusterInfo {
                 debug!(
                     "{}: retransmit blob {} to {} {}",
                     me.id,
-                    rblob.index(),
+                    blob.index(),
                     v.id,
                     v.tvu,
                 );
                 //TODO profile this, may need multiple sockets for par_iter
-                assert!(rblob.meta.size <= BLOB_SIZE);
-                s.send_to(&rblob.data[..rblob.meta.size], &v.tvu)
+                assert!(blob.meta.size <= BLOB_SIZE);
+                s.send_to(&blob.data[..blob.meta.size], &v.tvu)
             })
             .collect();
         for e in errs {
@@ -672,7 +671,7 @@ impl ClusterInfo {
     /// retransmit messages from the leader to layer 1 nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
-    pub fn retransmit(obj: &Arc<RwLock<Self>>, blob: &SharedBlob, s: &UdpSocket) -> Result<()> {
+    pub fn retransmit(obj: &Arc<RwLock<Self>>, blob: &Blob, s: &UdpSocket) -> Result<()> {
         let peers = obj.read().unwrap().retransmit_peers();
         ClusterInfo::retransmit_to(obj, &peers, blob, s)
     }
@@ -680,13 +679,11 @@ impl ClusterInfo {
     fn send_orders(
         id: &Pubkey,
         s: &UdpSocket,
-        orders: Vec<(SharedBlob, Vec<&ContactInfo>)>,
+        orders: Vec<(Blob, Vec<&ContactInfo>)>,
     ) -> Vec<io::Result<usize>> {
         orders
             .into_iter()
-            .flat_map(|(b, vs)| {
-                let blob = b.read().unwrap();
-
+            .flat_map(|(blob, vs)| {
                 let ids_and_tvus = if log_enabled!(log::Level::Trace) {
                     let v_ids = vs.iter().map(|v| v.id);
                     let tvus = vs.iter().map(|v| v.tvu);
@@ -914,7 +911,7 @@ impl ClusterInfo {
         let reqs = obj.write().unwrap().gossip_request(&stakes);
         let blobs = reqs
             .into_iter()
-            .filter_map(|(remote_gossip_addr, req)| to_shared_blob(req, remote_gossip_addr).ok())
+            .filter_map(|(remote_gossip_addr, req)| to_blob(req, remote_gossip_addr).ok())
             .collect();
         blob_sender.send(blobs)?;
         Ok(())
@@ -968,7 +965,7 @@ impl ClusterInfo {
         me: &ContactInfo,
         slot: u64,
         blob_index: u64,
-    ) -> Vec<SharedBlob> {
+    ) -> Vec<Blob> {
         if let Some(blocktree) = blocktree {
             // Try to find the requested index in one of the slots
             let blob = blocktree.get_data_blob(slot, blob_index);
@@ -977,7 +974,7 @@ impl ClusterInfo {
                 inc_new_counter_info!("cluster_info-window-request-ledger", 1);
                 blob.meta.set_addr(from_addr);
 
-                return vec![Arc::new(RwLock::new(blob))];
+                return vec![blob];
             }
         }
 
@@ -998,7 +995,7 @@ impl ClusterInfo {
         blocktree: Option<&Arc<Blocktree>>,
         slot: u64,
         highest_index: u64,
-    ) -> Vec<SharedBlob> {
+    ) -> Vec<Blob> {
         if let Some(blocktree) = blocktree {
             // Try to find the requested index in one of the slots
             let meta = blocktree.meta(slot);
@@ -1010,7 +1007,7 @@ impl ClusterInfo {
 
                     if let Ok(Some(mut blob)) = blob {
                         blob.meta.set_addr(from_addr);
-                        return vec![Arc::new(RwLock::new(blob))];
+                        return vec![blob];
                     }
                 }
             }
@@ -1024,7 +1021,7 @@ impl ClusterInfo {
         blocktree: Option<&Arc<Blocktree>>,
         mut slot: u64,
         max_responses: usize,
-    ) -> Vec<SharedBlob> {
+    ) -> Vec<Blob> {
         let mut res = vec![];
         if let Some(blocktree) = blocktree {
             // Try to find the next "n" parent slots of the input slot
@@ -1035,7 +1032,7 @@ impl ClusterInfo {
                 let blob = blocktree.get_data_blob(slot, meta.received - 1);
                 if let Ok(Some(mut blob)) = blob {
                     blob.meta.set_addr(from_addr);
-                    res.push(Arc::new(RwLock::new(blob)));
+                    res.push(blob);
                 }
                 if meta.is_parent_set() && res.len() <= max_responses {
                     slot = meta.parent_slot;
@@ -1053,7 +1050,7 @@ impl ClusterInfo {
         obj: &Arc<RwLock<Self>>,
         blocktree: Option<&Arc<Blocktree>>,
         blob: &Blob,
-    ) -> Vec<SharedBlob> {
+    ) -> Vec<Blob> {
         deserialize(&blob.data[..blob.meta.size])
             .into_iter()
             .flat_map(|request| {
@@ -1067,7 +1064,7 @@ impl ClusterInfo {
         filter: Bloom<Hash>,
         caller: CrdsValue,
         from_addr: &SocketAddr,
-    ) -> Vec<SharedBlob> {
+    ) -> Vec<Blob> {
         let self_id = me.read().unwrap().gossip.id;
         inc_new_counter_info!("cluster_info-pull_request", 1);
         if caller.contact_info().is_none() {
@@ -1099,7 +1096,7 @@ impl ClusterInfo {
             from.gossip = *from_addr;
         }
         inc_new_counter_info!("cluster_info-pull_request-rsp", len);
-        to_shared_blob(rsp, from.gossip).ok().into_iter().collect()
+        to_blob(rsp, from.gossip).ok().into_iter().collect()
     }
     fn handle_pull_response(me: &Arc<RwLock<Self>>, from: &Pubkey, data: Vec<CrdsValue>) {
         let len = data.len();
@@ -1115,11 +1112,7 @@ impl ClusterInfo {
 
         report_time_spent("ReceiveUpdates", &now.elapsed(), &format!(" len: {}", len));
     }
-    fn handle_push_message(
-        me: &Arc<RwLock<Self>>,
-        from: &Pubkey,
-        data: &[CrdsValue],
-    ) -> Vec<SharedBlob> {
+    fn handle_push_message(me: &Arc<RwLock<Self>>, from: &Pubkey, data: &[CrdsValue]) -> Vec<Blob> {
         let self_id = me.read().unwrap().gossip.id;
         inc_new_counter_info!("cluster_info-push_message", 1);
         let prunes: Vec<_> = me
@@ -1143,15 +1136,13 @@ impl ClusterInfo {
                     };
                     prune_msg.sign(&me.read().unwrap().keypair);
                     let rsp = Protocol::PruneMessage(self_id, prune_msg);
-                    to_shared_blob(rsp, ci.gossip).ok()
+                    to_blob(rsp, ci.gossip).ok()
                 })
                 .into_iter()
                 .collect();
             let mut blobs: Vec<_> = pushes
                 .into_iter()
-                .filter_map(|(remote_gossip_addr, req)| {
-                    to_shared_blob(req, remote_gossip_addr).ok()
-                })
+                .filter_map(|(remote_gossip_addr, req)| to_blob(req, remote_gossip_addr).ok())
                 .collect();
             rsp.append(&mut blobs);
             rsp
@@ -1174,7 +1165,7 @@ impl ClusterInfo {
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
         request: Protocol,
-    ) -> Vec<SharedBlob> {
+    ) -> Vec<Blob> {
         let now = Instant::now();
 
         //TODO this doesn't depend on cluster_info module, could be moved
@@ -1249,7 +1240,7 @@ impl ClusterInfo {
         from_addr: &SocketAddr,
         blocktree: Option<&Arc<Blocktree>>,
         request: Protocol,
-    ) -> Vec<SharedBlob> {
+    ) -> Vec<Blob> {
         match request {
             // TODO verify messages faster
             Protocol::PullRequest(filter, caller) => {
@@ -1325,7 +1316,7 @@ impl ClusterInfo {
         }
         let mut resps = Vec::new();
         for req in reqs {
-            let mut resp = Self::handle_blob(obj, blocktree, &req.read().unwrap());
+            let mut resp = Self::handle_blob(obj, blocktree, &req);
             resps.append(&mut resp);
         }
         response_sender.send(resps)?;
@@ -1772,13 +1763,12 @@ mod tests {
             );
             assert!(rv.is_empty());
             let data_size = 1;
-            let blob = SharedBlob::default();
+            let mut blob = Blob::default();
             {
-                let mut w_blob = blob.write().unwrap();
-                w_blob.set_size(data_size);
-                w_blob.set_index(1);
-                w_blob.set_slot(2);
-                w_blob.meta.size = data_size + BLOB_HEADER_SIZE;
+                blob.set_size(data_size);
+                blob.set_index(1);
+                blob.set_slot(2);
+                blob.meta.size = data_size + BLOB_HEADER_SIZE;
             }
 
             blocktree
@@ -1795,9 +1785,9 @@ mod tests {
             );
             assert!(!rv.is_empty());
             let v = rv[0].clone();
-            assert_eq!(v.read().unwrap().index(), 1);
-            assert_eq!(v.read().unwrap().slot(), 2);
-            assert_eq!(v.read().unwrap().meta.size, BLOB_HEADER_SIZE + data_size);
+            assert_eq!(v.index(), 1);
+            assert_eq!(v.slot(), 2);
+            assert_eq!(v.meta.size, BLOB_HEADER_SIZE + data_size);
         }
 
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
@@ -1835,9 +1825,9 @@ mod tests {
                 ClusterInfo::run_highest_window_request(&socketaddr_any!(), Some(&blocktree), 2, 1);
             assert!(!rv.is_empty());
             let v = rv[0].clone();
-            assert_eq!(v.read().unwrap().index(), max_index - 1);
-            assert_eq!(v.read().unwrap().slot(), 2);
-            assert_eq!(v.read().unwrap().meta.size, BLOB_HEADER_SIZE + data_size);
+            assert_eq!(v.index(), max_index - 1);
+            assert_eq!(v.slot(), 2);
+            assert_eq!(v.meta.size, BLOB_HEADER_SIZE + data_size);
 
             let rv = ClusterInfo::run_highest_window_request(
                 &socketaddr_any!(),
@@ -1873,15 +1863,12 @@ mod tests {
 
             // For slot 3, we should return the highest blobs from slots 3, 2, 1 respectively
             // for this request
-            let rv: Vec<_> = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 3, 5)
-                .iter()
-                .map(|b| b.read().unwrap().clone())
-                .collect();
+            let blobs: Vec<_> = ClusterInfo::run_orphan(&socketaddr_any!(), Some(&blocktree), 3, 5);
             let expected: Vec<_> = (1..=3)
                 .rev()
                 .map(|slot| blocktree.get_data_blob(slot, 4).unwrap().unwrap())
                 .collect();
-            assert_eq!(rv, expected)
+            assert_eq!(blobs, expected)
         }
 
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");

@@ -2,7 +2,7 @@
 //! unique ID that is the hash of the Entry before it, plus the hash of the
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
-use crate::packet::{Blob, SharedBlob, BLOB_DATA_SIZE};
+use crate::packet::{Blob, BLOB_DATA_SIZE};
 use crate::poh::Poh;
 use crate::result::Result;
 use bincode::{deserialize, serialized_size};
@@ -14,7 +14,6 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use std::borrow::Borrow;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, RwLock};
 
 pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
@@ -79,11 +78,6 @@ impl Entry {
                 transactions,
             }
         }
-    }
-
-    pub fn to_shared_blob(&self) -> SharedBlob {
-        let blob = self.to_blob();
-        Arc::new(RwLock::new(blob))
     }
 
     pub fn to_blob(&self) -> Blob {
@@ -209,10 +203,8 @@ where
 pub trait EntrySlice {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify(&self, start_hash: &Hash) -> bool;
-    fn to_shared_blobs(&self) -> Vec<SharedBlob>;
     fn to_blobs(&self) -> Vec<Blob>;
     fn to_single_entry_blobs(&self) -> Vec<Blob>;
-    fn to_single_entry_shared_blobs(&self) -> Vec<SharedBlob>;
 }
 
 impl EntrySlice for [Entry] {
@@ -244,20 +236,6 @@ impl EntrySlice for [Entry] {
             &|s| bincode::serialized_size(&s).unwrap(),
             &mut |entries: &[Entry]| Blob::from_serializable(entries),
         )
-    }
-
-    fn to_shared_blobs(&self) -> Vec<SharedBlob> {
-        self.to_blobs()
-            .into_iter()
-            .map(|b| Arc::new(RwLock::new(b)))
-            .collect()
-    }
-
-    fn to_single_entry_shared_blobs(&self) -> Vec<SharedBlob> {
-        self.to_single_entry_blobs()
-            .into_iter()
-            .map(|b| Arc::new(RwLock::new(b)))
-            .collect()
     }
 
     fn to_single_entry_blobs(&self) -> Vec<Blob> {
@@ -406,13 +384,12 @@ pub fn make_consecutive_blobs(
     start_height: u64,
     start_hash: Hash,
     addr: &std::net::SocketAddr,
-) -> Vec<SharedBlob> {
+) -> Vec<Blob> {
     let entries = create_ticks(num_blobs_to_make, start_hash);
 
-    let blobs = entries.to_single_entry_shared_blobs();
+    let mut blobs = entries.to_single_entry_blobs();
     let mut index = start_height;
-    for blob in &blobs {
-        let mut blob = blob.write().unwrap();
+    for blob in &mut blobs {
         blob.set_index(index);
         blob.set_id(id);
         blob.forward(true);

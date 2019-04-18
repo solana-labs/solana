@@ -5,8 +5,7 @@ use log::*;
 use solana::banking_stage::create_test_recorder;
 use solana::blocktree::{create_new_tmp_ledger, Blocktree};
 use solana::cluster_info::{ClusterInfo, Node};
-use solana::entry::next_entry_mut;
-use solana::entry::EntrySlice;
+use solana::entry::{next_entry_mut, EntrySlice};
 use solana::fullnode;
 use solana::gossip_service::GossipService;
 use solana::packet::index_blobs;
@@ -157,12 +156,10 @@ fn test_replay() {
             transfer_amount -= 1; // Sneaky: change transfer_amount slightly to avoid DuplicateSignature errors
 
             let entries = vec![entry0, entry_tick0, entry_tick1, entry1, entry_tick2];
-            let blobs = entries.to_shared_blobs();
-            index_blobs(&blobs, &leader.info.id, blob_idx, 1, 0);
+            let mut blobs = entries.to_blobs();
+            index_blobs(&mut blobs, &leader.info.id, blob_idx, 1, 0);
             blob_idx += blobs.len() as u64;
-            blobs
-                .iter()
-                .for_each(|b| b.write().unwrap().meta.set_addr(&tvu_addr));
+            blobs.iter_mut().for_each(|b| b.meta.set_addr(&tvu_addr));
             msgs.extend(blobs.into_iter());
         }
 

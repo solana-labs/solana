@@ -83,11 +83,11 @@ impl Broadcast {
 
         let to_blobs_start = Instant::now();
 
-        let blobs: Vec<_> = ventries
+        let mut blobs: Vec<_> = ventries
             .into_par_iter()
             .map_with(storage_entry_sender.clone(), |s, p| {
                 let entries: Vec<_> = p.into_iter().map(|e| e.0).collect();
-                let blobs = entries.to_shared_blobs();
+                let blobs = entries.to_blobs();
                 let _ignored = s.send(entries);
                 blobs
             })
@@ -101,7 +101,7 @@ impl Broadcast {
             .unwrap_or(0);
 
         index_blobs(
-            &blobs,
+            &mut blobs,
             &self.id,
             blob_index,
             bank.slot(),
@@ -111,7 +111,7 @@ impl Broadcast {
         let contains_last_tick = last_tick == max_tick_height;
 
         if contains_last_tick {
-            blobs.last().unwrap().write().unwrap().set_is_last_in_slot();
+            blobs.last_mut().unwrap().set_is_last_in_slot();
         }
 
         blocktree.write_shared_blobs(&blobs)?;

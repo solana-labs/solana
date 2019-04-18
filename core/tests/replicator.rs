@@ -78,10 +78,9 @@ fn download_from_replicator(replicator_info: &ContactInfo) {
 
         if let Ok(blobs) = x {
             for b in blobs {
-                let br = b.read().unwrap();
-                assert!(br.index() == repair_index);
-                info!("br: {:?}", br);
-                let entries = Blocktree::deserialize_blob_data(&br.data()).unwrap();
+                assert!(b.index() == repair_index);
+                info!("br: {:?}", b);
+                let entries = Blocktree::deserialize_blob_data(&b.data()).unwrap();
                 for entry in &entries {
                     info!("entry: {:?}", entry);
                     assert_ne!(entry.hash, Hash::default());

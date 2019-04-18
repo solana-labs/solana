@@ -1,9 +1,7 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::packet::{
-    deserialize_packets_in_blob, Blob, Meta, Packets, SharedBlobs, PACKET_DATA_SIZE,
-};
+use crate::packet::{deserialize_packets_in_blob, Blob, Meta, Packets, PACKET_DATA_SIZE};
 use crate::result::{Error, Result};
 use bincode;
 use solana_sdk::timing::duration_as_ms;
@@ -16,8 +14,8 @@ use std::time::{Duration, Instant};
 
 pub type PacketReceiver = Receiver<Packets>;
 pub type PacketSender = Sender<Packets>;
-pub type BlobSender = Sender<SharedBlobs>;
-pub type BlobReceiver = Receiver<SharedBlobs>;
+pub type BlobSender = Sender<Vec<Blob>>;
+pub type BlobReceiver = Receiver<Vec<Blob>>;
 
 const RECV_BATCH_MAX: usize = 60_000;
 
@@ -142,10 +140,9 @@ fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender) -> Result<()> {
     let serialized_packet_size = serialized_meta_size + PACKET_DATA_SIZE;
     let blobs = Blob::recv_from(sock)?;
     for blob in blobs {
-        let r_blob = blob.read().unwrap();
         let data = {
-            let msg_size = r_blob.size();
-            &r_blob.data()[..msg_size]
+            let msg_size = blob.size();
+            &blob.data()[..msg_size]
         };
 
         let packets =
@@ -187,7 +184,7 @@ pub fn blob_packet_receiver(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
+    use crate::packet::{Blob, Packet, Packets, PACKET_DATA_SIZE};
     use crate::streamer::{receiver, responder};
     use std::io;
     use std::io::Write;
@@ -231,12 +228,11 @@ mod test {
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
             let mut msgs = Vec::new();
             for i in 0..5 {
-                let b = SharedBlob::default();
+                let mut b = Blob::default();
                 {
-                    let mut w = b.write().unwrap();
-                    w.data[0] = i as u8;
-                    w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&addr);
+                    b.data[0] = i as u8;
+                    b.meta.size = PACKET_DATA_SIZE;
+                    b.meta.set_addr(&addr);
                 }
                 msgs.push(b);
             }

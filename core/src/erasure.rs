@@ -40,11 +40,11 @@
 //!             |<============== data blob part for "coding"  ==============>|
 //!
 //!
-use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
+use crate::packet::{Blob, BLOB_HEADER_SIZE};
 use crate::result::Result;
 use std::cmp;
 use std::convert::AsMut;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use reed_solomon_erasure::ReedSolomon;
 
@@ -64,8 +64,8 @@ pub struct Session(ReedSolomon);
 /// Generates coding blobs on demand given data blobs
 #[derive(Debug, Clone)]
 pub struct CodingGenerator {
-    /// SharedBlobs that couldn't be used in last call to next()
-    leftover: Vec<SharedBlob>,
+    /// Blobs that couldn't be used in last call to next()
+    leftover: Vec<Blob>,
     session: Arc<Session>,
 }
 
@@ -187,14 +187,14 @@ impl CodingGenerator {
     ///
     /// If used improperly, it my return garbage coding blobs, but will not give an
     /// error.
-    pub fn next(&mut self, next_data: &[SharedBlob]) -> Vec<SharedBlob> {
+    pub fn next(&mut self, next_data: &[Blob]) -> Vec<Blob> {
         let (num_data, num_coding) = self.session.dimensions();
         let mut next_coding =
             Vec::with_capacity((self.leftover.len() + next_data.len()) / num_data * num_coding);
 
         if !self.leftover.is_empty()
             && !next_data.is_empty()
-            && self.leftover[0].read().unwrap().slot() != next_data[0].read().unwrap().slot()
+            && self.leftover[0].slot() != next_data[0].slot()
         {
             self.leftover.clear();
         }
@@ -211,17 +211,16 @@ impl CodingGenerator {
             // find max_data_size for the erasure set
             let max_data_size = data_blobs
                 .iter()
-                .fold(0, |max, blob| cmp::max(blob.read().unwrap().meta.size, max));
+                .fold(0, |max, blob| cmp::max(blob.meta.size, max));
 
-            let data_locks: Vec<_> = data_blobs.iter().map(|b| b.read().unwrap()).collect();
-            let data_ptrs: Vec<_> = data_locks
+            let data_ptrs: Vec<_> = data_blobs
                 .iter()
                 .map(|l| &l.data[..max_data_size])
                 .collect();
 
             let mut coding_blobs = Vec::with_capacity(num_coding);
 
-            for data_blob in &data_locks[..num_coding] {
+            for data_blob in &data_blobs[..num_coding] {
                 let index = data_blob.index();
                 let slot = data_blob.slot();
                 let id = data_blob.id();
@@ -253,9 +252,6 @@ impl CodingGenerator {
         }
 
         next_coding
-            .into_iter()
-            .map(|blob| Arc::new(RwLock::new(blob)))
-            .collect()
     }
 }
 
@@ -280,7 +276,7 @@ pub mod test {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::Blocktree;
-    use crate::packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
+    use crate::packet::{index_blobs, Blob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::borrow::Borrow;
@@ -316,8 +312,8 @@ pub mod test {
     pub struct ErasureSetModel {
         pub set_index: u64,
         pub start_index: u64,
-        pub coding: Vec<SharedBlob>,
-        pub data: Vec<SharedBlob>,
+        pub coding: Vec<Blob>,
+        pub data: Vec<Blob>,
     }
 
     #[test]
@@ -373,21 +369,21 @@ pub mod test {
 
     fn test_toss_and_recover(
         session: &Session,
-        data_blobs: &[SharedBlob],
-        coding_blobs: &[SharedBlob],
+        data_blobs: &[Blob],
+        coding_blobs: &[Blob],
         block_start_idx: usize,
     ) {
-        let size = coding_blobs[0].read().unwrap().size();
+        let size = coding_blobs[0].size();
 
-        let mut blobs: Vec<SharedBlob> = Vec::with_capacity(ERASURE_SET_SIZE);
+        let mut blobs: Vec<Blob> = Vec::with_capacity(ERASURE_SET_SIZE);
 
-        blobs.push(SharedBlob::default()); // empty data, erasure at zero
+        blobs.push(Blob::default()); // empty data, erasure at zero
         for blob in &data_blobs[block_start_idx + 1..block_start_idx + NUM_DATA] {
             // skip first blob
             blobs.push(blob.clone());
         }
 
-        blobs.push(SharedBlob::default()); // empty coding, erasure at zero
+        blobs.push(Blob::default()); // empty coding, erasure at zero
         for blob in &coding_blobs[1..NUM_CODING] {
             blobs.push(blob.clone());
         }
@@ -398,32 +394,17 @@ pub mod test {
         present[NUM_DATA] = false;
 
         let (recovered_data, recovered_coding) = session
-            .reconstruct_shared_blobs(&mut blobs, &present, size, block_start_idx as u64, 0)
+            .reconstruct_from_blobs(&mut blobs, &present, size, block_start_idx as u64, 0)
             .expect("reconstruction must succeed");
 
         assert_eq!(recovered_data.len(), 1);
         assert_eq!(recovered_coding.len(), 1);
 
-        assert_eq!(
-            blobs[1].read().unwrap().meta,
-            data_blobs[block_start_idx + 1].read().unwrap().meta
-        );
-        assert_eq!(
-            blobs[1].read().unwrap().data(),
-            data_blobs[block_start_idx + 1].read().unwrap().data()
-        );
-        assert_eq!(
-            recovered_data[0].meta,
-            data_blobs[block_start_idx].read().unwrap().meta
-        );
-        assert_eq!(
-            recovered_data[0].data(),
-            data_blobs[block_start_idx].read().unwrap().data()
-        );
-        assert_eq!(
-            recovered_coding[0].data(),
-            coding_blobs[0].read().unwrap().data()
-        );
+        assert_eq!(blobs[1].meta, data_blobs[block_start_idx + 1].meta);
+        assert_eq!(blobs[1].data(), data_blobs[block_start_idx + 1].data());
+        assert_eq!(recovered_data[0].meta, data_blobs[block_start_idx].meta);
+        assert_eq!(recovered_data[0].data(), data_blobs[block_start_idx].data());
+        assert_eq!(recovered_coding[0].data(), coding_blobs[0].data());
     }
 
     #[test]
@@ -450,7 +431,7 @@ pub mod test {
 
                 for j in 0..NUM_CODING {
                     assert_eq!(
-                        coding_blobs[j].read().unwrap().index(),
+                        coding_blobs[j].index(),
                         ((i / NUM_DATA) * NUM_DATA + j) as u64
                     );
                 }
@@ -471,10 +452,10 @@ pub mod test {
         let mut coding_generator = CodingGenerator::default();
 
         // test coding by iterating one blob at a time
-        let data_blobs = generate_test_blobs(0, NUM_DATA * 2);
+        let mut data_blobs = generate_test_blobs(0, NUM_DATA * 2);
 
         for i in NUM_DATA..NUM_DATA * 2 {
-            data_blobs[i].write().unwrap().set_slot(1);
+            data_blobs[i].set_slot(1);
         }
 
         let coding_blobs = coding_generator.next(&data_blobs[0..NUM_DATA - 1]);
@@ -586,19 +567,19 @@ pub mod test {
 
                             let mut blobs = Vec::with_capacity(ERASURE_SET_SIZE);
 
-                            blobs.push(SharedBlob::default());
-                            blobs.push(SharedBlob::default());
-                            blobs.push(SharedBlob::default());
+                            blobs.push(Blob::default());
+                            blobs.push(Blob::default());
+                            blobs.push(Blob::default());
                             for blob in erasure_set.data.into_iter().skip(3) {
                                 blobs.push(blob);
                             }
 
-                            blobs.push(SharedBlob::default());
+                            blobs.push(Blob::default());
                             for blob in erasure_set.coding.into_iter().skip(1) {
                                 blobs.push(blob);
                             }
 
-                            let size = erased_coding.read().unwrap().size() as usize;
+                            let size = erased_coding.size() as usize;
 
                             let mut present = vec![true; ERASURE_SET_SIZE];
                             present[0] = false;
@@ -607,7 +588,7 @@ pub mod test {
                             present[NUM_DATA] = false;
 
                             session
-                                .reconstruct_shared_blobs(
+                                .reconstruct_from_blobs(
                                     &mut blobs,
                                     &present,
                                     size,
@@ -616,9 +597,7 @@ pub mod test {
                                 )
                                 .expect("reconstruction must succeed");
 
-                            for (expected, recovered) in erased_data.iter().zip(blobs.iter()) {
-                                let expected = expected.read().unwrap();
-                                let mut recovered = recovered.write().unwrap();
+                            for (expected, recovered) in erased_data.iter().zip(blobs.iter_mut()) {
                                 let data_size = recovered.data_size() as usize - BLOB_HEADER_SIZE;
                                 recovered.set_size(data_size);
                                 let corrupt = data_size > BLOB_DATA_SIZE;
@@ -626,10 +605,7 @@ pub mod test {
                                 assert_eq!(&*expected, &*recovered);
                             }
 
-                            assert_eq!(
-                                erased_coding.read().unwrap().data(),
-                                blobs[NUM_DATA].read().unwrap().data()
-                            );
+                            assert_eq!(erased_coding.data(), blobs[NUM_DATA].data());
 
                             debug!("passed set: {}", erasure_set.set_index);
                         }
@@ -668,7 +644,7 @@ pub mod test {
 
                     let mut blobs = generate_test_blobs(0, NUM_DATA);
                     index_blobs(
-                        &blobs,
+                        &mut blobs,
                         &Keypair::new().pubkey(),
                         start_index as u64,
                         slot,
@@ -706,8 +682,7 @@ pub mod test {
             for erasure_set in slot_model.chunks {
                 blocktree.write_shared_blobs(erasure_set.data).unwrap();
 
-                for shared_coding_blob in erasure_set.coding.into_iter() {
-                    let blob = shared_coding_blob.read().unwrap();
+                for blob in erasure_set.coding.into_iter() {
                     blocktree
                         .put_coding_blob_bytes_raw(
                             slot,
@@ -722,7 +697,7 @@ pub mod test {
         blocktree
     }
 
-    //    fn verify_test_blobs(offset: usize, blobs: &[SharedBlob]) -> bool {
+    //    fn verify_test_blobs(offset: usize, blobs: &[Blob]) -> bool {
     //        let data: Vec<_> = (0..BLOB_DATA_SIZE).into_iter().map(|i| i as u8).collect();
     //
     //        blobs.iter().enumerate().all(|(i, blob)| {
@@ -731,39 +706,34 @@ pub mod test {
     //        })
     //    }
     //
-    fn generate_test_blobs(offset: usize, num_blobs: usize) -> Vec<SharedBlob> {
+    fn generate_test_blobs(offset: usize, num_blobs: usize) -> Vec<Blob> {
         let data: Vec<_> = (0..BLOB_DATA_SIZE).into_iter().map(|i| i as u8).collect();
 
-        let blobs: Vec<_> = (0..num_blobs)
+        let mut blobs: Vec<_> = (0..num_blobs)
             .into_iter()
             .map(|_| {
                 let mut blob = Blob::default();
                 blob.data_mut()[..data.len()].copy_from_slice(&data);
                 blob.set_size(data.len());
-                Arc::new(RwLock::new(blob))
+                blob
             })
             .collect();
 
-        index_blobs(&blobs, &Pubkey::new_rand(), offset as u64, 0, 0);
+        index_blobs(&mut blobs, &Pubkey::new_rand(), offset as u64, 0, 0);
 
         blobs
     }
 
     impl Session {
-        fn reconstruct_shared_blobs(
+        fn reconstruct_from_blobs(
             &self,
-            blobs: &mut [SharedBlob],
+            blobs: &mut [Blob],
             present: &[bool],
             size: usize,
             block_start_idx: u64,
             slot: u64,
         ) -> Result<(Vec<Blob>, Vec<Blob>)> {
-            let mut locks: Vec<std::sync::RwLockWriteGuard<_>> = blobs
-                .iter()
-                .map(|shared_blob| shared_blob.write().unwrap())
-                .collect();
-
-            let mut slices: Vec<_> = locks
+            let mut slices: Vec<_> = blobs
                 .iter_mut()
                 .enumerate()
                 .map(|(i, blob)| {

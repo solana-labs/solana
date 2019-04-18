@@ -4,7 +4,7 @@
 
 use crate::entry::Entry;
 use crate::erasure;
-use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
+use crate::packet::{Blob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
 #[cfg(feature = "kvstore")]
 use solana_kvstore as kvstore;
@@ -171,20 +171,11 @@ impl Blocktree {
         }
     }
 
-    pub fn write_shared_blobs<I>(&self, shared_blobs: I) -> Result<()>
+    pub fn write_shared_blobs<I>(&self, blobs: I) -> Result<()>
     where
         I: IntoIterator,
-        I::Item: Borrow<SharedBlob>,
+        I::Item: Borrow<Blob>,
     {
-        let c_blobs: Vec<_> = shared_blobs
-            .into_iter()
-            .map(move |s| s.borrow().clone())
-            .collect();
-
-        let r_blobs: Vec<_> = c_blobs.iter().map(move |b| b.read().unwrap()).collect();
-
-        let blobs = r_blobs.iter().map(|s| &**s);
-
         self.insert_data_blobs(blobs)
     }
 
@@ -1422,12 +1413,9 @@ pub mod tests {
 
     #[test]
     fn test_read_blobs_bytes() {
-        let shared_blobs = make_tiny_test_entries(10).to_single_entry_shared_blobs();
+        let mut blobs = make_tiny_test_entries(10).to_single_entry_blobs();
         let slot = 0;
-        packet::index_blobs(&shared_blobs, &Pubkey::new_rand(), 0, slot, 0);
-
-        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
-        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
+        packet::index_blobs(&mut blobs, &Pubkey::new_rand(), 0, slot, 0);
 
         let ledger_path = get_tmp_ledger_path("test_read_blobs_bytes");
         let ledger = Blocktree::open(&ledger_path).unwrap();
@@ -2538,12 +2526,9 @@ pub mod tests {
 
         // Write entries
         let num_entries = 10;
-        let shared_blobs = make_tiny_test_entries(num_entries).to_single_entry_shared_blobs();
+        let mut blobs = make_tiny_test_entries(num_entries).to_single_entry_blobs();
 
-        crate::packet::index_blobs(&shared_blobs, &Pubkey::new_rand(), 0, slot, 0);
-
-        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
-        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
+        crate::packet::index_blobs(&mut blobs, &Pubkey::new_rand(), 0, slot, 0);
         blocktree.write_blobs(blobs).unwrap();
 
         let empty: Vec<u64> = vec![];
@@ -2565,13 +2550,6 @@ pub mod tests {
         use crate::erasure::test::{generate_ledger_model, ErasureSpec, SlotSpec};
         use crate::erasure::{CodingGenerator, NUM_CODING, NUM_DATA};
         use rand::{thread_rng, Rng};
-        use std::sync::RwLock;
-
-        impl Into<SharedBlob> for Blob {
-            fn into(self) -> SharedBlob {
-                Arc::new(RwLock::new(self))
-            }
-        }
 
         #[test]
         fn test_erasure_meta_accuracy() {
@@ -2583,11 +2561,6 @@ pub mod tests {
             let slot = 0;
 
             let (blobs, _) = make_slot_entries(slot, 0, num_blobs);
-            let shared_blobs: Vec<_> = blobs
-                .iter()
-                .cloned()
-                .map(|blob| Arc::new(RwLock::new(blob)))
-                .collect();
 
             blocktree.write_blobs(&blobs[8..16]).unwrap();
 
@@ -2625,10 +2598,9 @@ pub mod tests {
             assert_eq!(erasure_meta.coding, 0x0);
 
             let mut coding_generator = CodingGenerator::new(Arc::clone(&blocktree.session));
-            let coding_blobs = coding_generator.next(&shared_blobs[..NUM_DATA]);
+            let coding_blobs = coding_generator.next(&blobs[..NUM_DATA]);
 
-            for shared_coding_blob in coding_blobs {
-                let blob = shared_coding_blob.read().unwrap();
+            for blob in coding_blobs {
                 let size = blob.size() + BLOB_HEADER_SIZE;
                 blocktree
                     .put_coding_blob_bytes(blob.slot(), blob.index(), &blob.data[..size])
@@ -2688,8 +2660,8 @@ pub mod tests {
                 let deleted_data = data_blobs[NUM_DATA - 1].clone();
                 debug!(
                     "deleted: slot: {}, index: {}",
-                    deleted_data.read().unwrap().slot(),
-                    deleted_data.read().unwrap().index()
+                    deleted_data.slot(),
+                    deleted_data.index()
                 );
 
                 blocktree
@@ -2697,8 +2669,7 @@ pub mod tests {
                     .unwrap();
 
                 // this should trigger recovery
-                for shared_coding_blob in coding_blobs {
-                    let blob = shared_coding_blob.read().unwrap();
+                for blob in coding_blobs {
                     let size = blob.size() + BLOB_HEADER_SIZE;
 
                     blocktree
@@ -2725,7 +2696,7 @@ pub mod tests {
 
                 let data_blob = Blob::new(&retrieved_data.unwrap());
 
-                assert_eq!(&data_blob, &*deleted_data.read().unwrap());
+                assert_eq!(&data_blob, &deleted_data);
             }
 
             drop(blocktree);
@@ -2799,8 +2770,7 @@ pub mod tests {
                                 slot, erasure_set.set_index
                             );
 
-                            for shared_coding_blob in erasure_set.coding {
-                                let blob = shared_coding_blob.read().unwrap();
+                            for blob in erasure_set.coding {
                                 let size = blob.size() + BLOB_HEADER_SIZE;
                                 blocktree
                                     .put_coding_blob_bytes(slot, blob.index(), &blob.data[..size])
@@ -2814,8 +2784,7 @@ pub mod tests {
                             // for odd sets, write coding blobs first, then write the data blobs.
                             // writing the data blobs should trigger recovery, since 3/4 coding and
                             // 15/16 data blobs will be present
-                            for shared_coding_blob in erasure_set.coding {
-                                let blob = shared_coding_blob.read().unwrap();
+                            for blob in erasure_set.coding {
                                 let size = blob.size() + BLOB_HEADER_SIZE;
                                 blocktree
                                     .put_coding_blob_bytes(slot, blob.index(), &blob.data[..size])

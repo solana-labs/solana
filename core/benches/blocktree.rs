@@ -179,14 +179,14 @@ fn bench_insert_data_blob_big(bench: &mut Bencher) {
         Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
     let entries = make_large_test_entries(num_entries);
-    let mut shared_blobs = entries.to_shared_blobs();
+    let mut shared_blobs = entries.to_blobs();
     shared_blobs.shuffle(&mut thread_rng());
 
     bench.iter(move || {
         for blob in shared_blobs.iter_mut() {
-            let index = blob.read().unwrap().index();
+            let index = blob.index();
             blocktree.write_shared_blobs(vec![blob.clone()]).unwrap();
-            blob.write().unwrap().set_index(index + num_entries as u64);
+            blob.set_index(index + num_entries as u64);
         }
     });
 

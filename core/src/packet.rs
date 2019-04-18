@@ -16,10 +16,6 @@ use std::io::Write;
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, RwLock};
-
-pub type SharedBlob = Arc<RwLock<Blob>>;
-pub type SharedBlobs = Vec<SharedBlob>;
 
 pub const NUM_PACKETS: usize = 1024 * 8;
 pub const BLOB_SIZE: usize = (64 * 1024 - 128); // wikipedia says there should be 20b for ipv4 headers
@@ -292,19 +288,6 @@ pub fn to_blobs<T: Serialize>(rsps: Vec<(T, SocketAddr)>) -> Result<Vec<Blob>> {
     Ok(blobs)
 }
 
-pub fn to_shared_blob<T: Serialize>(resp: T, rsp_addr: SocketAddr) -> Result<SharedBlob> {
-    let blob = Arc::new(RwLock::new(to_blob(resp, rsp_addr)?));
-    Ok(blob)
-}
-
-pub fn to_shared_blobs<T: Serialize>(rsps: Vec<(T, SocketAddr)>) -> Result<SharedBlobs> {
-    let mut blobs = Vec::new();
-    for (resp, rsp_addr) in rsps {
-        blobs.push(to_shared_blob(resp, rsp_addr)?);
-    }
-    Ok(blobs)
-}
-
 pub fn packets_to_blobs<T: Borrow<Packet>>(packets: &[T]) -> Vec<Blob> {
     let mut current_index = 0;
     let mut blobs = vec![];
@@ -510,18 +493,17 @@ impl Blob {
         last_index
     }
 
-    pub fn recv_blob(socket: &UdpSocket, r: &SharedBlob) -> io::Result<()> {
-        let mut p = r.write().unwrap();
+    pub fn recv_blob(socket: &UdpSocket, r: &mut Blob) -> io::Result<()> {
         trace!("receiving on {}", socket.local_addr().unwrap());
 
-        let (nrecv, from) = socket.recv_from(&mut p.data)?;
-        p.meta.size = nrecv;
-        p.meta.set_addr(&from);
+        let (nrecv, from) = socket.recv_from(&mut r.data)?;
+        r.meta.size = nrecv;
+        r.meta.set_addr(&from);
         trace!("got {} bytes from {}", nrecv, from);
         Ok(())
     }
 
-    pub fn recv_from(socket: &UdpSocket) -> Result<SharedBlobs> {
+    pub fn recv_from(socket: &UdpSocket) -> Result<Vec<Blob>> {
         let mut v = Vec::new();
         //DOCUMENTED SIDE-EFFECT
         //Performance out of the IO without poll
@@ -531,9 +513,9 @@ impl Blob {
         //  * set it back to blocking before returning
         socket.set_nonblocking(false)?;
         for i in 0..NUM_BLOBS {
-            let r = SharedBlob::default();
+            let mut r = Blob::default();
 
-            match Blob::recv_blob(socket, &r) {
+            match Blob::recv_blob(socket, &mut r) {
                 Err(_) if i > 0 => {
                     trace!("got {:?} messages on {}", i, socket.local_addr().unwrap());
                     break;
@@ -554,10 +536,9 @@ impl Blob {
         }
         Ok(v)
     }
-    pub fn send_to(socket: &UdpSocket, v: SharedBlobs) -> Result<()> {
-        for r in v {
+    pub fn send_to(socket: &UdpSocket, v: Vec<Blob>) -> Result<()> {
+        for p in v {
             {
-                let p = r.read().unwrap();
                 let a = p.meta.addr();
                 if let Err(e) = socket.send_to(&p.data[..p.meta.size], &a) {
                     warn!(
@@ -572,11 +553,9 @@ impl Blob {
     }
 }
 
-pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, mut blob_index: u64, slot: u64, parent: u64) {
+pub fn index_blobs(blobs: &mut [Blob], id: &Pubkey, mut blob_index: u64, slot: u64, parent: u64) {
     // enumerate all the blobs, those are the indices
-    for blob in blobs.iter() {
-        let mut blob = blob.write().unwrap();
-
+    for blob in blobs.iter_mut() {
         blob.set_index(blob_index);
         blob.set_slot(slot);
         blob.set_parent(parent);
@@ -660,16 +639,16 @@ mod tests {
         let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let p = SharedBlob::default();
-        p.write().unwrap().meta.set_addr(&addr);
-        p.write().unwrap().meta.size = 1024;
+        let mut p = Blob::default();
+        p.meta.set_addr(&addr);
+        p.meta.size = 1024;
         let v = vec![p];
         Blob::send_to(&sender, v).unwrap();
         trace!("send_to");
         let rv = Blob::recv_from(&reader).unwrap();
         trace!("recv_from");
         assert_eq!(rv.len(), 1);
-        assert_eq!(rv[0].read().unwrap().meta.size, 1024);
+        assert_eq!(rv[0].meta.size, 1024);
     }
 
     #[cfg(all(feature = "ipv6", test))]
@@ -678,7 +657,7 @@ mod tests {
         let reader = UdpSocket::bind("[::1]:0").expect("bind");
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("[::1]:0").expect("bind");
-        let p = SharedBlob::default();
+        let p = Blob::default();
         p.as_mut().unwrap().meta.set_addr(&addr);
         p.as_mut().unwrap().meta.size = 1024;
         let mut v = VecDeque::default();

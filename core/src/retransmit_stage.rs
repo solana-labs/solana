@@ -6,7 +6,7 @@ use crate::cluster_info::{
     compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY,
     NEIGHBORHOOD_SIZE,
 };
-use crate::packet::SharedBlob;
+use crate::packet::Blob;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
@@ -47,7 +47,7 @@ fn retransmit(
         GROW_LAYER_CAPACITY,
     );
     for b in &dq {
-        if b.read().unwrap().should_forward() {
+        if b.should_forward() {
             ClusterInfo::retransmit_to(&cluster_info, &neighbors, &copy_for_neighbors(b), sock)?;
         }
         // Always send blobs to children
@@ -58,11 +58,11 @@ fn retransmit(
 
 /// Modifies a blob for neighbors nodes
 #[inline]
-fn copy_for_neighbors(b: &SharedBlob) -> SharedBlob {
-    let mut blob = b.read().unwrap().clone();
+fn copy_for_neighbors(b: &Blob) -> Blob {
+    let mut blob = b.clone();
     // Disable blob forwarding for neighbors
     blob.forward(false);
-    Arc::new(RwLock::new(blob))
+    blob
 }
 
 /// Service to retransmit messages from the leader or layer 1 to relevant peer nodes.
@@ -160,9 +160,9 @@ mod tests {
     // Test that blobs always come out with forward unset for neighbors
     #[test]
     fn test_blob_for_neighbors() {
-        let blob = SharedBlob::default();
-        blob.write().unwrap().forward(true);
+        let mut blob = Blob::default();
+        blob.forward(true);
         let for_hoodies = copy_for_neighbors(&blob);
-        assert!(!for_hoodies.read().unwrap().should_forward());
+        assert!(!for_hoodies.should_forward());
     }
 }
