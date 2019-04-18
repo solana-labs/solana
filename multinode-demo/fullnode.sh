@@ -204,7 +204,7 @@ while true; do
         $rsync -r "$rsync_leader_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR" || true
         if [[ -n $(diff "$SOLANA_RSYNC_CONFIG_DIR"/ledger/genesis.json "$ledger_config_dir"/genesis.json 2>&1) ]]; then
           echo "############## New genesis detected, restarting fullnode ##############"
-          rm -rf "$ledger_config_dir"
+          rm -rf "$ledger_config_dir" "$vote_id_path".configured
           kill "$pid" || true
           wait "$pid" || true
           break
