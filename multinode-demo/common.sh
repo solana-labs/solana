@@ -154,6 +154,8 @@ setup_vote_account() {
     # Fund the vote account from the node, with the node as the node_id
     $solana_wallet --keypair "$node_id_path" --host "$drone_address" \
       create-vote-account "$vote_id" "$node_id" $((stake - 1)) || return $?
+
+    touch "$vote_id_path".configured
   fi
 
   $solana_wallet --keypair "$node_id_path" --host "$drone_address" show-vote-account "$vote_id"
