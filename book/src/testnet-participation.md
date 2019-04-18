@@ -118,7 +118,7 @@ $ solana-install run fullnode.sh -- --public-address --poll-for-new-genesis-bloc
 If you built from source:
 ```bash
 $ USE_INSTALL=1 ./multinode-demo/clear-fullnode-config.sh
-$ USE_INSTALL=1 ./multinode-demo/fullnode.sh --public-address --poll-for-new-genesis-block edge.testnet.solana.com
+$ USE_INSTALL=1 ./multinode-demo/fullnode.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com
 ```
 
 #### Controlling local network port allocation
