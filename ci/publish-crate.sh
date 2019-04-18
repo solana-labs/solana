@@ -19,9 +19,10 @@ CRATES=(
   metrics
   client
   drone
-  programs/{budget_api,config_api,storage_api,token_api,vote_api}
+  programs/{budget_api,config_api,stake_api,storage_api,token_api,vote_api,exchange_api}
+  programs/{vote_program,budget_program,bpf_loader,config_program,exchange_program,failure_program}
+  programs/{noop_program,stake_program,storage_program,token_program}
   runtime
-  programs/{budget,bpf_loader,config,vote,storage,token,vote}
   vote-signer
   core
   fullnode
@@ -31,7 +32,6 @@ CRATES=(
   wallet
   install
 )
-
 
 # Only package/publish if this is a tagged release
 [[ -n $TRIGGERED_BUILDKITE_TAG ]] || {
@@ -55,7 +55,7 @@ for crate in "${CRATES[@]}"; do
     exit 1
   fi
   echo "-- $crate"
-  grep -q "^version = \"$expectedCrateVersion\"$" Cargo.toml || {
+  grep -q "^version = \"$expectedCrateVersion\"$" "$crate"/Cargo.toml || {
     echo "Error: $crate/Cargo.toml version is not $expectedCrateVersion"
     exit 1
   }
