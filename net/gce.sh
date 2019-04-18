@@ -30,6 +30,18 @@ ec2)
   clientMachineType=m4.2xlarge
   blockstreamerMachineType=m4.2xlarge
   ;;
+azure)
+  # shellcheck source=net/scripts/azure-provider.sh
+  source "$here"/scripts/azure-provider.sh
+
+  # TODO: Dial in machine types for Azure
+  cpuBootstrapLeaderMachineType=Standard_D16s_v3
+  gpuBootstrapLeaderMachineType=Standard_NC12
+  bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
+  fullNodeMachineType=$cpuBootstrapLeaderMachineType
+  clientMachineType=Standard_D16s_v3
+  blockstreamerMachineType=Standard_D16s_v3
+  ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
   ;;
@@ -190,6 +202,8 @@ case $cloudProvider in
 gce)
   ;;
 ec2)
+  ;;
+azure)
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
