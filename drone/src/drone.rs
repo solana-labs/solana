@@ -42,7 +42,7 @@ macro_rules! socketaddr {
 }
 
 pub const TIME_SLICE: u64 = 60;
-pub const REQUEST_CAP: u64 = 500_000_000;
+pub const REQUEST_CAP: u64 = 100_000_000_000_000;
 pub const DRONE_PORT: u16 = 9900;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]

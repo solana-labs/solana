@@ -4,7 +4,7 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
-lamports=1000000000
+lamports=100000000000000
 bootstrap_leader_lamports=
 
 usage () {

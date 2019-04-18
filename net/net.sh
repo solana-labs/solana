@@ -37,6 +37,9 @@ Operate a configured testnet
    -r                                  - Reuse existing node/ledger configuration from a
                                          previous |start| (ie, don't run ./multinode-demo/setup.sh).
    -D /path/to/instruction-processors  - Deploy custom programs from this location
+   -c [number]                         - Number of solana-bench-tps clients to start
+   -e [number]                         - Number of solana-bench-exchange clients to start
+
 
  sanity/start/update-specific options:
    -o noLedgerVerify    - Skip ledger verification
@@ -64,12 +67,14 @@ updateNodes=false
 customPrograms=
 updateManifestKeypairFile=
 updateDownloadUrl=
+nBenchTpsClients=0
+nBenchExchangeClients=0
 
 command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?T:t:o:f:rD:i:" opt; do
+while getopts "h?T:t:o:f:rD:i:c:e:" opt; do
   case $opt in
   h | \?)
     usage
@@ -117,6 +122,12 @@ while getopts "h?T:t:o:f:rD:i:" opt; do
       ;;
     esac
     ;;
+  c)
+    nBenchTpsClients=$OPTARG
+    ;;
+  e)
+    nBenchExchangeClients=$OPTARG
+    ;;
   *)
     usage "Error: unhandled option: $opt"
     ;;
@@ -125,11 +136,17 @@ done
 
 loadConfigFile
 
+nClients=${#clientIpList[@]}
+nClientsRequested=$(($nBenchTpsClients+$nBenchExchangeClients))
+if [ "$nClientsRequested" -gt "$nClients" ]; then
+  echo "Error: More clients requested ($nClientsRequested) then available ($nClients)"
+  exit 1
+fi
+
 build() {
   declare MAYBE_DOCKER=
   if [[ $(uname) != Linux ]]; then
-    # shellcheck source=ci/rust-version.sh 
-    source ../ci/rust-version.sh
+    source "$SOLANA_ROOT"/ci/rust-version.sh
     MAYBE_DOCKER="ci/docker-run.sh $rust_stable_docker_image"
   fi
   SECONDS=0
@@ -251,14 +268,15 @@ startNode() {
 
 startClient() {
   declare ipAddress=$1
-  declare logFile="$2"
-  echo "--- Starting client: $ipAddress"
+  declare clientToRun="$2"
+  declare logFile="$netLogDir/client-$clientToRun-$ipAddress.log"
+  echo "--- Starting client: $ipAddress - $clientToRun"
   echo "start log: $logFile"
   (
     set -x
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
-      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \"$RUST_LOG\""
+      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp "$clientToRun" \"$RUST_LOG\""
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -411,8 +429,12 @@ start() {
   sanity
 
   SECONDS=0
-  for ipAddress in "${clientIpList[@]}"; do
-    startClient "$ipAddress" "$netLogDir/client-$ipAddress.log"
+  for ((i=0; i < "$nClients" && i < "$nClientsRequested"; i++)) do
+    if [ $i -lt "$nBenchTpsClients" ]; then
+      startClient "${clientIpList[$i]}" "solana-bench-tps"
+    else
+      startClient "${clientIpList[$i]}" "solana-bench-exchange"
+    fi
   done
   clientDeployTime=$SECONDS
 
