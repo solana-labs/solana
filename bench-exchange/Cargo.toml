@@ -30,7 +30,7 @@ solana-logger = { path = "../logger", version = "0.14.0" }
 solana-metrics = { path = "../metrics", version = "0.14.0" }
 solana-netutil = { path = "../netutil", version = "0.14.0" }
 solana-sdk = { path = "../sdk", version = "0.14.0" }
-ws = "0.7.9"
+ws = "0.8.0"
 untrusted = "0.6.2"
 
 [features]
