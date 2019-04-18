@@ -327,7 +327,7 @@ impl StorageStage {
         let tx = Transaction::new_unsigned_instructions(vec![ix]);
         tx_sender.send(tx)?;
 
-        seed.copy_from_slice(&signature.to_bytes()[..32]);
+        seed.copy_from_slice(&signature.as_ref()[..32]);
 
         let mut rng = ChaChaRng::from_seed(seed);
 
@@ -340,7 +340,7 @@ impl StorageStage {
             return Ok(());
         }
         // TODO: what if the validator does not have this segment
-        let segment = signature.to_bytes()[0] as usize % num_segments;
+        let segment = signature.as_ref()[0] as usize % num_segments;
 
         debug!(
             "storage verifying: segment: {} identities: {}",

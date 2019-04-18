@@ -14,7 +14,6 @@ use crate::streamer::receiver;
 use crate::streamer::responder;
 use crate::window_service::WindowService;
 use bincode::deserialize;
-use ed25519_dalek;
 use rand::thread_rng;
 use rand::Rng;
 use solana_client::rpc_client::RpcClient;
@@ -61,7 +60,7 @@ pub struct Replicator {
     slot: u64,
     ledger_path: String,
     storage_keypair: Arc<Keypair>,
-    signature: ed25519_dalek::Signature,
+    signature: ring::signature::Signature,
     cluster_entrypoint: ContactInfo,
     ledger_data_file_encrypted: PathBuf,
     sampling_offsets: Vec<u64>,
@@ -108,10 +107,10 @@ pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
 }
 
 fn get_entry_heights_from_blockhash(
-    signature: &ed25519_dalek::Signature,
+    signature: &ring::signature::Signature,
     storage_entry_height: u64,
 ) -> u64 {
-    let signature_vec = signature.to_bytes();
+    let signature_vec = signature.as_ref();
     let mut segment_index = u64::from(signature_vec[0])
         | (u64::from(signature_vec[1]) << 8)
         | (u64::from(signature_vec[1]) << 16)
@@ -355,7 +354,7 @@ impl Replicator {
         #[cfg(feature = "chacha")]
         {
             let mut ivec = [0u8; 64];
-            ivec.copy_from_slice(&self.signature.to_bytes());
+            ivec.copy_from_slice(self.signature.as_ref());
 
             let num_encrypted_bytes = chacha_cbc_encrypt_ledger(
                 &self.blocktree,
@@ -384,7 +383,7 @@ impl Replicator {
             use rand_chacha::ChaChaRng;
 
             let mut rng_seed = [0u8; 32];
-            rng_seed.copy_from_slice(&self.signature.to_bytes()[0..32]);
+            rng_seed.copy_from_slice(&self.signature.as_ref()[0..32]);
             let mut rng = ChaChaRng::from_seed(rng_seed);
             for _ in 0..NUM_STORAGE_SAMPLES {
                 self.sampling_offsets
@@ -449,7 +448,7 @@ impl Replicator {
             &self.storage_keypair.pubkey(),
             self.hash,
             self.slot,
-            Signature::new(&self.signature.to_bytes()),
+            Signature::new(self.signature.as_ref()),
         );
         let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
         client

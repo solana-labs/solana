@@ -2,9 +2,9 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use clap::{crate_description, crate_name, crate_version, value_t, App, Arg, ArgMatches};
-use solana::gen_keys::GenKeys;
 use solana_drone::drone::DRONE_PORT;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
+use untrusted::Input;
 
 pub struct Config {
     pub network_addr: SocketAddr,
@@ -152,8 +152,7 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     } else {
         args.identity = {
             let seed = [42_u8; 32];
-            let mut rnd = GenKeys::new(seed);
-            rnd.gen_keypair()
+            Keypair::from_seed_unchecked(Input::from(&seed)).unwrap()
         };
     }
     args.threads = value_t!(matches.value_of("threads"), usize).expect("Failed to parse threads");

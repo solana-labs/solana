@@ -94,7 +94,7 @@ mod tests {
     use crate::blocktree::Blocktree;
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::entry::Entry;
-    use crate::gen_keys::GenKeys;
+    use ring::signature::Ed25519KeyPair;
     use solana_sdk::hash::{hash, Hash, Hasher};
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::system_transaction;
@@ -103,14 +103,19 @@ mod tests {
     use std::io::Read;
     use std::path::Path;
     use std::sync::Arc;
+    use untrusted::Input;
 
     fn make_tiny_deterministic_test_entries(num: usize) -> Vec<Entry> {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
-
-        let seed = [2u8; 32];
-        let mut rnd = GenKeys::new(seed);
-        let keypair = rnd.gen_keypair();
+        let pkcs = [
+            48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 109, 148, 235, 20, 97, 127,
+            43, 194, 109, 43, 121, 76, 54, 38, 234, 14, 108, 68, 209, 227, 137, 191, 167, 144, 177,
+            174, 57, 182, 79, 198, 196, 93, 161, 35, 3, 33, 0, 116, 121, 255, 78, 31, 95, 179, 172,
+            30, 125, 206, 87, 88, 78, 46, 145, 25, 154, 161, 252, 3, 58, 235, 116, 39, 148, 193,
+            150, 111, 61, 20, 226,
+        ];
+        let keypair = Ed25519KeyPair::from_pkcs8(Input::from(&pkcs)).unwrap();
 
         let mut id = one;
         let mut num_hashes = 0;
@@ -159,7 +164,7 @@ mod tests {
         use bs58;
         //  golden needs to be updated if blob stuff changes....
         let golden = Hash::new(
-            &bs58::decode("GD6xs6Loh9gci6b6P8FVVJ1c1whCqxDzaqBrQkpcxowA")
+            &bs58::decode("5NBn4cBZmNZRftkjxj3um8W1eyYPzn2RgUJSA3SVbHaJ")
                 .into_vec()
                 .unwrap(),
         );
