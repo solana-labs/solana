@@ -7,22 +7,6 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
-usage () {
-  exitcode=0
-  if [[ -n "$1" ]]; then
-    exitcode=1
-    echo "Error: $*"
-  fi
-  cat <<EOF
-usage: $0 [All arguments passed directly to drone]
-
-Run an airdrop drone
-
-EOF
-  exit $exitcode
-}
-
-
 [[ -f "$SOLANA_CONFIG_DIR"/mint-id.json ]] || {
   echo "$SOLANA_CONFIG_DIR/mint-id.json not found, create it by running:"
   echo
