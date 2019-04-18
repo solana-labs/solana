@@ -5,4 +5,4 @@
 
 here=$(dirname "$0")
 
-exec "$here"/fullnode.sh -x "$@"
+exec "$here"/fullnode.sh --label x$$ "$@"

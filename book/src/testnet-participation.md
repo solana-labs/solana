@@ -91,7 +91,6 @@ $ export PATH=$PWD/bin:$PATH
 ```
 
 ### Starting The Validator
-
 Sanity check that you are able to interact with the cluster by receiving a small
 airdrop of lamports from the testnet drone:
 ```bash
@@ -103,33 +102,51 @@ Then the following command will start a new validator node.
 
 If this is a `solana-install`-installation:
 ```bash
-$ fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com
+$ clear-fullnode-config.sh
+$ fullnode.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ solana-install run fullnode-x.sh -- --public-address --poll-for-new-genesis-block beta.testnet.solana.com
+$ solana-install run fullnode.sh -- --public-address --poll-for-new-genesis-block beta.testnet.solana.com
 ```
 
-When not using `solana-install`:
+If you built from source:
 ```bash
-$ USE_INSTALL=1 ./multinode-demo/fullnode-x.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.com
+$ USE_INSTALL=1 ./multinode-demo/clear-fullnode-config.sh
+$ USE_INSTALL=1 ./multinode-demo/fullnode.sh --public-address --poll-for-new-genesis-block edge.testnet.solana.com
 ```
-
-Then from another console, confirm the IP address if your node is now visible in
-the gossip network by running:
-```bash
-$ solana-gossip --network beta.testnet.solana.com:8001
-```
-
-Congratulations, you're now participating in the testnet cluster!
 
 #### Controlling local network port allocation
 By default the validator will dynamically select available network ports in the
 8000-10000 range, and may be overridden with `--dynamic-port-range`.  For
-example, `fullnode-x.sh --dynamic-port-range 11000-11010 ...` will restrict the
+example, `fullnode.sh --dynamic-port-range 11000-11010 ...` will restrict the
 validator to ports 11000-11011.
+
+### Validator Monitoring
+From another console, confirm the IP address of your validator is visible in the
+gossip network by running:
+```bash
+solana-gossip --network edge.testnet.solana.com:8001
+```
+
+When `fullnode.sh` starts, it will output a fullnode configuration that looks
+similar to:
+```bash
+======================[ Fullnode configuration ]======================
+node id: 4ceWXsL3UJvn7NYZiRkw7NsryMpviaKBDYr8GK7J61Dm
+vote id: 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
+ledger: ...
+accounts: ...
+======================================================================
+```
+
+Provide the **vote id** pubkey to the `solana-wallet show-vote-account` command to view
+the recent voting activity from your validator:
+```bash
+$ solana-wallet -n beta.testnet.solana.com show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
+```
 
 ### Sharing Metrics From Your Validator
 If you'd like to share metrics perform the following steps before starting the

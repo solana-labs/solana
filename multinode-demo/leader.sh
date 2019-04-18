@@ -1,1 +1,0 @@
-bootstrap-leader.sh

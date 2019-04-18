@@ -1,1 +1,0 @@
-fullnode-x.sh
