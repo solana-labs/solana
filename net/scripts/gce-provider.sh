@@ -208,10 +208,11 @@ cloud_DeleteInstances() {
   declare names=("${instances[@]/:*/}")
   declare zones=("${instances[@]/*:/}")
 
-  (
+  for zone in "${zones[@]}"; do
     set -x
-    gcloud beta compute instances delete --zone "${zones[0]}" --quiet "${names[@]}"
-  )
+    # Try deleting instances in all zones
+    gcloud beta compute instances delete --zone "$zone" --quiet "${names[@]}" || true
+  done
 }
 
 
