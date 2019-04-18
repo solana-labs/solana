@@ -2,12 +2,29 @@
 #
 # Utilities for working with Azure instances
 #
-
 set -x
-
 # Default zone
 cloud_DefaultZone() {
   echo "westus"
+}
+
+#
+# __cloud_GetConfigValueFromInstanceName
+# Return a piece of configuration information about an instance
+# Provide the exact name of an instance and the configuration key, and the corresponding value will be returned
+#
+# example:
+#   This will return the name of the resource group of the instance named
+#   __cloud_GetConfigValueFromInstanceName some-instance-name resourceGroup
+
+cloud_GetConfigValueFromInstanceName() {
+  query="[?name=='$1']"
+  key="[$2]"
+  config_value=`az vm list -d -o tsv --query "$query.$key"`
+}
+
+cloud_GetResourceGroupFromInstance() {
+  resourceGroup=`az vm list -o tsv --query "[?name=='$1'].[resourceGroup]"`
 }
 
 #
@@ -143,16 +160,11 @@ cloud_CreateInstances() {
   declare optionalBootDiskType="${10}"
 
   if $enableGpu; then
-    # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
-    #
-    # TODO: Unfortunately this image is not public.  When this becomes an issue,
-    # use the stock Ubuntu 18.04 image and programmatically install CUDA after the
-    # instance boots
-    #
-    imageName="ubuntu-1804-bionic-v20181029-with-cuda-10-and-cuda-9-2"
+    # TODO: First out what image is needed for Azure for GPU/non-GPU
+    imageName="UbuntuLTS"
   else
-    # Upstream Ubuntu 18.04 LTS image
-    imageName="ubuntu-1804-bionic-v20181029 --image-project ubuntu-os-cloud"
+    # TODO: First out what image is needed for Azure for GPU/non-GPU
+    imageName="UbuntuLTS"
   fi
 
   declare -a nodes
@@ -166,33 +178,26 @@ cloud_CreateInstances() {
 
   declare -a args
   args=(
-    --zone "$zone"
+    --resource-group $networkName
     --tags testnet
-    --metadata "testnet=$networkName"
-    --image "$imageName"
-    --maintenance-policy TERMINATE
-    --no-restart-on-failure
+    --image $imageName
+    --size $machineType
+    --generate-ssh-keys
   )
 
-  # shellcheck disable=SC2206 # Do not want to quote $imageName as it may contain extra args
-  args+=(--image $imageName)
-
-  # shellcheck disable=SC2206 # Do not want to quote $machineType as it may contain extra args
-  args+=(--machine-type $machineType)
   if [[ -n $optionalBootDiskSize ]]; then
     args+=(
-      --boot-disk-size "${optionalBootDiskSize}GB"
+      --os-disk-size-gb "$optionalBootDiskSize"
     )
   fi
   if [[ -n $optionalStartupScript ]]; then
     args+=(
-      --metadata-from-file "startup-script=$optionalStartupScript"
+      --custom-data "$optionalStartupScript"
     )
   fi
+
   if [[ -n $optionalBootDiskType ]]; then
-    args+=(
-        --boot-disk-type "${optionalBootDiskType}"
-    )
+    echo Boot disk type not configurable
   fi
 
   if [[ -n $optionalAddress ]]; then
@@ -201,13 +206,26 @@ cloud_CreateInstances() {
       exit 1
     }
     args+=(
-      --address "$optionalAddress"
+      --public-ip-address "$optionalAddress"
     )
   fi
 
   (
-    set -x
-    gcloud beta compute instances create "${nodes[@]}" "${args[@]}"
+  set -x
+    # 1: Check if resource group exists.  If not, create it.
+    numGroup=`az group list --query "length([?name=='$networkName'])"`
+    if [[ $numGroup -eq 0 ]]; then
+      echo Resource Group "$networkName" does not exist.  Creating it now.
+      az group create --name $networkName --location $zone
+    else
+      echo Resource group "$networkName" already exists.
+      az group show --name $networkName
+    fi
+
+    # 2: For node in numNodes, create VM
+    for nodeName in ${nodes[@]}; do
+      az vm create --name $nodeName "${args[@]}" --verbose
+    done
   )
 }
 
@@ -223,11 +241,14 @@ cloud_DeleteInstances() {
   fi
 
   declare names=("${instances[@]/:*/}")
-  declare zones=("${instances[@]/*:/}")
+  declare locations=("${instances[@]/*:/}")
 
   (
     set -x
-    gcloud beta compute instances delete --zone "${zones[0]}" --quiet "${names[@]}"
+    for instance in ${names[@]}; do
+      cloud_GetResourceGroupFromInstance $instance
+      az vm delete --name $instance --resource-group $resourceGroup --no-wait --yes --verbose
+    done
   )
 }
 
@@ -246,8 +267,7 @@ cloud_FetchFile() {
   declare localFile="$4"
   declare zone="$5"
 
-  (
-    set -x
-    gcloud compute scp --zone "$zone" "$instanceName:$remoteFile" "$localFile"
-  )
+  cloud_GetConfigValueFromInstanceName "$nodeName" osProfile.adminUsername
+  scp "$config_value"@"$publicIp:$remoteFile" "$localFile"
+
 }
