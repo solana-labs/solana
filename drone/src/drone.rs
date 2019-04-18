@@ -138,7 +138,7 @@ impl Drone {
                     Err(Error::new(
                         ErrorKind::Other,
                         format!(
-                            "token limit reached req: {} current: {} cap: {}",
+                            "token limit reached; req: {} current: {} cap: {}",
                             lamports, self.request_current, self.request_cap
                         ),
                     ))
