@@ -278,9 +278,7 @@ impl BankingStage {
                     if Self::should_buffer_packets(poh_recorder, cluster_info) {
                         let num = unprocessed_packets
                             .iter()
-                            .map(|(x, start, _)| {
-                                x.read().unwrap().packets.len().saturating_sub(*start)
-                            })
+                            .map(|(x, start, _)| x.packets.len().saturating_sub(*start))
                             .sum();
                         inc_new_counter_info!("banking_stage-buffered_packets", num);
                         buffered_packets.extend_from_slice(&unprocessed_packets);
