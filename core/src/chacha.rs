@@ -159,7 +159,7 @@ mod tests {
         use bs58;
         //  golden needs to be updated if blob stuff changes....
         let golden = Hash::new(
-            &bs58::decode("5NBn4cBZmNZRftkjxj3um8W1eyYPzn2RgUJSA3SVbHaJ")
+            &bs58::decode("GD6xs6Loh9gci6b6P8FVVJ1c1whCqxDzaqBrQkpcxowA")
                 .into_vec()
                 .unwrap(),
         );
