@@ -24,9 +24,8 @@ fn main() {
 
     let chacha = !env::var("CARGO_FEATURE_CHACHA").is_err();
     let cuda = !env::var("CARGO_FEATURE_CUDA").is_err();
-    let erasure = !env::var("CARGO_FEATURE_ERASURE").is_err();
 
-    if chacha || cuda || erasure {
+    if chacha || cuda {
         println!("cargo:rerun-if-changed={}", perf_libs_dir);
         println!("cargo:rustc-link-search=native={}", perf_libs_dir);
     }
@@ -45,31 +44,5 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=cudart");
         println!("cargo:rustc-link-lib=dylib=cuda");
         println!("cargo:rustc-link-lib=dylib=cudadevrt");
-    }
-    if erasure {
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        {
-            println!(
-                "cargo:rerun-if-changed={}/libgf_complete.dylib",
-                perf_libs_dir
-            );
-            println!("cargo:rerun-if-changed={}/libJerasure.dylib", perf_libs_dir);
-        }
-        #[cfg(all(unix, not(any(target_os = "macos", target_os = "ios"))))]
-        {
-            println!("cargo:rerun-if-changed={}/libgf_complete.so", perf_libs_dir);
-            println!("cargo:rerun-if-changed={}/libJerasure.so", perf_libs_dir);
-        }
-        #[cfg(windows)]
-        {
-            println!(
-                "cargo:rerun-if-changed={}/libgf_complete.dll",
-                perf_libs_dir
-            );
-            println!("cargo:rerun-if-changed={}/libJerasure.dll", perf_libs_dir);
-        }
-
-        println!("cargo:rustc-link-lib=dylib=Jerasure");
-        println!("cargo:rustc-link-lib=dylib=gf_complete");
     }
 }

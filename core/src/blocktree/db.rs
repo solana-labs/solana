@@ -28,7 +28,6 @@ pub mod columns {
     /// Data Column
     pub struct Data;
 
-    #[cfg(feature = "erasure")]
     #[derive(Debug)]
     /// The erasure meta column
     pub struct ErasureMeta;
