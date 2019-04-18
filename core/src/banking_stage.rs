@@ -8,7 +8,6 @@ use crate::entry;
 use crate::entry::{hash_transactions, Entry};
 use crate::leader_schedule_utils;
 use crate::packet;
-use crate::packet::SharedPackets;
 use crate::packet::{Packet, Packets};
 use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntries};
 use crate::poh_service::{PohService, PohServiceConfig};
@@ -31,7 +30,7 @@ use std::time::Duration;
 use std::time::Instant;
 use sys_info;
 
-pub type UnprocessedPackets = Vec<(SharedPackets, usize, Vec<u8>)>; // `usize` is the index of the first unprocessed packet in `SharedPackets`
+pub type UnprocessedPackets = Vec<(Packets, usize, Vec<u8>)>; // `usize` is the index of the first unprocessed packet in `SharedPackets`
 
 // number of threads is 1 until mt bank is ready
 pub const NUM_THREADS: u32 = 10;
@@ -105,11 +104,11 @@ impl BankingStage {
     fn forward_unprocessed_packets(
         socket: &std::net::UdpSocket,
         tpu_via_blobs: &std::net::SocketAddr,
-        unprocessed_packets: &[(SharedPackets, usize, Vec<u8>)],
+        unprocessed_packets: &[(Packets, usize, Vec<u8>)],
     ) -> std::io::Result<()> {
         let locked_packets: Vec<_> = unprocessed_packets
             .iter()
-            .map(|(p, start_index, _)| (p.read().unwrap(), start_index))
+            .map(|(p, start_index, _)| (p, start_index))
             .collect();
         let packets: Vec<&Packet> = locked_packets
             .iter()
@@ -127,7 +126,7 @@ impl BankingStage {
 
     fn process_buffered_packets(
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        buffered_packets: &[(SharedPackets, usize, Vec<u8>)],
+        buffered_packets: &[(Packets, usize, Vec<u8>)],
     ) -> Result<UnprocessedPackets> {
         let mut unprocessed_packets = vec![];
         let mut bank_shutdown = false;
@@ -195,7 +194,7 @@ impl BankingStage {
         socket: &std::net::UdpSocket,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        buffered_packets: &[(SharedPackets, usize, Vec<u8>)],
+        buffered_packets: &[(Packets, usize, Vec<u8>)],
     ) -> Result<UnprocessedPackets> {
         let rcluster_info = cluster_info.read().unwrap();
 
@@ -458,14 +457,13 @@ impl BankingStage {
     fn process_received_packets(
         bank: &Arc<Bank>,
         poh: &Arc<Mutex<PohRecorder>>,
-        msgs: &Arc<RwLock<Packets>>,
+        msgs: &Packets,
         vers: &[u8],
         offset: usize,
     ) -> Result<(usize, Vec<Transaction>, Vec<usize>)> {
         debug!("banking-stage-tx bank {}", bank.slot());
-        let transactions = Self::deserialize_transactions(&Packets::new(
-            msgs.read().unwrap().packets[offset..].to_owned(),
-        ));
+        let transactions =
+            Self::deserialize_transactions(&Packets::new(msgs.packets[offset..].to_owned()));
 
         let vers = vers[offset..].to_owned();
 

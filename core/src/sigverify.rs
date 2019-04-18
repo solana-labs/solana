@@ -4,7 +4,7 @@
 //! offloaded to the GPU.
 //!
 
-use crate::packet::{Packet, SharedPackets};
+use crate::packet::{Packet, Packets};
 use crate::result::Result;
 use solana_metrics::counter::Counter;
 use solana_sdk::pubkey::Pubkey;
@@ -111,15 +111,12 @@ fn verify_packet_disabled(_packet: &Packet) -> u8 {
     1
 }
 
-fn batch_size(batches: &[SharedPackets]) -> usize {
-    batches
-        .iter()
-        .map(|p| p.read().unwrap().packets.len())
-        .sum()
+fn batch_size(batches: &[Packets]) -> usize {
+    batches.iter().map(|p| p.packets.len()).sum()
 }
 
 #[cfg(not(feature = "cuda"))]
-pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
+pub fn ed25519_verify(batches: &[Packets]) -> Vec<Vec<u8>> {
     ed25519_verify_cpu(batches)
 }
 
@@ -141,7 +138,7 @@ pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u3
     )
 }
 
-pub fn generate_offsets(batches: &[SharedPackets]) -> Result<TxOffsets> {
+pub fn generate_offsets(batches: &[Packets]) -> Result<TxOffsets> {
     let mut signature_offsets: Vec<_> = Vec::new();
     let mut pubkey_offsets: Vec<_> = Vec::new();
     let mut msg_start_offsets: Vec<_> = Vec::new();
@@ -150,7 +147,7 @@ pub fn generate_offsets(batches: &[SharedPackets]) -> Result<TxOffsets> {
     let mut v_sig_lens = Vec::new();
     batches.iter().for_each(|p| {
         let mut sig_lens = Vec::new();
-        p.read().unwrap().packets.iter().for_each(|packet| {
+        p.packets.iter().for_each(|packet| {
             let current_offset = current_packet as u32 * size_of::<Packet>() as u32;
 
             let (sig_len, sig_start, msg_start_offset, pubkey_offset) =
@@ -185,39 +182,25 @@ pub fn generate_offsets(batches: &[SharedPackets]) -> Result<TxOffsets> {
     ))
 }
 
-pub fn ed25519_verify_cpu(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
+pub fn ed25519_verify_cpu(batches: &[Packets]) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
     debug!("CPU ECDSA for {}", batch_size(batches));
     let rv = batches
         .into_par_iter()
-        .map(|p| {
-            p.read()
-                .unwrap()
-                .packets
-                .par_iter()
-                .map(verify_packet)
-                .collect()
-        })
+        .map(|p| p.packets.par_iter().map(verify_packet).collect())
         .collect();
     inc_new_counter_info!("ed25519_verify_cpu", count);
     rv
 }
 
-pub fn ed25519_verify_disabled(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
+pub fn ed25519_verify_disabled(batches: &[Packets]) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
     debug!("disabled ECDSA for {}", batch_size(batches));
     let rv = batches
         .into_par_iter()
-        .map(|p| {
-            p.read()
-                .unwrap()
-                .packets
-                .par_iter()
-                .map(verify_packet_disabled)
-                .collect()
-        })
+        .map(|p| p.packets.par_iter().map(verify_packet_disabled).collect())
         .collect();
     inc_new_counter_info!("ed25519_verify_disabled", count);
     rv
@@ -235,7 +218,7 @@ pub fn init() {
 }
 
 #[cfg(feature = "cuda")]
-pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
+pub fn ed25519_verify(batches: &[Packets]) -> Vec<Vec<u8>> {
     use crate::packet::PACKET_DATA_SIZE;
     let count = batch_size(batches);
 
@@ -254,14 +237,10 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     debug!("CUDA ECDSA for {}", batch_size(batches));
     let mut out = Vec::new();
     let mut elems = Vec::new();
-    let mut locks = Vec::new();
     let mut rvs = Vec::new();
 
-    for packets in batches {
-        locks.push(packets.read().unwrap());
-    }
     let mut num_packets = 0;
-    for p in locks {
+    for p in batches {
         elems.push(Elems {
             elems: p.packets.as_ptr(),
             num: p.packets.len() as u32,
@@ -327,7 +306,7 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
 
 #[cfg(test)]
 mod tests {
-    use crate::packet::{Packet, SharedPackets};
+    use crate::packet::{Packet, Packets};
     use crate::sigverify;
     use crate::test_tx::{test_multisig_tx, test_tx};
     use bincode::{deserialize, serialize};
@@ -440,20 +419,16 @@ mod tests {
         packet: &Packet,
         num_packets_per_batch: usize,
         num_batches: usize,
-    ) -> Vec<SharedPackets> {
+    ) -> Vec<Packets> {
         // generate packet vector
         let batches: Vec<_> = (0..num_batches)
             .map(|_| {
-                let packets = SharedPackets::default();
-                packets
-                    .write()
-                    .unwrap()
-                    .packets
-                    .resize(0, Packet::default());
+                let mut packets = Packets::default();
+                packets.packets.resize(0, Packet::default());
                 for _ in 0..num_packets_per_batch {
-                    packets.write().unwrap().packets.push(packet.clone());
+                    packets.packets.push(packet.clone());
                 }
-                assert_eq!(packets.read().unwrap().packets.len(), num_packets_per_batch);
+                assert_eq!(packets.packets.len(), num_packets_per_batch);
                 packets
             })
             .collect();
@@ -505,11 +480,11 @@ mod tests {
 
         let n = 4;
         let num_batches = 3;
-        let batches = generate_packet_vec(&packet, n, num_batches);
+        let mut batches = generate_packet_vec(&packet, n, num_batches);
 
         packet.data[40] = packet.data[40].wrapping_add(8);
 
-        batches[0].write().unwrap().packets.push(packet);
+        batches[0].packets.push(packet);
 
         // verify packets
         let ans = sigverify::ed25519_verify(&batches);
