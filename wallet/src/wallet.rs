@@ -776,11 +776,9 @@ mod tests {
     use clap::{App, Arg, SubCommand};
     use serde_json::Value;
     use solana_client::mock_rpc_client_request::SIGNATURE;
-    use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use solana_sdk::transaction::TransactionError;
-    use std::fs;
     use std::net::{Ipv4Addr, SocketAddr};
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
     #[test]
     fn test_wallet_config_drone_addr() {
@@ -1422,29 +1420,5 @@ mod tests {
 
         config.command = WalletCommand::Deploy("bad/file/location.so".to_string());
         assert!(process_command(&config).is_err());
-    }
-
-    fn tmp_file_path(name: &str) -> String {
-        use std::env;
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
-        let keypair = Keypair::new();
-
-        format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey()).to_string()
-    }
-
-    #[test]
-    fn test_wallet_gen_keypair_file() {
-        let outfile = tmp_file_path("test_gen_keypair_file.json");
-        let serialized_keypair = gen_keypair_file(outfile.to_string()).unwrap();
-        let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
-        assert!(Path::new(&outfile).exists());
-        assert_eq!(keypair_vec, read_pkcs8(&outfile).unwrap());
-        read_keypair(&outfile).unwrap();
-        assert_eq!(
-            read_keypair(&outfile).unwrap().pubkey().as_ref().len(),
-            mem::size_of::<Pubkey>()
-        );
-        fs::remove_file(&outfile).unwrap();
-        assert!(!Path::new(&outfile).exists());
     }
 }

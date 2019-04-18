@@ -171,7 +171,7 @@ fn test_replay() {
         // receive retransmitted messages
         let timer = Duration::new(1, 0);
         while let Ok(_msg) = r_reader.recv_timeout(timer) {
-            trace!("got msg");
+            info!("got msg");
         }
 
         let working_bank = bank_forks.read().unwrap().working_bank();
