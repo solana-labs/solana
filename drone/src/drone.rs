@@ -261,41 +261,54 @@ pub fn run_local_drone(
             None,
             request_cap_input,
         )));
-        let socket = TcpListener::bind(&drone_addr).unwrap();
-        sender.send(socket.local_addr().unwrap()).unwrap();
-        info!("Drone started. Listening on: {}", drone_addr);
-        let done = socket
-            .incoming()
-            .map_err(|e| debug!("failed to accept socket; error = {:?}", e))
-            .for_each(move |socket| {
-                let drone2 = drone.clone();
-                let framed = BytesCodec::new().framed(socket);
-                let (writer, reader) = framed.split();
-
-                let processor = reader.and_then(move |bytes| {
-                    match drone2.lock().unwrap().process_drone_request(&bytes) {
-                        Ok(response_bytes) => {
-                            trace!("Airdrop response_bytes: {:?}", response_bytes.to_vec());
-                            Ok(response_bytes)
-                        }
-                        Err(e) => {
-                            info!("Error in request: {:?}", e);
-                            Ok(Bytes::from(&b""[..]))
-                        }
-                    }
-                });
-                let server = writer
-                    .send_all(processor.or_else(|err| {
-                        Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("Drone response: {:?}", err),
-                        ))
-                    }))
-                    .then(|_| Ok(()));
-                tokio::spawn(server)
-            });
-        tokio::run(done);
+        run_drone(drone, drone_addr, Some(sender));
     });
+}
+
+pub fn run_drone(
+    drone: Arc<Mutex<Drone>>,
+    drone_addr: SocketAddr,
+    send_addr: Option<Sender<SocketAddr>>,
+) {
+    let socket = TcpListener::bind(&drone_addr).unwrap();
+    if send_addr.is_some() {
+        send_addr
+            .unwrap()
+            .send(socket.local_addr().unwrap())
+            .unwrap();
+    }
+    info!("Drone started. Listening on: {}", drone_addr);
+    let done = socket
+        .incoming()
+        .map_err(|e| debug!("failed to accept socket; error = {:?}", e))
+        .for_each(move |socket| {
+            let drone2 = drone.clone();
+            let framed = BytesCodec::new().framed(socket);
+            let (writer, reader) = framed.split();
+
+            let processor = reader.and_then(move |bytes| {
+                match drone2.lock().unwrap().process_drone_request(&bytes) {
+                    Ok(response_bytes) => {
+                        trace!("Airdrop response_bytes: {:?}", response_bytes.to_vec());
+                        Ok(response_bytes)
+                    }
+                    Err(e) => {
+                        info!("Error in request: {:?}", e);
+                        Ok(Bytes::from(&b""[..]))
+                    }
+                }
+            });
+            let server = writer
+                .send_all(processor.or_else(|err| {
+                    Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Drone response: {:?}", err),
+                    ))
+                }))
+                .then(|_| Ok(()));
+            tokio::spawn(server)
+        });
+    tokio::run(done);
 }
 
 #[cfg(test)]
