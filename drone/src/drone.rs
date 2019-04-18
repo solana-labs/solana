@@ -267,13 +267,16 @@ pub fn run_local_drone(
                 let (writer, reader) = framed.split();
 
                 let processor = reader.and_then(move |bytes| {
-                    let response_bytes = drone2
-                        .lock()
-                        .unwrap()
-                        .process_drone_request(&bytes)
-                        .unwrap();
-                    trace!("Airdrop response_bytes: {:?}", response_bytes.to_vec());
-                    Ok(response_bytes)
+                    match drone2.lock().unwrap().process_drone_request(&bytes) {
+                        Ok(response_bytes) => {
+                            trace!("Airdrop response_bytes: {:?}", response_bytes.to_vec());
+                            Ok(response_bytes)
+                        }
+                        Err(e) => {
+                            info!("Error in request: {:?}", e);
+                            Ok(Bytes::from(&b""[..]))
+                        }
+                    }
                 });
                 let server = writer
                     .send_all(processor.or_else(|err| {
