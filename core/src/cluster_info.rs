@@ -1091,7 +1091,7 @@ impl ClusterInfo {
         let len = data.len();
         trace!("get updates since response {}", len);
         let rsp = Protocol::PullResponse(self_id, data);
-        // the remote side may not know their public IP:PORT, record what it looks like to us
+        // The remote node may not know its public IP:PORT. Record what it looks like to us.
         // This may or may not be correct for everybody, but it's better than leaving the remote with
         // an unspecified address in our table
         if from.gossip.ip().is_unspecified() {
