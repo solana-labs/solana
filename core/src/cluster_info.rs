@@ -1092,7 +1092,7 @@ impl ClusterInfo {
         trace!("get updates since response {}", len);
         let rsp = Protocol::PullResponse(self_id, data);
         // the remote side may not know their public IP:PORT, record what it looks like to us
-        // this may or may not be correct for everybody but it's better than leaving them with
+        // This may or may not be correct for everybody, but it's better than leaving the remote with
         // an unspecified address in our table
         if from.gossip.ip().is_unspecified() {
             inc_new_counter_info!("cluster_info-window-request-updates-unspec-gossip", 1);
