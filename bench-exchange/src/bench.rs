@@ -1029,7 +1029,6 @@ mod tests {
     use solana::gossip_service::discover_nodes;
     use solana::local_cluster::{ClusterConfig, LocalCluster};
     use solana_client::thin_client::create_client;
-    use solana_client::thin_client::ThinClient;
     use solana_drone::drone::run_local_drone;
     use std::sync::mpsc::channel;
 
@@ -1093,8 +1092,7 @@ mod tests {
                 if ContactInfo::is_valid_address(&cluster_addrs.0)
                     && ContactInfo::is_valid_address(&cluster_addrs.1)
                 {
-                    let client_ctor =
-                        move || -> ThinClient { create_client(cluster_addrs, FULLNODE_PORT_RANGE) };
+                    let client_ctor = move || create_client(cluster_addrs, FULLNODE_PORT_RANGE);
                     Some(client_ctor)
                 } else {
                     None
