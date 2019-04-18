@@ -14,7 +14,7 @@ source ci/upload-ci-artifact.sh
 [[ -n $ITERATION_WAIT ]] || ITERATION_WAIT=300
 [[ -n $NUMBER_OF_NODES ]] || NUMBER_OF_NODES="10 25 50 100"
 [[ -n $LEADER_CPU_MACHINE_TYPE ]] ||
-  LEADER_CPU_MACHINE_TYPE="n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
+  LEADER_CPU_MACHINE_TYPE="--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
 [[ -n $CLIENT_COUNT ]] || CLIENT_COUNT=2
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $TESTNET_ZONES ]] || TESTNET_ZONES="us-west1-b"
