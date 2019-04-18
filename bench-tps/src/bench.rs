@@ -189,16 +189,6 @@ pub fn do_bench_tps(config: Config) {
             while shared_tx_active_thread_count.load(Ordering::Relaxed) > 0 {
                 sleep(Duration::from_millis(100));
             }
-        } else {
-            // It's not feasible (would take too much time) to confirm each of the `tx_count / 2`
-            // transactions sent by `generate_txs()` so instead send and confirm a single transaction
-            // to validate the network is still functional.
-            send_barrier_transaction(
-                &mut barrier_client,
-                &mut blockhash,
-                &barrier_source_keypair,
-                &barrier_dest_id,
-            );
         }
 
         i += 1;
@@ -299,82 +289,6 @@ fn sample_tx_count(
             maxes.write().unwrap().push((v.tpu, stats));
             break;
         }
-    }
-}
-
-/// Send loopback payment of 0 lamports and confirm the network processed it
-fn send_barrier_transaction(
-    barrier_client: &mut ThinClient,
-    blockhash: &mut Hash,
-    source_keypair: &Keypair,
-    dest_id: &Pubkey,
-) {
-    let transfer_start = Instant::now();
-
-    let mut poll_count = 0;
-    loop {
-        if poll_count > 0 && poll_count % 8 == 0 {
-            println!(
-                "polling for barrier transaction confirmation, attempt {}",
-                poll_count
-            );
-        }
-
-        *blockhash = barrier_client.get_recent_blockhash().unwrap();
-
-        let transaction =
-            system_transaction::create_user_account(&source_keypair, dest_id, 0, *blockhash, 0);
-        let signature = barrier_client
-            .async_send_transaction(transaction)
-            .expect("Unable to send barrier transaction");
-
-        let confirmatiom = barrier_client.poll_for_signature(&signature);
-        let duration_ms = duration_as_ms(&transfer_start.elapsed());
-        if confirmatiom.is_ok() {
-            println!("barrier transaction confirmed in {} ms", duration_ms);
-
-            solana_metrics::submit(
-                influxdb::Point::new("bench-tps")
-                    .add_tag(
-                        "op",
-                        influxdb::Value::String("send_barrier_transaction".to_string()),
-                    )
-                    .add_field("poll_count", influxdb::Value::Integer(poll_count))
-                    .add_field("duration", influxdb::Value::Integer(duration_ms as i64))
-                    .to_owned(),
-            );
-
-            // Sanity check that the client balance is still 1
-            let balance = barrier_client
-                .poll_balance_with_timeout(
-                    &source_keypair.pubkey(),
-                    &Duration::from_millis(100),
-                    &Duration::from_secs(10),
-                )
-                .expect("Failed to get balance");
-            if balance != 1 {
-                panic!("Expected an account balance of 1 (balance: {}", balance);
-            }
-            break;
-        }
-
-        // Timeout after 3 minutes.  When running a CPU-only leader+validator+drone+bench-tps on a dev
-        // machine, some batches of transactions can take upwards of 1 minute...
-        if duration_ms > 1000 * 60 * 3 {
-            println!("Error: Couldn't confirm barrier transaction!");
-            exit(1);
-        }
-
-        let new_blockhash = barrier_client.get_recent_blockhash().unwrap();
-        if new_blockhash == *blockhash {
-            if poll_count > 0 && poll_count % 8 == 0 {
-                println!("blockhash is not advancing, still at {:?}", *blockhash);
-            }
-        } else {
-            *blockhash = new_blockhash;
-        }
-
-        poll_count += 1;
     }
 }
 
