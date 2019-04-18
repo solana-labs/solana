@@ -137,7 +137,7 @@ done
 loadConfigFile
 
 nClients=${#clientIpList[@]}
-nClientsRequested=$(($nBenchTpsClients+$nBenchExchangeClients))
+nClientsRequested=$((nBenchTpsClients+nBenchExchangeClients))
 if [ "$nClientsRequested" -gt "$nClients" ]; then
   echo "Error: More clients requested ($nClientsRequested) then available ($nClients)"
   exit 1
@@ -146,6 +146,7 @@ fi
 build() {
   declare MAYBE_DOCKER=
   if [[ $(uname) != Linux ]]; then
+    # shellcheck source=ci/rust-version.sh
     source "$SOLANA_ROOT"/ci/rust-version.sh
     MAYBE_DOCKER="ci/docker-run.sh $rust_stable_docker_image"
   fi
@@ -276,7 +277,7 @@ startClient() {
     set -x
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
-      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp "$clientToRun" \"$RUST_LOG\""
+      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp $clientToRun \"$RUST_LOG\""
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
