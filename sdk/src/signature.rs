@@ -24,9 +24,15 @@ impl Signature {
     }
 
     pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
-        let pubkey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes).unwrap();
-        let signature = ed25519_dalek::Signature::from_bytes(self.0.as_slice()).unwrap();
-        pubkey.verify(message_bytes, &signature).is_ok()
+        let pubkey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes);
+        let signature = ed25519_dalek::Signature::from_bytes(self.0.as_slice());
+        if pubkey.is_err() || signature.is_err() {
+            return false;
+        }
+        pubkey
+            .unwrap()
+            .verify(message_bytes, &signature.unwrap())
+            .is_ok()
     }
 }
 
