@@ -2,6 +2,8 @@
 
 use crate::blocktree;
 use crate::cluster_info;
+#[cfg(feature = "erasure")]
+use crate::erasure;
 use crate::packet;
 use crate::poh_recorder;
 use bincode;
@@ -23,7 +25,8 @@ pub enum Error {
     TransactionError(transaction::TransactionError),
     ClusterInfoError(cluster_info::ClusterInfoError),
     BlobError(packet::BlobError),
-    ErasureError(reed_solomon_erasure::Error),
+    #[cfg(feature = "erasure")]
+    ErasureError(erasure::ErasureError),
     SendError,
     PohRecorderError(poh_recorder::PohRecorderError),
     BlocktreeError(blocktree::BlocktreeError),
@@ -64,8 +67,9 @@ impl std::convert::From<cluster_info::ClusterInfoError> for Error {
         Error::ClusterInfoError(e)
     }
 }
-impl std::convert::From<reed_solomon_erasure::Error> for Error {
-    fn from(e: reed_solomon_erasure::Error) -> Error {
+#[cfg(feature = "erasure")]
+impl std::convert::From<erasure::ErasureError> for Error {
+    fn from(e: erasure::ErasureError) -> Error {
         Error::ErasureError(e)
     }
 }

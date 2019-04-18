@@ -138,6 +138,7 @@ impl TypedColumn<Kvs> for cf::SlotMeta {
     type Type = super::SlotMeta;
 }
 
+#[cfg(feature = "erasure")]
 impl Column<Kvs> for cf::ErasureMeta {
     const NAME: &'static str = super::ERASURE_META_CF;
     type Index = (u64, u64);
@@ -156,6 +157,7 @@ impl Column<Kvs> for cf::ErasureMeta {
     }
 }
 
+#[cfg(feature = "erasure")]
 impl TypedColumn<Kvs> for cf::ErasureMeta {
     type Type = super::ErasureMeta;
 }
