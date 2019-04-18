@@ -11,8 +11,6 @@ use solana_client::thin_client::ThinClient;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_metrics::influxdb;
 use solana_sdk::client::{AsyncClient, SyncClient};
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction;
 use solana_sdk::system_transaction;
@@ -68,8 +66,6 @@ pub fn do_bench_tps(config: Config) {
     let cluster_entrypoint = nodes[0].clone(); // Pick the first node, why not?
 
     let client = create_client(cluster_entrypoint.client_facing_addr(), FULLNODE_PORT_RANGE);
-    let mut barrier_client =
-        create_client(cluster_entrypoint.client_facing_addr(), FULLNODE_PORT_RANGE);
 
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&id.public_key_bytes()[..32]);
@@ -83,8 +79,6 @@ pub fn do_bench_tps(config: Config) {
         target /= MAX_SPENDS_PER_TX;
     }
     let gen_keypairs = rnd.gen_n_keypairs(total_keys as u64);
-    let barrier_source_keypair = Keypair::new();
-    let barrier_dest_id = Pubkey::new_rand();
 
     println!("Get lamports...");
     let num_lamports_per_account = 20;
@@ -104,11 +98,6 @@ pub fn do_bench_tps(config: Config) {
     }
     let start = gen_keypairs.len() - (tx_count * 2) as usize;
     let keypairs = &gen_keypairs[start..];
-    airdrop_lamports(&barrier_client, &drone_addr, &barrier_source_keypair, 1);
-
-    println!("Get last ID...");
-    let mut blockhash = client.get_recent_blockhash().unwrap();
-    println!("Got last ID {:?}", blockhash);
 
     let first_tx_count = client.get_transaction_count().expect("transaction count");
     println!("Initial transaction count {}", first_tx_count);
