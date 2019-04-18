@@ -639,7 +639,7 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
-        let (_vote_sender, vote_receiver) = channel();
+        let (vote_sender, vote_receiver) = channel();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree = Arc::new(
@@ -656,6 +656,7 @@ mod tests {
                 vote_receiver,
             );
             drop(verified_sender);
+            drop(vote_sender);
             exit.store(true, Ordering::Relaxed);
             banking_stage.join().unwrap();
             poh_service.join().unwrap();
@@ -671,7 +672,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
-        let (_vote_sender, vote_receiver) = channel();
+        let (vote_sender, vote_receiver) = channel();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree = Arc::new(
@@ -690,6 +691,7 @@ mod tests {
             trace!("sending bank");
             sleep(Duration::from_millis(600));
             drop(verified_sender);
+            drop(vote_sender);
             exit.store(true, Ordering::Relaxed);
             poh_service.join().unwrap();
             drop(poh_recorder);
@@ -715,7 +717,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
-        let (_vote_sender, vote_receiver) = channel();
+        let (vote_sender, vote_receiver) = channel();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree = Arc::new(
@@ -767,6 +769,7 @@ mod tests {
                 .unwrap();
 
             drop(verified_sender);
+            drop(vote_sender);
             exit.store(true, Ordering::Relaxed);
             poh_service.join().unwrap();
             drop(poh_recorder);
@@ -844,7 +847,7 @@ mod tests {
             .send(vec![(packets[0].clone(), vec![1u8])])
             .unwrap();
 
-        let (_vote_sender, vote_receiver) = channel();
+        let (vote_sender, vote_receiver) = channel();
         let ledger_path = get_tmp_ledger_path!();
         {
             let entry_receiver = {
@@ -876,6 +879,7 @@ mod tests {
                 entry_receiver
             };
             drop(verified_sender);
+            drop(vote_sender);
 
             // consume the entire entry_receiver, feed it into a new bank
             // check that the balance is what we expect.
