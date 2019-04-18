@@ -9,6 +9,7 @@ use solana_sdk::signature::KeypairUtil;
 
 fn main() {
     solana_logger::setup();
+    solana_metrics::set_panic_hook("bench-exchange");
 
     let matches = cli::build_args().get_matches();
     let cli_config = cli::extract_args(&matches);

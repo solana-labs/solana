@@ -62,11 +62,16 @@ solana-bench-tps)
   "
   ;;
 solana-bench-exchange)
+  solana-keygen -o bench.keypair
   clientCommand="\
     solana-bench-exchange \
       --network $entrypointIp:8001 \
       --drone $entrypointIp:9900 \
       --threads $threadCount \
+      --batch-size 1000 \
+      --fund-amount 20000 \
+      --duration 7500 \
+      --identity bench.keypair \
   "
   ;;
 *)
