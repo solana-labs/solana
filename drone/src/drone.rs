@@ -135,7 +135,13 @@ impl Drone {
                     let message = Message::new(vec![create_instruction]);
                     Ok(Transaction::new(&[&self.mint_keypair], message, blockhash))
                 } else {
-                    Err(Error::new(ErrorKind::Other, "token limit reached"))
+                    Err(Error::new(
+                        ErrorKind::Other,
+                        format!(
+                            "token limit reached; req: {} current: {} cap: {}",
+                            lamports, self.request_current, self.request_cap
+                        ),
+                    ))
                 }
             }
         }
