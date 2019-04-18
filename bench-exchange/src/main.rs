@@ -34,7 +34,12 @@ fn main() {
     let nodes = discover_nodes(&network_addr, num_nodes).unwrap_or_else(|_| {
         panic!("Failed to discover nodes");
     });
-    let client_ctors: Vec<_> = nodes
+    info!("{} nodes found", nodes.len());
+    if nodes.len() < num_nodes {
+        panic!("Error: Insufficient nodes discovered");
+    }
+
+    let clients: Vec<_> = nodes
         .iter()
         .filter_map(|node| {
             let cluster_entrypoint = node.clone();
@@ -42,25 +47,24 @@ fn main() {
             if ContactInfo::is_valid_address(&cluster_addrs.0)
                 && ContactInfo::is_valid_address(&cluster_addrs.1)
             {
-                let client_ctor = move || create_client(cluster_addrs, FULLNODE_PORT_RANGE);
-                Some(client_ctor)
+                let client = create_client(cluster_addrs, FULLNODE_PORT_RANGE);
+                Some(client)
             } else {
                 None
             }
         })
         .collect();
 
-    info!("{} nodes found", client_ctors.len());
-    if client_ctors.len() < num_nodes {
+    info!("{} nodes found", clients.len());
+    if clients.len() < num_nodes {
         panic!("Error: Insufficient nodes discovered");
     }
 
     info!("Funding keypair: {}", identity.pubkey());
 
-    let client = client_ctors[0]();
     let accounts_in_groups = batch_size * account_groups;
     airdrop_lamports(
-        &client,
+        &clients[0],
         &drone_addr,
         &identity,
         fund_amount * (accounts_in_groups + 1) as u64 * 2,
@@ -76,5 +80,5 @@ fn main() {
         account_groups,
     };
 
-    do_bench_exchange(client_ctors, config);
+    do_bench_exchange(clients, config);
 }
