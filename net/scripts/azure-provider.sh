@@ -3,6 +3,8 @@
 # Utilities for working with Azure instances
 #
 
+set -x
+
 # Default zone
 cloud_DefaultZone() {
   echo "westus"
@@ -15,27 +17,44 @@ cloud_DefaultZone() {
 #
 # For each matching instance, an entry in the `instances` array will be added with the
 # following information about the instance:
-#   "name:zone:public IP:private IP"
+#   "name:public IP:private IP:location"
 #
 # filter   - The instances to filter on
 #
 # examples:
-#   $ __cloud_FindInstances "name=exact-machine-name"
-#   $ __cloud_FindInstances "name~^all-machines-with-a-common-machine-prefix"
+#   $ __cloud_FindInstances prefix some-machine-prefix
+#   $ __cloud_FindInstances name exact-machine-name
 #
+#  Examples of plain-text filter command
+#
+#  This will return an exact match for a machine named pgnode
+#  az vm list -d --query "[?name=='pgnode'].[name,publicIps,privateIps,location]"
+#
+#  This will return a match for any machine with prefix pgnode, ex: pgnode and pgnode2
+#  az vm list -d --query "[?starts_with(name,'pgnode')].[name,publicIps,privateIps,location]"
+
 __cloud_FindInstances() {
-  declare filter="$1"
-  instances=()
 
-  declare name zone publicIp privateIp status
-  while read -r name publicIp privateIp status zone; do
-    printf "%-30s | publicIp=%-16s privateIp=%s status=%s zone=%s\n" "$name" "$publicIp" "$privateIp" "$status" "$zone"
+  case $1 in
+    prefix)
+      query="[?starts_with(name,'$2')]"
+      ;;
+    name)
+      query="[?name=='$2']"
+      ;;
+    *)
+      echo "Unknown filter command: $1"
+      ;;
+  esac
 
-    instances+=("$name:$publicIp:$privateIp:$zone")
-  done < <(gcloud compute instances list \
-             --filter "$filter" \
-             --format 'value(name,networkInterfaces[0].accessConfigs[0].natIP,networkInterfaces[0].networkIP,status,zone)')
+  keys="[name,publicIps,privateIps,location]"
+
+  while read -r name publicIp privateIp location; do
+    instances+=("$name:$publicIp:$privateIp:$location")
+  done < <(az vm list -d -o tsv --query "$query.$keys")
+  echo ${instances[*]}
 }
+
 #
 # cloud_FindInstances [namePrefix]
 #
@@ -43,7 +62,7 @@ __cloud_FindInstances() {
 #
 # For each matching instance, an entry in the `instances` array will be added with the
 # following information about the instance:
-#   "name:public IP:private IP"
+#   "name:public IP:private IP:location"
 #
 # namePrefix - The instance name prefix to look for
 #
@@ -51,8 +70,7 @@ __cloud_FindInstances() {
 #   $ cloud_FindInstances all-machines-with-a-common-machine-prefix
 #
 cloud_FindInstances() {
-  declare namePrefix="$1"
-  __cloud_FindInstances "name~^$namePrefix"
+  __cloud_FindInstances prefix $1
 }
 
 #
@@ -62,7 +80,7 @@ cloud_FindInstances() {
 #
 # For each matching instance, an entry in the `instances` array will be added with the
 # following information about the instance:
-#   "name:public IP:private IP"
+#   "name:public IP:private IP:location"
 #
 # name - The instance name to look for
 #
@@ -70,8 +88,7 @@ cloud_FindInstances() {
 #   $ cloud_FindInstance exact-machine-name
 #
 cloud_FindInstance() {
-  declare name="$1"
-  __cloud_FindInstances "name=$name"
+  __cloud_FindInstances name $1
 }
 
 #

@@ -87,3 +87,9 @@ create)
   usage "Unknown command: $command"
 esac
 
+filter() {
+
+az vm list --query "length([?starts_with(name, 'pgnode')])"
+az vm list --query "length([?contains(name, 'c')])"
+
+}
