@@ -128,6 +128,7 @@ loadConfigFile
 build() {
   declare MAYBE_DOCKER=
   if [[ $(uname) != Linux ]]; then
+    # shellcheck source=ci/rust-version.sh 
     source ../ci/rust-version.sh
     MAYBE_DOCKER="ci/docker-run.sh $rust_stable_docker_image"
   fi
