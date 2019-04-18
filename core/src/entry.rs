@@ -13,7 +13,6 @@ use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use std::borrow::Borrow;
-use std::mem::size_of;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 
@@ -52,44 +51,34 @@ pub struct Entry {
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
     pub fn new(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Self {
-        let entry = {
-            if num_hashes == 0 && transactions.is_empty() {
-                Entry {
-                    num_hashes: 0,
-                    hash: *prev_hash,
-                    transactions,
-                }
-            } else if num_hashes == 0 {
-                // If you passed in transactions, but passed in num_hashes == 0, then
-                // next_hash will generate the next hash and set num_hashes == 1
-                let hash = next_hash(prev_hash, 1, &transactions);
-                Entry {
-                    num_hashes: 1,
-                    hash,
-                    transactions,
-                }
-            } else {
-                // Otherwise, the next Entry `num_hashes` after `start_hash`.
-                // If you wanted a tick for instance, then pass in num_hashes = 1
-                // and transactions = empty
-                let hash = next_hash(prev_hash, num_hashes, &transactions);
-                Entry {
-                    num_hashes,
-                    hash,
-                    transactions,
-                }
-            }
-        };
+        assert!(Self::serialized_to_blob_size(&transactions) <= BLOB_DATA_SIZE as u64);
 
-        let size = Entry::serialized_size(&entry.transactions[..]);
-        if size > BLOB_DATA_SIZE as u64 {
-            panic!(
-                "Serialized entry size too large: {} ({} transactions):",
-                size,
-                entry.transactions.len()
-            );
+        if num_hashes == 0 && transactions.is_empty() {
+            Entry {
+                num_hashes: 0,
+                hash: *prev_hash,
+                transactions,
+            }
+        } else if num_hashes == 0 {
+            // If you passed in transactions, but passed in num_hashes == 0, then
+            // next_hash will generate the next hash and set num_hashes == 1
+            let hash = next_hash(prev_hash, 1, &transactions);
+            Entry {
+                num_hashes: 1,
+                hash,
+                transactions,
+            }
+        } else {
+            // Otherwise, the next Entry `num_hashes` after `start_hash`.
+            // If you wanted a tick for instance, then pass in num_hashes = 1
+            // and transactions = empty
+            let hash = next_hash(prev_hash, num_hashes, &transactions);
+            Entry {
+                num_hashes,
+                hash,
+                transactions,
+            }
         }
-        entry
     }
 
     pub fn to_shared_blob(&self) -> SharedBlob {
@@ -101,31 +90,36 @@ impl Entry {
         Blob::from_serializable(&vec![&self])
     }
 
-    /// Estimate serialized_size of Entry without creating an Entry.
-    pub fn serialized_size(transactions: &[Transaction]) -> u64 {
+    /// return serialized_size of a vector with a single Entry for given TXs
+    ///  since Blobs carry Vec<Entry>
+    pub fn serialized_to_blob_size(transactions: &[Transaction]) -> u64 {
         let txs_size: u64 = transactions
             .iter()
             .map(|tx| serialized_size(tx).unwrap())
             .sum();
-        // num_hashes   +    hash  +              txs
-        (2 * size_of::<u64>() + size_of::<Hash>()) as u64 + txs_size
+
+        serialized_size(&vec![Entry {
+            num_hashes: 0,
+            hash: Hash::default(),
+            transactions: vec![],
+        }])
+        .unwrap()
+            + txs_size
     }
 
-    /// Creates the next Tick Entry `num_hashes` after `start_hash`.
     pub fn new_mut(
         start_hash: &mut Hash,
         num_hashes: &mut u64,
         transactions: Vec<Transaction>,
     ) -> Self {
+        assert!(Self::serialized_to_blob_size(&transactions) <= BLOB_DATA_SIZE as u64);
+
         let entry = Self::new(start_hash, *num_hashes, transactions);
         *start_hash = entry.hash;
         *num_hashes = 0;
-        assert!(serialized_size(&entry).unwrap() <= BLOB_DATA_SIZE as u64);
+
         entry
     }
-
-    /// Creates a Entry from the number of hashes `num_hashes`
-    /// since the previous transaction and that resulting `hash`.
 
     #[cfg(test)]
     pub fn new_tick(num_hashes: u64, hash: &Hash) -> Self {
@@ -338,7 +332,7 @@ where
 
 /// Creates the next entries for given transactions, outputs
 /// updates start_hash to hash of last Entry, sets num_hashes to 0
-pub fn next_entries_mut(
+fn next_entries_mut(
     start_hash: &mut Hash,
     num_hashes: &mut u64,
     transactions: Vec<Transaction>,
@@ -346,7 +340,7 @@ pub fn next_entries_mut(
     split_serializable_chunks(
         &transactions[..],
         BLOB_DATA_SIZE as u64,
-        &Entry::serialized_size,
+        &Entry::serialized_to_blob_size,
         &mut |txs: &[Transaction]| Entry::new_mut(start_hash, num_hashes, txs.to_vec()),
     )
 }
@@ -449,6 +443,8 @@ mod tests {
     use crate::entry::Entry;
     use crate::packet::{to_blobs, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use solana_sdk::hash::hash;
+    use solana_sdk::instruction::Instruction;
+    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use solana_vote_api::vote_instruction;
@@ -467,7 +463,7 @@ mod tests {
         Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
     }
 
-    fn create_sample_signature(keypair: &Keypair, hash: Hash) -> Transaction {
+    fn create_sample_apply_signature(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
         let ix = budget_instruction::apply_signature(&pubkey, &pubkey, &pubkey);
         Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
@@ -513,7 +509,7 @@ mod tests {
         // First, verify entries
         let keypair = Keypair::new();
         let tx0 = create_sample_timestamp(&keypair, zero);
-        let tx1 = create_sample_signature(&keypair, zero);
+        let tx1 = create_sample_apply_signature(&keypair, zero);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
@@ -557,8 +553,8 @@ mod tests {
         let tx = system_transaction::create_user_account(&keypair, &keypair.pubkey(), 0, zero, 0);
         let entry = next_entry(&zero, 1, vec![tx.clone()]);
         assert_eq!(
-            Entry::serialized_size(&[tx]),
-            serialized_size(&entry).unwrap()
+            Entry::serialized_to_blob_size(&[tx]),
+            serialized_size(&vec![entry]).unwrap() // blobs are Vec<Entry>
         );
     }
 
@@ -577,36 +573,56 @@ mod tests {
         assert!(!bad_ticks.verify(&zero)); // inductive step, bad
     }
 
-    fn make_test_entries() -> Vec<Entry> {
-        let zero = Hash::default();
-        let one = hash(&zero.as_ref());
-        let keypair = Keypair::new();
-        let vote_account = Keypair::new();
-        let tx0 = create_sample_vote(&vote_account, one);
-        let tx1 = create_sample_timestamp(&keypair, one);
-        //
-        // TODO: this magic number and the mix of transaction types
-        //       is designed to fill up a Blob more or less exactly,
-        //       to get near enough the threshold that
-        //       deserialization falls over if it uses the wrong size()
-        //       parameter to index into blob.data()
-        //
-        // magic numbers -----------------+
-        //                                |
-        //                                V
-        let mut transactions = vec![tx0; 362];
-        transactions.extend(vec![tx1; 100]);
-        next_entries(&zero, 0, transactions)
+    fn blob_sized_entries(num_entries: usize) -> Vec<Entry> {
+        // rough guess
+        let mut magic_len = BLOB_DATA_SIZE
+            - serialized_size(&vec![Entry {
+                num_hashes: 0,
+                hash: Hash::default(),
+                transactions: vec![],
+            }])
+            .unwrap() as usize;
+
+        loop {
+            let entries = vec![Entry {
+                num_hashes: 0,
+                hash: Hash::default(),
+                transactions: vec![Transaction::new_unsigned_instructions(vec![
+                    Instruction::new(Pubkey::default(), &vec![0u8; magic_len as usize], vec![]),
+                ])],
+            }];
+            let size = serialized_size(&entries).unwrap() as usize;
+            if size < BLOB_DATA_SIZE {
+                magic_len += BLOB_DATA_SIZE - size;
+            } else if size > BLOB_DATA_SIZE {
+                magic_len -= size - BLOB_DATA_SIZE;
+            } else {
+                break;
+            }
+        }
+        vec![
+            Entry {
+                num_hashes: 0,
+                hash: Hash::default(),
+                transactions: vec![Transaction::new_unsigned_instructions(vec![
+                    Instruction::new(Pubkey::default(), &vec![0u8; magic_len], vec![]),
+                ])],
+            };
+            num_entries
+        ]
     }
 
     #[test]
     fn test_entries_to_blobs() {
         solana_logger::setup();
-        let entries = make_test_entries();
+        let entries = blob_sized_entries(10);
 
-        let blob_q = entries.to_blobs();
+        let blobs = entries.to_blobs();
+        for blob in &blobs {
+            assert_eq!(blob.size(), BLOB_DATA_SIZE);
+        }
 
-        assert_eq!(reconstruct_entries_from_blobs(blob_q).unwrap().0, entries);
+        assert_eq!(reconstruct_entries_from_blobs(blobs).unwrap().0, entries);
     }
 
     #[test]

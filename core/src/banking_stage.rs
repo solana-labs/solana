@@ -448,7 +448,7 @@ impl BankingStage {
                 + entry::num_will_fit(
                     &transactions[chunk_start..],
                     packet::BLOB_DATA_SIZE as u64,
-                    &Entry::serialized_size,
+                    &Entry::serialized_to_blob_size,
                 );
 
             let result = Self::process_and_record_transactions(
