@@ -1,4 +1,5 @@
 use crate::blocktree::Blocktree;
+use rand_chacha::ChaChaRng;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
@@ -107,14 +108,10 @@ mod tests {
     fn make_tiny_deterministic_test_entries(num: usize) -> Vec<Entry> {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
-        let keypair_bytes = [
-            48, 83, 2, 1, 1, 48, 5, 6, 3, 43, 101, 112, 4, 34, 4, 32, 109, 148, 235, 20, 97, 127,
-            43, 194, 109, 43, 121, 76, 54, 38, 234, 14, 108, 68, 209, 227, 137, 191, 167, 144, 177,
-            174, 57, 182, 79, 198, 196, 93, 161, 35, 3, 33, 0, 116, 121, 255, 78, 31, 95, 179, 172,
-            30, 125, 206, 87, 88, 78, 46, 145, 25, 154, 161, 252, 3, 58, 235, 116, 39, 148, 193,
-            150, 111, 61, 20, 226,
-        ];
-        let keypair = ed25519_dalek::Keypair::from_bytes(&keypair_bytes).unwrap();
+
+        let mut seed = [2u8; 32];
+        let mut rnd = GenKeys::new(seed);
+        let keypair = rnd.gen_n_keypairs(1)[0];
 
         let mut id = one;
         let mut num_hashes = 0;
