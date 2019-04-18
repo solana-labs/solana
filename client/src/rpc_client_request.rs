@@ -62,8 +62,8 @@ impl GenericRpcClientRequest for RpcClientRequest {
                 }
                 Err(e) => {
                     info!(
-                        "make_rpc_request() failed, {} retries left: {:?}",
-                        retries, e
+                        "make_rpc_request({:?}) failed, {} retries left: {:?}",
+                        request, retries, e
                     );
                     if retries == 0 {
                         Err(e)?;
