@@ -19,7 +19,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 pub struct RpcClient {
-    client: Box<GenericRpcClientRequest>,
+    client: Box<GenericRpcClientRequest + Send + Sync>,
 }
 
 impl RpcClient {
@@ -743,4 +743,9 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_rpc_client_thread() {
+        let rpc_client = RpcClient::new_mock("succeeds".to_string());
+        thread::spawn(move || rpc_client);
+    }
 }
