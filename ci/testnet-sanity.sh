@@ -60,10 +60,11 @@ for zone in "$@"; do
   net/"$cloudProvider".sh info
   echo "--- net.sh sanity [$cloudProvider:$zone]"
   ok=true
-  timeout 5m net/net.sh sanity $zone \
+  timeout 5m net/net.sh sanity \
     ${NO_LEDGER_VERIFY:+-o noLedgerVerify} \
     ${NO_VALIDATOR_SANITY:+-o noValidatorSanity} \
-    ${REJECT_EXTRA_NODES:+-o rejectExtraNodes} || ok=false
+    ${REJECT_EXTRA_NODES:+-o rejectExtraNodes} \
+    $zone || ok=false
 
   net/net.sh logs
   $ok
