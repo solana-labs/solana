@@ -244,40 +244,48 @@ impl ClusterInfo {
     }
 
     pub fn contact_info_trace(&self) -> String {
-        let leader_id = self.gossip_leader_id;
+        let now = timestamp();
+        let mut spy_nodes = 0;
         let nodes: Vec<_> = self
-            .tvu_peers()
+            .all_peers()
             .into_iter()
             .map(|node| {
-                let mut annotation = String::new();
-                if node.id == leader_id {
-                    annotation.push_str(" [leader]");
+                if !ContactInfo::is_valid_address(&node.gossip) {
+                    spy_nodes += 1;
                 }
-
-                format!(
-                    "- gossip: {:20} | {}{}\n  \
-                     tpu:    {:20} |\n  \
-                     rpc:    {:20} |\n",
-                    node.gossip.to_string(),
-                    node.id,
-                    annotation,
-                    node.tpu.to_string(),
-                    if ContactInfo::is_valid_address(&node.rpc) {
-                        node.rpc.to_string()
+                fn addr_to_string(addr: &SocketAddr) -> String {
+                    if ContactInfo::is_valid_address(addr) {
+                        addr.to_string()
                     } else {
                         "none".to_string()
                     }
+                }
+
+                format!(
+                    "- gossip: {:20} | {:5}ms | {}\n  \
+                     tpu:    {:20} |         |\n  \
+                     rpc:    {:20} |         |\n",
+                    addr_to_string(&node.gossip),
+                    now.saturating_sub(node.wallclock),
+                    node.id,
+                    addr_to_string(&node.tpu),
+                    addr_to_string(&node.rpc),
                 )
             })
             .collect();
 
         format!(
-            " Node contact info             | Node identifier\n\
-             -------------------------------+------------------\n\
+            " Node contact info             | Age     | Node identifier                   \n\
+             -------------------------------+---------+-----------------------------------\n\
              {}\
-             Nodes: {}",
+             Nodes: {}{}",
             nodes.join(""),
-            nodes.len()
+            nodes.len() - spy_nodes,
+            if spy_nodes > 0 {
+                format!("\nSpies: {}", spy_nodes)
+            } else {
+                "".to_string()
+            }
         )
     }
 
@@ -334,6 +342,19 @@ impl ClusterInfo {
             .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me)
             .filter(|x| ContactInfo::is_valid_address(&x.rpc))
+            .cloned()
+            .collect()
+    }
+
+    // All nodes in gossip, including spy nodes
+    fn all_peers(&self) -> Vec<ContactInfo> {
+        let me = self.my_data().id;
+        self.gossip
+            .crds
+            .table
+            .values()
+            .filter_map(|x| x.value.contact_info())
+            .filter(|x| x.id != me)
             .cloned()
             .collect()
     }
