@@ -1091,9 +1091,9 @@ impl ClusterInfo {
         let len = data.len();
         trace!("get updates since response {}", len);
         let rsp = Protocol::PullResponse(self_id, data);
-        // the remote side may not know his public IP:PORT, record what he looks like to us
-        //  this may or may not be correct for everybody but it's better than leaving him with
-        //  an unspecified address in our table
+        // the remote side may not know their public IP:PORT, record what it looks like to us
+        // this may or may not be correct for everybody but it's better than leaving them with
+        // an unspecified address in our table
         if from.gossip.ip().is_unspecified() {
             inc_new_counter_info!("cluster_info-window-request-updates-unspec-gossip", 1);
             from.gossip = *from_addr;
@@ -2214,5 +2214,5 @@ fn test_add_entrypoint() {
         .unwrap()
         .new_pull_requests(&HashMap::new());
     assert_eq!(1, pulls.len());
-    assert_eq!(cluster_info.read().unwrap().entrypoint, None);
+    assert_eq!(cluster_info.read().unwrap().entrypoint, Some(entrypoint));
 }
