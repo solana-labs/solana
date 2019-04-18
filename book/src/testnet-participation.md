@@ -12,8 +12,8 @@ serves as the entrypoint to the cluster for your validator.
 Additionally there is a blockexplorer available at
 [http://beta.testnet.solana.com/](http://beta.testnet.solana.com/).
 
-The beta testnet is configured to reset the ledger every 24hours, or sooner
-should an hourly automated sanity test fail.
+The beta testnet is configured to reset the ledger daily, or sooner
+should the hourly automated cluster sanity test fail.
 
 ### Machine Requirements
 Since the beta testnet is not intended for stress testing of max transaction
@@ -28,11 +28,11 @@ MacOS or WSL users may build from source.
 
 #### Confirm The Testnet Is Reachable
 Before attaching a validator node, sanity check that the cluster is accessible
-to your machine by running some simple wallet commands.  If any of these
-commands fail, please retry 5-10 minutes later to confirm the testnet is not
-just restarting itself before debugging further.
+to your machine by running some simple commands.  If any of the commands fail,
+please retry 5-10 minutes later to confirm the testnet is not just restarting
+itself before debugging further.
 
-Fetch the current testnet transaction count over JSON RPC:
+Fetch the current transaction count over JSON RPC:
 ```bash
 $ curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' http://beta.testnet.solana.com:8899
 ```
@@ -73,18 +73,21 @@ software to a newer version.
 ##### Download Prebuilt Binaries
 Binaries are available for Linux x86_64 systems.
 
-Download the binaries by navigating to https://github.com/solana-labs/solana/releases/latest, download
-**solana-release-x86_64-unknown-linux-gnu.tar.bz2**, then extract the archive:
+Download the binaries by navigating to
+[https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
+download **solana-release-x86_64-unknown-linux-gnu.tar.bz2**, then extract the
+archive:
 ```bash
 $ tar jxf solana-release-x86_64-unknown-linux-gnu.tar.bz2
 $ cd solana-release/
 $ export PATH=$PWD/bin:$PATH
 ```
 ##### Build From Source
-If you are unable to use the prebuilt binaries or prefer to build it yourself from source, navigate to:
-> https://github.com/solana-labs/solana/releases/latest
-
-Download the source code tarball (solana-*[release]*.tar.gz) from our latest release tag.  Extract the code and build the binaries with:
+If you are unable to use the prebuilt binaries or prefer to build it yourself
+from source, navigate to
+[https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
+and download the **Source Code** archive.  Extract the code and build the
+binaries with:
 ```bash
 $ ./scripts/cargo-install-all.sh .
 $ export PATH=$PWD/bin:$PATH
@@ -128,7 +131,7 @@ validator to ports 11000-11011.
 From another console, confirm the IP address of your validator is visible in the
 gossip network by running:
 ```bash
-solana-gossip --network edge.testnet.solana.com:8001
+$ solana-gossip --network edge.testnet.solana.com:8001
 ```
 
 When `fullnode.sh` starts, it will output a fullnode configuration that looks
