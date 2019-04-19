@@ -34,10 +34,6 @@ fn main() {
     let nodes = discover_nodes(&network_addr, num_nodes).unwrap_or_else(|_| {
         panic!("Failed to discover nodes");
     });
-    info!("{} nodes found", nodes.len());
-    if nodes.len() < num_nodes {
-        panic!("Error: Insufficient nodes discovered");
-    }
 
     let clients: Vec<_> = nodes
         .iter()

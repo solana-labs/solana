@@ -1071,13 +1071,7 @@ mod tests {
                 error!("Failed to discover {} nodes: {:?}", NUM_NODES, err);
                 exit(1);
             });
-        if nodes.len() < NUM_NODES {
-            error!(
-                "Error: Insufficient nodes discovered.  Expecting {} or more",
-                NUM_NODES
-            );
-            exit(1);
-        }
+
         let clients: Vec<_> = nodes
             .iter()
             .filter_map(|node| {
