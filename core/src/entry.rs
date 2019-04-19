@@ -281,8 +281,8 @@ where
     let mut num = serializables.len();
     let mut upper = serializables.len();
     let mut lower = 1; // if one won't fit, we have a lot of TODOs
-    let mut next = serializables.len(); // optimistic
     loop {
+        let next;
         if serialized_size(&serializables[..num]) <= max_size {
             next = (upper + num) / 2;
             lower = num;
