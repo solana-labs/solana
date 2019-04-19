@@ -9,8 +9,7 @@ use crate::entry::create_ticks;
 use crate::entry::next_entry_mut;
 use crate::entry::Entry;
 use crate::gossip_service::{discover_nodes, GossipService};
-use crate::leader_schedule_utils;
-use crate::poh_recorder::PohRecorder;
+use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::poh_service::{PohService, PohServiceConfig};
 use crate::rpc::JsonRpcConfig;
 use crate::rpc_pubsub_service::PubSubService;
@@ -20,6 +19,8 @@ use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
+
+use crate::poh_recorder::PohRecorder;
 use solana_metrics::counter::Counter;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
@@ -94,9 +95,10 @@ impl Fullnode {
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
 
-        let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
+        let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver, leader_schedule_cache) =
             new_banks_from_blocktree(ledger_path, config.account_paths.clone());
 
+        let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
@@ -107,15 +109,17 @@ impl Fullnode {
             bank.last_blockhash(),
         );
         let blocktree = Arc::new(blocktree);
+
         let (poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
             bank.tick_height(),
             bank.last_blockhash(),
             bank.slot(),
-            leader_schedule_utils::next_leader_slot(&id, bank.slot(), &bank, Some(&blocktree)),
+            leader_schedule_cache.next_leader_slot(&id, bank.slot(), &bank, Some(&blocktree)),
             bank.ticks_per_slot(),
             &id,
             &blocktree,
             blocktree.new_blobs_signals.first().cloned(),
+            &leader_schedule_cache,
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, &exit);
@@ -231,6 +235,7 @@ impl Fullnode {
             &poh_recorder,
             sender.clone(),
             receiver,
+            &leader_schedule_cache,
             &exit,
         );
         let tpu = Tpu::new(
@@ -244,6 +249,7 @@ impl Fullnode {
             config.sigverify_disabled,
             &blocktree,
             sender,
+            &leader_schedule_cache,
             &exit,
         );
 
@@ -275,14 +281,20 @@ impl Fullnode {
 pub fn new_banks_from_blocktree(
     blocktree_path: &str,
     account_paths: Option<String>,
-) -> (BankForks, Vec<BankForksInfo>, Blocktree, Receiver<bool>) {
+) -> (
+    BankForks,
+    Vec<BankForksInfo>,
+    Blocktree,
+    Receiver<bool>,
+    LeaderScheduleCache,
+) {
     let genesis_block =
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
 
     let (blocktree, ledger_signal_receiver) = Blocktree::open_with_signal(blocktree_path)
         .expect("Expected to successfully open database ledger");
 
-    let (bank_forks, bank_forks_info) =
+    let (bank_forks, bank_forks_info, leader_schedule_cache) =
         blocktree_processor::process_blocktree(&genesis_block, &blocktree, account_paths)
             .expect("process_blocktree failed");
 
@@ -291,6 +303,7 @@ pub fn new_banks_from_blocktree(
         bank_forks_info,
         blocktree,
         ledger_signal_receiver,
+        leader_schedule_cache,
     )
 }
 

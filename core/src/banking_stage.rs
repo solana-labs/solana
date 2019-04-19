@@ -6,7 +6,7 @@ use crate::cluster_info::ClusterInfo;
 use crate::contact_info::ContactInfo;
 use crate::entry;
 use crate::entry::{hash_transactions, Entry};
-use crate::leader_schedule_utils;
+use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::packet;
 use crate::packet::{Packet, Packets};
 use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntries};
@@ -56,6 +56,7 @@ impl BankingStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: Receiver<VerifiedPackets>,
         verified_vote_receiver: Receiver<VerifiedPackets>,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -63,6 +64,7 @@ impl BankingStage {
             verified_receiver,
             verified_vote_receiver,
             cmp::min(2, Self::num_threads()),
+            leader_schedule_cache,
         )
     }
 
@@ -72,6 +74,7 @@ impl BankingStage {
         verified_receiver: Receiver<VerifiedPackets>,
         verified_vote_receiver: Receiver<VerifiedPackets>,
         num_threads: u32,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) -> Self {
         let verified_receiver = Arc::new(Mutex::new(verified_receiver));
         let verified_vote_receiver = Arc::new(Mutex::new(verified_vote_receiver));
@@ -95,6 +98,7 @@ impl BankingStage {
                 let cluster_info = cluster_info.clone();
                 let exit = exit.clone();
                 let mut recv_start = Instant::now();
+                let leader_schedule_cache = leader_schedule_cache.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -104,6 +108,7 @@ impl BankingStage {
                             &cluster_info,
                             &mut recv_start,
                             enable_forwarding,
+                            leader_schedule_cache,
                         );
                         exit.store(true, Ordering::Relaxed);
                     })
@@ -238,6 +243,7 @@ impl BankingStage {
     fn should_buffer_packets(
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) -> bool {
         let rcluster_info = cluster_info.read().unwrap();
 
@@ -245,9 +251,9 @@ impl BankingStage {
         // or, if it was getting sent to me
         // or, the next leader is unknown
         let leader_id = match poh_recorder.lock().unwrap().bank() {
-            Some(bank) => {
-                leader_schedule_utils::slot_leader_at(bank.slot() + 1, &bank).unwrap_or_default()
-            }
+            Some(bank) => leader_schedule_cache
+                .slot_leader_at_else_compute(bank.slot() + 1, &bank)
+                .unwrap_or_default(),
             None => rcluster_info
                 .leader_data()
                 .map_or(rcluster_info.id(), |x| x.id),
@@ -262,6 +268,7 @@ impl BankingStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         recv_start: &mut Instant,
         enable_forwarding: bool,
+        leader_schedule_cache: Arc<LeaderScheduleCache>,
     ) {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = vec![];
@@ -292,7 +299,11 @@ impl BankingStage {
             {
                 Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                 Ok(unprocessed_packets) => {
-                    if Self::should_buffer_packets(poh_recorder, cluster_info) {
+                    if Self::should_buffer_packets(
+                        poh_recorder,
+                        cluster_info,
+                        &leader_schedule_cache,
+                    ) {
                         let num = unprocessed_packets
                             .iter()
                             .map(|(x, start, _)| x.packets.len().saturating_sub(*start))
@@ -618,6 +629,7 @@ pub fn create_test_recorder(
         bank.ticks_per_slot(),
         &Pubkey::default(),
         blocktree,
+        &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
     );
     poh_recorder.set_bank(&bank);
 
@@ -647,6 +659,7 @@ mod tests {
     fn test_banking_stage_shutdown1() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let (verified_sender, verified_receiver) = channel();
         let (vote_sender, vote_receiver) = channel();
         let ledger_path = get_tmp_ledger_path!();
@@ -663,6 +676,7 @@ mod tests {
                 &poh_recorder,
                 verified_receiver,
                 vote_receiver,
+                &leader_schedule_cache,
             );
             drop(verified_sender);
             drop(vote_sender);
@@ -679,6 +693,7 @@ mod tests {
         let (mut genesis_block, _mint_keypair) = GenesisBlock::new(2);
         genesis_block.ticks_per_slot = 4;
         let bank = Arc::new(Bank::new(&genesis_block));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
         let (vote_sender, vote_receiver) = channel();
@@ -696,6 +711,7 @@ mod tests {
                 &poh_recorder,
                 verified_receiver,
                 vote_receiver,
+                &leader_schedule_cache,
             );
             trace!("sending bank");
             sleep(Duration::from_millis(600));
@@ -724,6 +740,7 @@ mod tests {
         solana_logger::setup();
         let (genesis_block, mint_keypair) = GenesisBlock::new(10);
         let bank = Arc::new(Bank::new(&genesis_block));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
         let (vote_sender, vote_receiver) = channel();
@@ -741,6 +758,7 @@ mod tests {
                 &poh_recorder,
                 verified_receiver,
                 vote_receiver,
+                &leader_schedule_cache,
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -862,6 +880,7 @@ mod tests {
             let entry_receiver = {
                 // start a banking_stage to eat verified receiver
                 let bank = Arc::new(Bank::new(&genesis_block));
+                let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
                 let blocktree = Arc::new(
                     Blocktree::open(&ledger_path)
                         .expect("Expected to be able to open database ledger"),
@@ -877,6 +896,7 @@ mod tests {
                     verified_receiver,
                     vote_receiver,
                     2,
+                    &leader_schedule_cache,
                 );
 
                 // wait for banking_stage to eat the packets
@@ -933,6 +953,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &Pubkey::default(),
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
@@ -1040,6 +1061,7 @@ mod tests {
                 bank.ticks_per_slot(),
                 &pubkey,
                 &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 

@@ -1,7 +1,7 @@
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::entry::{Entry, EntrySlice};
-use crate::leader_schedule_utils;
+use crate::leader_schedule_cache::LeaderScheduleCache;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::Bank;
@@ -116,10 +116,9 @@ pub fn process_blocktree(
     genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
     account_paths: Option<String>,
-) -> result::Result<(BankForks, Vec<BankForksInfo>), BlocktreeProcessorError> {
+) -> result::Result<(BankForks, Vec<BankForksInfo>, LeaderScheduleCache), BlocktreeProcessorError> {
     let now = Instant::now();
     info!("processing ledger...");
-
     // Setup bank for slot 0
     let mut pending_slots = {
         let slot = 0;
@@ -138,6 +137,8 @@ pub fn process_blocktree(
 
         vec![(slot, meta, bank, entry_height, last_entry_hash)]
     };
+
+    let leader_schedule_cache = LeaderScheduleCache::new(*pending_slots[0].2.epoch_schedule());
 
     let mut fork_info = vec![];
     while !pending_slots.is_empty() {
@@ -216,7 +217,9 @@ pub fn process_blocktree(
             if next_meta.is_full() {
                 let next_bank = Arc::new(Bank::new_from_parent(
                     &bank,
-                    &leader_schedule_utils::slot_leader_at(next_slot, &bank).unwrap(),
+                    &leader_schedule_cache
+                        .slot_leader_at_else_compute(next_slot, &bank)
+                        .unwrap(),
                     next_slot,
                 ));
                 trace!("Add child bank for slot={}", next_slot);
@@ -250,7 +253,7 @@ pub fn process_blocktree(
         bank_forks_info.len(),
     );
 
-    Ok((bank_forks, bank_forks_info))
+    Ok((bank_forks, bank_forks_info, leader_schedule_cache))
 }
 
 #[cfg(test)]
@@ -327,7 +330,7 @@ mod tests {
         // slot 2, points at slot 1
         fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, blockhash);
 
-        let (mut _bank_forks, bank_forks_info) =
+        let (mut _bank_forks, bank_forks_info, _) =
             process_blocktree(&genesis_block, &blocktree, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
@@ -387,7 +390,7 @@ mod tests {
         blocktree.set_root(0).unwrap();
         blocktree.set_root(1).unwrap();
 
-        let (bank_forks, bank_forks_info) =
+        let (bank_forks, bank_forks_info, _) =
             process_blocktree(&genesis_block, &blocktree, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 2); // There are two forks
@@ -537,7 +540,7 @@ mod tests {
             .write_entries(1, 0, 0, genesis_block.ticks_per_slot, &entries)
             .unwrap();
         let entry_height = genesis_block.ticks_per_slot + entries.len() as u64;
-        let (bank_forks, bank_forks_info) =
+        let (bank_forks, bank_forks_info, _) =
             process_blocktree(&genesis_block, &blocktree, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
@@ -562,7 +565,7 @@ mod tests {
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
         let blocktree = Blocktree::open(&ledger_path).unwrap();
-        let (bank_forks, bank_forks_info) =
+        let (bank_forks, bank_forks_info, _) =
             process_blocktree(&genesis_block, &blocktree, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);

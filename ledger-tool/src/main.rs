@@ -112,7 +112,7 @@ fn main() {
             stdout().write_all(b"\n]}\n").expect("close array");
         }
         ("verify", _) => match process_blocktree(&genesis_block, &blocktree, None) {
-            Ok((_bank_forks, bank_forks_info)) => {
+            Ok((_bank_forks, bank_forks_info, _)) => {
                 println!("{:?}", bank_forks_info);
             }
             Err(err) => {

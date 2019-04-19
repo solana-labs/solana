@@ -19,6 +19,7 @@ use crate::blocktree::Blocktree;
 use crate::blocktree_processor::BankForksInfo;
 use crate::cluster_info::ClusterInfo;
 use crate::entry::{EntryReceiver, EntrySender};
+use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
@@ -71,6 +72,7 @@ impl Tvu {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         storage_entry_sender: EntrySender,
         storage_entry_receiver: EntryReceiver,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
     ) -> Self
     where
@@ -121,6 +123,7 @@ impl Tvu {
             subscriptions,
             poh_recorder,
             storage_entry_sender,
+            leader_schedule_cache,
         );
 
         let blockstream_service = if blockstream.is_some() {
@@ -214,6 +217,7 @@ pub mod tests {
             create_test_recorder(&bank, &blocktree);
         let voting_keypair = Keypair::new();
         let (storage_entry_sender, storage_entry_receiver) = channel();
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
             Some(Arc::new(voting_keypair)),
@@ -236,6 +240,7 @@ pub mod tests {
             &poh_recorder,
             storage_entry_sender,
             storage_entry_receiver,
+            &leader_schedule_cache,
             &exit,
         );
         exit.store(true, Ordering::Relaxed);

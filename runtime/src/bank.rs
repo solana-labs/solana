@@ -279,6 +279,10 @@ impl Bank {
         }
     }
 
+    pub fn epoch_schedule(&self) -> &EpochSchedule {
+        &self.epoch_schedule
+    }
+
     /// squash the parent's state up into this Bank,
     ///   this Bank becomes a root
     pub fn squash(&self) {

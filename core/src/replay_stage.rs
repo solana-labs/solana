@@ -5,6 +5,7 @@ use crate::blocktree::Blocktree;
 use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
 use crate::entry::{Entry, EntrySender, EntrySlice};
+use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::leader_schedule_utils;
 use crate::locktower::{Locktower, StakeLockout};
 use crate::packet::BlobError;
@@ -83,6 +84,7 @@ impl ReplayStage {
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         storage_entry_sender: EntrySender,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) -> (Self, Receiver<(u64, Pubkey)>)
     where
         T: 'static + KeypairUtil + Send + Sync,
@@ -103,6 +105,7 @@ impl ReplayStage {
                 .expect("blocktree.set_root() failed at replay_stage startup");
         }
         // Start the replay stage loop
+        let leader_schedule_cache = leader_schedule_cache.clone();
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
@@ -115,7 +118,11 @@ impl ReplayStage {
                         break;
                     }
 
-                    Self::generate_new_bank_forks(&blocktree, &mut bank_forks.write().unwrap());
+                    Self::generate_new_bank_forks(
+                        &blocktree,
+                        &mut bank_forks.write().unwrap(),
+                        &leader_schedule_cache,
+                    );
 
                     let mut is_tpu_bank_active = poh_recorder.lock().unwrap().bank().is_some();
 
@@ -158,6 +165,7 @@ impl ReplayStage {
                             &bank,
                             &poh_recorder,
                             ticks_per_slot,
+                            &leader_schedule_cache,
                         );
 
                         is_tpu_bank_active = false;
@@ -185,6 +193,7 @@ impl ReplayStage {
                             poh_slot,
                             reached_leader_tick,
                             grace_ticks,
+                            &leader_schedule_cache,
                         );
                     }
 
@@ -213,6 +222,7 @@ impl ReplayStage {
         poh_slot: u64,
         reached_leader_tick: bool,
         grace_ticks: u64,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) {
         trace!("{} checking poh slot {}", my_id, poh_slot);
         if bank_forks.read().unwrap().get(poh_slot).is_none() {
@@ -225,7 +235,7 @@ impl ReplayStage {
             };
             assert!(parent.is_frozen());
 
-            leader_schedule_utils::slot_leader_at(poh_slot, &parent)
+            leader_schedule_cache.slot_leader_at_else_compute(poh_slot, &parent)
                 .map(|next_leader| {
                     debug!(
                         "me: {} leader {} at poh slot {}",
@@ -327,9 +337,10 @@ impl ReplayStage {
         bank: &Arc<Bank>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         ticks_per_slot: u64,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) {
         let next_leader_slot =
-            leader_schedule_utils::next_leader_slot(&my_id, bank.slot(), &bank, Some(blocktree));
+            leader_schedule_cache.next_leader_slot(&my_id, bank.slot(), &bank, Some(blocktree));
         poh_recorder.lock().unwrap().reset(
             bank.tick_height(),
             bank.last_blockhash(),
@@ -557,7 +568,11 @@ impl ReplayStage {
         }
     }
 
-    fn generate_new_bank_forks(blocktree: &Blocktree, forks: &mut BankForks) {
+    fn generate_new_bank_forks(
+        blocktree: &Blocktree,
+        forks: &mut BankForks,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
+    ) {
         // Find the next slot that chains to the old slot
         let frozen_banks = forks.frozen_banks();
         let frozen_bank_slots: Vec<u64> = frozen_banks.keys().cloned().collect();
@@ -577,7 +592,9 @@ impl ReplayStage {
                     trace!("child already active or frozen {}", child_id);
                     continue;
                 }
-                let leader = leader_schedule_utils::slot_leader_at(child_id, &parent_bank).unwrap();
+                let leader = leader_schedule_cache
+                    .slot_leader_at_else_compute(child_id, &parent_bank)
+                    .unwrap();
                 info!("new fork:{} parent:{}", child_id, parent_id);
                 forks.insert(Bank::new_from_parent(&parent_bank, &leader, child_id));
             }
@@ -636,10 +653,10 @@ mod test {
         // Set up the replay stage
         {
             let voting_keypair = Arc::new(Keypair::new());
-            let (bank_forks, _bank_forks_info, blocktree, l_receiver) =
+            let (bank_forks, _bank_forks_info, blocktree, l_receiver, leader_schedule_cache) =
                 new_banks_from_blocktree(&my_ledger_path, None);
             let bank = bank_forks.working_bank();
-
+            let leader_schedule_cache = Arc::new(leader_schedule_cache);
             let blocktree = Arc::new(blocktree);
             let (exit, poh_recorder, poh_service, _entry_receiver) =
                 create_test_recorder(&bank, &blocktree);
@@ -656,6 +673,7 @@ mod test {
                 &Arc::new(RpcSubscriptions::default()),
                 &poh_recorder,
                 ledger_writer_sender,
+                &leader_schedule_cache,
             );
             let vote_ix = vote_instruction::vote(&voting_keypair.pubkey(), vec![Vote::new(0)]);
             let vote_tx = Transaction::new_signed_instructions(
@@ -754,6 +772,7 @@ mod test {
 
             let genesis_block = GenesisBlock::new(10_000).0;
             let bank0 = Bank::new(&genesis_block);
+            let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
             let mut bank_forks = BankForks::new(0, bank0);
             bank_forks.working_bank().freeze();
 
@@ -763,7 +782,11 @@ mod test {
             blob_slot_1.set_parent(0);
             blocktree.insert_data_blobs(&vec![blob_slot_1]).unwrap();
             assert!(bank_forks.get(1).is_none());
-            ReplayStage::generate_new_bank_forks(&blocktree, &mut bank_forks);
+            ReplayStage::generate_new_bank_forks(
+                &blocktree,
+                &mut bank_forks,
+                &leader_schedule_cache,
+            );
             assert!(bank_forks.get(1).is_some());
 
             // Insert blob for slot 3, generate new forks, check result
@@ -772,7 +795,11 @@ mod test {
             blob_slot_2.set_parent(0);
             blocktree.insert_data_blobs(&vec![blob_slot_2]).unwrap();
             assert!(bank_forks.get(2).is_none());
-            ReplayStage::generate_new_bank_forks(&blocktree, &mut bank_forks);
+            ReplayStage::generate_new_bank_forks(
+                &blocktree,
+                &mut bank_forks,
+                &leader_schedule_cache,
+            );
             assert!(bank_forks.get(1).is_some());
             assert!(bank_forks.get(2).is_some());
         }
