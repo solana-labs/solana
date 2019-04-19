@@ -168,7 +168,11 @@ impl ThinClient {
     }
 }
 
-impl Client for ThinClient {}
+impl Client for ThinClient {
+    fn transactions_addr(&self) -> String {
+        self.transactions_addr.to_string()
+    }
+}
 
 impl SyncClient for ThinClient {
     fn send_message(&self, keypairs: &[&Keypair], message: Message) -> TransportResult<Signature> {

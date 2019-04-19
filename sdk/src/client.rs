@@ -16,7 +16,9 @@ use crate::transaction;
 use crate::transport::Result;
 use std::io;
 
-pub trait Client: SyncClient + AsyncClient {}
+pub trait Client: SyncClient + AsyncClient {
+    fn transactions_addr(&self) -> String;
+}
 
 pub trait SyncClient {
     /// Create a transaction from the given message, and send it to the
