@@ -478,31 +478,6 @@ To also see the cluster messages:
 ```bash
 $ RUST_LOG=solana_bench_exchange=info,solana=info cargo test --release -- --nocapture test_exchange_local_cluster
 ```
-<!-- 
-### Starting the network
 
-The clients need a running Solana blockchain Network.  You can either direct the
-client to connect to an already running network or start your own locally.  To
-start your own, you will need at least two separate shell instances
-
-In the first shell setup the network and start the drone:
-
-```bash
-$ ../multinode-demo/setup.sh -n 100000000000000
-$ ../multinode-demo/drone.sh -c 1000000000000
-```
-
-In the second shell start the leader:
-
-```bash
-$ ../multinode-demo/bootstrap-leader.sh
-```
-
-Optionally in a 3rd shell start a validator:
-
-```bash
-$ ../multinode-demo/fullnode-x.sh
-```
--->
 
 
