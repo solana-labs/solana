@@ -1,5 +1,5 @@
 use crate::bank::Bank;
-use solana_sdk::client::{AsyncClient, SyncClient};
+use solana_sdk::client::{AsyncClient, Client, SyncClient};
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::message::Message;
@@ -18,6 +18,8 @@ pub struct BankClient {
     bank: Arc<Bank>,
     transaction_sender: Sender<Transaction>,
 }
+
+impl Client for BankClient {}
 
 impl AsyncClient for BankClient {
     fn async_send_transaction(&self, transaction: Transaction) -> io::Result<Signature> {
