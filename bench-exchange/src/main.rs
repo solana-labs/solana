@@ -5,6 +5,7 @@ pub mod order_book;
 use crate::bench::{airdrop_lamports, do_bench_exchange, Config};
 use log::*;
 use solana::cluster_info::FULLNODE_PORT_RANGE;
+use solana::contact_info::ContactInfo;
 use solana::gossip_service::discover_nodes;
 use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
@@ -34,19 +35,27 @@ fn main() {
     let nodes = discover_nodes(&network_addr, num_nodes).unwrap_or_else(|_| {
         panic!("Failed to discover nodes");
     });
-    info!("{} nodes found", nodes.len());
-    if nodes.len() < num_nodes {
-        panic!("Error: Insufficient nodes discovered");
-    }
-
     let client_ctors: Vec<_> = nodes
         .iter()
-        .map(|node| {
+        .filter_map(|node| {
             let cluster_entrypoint = node.clone();
             let cluster_addrs = cluster_entrypoint.client_facing_addr();
-            move || -> ThinClient { create_client(cluster_addrs, FULLNODE_PORT_RANGE) }
+            if ContactInfo::is_valid_address(&cluster_addrs.0)
+                && ContactInfo::is_valid_address(&cluster_addrs.1)
+            {
+                let client_ctor =
+                    move || -> ThinClient { create_client(cluster_addrs, FULLNODE_PORT_RANGE) };
+                Some(client_ctor)
+            } else {
+                None
+            }
         })
         .collect();
+
+    info!("{} nodes found", client_ctors.len());
+    if client_ctors.len() < num_nodes {
+        panic!("Error: Insufficient nodes discovered");
+    }
 
     info!("Funding keypair: {}", identity.pubkey());
 
