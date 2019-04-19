@@ -20,7 +20,11 @@ pub struct BankClient {
     transaction_sender: Mutex<Sender<Transaction>>,
 }
 
-impl Client for BankClient {}
+impl Client for BankClient {
+    fn transactions_addr(&self) -> String {
+        "Local BankClient".to_string()
+    }
+}
 
 impl AsyncClient for BankClient {
     fn async_send_transaction(&self, transaction: Transaction) -> io::Result<Signature> {
