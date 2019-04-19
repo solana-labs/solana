@@ -119,14 +119,7 @@ impl Session {
         trace!("[reconstruct_blobs] present: {:?}, size: {}", present, size,);
 
         // Decode the blocks
-        let res = self.decode_blocks(blocks.as_mut_slice(), &present);
-
-        if res.is_err() {
-            for (i, block) in blocks.iter().enumerate() {
-                dbg!((i, block.len()));
-            }
-            res?;
-        }
+        self.decode_blocks(blocks.as_mut_slice(), &present)?;
 
         let mut recovered_data = vec![];
         let mut recovered_coding = vec![];
