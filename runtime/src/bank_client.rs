@@ -12,11 +12,12 @@ use solana_sdk::transport::Result;
 use std::io;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread::Builder;
 
 pub struct BankClient {
     bank: Arc<Bank>,
-    transaction_sender: Sender<Transaction>,
+    transaction_sender: Mutex<Sender<Transaction>>,
 }
 
 impl Client for BankClient {}
@@ -24,7 +25,8 @@ impl Client for BankClient {}
 impl AsyncClient for BankClient {
     fn async_send_transaction(&self, transaction: Transaction) -> io::Result<Signature> {
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
-        self.transaction_sender.send(transaction).unwrap();
+        let transaction_sender = self.transaction_sender.lock().unwrap();
+        transaction_sender.send(transaction).unwrap();
         Ok(signature)
     }
 
@@ -122,6 +124,7 @@ impl BankClient {
     pub fn new(bank: Bank) -> Self {
         let bank = Arc::new(bank);
         let (transaction_sender, transaction_receiver) = channel();
+        let transaction_sender = Mutex::new(transaction_sender);
         let thread_bank = bank.clone();
         let bank = bank.clone();
         Builder::new()

@@ -1017,6 +1017,9 @@ mod tests {
     use solana::local_cluster::{ClusterConfig, LocalCluster};
     use solana_client::thin_client::create_client;
     use solana_drone::drone::run_local_drone;
+    use solana_runtime::bank::Bank;
+    use solana_runtime::bank_client::BankClient;
+    use solana_sdk::genesis_block::GenesisBlock;
     use std::sync::mpsc::channel;
 
     #[test]
@@ -1102,6 +1105,31 @@ mod tests {
             &config.identity,
             fund_amount * (accounts_in_groups + 1) as u64 * 2,
         );
+
+        do_bench_exchange(clients, config);
+    }
+
+    #[test]
+    fn test_exchange_bank_client() {
+        solana_logger::setup();
+        let (mut genesis_block, identity) = GenesisBlock::new(100_000_000_000_000);
+        genesis_block
+            .native_instruction_processors
+            .extend_from_slice(&[(
+                "solana_exchange_program".to_string(),
+                solana_exchange_api::id(),
+            )]);
+        let bank = Bank::new(&genesis_block);
+        let clients = vec![BankClient::new(bank)];
+
+        let mut config = Config::default();
+        config.identity = identity;
+        config.threads = 4;
+        config.duration = Duration::from_secs(60);
+        config.fund_amount = 100_000;
+        config.trade_delay = 1;
+        config.batch_size = 1000;
+        config.account_groups = 200;
 
         do_bench_exchange(clients, config);
     }
