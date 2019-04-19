@@ -24,7 +24,7 @@ lazy_static! {
 pub fn update_manifest_pubkey(target: &str) -> Option<&str> {
     match target {
         "x86_64-apple-darwin" => None,
-        "x86_64-unknown-linux-gnu" => Some("EVS4V6wha5J5qzw8ZJBroMq9g6EKMg5iFWqCRrKwfo3z"), // SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu
+        "x86_64-unknown-linux-gnu" => Some("FnKt2ES9iUJkjoprf2rL62xxBAxZLVgyA4SFexPGotFE"), // SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu
         _ => None,
     }
 }
