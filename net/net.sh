@@ -37,6 +37,12 @@ Operate a configured testnet
    -r                          - Reuse existing node/ledger configuration from a
                                  previous |start| (ie, don't run ./multinode-demo/setup.sh).
    -D /path/to/programs        - Deploy custom programs from this location
+   -c clientType=numClients    - Number of clientTypes to start.  This options can be specified
+                                 more than once.  Defaults to bench-tps for all clients if not
+                                 specified.
+                                 Valid client types are:
+                                     bench-tps
+                                     bench-exchange
 
  sanity/start/update-specific options:
    -o noLedgerVerify    - Skip ledger verification
@@ -64,12 +70,14 @@ updateNodes=false
 customPrograms=
 updateManifestKeypairFile=
 updateDownloadUrl=
+numBenchTpsClients=0
+numBenchExchangeClients=0
 
 command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?T:t:o:f:rD:i:" opt; do
+while getopts "h?T:t:o:f:rD:i:c:" opt; do
   case $opt in
   h | \?)
     usage
@@ -117,6 +125,36 @@ while getopts "h?T:t:o:f:rD:i:" opt; do
       ;;
     esac
     ;;
+  c)
+    getClientTypeAndNum() {
+      if ! [[ $OPTARG == *'='* ]]; then
+        echo "Error: Expecting keypair \"clientType=numClientType\" but got \"$OPTARG\""
+        exit 1
+      fi
+      local keyValue
+      IFS='=' read -ra keyValue <<< "$OPTARG"
+      local clientType=${keyValue[0]}
+      local numClients=${keyValue[1]}
+      re='^[0-9]+$'
+      if ! [[ $numClients =~ $re ]] ; then
+        echo "error: numClientType must be a number but got \"$numClients\""
+        exit 1
+      fi
+      case $clientType in
+        bench-tps)
+          numBenchTpsClients=$numClients
+        ;;
+        bench-exchange)
+          numBenchExchangeClients=$numClients
+        ;;
+        *)
+          echo "Unknown client type: $clientType"
+          exit 1
+          ;;
+      esac
+    }
+    getClientTypeAndNum
+    ;;
   *)
     usage "Error: unhandled option: $opt"
     ;;
@@ -125,11 +163,22 @@ done
 
 loadConfigFile
 
+numClients=${#clientIpList[@]}
+numClientsRequested=$((numBenchTpsClients+numBenchExchangeClients))
+if [[ "$numClientsRequested" -eq 0 ]]; then
+  numBenchTpsClients=$numClients
+else
+  if [[ "$numClientsRequested" -gt "$numClients" ]]; then
+    echo "Error: More clients requested ($numClientsRequested) then available ($numClients)"
+    exit 1
+  fi
+fi
+
 build() {
   declare MAYBE_DOCKER=
   if [[ $(uname) != Linux ]]; then
-    # shellcheck source=ci/rust-version.sh 
-    source ../ci/rust-version.sh
+    # shellcheck source=ci/rust-version.sh
+    source "$SOLANA_ROOT"/ci/rust-version.sh
     MAYBE_DOCKER="ci/docker-run.sh $rust_stable_docker_image"
   fi
   SECONDS=0
@@ -251,14 +300,15 @@ startNode() {
 
 startClient() {
   declare ipAddress=$1
-  declare logFile="$2"
-  echo "--- Starting client: $ipAddress"
+  declare clientToRun="$2"
+  declare logFile="$netLogDir/client-$clientToRun-$ipAddress.log"
+  echo "--- Starting client: $ipAddress - $clientToRun"
   echo "start log: $logFile"
   (
     set -x
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
-      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \"$RUST_LOG\""
+      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp $clientToRun \"$RUST_LOG\""
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -411,8 +461,12 @@ start() {
   sanity
 
   SECONDS=0
-  for ipAddress in "${clientIpList[@]}"; do
-    startClient "$ipAddress" "$netLogDir/client-$ipAddress.log"
+  for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
+    if [[ $i -lt "$numBenchTpsClients" ]]; then
+      startClient "${clientIpList[$i]}" "solana-bench-tps"
+    else
+      startClient "${clientIpList[$i]}" "solana-bench-exchange"
+    fi
   done
   clientDeployTime=$SECONDS
 
