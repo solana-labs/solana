@@ -238,6 +238,7 @@ fn test_erasure_meta_status() {
     assert_eq!(e_meta.status(), ErasureMetaStatus::DataFull);
 
     e_meta.coding = 0x0e;
+    e_meta.size = 1;
     assert_eq!(e_meta.status(), ErasureMetaStatus::DataFull);
 
     e_meta.data = 0b0111_1111_1111_1111;
