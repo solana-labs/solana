@@ -49,7 +49,8 @@ __cloud_FindInstances() {
   declare filter="$1"
 
   instances=()
-  declare -a regions=("us-east-1" "us-west-1" "us-west-2" "sa-east-1" "ap-northeast-2" "eu-central-1" "ca-central-1")
+  declare -a regions=("us-east-1" "us-east-2" "us-west-1" "us-west-2" "sa-east-1" "ap-northeast-2" \
+   "ap-northeast-1" "ap-southeast-2" "ap-southeast-1" "ap-south-1" "eu-west-1" "eu-west-2" "eu-central-1" "ca-central-1")
   for region in "${regions[@]}"
   do
     declare name publicIp privateIp
@@ -194,13 +195,16 @@ cloud_CreateInstances() {
     # Select an upstream Ubuntu 18.04 AMI from https://cloud-images.ubuntu.com/locator/ec2/
     case $region in
     us-east-1)
-      imageName="ami-0a313d6098716f372"
+      imageName="ami-0fba9b33b5304d8b4"
+      ;;
+    us-east-2)
+      imageName="ami-0e04554247365d806"
       ;;
     us-west-1)
-      imageName="ami-06397100adf427136"
+      imageName="ami-07390b6ff5934a238"
       ;;
     us-west-2)
-      imageName="ami-0dc34f4b016c9ce49"
+      imageName="ami-03804ed633fe58109"
       ;;
     sa-east-1)
       imageName="ami-0f1678b6f63a0f923"
@@ -208,8 +212,26 @@ cloud_CreateInstances() {
     ap-northeast-2)
       imageName="ami-0695e34e31339c3ff"
       ;;
+    ap-northeast-1)
+      imageName="ami-003371bfa26192744"
+      ;;
+    ap-southeast-2)
+      imageName="ami-0401c9e2f645b5557"
+      ;;
+    ap-southeast-1)
+      imageName="ami-08050c889a630f1bd"
+      ;;
+    ap-south-1)
+      imageName="ami-04184c12996409633"
+      ;;
     eu-central-1)
       imageName="ami-054e21e355db24124"
+      ;;
+    eu-west-1)
+      imageName="ami-0727f3c2d4b0226d5"
+      ;;
+    eu-west-2)
+      imageName="ami-068f09e337d7da0c4"
       ;;
     ca-central-1)
       imageName="ami-06ed08059bdc08fc9"
