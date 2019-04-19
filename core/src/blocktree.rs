@@ -171,14 +171,6 @@ impl Blocktree {
         }
     }
 
-    pub fn write_shared_blobs<I>(&self, blobs: I) -> Result<()>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<Blob>,
-    {
-        self.insert_data_blobs(blobs)
-    }
-
     pub fn write_blobs<I>(&self, blobs: I) -> Result<()>
     where
         I: IntoIterator,
@@ -2664,9 +2656,7 @@ pub mod tests {
                     deleted_data.index()
                 );
 
-                blocktree
-                    .write_shared_blobs(&data_blobs[..NUM_DATA - 1])
-                    .unwrap();
+                blocktree.write_blobs(&data_blobs[..NUM_DATA - 1]).unwrap();
 
                 // this should trigger recovery
                 for blob in coding_blobs {
@@ -2763,7 +2753,7 @@ pub mod tests {
                         // between 1-4 data blobs are missing
                         if rng.gen() {
                             blocktree
-                                .write_shared_blobs(erasure_set.data)
+                                .write_blobs(erasure_set.data)
                                 .expect("Writing data blobs must succeed");
                             debug!(
                                 "multislot: wrote data: slot: {}, erasure_set: {}",
@@ -2796,7 +2786,7 @@ pub mod tests {
                             );
 
                             blocktree
-                                .write_shared_blobs(erasure_set.data)
+                                .write_blobs(erasure_set.data)
                                 .expect("Writing data blobs must succeed");
                             debug!(
                                 "multislot: wrote data: slot: {}, erasure_set: {}",

@@ -185,7 +185,7 @@ fn bench_insert_data_blob_big(bench: &mut Bencher) {
     bench.iter(move || {
         for blob in shared_blobs.iter_mut() {
             let index = blob.index();
-            blocktree.write_shared_blobs(vec![blob.clone()]).unwrap();
+            blocktree.write_blobs(vec![blob.clone()]).unwrap();
             blob.set_index(index + num_entries as u64);
         }
     });

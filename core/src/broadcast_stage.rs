@@ -114,7 +114,7 @@ impl Broadcast {
             blobs.last_mut().unwrap().set_is_last_in_slot();
         }
 
-        blocktree.write_shared_blobs(&blobs)?;
+        blocktree.write_blobs(&blobs)?;
 
         let coding = self.coding_generator.next(&blobs);
 

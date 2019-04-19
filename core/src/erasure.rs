@@ -680,7 +680,7 @@ pub mod test {
             let slot = slot_model.slot;
 
             for erasure_set in slot_model.chunks {
-                blocktree.write_shared_blobs(erasure_set.data).unwrap();
+                blocktree.write_blobs(erasure_set.data).unwrap();
 
                 for blob in erasure_set.coding.into_iter() {
                     blocktree

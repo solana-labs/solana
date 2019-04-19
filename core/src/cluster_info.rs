@@ -1776,7 +1776,7 @@ mod tests {
             }
 
             blocktree
-                .write_shared_blobs(vec![&blob])
+                .write_blobs(vec![&blob])
                 .expect("Expect successful ledger write");
 
             let rv = ClusterInfo::run_window_request(
