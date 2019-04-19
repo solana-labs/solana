@@ -31,7 +31,7 @@ pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
-    pub num_retransmits: u64,
+    pub forward: bool,
     pub addr: [u16; 8],
     pub port: u16,
     pub v6: bool,
@@ -518,6 +518,13 @@ impl Blob {
         let (nrecv, from) = socket.recv_from(&mut p.data)?;
         p.meta.size = nrecv;
         p.meta.set_addr(&from);
+        if p.should_forward() {
+            // In the Meta, record the fact that this blob should be forwarded
+            p.meta.forward = true;
+        } else {
+            // Blobs that shouldn't be forwarded can be sanitized
+            p.forwarded(false);
+        }
         trace!("got {} bytes from {}", nrecv, from);
         Ok(())
     }
