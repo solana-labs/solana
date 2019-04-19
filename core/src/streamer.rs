@@ -19,7 +19,7 @@ pub type PacketSender = Sender<Packets>;
 pub type BlobSender = Sender<SharedBlobs>;
 pub type BlobReceiver = Receiver<SharedBlobs>;
 
-const RECV_BATCH_MAX: u64 = 60_000;
+const RECV_BATCH_MAX: usize = 60_000;
 
 fn recv_loop(sock: &UdpSocket, exit: Arc<AtomicBool>, channel: &PacketSender) -> Result<()> {
     loop {
