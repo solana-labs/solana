@@ -1017,6 +1017,7 @@ mod tests {
     use solana::local_cluster::{ClusterConfig, LocalCluster};
     use solana_client::thin_client::create_client;
     use solana_drone::drone::run_local_drone;
+    use solana_exchange_api::exchange_processor::process_instruction;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
@@ -1049,11 +1050,7 @@ mod tests {
             node_stakes: vec![100_000; NUM_NODES],
             cluster_lamports: 100_000_000_000_000,
             fullnode_config,
-            native_instruction_processors: [(
-                "solana_exchange_program".to_string(),
-                solana_exchange_api::id(),
-            )]
-            .to_vec(),
+            native_instruction_processors: [("solana_exchange_program".to_string(), id())].to_vec(),
             ..ClusterConfig::default()
         });
 
@@ -1112,24 +1109,19 @@ mod tests {
     #[test]
     fn test_exchange_bank_client() {
         solana_logger::setup();
-        let (mut genesis_block, identity) = GenesisBlock::new(100_000_000_000_000);
-        genesis_block
-            .native_instruction_processors
-            .extend_from_slice(&[(
-                "solana_exchange_program".to_string(),
-                solana_exchange_api::id(),
-            )]);
-        let bank = Bank::new(&genesis_block);
+        let (genesis_block, identity) = GenesisBlock::new(100_000_000_000_000);
+        let mut bank = Bank::new(&genesis_block);
+        bank.add_instruction_processor(id(), process_instruction);
         let clients = vec![BankClient::new(bank)];
 
         let mut config = Config::default();
         config.identity = identity;
         config.threads = 4;
-        config.duration = Duration::from_secs(60);
+        config.duration = Duration::from_secs(5);
         config.fund_amount = 100_000;
         config.trade_delay = 1;
-        config.batch_size = 1000;
-        config.account_groups = 200;
+        config.batch_size = 10;
+        config.account_groups = 100;
 
         do_bench_exchange(clients, config);
     }
