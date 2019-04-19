@@ -221,13 +221,14 @@ fn sample_tx_count<T: Client>(
     let log_prefix = format!("{:21}:", client.transactions_addr());
 
     loop {
-        let tx_count = client.get_transaction_count().expect("transaction count");
-        assert!(
-            tx_count >= initial_tx_count,
-            "expected tx_count({}) >= initial_tx_count({})",
-            tx_count,
-            initial_tx_count
-        );
+        let mut tx_count = client.get_transaction_count().expect("transaction count");
+        if tx_count < initial_tx_count {
+            println!(
+                "expected tx_count({}) >= initial_tx_count({})",
+                tx_count, initial_tx_count
+            );
+            tx_count = initial_tx_count;
+        }
         let duration = now.elapsed();
         now = Instant::now();
         let sample = tx_count - initial_tx_count;
