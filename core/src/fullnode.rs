@@ -238,6 +238,11 @@ impl Fullnode {
             &leader_schedule_cache,
             &exit,
         );
+
+        if config.sigverify_disabled {
+            warn!("signature verification disabled");
+        }
+
         let tpu = Tpu::new(
             &id,
             &cluster_info,
