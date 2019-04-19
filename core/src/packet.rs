@@ -431,7 +431,7 @@ impl Blob {
     }
 
     /// Mark this blob's forwarded status
-    pub fn forwarded(&mut self, forward: bool) {
+    pub fn set_forwarded(&mut self, forward: bool) {
         self.data[FORWARDED_RANGE][0] = u8::from(forward)
     }
 
@@ -518,13 +518,8 @@ impl Blob {
         let (nrecv, from) = socket.recv_from(&mut p.data)?;
         p.meta.size = nrecv;
         p.meta.set_addr(&from);
-        if p.should_forward() {
-            // In the Meta, record the fact that this blob should be forwarded
-            p.meta.forward = true;
-        } else {
-            // Blobs that shouldn't be forwarded can be sanitized
-            p.forwarded(false);
-        }
+        p.meta.forward = p.should_forward();
+        p.set_forwarded(false);
         trace!("got {} bytes from {}", nrecv, from);
         Ok(())
     }
@@ -716,7 +711,7 @@ mod tests {
     fn test_blob_forward() {
         let mut b = Blob::default();
         assert!(b.should_forward());
-        b.forwarded(true);
+        b.set_forwarded(true);
         assert!(!b.should_forward());
     }
 

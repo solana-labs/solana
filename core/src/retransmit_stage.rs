@@ -62,7 +62,7 @@ fn retransmit(
 fn mark_forwarded(b: &SharedBlob) -> SharedBlob {
     let mut blob = b.read().unwrap().clone();
     // Mark this blob as forwarded
-    blob.forwarded(true);
+    blob.set_forwarded(true);
     Arc::new(RwLock::new(blob))
 }
 
@@ -161,7 +161,7 @@ mod tests {
     #[test]
     fn test_blob_mark_forwarded() {
         let blob = SharedBlob::default();
-        blob.write().unwrap().forwarded(true);
+        blob.write().unwrap().set_forwarded(true);
         let for_hoodies = mark_forwarded(&blob);
         assert!(!for_hoodies.read().unwrap().should_forward());
     }
