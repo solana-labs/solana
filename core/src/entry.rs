@@ -91,7 +91,9 @@ impl Entry {
     }
 
     /// return serialized_size of a vector with a single Entry for given TXs
-    ///  since Blobs carry Vec<Entry>
+    ///  since Blobs carry Vec<Entry>...
+    /// calculate the total without actually constructing the full Entry (which
+    ///  would require a clone() of the transactions)
     pub fn serialized_to_blob_size(transactions: &[Transaction]) -> u64 {
         let txs_size: u64 = transactions
             .iter()
@@ -279,28 +281,22 @@ where
     let mut num = serializables.len();
     let mut upper = serializables.len();
     let mut lower = 1; // if one won't fit, we have a lot of TODOs
-    let mut next = serializables.len(); // optimistic
     loop {
-        debug!(
-            "num {}, upper {} lower {} next {} serializables.len() {}",
-            num,
-            upper,
-            lower,
-            next,
-            serializables.len()
-        );
+        let next;
         if serialized_size(&serializables[..num]) <= max_size {
             next = (upper + num) / 2;
             lower = num;
-            debug!("num {} fits, maybe too well? trying {}", num, next);
         } else {
+            if num == 1 {
+                // if not even one will fit, bail
+                num = 0;
+                break;
+            }
             next = (lower + num) / 2;
             upper = num;
-            debug!("num {} doesn't fit! trying {}", num, next);
         }
         // same as last time
         if next == num {
-            debug!("converged on num {}", num);
             break;
         }
         num = next;
@@ -547,7 +543,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialized_size() {
+    fn test_serialized_to_blob_size() {
         let zero = Hash::default();
         let keypair = Keypair::new();
         let tx = system_transaction::create_user_account(&keypair, &keypair.pubkey(), 0, zero, 0);
@@ -705,7 +701,7 @@ mod tests {
     }
 
     #[test]
-    fn test_num_fit() {
+    fn test_num_will_fit() {
         let serializables_vec: Vec<u8> = (0..10).map(|_| 1).collect();
         let serializables = &serializables_vec[..];
         let sum = |i: &[u8]| (0..i.len()).into_iter().sum::<usize>() as u64;
@@ -732,5 +728,11 @@ mod tests {
         // sum[0..9] <= 46, but contains all items
         let result = num_will_fit(serializables, 46, &sum);
         assert_eq!(result, 10);
+
+        // too small to fit a single u64
+        let result = num_will_fit(&[0u64], (std::mem::size_of::<u64>() - 1) as u64, &|i| {
+            (std::mem::size_of::<u64>() * i.len()) as u64
+        });
+        assert_eq!(result, 0);
     }
 }
