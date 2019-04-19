@@ -51,9 +51,8 @@ use std::time::{Duration, Instant};
 
 pub const FULLNODE_PORT_RANGE: PortRange = (8000, 10_000);
 
-/// The fanout for Ledger Replication
-pub const DATA_PLANE_FANOUT: usize = 200;
-pub const NEIGHBORHOOD_SIZE: usize = DATA_PLANE_FANOUT;
+/// The Data plane "neighborhood" size
+pub const NEIGHBORHOOD_SIZE: usize = 200;
 /// Set whether node capacity should grow as layers are added
 pub const GROW_LAYER_CAPACITY: bool = false;
 

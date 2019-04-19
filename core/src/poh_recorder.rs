@@ -111,7 +111,6 @@ impl PohRecorder {
 
                 let leader_ideal_start_tick =
                     target_tick.saturating_sub(self.max_last_leader_grace_ticks);
-
                 // Is the current tick in the same slot as the target tick?
                 // Check if either grace period has expired,
                 // or target tick is = grace period (i.e. poh recorder was just reset)

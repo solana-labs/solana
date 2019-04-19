@@ -1,7 +1,7 @@
 //! A stage to broadcast data from a leader node to validators
 //!
 use crate::blocktree::Blocktree;
-use crate::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT};
+use crate::cluster_info::{ClusterInfo, ClusterInfoError, NEIGHBORHOOD_SIZE};
 use crate::entry::{EntrySender, EntrySlice};
 use crate::erasure::CodingGenerator;
 use crate::packet::index_blobs;
@@ -71,12 +71,12 @@ impl Broadcast {
             }
         }
 
-        let mut broadcast_table = cluster_info
-            .read()
-            .unwrap()
-            .sorted_tvu_peers(&staking_utils::delegated_stakes(&bank));
+        let bank_epoch = bank.get_stakers_epoch(bank.slot());
+        let mut broadcast_table = cluster_info.read().unwrap().sorted_tvu_peers(
+            &staking_utils::delegated_stakes_at_epoch(&bank, bank_epoch).unwrap(),
+        );
         // Layer 1, leader nodes are limited to the fanout size.
-        broadcast_table.truncate(DATA_PLANE_FANOUT);
+        broadcast_table.truncate(NEIGHBORHOOD_SIZE);
 
         inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
