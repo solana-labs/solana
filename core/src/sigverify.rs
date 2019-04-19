@@ -101,11 +101,6 @@ fn verify_packet(packet: &Packet) -> u8 {
     1
 }
 
-fn verify_packet_disabled(_packet: &Packet) -> u8 {
-    warn!("signature verification is disabled");
-    1
-}
-
 fn batch_size(batches: &[Packets]) -> usize {
     batches.iter().map(|p| p.packets.len()).sum()
 }
@@ -195,7 +190,7 @@ pub fn ed25519_verify_disabled(batches: &[Packets]) -> Vec<Vec<u8>> {
     debug!("disabled ECDSA for {}", batch_size(batches));
     let rv = batches
         .into_par_iter()
-        .map(|p| p.packets.par_iter().map(verify_packet_disabled).collect())
+        .map(|p| vec![1u8; p.packets.len()])
         .collect();
     inc_new_counter_info!("ed25519_verify_disabled", count);
     rv
