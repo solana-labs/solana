@@ -1013,7 +1013,7 @@ impl Bank {
         self.is_delta.load(Ordering::Relaxed) && self.tick_height() == max_tick_height
     }
 
-    /// Add an instruction processor to intercept intructions before the dynamic loader.
+    /// Add an instruction processor to intercept instructions before the dynamic loader.
     pub fn add_instruction_processor(
         &mut self,
         program_id: Pubkey,
