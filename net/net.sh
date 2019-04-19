@@ -26,20 +26,23 @@ Operate a configured testnet
  logs     - Fetch remote logs from each network node
 
  start/update-specific options:
-   -T [tarFilename]                    - Deploy the specified release tarball
-   -t edge|beta|stable|vX.Y.Z          - Deploy the latest tarball release for the
-                                        specified release channel (edge|beta|stable) or release tag
-                                        (vX.Y.Z)
-   -i update_manifest_keypair          - Deploy the tarball using 'solana-install deploy ...'
-                                         (-t option must be supplied as well)
-   -f [cargoFeatures]                  - List of |cargo --feaures=| to activate
-                                        (ignored if -s or -S is specified)
-   -r                                  - Reuse existing node/ledger configuration from a
-                                         previous |start| (ie, don't run ./multinode-demo/setup.sh).
-   -D /path/to/instruction-processors  - Deploy custom programs from this location
-   -c [number]                         - Number of solana-bench-tps clients to start
-   -e [number]                         - Number of solana-bench-exchange clients to start
-
+   -T [tarFilename]            - Deploy the specified release tarball
+   -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
+                                 specified release channel (edge|beta|stable) or release tag
+                                 (vX.Y.Z)
+   -i update_manifest_keypair  - Deploy the tarball using 'solana-install deploy ...'
+                                 (-t option must be supplied as well)
+   -f [cargoFeatures]          - List of |cargo --feaures=| to activate
+                                 (ignored if -s or -S is specified)
+   -r                          - Reuse existing node/ledger configuration from a
+                                 previous |start| (ie, don't run ./multinode-demo/setup.sh).
+   -D /path/to/programs        - Deploy custom programs from this location
+   -c clientType=numClients    - Number of clientTypes to start.  This options can be specified
+                                 more than once.  Defaults to bench-tps for all clients if not
+                                 specified.
+                                 Valid client types are:
+                                     bench-tps
+                                     bench-exchange
 
  sanity/start/update-specific options:
    -o noLedgerVerify    - Skip ledger verification
@@ -67,14 +70,14 @@ updateNodes=false
 customPrograms=
 updateManifestKeypairFile=
 updateDownloadUrl=
-nBenchTpsClients=0
-nBenchExchangeClients=0
+numBenchTpsClients=0
+numBenchExchangeClients=0
 
 command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?T:t:o:f:rD:i:c:e:" opt; do
+while getopts "h?T:t:o:f:rD:i:c:" opt; do
   case $opt in
   h | \?)
     usage
@@ -123,10 +126,35 @@ while getopts "h?T:t:o:f:rD:i:c:e:" opt; do
     esac
     ;;
   c)
-    nBenchTpsClients=$OPTARG
-    ;;
-  e)
-    nBenchExchangeClients=$OPTARG
+    getClientTypeAndNum() {
+      if ! [[ $OPTARG == *'='* ]]; then
+        echo "Error: Expecting keypair \"clientType=numClientType\" but got \"$OPTARG\""
+        exit 1
+      fi
+      local keyValue
+      IFS='=' read -ra keyValue <<< "$OPTARG"
+      local clientType=${keyValue[0]}
+      local numClients=${keyValue[1]}
+      re='^[0-9]+$'
+      if ! [[ $numClients =~ $re ]] ; then
+        echo "error: numClientType must be a number but got \"$numClients\""
+        exit 1
+      fi
+      case $clientType in
+        tps)
+          numBenchTpsClients=$numClients
+        ;;
+        exchange)
+          numBenchExchangeClients=$numClients
+        ;;
+        *)
+          echo "Unknown client type: $clientType"
+          exit 1
+          ;;
+      esac
+      unset IFS
+    }
+    getClientTypeAndNum
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -136,11 +164,15 @@ done
 
 loadConfigFile
 
-nClients=${#clientIpList[@]}
-nClientsRequested=$((nBenchTpsClients+nBenchExchangeClients))
-if [ "$nClientsRequested" -gt "$nClients" ]; then
-  echo "Error: More clients requested ($nClientsRequested) then available ($nClients)"
-  exit 1
+numClients=${#clientIpList[@]}
+numClientsRequested=$((numBenchTpsClients+numBenchExchangeClients))
+if [ "$numClientsRequested" -eq 0 ]; then
+  numBenchTpsClients=$numClients
+else
+  if [ "$numClientsRequested" -gt "$numClients" ]; then
+    echo "Error: More clients requested ($numClientsRequested) then available ($numClients)"
+    exit 1
+  fi
 fi
 
 build() {
@@ -430,8 +462,8 @@ start() {
   sanity
 
   SECONDS=0
-  for ((i=0; i < "$nClients" && i < "$nClientsRequested"; i++)) do
-    if [ $i -lt "$nBenchTpsClients" ]; then
+  for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
+    if [ $i -lt "$numBenchTpsClients" ]; then
       startClient "${clientIpList[$i]}" "solana-bench-tps"
     else
       startClient "${clientIpList[$i]}" "solana-bench-exchange"
