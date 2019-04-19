@@ -14,39 +14,8 @@ if [[ $1 = -h ]]; then
   fullnode_usage "$@"
 fi
 
-extra_fullnode_args=()
-
-while [[ ${1:0:1} = - ]]; do
-  if [[ $1 = --blockstream ]]; then
-    extra_fullnode_args+=("$1" "$2")
-    shift 2
-  elif [[ $1 = --enable-rpc-exit ]]; then
-    extra_fullnode_args+=("$1")
-    shift
-  elif [[ $1 = --init-complete-file ]]; then
-    extra_fullnode_args+=("$1" "$2")
-    shift 2
-  elif [[ $1 = --public-address ]]; then
-    extra_fullnode_args+=("$1")
-    shift
-  elif [[ $1 = --no-voting ]]; then
-    extra_fullnode_args+=("$1")
-    shift
-  elif [[ $1 = --rpc-port ]]; then
-    extra_fullnode_args+=("$1" "$2")
-    shift 2
-  elif [[ $1 = --dynamic-port-range ]]; then
-    extra_fullnode_args+=("$1" "$2")
-    shift 2
-  else
-    echo "Unknown argument: $1"
-    exit 1
-  fi
-done
-
-if [[ -n $3 ]]; then
-  fullnode_usage "$@"
-fi
+# shellcheck source=multinode-demo/extra-fullnode-args.sh
+source "$here"/extra-fullnode-args.sh
 
 
 [[ -f "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json ]] || {

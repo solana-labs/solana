@@ -102,7 +102,7 @@ fn verify_packet(packet: &Packet) -> u8 {
 }
 
 fn verify_packet_disabled(_packet: &Packet) -> u8 {
-    warn!("signature verification is disabled");
+    debug!("signature verification is disabled");
     1
 }
 
