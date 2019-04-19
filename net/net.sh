@@ -141,10 +141,10 @@ while getopts "h?T:t:o:f:rD:i:c:" opt; do
         exit 1
       fi
       case $clientType in
-        tps)
+        bench-tps)
           numBenchTpsClients=$numClients
         ;;
-        exchange)
+        bench-exchange)
           numBenchExchangeClients=$numClients
         ;;
         *)
@@ -152,7 +152,6 @@ while getopts "h?T:t:o:f:rD:i:c:" opt; do
           exit 1
           ;;
       esac
-      unset IFS
     }
     getClientTypeAndNum
     ;;
@@ -166,10 +165,10 @@ loadConfigFile
 
 numClients=${#clientIpList[@]}
 numClientsRequested=$((numBenchTpsClients+numBenchExchangeClients))
-if [ "$numClientsRequested" -eq 0 ]; then
+if [[ "$numClientsRequested" -eq 0 ]]; then
   numBenchTpsClients=$numClients
 else
-  if [ "$numClientsRequested" -gt "$numClients" ]; then
+  if [[ "$numClientsRequested" -gt "$numClients" ]]; then
     echo "Error: More clients requested ($numClientsRequested) then available ($numClients)"
     exit 1
   fi
@@ -463,7 +462,7 @@ start() {
 
   SECONDS=0
   for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
-    if [ $i -lt "$numBenchTpsClients" ]; then
+    if [[ $i -lt "$numBenchTpsClients" ]]; then
       startClient "${clientIpList[$i]}" "solana-bench-tps"
     else
       startClient "${clientIpList[$i]}" "solana-bench-exchange"
