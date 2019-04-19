@@ -66,6 +66,7 @@ __cloud_FindInstances() {
 
   keys="[name,publicIps,privateIps,location]"
 
+  instances=()
   while read -r name publicIp privateIp location; do
     instances+=("$name:$publicIp:$privateIp:$location")
   done < <(az vm list -d -o tsv --query "$query.$keys")
