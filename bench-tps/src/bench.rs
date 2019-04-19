@@ -1,6 +1,7 @@
 use solana_metrics;
 
 use rayon::prelude::*;
+use solana::gen_keys::GenKeys;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_metrics::influxdb;
 use solana_sdk::client::Client;
@@ -614,12 +615,31 @@ fn should_switch_directions(num_lamports_per_account: u64, i: u64) -> bool {
     i % (num_lamports_per_account / 4) == 0 && (i >= (3 * num_lamports_per_account) / 4)
 }
 
+pub fn generate_keypairs(id: &Keypair, tx_count: usize) -> Vec<Keypair> {
+    let mut seed = [0u8; 32];
+    seed.copy_from_slice(&id.to_bytes()[..32]);
+    let mut rnd = GenKeys::new(seed);
+
+    let mut total_keys = 0;
+    let mut target = tx_count * 2;
+    while target > 0 {
+        total_keys += target;
+        target /= MAX_SPENDS_PER_TX;
+    }
+    rnd.gen_n_keypairs(total_keys as u64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana::cluster_info::FULLNODE_PORT_RANGE;
     use solana::fullnode::FullnodeConfig;
     use solana::local_cluster::{ClusterConfig, LocalCluster};
+    use solana_client::thin_client::create_client;
     use solana_drone::drone::run_local_drone;
+    use solana_runtime::bank::Bank;
+    use solana_runtime::bank_client::BankClient;
+    use solana_sdk::genesis_block::GenesisBlock;
     use std::sync::mpsc::channel;
 
     #[test]
@@ -656,13 +676,33 @@ mod tests {
         run_local_drone(drone_keypair, addr_sender, None);
         let drone_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
 
-        let mut cfg = Config::default();
-        cfg.network_addr = cluster.entry_point_info.gossip;
-        cfg.drone_addr = drone_addr;
-        cfg.tx_count = 100;
-        cfg.duration = Duration::from_secs(5);
-        cfg.num_nodes = NUM_NODES;
+        let mut config = Config::default();
+        config.tx_count = 100;
+        config.duration = Duration::from_secs(5);
 
-        do_bench_tps(cfg);
+        let keypairs = generate_keypairs(&config.id, config.tx_count);
+        let client = create_client(
+            (cluster.entry_point_info.gossip, drone_addr),
+            FULLNODE_PORT_RANGE,
+        );
+
+        do_bench_tps(vec![client], config, keypairs, 0);
+    }
+
+    #[test]
+    fn test_bench_tps_bank_client() {
+        let (genesis_block, id) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
+        let clients = vec![BankClient::new(bank)];
+
+        let mut config = Config::default();
+        config.id = id;
+        config.tx_count = 10;
+        config.duration = Duration::from_secs(5);
+
+        let keypairs = generate_keypairs(&config.id, config.tx_count);
+        fund_keys(&clients[0], &config.id, &keypairs, 20);
+
+        do_bench_tps(clients, config, keypairs, 0);
     }
 }

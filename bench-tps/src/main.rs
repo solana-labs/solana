@@ -2,11 +2,10 @@ mod bench;
 mod cli;
 
 use crate::bench::{
-    airdrop_lamports, do_bench_tps, fund_keys, Config, MAX_SPENDS_PER_TX, NUM_LAMPORTS_PER_ACCOUNT,
+    airdrop_lamports, do_bench_tps, fund_keys, generate_keypairs, Config, NUM_LAMPORTS_PER_ACCOUNT,
 };
 use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::contact_info::ContactInfo;
-use solana::gen_keys::GenKeys;
 use solana::gossip_service::discover_nodes;
 use solana_client::thin_client::create_client;
 use solana_sdk::client::SyncClient;
@@ -60,18 +59,8 @@ fn main() {
         })
         .collect();
 
-    let mut seed = [0u8; 32];
-    seed.copy_from_slice(&id.to_bytes()[..32]);
-    let mut rnd = GenKeys::new(seed);
-
     println!("Creating {} keypairs...", tx_count * 2);
-    let mut total_keys = 0;
-    let mut target = tx_count * 2;
-    while target > 0 {
-        total_keys += target;
-        target /= MAX_SPENDS_PER_TX;
-    }
-    let keypairs = rnd.gen_n_keypairs(total_keys as u64);
+    let keypairs = generate_keypairs(&id, tx_count);
 
     println!("Get lamports...");
 
