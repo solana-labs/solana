@@ -61,7 +61,7 @@ fn retransmit(
 #[inline]
 fn mark_forwarded(b: &SharedBlob) -> SharedBlob {
     let mut blob = b.read().unwrap().clone();
-    // Disable blob forwarding for neighbors
+    // Mark this blob as forwarded
     blob.forwarded(true);
     Arc::new(RwLock::new(blob))
 }
