@@ -61,7 +61,7 @@ fn retransmit(
 fn copy_for_neighbors(b: &SharedBlob) -> SharedBlob {
     let mut blob = b.read().unwrap().clone();
     // Disable blob forwarding for neighbors
-    blob.forward(false);
+    blob.forwarded(true);
     Arc::new(RwLock::new(blob))
 }
 
@@ -161,7 +161,7 @@ mod tests {
     #[test]
     fn test_blob_for_neighbors() {
         let blob = SharedBlob::default();
-        blob.write().unwrap().forward(true);
+        blob.write().unwrap().forwarded(true);
         let for_hoodies = copy_for_neighbors(&blob);
         assert!(!for_hoodies.read().unwrap().should_forward());
     }

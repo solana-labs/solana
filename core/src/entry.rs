@@ -415,7 +415,6 @@ pub fn make_consecutive_blobs(
         let mut blob = blob.write().unwrap();
         blob.set_index(index);
         blob.set_id(id);
-        blob.forward(true);
         blob.meta.set_addr(addr);
         index += 1;
     }
