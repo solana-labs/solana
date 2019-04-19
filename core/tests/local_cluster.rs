@@ -46,6 +46,22 @@ fn test_spend_and_verify_all_nodes_3() {
 }
 
 #[test]
+#[ignore]
+fn test_spend_and_verify_all_nodes_env_num_nodes() {
+    solana_logger::setup();
+    let num_nodes: usize = std::env::var("NUM_NODES")
+        .expect("please set environment variable NUM_NODES")
+        .parse()
+        .expect("could not parse NUM_NODES as a number");
+    let local = LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100);
+    cluster_tests::spend_and_verify_all_nodes(
+        &local.entry_point_info,
+        &local.funding_keypair,
+        num_nodes,
+    );
+}
+
+#[test]
 #[should_panic]
 fn test_fullnode_exit_default_config_should_panic() {
     solana_logger::setup();
