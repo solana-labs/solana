@@ -518,8 +518,6 @@ impl Blob {
         let (nrecv, from) = socket.recv_from(&mut p.data)?;
         p.meta.size = nrecv;
         p.meta.set_addr(&from);
-        p.meta.forward = p.should_forward();
-        p.set_forwarded(false);
         trace!("got {} bytes from {}", nrecv, from);
         Ok(())
     }
