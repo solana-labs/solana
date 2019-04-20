@@ -3,8 +3,7 @@
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{
-    compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY,
-    NEIGHBORHOOD_SIZE,
+    compute_retransmit_peers, ClusterInfo, GROW_LAYER_CAPACITY, NEIGHBORHOOD_SIZE,
 };
 use crate::packet::SharedBlob;
 use crate::result::{Error, Result};
@@ -39,10 +38,12 @@ fn retransmit(
             .add_field("count", influxdb::Value::Integer(dq.len() as i64))
             .to_owned(),
     );
+    let r_bank = bank_forks.read().unwrap().working_bank();
+    let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());
     let (neighbors, children) = compute_retransmit_peers(
-        &staking_utils::delegated_stakes(&bank_forks.read().unwrap().working_bank()),
+        &staking_utils::delegated_stakes_at_epoch(&r_bank, bank_epoch).unwrap(),
         cluster_info,
-        DATA_PLANE_FANOUT,
+        NEIGHBORHOOD_SIZE,
         NEIGHBORHOOD_SIZE,
         GROW_LAYER_CAPACITY,
     );

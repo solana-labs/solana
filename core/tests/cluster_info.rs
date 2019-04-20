@@ -2,8 +2,7 @@ use hashbrown::{HashMap, HashSet};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::prelude::*;
 use solana::cluster_info::{
-    compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY,
-    NEIGHBORHOOD_SIZE,
+    compute_retransmit_peers, ClusterInfo, GROW_LAYER_CAPACITY, NEIGHBORHOOD_SIZE,
 };
 use solana::contact_info::ContactInfo;
 use solana_sdk::pubkey::Pubkey;
@@ -173,30 +172,30 @@ fn run_simulation(stakes: &[u64], fanout: usize, hood_size: usize) {
 // Run with a single layer
 #[test]
 fn test_retransmit_small() {
-    let stakes: Vec<_> = (0..DATA_PLANE_FANOUT as u64).map(|i| i).collect();
-    run_simulation(&stakes, DATA_PLANE_FANOUT, NEIGHBORHOOD_SIZE);
+    let stakes: Vec<_> = (0..NEIGHBORHOOD_SIZE as u64).map(|i| i).collect();
+    run_simulation(&stakes, NEIGHBORHOOD_SIZE, NEIGHBORHOOD_SIZE);
 }
 
 // Make sure at least 2 layers are used
 #[test]
 fn test_retransmit_medium() {
-    let num_nodes = DATA_PLANE_FANOUT as u64 * 10;
+    let num_nodes = NEIGHBORHOOD_SIZE as u64 * 10;
     let stakes: Vec<_> = (0..num_nodes).map(|i| i).collect();
-    run_simulation(&stakes, DATA_PLANE_FANOUT, NEIGHBORHOOD_SIZE);
+    run_simulation(&stakes, NEIGHBORHOOD_SIZE, NEIGHBORHOOD_SIZE);
 }
 
 // Make sure at least 2 layers are used but with equal stakes
 #[test]
 fn test_retransmit_medium_equal_stakes() {
-    let num_nodes = DATA_PLANE_FANOUT as u64 * 10;
+    let num_nodes = NEIGHBORHOOD_SIZE as u64 * 10;
     let stakes: Vec<_> = (0..num_nodes).map(|_| 10).collect();
-    run_simulation(&stakes, DATA_PLANE_FANOUT, NEIGHBORHOOD_SIZE);
+    run_simulation(&stakes, NEIGHBORHOOD_SIZE, NEIGHBORHOOD_SIZE);
 }
 
 // Scale down the network and make sure at least 3 layers are used
 #[test]
 fn test_retransmit_large() {
-    let num_nodes = DATA_PLANE_FANOUT as u64 * 20;
+    let num_nodes = NEIGHBORHOOD_SIZE as u64 * 20;
     let stakes: Vec<_> = (0..num_nodes).map(|i| i).collect();
-    run_simulation(&stakes, DATA_PLANE_FANOUT / 10, NEIGHBORHOOD_SIZE / 10);
+    run_simulation(&stakes, NEIGHBORHOOD_SIZE / 10, NEIGHBORHOOD_SIZE / 10);
 }
