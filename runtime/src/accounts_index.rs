@@ -9,7 +9,7 @@ pub struct AccountsIndex<T> {
     account_maps: HashMap<Pubkey, Vec<(Fork, T)>>,
     roots: HashSet<Fork>,
     //This value that needs to be stored to recover the index from AppendVec
-    last_root: Fork,
+    pub last_root: Fork,
 }
 
 impl<T: Clone> AccountsIndex<T> {

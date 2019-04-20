@@ -131,13 +131,10 @@ impl AccountStorageEntry {
         self.count.fetch_add(1, Ordering::Relaxed);
     }
 
-    fn remove_account(&self) -> bool {
+    fn remove_account(&self) {
         if self.count.fetch_sub(1, Ordering::Relaxed) == 1 {
             self.accounts.reset();
             self.set_status(AccountStorageStatus::StorageAvailable);
-            true
-        } else {
-            false
         }
     }
 }
@@ -350,28 +347,44 @@ impl AccountsDB {
         reclaims
     }
 
-    fn collect_dead_forks(&self, reclaims: Vec<(Fork, AccountInfo)>) -> HashSet<Fork> {
-        let stores = self.storage.read().unwrap();
-        let mut cleared_forks: HashSet<Fork> = HashSet::new();
+    fn remove_dead_accounts(&self, reclaims: Vec<(Fork, AccountInfo)>) -> HashSet<Fork> {
+        let storage = self.storage.read().unwrap();
         for (fork_id, account_info) in reclaims {
-            if let Some(store) = stores.get(&account_info.id) {
+            if let Some(store) = storage.get(&account_info.id) {
                 assert_eq!(
                     fork_id, store.fork_id,
-                    "AccountDB::accounts_index corrupted.  stores should only point to one fork"
+                    "AccountDB::accounts_index corrupted. Storage should only point to one fork"
                 );
-                let cleared = store.remove_account();
-                if cleared {
-                    cleared_forks.insert(fork_id);
-                }
+                store.remove_account();
             }
         }
-        let live_forks: HashSet<Fork> = stores.values().map(|x| x.fork_id).collect();
-        cleared_forks.difference(&live_forks).cloned().collect()
+        let dead_forks: HashSet<Fork> = storage
+            .values()
+            .filter_map(|x| {
+                if x.count.load(Ordering::Relaxed) == 0 {
+                    Some(x.fork_id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let live_forks: HashSet<Fork> = storage
+            .values()
+            .filter_map(|x| {
+                if x.count.load(Ordering::Relaxed) > 0 {
+                    Some(x.fork_id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        dead_forks.difference(&live_forks).cloned().collect()
     }
-    fn cleanup_dead_forks(&self, forks: HashSet<Fork>) {
+    fn cleanup_dead_forks(&self, dead_forks: &mut HashSet<Fork>) {
         let mut index = self.accounts_index.write().unwrap();
-        for fork in forks {
-            index.cleanup_dead_fork(fork);
+        dead_forks.retain(|fork| *fork < index.last_root);
+        for fork in dead_forks.iter() {
+            index.cleanup_dead_fork(*fork);
         }
     }
 
@@ -380,9 +393,13 @@ impl AccountsDB {
         let infos = self.store_accounts(fork_id, accounts);
         let reclaims = self.update_index(fork_id, infos, accounts);
         trace!("reclaim: {}", reclaims.len());
-        let dead_forks = self.collect_dead_forks(reclaims);
+        let mut dead_forks = self.remove_dead_accounts(reclaims);
         println!("dead_forks: {}", dead_forks.len());
-        self.cleanup_dead_forks(dead_forks);
+        self.cleanup_dead_forks(&mut dead_forks);
+        println!("purge_forks: {}", dead_forks.len());
+        for fork in dead_forks {
+            self.purge_fork(fork);
+        }
     }
 
     pub fn add_root(&self, fork: Fork) {
