@@ -279,7 +279,7 @@ pub mod test {
     use crate::packet::{index_blobs, Blob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use std::borrow::Borrow;
+    use std::borrow::{Borrow, BorrowMut};
 
     /// Specifies the contents of a 16-data-blob and 4-coding-blob erasure set
     /// Exists to be passed to `generate_blocktree_with_coding`
@@ -312,8 +312,8 @@ pub mod test {
     pub struct ErasureSetModel {
         pub set_index: u64,
         pub start_index: u64,
-        pub coding: Vec<Blob>,
-        pub data: Vec<Blob>,
+        pub coding: Vec<Box<Blob>>,
+        pub data: Vec<Box<Blob>>,
     }
 
     #[test]
@@ -567,14 +567,14 @@ pub mod test {
 
                             let mut blobs = Vec::with_capacity(ERASURE_SET_SIZE);
 
-                            blobs.push(Blob::default());
-                            blobs.push(Blob::default());
-                            blobs.push(Blob::default());
+                            blobs.push(Box::default());
+                            blobs.push(Box::default());
+                            blobs.push(Box::default());
                             for blob in erasure_set.data.into_iter().skip(3) {
                                 blobs.push(blob);
                             }
 
-                            blobs.push(Blob::default());
+                            blobs.push(Box::default());
                             for blob in erasure_set.coding.into_iter().skip(1) {
                                 blobs.push(blob);
                             }
@@ -659,8 +659,8 @@ pub mod test {
                     ErasureSetModel {
                         start_index: start_index as u64,
                         set_index: set_index as u64,
-                        data: blobs,
-                        coding: coding_blobs,
+                        data: blobs.into_iter().map(Box::new).collect(),
+                        coding: coding_blobs.into_iter().map(Box::new).collect(),
                     }
                 })
                 .collect();
@@ -725,9 +725,9 @@ pub mod test {
     }
 
     impl Session {
-        fn reconstruct_from_blobs(
+        fn reconstruct_from_blobs<B: BorrowMut<Blob>>(
             &self,
-            blobs: &mut [Blob],
+            blobs: &mut [B],
             present: &[bool],
             size: usize,
             block_start_idx: u64,
@@ -738,9 +738,9 @@ pub mod test {
                 .enumerate()
                 .map(|(i, blob)| {
                     if i < NUM_DATA {
-                        &mut blob.data[..size]
+                        &mut blob.borrow_mut().data[..size]
                     } else {
-                        &mut blob.data_mut()[..size]
+                        &mut blob.borrow_mut().data_mut()[..size]
                     }
                 })
                 .collect();
