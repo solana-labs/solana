@@ -6,7 +6,6 @@ use crate::cluster_info::{
     compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY,
     NEIGHBORHOOD_SIZE,
 };
-use crate::packet::SharedBlob;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
@@ -48,22 +47,13 @@ fn retransmit(
     );
     for b in &dq {
         if b.read().unwrap().meta.forward {
-            ClusterInfo::retransmit_to(&cluster_info, &neighbors, &mark_forwarded(b), sock)?;
-            ClusterInfo::retransmit_to(&cluster_info, &children, b, sock)?;
+            ClusterInfo::retransmit_to(&cluster_info, &neighbors, b, sock, true)?;
+            ClusterInfo::retransmit_to(&cluster_info, &children, b, sock, false)?;
         } else {
-            ClusterInfo::retransmit_to(&cluster_info, &children, &mark_forwarded(b), sock)?;
+            ClusterInfo::retransmit_to(&cluster_info, &children, b, sock, true)?;
         }
     }
     Ok(())
-}
-
-/// Copies and marks a blob as "forwarded"
-#[inline]
-fn mark_forwarded(b: &SharedBlob) -> SharedBlob {
-    let mut blob = b.read().unwrap().clone();
-    // Mark this blob as forwarded
-    blob.set_forwarded(true);
-    Arc::new(RwLock::new(blob))
 }
 
 /// Service to retransmit messages from the leader or layer 1 to relevant peer nodes.
@@ -151,18 +141,5 @@ impl Service for RetransmitStage {
         }
         self.window_service.join()?;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_blob_mark_forwarded() {
-        let blob = SharedBlob::default();
-        blob.write().unwrap().set_forwarded(true);
-        let for_hoodies = mark_forwarded(&blob);
-        assert!(!for_hoodies.read().unwrap().should_forward());
     }
 }
