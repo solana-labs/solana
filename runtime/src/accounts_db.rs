@@ -379,7 +379,9 @@ impl AccountsDB {
     pub fn store(&self, fork_id: Fork, accounts: &[(&Pubkey, &Account)]) {
         let infos = self.store_accounts(fork_id, accounts);
         let reclaims = self.update_index(fork_id, infos, accounts);
+        trace!("reclaim: {}", reclaims.len());
         let dead_forks = self.collect_dead_forks(reclaims);
+        println!("dead_forks: {}", dead_forks.len());
         self.cleanup_dead_forks(dead_forks);
     }
 
@@ -828,6 +830,43 @@ mod tests {
         accounts.add_root(0);
         accounts.purge_fork(0);
         assert!(accounts.load_slow(&ancestors, &pubkeys[0]).is_some());
+    }
+
+    #[test]
+    fn test_lazy_gc_fork() {
+        //This test is pedantic
+        //A fork is purged when a non root bank is cleaned up.  If a fork is behind root but it is
+        //not root, it means we are retaining dead banks.
+        let paths = get_tmp_accounts_path!();
+        let accounts = AccountsDB::new(&paths.paths);
+        let pubkey = Pubkey::new_rand();
+        let account = Account::new(1, 0, &Account::default().owner);
+        //store an account
+        accounts.store(0, &[(&pubkey, &account)]);
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let info = accounts
+            .accounts_index
+            .read()
+            .unwrap()
+            .get(&pubkey, &ancestors)
+            .unwrap()
+            .clone();
+        //fork 0 is behind root, but it is not root, therefore it is purged
+        accounts.add_root(1);
+        assert!(accounts.accounts_index.read().unwrap().is_purged(0));
+
+        //fork is still there, since gc is lazy
+        assert!(accounts.storage.read().unwrap().get(&info.id).is_some());
+
+        //store causes cleanup
+        accounts.store(1, &[(&pubkey, &account)]);
+
+        //fork is gone
+        assert!(accounts.storage.read().unwrap().get(&info.id).is_none());
+
+        //new value is there
+        let ancestors = vec![(1, 1)].into_iter().collect();
+        assert_eq!(accounts.load_slow(&ancestors, &pubkey), Some(account));;
     }
 
 }

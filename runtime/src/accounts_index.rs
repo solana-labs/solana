@@ -59,7 +59,7 @@ impl<T: Clone> AccountsIndex<T> {
         };
         rv
     }
-    fn is_purged(&self, fork: Fork) -> bool {
+    pub fn is_purged(&self, fork: Fork) -> bool {
         !self.is_root(fork) && fork < self.last_root
     }
     pub fn is_root(&self, fork: Fork) -> bool {
