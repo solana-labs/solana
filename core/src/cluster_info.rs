@@ -645,7 +645,7 @@ impl ClusterInfo {
         };
         // hold a write lock so no one modifies the blob until we send it
         let mut wblob = blob.write().unwrap();
-        let was_fowarded = !wblob.should_forward();
+        let was_forwarded = !wblob.should_forward();
         wblob.set_forwarded(forwarded);
         trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders
@@ -664,7 +664,7 @@ impl ClusterInfo {
             })
             .collect();
         // reset the blob to its old state. This avoids us having to copy the blob to modify it
-        wblob.set_forwarded(was_fowarded);
+        wblob.set_forwarded(was_forwarded);
         for e in errs {
             if let Err(e) = &e {
                 inc_new_counter_info!("cluster_info-retransmit-send_to_error", 1, 1);
