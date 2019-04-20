@@ -394,9 +394,9 @@ impl AccountsDB {
         let reclaims = self.update_index(fork_id, infos, accounts);
         trace!("reclaim: {}", reclaims.len());
         let mut dead_forks = self.remove_dead_accounts(reclaims);
-        println!("dead_forks: {}", dead_forks.len());
+        trace!("dead_forks: {}", dead_forks.len());
         self.cleanup_dead_forks(&mut dead_forks);
-        println!("purge_forks: {}", dead_forks.len());
+        trace!("purge_forks: {}", dead_forks.len());
         for fork in dead_forks {
             self.purge_fork(fork);
         }
