@@ -1,6 +1,6 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
-use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
-use crate::result::{Error, Result};
+use crate::recvmmsg::{recv_mmsg, RecvM, NUM_RCVMMSGS};
+use crate::result::Result;
 use bincode;
 use byteorder::{ByteOrder, LittleEndian};
 use serde::Serialize;
@@ -18,7 +18,8 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 
-pub type SharedBlob = Arc<RwLock<Blob>>;
+pub type Shared<T> = Arc<RwLock<T>>;
+pub type SharedBlob = Shared<Blob>;
 pub type SharedBlobs = Vec<SharedBlob>;
 
 pub const NUM_PACKETS: usize = 1024 * 8;
@@ -42,6 +43,30 @@ pub struct Meta {
 pub struct Packet {
     pub data: [u8; PACKET_DATA_SIZE],
     pub meta: Meta,
+}
+
+/// Anything we receive over the network
+pub trait Message: Sized + Default + Clone {
+    const BATCH_SIZE: usize;
+
+    fn recv_from(&mut self, socket: &UdpSocket) -> io::Result<()>;
+
+    fn send_to(&self, socket: &UdpSocket) -> io::Result<()>;
+}
+
+/// A Mailbox can receive and send messages.
+/// A Mailbox can receive up to `Self::Message::BATCH_SIZE` messages,
+pub trait Mailbox: Default {
+    type Message: Message;
+
+    fn send_to(&self, sock: &UdpSocket) -> io::Result<()>;
+    /// DOCUMENTED SIDE-EFFECT
+    /// Performance out of the IO without poll
+    ///  * block on the socket until it's readable
+    ///  * set the socket to non blocking
+    ///  * read until it fails
+    ///  * set it back to blocking before returning
+    fn recv_from(&mut self, sock: &UdpSocket) -> io::Result<usize>;
 }
 
 impl Packet {
@@ -175,6 +200,7 @@ impl Deref for Blob {
         &self._data
     }
 }
+
 impl DerefMut for Blob {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self._data
@@ -204,53 +230,6 @@ pub enum BlobError {
     BadState,
     /// Blob verification failed
     VerificationFailed,
-}
-
-impl Packets {
-    pub fn recv_from(&mut self, socket: &UdpSocket) -> Result<usize> {
-        let mut i = 0;
-        //DOCUMENTED SIDE-EFFECT
-        //Performance out of the IO without poll
-        //  * block on the socket until it's readable
-        //  * set the socket to non blocking
-        //  * read until it fails
-        //  * set it back to blocking before returning
-        socket.set_nonblocking(false)?;
-        trace!("receiving on {}", socket.local_addr().unwrap());
-        loop {
-            self.packets.resize(i + NUM_RCVMMSGS, Packet::default());
-            match recv_mmsg(socket, &mut self.packets[i..]) {
-                Err(_) if i > 0 => {
-                    break;
-                }
-                Err(e) => {
-                    trace!("recv_from err {:?}", e);
-                    return Err(Error::IO(e));
-                }
-                Ok(npkts) => {
-                    if i == 0 {
-                        socket.set_nonblocking(true)?;
-                    }
-                    trace!("got {} packets", npkts);
-                    i += npkts;
-                    if npkts != NUM_RCVMMSGS || i >= 1024 {
-                        break;
-                    }
-                }
-            }
-        }
-        self.packets.truncate(i);
-        inc_new_counter_info!("packets-recv_count", i);
-        Ok(i)
-    }
-
-    pub fn send_to(&self, socket: &UdpSocket) -> Result<()> {
-        for p in &self.packets {
-            let a = p.meta.addr();
-            socket.send_to(&p.data[..p.meta.size], &a)?;
-        }
-        Ok(())
-    }
 }
 
 pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<Packets> {
@@ -510,67 +489,6 @@ impl Blob {
         self.set_size(size + written);
         last_index
     }
-
-    pub fn recv_blob(socket: &UdpSocket, r: &SharedBlob) -> io::Result<()> {
-        let mut p = r.write().unwrap();
-        trace!("receiving on {}", socket.local_addr().unwrap());
-
-        let (nrecv, from) = socket.recv_from(&mut p.data)?;
-        p.meta.size = nrecv;
-        p.meta.set_addr(&from);
-        trace!("got {} bytes from {}", nrecv, from);
-        Ok(())
-    }
-
-    pub fn recv_from(socket: &UdpSocket) -> Result<SharedBlobs> {
-        let mut v = Vec::new();
-        //DOCUMENTED SIDE-EFFECT
-        //Performance out of the IO without poll
-        //  * block on the socket until it's readable
-        //  * set the socket to non blocking
-        //  * read until it fails
-        //  * set it back to blocking before returning
-        socket.set_nonblocking(false)?;
-        for i in 0..NUM_BLOBS {
-            let r = SharedBlob::default();
-
-            match Blob::recv_blob(socket, &r) {
-                Err(_) if i > 0 => {
-                    trace!("got {:?} messages on {}", i, socket.local_addr().unwrap());
-                    break;
-                }
-                Err(e) => {
-                    if e.kind() != io::ErrorKind::WouldBlock {
-                        info!("recv_from err {:?}", e);
-                    }
-                    return Err(Error::IO(e));
-                }
-                Ok(()) => {
-                    if i == 0 {
-                        socket.set_nonblocking(true)?;
-                    }
-                }
-            }
-            v.push(r);
-        }
-        Ok(v)
-    }
-    pub fn send_to(socket: &UdpSocket, v: SharedBlobs) -> Result<()> {
-        for r in v {
-            {
-                let p = r.read().unwrap();
-                let a = p.meta.addr();
-                if let Err(e) = socket.send_to(&p.data[..p.meta.size], &a) {
-                    warn!(
-                        "error sending {} byte packet to {:?}: {:?}",
-                        p.meta.size, a, e
-                    );
-                    Err(e)?;
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, mut blob_index: u64, slot: u64, parent: u64) {
@@ -582,7 +500,183 @@ pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, mut blob_index: u64, slot:
         blob.set_slot(slot);
         blob.set_parent(parent);
         blob.set_id(id);
+        blob.set_forwarded(true);
         blob_index += 1;
+    }
+}
+
+impl Mailbox for Packets {
+    type Message = Packet;
+
+    fn recv_from(&mut self, socket: &UdpSocket) -> io::Result<usize> {
+        let mut i = 0;
+        socket.set_nonblocking(false)?;
+        trace!("receiving on {}", socket.local_addr().unwrap());
+
+        loop {
+            self.packets.resize(i + NUM_RCVMMSGS, Packet::default());
+            match recv_mmsg(socket, &mut self.packets[i..]) {
+                Err(_) if i > 0 => {
+                    break;
+                }
+                Err(e) => {
+                    trace!("recv_from err {:?}", e);
+                    return Err(e);
+                }
+                Ok(npkts) => {
+                    if i == 0 {
+                        socket.set_nonblocking(true)?;
+                    }
+
+                    trace!("got {} packets", npkts);
+                    i += npkts;
+
+                    if npkts != NUM_RCVMMSGS || i >= Packet::BATCH_SIZE {
+                        break;
+                    }
+                }
+            }
+        }
+
+        self.packets.truncate(i);
+        inc_new_counter_info!("packet-recv_count", i);
+
+        Ok(i)
+    }
+
+    fn send_to(&self, socket: &UdpSocket) -> io::Result<()> {
+        self.packets.send_to(socket)
+    }
+}
+
+impl<M: Message> Mailbox for Vec<M> {
+    type Message = M;
+
+    fn recv_from(&mut self, socket: &UdpSocket) -> io::Result<usize> {
+        let mut i = 0;
+        socket.set_nonblocking(false)?;
+
+        while i < M::BATCH_SIZE {
+            let mut message = M::default();
+
+            match message.recv_from(socket) {
+                Err(_) if i > 0 => {
+                    break;
+                }
+                Err(e) => {
+                    trace!("recv_from err {:?}", e);
+                    return Err(e);
+                }
+                Ok(()) => {
+                    if i == 0 {
+                        socket.set_nonblocking(true)?;
+                    }
+
+                    i += 1;
+                }
+            }
+
+            self.push(message);
+        }
+        self.truncate(i);
+        Ok(i)
+    }
+
+    fn send_to(&self, socket: &UdpSocket) -> io::Result<()> {
+        for message in self {
+            //let p = shared_message.write().unwrap();
+
+            //let a = p.meta().addr();
+            //socket.send_to(&p.content()[..p.meta().size], &a)?;
+            message.send_to(socket)?;
+        }
+        Ok(())
+    }
+}
+
+impl<M: Message> Message for Shared<M> {
+    const BATCH_SIZE: usize = M::BATCH_SIZE;
+
+    fn recv_from(&mut self, socket: &UdpSocket) -> io::Result<()> {
+        self.write().unwrap().recv_from(socket)
+    }
+
+    fn send_to(&self, socket: &UdpSocket) -> io::Result<()> {
+        self.read().unwrap().send_to(socket)
+    }
+}
+
+impl Message for Packet {
+    const BATCH_SIZE: usize = 1024;
+
+    fn recv_from(&mut self, socket: &UdpSocket) -> io::Result<()> {
+        let (nrecv, from) = socket.recv_from(&mut self.data)?;
+        self.meta.size = nrecv;
+        self.meta.set_addr(&from);
+        Ok(())
+    }
+
+    fn send_to(&self, socket: &UdpSocket) -> io::Result<()> {
+        socket.send_to(&self.data[..self.meta.size], self.meta.addr())?;
+        Ok(())
+    }
+}
+
+impl Message for Blob {
+    const BATCH_SIZE: usize = NUM_BLOBS;
+
+    fn recv_from(&mut self, socket: &UdpSocket) -> io::Result<()> {
+        let (nrecv, from) = socket.recv_from(&mut self.data)?;
+        self.meta.size = nrecv;
+        self.meta.set_addr(&from);
+        Ok(())
+    }
+
+    fn send_to(&self, socket: &UdpSocket) -> io::Result<()> {
+        socket.send_to(&self.data[..self.meta.size], self.meta.addr())?;
+        Ok(())
+    }
+}
+
+impl RecvM for Blob {
+    const CAPACITY: usize = BLOB_SIZE;
+    //const BATCH_SIZE: usize = NUM_BLOBS;
+
+    fn meta(&self) -> &Meta {
+        &self.meta
+    }
+
+    fn meta_mut(&mut self) -> &mut Meta {
+        &mut self.meta
+    }
+
+    fn content(&self) -> &[u8] {
+        &self.data[..]
+    }
+
+    fn content_mut(&mut self) -> &mut [u8] {
+        &mut self.data[..]
+    }
+}
+
+impl RecvM for Packet {
+    const CAPACITY: usize = PACKET_DATA_SIZE;
+    //const BATCH_SIZE: usize = 1024;
+
+    fn meta(&self) -> &Meta {
+        &self.meta
+    }
+
+    fn meta_mut(&mut self) -> &mut Meta {
+        &mut self.meta
+    }
+
+    fn content(&self) -> &[u8] {
+        &self.data[..]
+    }
+
+    fn content_mut(&mut self) -> &mut [u8] {
+        &mut self.data[..]
     }
 }
 
@@ -664,9 +758,11 @@ mod tests {
         p.write().unwrap().meta.set_addr(&addr);
         p.write().unwrap().meta.size = 1024;
         let v = vec![p];
-        Blob::send_to(&sender, v).unwrap();
+        //Blob::send_shared_to(&sender, &v).unwrap();
+        v.send_to(&sender).unwrap();
         trace!("send_to");
-        let rv = Blob::recv_from(&reader).unwrap();
+        let mut rv = SharedBlobs::default();
+        rv.recv_from(&reader).unwrap();
         trace!("recv_from");
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].read().unwrap().meta.size, 1024);

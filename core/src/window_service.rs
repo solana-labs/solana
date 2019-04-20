@@ -333,7 +333,11 @@ mod test {
             let blob_sockets: Vec<Arc<UdpSocket>> =
                 leader_node.sockets.tvu.into_iter().map(Arc::new).collect();
 
-            let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
+            let t_responder = responder::<Vec<SharedBlob>>(
+                "window_send_test",
+                blob_sockets[0].clone(),
+                r_responder,
+            );
             let num_blobs_to_make = 10;
             let gossip_address = &leader_node.info.gossip;
             let msgs = make_consecutive_blobs(

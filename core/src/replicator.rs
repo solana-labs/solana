@@ -5,7 +5,7 @@ use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::GossipService;
-use crate::packet::to_shared_blob;
+use crate::packet::{to_shared_blob, Packets};
 use crate::repair_service::RepairSlotRange;
 use crate::result::Result;
 use crate::service::Service;
@@ -129,7 +129,7 @@ fn create_request_processor(
     let (s_reader, r_reader) = channel();
     let (s_responder, r_responder) = channel();
     let storage_socket = Arc::new(socket);
-    let t_receiver = receiver(storage_socket.clone(), exit, s_reader);
+    let t_receiver = receiver::<Packets>(storage_socket.clone(), exit, s_reader);
     thread_handles.push(t_receiver);
 
     let t_responder = responder("replicator-responder", storage_socket.clone(), r_responder);

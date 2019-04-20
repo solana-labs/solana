@@ -1,11 +1,10 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::packet::{
-    deserialize_packets_in_blob, Blob, Meta, Packets, SharedBlobs, PACKET_DATA_SIZE,
-};
+use crate::packet::{deserialize_packets_in_blob, Mailbox, Meta, Packets, SharedBlobs};
 use crate::result::{Error, Result};
 use bincode;
+use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -21,9 +20,13 @@ pub type BlobReceiver = Receiver<SharedBlobs>;
 
 const RECV_BATCH_MAX: usize = 60_000;
 
-fn recv_loop(sock: &UdpSocket, exit: Arc<AtomicBool>, channel: &PacketSender) -> Result<()> {
+fn recv_loop<MB: Mailbox>(
+    sock: &UdpSocket,
+    exit: Arc<AtomicBool>,
+    channel: &Sender<MB>,
+) -> Result<()> {
     loop {
-        let mut msgs = Packets::default();
+        let mut msgs = MB::default();
         loop {
             // Check for exit signal, even if socket is busy
             // (for instance the leader trasaction socket)
@@ -38,11 +41,17 @@ fn recv_loop(sock: &UdpSocket, exit: Arc<AtomicBool>, channel: &PacketSender) ->
     }
 }
 
-pub fn receiver(
+/// Pulls from the socket and sends the messages on the sender
+/// DOCUMENTED SIDE-EFFECT
+/// 1 second timeout on socket read
+pub fn receiver<MB>(
     sock: Arc<UdpSocket>,
     exit: &Arc<AtomicBool>,
-    packet_sender: PacketSender,
-) -> JoinHandle<()> {
+    packet_sender: Sender<MB>,
+) -> JoinHandle<()>
+where
+    MB: Mailbox + Send + 'static,
+{
     let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
     if res.is_err() {
         panic!("streamer::receiver set_read_timeout error");
@@ -56,13 +65,14 @@ pub fn receiver(
         .unwrap()
 }
 
-fn recv_send(sock: &UdpSocket, r: &BlobReceiver) -> Result<()> {
+fn recv_send<MB: Mailbox>(sock: &UdpSocket, r: &Receiver<MB>) -> Result<()> {
     let timer = Duration::new(1, 0);
     let msgs = r.recv_timeout(timer)?;
-    Blob::send_to(sock, msgs)?;
+    msgs.send_to(sock)?;
     Ok(())
 }
 
+/// Attempts to receive up to `RECV_BATCH_MAX` packets from the receiver
 pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<Packets>, usize, u64)> {
     let timer = Duration::new(1, 0);
     let msgs = recvr.recv_timeout(timer)?;
@@ -83,7 +93,10 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<Packets>, usize, u64)> 
     Ok((batch, len, duration_as_ms(&recv_start.elapsed())))
 }
 
-pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: BlobReceiver) -> JoinHandle<()> {
+pub fn responder<MB>(name: &'static str, sock: Arc<UdpSocket>, r: Receiver<MB>) -> JoinHandle<()>
+where
+    MB: Mailbox + Send + 'static,
+{
     Builder::new()
         .name(format!("solana-responder-{}", name))
         .spawn(move || loop {
@@ -98,37 +111,14 @@ pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: BlobReceiver) -> J
         .unwrap()
 }
 
-//TODO, we would need to stick block authentication before we create the
-//window.
-fn recv_blobs(sock: &UdpSocket, s: &BlobSender) -> Result<()> {
-    trace!("recv_blobs: receiving on {}", sock.local_addr().unwrap());
-    let dq = Blob::recv_from(sock)?;
-    if !dq.is_empty() {
-        s.send(dq)?;
-    }
-    Ok(())
-}
-
+/// DOCUMENTED SIDE-EFFECT
+/// 1 second timeout on socket read
 pub fn blob_receiver(
     sock: Arc<UdpSocket>,
     exit: &Arc<AtomicBool>,
     s: BlobSender,
 ) -> JoinHandle<()> {
-    //DOCUMENTED SIDE-EFFECT
-    //1 second timeout on socket read
-    let timer = Duration::new(1, 0);
-    sock.set_read_timeout(Some(timer))
-        .expect("set socket timeout");
-    let exit = exit.clone();
-    Builder::new()
-        .name("solana-blob_receiver".to_string())
-        .spawn(move || loop {
-            if exit.load(Ordering::Relaxed) {
-                break;
-            }
-            let _ = recv_blobs(&sock, &s);
-        })
-        .unwrap()
+    receiver::<SharedBlobs>(sock, exit, s)
 }
 
 fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender) -> Result<()> {
@@ -140,7 +130,8 @@ fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender) -> Result<()> {
     let meta = Meta::default();
     let serialized_meta_size = bincode::serialized_size(&meta)? as usize;
     let serialized_packet_size = serialized_meta_size + PACKET_DATA_SIZE;
-    let blobs = Blob::recv_from(sock)?;
+    let mut blobs = SharedBlobs::default();
+    blobs.recv_from(sock)?;
     for blob in blobs {
         let r_blob = blob.read().unwrap();
         let data = {
@@ -162,13 +153,13 @@ fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender) -> Result<()> {
     Ok(())
 }
 
+/// DOCUMENTED SIDE-EFFECT
+/// 1 second timeout on socket read
 pub fn blob_packet_receiver(
     sock: Arc<UdpSocket>,
     exit: &Arc<AtomicBool>,
     s: PacketSender,
 ) -> JoinHandle<()> {
-    //DOCUMENTED SIDE-EFFECT
-    //1 second timeout on socket read
     let timer = Duration::new(1, 0);
     sock.set_read_timeout(Some(timer))
         .expect("set socket timeout");
