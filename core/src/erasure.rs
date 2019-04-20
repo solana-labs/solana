@@ -225,13 +225,11 @@ impl CodingGenerator {
                 let index = data_blob.index();
                 let slot = data_blob.slot();
                 let id = data_blob.id();
-                let should_forward = data_blob.should_forward();
 
                 let mut coding_blob = Blob::default();
                 coding_blob.set_index(index);
                 coding_blob.set_slot(slot);
                 coding_blob.set_id(&id);
-                coding_blob.forward(should_forward);
                 coding_blob.set_size(max_data_size);
                 coding_blob.set_coding();
 

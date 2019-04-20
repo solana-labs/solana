@@ -647,13 +647,17 @@ impl ClusterInfo {
         peers: &[ContactInfo],
         blob: &SharedBlob,
         s: &UdpSocket,
+        forwarded: bool,
     ) -> Result<()> {
         let (me, orders): (ContactInfo, &[ContactInfo]) = {
             // copy to avoid locking during IO
             let s = obj.read().unwrap();
             (s.my_data().clone(), peers)
         };
-        let rblob = blob.read().unwrap();
+        // hold a write lock so no one modifies the blob until we send it
+        let mut wblob = blob.write().unwrap();
+        let was_forwarded = !wblob.should_forward();
+        wblob.set_forwarded(forwarded);
         trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders
             .par_iter()
@@ -661,15 +665,17 @@ impl ClusterInfo {
                 debug!(
                     "{}: retransmit blob {} to {} {}",
                     me.id,
-                    rblob.index(),
+                    wblob.index(),
                     v.id,
                     v.tvu,
                 );
                 //TODO profile this, may need multiple sockets for par_iter
-                assert!(rblob.meta.size <= BLOB_SIZE);
-                s.send_to(&rblob.data[..rblob.meta.size], &v.tvu)
+                assert!(wblob.meta.size <= BLOB_SIZE);
+                s.send_to(&wblob.data[..wblob.meta.size], &v.tvu)
             })
             .collect();
+        // reset the blob to its old state. This avoids us having to copy the blob to modify it
+        wblob.set_forwarded(was_forwarded);
         for e in errs {
             if let Err(e) = &e {
                 inc_new_counter_info!("cluster_info-retransmit-send_to_error", 1, 1);
@@ -683,9 +689,14 @@ impl ClusterInfo {
     /// retransmit messages from the leader to layer 1 nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
-    pub fn retransmit(obj: &Arc<RwLock<Self>>, blob: &SharedBlob, s: &UdpSocket) -> Result<()> {
+    pub fn retransmit(
+        obj: &Arc<RwLock<Self>>,
+        blob: &SharedBlob,
+        s: &UdpSocket,
+        forwarded: bool,
+    ) -> Result<()> {
         let peers = obj.read().unwrap().retransmit_peers();
-        ClusterInfo::retransmit_to(obj, &peers, blob, s)
+        ClusterInfo::retransmit_to(obj, &peers, blob, s, forwarded)
     }
 
     fn send_orders(

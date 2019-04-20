@@ -1197,7 +1197,6 @@ where
         .map(|(idx, entry)| {
             let mut b = entry.borrow().to_blob();
             b.set_index(idx as u64);
-            b.forward(true);
             b.set_id(&keypair.pubkey());
             b.set_slot(0);
             b
