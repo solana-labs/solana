@@ -358,6 +358,7 @@ impl AccountsDB {
                 store.remove_account();
             }
         }
+        //TODO: performance here could be improved if AccountsDB::storage was organized by fork
         let dead_forks: HashSet<Fork> = storage
             .values()
             .filter_map(|x| {
@@ -382,6 +383,7 @@ impl AccountsDB {
     }
     fn cleanup_dead_forks(&self, dead_forks: &mut HashSet<Fork>) {
         let mut index = self.accounts_index.write().unwrap();
+        // a fork is not totally dead until it is older than the root
         dead_forks.retain(|fork| *fork < index.last_root);
         for fork in dead_forks.iter() {
             index.cleanup_dead_fork(*fork);
@@ -771,7 +773,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_account_grow() {
         let paths = get_tmp_accounts_path!();
         let accounts = AccountsDB::new(&paths.paths);
