@@ -462,6 +462,7 @@ impl Blocktree {
             .unwrap_or_else(|| ErasureMeta::new(set_index));
 
         erasure_meta.set_coding_present(index, true);
+        erasure_meta.set_size(bytes.len() - BLOB_HEADER_SIZE);
 
         let mut writebatch = self.db.batch()?;
 
@@ -1047,11 +1048,12 @@ impl Blocktree {
         let erasure_meta = self.erasure_meta_cf.get((slot, set_index))?.unwrap();
 
         let start_idx = erasure_meta.start_index();
+        let size = erasure_meta.size();
+
         let (data_end_idx, coding_end_idx) = erasure_meta.end_indexes();
 
         let present = &mut [true; ERASURE_SET_SIZE];
         let mut blobs = Vec::with_capacity(ERASURE_SET_SIZE);
-        let mut size = 0;
 
         for i in start_idx..coding_end_idx {
             if erasure_meta.is_coding_present(i) {
@@ -1061,10 +1063,6 @@ impl Blocktree {
                     .expect("erasure_meta must have no false positives");
 
                 blob_bytes.drain(..BLOB_HEADER_SIZE);
-
-                if size == 0 {
-                    size = blob_bytes.len();
-                }
 
                 blobs.push(blob_bytes);
             } else {

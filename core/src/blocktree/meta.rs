@@ -63,6 +63,8 @@ impl SlotMeta {
 pub struct ErasureMeta {
     /// Which erasure set in the slot this is
     pub set_index: u64,
+    /// Size of shards in this erasure set
+    pub size: usize,
     /// Bitfield representing presence/absence of data blobs
     pub data: u64,
     /// Bitfield representing presence/absence of coding blobs
@@ -80,6 +82,7 @@ impl ErasureMeta {
     pub fn new(set_index: u64) -> ErasureMeta {
         ErasureMeta {
             set_index,
+            size: 0,
             data: 0,
             coding: 0,
         }
@@ -91,6 +94,7 @@ impl ErasureMeta {
             NUM_CODING - self.coding.count_ones() as usize,
         );
         if data_missing > 0 && data_missing + coding_missing <= NUM_CODING {
+            assert!(self.size != 0);
             ErasureMetaStatus::CanRecover
         } else if data_missing == 0 {
             ErasureMetaStatus::DataFull
@@ -110,6 +114,14 @@ impl ErasureMeta {
         } else {
             false
         }
+    }
+
+    pub fn set_size(&mut self, size: usize) {
+        self.size = size;
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
     }
 
     pub fn set_coding_present(&mut self, index: u64, present: bool) {
@@ -193,12 +205,7 @@ fn test_meta_indexes() {
 
 #[test]
 fn test_meta_coding_present() {
-    let set_index = 0;
-    let mut e_meta = ErasureMeta {
-        set_index,
-        data: 0,
-        coding: 0,
-    };
+    let mut e_meta = ErasureMeta::default();
 
     for i in 0..NUM_CODING as u64 {
         e_meta.set_coding_present(i, true);
@@ -221,12 +228,7 @@ fn test_meta_coding_present() {
 
 #[test]
 fn test_erasure_meta_status() {
-    let set_index = 0;
-    let mut e_meta = ErasureMeta {
-        set_index,
-        data: 0,
-        coding: 0,
-    };
+    let mut e_meta = ErasureMeta::default();
 
     assert_eq!(e_meta.status(), ErasureMetaStatus::StillNeed(NUM_DATA));
 
@@ -236,6 +238,7 @@ fn test_erasure_meta_status() {
     assert_eq!(e_meta.status(), ErasureMetaStatus::DataFull);
 
     e_meta.coding = 0x0e;
+    e_meta.size = 1;
     assert_eq!(e_meta.status(), ErasureMetaStatus::DataFull);
 
     e_meta.data = 0b0111_1111_1111_1111;
@@ -263,12 +266,7 @@ fn test_erasure_meta_status() {
 
 #[test]
 fn test_meta_data_present() {
-    let set_index = 0;
-    let mut e_meta = ErasureMeta {
-        set_index,
-        data: 0,
-        coding: 0,
-    };
+    let mut e_meta = ErasureMeta::default();
 
     for i in 0..NUM_DATA as u64 {
         e_meta.set_data_present(i, true);
