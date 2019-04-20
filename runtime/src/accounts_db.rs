@@ -173,7 +173,7 @@ impl AccountsDB {
         let paths = get_paths_vec(&paths);
         AccountsDB {
             accounts_index: RwLock::new(AccountsIndex::default()),
-            storage: RwLock::new(vec![]),
+            storage: RwLock::new(HashMap::new()),
             next_id: AtomicUsize::new(0),
             write_version: AtomicUsize::new(0),
             paths,
@@ -195,7 +195,7 @@ impl AccountsDB {
     }
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
-        for x in self.storage.read().unwrap().iter() {
+        for x in self.storage.read().unwrap().values() {
             if x.fork_id == fork && x.count.load(Ordering::Relaxed) > 0 {
                 return true;
             }
@@ -215,7 +215,7 @@ impl AccountsDB {
             .storage
             .read()
             .unwrap()
-            .iter()
+            .values()
             .filter(|store| store.fork_id == fork_id)
             .cloned()
             .collect();
@@ -252,8 +252,8 @@ impl AccountsDB {
     }
 
     fn get_exclusive_storage(&self, fork_id: Fork) -> Arc<AccountStorageEntry> {
-        let stores = self.storage.write().unwrap();
-        let candidates: Vec<Arc<AccountStorageEntry>> = stores
+        let mut stores = self.storage.write().unwrap();
+        let mut candidates: Vec<Arc<AccountStorageEntry>> = stores
             .values()
             .filter_map(|x| {
                 if x.get_status() == AccountStorageStatus::StorageAvailable && x.fork_id == fork_id {
@@ -302,7 +302,7 @@ impl AccountsDB {
         let is_root = self.accounts_index.read().unwrap().is_root(fork);
         trace!("PURGING {} {}", fork, is_root);
         if !is_root {
-            self.storage.write().unwrap().retain(|k,v| {
+            self.storage.write().unwrap().retain(|_,v| {
                 trace!("PURGING {} {}", v.fork_id, fork);
                 v.fork_id != fork
             });
@@ -316,6 +316,7 @@ impl AccountsDB {
             loop {
                 let rv = self.append_account(&storage, pubkey, account);
                 if let Some(offset) = rv {
+                    storage.add_account();
                     infos.push(AccountInfo {
                         id: storage.id,
                         offset,
@@ -333,7 +334,7 @@ impl AccountsDB {
         infos
     }
 
-    fn update_index(&self, infos: Vec<AccountInfo>) -> Vec<(Fork, AccountInfo)> {
+    fn update_index(&self, fork_id: Fork, infos: Vec<AccountInfo>, accounts: &[(&Pubkey, &Account)]) -> Vec<(Fork, AccountInfo)> {
         let mut index = self.accounts_index.write().unwrap();
         let mut reclaims = vec![];
         for (i, info) in infos.into_iter().enumerate() {
@@ -363,7 +364,7 @@ impl AccountsDB {
     }
     fn cleanup_dead_forks(&self, forks: HashSet<Fork>) {
         let mut index = self.accounts_index.write().unwrap();
-        for fork in dead_forks {
+        for fork in forks {
             index.cleanup_dead_fork(fork);
         }
     }
@@ -371,7 +372,7 @@ impl AccountsDB {
     /// Store the account update.
     pub fn store(&self, fork_id: Fork, accounts: &[(&Pubkey, &Account)]) {
         let infos = self.store_accounts(fork_id, accounts);
-        let reclaims = self.update_index(infos);
+        let reclaims = self.update_index(fork_id, infos, accounts);
         let dead_forks = self.collect_dead_forks(reclaims);
         self.cleanup_dead_forks(dead_forks);
     }
