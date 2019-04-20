@@ -36,6 +36,7 @@ leaderRotation=
 
 buildSshOptions() {
   sshOptions=(
+    -o "ConnectTimeout=20"
     -o "BatchMode=yes"
     -o "StrictHostKeyChecking=no"
     -o "UserKnownHostsFile=/dev/null"

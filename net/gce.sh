@@ -323,8 +323,8 @@ EOF
   fi
 
   if [[ $additionalFullNodeCount -gt 0 ]]; then
-    echo "Looking for additional fullnode instances..."
     for zone in "${zones[@]}"; do
+      echo "Looking for additional fullnode instances in $zone ..."
       cloud_FindInstances "$prefix-$zone-fullnode"
       [[ ${#instances[@]} -gt 0 ]] || {
         echo "Unable to find additional fullnodes"
@@ -386,9 +386,12 @@ delete() {
     if [[ ${#instances[@]} -eq 0 ]]; then
       echo "No instances found matching '$filter'"
     else
-      cloud_DeleteInstances true
+      cloud_DeleteInstances true &
     fi
   done
+
+  wait
+
   if $externalNodes; then
     echo "Let's not delete the current configuration file"
   else
