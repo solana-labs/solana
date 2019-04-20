@@ -429,16 +429,28 @@ impl ClusterInfo {
         peers_with_stakes
     }
 
-    fn sorted_retransmit_peers<S: std::hash::BuildHasher>(
+    /// Return sorted Retransmit peers and index of `Self.id()` as if it were in that list
+    fn sorted_peers_and_index<S: std::hash::BuildHasher>(
         &self,
         stakes: &HashMap<Pubkey, u64, S>,
-    ) -> Vec<ContactInfo> {
-        let peers = self.retransmit_peers();
-        let peers_with_stakes: Vec<_> = ClusterInfo::sort_by_stake(&peers, stakes);
-        peers_with_stakes
-            .iter()
-            .map(|(_, peer)| (*peer).clone())
-            .collect()
+    ) -> (usize, Vec<ContactInfo>) {
+        let mut peers = self.retransmit_peers();
+        peers.push(self.lookup(&self.id()).unwrap().clone());
+        let contacts_and_stakes: Vec<_> = ClusterInfo::sort_by_stake(&peers, stakes);
+        let mut index = 0;
+        let peers: Vec<_> = contacts_and_stakes
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, (_, peer))| {
+                if peer.id == self.id() {
+                    index = i;
+                    None
+                } else {
+                    Some(peer)
+                }
+            })
+            .collect();
+        (index, peers)
     }
 
     pub fn sorted_tvu_peers(&self, stakes: &HashMap<Pubkey, u64>) -> Vec<ContactInfo> {
@@ -1397,8 +1409,7 @@ pub fn compute_retransmit_peers<S: std::hash::BuildHasher>(
     hood_size: usize,
     grow: bool,
 ) -> (Vec<ContactInfo>, Vec<ContactInfo>) {
-    let peers = cluster_info.read().unwrap().sorted_retransmit_peers(stakes);
-    let my_id = cluster_info.read().unwrap().id();
+    let (my_index, peers) = cluster_info.read().unwrap().sorted_peers_and_index(stakes);
     //calc num_layers and num_neighborhoods using the total number of nodes
     let (num_layers, layer_indices) =
         ClusterInfo::describe_data_plane(peers.len(), fanout, hood_size, grow);
@@ -1407,16 +1418,8 @@ pub fn compute_retransmit_peers<S: std::hash::BuildHasher>(
         /* single layer data plane */
         (peers, vec![])
     } else {
-        //find my index (my ix is the same as the first node with smaller stake)
-        let my_index = peers
-            .iter()
-            .position(|ci| *stakes.get(&ci.id).unwrap_or(&0) <= *stakes.get(&my_id).unwrap_or(&0));
         //find my layer
-        let locality = ClusterInfo::localize(
-            &layer_indices,
-            hood_size,
-            my_index.unwrap_or(peers.len() - 1),
-        );
+        let locality = ClusterInfo::localize(&layer_indices, hood_size, my_index);
         let upper_bound = cmp::min(locality.neighbor_bounds.1, peers.len());
         let neighbors = peers[locality.neighbor_bounds.0..upper_bound].to_vec();
         let mut children = Vec::new();
