@@ -587,7 +587,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_accountsdb_count_stores() {
         let paths = get_tmp_accounts_path!();
         let db = AccountsDB::new(&paths.paths);
