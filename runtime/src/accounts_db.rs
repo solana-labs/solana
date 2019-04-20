@@ -256,14 +256,15 @@ impl AccountsDB {
         let mut candidates: Vec<Arc<AccountStorageEntry>> = stores
             .values()
             .filter_map(|x| {
-                if x.get_status() == AccountStorageStatus::StorageAvailable && x.fork_id == fork_id {
+                if x.get_status() == AccountStorageStatus::StorageAvailable && x.fork_id == fork_id
+                {
                     Some(x.clone())
                 } else {
                     None
                 }
             })
             .collect();
-        if candidates.len() == 0 {
+        if candidates.is_empty() {
             let path_idx = thread_rng().gen_range(0, self.paths.len());
             let storage = self.new_storage_entry(fork_id, &self.paths[path_idx]);
             candidates.push(Arc::new(storage));
@@ -302,7 +303,7 @@ impl AccountsDB {
         let is_root = self.accounts_index.read().unwrap().is_root(fork);
         trace!("PURGING {} {}", fork, is_root);
         if !is_root {
-            self.storage.write().unwrap().retain(|_,v| {
+            self.storage.write().unwrap().retain(|_, v| {
                 trace!("PURGING {} {}", v.fork_id, fork);
                 v.fork_id != fork
             });
@@ -334,7 +335,12 @@ impl AccountsDB {
         infos
     }
 
-    fn update_index(&self, fork_id: Fork, infos: Vec<AccountInfo>, accounts: &[(&Pubkey, &Account)]) -> Vec<(Fork, AccountInfo)> {
+    fn update_index(
+        &self,
+        fork_id: Fork,
+        infos: Vec<AccountInfo>,
+        accounts: &[(&Pubkey, &Account)],
+    ) -> Vec<(Fork, AccountInfo)> {
         let mut index = self.accounts_index.write().unwrap();
         let mut reclaims = vec![];
         for (i, info) in infos.into_iter().enumerate() {
@@ -737,7 +743,7 @@ mod tests {
             );
         }
 
-        let mut append_vec_histogram = HashMap::new();           
+        let mut append_vec_histogram = HashMap::new();
         for storage in accounts.storage.read().unwrap().values() {
             *append_vec_histogram.entry(storage.fork_id).or_insert(0) += 1;
         }
