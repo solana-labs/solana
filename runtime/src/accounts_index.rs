@@ -9,7 +9,7 @@ pub struct AccountsIndex<T> {
     account_maps: HashMap<Pubkey, Vec<(Fork, T)>>,
     roots: HashSet<Fork>,
     //This value that needs to be stored to recover the index from AppendVec
-    last_root: Fork,
+    pub last_root: Fork,
 }
 
 impl<T: Clone> AccountsIndex<T> {
@@ -59,7 +59,7 @@ impl<T: Clone> AccountsIndex<T> {
         };
         rv
     }
-    fn is_purged(&self, fork: Fork) -> bool {
+    pub fn is_purged(&self, fork: Fork) -> bool {
         !self.is_root(fork) && fork < self.last_root
     }
     pub fn is_root(&self, fork: Fork) -> bool {
