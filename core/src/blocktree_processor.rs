@@ -12,7 +12,7 @@ use solana_sdk::timing::MAX_RECENT_BLOCKHASHES;
 use solana_sdk::transaction::{Result, TransactionError};
 use std::result;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
@@ -141,9 +141,15 @@ pub fn process_blocktree(
     let leader_schedule_cache = LeaderScheduleCache::new(*pending_slots[0].2.epoch_schedule());
 
     let mut fork_info = vec![];
+    let mut last_status_report = Instant::now();
     while !pending_slots.is_empty() {
         let (slot, meta, bank, mut entry_height, mut last_entry_hash) =
             pending_slots.pop().unwrap();
+
+        if last_status_report.elapsed() > Duration::from_secs(2) {
+            info!("processing ledger...block {}", slot);
+            last_status_report = Instant::now();
+        }
 
         // Fetch all entries for this slot
         let mut entries = blocktree.get_slot_entries(slot, 0, None).map_err(|err| {
@@ -248,7 +254,7 @@ pub fn process_blocktree(
     let (banks, bank_forks_info): (Vec<_>, Vec<_>) = fork_info.into_iter().unzip();
     let bank_forks = BankForks::new_from_banks(&banks);
     info!(
-        "processed ledger in {}ms, forks={}...",
+        "processing ledger...complete in {}ms, forks={}...",
         duration_as_ms(&now.elapsed()),
         bank_forks_info.len(),
     );
