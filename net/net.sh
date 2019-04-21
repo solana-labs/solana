@@ -167,6 +167,7 @@ numClients=${#clientIpList[@]}
 numClientsRequested=$((numBenchTpsClients+numBenchExchangeClients))
 if [[ "$numClientsRequested" -eq 0 ]]; then
   numBenchTpsClients=$numClients
+  numClientsRequested=$((numBenchTpsClients+numBenchExchangeClients))
 else
   if [[ "$numClientsRequested" -gt "$numClients" ]]; then
     echo "Error: More clients requested ($numClientsRequested) then available ($numClients)"
