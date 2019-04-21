@@ -20,8 +20,8 @@ Since the beta testnet is not intended for stress testing of max transaction
 throughput, a higher-end machine with a GPU is not necessary to participate.
 
 However ensure the machine used is not behind a residential NAT to avoid NAT
-traversal issues.  A cloud-hosted machine works best.  Ensure that IP ports
-8000 through 10000 are not blocked for Internet traffic.
+traversal issues.  A cloud-hosted machine works best.  **Ensure that IP ports
+8000 through 10000 are not blocked for Internet inbound and outbound traffic.**
 
 Prebuilt binaries are available for Linux x86_64 (Ubuntu 18.04 recommended).
 MacOS or WSL users may build from source.
