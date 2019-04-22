@@ -20,6 +20,12 @@ https://buildkite.com/solana-labs/publish-metrics-dashboard.
 Dashboard updates are accomplished by modifying `metrics/testnet-monitor.json`,
 **manual edits made directly in Grafana will be overwritten**.
 
+* Check out metrics to add at https://metrics.solana.com:8888/ in the data explorer.
+* When editing a query for a dashboard graph, use the "Toggle Edit Mode" selection
+  behind the hamburger button to use raw SQL and copy the query into the text field.
+  You may have to fixup the query with the dashboard variables like $testnet or $timeFilter,
+  check other functioning fields in the dashboard for examples.
+
 1. Open the desired dashboard in Grafana
 2. Create a development copy of the dashboard by selecting `Save As..` in the
    `Settings` menu for the dashboard
