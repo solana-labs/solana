@@ -20,9 +20,6 @@ pub struct TradeRequestInfo {
     /// The price ratio the primary price over the secondary price.  The primary price is fixed
     /// and equal to the variable `SCALER`.
     pub price: u64,
-
-    /// Token account to deposit tokens on successful swap
-    pub dst_account: Pubkey,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -40,8 +37,8 @@ pub enum ExchangeInstruction {
 
     /// Trade request
     /// key 0 - Signer
-    /// key 1 - Account in which to record the swap
-    /// key 2 - Token account associated with this trade
+    /// key 1 - Account in which to record the trade order
+    /// key 2 - Token account to source tokens from
     TradeRequest(TradeRequestInfo),
 
     /// Trade cancellation
@@ -51,11 +48,8 @@ pub enum ExchangeInstruction {
 
     /// Trade swap request
     /// key 0 - Signer
-    /// key 1 - Account in which to record the swap
     /// key 2 - 'To' trade order
     /// key 3 - `From` trade order
-    /// key 4 - Token account associated with the To Trade
-    /// key 5 - Token account associated with From trade
     /// key 6 - Token account in which to deposit the brokers profit from the swap.
     SwapRequest,
 }
@@ -95,7 +89,6 @@ pub fn trade_request(
     tokens: u64,
     price: u64,
     src_account: &Pubkey,
-    dst_account: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*owner, true),
@@ -109,37 +102,29 @@ pub fn trade_request(
             pair,
             tokens,
             price,
-            dst_account: *dst_account,
         }),
         account_metas,
     )
 }
 
-pub fn trade_cancellation(owner: &Pubkey, trade: &Pubkey, account: &Pubkey) -> Instruction {
+pub fn trade_cancellation(owner: &Pubkey, trade: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*owner, true),
         AccountMeta::new(*trade, false),
-        AccountMeta::new(*account, false),
     ];
     Instruction::new(id(), &ExchangeInstruction::TradeCancellation, account_metas)
 }
 
 pub fn swap_request(
     owner: &Pubkey,
-    swap: &Pubkey,
     to_trade: &Pubkey,
     from_trade: &Pubkey,
-    to_trade_account: &Pubkey,
-    from_trade_account: &Pubkey,
     profit_account: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*owner, true),
-        AccountMeta::new(*swap, false),
         AccountMeta::new(*to_trade, false),
         AccountMeta::new(*from_trade, false),
-        AccountMeta::new(*to_trade_account, false),
-        AccountMeta::new(*from_trade_account, false),
         AccountMeta::new(*profit_account, false),
     ];
     Instruction::new(id(), &ExchangeInstruction::SwapRequest, account_metas)

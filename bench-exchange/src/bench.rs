@@ -96,7 +96,7 @@ where
     let clients: Vec<_> = clients.into_iter().map(Arc::new).collect();
     let client = clients[0].as_ref();
 
-    let total_keys = accounts_in_groups as u64 * 5;
+    let total_keys = accounts_in_groups as u64 * 4;
     info!("Generating {:?} keys", total_keys);
     let mut keypairs = generate_keypairs(total_keys);
     let trader_signers: Vec<_> = keypairs
@@ -108,10 +108,6 @@ where
         .map(Arc::new)
         .collect();
     let src_pubkeys: Vec<_> = keypairs
-        .drain(0..accounts_in_groups)
-        .map(|keypair| keypair.pubkey())
-        .collect();
-    let dst_pubkeys: Vec<_> = keypairs
         .drain(0..accounts_in_groups)
         .map(|keypair| keypair.pubkey())
         .collect();
@@ -127,8 +123,6 @@ where
 
     info!("Create {:?} source token accounts", src_pubkeys.len());
     create_token_accounts(client, &trader_signers, &src_pubkeys);
-    info!("Create {:?} destination token accounts", dst_pubkeys.len());
-    create_token_accounts(client, &trader_signers, &dst_pubkeys);
     info!("Create {:?} profit token accounts", profit_pubkeys.len());
     create_token_accounts(client, &swapper_signers, &profit_pubkeys);
 
@@ -216,7 +210,6 @@ where
                     &shared_tx_active_thread_count,
                     &trader_signers,
                     &src_pubkeys,
-                    &dst_pubkeys,
                     trade_delay,
                     batch_size,
                     account_groups,
@@ -432,18 +425,16 @@ fn swapper<T>(
             stats.total += swaps_size as u64;
 
             let now = Instant::now();
-            let swap_keys = generate_keypairs(swaps_size as u64);
 
             let mut to_swap = vec![];
             let start = account_group * swaps_size as usize;
             let end = account_group * swaps_size as usize + batch_size as usize;
-            for (signer, swap, swap_key, profit) in izip!(
+            for (signer, swap, profit) in izip!(
                 signers[start..end].iter(),
                 swaps,
-                swap_keys,
                 profit_pubkeys[start..end].iter(),
             ) {
-                to_swap.push((signer, swap_key, swap, profit));
+                to_swap.push((signer, swap, profit));
             }
             account_group = (account_group + 1) % account_groups as usize;
             let duration = now.elapsed();
@@ -471,30 +462,17 @@ fn swapper<T>(
 
             let to_swap_txs: Vec<_> = to_swap
                 .par_iter()
-                .map(|(signer, swap_key, swap, profit)| {
+                .map(|(signer, swap, profit)| {
                     let s: &Keypair = &signer;
                     let owner = &signer.pubkey();
-                    let space = mem::size_of::<ExchangeState>() as u64;
                     Transaction::new_signed_instructions(
                         &[s],
-                        vec![
-                            system_instruction::create_account(
-                                owner,
-                                &swap_key.pubkey(),
-                                1,
-                                space,
-                                &id(),
-                            ),
-                            exchange_instruction::swap_request(
-                                owner,
-                                &swap_key.pubkey(),
-                                &swap.0.pubkey,
-                                &swap.1.pubkey,
-                                &swap.0.info.dst_account,
-                                &swap.1.info.dst_account,
-                                &profit,
-                            ),
-                        ],
+                        vec![exchange_instruction::swap_request(
+                            owner,
+                            &swap.0.pubkey,
+                            &swap.1.pubkey,
+                            &profit,
+                        )],
                         blockhash,
                     )
                 })
@@ -562,7 +540,6 @@ fn trader<T>(
     shared_tx_active_thread_count: &Arc<AtomicIsize>,
     signers: &[Arc<Keypair>],
     srcs: &[Pubkey],
-    dsts: &[Pubkey],
     delay: u64,
     batch_size: usize,
     account_groups: usize,
@@ -593,11 +570,10 @@ fn trader<T>(
         let start = account_group * batch_size as usize;
         let end = account_group * batch_size as usize + batch_size as usize;
         let mut direction = Direction::To;
-        for (signer, trade, src, dst) in izip!(
+        for (signer, trade, src) in izip!(
             signers[start..end].iter(),
             trade_keys,
             srcs[start..end].iter(),
-            dsts[start..end].iter()
         ) {
             direction = if direction == Direction::To {
                 Direction::From
@@ -611,14 +587,13 @@ fn trader<T>(
                 pair,
                 tokens,
                 price,
-                src_account: Pubkey::default(), // don't care
-                dst_account: *dst,
+                tokens_settled: 0,
             };
             trade_infos.push(TradeInfo {
                 trade_account: trade.pubkey(),
                 order_info,
             });
-            trades.push((signer, trade.pubkey(), direction, src, dst));
+            trades.push((signer, trade.pubkey(), direction, src));
         }
         account_group = (account_group + 1) % account_groups as usize;
         let duration = now.elapsed();
@@ -647,7 +622,7 @@ fn trader<T>(
 
             let trades_txs: Vec<_> = chunk
                 .par_iter()
-                .map(|(signer, trade, direction, src, dst)| {
+                .map(|(signer, trade, direction, src)| {
                     let s: &Keypair = &signer;
                     let owner = &signer.pubkey();
                     let space = mem::size_of::<ExchangeState>() as u64;
@@ -656,7 +631,7 @@ fn trader<T>(
                         vec![
                             system_instruction::create_account(owner, trade, 1, space, &id()),
                             exchange_instruction::trade_request(
-                                owner, trade, *direction, pair, tokens, price, src, dst,
+                                owner, trade, *direction, pair, tokens, price, src,
                             ),
                         ],
                         blockhash,
