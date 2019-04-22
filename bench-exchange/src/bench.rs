@@ -259,15 +259,16 @@ fn sample_tx_count<T>(
     let first_tx_count = initial_tx_count;
 
     loop {
-        let tx_count = client.get_transaction_count().expect("transaction count");
+        let mut tx_count = client.get_transaction_count().expect("transaction count");
         let duration = now.elapsed();
         now = Instant::now();
-        assert!(
-            tx_count >= initial_tx_count,
-            "expected tx_count({}) >= initial_tx_count({})",
-            tx_count,
-            initial_tx_count
-        );
+        if tx_count < initial_tx_count {
+            println!(
+                "expected tx_count({}) >= initial_tx_count({})",
+                tx_count, initial_tx_count
+            );
+            tx_count = initial_tx_count;
+        }
         let sample = tx_count - initial_tx_count;
         initial_tx_count = tx_count;
 
@@ -725,7 +726,7 @@ where
     for s in &tx.signatures {
         if let Ok(Some(r)) = sync_client.get_signature_status(s) {
             match r {
-                Ok(x) => {
+                Ok(_) => {
                     return true;
                 }
                 Err(e) => {
