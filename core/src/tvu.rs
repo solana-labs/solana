@@ -102,7 +102,7 @@ impl Tvu {
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
         let retransmit_stage = RetransmitStage::new(
-            &bank_forks,
+            bank_forks.clone(),
             blocktree.clone(),
             &cluster_info,
             Arc::new(retransmit_socket),
