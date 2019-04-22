@@ -21,7 +21,6 @@ use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_sdk::client::{AsyncClient, SyncClient};
-
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction;
@@ -235,6 +234,7 @@ impl Replicator {
         let (retransmit_sender, retransmit_receiver) = channel();
 
         let window_service = WindowService::new(
+            None, //TODO: need a way to validate blobs... https://github.com/solana-labs/solana/issues/3924
             blocktree.clone(),
             cluster_info.clone(),
             blob_fetch_receiver,

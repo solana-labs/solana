@@ -71,6 +71,7 @@ fn retransmitter(
     cluster_info: Arc<RwLock<ClusterInfo>>,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
+    let bank_forks = bank_forks.clone();
     Builder::new()
         .name("solana-retransmitter".to_string())
         .spawn(move || {
@@ -99,7 +100,7 @@ pub struct RetransmitStage {
 impl RetransmitStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
-        bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: Arc<RwLock<BankForks>>,
         blocktree: Arc<Blocktree>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         retransmit_socket: Arc<UdpSocket>,
@@ -116,6 +117,7 @@ impl RetransmitStage {
             retransmit_receiver,
         );
         let window_service = WindowService::new(
+            Some(bank_forks),
             blocktree,
             cluster_info.clone(),
             fetch_stage_receiver,
