@@ -1039,6 +1039,11 @@ impl Blocktree {
         if blob_index < slot_meta.consumed
             || prev_inserted_blob_datas.contains_key(&(blob_slot, blob_index))
         {
+            trace!(
+                "insert_data_blob: BlocktreeError::BlobForIndexExists: blob_index={} blob_slot={}",
+                blob_index,
+                blob_slot
+            );
             return Err(Error::BlocktreeError(BlocktreeError::BlobForIndexExists));
         }
 
@@ -1062,17 +1067,7 @@ impl Blocktree {
             }
         };
 
-        let serialized_blob_data = &blob_to_insert.data[..BLOB_HEADER_SIZE + blob_size];
-
-        // Commit step: commit all changes to the mutable structures at once, or none at all.
-        // We don't want only some of these changes going through.
-        write_batch.put_bytes::<cf::Data>((blob_slot, blob_index), serialized_blob_data)?;
-        prev_inserted_blob_datas.insert((blob_slot, blob_index), serialized_blob_data);
-        // Index is zero-indexed, while the "received" height starts from 1,
-        // so received = index + 1 for the same blob.
-        slot_meta.received = cmp::max(blob_index + 1, slot_meta.received);
-        slot_meta.consumed = new_consumed;
-        slot_meta.last_index = {
+        let new_last_index = {
             // If the last slot hasn't been set before, then
             // set it to this blob index
             if slot_meta.last_index == std::u64::MAX {
@@ -1085,6 +1080,28 @@ impl Blocktree {
                 slot_meta.last_index
             }
         };
+
+        // Ensure that inserting this (potentially invalid) blob won't trigger the assert in
+        // SlotMeta::is_full()
+        if new_last_index < std::u64::MAX && new_consumed > new_last_index + 1 {
+            info!(
+                "insert_data_blob: BlocktreeError::InvalidBlobData: blob_index={} blob_slot={}",
+                blob_index, blob_slot
+            );
+            return Err(Error::BlocktreeError(BlocktreeError::InvalidBlobData));
+        }
+
+        let serialized_blob_data = &blob_to_insert.data[..BLOB_HEADER_SIZE + blob_size];
+
+        // Commit step: commit all changes to the mutable structures at once, or none at all.
+        // We don't want only some of these changes going through.
+        write_batch.put_bytes::<cf::Data>((blob_slot, blob_index), serialized_blob_data)?;
+        prev_inserted_blob_datas.insert((blob_slot, blob_index), serialized_blob_data);
+        // Index is zero-indexed, while the "received" height starts from 1,
+        // so received = index + 1 for the same blob.
+        slot_meta.received = cmp::max(blob_index + 1, slot_meta.received);
+        slot_meta.consumed = new_consumed;
+        slot_meta.last_index = new_last_index;
         Ok(())
     }
 
