@@ -306,8 +306,7 @@ while [[ $iteration -le $iterations ]]; do
     set -x
     client_id=/tmp/client-id.json-$$
     $solana_keygen -o $client_id || exit $?
-    $solana_gossip \
-      --num-nodes-exactly $numNodes || exit $?
+    $solana_gossip spy --num-nodes-exactly $numNodes || exit $?
     rm -rf $client_id
   ) || flag_error
 

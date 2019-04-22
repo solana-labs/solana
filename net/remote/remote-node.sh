@@ -81,12 +81,13 @@ local|tar)
     fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
 
-    maybePublicAddress=
+    args=()
     if $publicNetwork; then
-      maybePublicAddress="--public-address"
+      args+=(--public-address)
     fi
+    args+=(--enable-rpc-exit)
 
-    ./multinode-demo/bootstrap-leader.sh $maybePublicAddress > bootstrap-leader.log 2>&1 &
+    ./multinode-demo/bootstrap-leader.sh "${args[@]}" > bootstrap-leader.log 2>&1 &
     ln -sTf bootstrap-leader.log fullnode.log
     ;;
   fullnode|blockstreamer)
@@ -116,6 +117,7 @@ local|tar)
     fi
 
     args+=(
+      --enable-rpc-exit
       --gossip-port 8001
       --rpc-port 8899
     )
@@ -147,7 +149,9 @@ local|tar)
       # Confirm the blockexplorer is now globally accessible
       curl --head "$(curl ifconfig.io)"
     fi
-    ./multinode-demo/fullnode.sh "${args[@]}" "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
+
+    args+=("$entrypointIp":~/solana "$entrypointIp:8001")
+    ./multinode-demo/fullnode.sh "${args[@]}" > fullnode.log 2>&1 &
     ;;
   *)
     echo "Error: unknown node type: $nodeType"
