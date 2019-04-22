@@ -20,11 +20,11 @@ cloud_DefaultZone() {
 cloud_GetConfigValueFromInstanceName() {
   query="[?name=='$1']"
   key="[$2]"
-  config_value=`az vm list -d -o tsv --query "$query.$key"`
+  config_value=$(az vm list -d -o tsv --query "$query.$key")
 }
 
 cloud_GetResourceGroupFromInstance() {
-  resourceGroup=`az vm list -o tsv --query "[?name=='$1'].[resourceGroup]"`
+  resourceGroup=$(az vm list -o tsv --query "[?name=='$1'].[resourceGroup]")
 }
 
 #
@@ -88,7 +88,7 @@ __cloud_FindInstances() {
 #   $ cloud_FindInstances all-machines-with-a-common-machine-prefix
 #
 cloud_FindInstances() {
-  __cloud_FindInstances prefix $1
+  __cloud_FindInstances prefix "$1"
 }
 
 #
@@ -106,7 +106,7 @@ cloud_FindInstances() {
 #   $ cloud_FindInstance exact-machine-name
 #
 cloud_FindInstance() {
-  __cloud_FindInstances name $1
+  __cloud_FindInstances name "$1"
 }
 
 #
@@ -179,11 +179,11 @@ cloud_CreateInstances() {
 
   declare -a args
   args=(
-    --resource-group $networkName
+    --resource-group "$networkName"
     --tags testnet
-    --image $imageName
-    --size $machineType
-    --location $zone
+    --image "$imageName"
+    --size "$machineType"
+    --location "$zone"
     --generate-ssh-keys
   )
 
@@ -215,18 +215,19 @@ cloud_CreateInstances() {
   (
   set -x
     # 1: Check if resource group exists.  If not, create it.
-    numGroup=`az group list --query "length([?name=='$networkName'])"`
+    numGroup=$(az group list --query "length([?name=='$networkName'])")
     if [[ $numGroup -eq 0 ]]; then
       echo Resource Group "$networkName" does not exist.  Creating it now.
-      az group create --name $networkName --location $zone
+      az group create --name "$networkName" --location "$zone"
     else
       echo Resource group "$networkName" already exists.
-      az group show --name $networkName
+      az group show --name "$networkName"
     fi
 
     # 2: For node in numNodes, create VM
+    # shellcheck disable=SC2068
     for nodeName in ${nodes[@]}; do
-      az vm create --name $nodeName "${args[@]}" --verbose
+      az vm create --name "$nodeName" "${args[@]}" --verbose
     done
   )
 }
@@ -248,8 +249,8 @@ cloud_DeleteInstances() {
   (
     set -x
     for instance in ${names[@]}; do
-      cloud_GetResourceGroupFromInstance $instance
-      az vm delete --name $instance --resource-group $resourceGroup --no-wait --yes --verbose
+      cloud_GetResourceGroupFromInstance "$instance"
+      az vm delete --name "$instance" --resource-group "$resourceGroup" --no-wait --yes --verbose
     done
   )
 }
@@ -263,13 +264,12 @@ cloud_DeleteInstances() {
 #
 cloud_FetchFile() {
   declare instanceName="$1"
-  # shellcheck disable=SC2034 # publicIp is unused
   declare publicIp="$2"
   declare remoteFile="$3"
   declare localFile="$4"
-  declare zone="$5"
+#  declare zone="$5"
 
-  cloud_GetConfigValueFromInstanceName "$nodeName" osProfile.adminUsername
+  cloud_GetConfigValueFromInstanceName "$instanceName" osProfile.adminUsername
   scp "$config_value"@"$publicIp:$remoteFile" "$localFile"
 
 }
