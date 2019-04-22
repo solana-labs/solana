@@ -72,7 +72,7 @@ fn process_blobs(blobs: &[SharedBlob], blocktree: &Arc<Blocktree>) -> Result<()>
 /// drop blobs that are from myself or not from the correct leader for the
 ///  blob's slot
 fn should_retransmit_and_persist(blob: &Blob, bank: Option<&Arc<Bank>>, my_id: &Pubkey) -> bool {
-    let slot_leader_id = bank.map_or(None, |bank| slot_leader_at(blob.slot(), &bank));
+    let slot_leader_id = bank.and_then(|bank| slot_leader_at(blob.slot(), &bank));
 
     if blob.id() == *my_id {
         inc_new_counter_info!("streamer-recv_window-circular_transmission", 1);
