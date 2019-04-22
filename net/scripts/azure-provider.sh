@@ -2,7 +2,7 @@
 #
 # Utilities for working with Azure instances
 #
-set -x
+
 # Default zone
 cloud_DefaultZone() {
   echo "westus"
@@ -23,8 +23,11 @@ cloud_GetConfigValueFromInstanceName() {
   config_value=$(az vm list -d -o tsv --query "$query.$key")
 }
 
-cloud_GetResourceGroupFromInstance() {
+cloud_GetResourceGroupFromInstanceName() {
   resourceGroup=$(az vm list -o tsv --query "[?name=='$1'].[resourceGroup]")
+}
+cloud_GetIdFromInstanceName() {
+  id=$(az vm list -o tsv --query "[?name=='$1'].[id]")
 }
 
 #
@@ -70,7 +73,7 @@ __cloud_FindInstances() {
   while read -r name publicIp privateIp location; do
     instances+=("$name:$publicIp:$privateIp:$location")
   done < <(az vm list -d -o tsv --query "$query.$keys")
-  echo ${instances[*]}
+  echo "${instances[*]}"
 }
 
 #
@@ -224,10 +227,14 @@ cloud_CreateInstances() {
       az group show --name "$networkName"
     fi
 
-    # 2: For node in numNodes, create VM
-    # shellcheck disable=SC2068
-    for nodeName in ${nodes[@]}; do
-      az vm create --name "$nodeName" "${args[@]}" --verbose
+    # 2: For node in numNodes, create VM and put the creation process in the background with --no-wait
+    for nodeName in "${nodes[@]}"; do
+      az vm create --name "$nodeName" "${args[@]}" --no-wait
+    done
+
+    # 3: Wait until all nodes are created
+    for nodeName in "${nodes[@]}"; do
+      az vm wait --created --name "$nodeName" --resource-group "$networkName"
     done
   )
 }
@@ -244,17 +251,35 @@ cloud_DeleteInstances() {
   fi
 
   declare names=("${instances[@]/:*/}")
-  declare locations=("${instances[@]/*:/}")
-
   (
     set -x
-    for instance in ${names[@]}; do
-      cloud_GetResourceGroupFromInstance "$instance"
-      az vm delete --name "$instance" --resource-group "$resourceGroup" --no-wait --yes --verbose
+    id_list=()
+
+    # Build a space delimited list of all resource IDs to delete
+    for instance in "${names[@]}"; do
+      cloud_GetIdFromInstanceName "$instance"
+      id_list+=("$id")
     done
+
+    # Delete all instances in the id_list and return once they are all deleted
+    az vm delete --ids "${id_list[@]}" --yes --verbose
   )
 }
 
+#
+# cloud_WaitForInstanceReady [instanceName] [instanceIp] [instanceZone] [timeout]
+#
+# Return once the newly created VM instance is responding.  This function is cloud-provider specific.
+#
+cloud_WaitForInstanceReady() {
+  declare instanceName="$1"
+  declare instanceIp="$2"
+  declare instanceZone="$3"
+  declare timeout="$4"
+
+  cloud_GetResourceGroupFromInstanceName "$instanceName"
+  az vm wait -g "$resourceGroup" -n "$instanceName" --created  --interval 10 --timeout "$timeout"
+}
 
 #
 # cloud_FetchFile [instanceName] [publicIp] [remoteFile] [localFile]
@@ -267,9 +292,8 @@ cloud_FetchFile() {
   declare publicIp="$2"
   declare remoteFile="$3"
   declare localFile="$4"
-#  declare zone="$5"
 
   cloud_GetConfigValueFromInstanceName "$instanceName" osProfile.adminUsername
-  scp "$config_value"@"$publicIp:$remoteFile" "$localFile"
+  scp "${config_value}@${publicIp}:${remoteFile}" "$localFile"
 
 }

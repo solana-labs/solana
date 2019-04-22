@@ -307,18 +307,10 @@ EOF
       declare nodeZone
       IFS=: read -r nodeName nodeIp _ nodeZone < <(echo "${instances[0]}")
 
-      # Try to ping the machine first.  Azure machines cannot be pinged due to the Azure load balancer blocking ICMP
-      case $cloudProvider in
-        gce)
-          timeout 90s bash -c "set -o pipefail; until ping -c 3 $nodeIp | tr - _; do echo .; done"
-          ;;
-        ec2)
-          timeout 90s bash -c "set -o pipefail; until ping -c 3 $nodeIp | tr - _; do echo .; done"
-          ;;
-        azure)
-          # TODO: Find a better way to assess if the Azure VM is alive
-          ;;
-        esac
+      # Make sure the machine is alive or pingable
+      tiemout_sec=90
+      cloud_WaitForInstanceReady "$nodeName" "$nodeIp" "$nodeZone" "$timeout_sec"
+
       if [[ ! -r $sshPrivateKey ]]; then
         echo "Fetching $sshPrivateKey from $nodeName"
 
