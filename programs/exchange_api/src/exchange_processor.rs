@@ -4,6 +4,7 @@ use crate::exchange_instruction::*;
 use crate::exchange_state::*;
 use crate::id;
 use log::*;
+use solana_metrics::counter::Counter;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
@@ -256,6 +257,8 @@ impl ExchangeProcessor {
         // Trade holds the tokens in escrow
         account.tokens[from_token] -= info.tokens;
 
+        inc_new_counter_info!("exchange_processor-trades", 1);
+
         Self::serialize(
             &ExchangeState::Trade(TradeOrderInfo {
                 owner: *keyed_accounts[OWNER_INDEX].unsigned_key(),
@@ -385,6 +388,8 @@ impl ExchangeProcessor {
             );
             Err(e)?
         }
+
+        inc_new_counter_info!("exchange_processor-swap", 1);
 
         Self::serialize(
             &ExchangeState::Swap(swap),

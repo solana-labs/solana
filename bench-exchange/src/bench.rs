@@ -259,15 +259,16 @@ fn sample_tx_count<T>(
     let first_tx_count = initial_tx_count;
 
     loop {
-        let tx_count = client.get_transaction_count().expect("transaction count");
+        let mut tx_count = client.get_transaction_count().expect("transaction count");
         let duration = now.elapsed();
         now = Instant::now();
-        assert!(
-            tx_count >= initial_tx_count,
-            "expected tx_count({}) >= initial_tx_count({})",
-            tx_count,
-            initial_tx_count
-        );
+        if tx_count < initial_tx_count {
+            println!(
+                "expected tx_count({}) >= initial_tx_count({})",
+                tx_count, initial_tx_count
+            );
+            tx_count = initial_tx_count;
+        }
         let sample = tx_count - initial_tx_count;
         initial_tx_count = tx_count;
 
@@ -507,6 +508,13 @@ fn swapper<T>(
             }
             trace!("  sw {:?} signed   {:.2} /s ", n, rate);
 
+            solana_metrics::submit(
+                influxdb::Point::new("bench-exchange")
+                    .add_tag("op", influxdb::Value::String("swaps".to_string()))
+                    .add_field("count", influxdb::Value::Integer(to_swap_txs.len() as i64))
+                    .to_owned(),
+            );
+
             let chunks: Vec<_> = to_swap_txs.chunks(CHUNK_LEN).collect();
             {
                 let mut shared_txs_wl = shared_txs.write().unwrap();
@@ -664,6 +672,13 @@ fn trader<T>(
             }
             trace!("  sw {:?} signed   {:.2} /s ", n, rate);
 
+            solana_metrics::submit(
+                influxdb::Point::new("bench-exchange")
+                    .add_tag("op", influxdb::Value::String("trades".to_string()))
+                    .add_field("count", influxdb::Value::Integer(trades_txs.len() as i64))
+                    .to_owned(),
+            );
+
             let chunks: Vec<_> = trades_txs.chunks(CHUNK_LEN).collect();
             {
                 let mut shared_txs_wl = shared_txs
@@ -709,8 +724,15 @@ where
     T: SyncClient + ?Sized,
 {
     for s in &tx.signatures {
-        if let Ok(Some(_)) = sync_client.get_signature_status(s) {
-            return true;
+        if let Ok(Some(r)) = sync_client.get_signature_status(s) {
+            match r {
+                Ok(_) => {
+                    return true;
+                }
+                Err(e) => {
+                    info!("error: {:?}", e);
+                }
+            }
         }
     }
     false
@@ -799,7 +821,7 @@ pub fn fund_keys(client: &Client, source: &Keypair, dests: &[Arc<Keypair>], lamp
 
                 let mut waits = 0;
                 loop {
-                    sleep(Duration::from_millis(50));
+                    sleep(Duration::from_millis(200));
                     to_fund_txs.retain(|(_, tx)| !verify_transfer(client, &tx));
                     if to_fund_txs.is_empty() {
                         break;
@@ -877,7 +899,7 @@ pub fn create_token_accounts(client: &Client, signers: &[Arc<Keypair>], accounts
 
                 let mut waits = 0;
                 while !to_create_txs.is_empty() {
-                    sleep(Duration::from_millis(50));
+                    sleep(Duration::from_millis(200));
                     to_create_txs.retain(|(_, tx)| !verify_transfer(client, &tx));
                     if to_create_txs.is_empty() {
                         break;
@@ -896,7 +918,7 @@ pub fn create_token_accounts(client: &Client, signers: &[Arc<Keypair>], accounts
                 if !to_create_txs.is_empty() {
                     retries += 1;
                     debug!("  Retry {:?}", retries);
-                    if retries >= 10 {
+                    if retries >= 20 {
                         error!("  Too many retries, give up");
                         exit(1);
                     }
@@ -969,7 +991,7 @@ fn generate_keypairs(num: u64) -> Vec<Keypair> {
 pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, amount: u64) {
     let balance = client.get_balance(&id.pubkey());
     let balance = balance.unwrap_or(0);
-    if balance > amount {
+    if balance >= amount {
         return;
     }
 
@@ -991,7 +1013,13 @@ pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, 
             Ok(transaction) => {
                 let signature = client.async_send_transaction(transaction).unwrap();
 
-                if let Ok(Some(_)) = client.get_signature_status(&signature) {
+                for _ in 0..30 {
+                    if let Ok(Some(_)) = client.get_signature_status(&signature) {
+                        break;
+                    }
+                    sleep(Duration::from_millis(100));
+                }
+                if client.get_balance(&id.pubkey()).unwrap_or(0) >= amount {
                     break;
                 }
             }
@@ -1008,6 +1036,7 @@ pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, 
             error!("Too many retries, give up");
             exit(1);
         }
+        sleep(Duration::from_secs(2));
     }
 }
 

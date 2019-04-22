@@ -2,6 +2,9 @@ pub mod exchange_instruction;
 pub mod exchange_processor;
 pub mod exchange_state;
 
+#[macro_use]
+extern crate solana_metrics;
+
 use solana_sdk::pubkey::Pubkey;
 
 pub const EXCHANGE_PROGRAM_ID: [u8; 32] = [
