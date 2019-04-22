@@ -1,7 +1,9 @@
 //! A command-line executable for monitoring a cluster's gossip plane.
 
-use clap::{crate_description, crate_name, crate_version, App, Arg};
+use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg, SubCommand};
+use solana::contact_info::ContactInfo;
 use solana::gossip_service::discover;
+use solana_client::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use std::error;
 use std::net::SocketAddr;
@@ -22,6 +24,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
+        .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg(
             Arg::with_name("network")
                 .short("n")
@@ -31,38 +34,58 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .default_value(&network_string)
                 .help("Rendezvous with the cluster at this gossip entry point"),
         )
-        .arg(
-            Arg::with_name("num_nodes")
-                .short("N")
-                .long("num-nodes")
-                .value_name("NUM")
-                .takes_value(true)
-                .conflicts_with("num_nodes_exactly")
-                .help("Wait for at least NUM nodes to converge"),
+        .subcommand(
+            SubCommand::with_name("spy")
+                .about("Monitor the gossip network")
+                .setting(AppSettings::DisableVersion)
+                .arg(
+                    Arg::with_name("num_nodes")
+                        .short("N")
+                        .long("num-nodes")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .conflicts_with("num_nodes_exactly")
+                        .help("Wait for at least NUM nodes to converge"),
+                )
+                .arg(
+                    Arg::with_name("num_nodes_exactly")
+                        .short("E")
+                        .long("num-nodes-exactly")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .help("Wait for exactly NUM nodes to converge"),
+                )
+                .arg(
+                    Arg::with_name("node_pubkey")
+                        .short("p")
+                        .long("pubkey")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .validator(pubkey_validator)
+                        .help("Public key of a specific node to wait for"),
+                )
+                .arg(
+                    Arg::with_name("timeout")
+                        .long("timeout")
+                        .value_name("SECS")
+                        .takes_value(true)
+                        .help(
+                            "Maximum time to wait for cluster to converge [default: wait forever]",
+                        ),
+                ),
         )
-        .arg(
-            Arg::with_name("num_nodes_exactly")
-                .short("E")
-                .long("num-nodes-exactly")
-                .value_name("NUM")
-                .takes_value(true)
-                .help("Wait for exactly NUM nodes to converge"),
-        )
-        .arg(
-            Arg::with_name("node_pubkey")
-                .short("p")
-                .long("pubkey")
-                .value_name("PUBKEY")
-                .takes_value(true)
-                .validator(pubkey_validator)
-                .help("Public key of a specific node to wait for"),
-        )
-        .arg(
-            Arg::with_name("timeout")
-                .long("timeout")
-                .value_name("SECS")
-                .takes_value(true)
-                .help("Maximum time to wait for cluster to converge [default: wait forever]"),
+        .subcommand(
+            SubCommand::with_name("stop")
+                .about("Send stop request to a node")
+                .setting(AppSettings::DisableVersion)
+                .arg(
+                    Arg::with_name("node_pubkey")
+                        .index(1)
+                        .required(true)
+                        .value_name("PUBKEY")
+                        .validator(pubkey_validator)
+                        .help("Public key of a specific node to stop"),
+                ),
         )
         .get_matches();
 
@@ -72,48 +95,74 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             exit(1)
         });
     }
+    match matches.subcommand() {
+        ("spy", Some(matches)) => {
+            let num_nodes_exactly = matches
+                .value_of("num_nodes_exactly")
+                .map(|num| num.to_string().parse().unwrap());
+            let num_nodes = matches
+                .value_of("num_nodes")
+                .map(|num| num.to_string().parse().unwrap())
+                .or(num_nodes_exactly);
+            let timeout = matches
+                .value_of("timeout")
+                .map(|secs| secs.to_string().parse().unwrap());
+            let pubkey = matches
+                .value_of("node_pubkey")
+                .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
 
-    let num_nodes_exactly = matches
-        .value_of("num_nodes_exactly")
-        .map(|num| num.to_string().parse().unwrap());
-    let num_nodes = matches
-        .value_of("num_nodes")
-        .map(|num| num.to_string().parse().unwrap())
-        .or(num_nodes_exactly);
-    let timeout = matches
-        .value_of("timeout")
-        .map(|secs| secs.to_string().parse().unwrap());
-    let pubkey = matches
-        .value_of("node_pubkey")
-        .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
+            let nodes = discover(&network_addr, num_nodes, timeout, pubkey)?;
 
-    let nodes = discover(&network_addr, num_nodes, timeout, pubkey)?;
-
-    if timeout.is_some() {
-        if let Some(num) = num_nodes {
-            if nodes.len() < num {
-                let add = if num_nodes_exactly.is_some() {
-                    ""
-                } else {
-                    " or more"
-                };
+            if timeout.is_some() {
+                if let Some(num) = num_nodes {
+                    if nodes.len() < num {
+                        let add = if num_nodes_exactly.is_some() {
+                            ""
+                        } else {
+                            " or more"
+                        };
+                        eprintln!(
+                            "Error: Insufficient nodes discovered.  Expecting {}{}",
+                            num, add,
+                        );
+                    }
+                }
+                if let Some(node) = pubkey {
+                    if nodes.iter().find(|x| x.id == node).is_none() {
+                        eprintln!("Error: Could not find node {:?}", node);
+                    }
+                }
+            }
+            if num_nodes_exactly.is_some() && nodes.len() > num_nodes_exactly.unwrap() {
                 eprintln!(
-                    "Error: Insufficient nodes discovered.  Expecting {}{}",
-                    num, add,
+                    "Error: Extra nodes discovered.  Expecting exactly {}",
+                    num_nodes_exactly.unwrap()
                 );
             }
         }
-        if let Some(node) = pubkey {
-            if nodes.iter().find(|x| x.id == node).is_none() {
-                eprintln!("Error: Could not find node {:?}", node);
+        ("stop", Some(matches)) => {
+            let pubkey = matches
+                .value_of("node_pubkey")
+                .unwrap()
+                .parse::<Pubkey>()
+                .unwrap();
+            let nodes = discover(&network_addr, None, None, Some(pubkey))?;
+            let node = nodes.iter().find(|x| x.id == pubkey).unwrap();
+
+            if !ContactInfo::is_valid_address(&node.rpc) {
+                eprintln!("Error: RPC service is not enabled on node {:?}", pubkey);
+            }
+            println!("\nSending stop request to node {:?}", pubkey);
+
+            let result = RpcClient::new_socket(node.rpc).fullnode_exit()?;
+            if result {
+                println!("Stop signal accepted");
+            } else {
+                eprintln!("Error: Stop signal ignored");
             }
         }
+        _ => unreachable!(),
     }
-    if num_nodes_exactly.is_some() && nodes.len() > num_nodes_exactly.unwrap() {
-        eprintln!(
-            "Error: Extra nodes discovered.  Expecting exactly {}",
-            num_nodes_exactly.unwrap()
-        );
-    }
+
     Ok(())
 }

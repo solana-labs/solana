@@ -89,9 +89,8 @@ echo "+++ $entrypointIp: node count ($numNodes expected)"
     nodeArg="num-nodes-exactly"
   fi
 
-  timeout 2m $solana_gossip \
-    --network "$entrypointIp:8001" \
-    --$nodeArg "$numNodes" \
+  timeout 2m $solana_gossip --network "$entrypointIp:8001" \
+    spy --$nodeArg "$numNodes" \
 )
 
 echo "--- RPC API: getTransactionCount"

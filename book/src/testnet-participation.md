@@ -41,7 +41,7 @@ Inspect the blockexplorer at [http://beta.testnet.solana.com/](http://beta.testn
 
 Run the following command to join the gossip network and view all the other nodes in the cluster:
 ```bash
-$ solana-gossip --network beta.testnet.solana.com:8001
+$ solana-gossip --network beta.testnet.solana.com:8001 spy
 ```
 
 View the [metrics dashboard](
