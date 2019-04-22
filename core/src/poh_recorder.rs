@@ -79,21 +79,31 @@ impl PohRecorder {
         }
     }
 
-    pub fn would_be_leader(&self, within_next_n_slots: u64) -> bool {
-        self.working_bank.as_ref().map_or(false, |working_bank| {
-            if let Some(slot) = self.leader_schedule_cache.next_leader_slot(
-                &self.id,
-                self.start_slot,
-                &working_bank.bank,
-                Some(&self.blocktree),
-            ) {
-                self.start_slot.saturating_add(within_next_n_slots) > slot
-            } else {
-                false
-            }
+    pub fn would_be_leader(&self, within_next_n_slots: u64, ticks_per_slot: u64) -> bool {
+        let close_to_leader_tick = self.start_leader_at_tick.map_or(false, |leader_tick| {
+            let leader_ideal_start_tick =
+                leader_tick.saturating_sub(self.max_last_leader_grace_ticks);
+
+            self.tick_height() <= self.last_leader_tick.unwrap_or(0)
+                && self.tick_height()
+                    >= leader_ideal_start_tick.saturating_sub(within_next_n_slots * ticks_per_slot)
         });
 
-        false
+        self.working_bank
+            .as_ref()
+            .map_or(close_to_leader_tick, |working_bank| {
+                let bank_slot = working_bank.bank.slot();
+                if let Some(slot) = self.leader_schedule_cache.next_leader_slot(
+                    &self.id,
+                    bank_slot.saturating_sub(1),
+                    &working_bank.bank,
+                    Some(&self.blocktree),
+                ) {
+                    bank_slot >= slot.saturating_sub(within_next_n_slots)
+                } else {
+                    close_to_leader_tick
+                }
+            })
     }
 
     pub fn hash(&mut self) {
