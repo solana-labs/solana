@@ -223,10 +223,10 @@ cloud_DeleteInstances() {
 cloud_WaitForInstanceReady() {
   declare instanceName="$1"
   declare instanceIp="$2"
-  declare instanceZone="$3"
+#  declare instanceZone="$3"
   declare timeout="$4"
 
-  timeout ${timeout}s bash -c "set -o pipefail; until ping -c 3 $instanceIp | tr - _; do echo .; done"
+  timeout "${timeout}"s bash -c "set -o pipefail; until ping -c 3 $instanceIp | tr - _; do echo .; done"
 }
 
 #

@@ -273,8 +273,8 @@ cloud_DeleteInstances() {
 #
 cloud_WaitForInstanceReady() {
   declare instanceName="$1"
-  declare instanceIp="$2"
-  declare instanceZone="$3"
+#  declare instanceIp="$2"  # unused
+#  declare instanceZone="$3"  # unused
   declare timeout="$4"
 
   cloud_GetResourceGroupFromInstanceName "$instanceName"
