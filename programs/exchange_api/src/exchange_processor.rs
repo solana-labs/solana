@@ -790,7 +790,7 @@ mod test {
         assert_eq!(
             TokenAccountInfo::default()
                 .owner(&owner.pubkey())
-                .tokens(0, 1, 0, 0),
+                .tokens(1, 0, 0, 0),
             ExchangeProcessor::deserialize_account(&from_trade_account_data).unwrap()
         );
 
