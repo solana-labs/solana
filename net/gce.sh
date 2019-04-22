@@ -308,7 +308,7 @@ EOF
       IFS=: read -r nodeName nodeIp _ nodeZone < <(echo "${instances[0]}")
 
       # Make sure the machine is alive or pingable
-      tiemout_sec=90
+      timeout_sec=90
       cloud_WaitForInstanceReady "$nodeName" "$nodeIp" "$nodeZone" "$timeout_sec"
 
       if [[ ! -r $sshPrivateKey ]]; then
