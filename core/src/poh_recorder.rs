@@ -79,7 +79,7 @@ impl PohRecorder {
         }
     }
 
-    pub fn would_be_leader(&self, num_slots: u64) -> bool {
+    pub fn would_be_leader(&self, within_next_n_slots: u64) -> bool {
         self.working_bank.as_ref().map_or(false, |working_bank| {
             if let Some(slot) = self.leader_schedule_cache.next_leader_slot(
                 &self.id,
@@ -87,7 +87,7 @@ impl PohRecorder {
                 &working_bank.bank,
                 Some(&self.blocktree),
             ) {
-                self.start_slot.saturating_add(num_slots) > slot
+                self.start_slot.saturating_add(within_next_n_slots) > slot
             } else {
                 false
             }

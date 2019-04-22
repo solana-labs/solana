@@ -51,10 +51,12 @@ impl FetchStage {
         sendr: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
-        let (batch, _len, _recv_time) = streamer::recv_batch(&recvr)?;
+        let (batch, _len, _recv_time) = streamer::recv_batch(recvr)?;
         if poh_recorder.lock().unwrap().would_be_leader(1) {
             for packets in batch {
-                sendr.send(packets).unwrap();
+                if sendr.send(packets).is_err() {
+                    return Err(Error::SendError);
+                }
             }
         }
 
@@ -89,9 +91,7 @@ impl FetchStage {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        Error::SendError => {
-                            break;
-                        }
+                        Error::SendError => break,
                         _ => error!("{:?}", e),
                     }
                 }
