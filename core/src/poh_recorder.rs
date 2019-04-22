@@ -79,6 +79,23 @@ impl PohRecorder {
         }
     }
 
+    pub fn would_be_leader(&self, num_slots: u64) -> bool {
+        self.working_bank.as_ref().map_or(false, |working_bank| {
+            if let Some(slot) = self.leader_schedule_cache.next_leader_slot(
+                &self.id,
+                self.start_slot,
+                &working_bank.bank,
+                Some(&self.blocktree),
+            ) {
+                self.start_slot.saturating_add(num_slots) > slot
+            } else {
+                false
+            }
+        });
+
+        false
+    }
+
     pub fn hash(&mut self) {
         // TODO: amortize the cost of this lock by doing the loop in here for
         // some min amount of hashes

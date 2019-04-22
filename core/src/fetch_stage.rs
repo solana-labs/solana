@@ -1,12 +1,14 @@
 //! The `fetch_stage` batches input from a UDP socket and sends it to a channel.
 
+use crate::poh_recorder::PohRecorder;
+use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{self, PacketReceiver, PacketSender};
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::channel;
-use std::sync::Arc;
-use std::thread::{self, JoinHandle};
+use std::sync::mpsc::{channel, RecvTimeoutError};
+use std::sync::{Arc, Mutex};
+use std::thread::{self, Builder, JoinHandle};
 
 pub struct FetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -18,10 +20,11 @@ impl FetchStage {
         sockets: Vec<UdpSocket>,
         tpu_via_blobs_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> (Self, PacketReceiver) {
         let (sender, receiver) = channel();
         (
-            Self::new_with_sender(sockets, tpu_via_blobs_sockets, exit, &sender),
+            Self::new_with_sender(sockets, tpu_via_blobs_sockets, exit, &sender, &poh_recorder),
             receiver,
         )
     }
@@ -30,10 +33,32 @@ impl FetchStage {
         tpu_via_blobs_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
         let tpu_via_blobs_sockets = tpu_via_blobs_sockets.into_iter().map(Arc::new).collect();
-        Self::new_multi_socket(tx_sockets, tpu_via_blobs_sockets, exit, &sender)
+        Self::new_multi_socket(
+            tx_sockets,
+            tpu_via_blobs_sockets,
+            exit,
+            &sender,
+            &poh_recorder,
+        )
+    }
+
+    fn handle_forwarded_packets(
+        recvr: &PacketReceiver,
+        sendr: &PacketSender,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
+    ) -> Result<()> {
+        let (batch, _len, _recv_time) = streamer::recv_batch(&recvr)?;
+        if poh_recorder.lock().unwrap().would_be_leader(1) {
+            for packets in batch {
+                sendr.send(packets).unwrap();
+            }
+        }
+
+        Ok(())
     }
 
     fn new_multi_socket(
@@ -41,16 +66,40 @@ impl FetchStage {
         tpu_via_blobs_sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
         sender: &PacketSender,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Self {
         let tpu_threads = sockets
             .into_iter()
             .map(|socket| streamer::receiver(socket, &exit, sender.clone()));
 
+        let (forward_sender, forward_receiver) = channel();
         let tpu_via_blobs_threads = tpu_via_blobs_sockets
             .into_iter()
-            .map(|socket| streamer::blob_packet_receiver(socket, &exit, sender.clone()));
+            .map(|socket| streamer::blob_packet_receiver(socket, &exit, forward_sender.clone()));
 
-        let thread_hdls: Vec<_> = tpu_threads.chain(tpu_via_blobs_threads).collect();
+        let sender = sender.clone();
+        let poh_recorder = poh_recorder.clone();
+
+        let fwd_thread_hdl = Builder::new()
+            .name("solana-fetch-stage-fwd-rcvr".to_string())
+            .spawn(move || loop {
+                if let Err(e) =
+                    Self::handle_forwarded_packets(&forward_receiver, &sender, &poh_recorder)
+                {
+                    match e {
+                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        Error::SendError => {
+                            break;
+                        }
+                        _ => error!("{:?}", e),
+                    }
+                }
+            })
+            .unwrap();
+
+        let mut thread_hdls: Vec<_> = tpu_threads.chain(tpu_via_blobs_threads).collect();
+        thread_hdls.push(fwd_thread_hdl);
         Self { thread_hdls }
     }
 }
