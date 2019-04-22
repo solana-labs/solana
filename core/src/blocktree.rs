@@ -296,8 +296,8 @@ impl Blocktree {
 
             let slot_meta = &mut entry.0.borrow_mut();
 
-            // This slot is full, skip the bogus blob
-            if slot_meta.is_full() {
+            // Check if this blob should be inserted
+            if !self.should_insert_blob(&slot_meta, &prev_inserted_blob_datas, blob) {
                 continue;
             }
 
@@ -1036,12 +1036,6 @@ impl Blocktree {
         let blob_slot = blob_to_insert.slot();
         let blob_size = blob_to_insert.size();
 
-        if blob_index < slot_meta.consumed
-            || prev_inserted_blob_datas.contains_key(&(blob_slot, blob_index))
-        {
-            return Err(Error::BlocktreeError(BlocktreeError::BlobForIndexExists));
-        }
-
         let new_consumed = {
             if slot_meta.consumed == blob_index {
                 let blob_datas = self.get_slot_consecutive_blobs(
@@ -1275,6 +1269,64 @@ impl Blocktree {
         }
         self.db.write(batch)?;
         Ok(())
+    }
+
+    fn should_insert_blob(
+        &self,
+        slot: &SlotMeta,
+        prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
+        blob: &Blob,
+    ) -> bool {
+        let blob_index = blob.index();
+        let blob_slot = blob.slot();
+
+        // Check that the blob doesn't already exist
+        if blob_index < slot.consumed
+            || prev_inserted_blob_datas.contains_key(&(blob_slot, blob_index))
+            || self
+                .get_data_blob_bytes(blob_slot, blob_index)
+                .unwrap()
+                .is_some()
+        {
+            return false;
+        }
+
+        // Check that we do not receive blobs >= than the last_index
+        // for the slot
+        let last_index = slot.last_index;
+        if blob_index >= last_index {
+            solana_metrics::submit(
+                solana_metrics::influxdb::Point::new("blocktree_invalid_blob_error")
+                    .add_field(
+                        "error",
+                        solana_metrics::influxdb::Value::String(format!(
+                            "Received last blob with index {} >= slot.last_index {}",
+                            blob_index, last_index
+                        )),
+                    )
+                    .to_owned(),
+            );
+            return false;
+        }
+
+        // Check that we do not receive a blob with "last_index" true, but index
+        // less than our current received
+        if blob.is_last_in_slot() && blob_index < slot.received {
+            solana_metrics::submit(
+                solana_metrics::influxdb::Point::new("blocktree_invalid_blob_error")
+                    .add_field(
+                        "error",
+                        solana_metrics::influxdb::Value::String(format!(
+                            "Received last blob with index {} < slot.received {}",
+                            blob_index, slot.received
+                        )),
+                    )
+                    .to_owned(),
+            );
+            return false;
+        }
+
+        true
     }
 }
 
@@ -2660,6 +2712,69 @@ pub mod tests {
                 );
             }
         }
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    pub fn test_should_insert_blob() {
+        let (mut blobs, _) = make_slot_entries(0, 0, 20);
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+        // Insert the first 5 blobs, we don't have a "is_last" blob yet
+        blocktree.insert_data_blobs(&blobs[0..5]).unwrap();
+
+        // Trying to insert a blob less than consumed should fail
+        let slot_meta = blocktree.meta(0).unwrap().unwrap();
+        assert_eq!(slot_meta.consumed, 5);
+        assert!(!blocktree.should_insert_blob(&slot_meta, &HashMap::new(), &blobs[4].clone()));
+
+        // Trying to insert the same blob again should fail
+        blocktree.insert_data_blobs(&blobs[7..8]).unwrap();
+        let slot_meta = blocktree.meta(0).unwrap().unwrap();
+        assert!(!blocktree.should_insert_blob(&slot_meta, &HashMap::new(), &blobs[7].clone()));
+
+        // Trying to insert another "is_last" blob with index < the received index
+        // should fail
+        blocktree.insert_data_blobs(&blobs[8..9]).unwrap();
+        let slot_meta = blocktree.meta(0).unwrap().unwrap();
+        assert_eq!(slot_meta.received, 9);
+        blobs[8].set_is_last_in_slot();
+        assert!(!blocktree.should_insert_blob(&slot_meta, &HashMap::new(), &blobs[8].clone()));
+
+        // Insert the 10th blob, which is marked as "is_last"
+        blobs[9].set_is_last_in_slot();
+        blocktree.insert_data_blobs(&blobs[9..10]).unwrap();
+        let slot_meta = blocktree.meta(0).unwrap().unwrap();
+
+        // Trying to insert a blob with index > the "is_last" blob should fail
+        assert!(!blocktree.should_insert_blob(&slot_meta, &HashMap::new(), &blobs[10].clone()));
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    pub fn test_insert_multiple_is_last() {
+        let (mut blobs, _) = make_slot_entries(0, 0, 20);
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
+        // Inserting multiple blobs with the is_last flag set should only insert
+        // the first blob with the "is_last" flag, and drop the rest
+        for i in 6..20 {
+            blobs[i].set_is_last_in_slot();
+        }
+
+        blocktree.insert_data_blobs(&blobs[..]).unwrap();
+        let slot_meta = blocktree.meta(0).unwrap().unwrap();
+
+        assert_eq!(slot_meta.consumed, 7);
+        assert_eq!(slot_meta.received, 7);
+        assert_eq!(slot_meta.last_index, 6);
+        assert!(slot_meta.is_full());
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
