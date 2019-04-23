@@ -66,7 +66,7 @@ pub fn transfer(
     _fee: u64,
 ) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
-    let move_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
-    let instructions = vec![move_instruction];
+    let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
+    let instructions = vec![transfer_instruction];
     Transaction::new_signed_instructions(&[from_keypair], instructions, recent_blockhash)
 }

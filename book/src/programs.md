@@ -3,8 +3,8 @@
 A client *app* interacts with a Solana cluster by sending it *transactions*
 with one or more *instructions*. The Solana *runtime* passes those instructions
 to user-contributed *programs*. An instruction might, for example, tell a
-program to move *lamports* from one *account* to another or create an interactive
-contract that governs how lamports are moved. Instructions are executed
+program to transfer *lamports* from one *account* to another or create an interactive
+contract that governs how lamports are transfered. Instructions are executed
 atomically. If any instruction is invalid, any changes made within the
 transaction are discarded.
 

@@ -1593,14 +1593,14 @@ mod tests {
         let key2 = Keypair::new();
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let tx_move_mint_to_1 =
+        let tx_transfer_mint_to_1 =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
         trace!("parent process tx ");
-        assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
+        assert_eq!(parent.process_transaction(&tx_transfer_mint_to_1), Ok(()));
         trace!("done parent process tx ");
         assert_eq!(parent.transaction_count(), 1);
         assert_eq!(
-            parent.get_signature_status(&tx_move_mint_to_1.signatures[0]),
+            parent.get_signature_status(&tx_transfer_mint_to_1.signatures[0]),
             Some(Ok(()))
         );
 
@@ -1608,18 +1608,18 @@ mod tests {
         let bank = new_from_parent(&parent);
         trace!("done new form parent");
         assert_eq!(
-            bank.get_signature_status(&tx_move_mint_to_1.signatures[0]),
+            bank.get_signature_status(&tx_transfer_mint_to_1.signatures[0]),
             Some(Ok(()))
         );
 
         assert_eq!(bank.transaction_count(), parent.transaction_count());
-        let tx_move_1_to_2 =
+        let tx_transfer_1_to_2 =
             system_transaction::transfer(&key1, &key2.pubkey(), 1, genesis_block.hash(), 0);
-        assert_eq!(bank.process_transaction(&tx_move_1_to_2), Ok(()));
+        assert_eq!(bank.process_transaction(&tx_transfer_1_to_2), Ok(()));
         assert_eq!(bank.transaction_count(), 2);
         assert_eq!(parent.transaction_count(), 1);
         assert_eq!(
-            parent.get_signature_status(&tx_move_1_to_2.signatures[0]),
+            parent.get_signature_status(&tx_transfer_1_to_2.signatures[0]),
             None
         );
 
@@ -1630,11 +1630,11 @@ mod tests {
             assert_eq!(bank.get_balance(&key2.pubkey()), 1);
             trace!("start");
             assert_eq!(
-                bank.get_signature_status(&tx_move_mint_to_1.signatures[0]),
+                bank.get_signature_status(&tx_transfer_mint_to_1.signatures[0]),
                 Some(Ok(()))
             );
             assert_eq!(
-                bank.get_signature_status(&tx_move_1_to_2.signatures[0]),
+                bank.get_signature_status(&tx_transfer_1_to_2.signatures[0]),
                 Some(Ok(()))
             );
 
@@ -1731,13 +1731,13 @@ mod tests {
         bank.fee_calculator.lamports_per_signature = 2;
         let key = Keypair::new();
 
-        let mut move_instruction =
+        let mut transfer_instruction =
             system_instruction::transfer(&mint_keypair.pubkey(), &key.pubkey(), 0);
-        move_instruction.accounts[0].is_signer = false;
+        transfer_instruction.accounts[0].is_signer = false;
 
         let tx = Transaction::new_signed_instructions(
             &Vec::<&Keypair>::new(),
-            vec![move_instruction],
+            vec![transfer_instruction],
             bank.last_blockhash(),
         );
 
@@ -1813,9 +1813,9 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(500);
         let bank = Arc::new(Bank::new(&genesis_block));
         let key1 = Keypair::new();
-        let tx_move_mint_to_1 =
+        let tx_transfer_mint_to_1 =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
-        assert_eq!(bank.process_transaction(&tx_move_mint_to_1), Ok(()));
+        assert_eq!(bank.process_transaction(&tx_transfer_mint_to_1), Ok(()));
         assert_eq!(bank.is_delta.load(Ordering::Relaxed), true);
     }
 
@@ -1827,9 +1827,9 @@ mod tests {
         assert_eq!(bank.is_votable(), false);
 
         // Set is_delta to true
-        let tx_move_mint_to_1 =
+        let tx_transfer_mint_to_1 =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
-        assert_eq!(bank.process_transaction(&tx_move_mint_to_1), Ok(()));
+        assert_eq!(bank.process_transaction(&tx_transfer_mint_to_1), Ok(()));
         assert_eq!(bank.is_votable(), false);
 
         // Register enough ticks to hit max tick height

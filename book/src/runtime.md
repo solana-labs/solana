@@ -67,7 +67,7 @@ data array and assign it to a Program.
 
 * `Assign` - Allows the user to assign an existing account to a program.
 
-* `Move`  - Moves lamports between accounts.
+* `Transfer`  - Transfers lamports between accounts.
 
 ## Program State Security
 

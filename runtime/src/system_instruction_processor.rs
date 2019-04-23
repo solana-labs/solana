@@ -50,7 +50,10 @@ fn assign_account_to_program(
     keyed_accounts[FROM_ACCOUNT_INDEX].account.owner = *program_id;
     Ok(())
 }
-fn move_lamports(keyed_accounts: &mut [KeyedAccount], lamports: u64) -> Result<(), SystemError> {
+fn transfer_lamports(
+    keyed_accounts: &mut [KeyedAccount],
+    lamports: u64,
+) -> Result<(), SystemError> {
     if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports {
         debug!(
             "Transfer: insufficient lamports ({}, need {})",
@@ -91,7 +94,7 @@ pub fn process_instruction(
                 }
                 assign_account_to_program(keyed_accounts, &program_id)
             }
-            SystemInstruction::Transfer { lamports } => move_lamports(keyed_accounts, lamports),
+            SystemInstruction::Transfer { lamports } => transfer_lamports(keyed_accounts, lamports),
         }
         .map_err(|e| InstructionError::CustomError(e as u32))
     } else {
@@ -249,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn test_move_lamports() {
+    fn test_transfer_lamports() {
         let from = Pubkey::new_rand();
         let mut from_account = Account::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
         let to = Pubkey::new_rand();
@@ -258,7 +261,7 @@ mod tests {
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&to, false, &mut to_account),
         ];
-        move_lamports(&mut keyed_accounts, 50).unwrap();
+        transfer_lamports(&mut keyed_accounts, 50).unwrap();
         let from_lamports = from_account.lamports;
         let to_lamports = to_account.lamports;
         assert_eq!(from_lamports, 50);
@@ -269,7 +272,7 @@ mod tests {
             KeyedAccount::new(&from, true, &mut from_account),
             KeyedAccount::new(&to, false, &mut to_account),
         ];
-        let result = move_lamports(&mut keyed_accounts, 100);
+        let result = transfer_lamports(&mut keyed_accounts, 100);
         assert_eq!(result, Err(SystemError::ResultWithNegativeLamports));
         assert_eq!(from_account.lamports, 50);
         assert_eq!(to_account.lamports, 51);
