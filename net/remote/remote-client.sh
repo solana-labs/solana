@@ -9,6 +9,8 @@ deployMethod="$1"
 entrypointIp="$2"
 clientToRun="$3"
 RUST_LOG="$4"
+benchTpsExtraArgs="$5"
+benchExchangeExtraArgs="$6"
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 
 missing() {
@@ -59,6 +61,7 @@ solana-bench-tps)
       --duration 7500 \
       --sustained \
       --threads $threadCount \
+      $benchTpsExtraArgs \
   "
   ;;
 solana-bench-exchange)
@@ -72,6 +75,7 @@ solana-bench-exchange)
       --fund-amount 20000 \
       --duration 7500 \
       --identity bench.keypair \
+      $benchExchangeExtraArgs \
   "
   ;;
 *)

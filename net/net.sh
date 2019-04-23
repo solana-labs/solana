@@ -72,6 +72,8 @@ updateManifestKeypairFile=
 updateDownloadUrl=
 numBenchTpsClients=0
 numBenchExchangeClients=0
+benchTpsExtraArgs=
+benchExchangeExtraArgs=
 
 command=$1
 [[ -n $command ]] || usage
@@ -128,13 +130,15 @@ while getopts "h?T:t:o:f:rD:i:c:" opt; do
   c)
     getClientTypeAndNum() {
       if ! [[ $OPTARG == *'='* ]]; then
-        echo "Error: Expecting keypair \"clientType=numClientType\" but got \"$OPTARG\""
+        echo "Error: Expecting tuple \"clientType=numClientType=extraArgs\" but got \"$OPTARG\""
         exit 1
       fi
+      set -x
       local keyValue
       IFS='=' read -ra keyValue <<< "$OPTARG"
       local clientType=${keyValue[0]}
       local numClients=${keyValue[1]}
+      local extraArgs=${keyValue[2]}
       re='^[0-9]+$'
       if ! [[ $numClients =~ $re ]] ; then
         echo "error: numClientType must be a number but got \"$numClients\""
@@ -143,9 +147,11 @@ while getopts "h?T:t:o:f:rD:i:c:" opt; do
       case $clientType in
         bench-tps)
           numBenchTpsClients=$numClients
+          benchTpsExtraArgs=$extraArgs
         ;;
         bench-exchange)
           numBenchExchangeClients=$numClients
+          benchExchangeExtraArgs=$extraArgs
         ;;
         *)
           echo "Unknown client type: $clientType"
@@ -310,7 +316,8 @@ startClient() {
     set -x
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
-      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp $clientToRun \"$RUST_LOG\""
+      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \
+      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" \"$benchExchangeExtraArgs\""
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
