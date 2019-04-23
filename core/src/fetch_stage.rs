@@ -107,6 +107,7 @@ impl FetchStage {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        Error::RecvError(_) => break,
                         Error::SendError => break,
                         _ => error!("{:?}", e),
                     }
