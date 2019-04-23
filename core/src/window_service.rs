@@ -4,6 +4,7 @@
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
+use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::leader_schedule_utils::slot_leader_at;
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::repair_service::{RepairService, RepairSlotRange};
@@ -71,8 +72,19 @@ fn process_blobs(blobs: &[SharedBlob], blocktree: &Arc<Blocktree>) -> Result<()>
 
 /// drop blobs that are from myself or not from the correct leader for the
 ///  blob's slot
-fn should_retransmit_and_persist(blob: &Blob, bank: Option<&Arc<Bank>>, my_id: &Pubkey) -> bool {
-    let slot_leader_id = bank.and_then(|bank| slot_leader_at(blob.slot(), &bank));
+fn should_retransmit_and_persist(
+    blob: &Blob,
+    bank: Option<&Arc<Bank>>,
+    leader_schedule_cache: Option<&Arc<LeaderScheduleCache>>,
+    my_id: &Pubkey,
+) -> bool {
+    let slot_leader_id = match bank {
+        None => leader_schedule_cache.and_then(|cache| cache.slot_leader_at(blob.slot())),
+        Some(bank) => match leader_schedule_cache {
+            None => slot_leader_at(blob.slot(), &bank),
+            Some(cache) => cache.slot_leader_at_else_compute(blob.slot(), bank),
+        },
+    };
 
     if blob.id() == *my_id {
         inc_new_counter_info!("streamer-recv_window-circular_transmission", 1);
@@ -90,6 +102,7 @@ fn should_retransmit_and_persist(blob: &Blob, bank: Option<&Arc<Bank>>, my_id: &
 
 fn recv_window(
     bank_forks: Option<&Arc<RwLock<BankForks>>>,
+    leader_schedule_cache: Option<&Arc<LeaderScheduleCache>>,
     blocktree: &Arc<Blocktree>,
     my_id: &Pubkey,
     r: &BlobReceiver,
@@ -110,6 +123,7 @@ fn recv_window(
             bank_forks
                 .map(|bank_forks| bank_forks.read().unwrap().working_bank())
                 .as_ref(),
+            leader_schedule_cache,
             my_id,
         )
     });
@@ -154,6 +168,7 @@ pub struct WindowService {
 impl WindowService {
     pub fn new(
         bank_forks: Option<Arc<RwLock<BankForks>>>,
+        leader_schedule_cache: Option<Arc<LeaderScheduleCache>>,
         blocktree: Arc<Blocktree>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         r: BlobReceiver,
@@ -171,6 +186,7 @@ impl WindowService {
         );
         let exit = exit.clone();
         let bank_forks = bank_forks.clone();
+        let leader_schedule_cache = leader_schedule_cache.clone();
         let t_window = Builder::new()
             .name("solana-window".to_string())
             .spawn(move || {
@@ -181,9 +197,14 @@ impl WindowService {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                    if let Err(e) =
-                        recv_window(bank_forks.as_ref(), &blocktree, &id, &r, &retransmit)
-                    {
+                    if let Err(e) = recv_window(
+                        bank_forks.as_ref(),
+                        leader_schedule_cache.as_ref(),
+                        &blocktree,
+                        &id,
+                        &r,
+                        &retransmit,
+                    ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                             Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -263,23 +284,27 @@ mod test {
         let bank = Arc::new(Bank::new(
             &GenesisBlock::new_with_leader(100, &leader_id, 10).0,
         ));
+        let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         let mut blob = Blob::default();
         blob.set_id(&leader_id);
 
         // without a Bank and blobs not from me, blob continues
-        assert_eq!(should_retransmit_and_persist(&blob, None, &me_id), true);
+        assert_eq!(
+            should_retransmit_and_persist(&blob, None, None, &me_id),
+            true
+        );
 
         // with a Bank for slot 0, blob continues
         assert_eq!(
-            should_retransmit_and_persist(&blob, Some(&bank), &me_id),
+            should_retransmit_and_persist(&blob, Some(&bank), Some(&cache), &me_id),
             true
         );
 
         // set the blob to have come from the wrong leader
         blob.set_id(&Pubkey::new_rand());
         assert_eq!(
-            should_retransmit_and_persist(&blob, Some(&bank), &me_id),
+            should_retransmit_and_persist(&blob, Some(&bank), Some(&cache), &me_id),
             false
         );
 
@@ -287,13 +312,16 @@ mod test {
         // TODO: persistr in blocktree that we didn't know who the leader was at the time?
         blob.set_slot(100);
         assert_eq!(
-            should_retransmit_and_persist(&blob, Some(&bank), &me_id),
+            should_retransmit_and_persist(&blob, Some(&bank), Some(&cache), &me_id),
             true
         );
 
         // if the blob came back from me, it doesn't continue, whether or not I have a bank
         blob.set_id(&me_id);
-        assert_eq!(should_retransmit_and_persist(&blob, None, &me_id), false);
+        assert_eq!(
+            should_retransmit_and_persist(&blob, None, None, &me_id),
+            false
+        );
     }
 
     #[test]
@@ -315,11 +343,13 @@ mod test {
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
+
+        let bank = Bank::new(&GenesisBlock::new_with_leader(100, &me_id, 10).0);
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
+        let bank_forks = Some(Arc::new(RwLock::new(BankForks::new(0, bank))));
         let t_window = WindowService::new(
-            Some(Arc::new(RwLock::new(BankForks::new(
-                0,
-                Bank::new(&GenesisBlock::new_with_leader(100, &me_id, 10).0),
-            )))),
+            bank_forks,
+            Some(leader_schedule_cache),
             blocktree,
             subs,
             r_reader,
@@ -391,11 +421,12 @@ mod test {
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
+        let bank = Bank::new(&GenesisBlock::new_with_leader(100, &me_id, 10).0);
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
+        let bank_forks = Some(Arc::new(RwLock::new(BankForks::new(0, bank))));
         let t_window = WindowService::new(
-            Some(Arc::new(RwLock::new(BankForks::new(
-                0,
-                Bank::new(&GenesisBlock::new_with_leader(100, &me_id, 10).0),
-            )))),
+            bank_forks,
+            Some(leader_schedule_cache),
             blocktree,
             subs.clone(),
             r_reader,

@@ -103,6 +103,7 @@ impl Tvu {
         //then sent to the window, which does the erasure coding reconstruction
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
+            leader_schedule_cache,
             blocktree.clone(),
             &cluster_info,
             Arc::new(retransmit_socket),
