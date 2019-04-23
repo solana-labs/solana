@@ -2,10 +2,18 @@ use crate::native_loader;
 use crate::system_instruction_processor;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
+use solana_sdk::instruction_processor_utils;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
 use solana_sdk::transaction::TransactionError;
+use std::collections::HashMap;
+use std::sync::RwLock;
+
+#[cfg(unix)]
+use libloading::os::unix::*;
+#[cfg(windows)]
+use libloading::os::windows::*;
 
 /// Return true if the slice has any duplicate elements
 pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
@@ -75,8 +83,11 @@ fn verify_instruction(
 pub type ProcessInstruction =
     fn(&Pubkey, &mut [KeyedAccount], &[u8], u64) -> Result<(), InstructionError>;
 
+pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<instruction_processor_utils::Entrypoint>>>;
+
 pub struct MessageProcessor {
     instruction_processors: Vec<(Pubkey, ProcessInstruction)>,
+    symbol_cache: SymbolCache,
 }
 
 impl Default for MessageProcessor {
@@ -88,6 +99,7 @@ impl Default for MessageProcessor {
 
         Self {
             instruction_processors,
+            symbol_cache: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -145,6 +157,7 @@ impl MessageProcessor {
             &mut keyed_accounts,
             &instruction.data,
             tick_height,
+            &self.symbol_cache,
         )
     }
 

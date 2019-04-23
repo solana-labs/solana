@@ -1,4 +1,5 @@
 //! Native loader
+use crate::message_processor::SymbolCache;
 use bincode::deserialize;
 #[cfg(unix)]
 use libloading::os::unix::*;
@@ -52,12 +53,18 @@ pub fn entrypoint(
     keyed_accounts: &mut [KeyedAccount],
     ix_data: &[u8],
     tick_height: u64,
+    symbol_cache: &SymbolCache,
 ) -> Result<(), InstructionError> {
     if keyed_accounts[0].account.executable {
         // dispatch it
         let (names, params) = keyed_accounts.split_at_mut(1);
-        let name = &names[0].account.data;
-        let name = match str::from_utf8(name) {
+        let name_vec = &names[0].account.data;
+        if let Some(entrypoint) = symbol_cache.read().unwrap().get(name_vec) {
+            unsafe {
+                return entrypoint(program_id, params, ix_data, tick_height);
+            }
+        }
+        let name = match str::from_utf8(name_vec) {
             Ok(v) => v,
             Err(e) => {
                 warn!("Invalid UTF-8 sequence: {}", e);
@@ -81,7 +88,12 @@ pub fn entrypoint(
                             return Err(InstructionError::GenericError);
                         }
                     };
-                return entrypoint(program_id, params, ix_data, tick_height);
+                let ret = entrypoint(program_id, params, ix_data, tick_height);
+                symbol_cache
+                    .write()
+                    .unwrap()
+                    .insert(name_vec.to_vec(), entrypoint);
+                return ret;
             },
             Err(e) => {
                 warn!("Unable to load: {:?}", e);
