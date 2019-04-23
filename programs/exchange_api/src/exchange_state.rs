@@ -157,16 +157,15 @@ pub struct TradeOrderInfo {
     pub direction: Direction,
     /// Token pair indicating two tokens to exchange, first is primary
     pub pair: TokenPair,
-    /// Number of tokens to exchange; primary or secondary depending on direction
+    /// Number of tokens to exchange; primary or secondary depending on direction.  Once
+    /// this number goes to zero this trade order will be converted into a regular token account
     pub tokens: u64,
     /// Scaled price of the secondary token given the primary is equal to the scale value
     /// If scale is 1 and price is 2 then ratio is 1:2 or 1 primary token for 2 secondary tokens
     pub price: u64,
-    /// account which the tokens were source from.  The trade account holds the tokens in escrow
-    /// until either one or more part of a swap or the trade is cancelled.
-    pub src_account: Pubkey,
-    /// account which the tokens the tokens will be deposited into on a successful trade
-    pub dst_account: Pubkey,
+    /// Number of tokens that have been settled so far.  These nay be transferred to another
+    /// token account by the owner.
+    pub tokens_settled: u64,
 }
 impl Default for TradeOrderInfo {
     fn default() -> Self {
@@ -176,8 +175,7 @@ impl Default for TradeOrderInfo {
             direction: Direction::To,
             tokens: 0,
             price: 0,
-            src_account: Pubkey::default(),
-            dst_account: Pubkey::default(),
+            tokens_settled: 0,
         }
     }
 }
@@ -222,25 +220,6 @@ pub fn check_trade(direction: Direction, tokens: u64, price: u64) -> Result<(), 
     Ok(())
 }
 
-/// Swap accounts are populated with this structure
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct TradeSwapInfo {
-    /// Pair swapped
-    pub pair: TokenPair,
-    /// `To` trade order
-    pub to_trade_order: Pubkey,
-    /// `From` trade order
-    pub from_trade_order: Pubkey,
-    /// Number of primary tokens exchanged
-    pub primary_tokens: u64,
-    /// Price the primary tokens were exchanged for
-    pub primary_price: u64,
-    /// Number of secondary tokens exchanged
-    pub secondary_tokens: u64,
-    /// Price the secondary tokens were exchanged for
-    pub secondary_price: u64,
-}
-
 /// Type of exchange account, account's user data is populated with this enum
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ExchangeState {
@@ -250,8 +229,6 @@ pub enum ExchangeState {
     Account(TokenAccountInfo),
     // Trade order account
     Trade(TradeOrderInfo),
-    // Swap account
-    Swap(TradeSwapInfo),
     Invalid,
 }
 impl Default for ExchangeState {
