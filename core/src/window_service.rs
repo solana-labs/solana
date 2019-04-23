@@ -168,6 +168,7 @@ pub struct WindowService {
 }
 
 impl WindowService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         leader_schedule_cache: Option<Arc<LeaderScheduleCache>>,
@@ -190,7 +191,7 @@ impl WindowService {
         let exit = exit.clone();
         let bank_forks = bank_forks.clone();
         let leader_schedule_cache = leader_schedule_cache.clone();
-        let hash = genesis_blockhash.clone();
+        let hash = *genesis_blockhash;
         let t_window = Builder::new()
             .name("solana-window".to_string())
             .spawn(move || {

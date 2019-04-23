@@ -248,7 +248,7 @@ impl BroadcastStage {
     ) -> Self {
         let blocktree = blocktree.clone();
         let exit_sender = exit_sender.clone();
-        let genesis_blockhash = genesis_blockhash.clone();
+        let genesis_blockhash = *genesis_blockhash;
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
