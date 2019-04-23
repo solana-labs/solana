@@ -245,6 +245,7 @@ impl ClusterInfo {
     pub fn contact_info_trace(&self) -> String {
         let now = timestamp();
         let mut spy_nodes = 0;
+        let my_id = self.my_data().id;
         let nodes: Vec<_> = self
             .all_peers()
             .into_iter()
@@ -261,12 +262,13 @@ impl ClusterInfo {
                 }
 
                 format!(
-                    "- gossip: {:20} | {:5}ms | {}\n  \
+                    "- gossip: {:20} | {:5}ms | {} {}\n  \
                      tpu:    {:20} |         |\n  \
                      rpc:    {:20} |         |\n",
                     addr_to_string(&node.gossip),
                     now.saturating_sub(node.wallclock),
                     node.id,
+                    if node.id == my_id { "(me)" } else { "" }.to_string(),
                     addr_to_string(&node.tpu),
                     addr_to_string(&node.rpc),
                 )
@@ -346,14 +348,12 @@ impl ClusterInfo {
     }
 
     // All nodes in gossip, including spy nodes
-    fn all_peers(&self) -> Vec<ContactInfo> {
-        let me = self.my_data().id;
+    pub(crate) fn all_peers(&self) -> Vec<ContactInfo> {
         self.gossip
             .crds
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != me)
             .cloned()
             .collect()
     }
