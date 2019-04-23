@@ -176,8 +176,9 @@ else
 fi
 
 build() {
+  supported=("18.04")
   declare MAYBE_DOCKER=
-  if [[ $(uname) != Linux ]]; then
+  if [[ $(uname) != Linux || ! " ${supported[*]} " =~ $(lsb_release -sr) ]]; then
     # shellcheck source=ci/rust-version.sh
     source "$SOLANA_ROOT"/ci/rust-version.sh
     MAYBE_DOCKER="ci/docker-run.sh $rust_stable_docker_image"
