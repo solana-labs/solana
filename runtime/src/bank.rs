@@ -1946,4 +1946,44 @@ mod tests {
         bank.tick_height.store(max_tick_height, Ordering::Relaxed);
         assert!(bank.is_votable());
     }
+
+    #[test]
+    fn test_is_delta_with_no_committables() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(8000);
+        let bank = Bank::new(&genesis_block);
+        bank.is_delta.store(false, Ordering::Relaxed);
+
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let fail_tx = system_transaction::create_user_account(
+            &keypair1,
+            &keypair2.pubkey(),
+            1,
+            bank.last_blockhash(),
+            0,
+        );
+
+        // Should fail with TransactionError::AccountNotFound, which means
+        // the account which this tx operated on will not be committed. Thus
+        // the bank is_delta should still be false
+        assert_eq!(
+            bank.process_transaction(&fail_tx),
+            Err(TransactionError::AccountNotFound)
+        );
+
+        // Check the bank is_delta is still false
+        assert!(!bank.is_delta.load(Ordering::Relaxed));
+
+        // Should fail with InstructionError, but InstructionErrors are committable,
+        // so is_delta should be true
+        assert_eq!(
+            bank.transfer(10_001, &mint_keypair, &Pubkey::new_rand()),
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::new_result_with_negative_lamports(),
+            ))
+        );
+
+        assert!(bank.is_delta.load(Ordering::Relaxed));
+    }
 }
