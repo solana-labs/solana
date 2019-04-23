@@ -21,9 +21,10 @@ fn main() {
         threads,
         num_nodes,
         duration,
-        trade_delay,
+        transfer_delay,
         fund_amount,
         batch_size,
+        chunk_size,
         account_groups,
         ..
     } = cli_config;
@@ -54,9 +55,10 @@ fn main() {
         identity,
         threads,
         duration,
-        trade_delay,
+        transfer_delay,
         fund_amount,
         batch_size,
+        chunk_size,
         account_groups,
     };
 
