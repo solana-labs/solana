@@ -41,5 +41,7 @@ export async function sendAndConfirmRawTransaction(
     return signature;
   }
 
-  throw new Error(`Raw transaction ${signature} failed (${JSON.stringify(status)})`);
+  throw new Error(
+    `Raw transaction ${signature} failed (${JSON.stringify(status)})`,
+  );
 }
