@@ -368,8 +368,7 @@ impl BankingStage {
             .iter()
             .zip(txs.iter())
             .filter_map(|(r, x)| {
-                Self::log_tx_errors(r);
-                if Bank::is_tx_committable(r) {
+                if Bank::can_commit(r) {
                     Some(x.clone())
                 } else {
                     None
@@ -425,19 +424,6 @@ impl BankingStage {
         );
 
         Ok(())
-    }
-
-    fn log_tx_errors(result: &transaction::Result<()>) {
-        match result {
-            Err(TransactionError::InstructionError(index, err)) => {
-                debug!("instruction error {:?}, {:?}", index, err);
-            }
-            Err(ref e) => {
-                debug!("process transaction failed {:?}", e);
-            }
-
-            _ => (),
-        }
     }
 
     pub fn process_and_record_transactions(
