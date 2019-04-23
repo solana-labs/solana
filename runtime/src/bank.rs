@@ -425,7 +425,8 @@ impl Bank {
 
     pub fn can_commit(result: &Result<()>) -> bool {
         match result {
-            Ok(_) | Err(TransactionError::InstructionError(_, _)) => true,
+            Ok(_) => true,
+            Err(TransactionError::InstructionError(_, _)) => true,
             Err(_) => false,
         }
     }

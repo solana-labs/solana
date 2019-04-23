@@ -20,7 +20,7 @@ use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES};
-use solana_sdk::transaction::{self, Transaction, TransactionError};
+use solana_sdk::transaction::{self, Transaction};
 use std::cmp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -663,6 +663,7 @@ mod tests {
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
+    use solana_sdk::transaction::TransactionError;
     use std::sync::mpsc::channel;
     use std::thread::sleep;
 
