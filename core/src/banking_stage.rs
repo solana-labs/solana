@@ -19,7 +19,7 @@ use solana_metrics::counter::Counter;
 use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_BLOCKHASHES};
+use solana_sdk::timing::{self, duration_as_us, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{self, Transaction, TransactionError};
 use std::cmp;
 use std::net::UdpSocket;
@@ -186,6 +186,7 @@ impl BankingStage {
     fn process_or_forward_packets(
         leader_data: Option<&ContactInfo>,
         bank_is_available: bool,
+        would_be_leader: bool,
         my_id: &Pubkey,
     ) -> BufferedPacketsDecision {
         leader_data.map_or(
@@ -196,6 +197,9 @@ impl BankingStage {
                 if bank_is_available {
                     // If the bank is available, this node is the leader
                     BufferedPacketsDecision::Consume
+                } else if would_be_leader {
+                    // If the node will be the leader soon, hold the packets for now
+                    BufferedPacketsDecision::Hold
                 } else if x.id != *my_id {
                     // If the current node is not the leader, forward the buffered packets
                     BufferedPacketsDecision::Forward
@@ -216,11 +220,15 @@ impl BankingStage {
     ) -> Result<UnprocessedPackets> {
         let rcluster_info = cluster_info.read().unwrap();
 
-        let decision = Self::process_or_forward_packets(
-            rcluster_info.leader_data(),
-            poh_recorder.lock().unwrap().bank().is_some(),
-            &rcluster_info.id(),
-        );
+        let decision = {
+            let poh = poh_recorder.lock().unwrap();
+            Self::process_or_forward_packets(
+                rcluster_info.leader_data(),
+                poh.bank().is_some(),
+                poh.would_be_leader(DEFAULT_TICKS_PER_SLOT),
+                &rcluster_info.id(),
+            )
+        };
 
         match decision {
             BufferedPacketsDecision::Consume => {
@@ -250,13 +258,20 @@ impl BankingStage {
         // Buffer the packets if I am the next leader
         // or, if it was getting sent to me
         // or, the next leader is unknown
-        let leader_id = match poh_recorder.lock().unwrap().bank() {
+        let poh = poh_recorder.lock().unwrap();
+        let leader_id = match poh.bank() {
             Some(bank) => leader_schedule_cache
                 .slot_leader_at_else_compute(bank.slot() + 1, &bank)
                 .unwrap_or_default(),
-            None => rcluster_info
-                .leader_data()
-                .map_or(rcluster_info.id(), |x| x.id),
+            None => {
+                if poh.would_be_leader(DEFAULT_TICKS_PER_SLOT) {
+                    rcluster_info.id()
+                } else {
+                    rcluster_info
+                        .leader_data()
+                        .map_or(rcluster_info.id(), |x| x.id)
+                }
+            }
         };
 
         leader_id == rcluster_info.id()
@@ -997,34 +1012,38 @@ mod tests {
         let my_id1 = Pubkey::new_rand();
 
         assert_eq!(
-            BankingStage::process_or_forward_packets(None, true, &my_id),
+            BankingStage::process_or_forward_packets(None, true, false, &my_id),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::process_or_forward_packets(None, false, &my_id),
+            BankingStage::process_or_forward_packets(None, false, false, &my_id),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::process_or_forward_packets(None, false, &my_id1),
+            BankingStage::process_or_forward_packets(None, false, false, &my_id1),
             BufferedPacketsDecision::Hold
         );
 
         let mut contact_info = ContactInfo::default();
         contact_info.id = my_id1;
         assert_eq!(
-            BankingStage::process_or_forward_packets(Some(&contact_info), false, &my_id),
+            BankingStage::process_or_forward_packets(Some(&contact_info), false, false, &my_id),
             BufferedPacketsDecision::Forward
         );
         assert_eq!(
-            BankingStage::process_or_forward_packets(Some(&contact_info), true, &my_id),
-            BufferedPacketsDecision::Consume
-        );
-        assert_eq!(
-            BankingStage::process_or_forward_packets(Some(&contact_info), false, &my_id1),
+            BankingStage::process_or_forward_packets(Some(&contact_info), false, true, &my_id),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::process_or_forward_packets(Some(&contact_info), true, &my_id1),
+            BankingStage::process_or_forward_packets(Some(&contact_info), true, false, &my_id),
+            BufferedPacketsDecision::Consume
+        );
+        assert_eq!(
+            BankingStage::process_or_forward_packets(Some(&contact_info), false, false, &my_id1),
+            BufferedPacketsDecision::Hold
+        );
+        assert_eq!(
+            BankingStage::process_or_forward_packets(Some(&contact_info), true, false, &my_id1),
             BufferedPacketsDecision::Consume
         );
     }
