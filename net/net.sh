@@ -294,8 +294,7 @@ startNode() {
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
-  #ln -sfT "fullnode-$ipAddress.log" "$netLogDir/fullnode-$pid.log"
-  ln -sf "fullnode-$ipAddress.log" "$netLogDir/fullnode-$pid.log"
+  ln -sfT "fullnode-$ipAddress.log" "$netLogDir/fullnode-$pid.log"
   pids+=("$pid")
 }
 

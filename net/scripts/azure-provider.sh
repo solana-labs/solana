@@ -52,9 +52,7 @@ cloud_GetIdFromInstanceName() {
 #
 #  This will return a match for any machine with prefix pgnode, ex: pgnode and pgnode2
 #  az vm list -d --query "[?starts_with(name,'pgnode')].[name,publicIps,privateIps,location]"
-
 __cloud_FindInstances() {
-
   case $1 in
     prefix)
       query="[?starts_with(name,'$2')]"
@@ -163,14 +161,6 @@ cloud_CreateInstances() {
   declare optionalAddress="$9"
   declare optionalBootDiskType="${10}"
 
-  if $enableGpu; then
-    # TODO: First out what image is needed for Azure for GPU/non-GPU
-    imageName="UbuntuLTS"
-  else
-    # TODO: First out what image is needed for Azure for GPU/non-GPU
-    imageName="UbuntuLTS"
-  fi
-
   declare -a nodes
   if [[ $numNodes = 1 ]]; then
     nodes=("$namePrefix")
@@ -184,7 +174,7 @@ cloud_CreateInstances() {
   args=(
     --resource-group "$networkName"
     --tags testnet
-    --image "$imageName"
+    --image UbuntuLTS
     --size "$machineType"
     --location "$zone"
     --generate-ssh-keys
@@ -216,7 +206,7 @@ cloud_CreateInstances() {
   fi
 
   (
-  set -x
+    set -x
     # 1: Check if resource group exists.  If not, create it.
     numGroup=$(az group list --query "length([?name=='$networkName'])")
     if [[ $numGroup -eq 0 ]]; then
@@ -236,6 +226,24 @@ cloud_CreateInstances() {
     for nodeName in "${nodes[@]}"; do
       az vm wait --created --name "$nodeName" --resource-group "$networkName"
     done
+
+    # 4. If GPU is to be enabled, install the appropriate extension
+    if $enableGpu; then
+      for nodeName in "${nodes[@]}"; do
+        az vm extension set \
+        --resource-group "$networkName" \
+        --vm-name "$nodeName" \
+        --name NvidiaGpuDriverLinux \
+        --publisher Microsoft.HpcCompute \
+        --version 1.2 \
+        --no-wait
+      done
+
+      # 5. Wait until all nodes have GPU extension installed
+      for nodeName in "${nodes[@]}"; do
+        az vm wait --updated --name "$nodeName" --resource-group "$networkName"
+      done
+    fi
   )
 }
 
@@ -295,5 +303,4 @@ cloud_FetchFile() {
 
   cloud_GetConfigValueFromInstanceName "$instanceName" osProfile.adminUsername
   scp "${config_value}@${publicIp}:${remoteFile}" "$localFile"
-
 }
