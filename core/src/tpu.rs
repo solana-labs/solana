@@ -11,6 +11,7 @@ use crate::fetch_stage::FetchStage;
 use crate::poh_recorder::{PohRecorder, WorkingBankEntries};
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
@@ -40,6 +41,7 @@ impl Tpu {
         blocktree: &Arc<Blocktree>,
         storage_entry_sender: EntrySender,
         exit: &Arc<AtomicBool>,
+        genesis_blockhash: &Hash,
     ) -> Self {
         cluster_info.write().unwrap().set_leader(id);
 
@@ -72,6 +74,7 @@ impl Tpu {
             &exit,
             blocktree,
             storage_entry_sender,
+            genesis_blockhash,
         );
 
         Self {

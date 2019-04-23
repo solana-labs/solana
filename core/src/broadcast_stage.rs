@@ -5,7 +5,7 @@ use crate::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT};
 use crate::entry::{EntrySender, EntrySlice};
 #[cfg(feature = "erasure")]
 use crate::erasure::CodingGenerator;
-use crate::packet::index_blobs;
+use crate::packet::index_blobs_with_genesis;
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -13,6 +13,7 @@ use crate::staking_utils;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -42,6 +43,7 @@ impl Broadcast {
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
         storage_entry_sender: &EntrySender,
+        genesis_blockhash: &Hash,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let (mut bank, entries) = receiver.recv_timeout(timer)?;
@@ -103,9 +105,10 @@ impl Broadcast {
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
-        index_blobs(
+        index_blobs_with_genesis(
             &blobs,
             &self.id,
+            genesis_blockhash,
             blob_index,
             bank.slot(),
             bank.parent().map_or(0, |parent| parent.slot()),
@@ -192,6 +195,7 @@ impl BroadcastStage {
         receiver: &Receiver<WorkingBankEntries>,
         blocktree: &Arc<Blocktree>,
         storage_entry_sender: EntrySender,
+        genesis_blockhash: &Hash,
     ) -> BroadcastStageReturnType {
         let me = cluster_info.read().unwrap().my_data().clone();
 
@@ -208,6 +212,7 @@ impl BroadcastStage {
                 sock,
                 blocktree,
                 &storage_entry_sender,
+                genesis_blockhash,
             ) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
@@ -247,9 +252,11 @@ impl BroadcastStage {
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
         storage_entry_sender: EntrySender,
+        genesis_blockhash: &Hash,
     ) -> Self {
         let blocktree = blocktree.clone();
         let exit_sender = exit_sender.clone();
+        let genesis_blockhash = *genesis_blockhash;
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
@@ -260,6 +267,7 @@ impl BroadcastStage {
                     &receiver,
                     &blocktree,
                     storage_entry_sender,
+                    &genesis_blockhash,
                 )
             })
             .unwrap();
@@ -331,6 +339,7 @@ mod test {
             &exit_sender,
             &blocktree,
             storage_sender,
+            &Hash::default(),
         );
 
         MockBroadcastStage {

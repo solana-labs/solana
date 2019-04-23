@@ -12,6 +12,7 @@ use crate::service::Service;
 use crate::streamer::{BlobReceiver, BlobSender};
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::Bank;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -91,6 +92,7 @@ fn recv_window(
     my_id: &Pubkey,
     r: &BlobReceiver,
     retransmit: &BlobSender,
+    genesis_blockhash: &Hash,
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
     let mut blobs = r.recv_timeout(timer)?;
@@ -108,7 +110,7 @@ fn recv_window(
                 .map(|bank_forks| bank_forks.read().unwrap().working_bank())
                 .as_ref(),
             my_id,
-        )
+        ) && blob.read().unwrap().genesis_blockhash() == *genesis_blockhash
     });
 
     retransmit_blobs(&blobs, retransmit, my_id)?;
@@ -149,6 +151,7 @@ pub struct WindowService {
 }
 
 impl WindowService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         blocktree: Arc<Blocktree>,
@@ -158,6 +161,7 @@ impl WindowService {
         repair_socket: Arc<UdpSocket>,
         exit: &Arc<AtomicBool>,
         repair_slot_range: Option<RepairSlotRange>,
+        genesis_blockhash: &Hash,
     ) -> WindowService {
         let repair_service = RepairService::new(
             blocktree.clone(),
@@ -168,6 +172,7 @@ impl WindowService {
         );
         let exit = exit.clone();
         let bank_forks = bank_forks.clone();
+        let hash = *genesis_blockhash;
         let t_window = Builder::new()
             .name("solana-window".to_string())
             .spawn(move || {
@@ -179,7 +184,7 @@ impl WindowService {
                         break;
                     }
                     if let Err(e) =
-                        recv_window(bank_forks.as_ref(), &blocktree, &id, &r, &retransmit)
+                        recv_window(bank_forks.as_ref(), &blocktree, &id, &r, &retransmit, &hash)
                     {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -324,6 +329,7 @@ mod test {
             Arc::new(leader_node.sockets.repair),
             &exit,
             None,
+            &Hash::default(),
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -400,6 +406,7 @@ mod test {
             Arc::new(leader_node.sockets.repair),
             &exit,
             None,
+            &Hash::default(),
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
