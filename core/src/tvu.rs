@@ -26,6 +26,7 @@ use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
@@ -74,6 +75,7 @@ impl Tvu {
         storage_entry_receiver: EntryReceiver,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
+        genesis_blockhash: &Hash,
     ) -> Self
     where
         T: 'static + KeypairUtil + Sync + Send,
@@ -110,6 +112,7 @@ impl Tvu {
             repair_socket,
             blob_fetch_receiver,
             &exit,
+            genesis_blockhash,
         );
 
         let (replay_stage, slot_full_receiver) = ReplayStage::new(
@@ -243,6 +246,7 @@ pub mod tests {
             storage_entry_receiver,
             &leader_schedule_cache,
             &exit,
+            &Hash::default(),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

@@ -13,6 +13,7 @@ use crate::streamer::BlobReceiver;
 use crate::window_service::WindowService;
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
+use solana_sdk::hash::Hash;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
@@ -120,6 +121,7 @@ impl RetransmitStage {
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: BlobReceiver,
         exit: &Arc<AtomicBool>,
+        genesis_blockhash: &Hash,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -140,6 +142,7 @@ impl RetransmitStage {
             repair_socket,
             exit,
             None,
+            genesis_blockhash,
         );
 
         let thread_hdls = vec![t_retransmit];
