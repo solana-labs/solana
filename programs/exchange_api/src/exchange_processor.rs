@@ -15,7 +15,7 @@ pub struct ExchangeProcessor {}
 impl ExchangeProcessor {
     #[allow(clippy::needless_pass_by_value)]
     fn map_to_invalid_arg(err: std::boxed::Box<bincode::ErrorKind>) -> InstructionError {
-        warn!("Deserialize failed: {:?}", err);
+        warn!("Deserialize failed, not a valid state: {:?}", err);
         InstructionError::InvalidArgument
     }
 
@@ -200,7 +200,6 @@ impl ExchangeProcessor {
                     .map_err(Self::map_to_invalid_arg)?;
             match state {
                 ExchangeState::Account(mut from_account) => {
-                    println!("tranfer from account");
                     if &from_account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
                         error!("Signer does not own from account");
                         Err(InstructionError::GenericError)?
@@ -220,7 +219,6 @@ impl ExchangeProcessor {
                     )?;
                 }
                 ExchangeState::Trade(mut from_trade) => {
-                    println!("tranfer from trade");
                     if &from_trade.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
                         error!("Signer does not own from account");
                         Err(InstructionError::GenericError)?
