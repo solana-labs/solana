@@ -348,7 +348,7 @@ impl ClusterInfo {
     }
 
     // All nodes in gossip, including spy nodes
-    fn all_peers(&self) -> Vec<ContactInfo> {
+    pub(crate) fn all_peers(&self) -> Vec<ContactInfo> {
         self.gossip
             .crds
             .table

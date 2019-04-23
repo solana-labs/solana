@@ -24,8 +24,10 @@ Methods
 * [confirmTransaction](#confirmtransaction)
 * [getAccountInfo](#getaccountinfo)
 * [getBalance](#getbalance)
+* [getClusterNodes](#getclusternodes)
 * [getRecentBlockhash](#getrecentblockhash)
 * [getSignatureStatus](#getsignaturestatus)
+* [getSlotLeader](#getslotleader)
 * [getNumBlocksSinceSignatureConfirmation](#getnumblockssincesignatureconfirmation)
 * [getTransactionCount](#gettransactioncount)
 * [requestAirdrop](#requestairdrop)
@@ -114,6 +116,30 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 ---
 
+### getClusterNodes
+Returns information about all the nodes participating in the cluster
+
+##### Parameters:
+None
+
+##### Results:
+The result field will be an array of JSON objects, each with the following sub fields:
+* `id` - Node identifier, as base-58 encoded string
+* `gossip` - Gossip network address for the node
+* `tpu` - TPU network address for the node
+* `rpc` - JSON RPC network address for the node, or `null` if the JSON RPC service is not enabled
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getClusterNodes"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":[{"gossip":"10.239.6.48:8001","id":"9QzsJf7LPLj8GkXbYT3LFDKqsj2hHG7TA3xinJHu8epQ","rpc":"10.239.6.48:8899","tpu":"10.239.6.48:8856"}],"id":1}
+```
+
+---
+
 ### getAccountInfo
 Returns all information associated with the account of provided Pubkey
 
@@ -183,7 +209,27 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 {"jsonrpc":"2.0","result":"SignatureNotFound","id":1}
 ```
 
----
+-----
+
+### getSlotLeader
+Returns the current slot leader
+
+##### Parameters:
+None
+
+##### Results:
+* `string` - Node Id as base-58 encoded string
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getSlotLeader"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":"ENvAW7JScgYq6o4zKZwewtkzzJgDzuJAFxYasvmEQdpS","id":1}
+```
+
+-----
 
 ### getNumBlocksSinceSignatureConfirmation
 Returns the current number of blocks since signature has been confirmed.
