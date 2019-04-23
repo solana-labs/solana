@@ -130,9 +130,9 @@ impl RetransmitStage {
             cluster_info.clone(),
             retransmit_receiver,
         );
-        let window_service = WindowService::new(
-            Some(bank_forks),
-            Some(leader_schedule_cache.clone()),
+        let window_service = WindowService::new_for_validator(
+            bank_forks,
+            leader_schedule_cache.clone(),
             blocktree,
             cluster_info.clone(),
             fetch_stage_receiver,

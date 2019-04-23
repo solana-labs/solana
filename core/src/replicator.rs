@@ -231,15 +231,10 @@ impl Replicator {
         let (blob_fetch_sender, blob_fetch_receiver) = channel();
         let fetch_stage = BlobFetchStage::new_multi_socket(blob_sockets, &blob_fetch_sender, &exit);
 
-        let (retransmit_sender, retransmit_receiver) = channel();
-
-        let window_service = WindowService::new(
-            None, //TODO: need a way to validate blobs... https://github.com/solana-labs/solana/issues/3924
-            None, //TODO: see above ^
+        let window_service = WindowService::new_for_replicator(
             blocktree.clone(),
             cluster_info.clone(),
             blob_fetch_receiver,
-            retransmit_sender,
             repair_socket,
             &exit,
             Some(repair_slot_range),
@@ -250,16 +245,6 @@ impl Replicator {
 
         let mut thread_handles =
             create_request_processor(node.sockets.storage.unwrap(), &exit, slot);
-
-        // receive blobs from retransmit and drop them.
-        let exit2 = exit.clone();
-        let t_retransmit = spawn(move || loop {
-            let _ = retransmit_receiver.recv_timeout(Duration::from_secs(1));
-            if exit2.load(Ordering::Relaxed) {
-                break;
-            }
-        });
-        thread_handles.push(t_retransmit);
 
         let exit3 = exit.clone();
         let blocktree1 = blocktree.clone();
