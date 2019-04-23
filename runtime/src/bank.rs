@@ -423,31 +423,24 @@ impl Bank {
         self.status_cache.write().unwrap().clear_signatures();
     }
 
+    pub fn can_commit(result: &Result<()>) -> bool {
+        match result {
+            Ok(_) => true,
+            Err(TransactionError::InstructionError(_, _)) => true,
+            Err(_) => false,
+        }
+    }
+
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
         let mut status_cache = self.status_cache.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
-            match &res[i] {
-                Ok(_) => {
-                    if !tx.signatures.is_empty() {
-                        status_cache.insert(
-                            &tx.message().recent_blockhash,
-                            &tx.signatures[0],
-                            self.slot(),
-                            Ok(()),
-                        );
-                    }
-                }
-                Err(TransactionError::InstructionError(b, e)) => {
-                    if !tx.signatures.is_empty() {
-                        status_cache.insert(
-                            &tx.message().recent_blockhash,
-                            &tx.signatures[0],
-                            self.slot(),
-                            Err(TransactionError::InstructionError(*b, e.clone())),
-                        );
-                    }
-                }
-                Err(_) => (),
+            if Self::can_commit(&res[i]) && !tx.signatures.is_empty() {
+                status_cache.insert(
+                    &tx.message().recent_blockhash,
+                    &tx.signatures[0],
+                    self.slot(),
+                    res[i].clone(),
+                );
             }
         }
     }
@@ -769,7 +762,9 @@ impl Bank {
             warn!("=========== FIXME: commit_transactions() working on a frozen bank! ================");
         }
 
-        self.is_delta.store(true, Ordering::Relaxed);
+        if executed.iter().any(|res| Self::can_commit(res)) {
+            self.is_delta.store(true, Ordering::Relaxed);
+        }
 
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
@@ -1951,5 +1946,45 @@ mod tests {
         let max_tick_height = ((bank.slot + 1) * bank.ticks_per_slot - 1) as usize;
         bank.tick_height.store(max_tick_height, Ordering::Relaxed);
         assert!(bank.is_votable());
+    }
+
+    #[test]
+    fn test_is_delta_with_no_committables() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(8000);
+        let bank = Bank::new(&genesis_block);
+        bank.is_delta.store(false, Ordering::Relaxed);
+
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let fail_tx = system_transaction::create_user_account(
+            &keypair1,
+            &keypair2.pubkey(),
+            1,
+            bank.last_blockhash(),
+            0,
+        );
+
+        // Should fail with TransactionError::AccountNotFound, which means
+        // the account which this tx operated on will not be committed. Thus
+        // the bank is_delta should still be false
+        assert_eq!(
+            bank.process_transaction(&fail_tx),
+            Err(TransactionError::AccountNotFound)
+        );
+
+        // Check the bank is_delta is still false
+        assert!(!bank.is_delta.load(Ordering::Relaxed));
+
+        // Should fail with InstructionError, but InstructionErrors are committable,
+        // so is_delta should be true
+        assert_eq!(
+            bank.transfer(10_001, &mint_keypair, &Pubkey::new_rand()),
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::new_result_with_negative_lamports(),
+            ))
+        );
+
+        assert!(bank.is_delta.load(Ordering::Relaxed));
     }
 }
