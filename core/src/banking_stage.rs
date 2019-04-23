@@ -367,14 +367,11 @@ impl BankingStage {
         let processed_transactions: Vec<_> = results
             .iter()
             .zip(txs.iter())
-            .filter_map(|(r, x)| match r {
-                Ok(_) => Some(x.clone()),
-                Err(TransactionError::InstructionError(index, err)) => {
-                    debug!("instruction error {:?}, {:?}", index, err);
+            .filter_map(|(r, x)| {
+                Self::log_tx_errors(r);
+                if Bank::is_tx_committable(r) {
                     Some(x.clone())
-                }
-                Err(ref e) => {
-                    debug!("process transaction failed {:?}", e);
+                } else {
                     None
                 }
             })
@@ -428,6 +425,19 @@ impl BankingStage {
         );
 
         Ok(())
+    }
+
+    fn log_tx_errors(result: &transaction::Result<()>) {
+        match result {
+            Err(TransactionError::InstructionError(index, err)) => {
+                debug!("instruction error {:?}, {:?}", index, err);
+            }
+            Err(ref e) => {
+                debug!("process transaction failed {:?}", e);
+            }
+
+            _ => (),
+        }
     }
 
     pub fn process_and_record_transactions(

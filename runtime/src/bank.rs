@@ -423,31 +423,24 @@ impl Bank {
         self.status_cache.write().unwrap().clear_signatures();
     }
 
+    pub fn is_tx_committable(result: &Result<()>) -> bool {
+        match result {
+            Ok(_) => true,
+            Err(TransactionError::InstructionError(_, _)) => true,
+            Err(_) => false,
+        }
+    }
+
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
         let mut status_cache = self.status_cache.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
-            match &res[i] {
-                Ok(_) => {
-                    if !tx.signatures.is_empty() {
-                        status_cache.insert(
-                            &tx.message().recent_blockhash,
-                            &tx.signatures[0],
-                            self.slot(),
-                            Ok(()),
-                        );
-                    }
-                }
-                Err(TransactionError::InstructionError(b, e)) => {
-                    if !tx.signatures.is_empty() {
-                        status_cache.insert(
-                            &tx.message().recent_blockhash,
-                            &tx.signatures[0],
-                            self.slot(),
-                            Err(TransactionError::InstructionError(*b, e.clone())),
-                        );
-                    }
-                }
-                Err(_) => (),
+            if Self::is_tx_committable(&res[i]) && !tx.signatures.is_empty() {
+                status_cache.insert(
+                    &tx.message().recent_blockhash,
+                    &tx.signatures[0],
+                    self.slot(),
+                    res[i].clone(),
+                );
             }
         }
     }
@@ -769,7 +762,13 @@ impl Bank {
             warn!("=========== FIXME: commit_transactions() working on a frozen bank! ================");
         }
 
-        self.is_delta.store(true, Ordering::Relaxed);
+        if executed
+            .iter()
+            .find(|res| Self::is_tx_committable(*res))
+            .is_some()
+        {
+            self.is_delta.store(true, Ordering::Relaxed);
+        }
 
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
