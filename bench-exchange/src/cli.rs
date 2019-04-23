@@ -76,7 +76,7 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                 .value_name("<threads>")
                 .takes_value(true)
                 .required(false)
-                .default_value("4")
+                .default_value("1")
                 .help("Number of threads submitting transactions"),
         )
         .arg(
@@ -129,7 +129,7 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                 .value_name("<cunk>")
                 .takes_value(true)
                 .required(false)
-                .default_value("1000")
+                .default_value("500")
                 .help("Number of transactions to generate and send at a time"),
         )
         .arg(
@@ -138,7 +138,7 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                 .value_name("<groups>")
                 .takes_value(true)
                 .required(false)
-                .default_value("100")
+                .default_value("10")
                 .help("Number of account groups to cycle for each batch"),
         )
 }

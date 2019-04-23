@@ -99,7 +99,8 @@ where
     let clients: Vec<_> = clients.into_iter().map(Arc::new).collect();
     let client = clients[0].as_ref();
 
-    let total_keys = accounts_in_groups as u64 * 4;
+    const NUM_KEYPAIR_GROUPS: u64 = 4;
+    let total_keys = accounts_in_groups as u64 * NUM_KEYPAIR_GROUPS;
     info!("Generating {:?} keys", total_keys);
     let mut keypairs = generate_keypairs(total_keys);
     let trader_signers: Vec<_> = keypairs
@@ -119,12 +120,12 @@ where
         .map(|keypair| keypair.pubkey())
         .collect();
 
-    println!("Fund trader accounts");
+    info!("Fund trader accounts");
     fund_keys(client, &identity, &trader_signers, fund_amount);
-    println!("Fund swapper accounts");
+    info!("Fund swapper accounts");
     fund_keys(client, &identity, &swapper_signers, fund_amount);
 
-    println!("Create {:?} source token accounts", src_pubkeys.len());
+    info!("Create {:?} source token accounts", src_pubkeys.len());
     create_token_accounts(client, &trader_signers, &src_pubkeys);
     info!("Create {:?} profit token accounts", profit_pubkeys.len());
     create_token_accounts(client, &swapper_signers, &profit_pubkeys);
@@ -132,8 +133,8 @@ where
     // Collect the max transaction rate and total tx count seen (single node only)
     let sample_stats = Arc::new(RwLock::new(Vec::new()));
     let sample_period = 1; // in seconds
-    println!("Sampling clients for tps every {} s", sample_period);
-    println!(
+    info!("Sampling clients for tps every {} s", sample_period);
+    info!(
         "Requesting and swapping trades with {} ms delay per thread...",
         transfer_delay
     );
@@ -205,7 +206,6 @@ where
                     &shared_tx_active_thread_count,
                     &trader_signers,
                     &src_pubkeys,
-                    &dst_pubkeys,
                     transfer_delay,
                     batch_size,
                     chunk_size,
@@ -231,17 +231,17 @@ where
 
     sleep(duration);
 
-    println!("Stopping threads");
+    info!("Stopping threads");
     exit_signal.store(true, Ordering::Relaxed);
-    println!("wait for trader thread");
+    info!("Wait for trader thread");
     let _ = trader_thread.join();
-    println!("waiting for swapper thread");
+    info!("Waiting for swapper thread");
     let _ = swapper_thread.join();
-    println!("wait for tx threads");
+    info!("Wait for tx threads");
     for t in s_threads {
         let _ = t.join();
     }
-    println!("wait for sample threads");
+    info!("Wait for sample threads");
     for t in sample_threads {
         let _ = t.join();
     }
@@ -356,7 +356,7 @@ fn do_tx_transfers<T>(
             );
         }
         if exit_signal.load(Ordering::Relaxed) {
-            println!(
+            info!(
                 "  Thread Transferred {} Txs, avg {:.2}/s peak {:.2}/s",
                 stats.total,
                 (stats.total as f64 / stats.sent_ns as f64) * 1_000_000_000_f64,
@@ -417,7 +417,7 @@ fn swapper<T>(
                     if exit_signal.load(Ordering::Relaxed) {
                         break 'outer;
                     }
-                    debug!("Give up waiting, dump batch");
+                    error!("Give up waiting, dump batch");
                     continue 'outer;
                 }
                 debug!("{} waiting for trades batch to clear", tries);
@@ -525,16 +525,16 @@ fn swapper<T>(
             break 'outer;
         }
     }
-    println!(
+    info!(
         "{} Swaps, batch size {}, chunk size {}",
         stats.total, batch_size, chunk_size
     );
-    println!(
+    info!(
         "  Keygen avg {:.2}/s peak {:.2}/s",
         (stats.total as f64 / stats.keygen_ns as f64) * 1_000_000_000_f64,
         stats.keygen_peak_rate
     );
-    println!(
+    info!(
         "  Signed avg {:.2}/s peak {:.2}/s",
         (stats.total as f64 / stats.sign_ns as f64) * 1_000_000_000_f64,
         stats.sign_peak_rate
@@ -687,16 +687,16 @@ fn trader<T>(
         }
 
         if exit_signal.load(Ordering::Relaxed) {
-            println!(
+            info!(
                 "{} Trades with batch size {} chunk size {}",
                 stats.total, batch_size, chunk_size
             );
-            println!(
+            info!(
                 "  Keygen avg {:.2}/s peak {:.2}/s",
                 (stats.total as f64 / stats.keygen_ns as f64) * 1_000_000_000_f64,
                 stats.keygen_peak_rate
             );
-            println!(
+            info!(
                 "  Signed avg {:.2}/s peak {:.2}/s",
                 (stats.total as f64 / stats.sign_ns as f64) * 1_000_000_000_f64,
                 stats.sign_peak_rate
@@ -717,7 +717,7 @@ where
                     return true;
                 }
                 Err(e) => {
-                    println!("error: {:?}", e);
+                    info!("error: {:?}", e);
                 }
             }
         }
@@ -730,7 +730,7 @@ pub fn fund_keys(client: &Client, source: &Keypair, dests: &[Arc<Keypair>], lamp
     let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
     let mut notfunded: Vec<&Arc<Keypair>> = dests.iter().collect();
 
-    println!(
+    info!(
         "  Funding {} keys with {} lamports each",
         dests.len(),
         lamports
@@ -927,8 +927,8 @@ pub fn create_token_accounts(client: &Client, signers: &[Arc<Keypair>], accounts
 fn compute_and_report_stats(maxes: &Arc<RwLock<Vec<(SampleStats)>>>, total_txs_sent: u64) {
     let mut max_txs = 0;
     let mut max_elapsed = Duration::new(0, 0);
-    println!("|       Max TPS | Total Transactions");
-    println!("+---------------+--------------------");
+    info!("|       Max TPS | Total Transactions");
+    info!("+---------------+--------------------");
 
     for stats in maxes.read().unwrap().iter() {
         let maybe_flag = match stats.txs {
@@ -936,7 +936,7 @@ fn compute_and_report_stats(maxes: &Arc<RwLock<Vec<(SampleStats)>>>, total_txs_s
             _ => "",
         };
 
-        println!("| {:13.2} | {} {}", stats.tps, stats.txs, maybe_flag);
+        info!("| {:13.2} | {} {}", stats.tps, stats.txs, maybe_flag);
 
         if stats.elapsed > max_elapsed {
             max_elapsed = stats.elapsed;
@@ -945,20 +945,20 @@ fn compute_and_report_stats(maxes: &Arc<RwLock<Vec<(SampleStats)>>>, total_txs_s
             max_txs = stats.txs;
         }
     }
-    println!("+---------------+--------------------");
+    info!("+---------------+--------------------");
 
     if max_txs >= total_txs_sent {
-        println!(
+        info!(
             "Warning: Average TPS might be under reported, there were no txs sent for a portion of the duration"
         );
         max_txs = total_txs_sent;
     }
-    println!(
+    info!(
         "{} txs outstanding when test ended (lag) ({:.2}%)",
         total_txs_sent - max_txs,
         (total_txs_sent - max_txs) as f64 / total_txs_sent as f64 * 100_f64
     );
-    println!(
+    info!(
         "\tAverage TPS: {:.2}",
         max_txs as f32 / max_elapsed.as_secs() as f32
     );
@@ -980,7 +980,7 @@ pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, 
 
     let amount_to_drop = amount - balance;
 
-    println!(
+    info!(
         "Airdropping {:?} lamports from {} for {}",
         amount_to_drop,
         drone_addr,
@@ -1066,7 +1066,7 @@ mod tests {
         config.threads = 1;
         config.duration = Duration::from_secs(30);
         config.fund_amount = 100_000;
-        config.transfer_delay = 50;
+        config.transfer_delay = 40;
         config.batch_size = 1000;
         config.chunk_size = 250;
         config.account_groups = 10;
@@ -1097,7 +1097,7 @@ mod tests {
         run_local_drone(drone_keypair, addr_sender, Some(1_000_000_000_000));
         let drone_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
 
-        println!("Connecting to the cluster");
+        info!("Connecting to the cluster");
         let nodes =
             discover_nodes(&cluster.entry_point_info.gossip, NUM_NODES).unwrap_or_else(|err| {
                 error!("Failed to discover {} nodes: {:?}", NUM_NODES, err);
@@ -1114,11 +1114,12 @@ mod tests {
             exit(1);
         }
 
+        const NUM_SIGNERS: u64 = 2;
         airdrop_lamports(
             &clients[0],
             &drone_addr,
             &config.identity,
-            fund_amount * (accounts_in_groups + 1) as u64 * 2,
+            fund_amount * (accounts_in_groups + 1) as u64 * NUM_SIGNERS,
         );
 
         do_bench_exchange(clients, config);
@@ -1138,9 +1139,9 @@ mod tests {
         config.duration = Duration::from_secs(30);
         config.fund_amount = 100_000;
         config.transfer_delay = 0;
-        config.batch_size = 100;
-        config.chunk_size = 100;
-        config.account_groups = 50;
+        config.batch_size = 1000;
+        config.chunk_size = 500;
+        config.account_groups = 10;
 
         do_bench_exchange(clients, config);
     }

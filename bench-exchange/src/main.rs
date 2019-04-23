@@ -44,11 +44,12 @@ fn main() {
     info!("Funding keypair: {}", identity.pubkey());
 
     let accounts_in_groups = batch_size * account_groups;
+    const NUM_SIGNERS: u64 = 2;
     airdrop_lamports(
         &clients[0],
         &drone_addr,
         &identity,
-        fund_amount * (accounts_in_groups + 1) as u64 * 2,
+        fund_amount * (accounts_in_groups + 1) as u64 * NUM_SIGNERS,
     );
 
     let config = Config {
