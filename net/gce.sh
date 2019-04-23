@@ -30,6 +30,18 @@ ec2)
   clientMachineType=m4.2xlarge
   blockstreamerMachineType=m4.2xlarge
   ;;
+azure)
+  # shellcheck source=net/scripts/azure-provider.sh
+  source "$here"/scripts/azure-provider.sh
+
+  # TODO: Dial in machine types for Azure
+  cpuBootstrapLeaderMachineType=Standard_D16s_v3
+  gpuBootstrapLeaderMachineType=Standard_NC12
+  bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
+  fullNodeMachineType=$cpuBootstrapLeaderMachineType
+  clientMachineType=Standard_D16s_v3
+  blockstreamerMachineType=Standard_D16s_v3
+  ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
   ;;
@@ -191,6 +203,8 @@ gce)
   ;;
 ec2)
   ;;
+azure)
+  ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
   ;;
@@ -202,10 +216,10 @@ esac
 #
 #   cmd   - The command to execute on each instance
 #           The command will receive arguments followed by any
-#           additionl arguments supplied to cloud_ForEachInstance:
+#           additional arguments supplied to cloud_ForEachInstance:
 #               name     - name of the instance
 #               publicIp - The public IP address of this instance
-#               privateIp - The priate IP address of this instance
+#               privateIp - The private IP address of this instance
 #               count    - Monotonically increasing count for each
 #                          invocation of cmd, starting at 1
 #               ...      - Extra args to cmd..
@@ -293,8 +307,9 @@ EOF
       declare nodeZone
       IFS=: read -r nodeName nodeIp _ nodeZone < <(echo "${instances[0]}")
 
-      # Try to ping the machine first.
-      timeout 90s bash -c "set -o pipefail; until ping -c 3 $nodeIp | tr - _; do echo .; done"
+      # Make sure the machine is alive or pingable
+      timeout_sec=90
+      cloud_WaitForInstanceReady "$nodeName" "$nodeIp" "$nodeZone" "$timeout_sec"
 
       if [[ ! -r $sshPrivateKey ]]; then
         echo "Fetching $sshPrivateKey from $nodeName"

@@ -1,11 +1,33 @@
 # |source| this file
 #
-# Utilities for working with GCE instances
+# Utilities for working with Azure instances
 #
 
 # Default zone
 cloud_DefaultZone() {
-  echo "us-west1-b"
+  echo "westus"
+}
+
+#
+# __cloud_GetConfigValueFromInstanceName
+# Return a piece of configuration information about an instance
+# Provide the exact name of an instance and the configuration key, and the corresponding value will be returned
+#
+# example:
+#   This will return the name of the resource group of the instance named
+#   __cloud_GetConfigValueFromInstanceName some-instance-name resourceGroup
+
+cloud_GetConfigValueFromInstanceName() {
+  query="[?name=='$1']"
+  key="[$2]"
+  config_value=$(az vm list -d -o tsv --query "$query.$key")
+}
+
+cloud_GetResourceGroupFromInstanceName() {
+  resourceGroup=$(az vm list -o tsv --query "[?name=='$1'].[resourceGroup]")
+}
+cloud_GetIdFromInstanceName() {
+  id=$(az vm list -o tsv --query "[?name=='$1'].[id]")
 }
 
 #
@@ -15,27 +37,43 @@ cloud_DefaultZone() {
 #
 # For each matching instance, an entry in the `instances` array will be added with the
 # following information about the instance:
-#   "name:zone:public IP:private IP"
+#   "name:public IP:private IP:location"
 #
 # filter   - The instances to filter on
 #
 # examples:
-#   $ __cloud_FindInstances "name=exact-machine-name"
-#   $ __cloud_FindInstances "name~^all-machines-with-a-common-machine-prefix"
+#   $ __cloud_FindInstances prefix some-machine-prefix
+#   $ __cloud_FindInstances name exact-machine-name
 #
+#  Examples of plain-text filter command
+#
+#  This will return an exact match for a machine named pgnode
+#  az vm list -d --query "[?name=='pgnode'].[name,publicIps,privateIps,location]"
+#
+#  This will return a match for any machine with prefix pgnode, ex: pgnode and pgnode2
+#  az vm list -d --query "[?starts_with(name,'pgnode')].[name,publicIps,privateIps,location]"
 __cloud_FindInstances() {
-  declare filter="$1"
+  case $1 in
+    prefix)
+      query="[?starts_with(name,'$2')]"
+      ;;
+    name)
+      query="[?name=='$2']"
+      ;;
+    *)
+      echo "Unknown filter command: $1"
+      ;;
+  esac
+
+  keys="[name,publicIps,privateIps,location]"
+
   instances=()
-
-  declare name zone publicIp privateIp status
-  while read -r name publicIp privateIp status zone; do
-    printf "%-30s | publicIp=%-16s privateIp=%s status=%s zone=%s\n" "$name" "$publicIp" "$privateIp" "$status" "$zone"
-
-    instances+=("$name:$publicIp:$privateIp:$zone")
-  done < <(gcloud compute instances list \
-             --filter "$filter" \
-             --format 'value(name,networkInterfaces[0].accessConfigs[0].natIP,networkInterfaces[0].networkIP,status,zone)')
+  while read -r name publicIp privateIp location; do
+    instances+=("$name:$publicIp:$privateIp:$location")
+  done < <(az vm list -d -o tsv --query "$query.$keys")
+  echo "${instances[*]}"
 }
+
 #
 # cloud_FindInstances [namePrefix]
 #
@@ -43,7 +81,7 @@ __cloud_FindInstances() {
 #
 # For each matching instance, an entry in the `instances` array will be added with the
 # following information about the instance:
-#   "name:public IP:private IP"
+#   "name:public IP:private IP:location"
 #
 # namePrefix - The instance name prefix to look for
 #
@@ -51,8 +89,7 @@ __cloud_FindInstances() {
 #   $ cloud_FindInstances all-machines-with-a-common-machine-prefix
 #
 cloud_FindInstances() {
-  declare namePrefix="$1"
-  __cloud_FindInstances "name~^$namePrefix"
+  __cloud_FindInstances prefix "$1"
 }
 
 #
@@ -62,7 +99,7 @@ cloud_FindInstances() {
 #
 # For each matching instance, an entry in the `instances` array will be added with the
 # following information about the instance:
-#   "name:public IP:private IP"
+#   "name:public IP:private IP:location"
 #
 # name - The instance name to look for
 #
@@ -70,8 +107,7 @@ cloud_FindInstances() {
 #   $ cloud_FindInstance exact-machine-name
 #
 cloud_FindInstance() {
-  declare name="$1"
-  __cloud_FindInstances "name=$name"
+  __cloud_FindInstances name "$1"
 }
 
 #
@@ -125,19 +161,6 @@ cloud_CreateInstances() {
   declare optionalAddress="$9"
   declare optionalBootDiskType="${10}"
 
-  if $enableGpu; then
-    # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
-    #
-    # TODO: Unfortunately this image is not public.  When this becomes an issue,
-    # use the stock Ubuntu 18.04 image and programmatically install CUDA after the
-    # instance boots
-    #
-    imageName="ubuntu-1804-bionic-v20181029-with-cuda-10-and-cuda-9-2"
-  else
-    # Upstream Ubuntu 18.04 LTS image
-    imageName="ubuntu-1804-bionic-v20181029 --image-project ubuntu-os-cloud"
-  fi
-
   declare -a nodes
   if [[ $numNodes = 1 ]]; then
     nodes=("$namePrefix")
@@ -149,33 +172,27 @@ cloud_CreateInstances() {
 
   declare -a args
   args=(
-    --zone "$zone"
+    --resource-group "$networkName"
     --tags testnet
-    --metadata "testnet=$networkName"
-    --image "$imageName"
-    --maintenance-policy TERMINATE
-    --no-restart-on-failure
+    --image UbuntuLTS
+    --size "$machineType"
+    --location "$zone"
+    --generate-ssh-keys
   )
 
-  # shellcheck disable=SC2206 # Do not want to quote $imageName as it may contain extra args
-  args+=(--image $imageName)
-
-  # shellcheck disable=SC2206 # Do not want to quote $machineType as it may contain extra args
-  args+=($machineType)
   if [[ -n $optionalBootDiskSize ]]; then
     args+=(
-      --boot-disk-size "${optionalBootDiskSize}GB"
+      --os-disk-size-gb "$optionalBootDiskSize"
     )
   fi
   if [[ -n $optionalStartupScript ]]; then
     args+=(
-      --metadata-from-file "startup-script=$optionalStartupScript"
+      --custom-data "$optionalStartupScript"
     )
   fi
+
   if [[ -n $optionalBootDiskType ]]; then
-    args+=(
-        --boot-disk-type "${optionalBootDiskType}"
-    )
+    echo Boot disk type not configurable
   fi
 
   if [[ -n $optionalAddress ]]; then
@@ -184,13 +201,49 @@ cloud_CreateInstances() {
       exit 1
     }
     args+=(
-      --address "$optionalAddress"
+      --public-ip-address "$optionalAddress"
     )
   fi
 
   (
     set -x
-    gcloud beta compute instances create "${nodes[@]}" "${args[@]}"
+    # 1: Check if resource group exists.  If not, create it.
+    numGroup=$(az group list --query "length([?name=='$networkName'])")
+    if [[ $numGroup -eq 0 ]]; then
+      echo Resource Group "$networkName" does not exist.  Creating it now.
+      az group create --name "$networkName" --location "$zone"
+    else
+      echo Resource group "$networkName" already exists.
+      az group show --name "$networkName"
+    fi
+
+    # 2: For node in numNodes, create VM and put the creation process in the background with --no-wait
+    for nodeName in "${nodes[@]}"; do
+      az vm create --name "$nodeName" "${args[@]}" --no-wait
+    done
+
+    # 3: Wait until all nodes are created
+    for nodeName in "${nodes[@]}"; do
+      az vm wait --created --name "$nodeName" --resource-group "$networkName"
+    done
+
+    # 4. If GPU is to be enabled, install the appropriate extension
+    if $enableGpu; then
+      for nodeName in "${nodes[@]}"; do
+        az vm extension set \
+        --resource-group "$networkName" \
+        --vm-name "$nodeName" \
+        --name NvidiaGpuDriverLinux \
+        --publisher Microsoft.HpcCompute \
+        --version 1.2 \
+        --no-wait
+      done
+
+      # 5. Wait until all nodes have GPU extension installed
+      for nodeName in "${nodes[@]}"; do
+        az vm wait --updated --name "$nodeName" --resource-group "$networkName"
+      done
+    fi
   )
 }
 
@@ -206,13 +259,19 @@ cloud_DeleteInstances() {
   fi
 
   declare names=("${instances[@]/:*/}")
-  declare zones=("${instances[@]/*:/}")
-
-  for zone in "${zones[@]}"; do
+  (
     set -x
-    # Try deleting instances in all zones
-    gcloud beta compute instances delete --zone "$zone" --quiet "${names[@]}" || true
-  done
+    id_list=()
+
+    # Build a space delimited list of all resource IDs to delete
+    for instance in "${names[@]}"; do
+      cloud_GetIdFromInstanceName "$instance"
+      id_list+=("$id")
+    done
+
+    # Delete all instances in the id_list and return once they are all deleted
+    az vm delete --ids "${id_list[@]}" --yes --verbose
+  )
 }
 
 #
@@ -222,11 +281,12 @@ cloud_DeleteInstances() {
 #
 cloud_WaitForInstanceReady() {
   declare instanceName="$1"
-  declare instanceIp="$2"
-#  declare instanceZone="$3"
+#  declare instanceIp="$2"  # unused
+#  declare instanceZone="$3"  # unused
   declare timeout="$4"
 
-  timeout "${timeout}"s bash -c "set -o pipefail; until ping -c 3 $instanceIp | tr - _; do echo .; done"
+  cloud_GetResourceGroupFromInstanceName "$instanceName"
+  az vm wait -g "$resourceGroup" -n "$instanceName" --created  --interval 10 --timeout "$timeout"
 }
 
 #
@@ -237,14 +297,10 @@ cloud_WaitForInstanceReady() {
 #
 cloud_FetchFile() {
   declare instanceName="$1"
-  # shellcheck disable=SC2034 # publicIp is unused
   declare publicIp="$2"
   declare remoteFile="$3"
   declare localFile="$4"
-  declare zone="$5"
 
-  (
-    set -x
-    gcloud compute scp --zone "$zone" "$instanceName:$remoteFile" "$localFile"
-  )
+  cloud_GetConfigValueFromInstanceName "$instanceName" osProfile.adminUsername
+  scp "${config_value}@${publicIp}:${remoteFile}" "$localFile"
 }

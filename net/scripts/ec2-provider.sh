@@ -340,6 +340,19 @@ cloud_DeleteInstances() {
   done
 }
 
+#
+# cloud_WaitForInstanceReady [instanceName] [instanceIp] [instanceZone] [timeout]
+#
+# Return once the newly created VM instance is responding.  This function is cloud-provider specific.
+#
+cloud_WaitForInstanceReady() {
+  declare instanceName="$1"
+  declare instanceIp="$2"
+#  declare instanceZone="$3"  # unused
+  declare timeout="$4"
+
+  timeout "${timeout}"s bash -c "set -o pipefail; until ping -c 3 $instanceIp | tr - _; do echo .; done"
+}
 
 #
 # cloud_FetchFile [instanceName] [publicIp] [remoteFile] [localFile]
