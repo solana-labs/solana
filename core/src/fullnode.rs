@@ -10,6 +10,7 @@ use crate::entry::next_entry_mut;
 use crate::entry::Entry;
 use crate::gossip_service::{discover_nodes, GossipService};
 use crate::leader_schedule_cache::LeaderScheduleCache;
+use crate::poh_recorder::PohRecorder;
 use crate::poh_service::{PohService, PohServiceConfig};
 use crate::rpc::JsonRpcConfig;
 use crate::rpc_pubsub_service::PubSubService;
@@ -19,8 +20,6 @@ use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
-
-use crate::poh_recorder::PohRecorder;
 use solana_metrics::counter::Counter;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
@@ -102,6 +101,7 @@ impl Fullnode {
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
+        let genesis_blockhash = bank.last_blockhash();
 
         info!(
             "starting PoH... {} {}",
@@ -237,6 +237,7 @@ impl Fullnode {
             receiver,
             &leader_schedule_cache,
             &exit,
+            &genesis_blockhash,
         );
 
         if config.sigverify_disabled {
@@ -256,6 +257,7 @@ impl Fullnode {
             sender,
             &leader_schedule_cache,
             &exit,
+            &genesis_blockhash,
         );
 
         inc_new_counter_info!("fullnode-new", 1);

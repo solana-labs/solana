@@ -129,6 +129,7 @@ fn test_replay() {
             storage_receiver,
             &leader_schedule_cache,
             &exit,
+            &solana_sdk::hash::Hash::default(),
         );
 
         let mut mint_ref_balance = starting_mint_balance;
