@@ -1,6 +1,6 @@
 use crate::accounts_db::{
-    get_paths_vec, AccountInfo, AccountStorage, AccountsDB, ErrorCounters, InstructionAccounts,
-    InstructionLoaders,
+    get_paths_vec, AccountInfo, AccountStorageSlice, AccountsDB, ErrorCounters,
+    InstructionAccounts, InstructionLoaders,
 };
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::StoredAccount;
@@ -140,7 +140,7 @@ impl Accounts {
     }
 
     fn load_tx_accounts(
-        storage: &AccountStorage,
+        storage: &AccountStorageSlice,
         ancestors: &HashMap<Fork, usize>,
         accounts_index: &AccountsIndex<AccountInfo>,
         tx: &Transaction,
@@ -180,7 +180,7 @@ impl Accounts {
     }
 
     fn load_executable_accounts(
-        storage: &AccountStorage,
+        storage: &AccountStorageSlice,
         ancestors: &HashMap<Fork, usize>,
         accounts_index: &AccountsIndex<AccountInfo>,
         program_id: &Pubkey,
@@ -222,7 +222,7 @@ impl Accounts {
 
     /// For each program_id in the transaction, load its loaders.
     fn load_loaders(
-        storage: &AccountStorage,
+        storage: &AccountStorageSlice,
         ancestors: &HashMap<Fork, usize>,
         accounts_index: &AccountsIndex<AccountInfo>,
         tx: &Transaction,
