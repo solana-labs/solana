@@ -4,6 +4,7 @@ use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{self, PacketReceiver, PacketSender};
+use solana_metrics::counter::Counter;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
@@ -53,8 +54,10 @@ impl FetchStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
         let msgs = recvr.recv()?;
+        let mut len = msgs.packets.len();
         let mut batch = vec![msgs];
         while let Ok(more) = recvr.try_recv() {
+            len += more.packets.len();
             batch.push(more);
         }
 
@@ -63,11 +66,14 @@ impl FetchStage {
             .unwrap()
             .would_be_leader(1, DEFAULT_TICKS_PER_SLOT)
         {
+            inc_new_counter_info!("fetch_stage-honor_forwards", len);
             for packets in batch {
                 if sendr.send(packets).is_err() {
                     return Err(Error::SendError);
                 }
             }
+        } else {
+            inc_new_counter_info!("fetch_stage-discard_forwards", len);
         }
 
         Ok(())
