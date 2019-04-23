@@ -13,9 +13,10 @@ pub struct Config {
     pub threads: usize,
     pub num_nodes: usize,
     pub duration: Duration,
-    pub trade_delay: u64,
+    pub transfer_delay: u64,
     pub fund_amount: u64,
     pub batch_size: usize,
+    pub chunk_size: usize,
     pub account_groups: usize,
 }
 
@@ -28,9 +29,10 @@ impl Default for Config {
             num_nodes: 1,
             threads: 4,
             duration: Duration::new(u64::max_value(), 0),
-            trade_delay: 0,
+            transfer_delay: 0,
             fund_amount: 100_000,
             batch_size: 100,
+            chunk_size: 100,
             account_groups: 100,
         }
     }
@@ -74,7 +76,7 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                 .value_name("<threads>")
                 .takes_value(true)
                 .required(false)
-                .default_value("4")
+                .default_value("1")
                 .help("Number of threads submitting transactions"),
         )
         .arg(
@@ -95,13 +97,13 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                 .help("Seconds to run benchmark, then exit; default is forever"),
         )
         .arg(
-            Arg::with_name("trade-delay")
-                .long("trade-delay")
+            Arg::with_name("transfer-delay")
+                .long("transfer-delay")
                 .value_name("<delay>")
                 .takes_value(true)
                 .required(false)
                 .default_value("0")
-                .help("Delay between trade requests in milliseconds"),
+                .help("Delay between each chunk"),
         )
         .arg(
             Arg::with_name("fund-amount")
@@ -119,7 +121,16 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .required(false)
                 .default_value("1000")
-                .help("Number of bulk trades to submit between trade delays"),
+                .help("Number of transactions before the signer rolls over"),
+        )
+        .arg(
+            Arg::with_name("chunk-size")
+                .long("chunk-size")
+                .value_name("<cunk>")
+                .takes_value(true)
+                .required(false)
+                .default_value("500")
+                .help("Number of transactions to generate and send at a time"),
         )
         .arg(
             Arg::with_name("account-groups")
@@ -127,7 +138,7 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                 .value_name("<groups>")
                 .takes_value(true)
                 .required(false)
-                .default_value("100")
+                .default_value("10")
                 .help("Number of account groups to cycle for each batch"),
         )
 }
@@ -161,12 +172,14 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
         value_t!(matches.value_of("num-nodes"), usize).expect("Failed to parse num-nodes");
     let duration = value_t!(matches.value_of("duration"), u64).expect("Failed to parse duration");
     args.duration = Duration::from_secs(duration);
-    args.trade_delay =
-        value_t!(matches.value_of("trade-delay"), u64).expect("Failed to parse trade-delay");
+    args.transfer_delay =
+        value_t!(matches.value_of("transfer-delay"), u64).expect("Failed to parse transfer-delay");
     args.fund_amount =
         value_t!(matches.value_of("fund-amount"), u64).expect("Failed to parse fund-amount");
     args.batch_size =
         value_t!(matches.value_of("batch-size"), usize).expect("Failed to parse batch-size");
+    args.chunk_size =
+        value_t!(matches.value_of("chunk-size"), usize).expect("Failed to parse chunk-size");
     args.account_groups = value_t!(matches.value_of("account-groups"), usize)
         .expect("Failed to parse account-groups");
 

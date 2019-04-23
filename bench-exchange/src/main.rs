@@ -21,9 +21,10 @@ fn main() {
         threads,
         num_nodes,
         duration,
-        trade_delay,
+        transfer_delay,
         fund_amount,
         batch_size,
+        chunk_size,
         account_groups,
         ..
     } = cli_config;
@@ -43,20 +44,22 @@ fn main() {
     info!("Funding keypair: {}", identity.pubkey());
 
     let accounts_in_groups = batch_size * account_groups;
+    const NUM_SIGNERS: u64 = 2;
     airdrop_lamports(
         &clients[0],
         &drone_addr,
         &identity,
-        fund_amount * (accounts_in_groups + 1) as u64 * 2,
+        fund_amount * (accounts_in_groups + 1) as u64 * NUM_SIGNERS,
     );
 
     let config = Config {
         identity,
         threads,
         duration,
-        trade_delay,
+        transfer_delay,
         fund_amount,
         batch_size,
+        chunk_size,
         account_groups,
     };
 
