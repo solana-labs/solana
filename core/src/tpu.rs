@@ -51,6 +51,7 @@ impl Tpu {
             tpu_via_blobs_sockets,
             &exit,
             &packet_sender,
+            &poh_recorder,
         );
         let (verified_sender, verified_receiver) = channel();
 

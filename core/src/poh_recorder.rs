@@ -79,6 +79,19 @@ impl PohRecorder {
         }
     }
 
+    pub fn would_be_leader(&self, within_next_n_slots: u64, ticks_per_slot: u64) -> bool {
+        let close_to_leader_tick = self.start_leader_at_tick.map_or(false, |leader_tick| {
+            let leader_ideal_start_tick =
+                leader_tick.saturating_sub(self.max_last_leader_grace_ticks);
+
+            self.tick_height() <= self.last_leader_tick.unwrap_or(0)
+                && self.tick_height()
+                    >= leader_ideal_start_tick.saturating_sub(within_next_n_slots * ticks_per_slot)
+        });
+
+        self.working_bank.is_some() || close_to_leader_tick
+    }
+
     pub fn hash(&mut self) {
         // TODO: amortize the cost of this lock by doing the loop in here for
         // some min amount of hashes
@@ -1154,5 +1167,83 @@ mod tests {
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
         }
         Blocktree::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_would_be_leader_soon() {
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+            let bank = Arc::new(Bank::new(&genesis_block));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, _entry_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                0,
+                None,
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+            );
+
+            // Test that with no leader slot, we don't reach the leader tick
+            assert_eq!(
+                poh_recorder.would_be_leader(2, bank.ticks_per_slot()),
+                false
+            );
+
+            for _ in 0..bank.ticks_per_slot() {
+                poh_recorder.tick();
+            }
+
+            // Test that with no leader slot, we don't reach the leader tick after sending some ticks
+            assert_eq!(
+                poh_recorder.would_be_leader(2, bank.ticks_per_slot()),
+                false
+            );
+
+            poh_recorder.reset(
+                poh_recorder.tick_height(),
+                bank.last_blockhash(),
+                0,
+                None,
+                bank.ticks_per_slot(),
+            );
+
+            assert_eq!(
+                poh_recorder.would_be_leader(2, bank.ticks_per_slot()),
+                false
+            );
+
+            // We reset with leader slot after 3 slots
+            poh_recorder.reset(
+                poh_recorder.tick_height(),
+                bank.last_blockhash(),
+                0,
+                Some(bank.slot() + 3),
+                bank.ticks_per_slot(),
+            );
+
+            // Test that the node won't be leader in next 2 slots
+            assert_eq!(
+                poh_recorder.would_be_leader(2, bank.ticks_per_slot()),
+                false
+            );
+
+            // Test that the node will be leader in next 3 slots
+            assert_eq!(poh_recorder.would_be_leader(3, bank.ticks_per_slot()), true);
+
+            assert_eq!(
+                poh_recorder.would_be_leader(2, bank.ticks_per_slot()),
+                false
+            );
+
+            // If we set the working bank, the node should be leader within next 2 slots
+            poh_recorder.set_bank(&bank);
+            assert_eq!(poh_recorder.would_be_leader(2, bank.ticks_per_slot()), true);
+        }
     }
 }
