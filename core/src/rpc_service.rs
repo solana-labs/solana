@@ -15,7 +15,9 @@ use std::time::Duration;
 
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
-    pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>, // Used only by tests...
+
+    #[cfg(test)]
+    pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>, // Used only by test_rpc_new()...
 }
 
 impl JsonRpcService {
@@ -37,7 +39,7 @@ impl JsonRpcService {
         )));
         let request_processor_ = request_processor.clone();
 
-        let info = cluster_info.clone();
+        let cluster_info = cluster_info.clone();
         let exit_ = exit.clone();
 
         let thread_hdl = Builder::new()
@@ -50,7 +52,7 @@ impl JsonRpcService {
                 let server =
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request<hyper::Body>| Meta {
                         request_processor: request_processor_.clone(),
-                        cluster_info: info.clone(),
+                        cluster_info: cluster_info.clone(),
                     }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
@@ -68,6 +70,7 @@ impl JsonRpcService {
             .unwrap();
         Self {
             thread_hdl,
+            #[cfg(test)]
             request_processor,
         }
     }
