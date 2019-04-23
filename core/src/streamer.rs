@@ -19,8 +19,6 @@ pub type PacketSender = Sender<Packets>;
 pub type BlobSender = Sender<SharedBlobs>;
 pub type BlobReceiver = Receiver<SharedBlobs>;
 
-const RECV_BATCH_MAX: usize = 60_000;
-
 fn recv_loop(sock: &UdpSocket, exit: Arc<AtomicBool>, channel: &PacketSender) -> Result<()> {
     loop {
         let mut msgs = Packets::default();
@@ -63,7 +61,7 @@ fn recv_send(sock: &UdpSocket, r: &BlobReceiver) -> Result<()> {
     Ok(())
 }
 
-pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<Packets>, usize, u64)> {
+pub fn recv_batch(recvr: &PacketReceiver, max_batch: usize) -> Result<(Vec<Packets>, usize, u64)> {
     let timer = Duration::new(1, 0);
     let msgs = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
@@ -75,7 +73,7 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<Packets>, usize, u64)> 
         len += more.packets.len();
         batch.push(more);
 
-        if len > RECV_BATCH_MAX {
+        if len > max_batch {
             break;
         }
     }

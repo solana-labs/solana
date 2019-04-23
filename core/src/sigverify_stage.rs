@@ -18,6 +18,12 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 
+#[cfg(feature = "cuda")]
+const RECV_BATCH_MAX: usize = 60_000;
+
+#[cfg(not(feature = "cuda"))]
+const RECV_BATCH_MAX: usize = 1000;
+
 pub type VerifiedPackets = Vec<(Packets, Vec<u8>)>;
 
 pub struct SigVerifyStage {
@@ -52,8 +58,10 @@ impl SigVerifyStage {
         sigverify_disabled: bool,
         id: usize,
     ) -> Result<()> {
-        let (batch, len, recv_time) =
-            streamer::recv_batch(&recvr.lock().expect("'recvr' lock in fn verifier"))?;
+        let (batch, len, recv_time) = streamer::recv_batch(
+            &recvr.lock().expect("'recvr' lock in fn verifier"),
+            RECV_BATCH_MAX,
+        )?;
         inc_new_counter_info!("sigverify_stage-packets_received", len);
 
         let now = Instant::now();
