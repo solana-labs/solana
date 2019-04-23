@@ -258,11 +258,12 @@ impl AccountsDB {
             .unwrap()
             .values()
             .filter_map(|entry| {
-                if {
+                let res = {
                     let entry = entry.read().unwrap();
                     entry.status() == AccountStorageStatus::StorageAvailable
                         && entry.fork_id == fork_id
-                } {
+                };
+                if res {
                     Some(entry.clone())
                 } else {
                     None
