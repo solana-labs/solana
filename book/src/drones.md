@@ -10,7 +10,7 @@ client's account.
 A drone is a simple signing service. It listens for requests to sign
 *transaction data*.  Once received, the drone validates the request however it
 sees fit. It may, for example, only accept transaction data with a
-`SystemInstruction::Move` instruction transferring only up to a certain amount
+`SystemInstruction::Transfer` instruction transferring only up to a certain amount
 of tokens. If the drone accepts the transaction, it returns an `Ok(Signature)`
 where `Signature` is a signature of the transaction data using the drone's
 private key. If it rejects the transaction data, it returns a `DroneError`
@@ -76,7 +76,7 @@ beyond a certain *age*.
 
 If the transaction data size is smaller than the size of the returned signature
 (or descriptive error), a single client can flood the network.  Considering
-that a simple `Move` operation requires two public keys (each 32 bytes) and a
+that a simple `Transfer` operation requires two public keys (each 32 bytes) and a
 `fee` field, and that the returned signature is 64 bytes (and a byte to
 indicate `Ok`), consideration for this attack may not be required.
 

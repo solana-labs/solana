@@ -160,12 +160,12 @@ mod tests {
 
         // Create 2-2 Multisig Transfer instruction.
         let bob_pubkey = Pubkey::new_rand();
-        let mut move_instruction = system_instruction::transfer(&john_pubkey, &bob_pubkey, 42);
-        move_instruction
+        let mut transfer_instruction = system_instruction::transfer(&john_pubkey, &bob_pubkey, 42);
+        transfer_instruction
             .accounts
             .push(AccountMeta::new(jane_pubkey, true));
 
-        let message = Message::new(vec![move_instruction]);
+        let message = Message::new(vec![transfer_instruction]);
         bank_client.send_message(&doe_keypairs, message).unwrap();
         assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 42);
     }

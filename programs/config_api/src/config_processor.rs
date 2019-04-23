@@ -158,7 +158,8 @@ mod tests {
         bank.transfer(42, &mint_keypair, &system_pubkey).unwrap();
         let (bank_client, from_keypair, config_keypair) = create_config_client(bank, mint_keypair);
 
-        let move_instruction = system_instruction::transfer(&system_pubkey, &Pubkey::default(), 42);
+        let transfer_instruction =
+            system_instruction::transfer(&system_pubkey, &Pubkey::default(), 42);
         let my_config = MyConfig::new(42);
         let mut store_instruction =
             config_instruction::store(&from_keypair.pubkey(), &config_keypair.pubkey(), &my_config);
@@ -166,7 +167,7 @@ mod tests {
         store_instruction.accounts[1].is_signer = false;
 
         // Don't sign the transaction with `config_client`
-        let message = Message::new(vec![move_instruction, store_instruction]);
+        let message = Message::new(vec![transfer_instruction, store_instruction]);
         bank_client
             .send_message(&[&system_keypair], message)
             .unwrap_err();

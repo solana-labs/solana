@@ -202,8 +202,8 @@ mod tests {
         // Sneak in an instruction so that the transaction is signed but
         // the 0th account in the second instruction is not! The program
         // needs to check that it's signed.
-        let move_ix = system_instruction::transfer(&mallory_id, &vote_id, 1);
-        let message = Message::new(vec![move_ix, vote_ix]);
+        let transfer_ix = system_instruction::transfer(&mallory_id, &vote_id, 1);
+        let message = Message::new(vec![transfer_ix, vote_ix]);
         let result = bank_client.send_message(&[&mallory_keypair], message);
 
         // And ensure there's no vote.
