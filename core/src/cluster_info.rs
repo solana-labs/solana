@@ -646,6 +646,7 @@ impl ClusterInfo {
         obj: &Arc<RwLock<Self>>,
         peers: &[ContactInfo],
         blob: &SharedBlob,
+        slot_leader_id: Option<Pubkey>,
         s: &UdpSocket,
         forwarded: bool,
     ) -> Result<()> {
@@ -661,6 +662,7 @@ impl ClusterInfo {
         trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders
             .par_iter()
+            .filter(|v| v.id != slot_leader_id.unwrap_or_default())
             .map(|v| {
                 debug!(
                     "{}: retransmit blob {} to {} {}",
@@ -684,19 +686,6 @@ impl ClusterInfo {
             e?;
         }
         Ok(())
-    }
-
-    /// retransmit messages from the leader to layer 1 nodes
-    /// # Remarks
-    /// We need to avoid having obj locked while doing any io, such as the `send_to`
-    pub fn retransmit(
-        obj: &Arc<RwLock<Self>>,
-        blob: &SharedBlob,
-        s: &UdpSocket,
-        forwarded: bool,
-    ) -> Result<()> {
-        let peers = obj.read().unwrap().retransmit_peers();
-        ClusterInfo::retransmit_to(obj, &peers, blob, s, forwarded)
     }
 
     fn send_orders(

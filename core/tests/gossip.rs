@@ -176,7 +176,8 @@ pub fn cluster_info_retransmit() -> result::Result<()> {
     assert!(done);
     let b = SharedBlob::default();
     b.write().unwrap().meta.size = 10;
-    ClusterInfo::retransmit(&c1, &b, &tn1, false)?;
+    let peers = c1.read().unwrap().retransmit_peers();
+    ClusterInfo::retransmit_to(&c1, &peers, &b, None, &tn1, false)?;
     let res: Vec<_> = [tn1, tn2, tn3]
         .into_par_iter()
         .map(|s| {

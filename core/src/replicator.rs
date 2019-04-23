@@ -235,6 +235,7 @@ impl Replicator {
 
         let window_service = WindowService::new(
             None, //TODO: need a way to validate blobs... https://github.com/solana-labs/solana/issues/3924
+            None, //TODO: see above ^
             blocktree.clone(),
             cluster_info.clone(),
             blob_fetch_receiver,
