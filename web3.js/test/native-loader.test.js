@@ -23,7 +23,11 @@ test('load native program', async () => {
 
   const connection = new Connection(url);
   const from = await newAccountWithLamports(connection, 1024);
-  const programId = await NativeLoader.load(connection, from, 'solana_noop_program');
+  const programId = await NativeLoader.load(
+    connection,
+    from,
+    'solana_noop_program',
+  );
   const transaction = new Transaction().add({
     keys: [{pubkey: from.publicKey, isSigner: true}],
     programId,

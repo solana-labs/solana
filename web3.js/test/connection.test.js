@@ -64,6 +64,64 @@ test('get balance', async () => {
   expect(balance).toBeGreaterThanOrEqual(0);
 });
 
+test('get slot leader', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getSlotLeader',
+    },
+    {
+      error: null,
+      result: '11111111111111111111111111111111',
+    },
+  ]);
+
+  const slotLeader = await connection.getSlotLeader();
+  if (mockRpcEnabled) {
+    expect(slotLeader).toBe('11111111111111111111111111111111');
+  } else {
+    // No idea what the correct slotLeader value should be on a live cluster, so
+    // just check the type
+    expect(typeof slotLeader).toBe('string');
+  }
+});
+
+test('get cluster nodes', async () => {
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getClusterNodes',
+    },
+    {
+      error: null,
+      result: [
+        {
+          id: '11111111111111111111111111111111',
+          gossip: '127.0.0.0:1234',
+          tpu: '127.0.0.0:1235',
+          rpc: null,
+        },
+      ],
+    },
+  ]);
+
+  const clusterNodes = await connection.getClusterNodes();
+  if (mockRpcEnabled) {
+    expect(clusterNodes).toHaveLength(1);
+    expect(clusterNodes[0].id).toBe('11111111111111111111111111111111');
+    expect(typeof clusterNodes[0].gossip).toBe('string');
+    expect(typeof clusterNodes[0].tpu).toBe('string');
+    expect(clusterNodes[0].rpc).toBeNull();
+  } else {
+    // There should be at least one node (the node that we're talking to)
+    expect(clusterNodes.length).toBeGreaterThan(0);
+  }
+});
+
 test('confirm transaction - error', () => {
   const connection = new Connection(url);
 

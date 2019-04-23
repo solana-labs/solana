@@ -10,7 +10,11 @@ test('signPartial', () => {
   const account1 = new Account();
   const account2 = new Account();
   const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
-  const transfer = SystemProgram.transfer(account1.publicKey, account2.publicKey, 123);
+  const transfer = SystemProgram.transfer(
+    account1.publicKey,
+    account2.publicKey,
+    123,
+  );
 
   const transaction = new Transaction({recentBlockhash}).add(transfer);
   transaction.sign(account1, account2);
@@ -27,10 +31,21 @@ test('transfer signatures', () => {
   const account1 = new Account();
   const account2 = new Account();
   const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
-  const transfer1 = SystemProgram.transfer(account1.publicKey, account2.publicKey, 123);
-  const transfer2 = SystemProgram.transfer(account2.publicKey, account1.publicKey, 123);
+  const transfer1 = SystemProgram.transfer(
+    account1.publicKey,
+    account2.publicKey,
+    123,
+  );
+  const transfer2 = SystemProgram.transfer(
+    account2.publicKey,
+    account1.publicKey,
+    123,
+  );
 
-  const orgTransaction = new Transaction({recentBlockhash}).add(transfer1, transfer2);
+  const orgTransaction = new Transaction({recentBlockhash}).add(
+    transfer1,
+    transfer2,
+  );
   orgTransaction.sign(account1, account2);
 
   const newTransaction = new Transaction({

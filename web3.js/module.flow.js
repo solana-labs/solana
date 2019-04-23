@@ -43,6 +43,13 @@ declare module '@solana/web3.js' {
     data: Buffer,
   };
 
+  declare export type ContactInfo = {
+    id: string,
+    gossip: string,
+    tpu: string | null,
+    rpc: string | null,
+  };
+
   declare export type KeyedAccountInfo = {
     accountId: PublicKey,
     accountInfo: AccountInfo,
@@ -62,9 +69,11 @@ declare module '@solana/web3.js' {
 
   declare export class Connection {
     constructor(endpoint: string): Connection;
-    getBalance(publicKey: PublicKey): Promise<number>;
     getAccountInfo(publicKey: PublicKey): Promise<AccountInfo>;
+    getBalance(publicKey: PublicKey): Promise<number>;
+    getClusterNodes(): Promise<Array<ContactInfo>>;
     confirmTransaction(signature: TransactionSignature): Promise<boolean>;
+    getSlotLeader(): Promise<string>;
     getSignatureStatus(
       signature: TransactionSignature,
     ): Promise<SignatureSuccess | TransactionError | null>;
@@ -102,7 +111,11 @@ declare module '@solana/web3.js' {
       space: number,
       programId: PublicKey,
     ): Transaction;
-    static transfer(from: PublicKey, to: PublicKey, amount: number): Transaction;
+    static transfer(
+      from: PublicKey,
+      to: PublicKey,
+      amount: number,
+    ): Transaction;
     static assign(from: PublicKey, programId: PublicKey): Transaction;
   }
 

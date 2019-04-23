@@ -52,7 +52,9 @@ export async function sendAndConfirmTransaction(
     }
 
     if (status && status.Err && !('AccountInUse' in status.Err)) {
-      throw new Error(`Transaction ${signature} failed (${JSON.stringify(status)})`);
+      throw new Error(
+        `Transaction ${signature} failed (${JSON.stringify(status)})`,
+      );
     }
 
     // Retry in 0..100ms to try to avoid another AccountInUse collision

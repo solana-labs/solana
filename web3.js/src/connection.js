@@ -17,6 +17,22 @@ import type {TransactionSignature} from './transaction';
 
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
+/**
+ * Information describing a cluster node
+ *
+ * @typedef {Object} ContactInfo
+ * @property {string} id Unique identifier of the node
+ * @property {string} gossip Gossip network address for the node
+ * @property {string} tpu TPU network address for the node (null if not available)
+ * @property {string|null} rpc JSON RPC network address for the node (null if not available)
+ */
+type ContactInfo = {
+  id: string,
+  gossip: string,
+  tpu: string | null,
+  rpc: string | null,
+};
+
 function createRpcRequest(url): RpcRequest {
   const server = jayson(async (request, callback) => {
     const options = {
@@ -119,6 +135,25 @@ const ProgramAccountNotificationResult = struct({
  * Expected JSON RPC response for the "confirmTransaction" message
  */
 const ConfirmTransactionRpcResult = jsonRpcResult('boolean');
+
+/**
+ * Expected JSON RPC response for the "getSlotLeader" message
+ */
+const GetSlotLeader = jsonRpcResult('string');
+
+/**
+ * Expected JSON RPC response for the "getClusterNodes" message
+ */
+const GetClusterNodes = jsonRpcResult(
+  struct.list([
+    struct({
+      id: 'string',
+      gossip: 'string',
+      tpu: struct.union(['null', 'string']),
+      rpc: struct.union(['null', 'string']),
+    }),
+  ]),
+);
 
 /**
  * Expected JSON RPC response for the "getSignatureStatus" message
@@ -329,6 +364,32 @@ export class Connection {
   async confirmTransaction(signature: TransactionSignature): Promise<boolean> {
     const unsafeRes = await this._rpcRequest('confirmTransaction', [signature]);
     const res = ConfirmTransactionRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
+  /**
+   * Fetch the current slot leader of the cluster
+   */
+  async getSlotLeader(): Promise<string> {
+    const unsafeRes = await this._rpcRequest('getSlotLeader', []);
+    const res = GetSlotLeader(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
+  /**
+   * Fetch the current slot leader of the cluster
+   */
+  async getClusterNodes(): Promise<Array<ContactInfo>> {
+    const unsafeRes = await this._rpcRequest('getClusterNodes', []);
+    const res = GetClusterNodes(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
