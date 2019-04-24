@@ -26,23 +26,29 @@ Operate a configured testnet
  logs     - Fetch remote logs from each network node
 
  start/update-specific options:
-   -T [tarFilename]            - Deploy the specified release tarball
-   -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
-                                 specified release channel (edge|beta|stable) or release tag
-                                 (vX.Y.Z)
-   -i update_manifest_keypair  - Deploy the tarball using 'solana-install deploy ...'
-                                 (-t option must be supplied as well)
-   -f [cargoFeatures]          - List of |cargo --feaures=| to activate
-                                 (ignored if -s or -S is specified)
-   -r                          - Reuse existing node/ledger configuration from a
-                                 previous |start| (ie, don't run ./multinode-demo/setup.sh).
-   -D /path/to/programs        - Deploy custom programs from this location
-   -c clientType=numClients    - Number of clientTypes to start.  This options can be specified
-                                 more than once.  Defaults to bench-tps for all clients if not
-                                 specified.
-                                 Valid client types are:
-                                     bench-tps
-                                     bench-exchange
+   -T [tarFilename]                   - Deploy the specified release tarball
+   -t edge|beta|stable|vX.Y.Z         - Deploy the latest tarball release for the
+                                        specified release channel (edge|beta|stable) or release tag
+                                        (vX.Y.Z)
+   -i update_manifest_keypair         - Deploy the tarball using 'solana-install deploy ...'
+                                        (-t option must be supplied as well)
+   -f [cargoFeatures]                 - List of |cargo --feaures=| to activate
+                                        (ignored if -s or -S is specified)
+   -r                                 - Reuse existing node/ledger configuration from a
+                                        previous |start| (ie, don't run ./multinode-demo/setup.sh).
+   -D /path/to/programs               - Deploy custom programs from this location
+   -c clientType=numClients=extraArgs - Number of clientTypes to start.  This options can be specified
+                                        more than once.  Defaults to bench-tps for all clients if not
+                                        specified.
+                                        Valid client types are:
+                                            bench-tps
+                                            bench-exchange
+                                        User can optionally provide extraArgs that are transparently
+                                        supplied to the client program as command line parameters.
+                                        For example,
+                                            -c bench-tps=2="--tx_count 25000"
+                                        This will start 2 bench-tps clients, and supply "--tx_count 25000"
+                                        to the bench-tps client.
 
  sanity/start/update-specific options:
    -o noLedgerVerify    - Skip ledger verification

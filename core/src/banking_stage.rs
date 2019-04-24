@@ -343,6 +343,12 @@ impl BankingStage {
                     break;
                 }
             }
+
+            let num = buffered_packets
+                .iter()
+                .map(|(x, start, _)| x.packets.len().saturating_sub(*start))
+                .sum();
+            inc_new_counter_info!("banking_stage-total_buffered_packets", num);
         }
     }
 
