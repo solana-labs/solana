@@ -300,7 +300,7 @@ impl AccountsDB {
                 let meta = StorageMeta {
                     write_version,
                     pubkey: **pubkey,
-                    data_len: data_len,
+                    data_len,
                 };
                 (meta, *account)
             })
