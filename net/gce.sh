@@ -271,6 +271,15 @@ EOF
     declare failOnFailure="$5"
     declare arrayName="$6"
 
+    # This check should eventually be moved to cloud provider specific script 
+    if [ "$publicIp" = "TERMINATED" ] || [ "$privateIp" = "TERMINATED" ]; then
+      if $failOnFailure; then
+        exit 1
+      else
+        return 0
+      fi
+    fi
+
     ok=true
     echo "Waiting for $name to finish booting..."
     (
