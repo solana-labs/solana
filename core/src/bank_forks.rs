@@ -5,6 +5,7 @@ use solana_metrics::counter::Counter;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing;
 use std::collections::{HashMap, HashSet};
+use std::env;
 use std::fs;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Error, ErrorKind};
@@ -17,6 +18,8 @@ pub struct BankForks {
     banks: HashMap<u64, Arc<Bank>>,
     working_bank: Arc<Bank>,
     root: u64,
+    slots: HashSet<u64>,
+    use_snapshot: bool,
 }
 
 impl Index<u64> for BankForks {
@@ -35,6 +38,8 @@ impl BankForks {
             banks,
             working_bank,
             root: 0,
+            slots: HashSet::new(),
+            use_snapshot: false,
         }
     }
 
@@ -97,6 +102,8 @@ impl BankForks {
             root,
             banks,
             working_bank,
+            slots: HashSet::new(),
+            use_snapshot: false,
         }
     }
 
@@ -134,61 +141,99 @@ impl BankForks {
     }
 
     fn prune_non_root(&mut self, root: u64) {
+        let slots: HashSet<u64> = self
+            .banks
+            .iter()
+            .filter(|(_, b)| b.is_frozen())
+            .map(|(k, _)| *k)
+            .collect();
         let descendants = self.descendants();
         self.banks
             .retain(|slot, _| descendants[&root].contains(slot))
+        self.banks
+            .retain(|slot, bank| *slot >= root || bank.is_in_subtree_of(root));
+        let diff: HashSet<_> = slots.symmetric_difference(&self.slots).collect();
+        for slot in diff.iter() {
+            if **slot > root {
+                let _ = self.add_snapshot(**slot);
+            } else {
+                self.remove_snapshot(**slot);
+            }
+        }
+        self.slots = slots.clone();
     }
 
     fn get_io_error(error: &str) -> Error {
         Error::new(ErrorKind::Other, error)
     }
 
-    pub fn save_snapshot(&self, path: &str) -> Result<(), Error> {
-        let mut bank_index: HashMap<u64, PathBuf> = HashMap::new();
-        let path = Path::new(&path);
-        fs::create_dir_all(path)?;
-        for (slot, bank) in &self.frozen_banks() {
-            let bank_file = format!("bank-{}.snapshot", slot);
-            let bank_file_path = path.join(bank_file);
-            bank_index.insert(*slot, bank_file_path.clone());
-            let file = File::create(bank_file_path)?;
-            let mut stream = BufWriter::new(file);
-            serialize_into(&mut stream, &bank)
-                .map_err(|_| BankForks::get_io_error("serialize bank error"))?;
-        }
-        let index_path = Path::new(&path).join("bank.index");
-        fs::create_dir_all(path)?;
-        {
-            let file = File::create(index_path)?;
-            let mut stream = BufWriter::new(file);
-            serialize_into(&mut stream, &bank_index)
-                .map_err(|_| BankForks::get_io_error("serialize bank error"))?;
-        }
+    fn get_snapshot_path() -> PathBuf {
+        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+        let snapshot_dir = format!("{}/snapshots/", out_dir);
+        Path::new(&snapshot_dir).to_path_buf()
+    }
+
+    pub fn add_snapshot(&self, slot: u64) -> Result<(), Error> {
+        let path = BankForks::get_snapshot_path();
+        fs::create_dir_all(path.clone())?;
+        let bank_file = format!("{}", slot);
+        let bank_file_path = path.join(bank_file);
+        let file = File::create(bank_file_path)?;
+        let mut stream = BufWriter::new(file);
+        serialize_into(&mut stream, self.get(slot).unwrap())
+            .map_err(|_| BankForks::get_io_error("serialize bank error"))?;
         Ok(())
     }
 
-    pub fn load_from_snapshot(path: &str) -> Result<Self, Error> {
-        let bank_index = {
-            let path = Path::new(path).join("bank.index");
-            let index_file = File::open(path)?;
-            let mut stream = BufReader::new(index_file);
-            let index: HashMap<u64, PathBuf> = deserialize_from(&mut stream)
-                .map_err(|_| BankForks::get_io_error("deserialize snapshot index error"))?;
-            index
-        };
+    pub fn remove_snapshot(&self, slot: u64) {
+        let path = BankForks::get_snapshot_path();
+        let bank_file = format!("{}", slot);
+        let bank_file_path = path.join(bank_file);
+        let _ = fs::remove_file(bank_file_path);
+    }
 
+    pub fn set_snapshot_config(&mut self, use_snapshot: bool) {
+        self.use_snapshot = use_snapshot;
+    }
+
+    pub fn load_from_snapshot() -> Result<Self, Error> {
+        let path = BankForks::get_snapshot_path();
+        let paths = fs::read_dir(path.clone())?;
+        let mut names = paths
+            .filter_map(|entry| {
+                entry.ok().and_then(|e| {
+                    e.path()
+                        .file_name()
+                        .and_then(|n| n.to_str().map(|s| s.parse::<u64>().unwrap()))
+                })
+            })
+            .collect::<Vec<u64>>();
+
+        names.sort();
         let mut banks: HashMap<u64, Arc<Bank>> = HashMap::new();
-        for (slot, bank_path) in &bank_index {
-            let file = File::open(bank_path)?;
+        let mut slots = HashSet::new();
+        for bank_slot in names.clone() {
+            let bank_path = format!("{}", bank_slot);
+            let bank_file_path = path.join(bank_path.clone());
+            info!("Load from {:?}", bank_file_path);
+            let file = File::open(bank_file_path)?;
             let mut stream = BufReader::new(file);
-            let bank: Bank = deserialize_from(&mut stream)
-                .map_err(|_| BankForks::get_io_error("deserialize bank error"))?;
-            banks.insert(*slot, Arc::new(bank));
+            let bank: Result<Bank, std::io::Error> = deserialize_from(&mut stream)
+                .map_err(|_| BankForks::get_io_error("deserialize bank error"));
+            match bank {
+                Ok(v) => {
+                    banks.insert(bank_slot, Arc::new(v));
+                    slots.insert(bank_slot);
+                }
+                Err(_) => warn!("Load snapshot failed for {}", bank_slot),
+            }
         }
-        let working_bank = banks[&0].clone();
+        let working_bank = banks[&names[names.len() - 1]].clone();
         Ok(BankForks {
             banks,
             working_bank,
+            slots,
+            use_snapshot: true,
         })
     }
 }
@@ -322,11 +367,12 @@ mod tests {
         let bank_ser = serialize(&bank).unwrap();
         let child_bank = bank_forks.banks.get(&1).unwrap();
         let child_bank_ser = serialize(&child_bank).unwrap();
-        let snapshot_path = "snapshots";
-        bank_forks.save_snapshot(snapshot_path).unwrap();
+        for (slot, _) in bank_forks.banks.iter() {
+            bank_forks.add_snapshot(*slot).unwrap();
+        }
         drop(bank_forks);
 
-        let new = BankForks::load_from_snapshot(snapshot_path).unwrap();
+        let new = BankForks::load_from_snapshot().unwrap();
         assert_eq!(new[0].tick_height(), tick_height);
         let bank: Bank = deserialize(&bank_ser).unwrap();
         let new_bank = new.banks.get(&0).unwrap();
@@ -334,8 +380,10 @@ mod tests {
         let child_bank: Bank = deserialize(&child_bank_ser).unwrap();
         let new_bank = new.banks.get(&1).unwrap();
         child_bank.compare_bank(&new_bank);
+        for (slot, _) in new.banks.iter() {
+            new.remove_snapshot(*slot);
+        }
         drop(new);
-        let _ = fs::remove_dir_all(snapshot_path);
     }
 
     #[test]

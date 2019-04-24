@@ -72,9 +72,10 @@ pub struct Accounts {
 
 impl Drop for Accounts {
     fn drop(&mut self) {
-        if self.own_paths {
+        if self.own_paths && (Arc::strong_count(&self.accounts_db) == 1) {
             let paths = get_paths_vec(&self.paths);
             paths.iter().for_each(|p| {
+                info!("drop remove {:?}", p);
                 let _ignored = remove_dir_all(p);
 
                 // it is safe to delete the parent

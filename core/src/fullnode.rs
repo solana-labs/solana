@@ -291,6 +291,30 @@ impl Fullnode {
     }
 }
 
+fn get_bank_forks(
+    genesis_block: &GenesisBlock,
+    blocktree: &Blocktree,
+    account_paths: Option<String>,
+    use_snapshot: bool,
+) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
+    if use_snapshot {
+        let bank_forks = BankForks::load_from_snapshot();
+        match bank_forks {
+            Ok(v) => {
+                let bank = &v.working_bank();
+                let fork_info = BankForksInfo {
+                    bank_slot: bank.slot(),
+                    entry_height: bank.tick_height(),
+                };
+                return (v, vec![fork_info], LeaderScheduleCache::new_from_bank(bank));
+            }
+            Err(_) => warn!("Failed to load from snapshot, fallback to load from ledger"),
+        }
+    }
+    blocktree_processor::process_blocktree(&genesis_block, &blocktree, account_paths)
+        .expect("process_blocktree failed")
+}
+
 pub fn new_banks_from_blocktree(
     blocktree_path: &str,
     account_paths: Option<String>,
@@ -310,14 +334,8 @@ pub fn new_banks_from_blocktree(
         Blocktree::open_with_signal(blocktree_path)
             .expect("Expected to successfully open database ledger");
 
-    let (bank_forks, bank_forks_info, leader_schedule_cache) = if use_snapshot {
-        let bank_forks = BankForks::load_from_snapshot("bank-snapshot").unwrap();
-        let bank = &bank_forks.working_bank();
-        (bank_forks, vec![], LeaderScheduleCache::new_from_bank(bank))
-    } else {
-        blocktree_processor::process_blocktree(&genesis_block, &blocktree, account_paths)
-            .expect("process_blocktree failed")
-    };
+    let (bank_forks, bank_forks_info, leader_schedule_cache) =
+        get_bank_forks(&genesis_block, &blocktree, account_paths, use_snapshot);
 
     (
         bank_forks,
