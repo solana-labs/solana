@@ -138,6 +138,7 @@ impl StorageState {
 }
 
 impl StorageStage {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         storage_state: &StorageState,
         storage_entry_receiver: EntryReceiver,
