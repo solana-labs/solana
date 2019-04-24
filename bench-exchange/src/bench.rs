@@ -413,7 +413,7 @@ fn swapper<T>(
                 == 0
             {
                 tries += 1;
-                if tries > 30 {
+                if tries > 300 {
                     if exit_signal.load(Ordering::Relaxed) {
                         break 'outer;
                     }
@@ -1064,12 +1064,12 @@ mod tests {
         let mut config = Config::default();
         config.identity = Keypair::new();
         config.threads = 1;
-        config.duration = Duration::from_secs(30);
+        config.duration = Duration::from_secs(1);
         config.fund_amount = 100_000;
-        config.transfer_delay = 40;
-        config.batch_size = 1000;
-        config.chunk_size = 250;
-        config.account_groups = 10;
+        config.transfer_delay = 20;
+        config.batch_size = 100; // 1000;
+        config.chunk_size = 10; // 250;
+        config.account_groups = 1; // 10;
         let Config {
             fund_amount,
             batch_size,
@@ -1136,12 +1136,12 @@ mod tests {
         let mut config = Config::default();
         config.identity = identity;
         config.threads = 1;
-        config.duration = Duration::from_secs(30);
+        config.duration = Duration::from_secs(1);
         config.fund_amount = 100_000;
-        config.transfer_delay = 0;
-        config.batch_size = 1000;
-        config.chunk_size = 500;
-        config.account_groups = 10;
+        config.transfer_delay = 20; // 0;
+        config.batch_size = 100; // 1500;
+        config.chunk_size = 10; // 1500;
+        config.account_groups = 1; // 50;
 
         do_bench_exchange(clients, config);
     }
