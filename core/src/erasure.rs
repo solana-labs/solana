@@ -41,7 +41,6 @@
 //!
 //!
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
-use crate::result::Result;
 use std::cmp;
 use std::convert::AsMut;
 use std::sync::{Arc, RwLock};
@@ -55,6 +54,8 @@ pub const NUM_DATA: usize = 16;
 pub const NUM_CODING: usize = 4;
 /// Total number of blobs in an erasure set; includes data and coding blobs
 pub const ERASURE_SET_SIZE: usize = NUM_DATA + NUM_CODING;
+
+type Result<T> = std::result::Result<T, reed_solomon_erasure::Error>;
 
 /// Represents an erasure "session" with a particular configuration and number of data and coding
 /// blobs
