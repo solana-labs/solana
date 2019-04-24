@@ -44,6 +44,28 @@ test('get account info - error', () => {
   );
 });
 
+test('fullnodeExit', async () => {
+  if (!mockRpcEnabled) {
+    console.log('fullnodeExit skipped on live node');
+    return;
+  }
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'fullnodeExit',
+    },
+    {
+      error: null,
+      result: false,
+    },
+  ]);
+
+  const result = await connection.fullnodeExit();
+  expect(result).toBe(false);
+});
+
 test('get balance', async () => {
   const account = new Account();
   const connection = new Connection(url);
