@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .subcommand(
             SubCommand::with_name("pubkey")
-                .about("Generate a pubkey from keypair file")
+                .about("Display the pubkey from a keypair file")
                 .arg(
                     Arg::with_name("infile")
                         .index(1)
