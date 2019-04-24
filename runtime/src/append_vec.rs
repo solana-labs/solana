@@ -144,11 +144,7 @@ impl AppendVec {
         *offset = pos + len;
     }
 
-    #[allow(clippy::mutex_atomic)]
-    fn append_ptrs(&self, vals: &[(*const u8, usize)]) -> Option<usize> {
-        // This mutex forces append to be single threaded, but concurrent with reads
-        // See UNSAFE usage in `append_ptr`
-        let mut offset = self.append_offset.lock().unwrap();
+    fn append_ptrs_locked(&self, offset: &mut usize, vals: &[(*const u8, usize)]) -> Option<usize> {
         let mut end = *offset;
         for val in vals {
             //Data is aligned at the next 64 byte offset. Without alignment loading the memory may
@@ -165,7 +161,7 @@ impl AppendVec {
         //crash on some architectures.
         let pos = align_up!(*offset, mem::size_of::<u64>());
         for val in vals {
-            self.append_ptr(&mut offset, val.0, val.1)
+            self.append_ptr(offset, val.0, val.1)
         }
         self.current_len.store(*offset, Ordering::Relaxed);
         Some(pos)
@@ -207,23 +203,40 @@ impl AppendVec {
         accounts
     }
 
-    pub fn append_account(&self, storage_meta: StorageMeta, account: &Account) -> Option<usize> {
-        let meta_ptr = &storage_meta as *const StorageMeta;
-        let balance = AccountBalance {
-            lamports: account.lamports,
-            owner: account.owner,
-            executable: account.executable,
-        };
-        let balance_ptr = &balance as *const AccountBalance;
-        let data_len = account.data.len();
-        let data_ptr = account.data.as_ptr();
-        let ptrs = [
-            (meta_ptr as *const u8, mem::size_of::<StorageMeta>()),
-            (balance_ptr as *const u8, mem::size_of::<AccountBalance>()),
-            (data_ptr, data_len),
-        ];
-        self.append_ptrs(&ptrs)
+    #[allow(clippy::mutex_atomic)]
+    pub fn append_accounts(&self, accounts: &[(StorageMeta, &Account)]) -> Vec<usize> {
+        let mut offset = self.append_offset.lock().unwrap();
+        let mut rv = vec![];
+        for (storage_meta, account) in accounts {
+            let meta_ptr = storage_meta as *const StorageMeta;
+            let balance = AccountBalance {
+                lamports: account.lamports,
+                owner: account.owner,
+                executable: account.executable,
+            };
+            let balance_ptr = &balance as *const AccountBalance;
+            let data_len = storage_meta.data_len as usize;
+            let data_ptr = account.data.as_ptr();
+            let ptrs = [
+                (meta_ptr as *const u8, mem::size_of::<StorageMeta>()),
+                (balance_ptr as *const u8, mem::size_of::<AccountBalance>()),
+                (data_ptr, data_len),
+            ];
+            if let Some(res) = self.append_ptrs_locked(&mut offset, &ptrs) {
+                rv.push(res)
+            } else {
+                break;
+            }
+        }
+        rv
     }
+
+    pub fn append_account(&self, storage_meta: StorageMeta, account: &Account) -> Option<usize> {
+        self.append_accounts(&[(storage_meta, account)])
+            .first()
+            .cloned()
+    }
+
     pub fn append_account_test(&self, data: &(StorageMeta, Account)) -> Option<usize> {
         self.append_account(data.0.clone(), &data.1)
     }
