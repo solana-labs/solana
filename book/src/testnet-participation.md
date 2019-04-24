@@ -112,6 +112,7 @@ $ fullnode.sh --public-address --poll-for-new-genesis-block beta.testnet.solana.
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
+$ clear-fullnode-config.sh
 $ solana-install run fullnode.sh -- --public-address --poll-for-new-genesis-block beta.testnet.solana.com
 ```
 
@@ -149,6 +150,14 @@ Provide the **vote id** pubkey to the `solana-wallet show-vote-account` command 
 the recent voting activity from your validator:
 ```bash
 $ solana-wallet -n beta.testnet.solana.com show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
+```
+
+The vote id for the validator can also be found by running:
+```bash
+# If this is a `solana-install`-installation run:
+$ solana-keygen pubkey ~/.local/share/solana/install/active_release/config-local/fullnode-vote-id.json
+# Otherwise run:
+$ solana-keygen pubkey ./config-local/fullnode-vote-id.json
 ```
 
 ### Sharing Metrics From Your Validator
