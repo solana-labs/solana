@@ -385,7 +385,7 @@ export class Connection {
   }
 
   /**
-   * Fetch the current slot leader of the cluster
+   * Return the list of nodes that are currently participating in the cluster
    */
   async getClusterNodes(): Promise<Array<ContactInfo>> {
     const unsafeRes = await this._rpcRequest('getClusterNodes', []);
