@@ -256,100 +256,73 @@ impl Blocktree {
         I::Item: Borrow<Blob>,
     {
         let mut write_batch = self.db.batch()?;
+        let new_blobs: Vec<_> = new_blobs.into_iter().collect();
+        let mut recovered_data = vec![];
+
+        let mut prev_inserted_blob_datas = HashMap::new();
         // A map from slot to a 2-tuple of metadata: (working copy, backup copy),
         // so we can detect changes to the slot metadata later
         let mut slot_meta_working_set = HashMap::new();
         let mut erasure_meta_working_set = HashMap::new();
-        let new_blobs: Vec<_> = new_blobs.into_iter().collect();
-        let mut prev_inserted_blob_datas = HashMap::new();
 
         for blob in new_blobs.iter() {
             let blob = blob.borrow();
             let blob_slot = blob.slot();
-            let parent_slot = blob.parent();
-
-            // Check if we've already inserted the slot metadata for this blob's slot
-            let entry = slot_meta_working_set.entry(blob_slot).or_insert_with(|| {
-                // Store a 2-tuple of the metadata (working copy, backup copy)
-                if let Some(mut meta) = self
-                    .meta(blob_slot)
-                    .expect("Expect database get to succeed")
-                {
-                    let backup = Some(meta.clone());
-                    // If parent_slot == std::u64::MAX, then this is one of the orphans inserted
-                    // during the chaining process, see the function find_slot_meta_in_cached_state()
-                    // for details. Slots that are orphans are missing a parent_slot, so we should
-                    // fill in the parent now that we know it.
-                    if Self::is_orphan(&meta) {
-                        meta.parent_slot = parent_slot;
-                    }
-
-                    (Rc::new(RefCell::new(meta)), backup)
-                } else {
-                    (
-                        Rc::new(RefCell::new(SlotMeta::new(blob_slot, parent_slot))),
-                        None,
-                    )
-                }
-            });
-
-            let slot_meta = &mut entry.0.borrow_mut();
-
-            // This slot is full, skip the bogus blob
-            if slot_meta.is_full() {
-                continue;
-            }
 
             let set_index = ErasureMeta::set_index_for(blob.index());
-            let erasure_meta_entry = erasure_meta_working_set
+            erasure_meta_working_set
                 .entry((blob_slot, set_index))
                 .or_insert_with(|| {
-                    self.erasure_meta_cf
+                    let erasure_meta = self
+                        .erasure_meta_cf
                         .get((blob_slot, set_index))
                         .expect("Expect database get to succeed")
-                        .unwrap_or_else(|| ErasureMeta::new(set_index))
+                        .unwrap_or_else(|| ErasureMeta::new(set_index));
+
+                    erasure_meta
                 });
-
-            erasure_meta_entry.set_data_present(blob.index(), true);
-
-            let _ = self.insert_data_blob(
-                blob,
-                &mut prev_inserted_blob_datas,
-                slot_meta,
-                &mut write_batch,
-            );
         }
 
-        // Handle chaining for the working set
-        self.handle_chaining(&mut write_batch, &slot_meta_working_set)?;
-        let mut should_signal = false;
+        self.insert_data_blobs_with_batch(
+            new_blobs.iter().map(Borrow::borrow),
+            &mut slot_meta_working_set,
+            &mut erasure_meta_working_set,
+            &mut prev_inserted_blob_datas,
+            &mut write_batch,
+        )?;
 
-        // Check if any metadata was changed, if so, insert the new version of the
-        // metadata into the write batch
-        for (slot, (meta, meta_backup)) in slot_meta_working_set.iter() {
-            let meta: &SlotMeta = &RefCell::borrow(&*meta);
-            // Check if the working copy of the metadata has changed
-            if Some(meta) != meta_backup.as_ref() {
-                should_signal = should_signal || Self::slot_has_updates(meta, &meta_backup);
-                write_batch.put::<cf::SlotMeta>(*slot, &meta)?;
+        for (&(slot, _), erasure_meta) in erasure_meta_working_set.iter_mut() {
+            if let Some((data, coding)) =
+                self.try_erasure_recover(&erasure_meta, slot, &prev_inserted_blob_datas, None)?
+            {
+                for data_blob in data {
+                    recovered_data.push(data_blob);
+                }
+
+                for coding_blob in coding {
+                    erasure_meta.set_coding_present(coding_blob.index(), true);
+
+                    write_batch.put_bytes::<cf::Coding>(
+                        (coding_blob.slot(), coding_blob.index()),
+                        &coding_blob.data[..BLOB_HEADER_SIZE + coding_blob.size()],
+                    )?;
+                }
             }
         }
 
-        for ((slot, set_index), erasure_meta) in erasure_meta_working_set.iter() {
-            write_batch.put::<cf::ErasureMeta>((*slot, *set_index), erasure_meta)?;
+        self.insert_data_blobs_with_batch(
+            recovered_data.iter(),
+            &mut slot_meta_working_set,
+            &mut erasure_meta_working_set,
+            &mut prev_inserted_blob_datas,
+            &mut write_batch,
+        )?;
+
+        for ((slot, set_index), erasure_meta) in erasure_meta_working_set {
+            write_batch.put::<cf::ErasureMeta>((slot, set_index), &erasure_meta)?;
         }
 
         self.db.write(write_batch)?;
-
-        if should_signal {
-            for signal in self.new_blobs_signals.iter() {
-                let _ = signal.try_send(true);
-            }
-        }
-
-        for ((slot, set_index), erasure_meta) in erasure_meta_working_set.into_iter() {
-            self.try_erasure_recover(&erasure_meta, slot, set_index)?;
-        }
 
         Ok(())
     }
@@ -448,6 +421,8 @@ impl Blocktree {
         self.data_cf.put_bytes((slot, index), bytes)
     }
 
+    /// For benchmarks, testing, and setup.
+    /// Does no metadata tracking. Use with care.
     pub fn put_coding_blob_bytes_raw(&self, slot: u64, index: u64, bytes: &[u8]) -> Result<()> {
         self.erasure_cf.put_bytes((slot, index), bytes)
     }
@@ -468,29 +443,122 @@ impl Blocktree {
 
         writebatch.put_bytes::<cf::Coding>((slot, index), bytes)?;
 
+        if let Some((data, coding)) = self.try_erasure_recover(
+            &mut erasure_meta,
+            slot,
+            &HashMap::new(),
+            Some((index, bytes)),
+        )? {
+            let mut erasure_meta_working_set = HashMap::new();
+            erasure_meta_working_set.insert((slot, set_index), erasure_meta);
+
+            self.insert_data_blobs_with_batch(
+                &data[..],
+                &mut HashMap::new(),
+                &mut erasure_meta_working_set,
+                &mut HashMap::new(),
+                &mut writebatch,
+            )?;
+
+            erasure_meta = *erasure_meta_working_set.values().next().unwrap();
+
+            for coding_blob in coding {
+                erasure_meta.set_coding_present(coding_blob.index(), true);
+
+                writebatch.put_bytes::<cf::Coding>(
+                    (coding_blob.slot(), coding_blob.index()),
+                    &coding_blob.data[..BLOB_HEADER_SIZE + coding_blob.size()],
+                )?;
+            }
+        }
+
         writebatch.put::<cf::ErasureMeta>((slot, set_index), &erasure_meta)?;
 
         self.db.write(writebatch)?;
 
-        self.try_erasure_recover(&erasure_meta, slot, set_index)
+        Ok(())
     }
 
     fn try_erasure_recover(
         &self,
         erasure_meta: &ErasureMeta,
         slot: u64,
-        set_index: u64,
-    ) -> Result<()> {
-        match erasure_meta.status() {
+        prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
+        new_coding_blob: Option<(u64, &[u8])>,
+    ) -> Result<Option<(Vec<Blob>, Vec<Blob>)>> {
+        let blobs = match erasure_meta.status() {
             ErasureMetaStatus::CanRecover => {
-                let recovered = self.recover(slot, set_index)?;
+                let (data, coding) = self.recover(
+                    slot,
+                    erasure_meta,
+                    prev_inserted_blob_datas,
+                    new_coding_blob,
+                )?;
+                let recovered = data.len() + coding.len();
+                info!("recovered {} blobs", recovered);
                 inc_new_counter_info!("blocktree-erasure-blobs_recovered", recovered);
+                Some((data, coding))
             }
             ErasureMetaStatus::StillNeed(needed) => {
-                inc_new_counter_info!("blocktree-erasure-blobs_needed", needed)
+                inc_new_counter_info!("blocktree-erasure-blobs_needed", needed);
+                None
             }
-            ErasureMetaStatus::DataFull => inc_new_counter_info!("blocktree-erasure-complete", 1),
+            ErasureMetaStatus::DataFull => {
+                inc_new_counter_info!("blocktree-erasure-complete", 1);
+                None
+            }
+        };
+
+        Ok(blobs)
+    }
+
+    fn insert_data_blobs_with_batch<'a, I>(
+        &self,
+        new_blobs: I,
+        slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+        erasure_meta_working_set: &mut HashMap<(u64, u64), ErasureMeta>,
+        prev_inserted_blob_datas: &mut HashMap<(u64, u64), &'a [u8]>,
+        write_batch: &mut WriteBatch,
+    ) -> Result<()>
+    where
+        I: IntoIterator<Item = &'a Blob>,
+    {
+        for blob in new_blobs.into_iter() {
+            let inserted = self.check_insert_data_blob(
+                blob,
+                slot_meta_working_set,
+                prev_inserted_blob_datas,
+                write_batch,
+            )?;
+
+            if inserted {
+                erasure_meta_working_set
+                    .get_mut(&(blob.slot(), ErasureMeta::set_index_for(blob.index())))
+                    .unwrap()
+                    .set_data_present(blob.index(), true);
+            }
         }
+        // Handle chaining for the working set
+        self.handle_chaining(write_batch, slot_meta_working_set)?;
+        let mut should_signal = false;
+
+        // Check if any metadata was changed, if so, insert the new version of the
+        // metadata into the write batch
+        for (slot, (meta, meta_backup)) in slot_meta_working_set.iter() {
+            let meta: &SlotMeta = &RefCell::borrow(&*meta);
+            // Check if the working copy of the metadata has changed
+            if Some(meta) != meta_backup.as_ref() {
+                should_signal = should_signal || Self::slot_has_updates(meta, &meta_backup);
+                write_batch.put::<cf::SlotMeta>(*slot, &meta)?;
+            }
+        }
+
+        if should_signal {
+            for signal in self.new_blobs_signals.iter() {
+                let _ = signal.try_send(true);
+            }
+        }
+
         Ok(())
     }
 
@@ -977,6 +1045,54 @@ impl Blocktree {
         }
     }
 
+    /// Checks if this data blob is a duplicate. If  it's not, then inserts it.
+    fn check_insert_data_blob<'a>(
+        &self,
+        blob: &'a Blob,
+        slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
+        prev_inserted_blob_datas: &mut HashMap<(u64, u64), &'a [u8]>,
+        write_batch: &mut WriteBatch,
+    ) -> Result<bool> {
+        //let blob = blob.borrow();
+        let blob_slot = blob.slot();
+        let parent_slot = blob.parent();
+
+        // Check if we've already inserted the slot metadata for this blob's slot
+        let entry = slot_meta_working_set.entry(blob_slot).or_insert_with(|| {
+            // Store a 2-tuple of the metadata (working copy, backup copy)
+            if let Some(mut meta) = self
+                .meta(blob_slot)
+                .expect("Expect database get to succeed")
+            {
+                let backup = Some(meta.clone());
+                // If parent_slot == std::u64::MAX, then this is one of the orphans inserted
+                // during the chaining process, see the function find_slot_meta_in_cached_state()
+                // for details. Slots that are orphans are missing a parent_slot, so we should
+                // fill in the parent now that we know it.
+                if Blocktree::is_orphan(&meta) {
+                    meta.parent_slot = parent_slot;
+                }
+
+                (Rc::new(RefCell::new(meta)), backup)
+            } else {
+                (
+                    Rc::new(RefCell::new(SlotMeta::new(blob_slot, parent_slot))),
+                    None,
+                )
+            }
+        });
+
+        let slot_meta = &mut entry.0.borrow_mut();
+
+        // This slot is full, skip the bogus blob
+        if slot_meta.is_full() {
+            return Ok(false);
+        }
+
+        let _ = self.insert_data_blob(blob, prev_inserted_blob_datas, slot_meta, write_batch);
+        Ok(true)
+    }
+
     /// Insert a blob into ledger, updating the slot_meta if necessary
     fn insert_data_blob<'a>(
         &self,
@@ -1042,10 +1158,16 @@ impl Blocktree {
     }
 
     /// Attempts recovery using erasure coding
-    fn recover(&self, slot: u64, set_index: u64) -> Result<usize> {
-        use crate::erasure::{ERASURE_SET_SIZE, NUM_DATA};
+    fn recover(
+        &self,
+        slot: u64,
+        erasure_meta: &ErasureMeta,
+        prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
+        new_coding: Option<(u64, &[u8])>,
+    ) -> Result<(Vec<Blob>, Vec<Blob>)> {
+        use crate::erasure::ERASURE_SET_SIZE;
 
-        let erasure_meta = self.erasure_meta_cf.get((slot, set_index))?.unwrap();
+        //let mut erasure_meta = self.erasure_meta_cf.get((slot, set_index))?.unwrap();
 
         let start_idx = erasure_meta.start_index();
         let size = erasure_meta.size();
@@ -1057,16 +1179,19 @@ impl Blocktree {
 
         for i in start_idx..coding_end_idx {
             if erasure_meta.is_coding_present(i) {
-                let mut blob_bytes = self
-                    .erasure_cf
-                    .get_bytes((slot, i))?
-                    .expect("erasure_meta must have no false positives");
+                let mut blob_bytes = match new_coding {
+                    Some((new_coding_index, bytes)) if new_coding_index == i => bytes.to_vec(),
+                    _ => self
+                        .erasure_cf
+                        .get_bytes((slot, i))?
+                        .expect("ErasureMeta must have no false positivies"),
+                };
 
                 blob_bytes.drain(..BLOB_HEADER_SIZE);
 
                 blobs.push(blob_bytes);
             } else {
-                let set_relative_idx = (i - start_idx) as usize + NUM_DATA;
+                let set_relative_idx = erasure_meta.coding_index_in_set(i).unwrap() as usize;
                 blobs.push(vec![0; size]);
                 present[set_relative_idx] = false;
             }
@@ -1075,13 +1200,16 @@ impl Blocktree {
         assert_ne!(size, 0);
 
         for i in start_idx..data_end_idx {
-            let set_relative_idx = (i - start_idx) as usize;
+            let set_relative_idx = erasure_meta.data_index_in_set(i).unwrap() as usize;
 
             if erasure_meta.is_data_present(i) {
-                let mut blob_bytes = self
-                    .data_cf
-                    .get_bytes((slot, i))?
-                    .expect("erasure_meta must have no false positives");
+                let mut blob_bytes = match prev_inserted_blob_datas.get(&(slot, i)) {
+                    Some(bytes) => bytes.to_vec(),
+                    None => self
+                        .data_cf
+                        .get_bytes((slot, i))?
+                        .expect("erasure_meta must have no false positives"),
+                };
 
                 // If data is too short, extend it with zeroes
                 blob_bytes.resize(size, 0u8);
@@ -1094,11 +1222,27 @@ impl Blocktree {
             }
         }
 
-        let (recovered_data, recovered_coding) = self
+        let (recovered_data, recovered_coding) = match self
             .session
-            .reconstruct_blobs(&mut blobs, present, size, start_idx, slot)?;
+            .reconstruct_blobs(&mut blobs, present, size, start_idx, slot)
+        {
+            Ok(x) => x,
+            Err(e) => {
+                error!(
+                    "[recover] erasure recovery failed! slot: {}, indexes: [{}, {}), cause: {}",
+                    slot, start_idx, data_end_idx, e
+                );
+                return Err(Error::ErasureError(e));
+            }
+        };
 
         let amount_recovered = recovered_data.len() + recovered_coding.len();
+        assert_eq!(
+            amount_recovered,
+            ERASURE_SET_SIZE
+                - (erasure_meta.coding.count_ones() + erasure_meta.data.count_ones()) as usize,
+            "Recovery should always complete a set"
+        );
 
         trace!(
             "[recover] reconstruction OK slot: {}, indexes: [{},{})",
@@ -1107,13 +1251,20 @@ impl Blocktree {
             data_end_idx
         );
 
-        self.write_blobs(recovered_data)?;
+        Ok((recovered_data, recovered_coding))
+        //let mut batch = self.db.batch()?;
+        //erasure_meta.coding = 0x0F;
+        //batch.put::<cf::ErasureMeta>((slot, erasure_meta.set_index), &erasure_meta)?;
 
-        for blob in recovered_coding {
-            self.put_coding_blob_bytes_raw(slot, blob.index(), &blob.data[..])?;
-        }
+        //for blob in recovered_coding {
+        ////self.put_coding_blob_bytes_raw(slot, blob.index(), &blob.data[..])?;
+        //batch.put_bytes::<cf::Coding>((slot, blob.index()), &blob.data[..])?;
+        //}
 
-        Ok(amount_recovered)
+        //self.db.write(batch)?;
+        //self.write_blobs(recovered_data)?;
+
+        //Ok(amount_recovered)
     }
 
     /// Returns the next consumed index and the number of ticks in the new consumed
@@ -2559,6 +2710,7 @@ pub mod tests {
 
     mod erasure {
         use super::*;
+        use crate::blocktree::meta::ErasureMetaStatus;
         use crate::erasure::test::{generate_ledger_model, ErasureSpec, SlotSpec};
         use crate::erasure::{CodingGenerator, NUM_CODING, NUM_DATA};
         use rand::{thread_rng, Rng};
@@ -2572,11 +2724,13 @@ pub mod tests {
 
         #[test]
         fn test_erasure_meta_accuracy() {
+            use ErasureMetaStatus::{DataFull, StillNeed};
+
             let path = get_tmp_ledger_path!();
             let blocktree = Blocktree::open(&path).unwrap();
 
-            // one erasure set + half of the next
-            let num_blobs = 24;
+            // two erasure sets
+            let num_blobs = 32;
             let slot = 0;
 
             let (blobs, _) = make_slot_entries(slot, 0, num_blobs);
@@ -2596,8 +2750,7 @@ pub mod tests {
             assert!(erasure_meta_opt.is_some());
             let erasure_meta = erasure_meta_opt.unwrap();
 
-            assert_eq!(erasure_meta.data, 0xFF00);
-            assert_eq!(erasure_meta.coding, 0x0);
+            assert_eq!(erasure_meta.status(), StillNeed(8));
 
             blocktree.write_blobs(&blobs[..8]).unwrap();
 
@@ -2609,18 +2762,9 @@ pub mod tests {
 
             assert_eq!(erasure_meta.data, 0xFFFF);
             assert_eq!(erasure_meta.coding, 0x0);
+            assert_eq!(erasure_meta.status(), DataFull);
 
-            blocktree.write_blobs(&blobs[16..]).unwrap();
-
-            let erasure_meta = blocktree
-                .erasure_meta_cf
-                .get((slot, 1))
-                .expect("DB get must succeed")
-                .unwrap();
-
-            assert_eq!(erasure_meta.data, 0x00FF);
-            assert_eq!(erasure_meta.coding, 0x0);
-
+            // insert all coding blobs in first set
             let mut coding_generator = CodingGenerator::new(Arc::clone(&blocktree.session));
             let coding_blobs = coding_generator.next(&shared_blobs[..NUM_DATA]);
 
@@ -2640,7 +2784,68 @@ pub mod tests {
 
             assert_eq!(erasure_meta.data, 0xFFFF);
             assert_eq!(erasure_meta.coding, 0x0F);
+            assert_eq!(erasure_meta.status(), DataFull);
 
+            // insert 8 of 16 data blobs in 2nd set
+            blocktree.write_blobs(&blobs[16..24]).unwrap();
+
+            let erasure_meta = blocktree
+                .erasure_meta_cf
+                .get((slot, 1))
+                .expect("DB get must succeed")
+                .unwrap();
+
+            assert_eq!(erasure_meta.data, 0x00FF);
+            assert_eq!(erasure_meta.coding, 0x0);
+            assert_eq!(erasure_meta.status(), StillNeed(8));
+
+            // insert all coding blobs in 2nd set
+            let mut coding_generator = CodingGenerator::new(Arc::clone(&blocktree.session));
+            let coding_blobs = coding_generator.next(&shared_blobs[NUM_DATA..]);
+
+            for shared_coding_blob in coding_blobs {
+                let blob = shared_coding_blob.read().unwrap();
+                let size = blob.size() + BLOB_HEADER_SIZE;
+                blocktree
+                    .put_coding_blob_bytes(blob.slot(), blob.index(), &blob.data[..size])
+                    .unwrap();
+            }
+
+            let erasure_meta = blocktree
+                .erasure_meta_cf
+                .get((slot, 1))
+                .expect("DB get must succeed")
+                .unwrap();
+
+            assert_eq!(erasure_meta.data, 0x00FF);
+            assert_eq!(erasure_meta.coding, 0x0F);
+            assert_eq!(erasure_meta.status(), StillNeed(4));
+
+            // insert 3 more data blobs in 2nd erasure set.
+            blocktree.write_blobs(&blobs[24..27]).unwrap();
+
+            let erasure_meta = blocktree
+                .erasure_meta_cf
+                .get((slot, 1))
+                .expect("DB get must succeed")
+                .unwrap();
+
+            assert_eq!(erasure_meta.data, 0x07FF);
+            assert_eq!(erasure_meta.coding, 0x0F);
+            assert_eq!(erasure_meta.status(), StillNeed(1));
+
+            // insert 1 more data blob, should trigger erasure
+            blocktree.write_blobs(&blobs[28..29]).unwrap();
+
+            let erasure_meta = blocktree
+                .erasure_meta_cf
+                .get((slot, 1))
+                .expect("DB get must succeed")
+                .unwrap();
+
+            assert_eq!(erasure_meta.status(), DataFull);
+
+            // remove coding blobs, erasure meta should still report being full
             let (start_idx, coding_end_idx) =
                 (erasure_meta.start_index(), erasure_meta.end_indexes().1);
 
@@ -2650,7 +2855,7 @@ pub mod tests {
 
             let erasure_meta = blocktree
                 .erasure_meta_cf
-                .get((slot, 0))
+                .get((slot, 1))
                 .expect("DB get must succeed")
                 .unwrap();
 
@@ -2732,9 +2937,10 @@ pub mod tests {
 
         #[test]
         fn test_recovery_multi_slot_multi_thread() {
-            use rand::rngs::SmallRng;
-            use rand::SeedableRng;
+            use rand::{rngs::SmallRng, seq::SliceRandom, SeedableRng};
             use std::thread;
+
+            const N_THREADS: usize = 3;
 
             let slots = vec![0, 3, 5, 50, 100];
             let max_erasure_sets = 16;
@@ -2744,8 +2950,9 @@ pub mod tests {
             let mut rng = thread_rng();
 
             // Specification should generate a ledger where each slot has an random number of
-            // erasure sets. Odd erasure sets will have all data blobs and no coding blobs, and even ones
-            // will have between 1 data blob missing and 1 coding blob
+            // erasure sets. Odd erasure sets will have all coding blobs and between 1-4 data blobs
+            // missing, and even ones will have between 1-2 data blobs missing and 1-2 coding blobs
+            // missing
             let specs = slots
                 .iter()
                 .map(|&slot| {
@@ -2754,9 +2961,12 @@ pub mod tests {
                     let set_specs = (0..num_erasure_sets)
                         .map(|set_index| {
                             let (num_data, num_coding) = if set_index % 2 == 0 {
-                                (NUM_DATA - rng.gen_range(1, 5), NUM_CODING)
+                                (
+                                    NUM_DATA - rng.gen_range(1, 3),
+                                    NUM_CODING - rng.gen_range(1, 3),
+                                )
                             } else {
-                                (NUM_DATA - 1, NUM_CODING - 1)
+                                (NUM_DATA - rng.gen_range(1, 5), NUM_CODING)
                             };
                             ErasureSpec {
                                 set_index,
@@ -2770,66 +2980,82 @@ pub mod tests {
                 })
                 .collect::<Vec<_>>();
 
-            let model = generate_ledger_model(&specs);
+            let model = generate_ledger_model(specs);
             let blocktree = Arc::new(Blocktree::open(&path).unwrap());
 
             // Write to each slot in a different thread simultaneously.
             // These writes should trigger the recovery. Every erasure set should have all of its
-            // data blobs
+            // data blobs and coding_blobs at the end
             let mut handles = vec![];
 
-            for slot_model in model.clone() {
+            // Each thread will attempt to write to each slot in order. Within a slot, each thread
+            // will try to write each erasure set in a random order. Within each erasure set, there
+            // is a 50/50 chance of attempting to write the coding blobs first or the data blobs
+            // first.
+            // The goal is to be as racey as possible and cover a wide range of situations
+            for _ in 0..N_THREADS {
                 let blocktree = Arc::clone(&blocktree);
-                let slot = slot_model.slot;
                 let mut rng = SmallRng::from_rng(&mut rng).unwrap();
+                let model = model.clone();
                 let handle = thread::spawn(move || {
-                    for erasure_set in slot_model.chunks {
-                        // for even sets, write data blobs first, then write coding blobs, which
-                        // should trigger recovery since all coding blobs will be inserted and
-                        // between 1-4 data blobs are missing
-                        if rng.gen() {
-                            blocktree
-                                .write_shared_blobs(erasure_set.data)
-                                .expect("Writing data blobs must succeed");
-                            debug!(
-                                "multislot: wrote data: slot: {}, erasure_set: {}",
-                                slot, erasure_set.set_index
-                            );
+                    for slot_model in model {
+                        let slot = slot_model.slot;
+                        let num_erasure_sets = slot_model.chunks.len();
+                        let unordered_sets = slot_model
+                            .chunks
+                            .choose_multiple(&mut rng, num_erasure_sets);
 
-                            for shared_coding_blob in erasure_set.coding {
-                                let blob = shared_coding_blob.read().unwrap();
-                                let size = blob.size() + BLOB_HEADER_SIZE;
+                        for erasure_set in unordered_sets {
+                            if rng.gen() {
                                 blocktree
-                                    .put_coding_blob_bytes(slot, blob.index(), &blob.data[..size])
-                                    .expect("Writing coding blobs must succeed");
-                            }
-                            debug!(
-                                "multislot: wrote coding: slot: {}, erasure_set: {}",
-                                slot, erasure_set.set_index
-                            );
-                        } else {
-                            // for odd sets, write coding blobs first, then write the data blobs.
-                            // writing the data blobs should trigger recovery, since 3/4 coding and
-                            // 15/16 data blobs will be present
-                            for shared_coding_blob in erasure_set.coding {
-                                let blob = shared_coding_blob.read().unwrap();
-                                let size = blob.size() + BLOB_HEADER_SIZE;
-                                blocktree
-                                    .put_coding_blob_bytes(slot, blob.index(), &blob.data[..size])
-                                    .expect("Writing coding blobs must succeed");
-                            }
-                            debug!(
-                                "multislot: wrote coding: slot: {}, erasure_set: {}",
-                                slot, erasure_set.set_index
-                            );
+                                    .write_shared_blobs(&erasure_set.data)
+                                    .expect("Writing data blobs must succeed");
+                                debug!(
+                                    "multislot: wrote data: slot: {}, erasure_set: {}",
+                                    slot, erasure_set.set_index
+                                );
 
-                            blocktree
-                                .write_shared_blobs(erasure_set.data)
-                                .expect("Writing data blobs must succeed");
-                            debug!(
-                                "multislot: wrote data: slot: {}, erasure_set: {}",
-                                slot, erasure_set.set_index
-                            );
+                                for shared_coding_blob in &erasure_set.coding {
+                                    let blob = shared_coding_blob.read().unwrap();
+                                    let size = blob.size() + BLOB_HEADER_SIZE;
+                                    blocktree
+                                        .put_coding_blob_bytes(
+                                            slot,
+                                            blob.index(),
+                                            &blob.data[..size],
+                                        )
+                                        .expect("Writing coding blobs must succeed");
+                                }
+                                debug!(
+                                    "multislot: wrote coding: slot: {}, erasure_set: {}",
+                                    slot, erasure_set.set_index
+                                );
+                            } else {
+                                // write coding blobs first, then write the data blobs.
+                                for shared_coding_blob in &erasure_set.coding {
+                                    let blob = shared_coding_blob.read().unwrap();
+                                    let size = blob.size() + BLOB_HEADER_SIZE;
+                                    blocktree
+                                        .put_coding_blob_bytes(
+                                            slot,
+                                            blob.index(),
+                                            &blob.data[..size],
+                                        )
+                                        .expect("Writing coding blobs must succeed");
+                                }
+                                debug!(
+                                    "multislot: wrote coding: slot: {}, erasure_set: {}",
+                                    slot, erasure_set.set_index
+                                );
+
+                                blocktree
+                                    .write_shared_blobs(&erasure_set.data)
+                                    .expect("Writing data blobs must succeed");
+                                debug!(
+                                    "multislot: wrote data: slot: {}, erasure_set: {}",
+                                    slot, erasure_set.set_index
+                                );
+                            }
                         }
                     }
                 });
@@ -2862,10 +3088,8 @@ pub mod tests {
                     assert_eq!(erasure_meta.status(), ErasureMetaStatus::DataFull);
                     // Should have all data
                     assert_eq!(erasure_meta.data, 0xFFFF);
-                    if set_index % 2 == 0 {
-                        // Even sets have all coding
-                        assert_eq!(erasure_meta.coding, 0x0F);
-                    }
+                    // Should have all coding
+                    assert_eq!(erasure_meta.coding, 0x0F);
                 }
             }
 

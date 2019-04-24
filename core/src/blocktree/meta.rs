@@ -58,7 +58,7 @@ impl SlotMeta {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 /// Erasure coding information
 pub struct ErasureMeta {
     /// Which erasure set in the slot this is
@@ -104,12 +104,7 @@ impl ErasureMeta {
     }
 
     pub fn is_coding_present(&self, index: u64) -> bool {
-        let start = self.start_index();
-        let end = start + NUM_CODING as u64;
-
-        if start <= index && index < end {
-            let position = index - start;
-
+        if let Some(position) = self.data_index_in_set(index) {
             self.coding & (1 << position) != 0
         } else {
             false
@@ -125,11 +120,7 @@ impl ErasureMeta {
     }
 
     pub fn set_coding_present(&mut self, index: u64, present: bool) {
-        let set_index = Self::set_index_for(index);
-
-        if set_index as u64 == self.set_index {
-            let position = index - self.start_index();
-
+        if let Some(position) = self.data_index_in_set(index) {
             if present {
                 self.coding |= 1 << position;
             } else {
@@ -139,12 +130,7 @@ impl ErasureMeta {
     }
 
     pub fn is_data_present(&self, index: u64) -> bool {
-        let start = self.start_index();
-        let end = start + NUM_DATA as u64;
-
-        if start <= index && index < end {
-            let position = index - start;
-
+        if let Some(position) = self.data_index_in_set(index) {
             self.data & (1 << position) != 0
         } else {
             false
@@ -152,11 +138,7 @@ impl ErasureMeta {
     }
 
     pub fn set_data_present(&mut self, index: u64, present: bool) {
-        let set_index = Self::set_index_for(index);
-
-        if set_index as u64 == self.set_index {
-            let position = index - self.start_index();
-
+        if let Some(position) = self.data_index_in_set(index) {
             if present {
                 self.data |= 1 << position;
             } else {
@@ -167,6 +149,20 @@ impl ErasureMeta {
 
     pub fn set_index_for(index: u64) -> u64 {
         index / NUM_DATA as u64
+    }
+
+    pub fn data_index_in_set(&self, index: u64) -> Option<u64> {
+        let set_index = Self::set_index_for(index);
+
+        if set_index == self.set_index {
+            Some(index - self.start_index())
+        } else {
+            None
+        }
+    }
+
+    pub fn coding_index_in_set(&self, index: u64) -> Option<u64> {
+        self.data_index_in_set(index).map(|i| i + NUM_DATA as u64)
     }
 
     pub fn start_index(&self) -> u64 {
@@ -183,24 +179,42 @@ impl ErasureMeta {
 #[test]
 fn test_meta_indexes() {
     use rand::{thread_rng, Rng};
+    // to avoid casts everywhere
+    const NUM_DATA: u64 = crate::erasure::NUM_DATA as u64;
 
     let mut rng = thread_rng();
 
     for _ in 0..100 {
         let set_index = rng.gen_range(0, 1_000);
-        let blob_index = (set_index * NUM_DATA as u64) + rng.gen_range(0, 16);
+        let blob_index = (set_index * NUM_DATA) + rng.gen_range(0, 16);
 
         assert_eq!(set_index, ErasureMeta::set_index_for(blob_index));
         let e_meta = ErasureMeta::new(set_index);
 
-        assert_eq!(e_meta.start_index(), set_index * NUM_DATA as u64);
+        assert_eq!(e_meta.start_index(), set_index * NUM_DATA);
         let (data_end_idx, coding_end_idx) = e_meta.end_indexes();
-        assert_eq!(data_end_idx, (set_index + 1) * NUM_DATA as u64);
-        assert_eq!(
-            coding_end_idx,
-            set_index * NUM_DATA as u64 + NUM_CODING as u64
-        );
+        assert_eq!(data_end_idx, (set_index + 1) * NUM_DATA);
+        assert_eq!(coding_end_idx, set_index * NUM_DATA + NUM_CODING as u64);
     }
+
+    let mut e_meta = ErasureMeta::new(0);
+
+    assert_eq!(e_meta.data_index_in_set(0), Some(0));
+    assert_eq!(e_meta.data_index_in_set(NUM_DATA / 2), Some(NUM_DATA / 2));
+    assert_eq!(e_meta.data_index_in_set(NUM_DATA - 1), Some(NUM_DATA - 1));
+    assert_eq!(e_meta.data_index_in_set(NUM_DATA), None);
+    assert_eq!(e_meta.data_index_in_set(std::u64::MAX), None);
+
+    e_meta.set_index = 1;
+
+    assert_eq!(e_meta.data_index_in_set(0), None);
+    assert_eq!(e_meta.data_index_in_set(NUM_DATA - 1), None);
+    assert_eq!(e_meta.data_index_in_set(NUM_DATA), Some(0));
+    assert_eq!(
+        e_meta.data_index_in_set(NUM_DATA * 2 - 1),
+        Some(NUM_DATA - 1)
+    );
+    assert_eq!(e_meta.data_index_in_set(std::u64::MAX), None);
 }
 
 #[test]
