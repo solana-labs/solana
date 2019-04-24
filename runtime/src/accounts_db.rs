@@ -309,7 +309,7 @@ impl AccountsDB {
         while infos.len() < with_meta.len() {
             let storage = self.fork_storage(fork_id);
             let rvs = storage.accounts.append_accounts(&with_meta[infos.len()..]);
-            if rvs.len() == 0 {
+            if rvs.is_empty() {
                 storage.set_status(AccountStorageStatus::StorageFull);
             }
             for (offset, (_, account)) in rvs.iter().zip(&with_meta[infos.len()..]) {
