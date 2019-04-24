@@ -100,6 +100,7 @@ impl Fullnode {
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
+        let genesis_blockhash = bank.last_blockhash();
 
         info!(
             "starting PoH... {} {}",
@@ -232,6 +233,7 @@ impl Fullnode {
             sender.clone(),
             receiver,
             &exit,
+            &genesis_blockhash,
         );
         let tpu = Tpu::new(
             &id,
@@ -245,6 +247,7 @@ impl Fullnode {
             &blocktree,
             sender,
             &exit,
+            &genesis_blockhash,
         );
 
         inc_new_counter_info!("fullnode-new", 1);
