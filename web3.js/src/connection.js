@@ -522,6 +522,19 @@ export class Connection {
   }
 
   /**
+   * @private
+   */
+  async fullnodeExit(): Promise<boolean> {
+    const unsafeRes = await this._rpcRequest('fullnodeExit', []);
+    const res = jsonRpcResult('boolean')(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
+  /**
    * Send a transaction that has already been signed and serialized into the
    * wire format
    */
