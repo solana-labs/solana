@@ -181,6 +181,20 @@ else
   fi
 fi
 
+annotate() {
+  ${BUILDKITE:-false} && {
+    buildkite-agent annotate "$@"
+  }
+}
+
+annotateBlockexplorerUrl() {
+  declare blockstreamer=${blockstreamerIpList[0]}
+
+  if [[ -n $blockstreamer ]]; then
+    annotate --style info --context blockexplorer-url "Block explorer: http://$blockstreamer/"
+  fi
+}
+
 build() {
   supported=("18.04")
   declare MAYBE_DOCKER=
@@ -332,6 +346,8 @@ sanity() {
   declare bootstrapLeader=${fullnodeIpList[0]}
   declare blockstreamer=${blockstreamerIpList[0]}
 
+  annotateBlockexplorerUrl
+
   echo "--- Sanity: $bootstrapLeader"
   (
     set -x
@@ -461,6 +477,8 @@ start() {
 
   $metricsWriteDatapoint "testnet-deploy net-fullnodes-started=1"
   additionalNodeDeployTime=$SECONDS
+
+  annotateBlockexplorerUrl
 
   if $updateNodes; then
     for ipAddress in "${clientIpList[@]}"; do
