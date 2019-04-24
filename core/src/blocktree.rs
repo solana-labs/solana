@@ -273,17 +273,14 @@ impl Blocktree {
             erasure_meta_working_set
                 .entry((blob_slot, set_index))
                 .or_insert_with(|| {
-                    let erasure_meta = self
-                        .erasure_meta_cf
+                    self.erasure_meta_cf
                         .get((blob_slot, set_index))
                         .expect("Expect database get to succeed")
-                        .unwrap_or_else(|| ErasureMeta::new(set_index));
-
-                    erasure_meta
+                        .unwrap_or_else(|| ErasureMeta::new(set_index))
                 });
         }
 
-        self.insert_data_blobs_with_batch(
+        self.insert_data_blob_batch(
             new_blobs.iter().map(Borrow::borrow),
             &mut slot_meta_working_set,
             &mut erasure_meta_working_set,
@@ -310,7 +307,7 @@ impl Blocktree {
             }
         }
 
-        self.insert_data_blobs_with_batch(
+        self.insert_data_blob_batch(
             recovered_data.iter(),
             &mut slot_meta_working_set,
             &mut erasure_meta_working_set,
@@ -318,8 +315,29 @@ impl Blocktree {
             &mut write_batch,
         )?;
 
+        // Handle chaining for the working set
+        self.handle_chaining(&mut write_batch, &slot_meta_working_set)?;
+        let mut should_signal = false;
+
+        // Check if any metadata was changed, if so, insert the new version of the
+        // metadata into the write batch
+        for (slot, (meta, meta_backup)) in slot_meta_working_set.iter() {
+            let meta: &SlotMeta = &RefCell::borrow(&*meta);
+            // Check if the working copy of the metadata has changed
+            if Some(meta) != meta_backup.as_ref() {
+                should_signal = should_signal || Self::slot_has_updates(meta, &meta_backup);
+                write_batch.put::<cf::SlotMeta>(*slot, &meta)?;
+            }
+        }
+
         for ((slot, set_index), erasure_meta) in erasure_meta_working_set {
             write_batch.put::<cf::ErasureMeta>((slot, set_index), &erasure_meta)?;
+        }
+
+        if should_signal {
+            for signal in self.new_blobs_signals.iter() {
+                let _ = signal.try_send(true);
+            }
         }
 
         self.db.write(write_batch)?;
@@ -443,16 +461,13 @@ impl Blocktree {
 
         writebatch.put_bytes::<cf::Coding>((slot, index), bytes)?;
 
-        if let Some((data, coding)) = self.try_erasure_recover(
-            &mut erasure_meta,
-            slot,
-            &HashMap::new(),
-            Some((index, bytes)),
-        )? {
+        if let Some((data, coding)) =
+            self.try_erasure_recover(&erasure_meta, slot, &HashMap::new(), Some((index, bytes)))?
+        {
             let mut erasure_meta_working_set = HashMap::new();
             erasure_meta_working_set.insert((slot, set_index), erasure_meta);
 
-            self.insert_data_blobs_with_batch(
+            self.insert_data_blob_batch(
                 &data[..],
                 &mut HashMap::new(),
                 &mut erasure_meta_working_set,
@@ -512,7 +527,7 @@ impl Blocktree {
         Ok(blobs)
     }
 
-    fn insert_data_blobs_with_batch<'a, I>(
+    fn insert_data_blob_batch<'a, I>(
         &self,
         new_blobs: I,
         slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
@@ -536,26 +551,6 @@ impl Blocktree {
                     .get_mut(&(blob.slot(), ErasureMeta::set_index_for(blob.index())))
                     .unwrap()
                     .set_data_present(blob.index(), true);
-            }
-        }
-        // Handle chaining for the working set
-        self.handle_chaining(write_batch, slot_meta_working_set)?;
-        let mut should_signal = false;
-
-        // Check if any metadata was changed, if so, insert the new version of the
-        // metadata into the write batch
-        for (slot, (meta, meta_backup)) in slot_meta_working_set.iter() {
-            let meta: &SlotMeta = &RefCell::borrow(&*meta);
-            // Check if the working copy of the metadata has changed
-            if Some(meta) != meta_backup.as_ref() {
-                should_signal = should_signal || Self::slot_has_updates(meta, &meta_backup);
-                write_batch.put::<cf::SlotMeta>(*slot, &meta)?;
-            }
-        }
-
-        if should_signal {
-            for signal in self.new_blobs_signals.iter() {
-                let _ = signal.try_send(true);
             }
         }
 
@@ -1252,19 +1247,6 @@ impl Blocktree {
         );
 
         Ok((recovered_data, recovered_coding))
-        //let mut batch = self.db.batch()?;
-        //erasure_meta.coding = 0x0F;
-        //batch.put::<cf::ErasureMeta>((slot, erasure_meta.set_index), &erasure_meta)?;
-
-        //for blob in recovered_coding {
-        ////self.put_coding_blob_bytes_raw(slot, blob.index(), &blob.data[..])?;
-        //batch.put_bytes::<cf::Coding>((slot, blob.index()), &blob.data[..])?;
-        //}
-
-        //self.db.write(batch)?;
-        //self.write_blobs(recovered_data)?;
-
-        //Ok(amount_recovered)
     }
 
     /// Returns the next consumed index and the number of ticks in the new consumed
