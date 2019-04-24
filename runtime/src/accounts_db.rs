@@ -249,24 +249,28 @@ impl AccountsDB {
     }
 
     fn fork_storage(&self, fork_id: Fork) -> Arc<AccountStorageEntry> {
-        let mut stores = self.storage.write().unwrap();
-        let mut candidates: Vec<Arc<AccountStorageEntry>> = stores
-            .values()
-            .filter_map(|x| {
-                if x.get_status() == AccountStorageStatus::StorageAvailable && x.fork_id == fork_id
-                {
-                    Some(x.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let mut candidates: Vec<Arc<AccountStorageEntry>> = {
+            let stores = self.storage.read().unwrap();
+            stores
+                .values()
+                .filter_map(|x| {
+                    if x.get_status() == AccountStorageStatus::StorageAvailable
+                        && x.fork_id == fork_id
+                    {
+                        Some(x.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
         if candidates.is_empty() {
+            let mut stores = self.storage.write().unwrap();
             let path_idx = thread_rng().gen_range(0, self.paths.len());
-            let storage = self.new_storage_entry(fork_id, &self.paths[path_idx]);
-            candidates.push(Arc::new(storage));
+            let storage = Arc::new(self.new_storage_entry(fork_id, &self.paths[path_idx]));
+            stores.insert(storage.id, storage);
+            candidates.push(storage);
         }
-
         let rv = thread_rng().gen_range(0, candidates.len());
         candidates[rv].clone()
     }
@@ -284,34 +288,40 @@ impl AccountsDB {
     }
 
     fn store_accounts(&self, fork_id: Fork, accounts: &[(&Pubkey, &Account)]) -> Vec<AccountInfo> {
-        let mut infos = vec![];
-        let with_meta: Vec<_> = accounts.iter().map(|(pubkey, account)| {
-            let write_version = self.write_version.fetch_add(1, Ordering::Relaxed) as u64;
-            let data_len = 
-            if account.lamports == 0 {
-                0
-            } else {
-                accounts.data.len() as u64
-            };
-            let meta = StorageMeta {
-                write_version,
-                pubkey: *pubkey,
-                data_len: data_len,
-            };
-            (&meta, account)
-        }).collect();
-        let mut infos = vec![];
+        let with_meta: Vec<(StorageMeta, &Account)> = accounts
+            .iter()
+            .map(|(pubkey, account)| {
+                let write_version = self.write_version.fetch_add(1, Ordering::Relaxed) as u64;
+                let data_len = if account.lamports == 0 {
+                    0
+                } else {
+                    account.data.len() as u64
+                };
+                let meta = StorageMeta {
+                    write_version,
+                    pubkey: **pubkey,
+                    data_len: data_len,
+                };
+                (meta, *account)
+            })
+            .collect();
+        let mut infos: Vec<AccountInfo> = vec![];
         while infos.len() < with_meta.len() {
             let storage = self.fork_storage(fork_id);
             let mut rvs = storage.accounts.append_accounts(&with_meta[infos.len()..]);
             if rvs.len() == 0 {
                 storage.set_status(AccountStorageStatus::StorageFull);
             }
-            infos.append(rvs);
+            for (offset, (_, account)) in rvs.iter().zip(&with_meta[infos.len()..]) {
+                infos.push(AccountInfo {
+                    id: storage.id,
+                    offset: *offset,
+                    lamports: account.lamports,
+                });
+            }
         }
         infos
     }
- 
 
     fn update_index(
         &self,

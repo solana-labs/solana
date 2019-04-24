@@ -164,7 +164,7 @@ impl AppendVec {
             self.append_ptr(&mut offset, val.0, val.1)
         }
         self.current_len.store(*offset, Ordering::Relaxed);
-        Some(pos) 
+        Some(pos)
     }
 
     #[allow(clippy::mutex_atomic)]
@@ -211,7 +211,7 @@ impl AppendVec {
         accounts
     }
 
-    pub fn append_accounts(&self, accounts: &[(&StorageMeta, &Account)]) -> Vec<usize> {
+    pub fn append_accounts(&self, accounts: &[(StorageMeta, &Account)]) -> Vec<usize> {
         let mut offset = self.append_offset.lock().unwrap();
         let mut rv = vec![];
         for (storage_meta, account) in accounts {
@@ -222,7 +222,7 @@ impl AppendVec {
                 executable: account.executable,
             };
             let balance_ptr = &balance as *const AccountBalance;
-            let data_len = storage_meta.data_len;
+            let data_len = storage_meta.data_len as usize;
             let data_ptr = account.data.as_ptr();
             let ptrs = [
                 (meta_ptr as *const u8, mem::size_of::<StorageMeta>()),
@@ -239,7 +239,9 @@ impl AppendVec {
     }
 
     pub fn append_account(&self, storage_meta: StorageMeta, account: &Account) -> Option<usize> {
-        self.append_accounts(&[(&storage_meta, account)]).first()
+        self.append_accounts(&[(storage_meta, account)])
+            .first()
+            .cloned()
     }
 
     pub fn append_account_test(&self, data: &(StorageMeta, Account)) -> Option<usize> {
