@@ -273,23 +273,21 @@ EOF
 
     ok=false
     echo "Waiting for $name to finish booting..."
-    (
-      set -x +e
-      for i in $(seq 1 20); do
-        timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
-        ret=$?
-        if [[ $ret -eq 0 ]]; then
-          echo "$name has booted."
-          ok=true
-          break
-        fi
-        sleep 2
-        echo "Retry $i..."
-      done
-      echo "$name failed to boot."
-    )
+    set -x
+    for i in $(seq 1 20); do
+      timeout 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
+      ret=$?
+      if [[ $ret -eq 0 ]]; then
+        echo "$name has booted."
+        ok=true
+        break
+      fi
+      sleep 2
+      echo "Retry $i..."
+    done
 
     if ! $ok; then
+      echo "$name failed to boot."
       if $failOnFailure; then
         exit 1
       else
