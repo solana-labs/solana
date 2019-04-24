@@ -248,7 +248,7 @@ impl AccountsDB {
         Self::load(&storage, ancestors, &accounts_index, pubkey)
     }
 
-    fn get_exclusive_storage(&self, fork_id: Fork) -> Arc<AccountStorageEntry> {
+    fn fork_storage(&self, fork_id: Fork) -> Arc<AccountStorageEntry> {
         let mut stores = self.storage.write().unwrap();
         let mut candidates: Vec<Arc<AccountStorageEntry>> = stores
             .values()
@@ -268,31 +268,7 @@ impl AccountsDB {
         }
 
         let rv = thread_rng().gen_range(0, candidates.len());
-        stores.remove(&candidates[rv].id);
         candidates[rv].clone()
-    }
-
-    fn append_account(
-        &self,
-        storage: &Arc<AccountStorageEntry>,
-        pubkey: &Pubkey,
-        account: &Account,
-    ) -> Option<usize> {
-        let write_version = self.write_version.fetch_add(1, Ordering::Relaxed) as u64;
-        let meta = StorageMeta {
-            write_version,
-            pubkey: *pubkey,
-            data_len: account.data.len() as u64,
-        };
-        if account.lamports == 0 {
-            // Even if no lamports, need to preserve the account owner so
-            // we can update the vote_accounts correctly as roots move forward
-            let account = &mut account.clone();
-            account.data.resize(0, 0);
-            storage.accounts.append_account(meta, account)
-        } else {
-            storage.accounts.append_account(meta, account)
-        }
     }
 
     pub fn purge_fork(&self, fork: Fork) {
@@ -308,29 +284,34 @@ impl AccountsDB {
     }
 
     fn store_accounts(&self, fork_id: Fork, accounts: &[(&Pubkey, &Account)]) -> Vec<AccountInfo> {
-        let mut storage = self.get_exclusive_storage(fork_id);
         let mut infos = vec![];
-        for (pubkey, account) in accounts {
-            loop {
-                let rv = self.append_account(&storage, pubkey, account);
-                if let Some(offset) = rv {
-                    storage.add_account();
-                    infos.push(AccountInfo {
-                        id: storage.id,
-                        offset,
-                        lamports: account.lamports,
-                    });
-                    break;
-                } else {
-                    storage.set_status(AccountStorageStatus::StorageFull);
-                    self.storage.write().unwrap().insert(storage.id, storage);
-                    storage = self.get_exclusive_storage(fork_id);
-                }
+        let with_meta: Vec<_> = accounts.iter().map(|(pubkey, account)| {
+            let write_version = self.write_version.fetch_add(1, Ordering::Relaxed) as u64;
+            let data_len = 
+            if account.lamports == 0 {
+                0
+            } else {
+                accounts.data.len() as u64
+            };
+            let meta = StorageMeta {
+                write_version,
+                pubkey: *pubkey,
+                data_len: data_len,
+            };
+            (&meta, account)
+        }).collect();
+        let mut infos = vec![];
+        while infos.len() < with_meta.len() {
+            let storage = self.fork_storage(fork_id);
+            let mut rvs = storage.accounts.append_accounts(&with_meta[infos.len()..]);
+            if rvs.len() == 0 {
+                storage.set_status(AccountStorageStatus::StorageFull);
             }
+            infos.append(rvs);
         }
-        self.storage.write().unwrap().insert(storage.id, storage);
         infos
     }
+ 
 
     fn update_index(
         &self,
