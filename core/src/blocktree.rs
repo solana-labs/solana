@@ -501,18 +501,44 @@ impl Blocktree {
         prev_inserted_blob_datas: &HashMap<(u64, u64), &[u8]>,
         new_coding_blob: Option<(u64, &[u8])>,
     ) -> Result<Option<(Vec<Blob>, Vec<Blob>)>> {
+        use crate::erasure::ERASURE_SET_SIZE;
+
         let blobs = match erasure_meta.status() {
             ErasureMetaStatus::CanRecover => {
-                let (data, coding) = self.recover(
+                let erasure_result = self.recover(
                     slot,
                     erasure_meta,
                     prev_inserted_blob_datas,
                     new_coding_blob,
-                )?;
-                let recovered = data.len() + coding.len();
-                info!("recovered {} blobs", recovered);
-                inc_new_counter_info!("blocktree-erasure-blobs_recovered", recovered);
-                Some((data, coding))
+                );
+
+                match erasure_result {
+                    Ok((data, coding)) => {
+                        let recovered = data.len() + coding.len();
+                        assert_eq!(
+                            ERASURE_SET_SIZE,
+                            recovered
+                                + (erasure_meta.coding.count_ones()
+                                    + erasure_meta.data.count_ones())
+                                    as usize,
+                            "Recovery should always complete a set"
+                        );
+
+                        info!("[try_erasure] recovered {} blobs", recovered);
+                        inc_new_counter_info!("blocktree-erasure-blobs_recovered", recovered);
+                        Some((data, coding))
+                    }
+                    Err(Error::ErasureError(e)) => {
+                        inc_new_counter_info!("blocktree-erasure-recovery_failed", 1);
+                        error!(
+                            "[try_erasure] recovery failed: slot: {}, set_index: {}, cause: {}",
+                            slot, erasure_meta.set_index, e
+                        );
+                        None
+                    }
+
+                    Err(e) => return Err(e),
+                }
             }
             ErasureMetaStatus::StillNeed(needed) => {
                 inc_new_counter_info!("blocktree-erasure-blobs_needed", needed);
@@ -1214,27 +1240,9 @@ impl Blocktree {
             }
         }
 
-        let (recovered_data, recovered_coding) = match self
+        let (recovered_data, recovered_coding) = self
             .session
-            .reconstruct_blobs(&mut blobs, present, size, start_idx, slot)
-        {
-            Ok(x) => x,
-            Err(e) => {
-                error!(
-                    "[recover] erasure recovery failed! slot: {}, indexes: [{}, {}), cause: {}",
-                    slot, start_idx, data_end_idx, e
-                );
-                return Err(Error::ErasureError(e));
-            }
-        };
-
-        let amount_recovered = recovered_data.len() + recovered_coding.len();
-        assert_eq!(
-            amount_recovered,
-            ERASURE_SET_SIZE
-                - (erasure_meta.coding.count_ones() + erasure_meta.data.count_ones()) as usize,
-            "Recovery should always complete a set"
-        );
+            .reconstruct_blobs(&mut blobs, present, size, start_idx, slot)?;
 
         trace!(
             "[recover] reconstruction OK slot: {}, indexes: [{},{})",
@@ -2912,6 +2920,59 @@ pub mod tests {
             drop(blocktree);
 
             Blocktree::destroy(&ledger_path).expect("Expect successful Blocktree destruction");
+        }
+
+        #[test]
+        fn test_recovery_fails_safely() {
+            const SLOT: u64 = 0;
+            const SET_INDEX: u64 = 0;
+
+            solana_logger::setup();
+            let ledger_path = get_tmp_ledger_path!();
+            let blocktree = Blocktree::open(&ledger_path).unwrap();
+            let data_blobs = make_slot_entries(SLOT, 0, NUM_DATA as u64)
+                .0
+                .into_iter()
+                .map(Blob::into)
+                .collect::<Vec<_>>();
+
+            let mut coding_generator = CodingGenerator::new(Arc::clone(&blocktree.session));
+
+            let shared_coding_blobs = coding_generator.next(&data_blobs);
+            assert_eq!(shared_coding_blobs.len(), NUM_CODING);
+
+            // Insert data blobs and coding. Not enough to do recovery
+            blocktree
+                .write_shared_blobs(&data_blobs[..NUM_DATA - 5])
+                .unwrap();
+
+            for shared_blob in shared_coding_blobs {
+                let blob = shared_blob.read().unwrap();
+                let size = blob.size() + BLOB_HEADER_SIZE;
+
+                blocktree
+                    .put_coding_blob_bytes(SLOT, blob.index(), &blob.data[..size])
+                    .expect("Inserting coding blobs must succeed");
+            }
+
+            // try recovery even though there aren't enough blobs
+            let erasure_meta = blocktree
+                .erasure_meta_cf
+                .get((SLOT, SET_INDEX))
+                .unwrap()
+                .unwrap();
+
+            assert_eq!(erasure_meta.status(), ErasureMetaStatus::StillNeed(1));
+
+            let prev_inserted_blob_datas = HashMap::new();
+
+            let attempt_result =
+                blocktree.try_erasure_recover(&erasure_meta, SLOT, &prev_inserted_blob_datas, None);
+
+            assert!(attempt_result.is_ok());
+            let recovered_blobs_opt = attempt_result.unwrap();
+
+            assert!(recovered_blobs_opt.is_none());
         }
 
         #[test]
