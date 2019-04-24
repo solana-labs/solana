@@ -55,6 +55,7 @@ blockstreamer=false
 fullNodeBootDiskSizeInGb=1000
 clientBootDiskSizeInGb=75
 externalNodes=false
+failOnValidatorBootupFailure=true
 
 publicNetwork=false
 enableGpu=false
@@ -95,6 +96,7 @@ Manage testnet instances
                       zone
    -x               - append to the existing configuration instead of creating a
                       new configuration
+   -f               - Discard validator nodes that didn't bootup successfully
 
  create-specific options:
    -n [number]      - Number of additional fullnodes (default: $additionalFullNodeCount)
@@ -133,7 +135,7 @@ shift
 [[ $command = create || $command = config || $command = info || $command = delete ]] ||
   usage "Invalid command: $command"
 
-while getopts "h?p:Pn:c:z:gG:a:d:bux" opt; do
+while getopts "h?p:Pn:c:z:gG:a:d:buxf" opt; do
   case $opt in
   h | \?)
     usage
@@ -178,6 +180,9 @@ while getopts "h?p:Pn:c:z:gG:a:d:bux" opt; do
     ;;
   x)
     externalNodes=true
+    ;;
+  f)
+    failOnValidatorBootupFailure=false
     ;;
   *)
     usage "unhandled option: $opt"
@@ -263,23 +268,27 @@ EOF
     declare publicIp="$2"
     declare privateIp="$3"
 
-    declare arrayName="$5"
+    declare failOnFailure="$5"
+    declare arrayName="$6"
 
-    echo "$arrayName+=($publicIp)  # $name" >> "$configFile"
-    echo "${arrayName}Private+=($privateIp)  # $name" >> "$configFile"
-  }
+    # This check should eventually be moved to cloud provider specific script 
+    if [ "$publicIp" = "TERMINATED" ] || [ "$privateIp" = "TERMINATED" ]; then
+      if $failOnFailure; then
+        exit 1
+      else
+        return 0
+      fi
+    fi
 
-  waitForStartupComplete() {
-    declare name="$1"
-    declare publicIp="$2"
-
+    ok=true
     echo "Waiting for $name to finish booting..."
     (
       set -x +e
-      for i in $(seq 1 60); do
-        timeout 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
+      for i in $(seq 1 20); do
+        timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
         ret=$?
         if [[ $ret -eq 0 ]]; then
+          echo "$name has booted."
           exit 0
         fi
         sleep 2
@@ -287,8 +296,16 @@ EOF
       done
       echo "$name failed to boot."
       exit 1
-    )
-    echo "$name has booted."
+    ) || ok=false
+
+    if ! $ok; then
+      if $failOnFailure; then
+        exit 1
+      fi
+    else
+      echo "$arrayName+=($publicIp)  # $name" >> "$configFile"
+      echo "${arrayName}Private+=($privateIp)  # $name" >> "$configFile"
+    fi
   }
 
   if $externalNodes; then
@@ -333,8 +350,7 @@ EOF
 
     echo "fullnodeIpList=()" >> "$configFile"
     echo "fullnodeIpListPrivate=()" >> "$configFile"
-    cloud_ForEachInstance recordInstanceIp fullnodeIpList
-    cloud_ForEachInstance waitForStartupComplete
+    cloud_ForEachInstance recordInstanceIp true fullnodeIpList
   fi
 
   if [[ $additionalFullNodeCount -gt 0 ]]; then
@@ -345,8 +361,7 @@ EOF
         echo "Unable to find additional fullnodes"
         exit 1
       }
-      cloud_ForEachInstance recordInstanceIp fullnodeIpList
-      cloud_ForEachInstance waitForStartupComplete
+      cloud_ForEachInstance recordInstanceIp "$failOnValidatorBootupFailure" fullnodeIpList
     done
   fi
 
@@ -359,8 +374,7 @@ EOF
   echo "Looking for client bencher instances..."
   cloud_FindInstances "$prefix-client"
   [[ ${#instances[@]} -eq 0 ]] || {
-    cloud_ForEachInstance recordInstanceIp clientIpList
-    cloud_ForEachInstance waitForStartupComplete
+    cloud_ForEachInstance recordInstanceIp true clientIpList
   }
 
   if $externalNodes; then
@@ -372,8 +386,7 @@ EOF
   echo "Looking for blockstreamer instances..."
   cloud_FindInstances "$prefix-blockstreamer"
   [[ ${#instances[@]} -eq 0 ]] || {
-    cloud_ForEachInstance recordInstanceIp blockstreamerIpList
-    cloud_ForEachInstance waitForStartupComplete
+    cloud_ForEachInstance recordInstanceIp true blockstreamerIpList
   }
 
   echo "Wrote $configFile"
