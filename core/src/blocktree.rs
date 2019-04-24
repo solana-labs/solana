@@ -1048,7 +1048,6 @@ impl Blocktree {
         prev_inserted_blob_datas: &mut HashMap<(u64, u64), &'a [u8]>,
         write_batch: &mut WriteBatch,
     ) -> Result<bool> {
-        //let blob = blob.borrow();
         let blob_slot = blob.slot();
         let parent_slot = blob.parent();
 
@@ -1162,8 +1161,6 @@ impl Blocktree {
     ) -> Result<(Vec<Blob>, Vec<Blob>)> {
         use crate::erasure::ERASURE_SET_SIZE;
 
-        //let mut erasure_meta = self.erasure_meta_cf.get((slot, set_index))?.unwrap();
-
         let start_idx = erasure_meta.start_index();
         let size = erasure_meta.size();
 
@@ -1179,7 +1176,7 @@ impl Blocktree {
                     _ => self
                         .erasure_cf
                         .get_bytes((slot, i))?
-                        .expect("ErasureMeta must have no false positivies"),
+                        .expect("ErasureMeta must have no false positives"),
                 };
 
                 blob_bytes.drain(..BLOB_HEADER_SIZE);
