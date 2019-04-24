@@ -570,7 +570,7 @@ impl Blocktree {
                 slot_meta_working_set,
                 prev_inserted_blob_datas,
                 write_batch,
-            )?;
+            );
 
             if inserted {
                 erasure_meta_working_set
@@ -1066,14 +1066,15 @@ impl Blocktree {
         }
     }
 
-    /// Checks if this data blob is a duplicate. If  it's not, then inserts it.
+    /// Checks to see if the data blob passes integrity checks for insertion. Proceeds with
+    /// insertion if it does.
     fn check_insert_data_blob<'a>(
         &self,
         blob: &'a Blob,
         slot_meta_working_set: &mut HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
         prev_inserted_blob_datas: &mut HashMap<(u64, u64), &'a [u8]>,
         write_batch: &mut WriteBatch,
-    ) -> Result<bool> {
+    ) -> bool {
         let blob_slot = blob.slot();
         let parent_slot = blob.parent();
 
@@ -1106,11 +1107,11 @@ impl Blocktree {
 
         // This slot is full, skip the bogus blob
         if slot_meta.is_full() {
-            return Ok(false);
+            false
+        } else {
+            let _ = self.insert_data_blob(blob, prev_inserted_blob_datas, slot_meta, write_batch);
+            true
         }
-
-        let _ = self.insert_data_blob(blob, prev_inserted_blob_datas, slot_meta, write_batch);
-        Ok(true)
     }
 
     /// Insert a blob into ledger, updating the slot_meta if necessary
