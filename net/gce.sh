@@ -268,17 +268,10 @@ EOF
     declare publicIp="$2"
     declare privateIp="$3"
 
-    declare arrayName="$5"
+    declare failOnFailure="$5"
+    declare arrayName="$6"
 
-    echo "$arrayName+=($publicIp)  # $name" >> "$configFile"
-    echo "${arrayName}Private+=($privateIp)  # $name" >> "$configFile"
-  }
-
-  waitForStartupComplete() {
-    declare name="$1"
-    declare publicIp="$2"
-    declare failOnFailure="$5" # skipping args 3: privateIp, 4: count
-
+    ok=false
     echo "Waiting for $name to finish booting..."
     (
       set -x +e
@@ -286,19 +279,26 @@ EOF
         timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
         ret=$?
         if [[ $ret -eq 0 ]]; then
-          exit 0
+          echo "$name has booted."
+          ok=true
+          break
         fi
         sleep 2
         echo "Retry $i..."
       done
       echo "$name failed to boot."
+    )
+
+    if ! $ok; then
       if $failOnFailure; then
         exit 1
       else
-        exit 0
+        return
       fi
-    )
-    echo "$name has booted."
+    fi
+
+    echo "$arrayName+=($publicIp)  # $name" >> "$configFile"
+    echo "${arrayName}Private+=($privateIp)  # $name" >> "$configFile"
   }
 
   if $externalNodes; then
@@ -343,8 +343,7 @@ EOF
 
     echo "fullnodeIpList=()" >> "$configFile"
     echo "fullnodeIpListPrivate=()" >> "$configFile"
-    cloud_ForEachInstance recordInstanceIp fullnodeIpList
-    cloud_ForEachInstance waitForStartupComplete true
+    cloud_ForEachInstance recordInstanceIp true fullnodeIpList
   fi
 
   if [[ $additionalFullNodeCount -gt 0 ]]; then
@@ -355,8 +354,7 @@ EOF
         echo "Unable to find additional fullnodes"
         exit 1
       }
-      cloud_ForEachInstance recordInstanceIp fullnodeIpList
-      cloud_ForEachInstance waitForStartupComplete "$failOnValidatorBootupFailure"
+      cloud_ForEachInstance recordInstanceIp "$failOnValidatorBootupFailure" fullnodeIpList
     done
   fi
 
@@ -369,8 +367,7 @@ EOF
   echo "Looking for client bencher instances..."
   cloud_FindInstances "$prefix-client"
   [[ ${#instances[@]} -eq 0 ]] || {
-    cloud_ForEachInstance recordInstanceIp clientIpList
-    cloud_ForEachInstance waitForStartupComplete true
+    cloud_ForEachInstance recordInstanceIp true clientIpList
   }
 
   if $externalNodes; then
@@ -382,8 +379,7 @@ EOF
   echo "Looking for blockstreamer instances..."
   cloud_FindInstances "$prefix-blockstreamer"
   [[ ${#instances[@]} -eq 0 ]] || {
-    cloud_ForEachInstance recordInstanceIp blockstreamerIpList
-    cloud_ForEachInstance waitForStartupComplete true
+    cloud_ForEachInstance recordInstanceIp true blockstreamerIpList
   }
 
   echo "Wrote $configFile"
