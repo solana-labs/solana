@@ -41,7 +41,7 @@ test-stable-perf)
     ^sdk/ \
   || {
     annotate --style info \
-      "Skipped test-stable-perf as no relavant files were modified"
+      "Skipped test-stable-perf as no relevant files were modified"
     exit 0
   }
 
