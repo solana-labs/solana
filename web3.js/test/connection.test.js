@@ -567,7 +567,7 @@ test('program account change notification', async () => {
       break;
     }
 
-    if (++i === 5) {
+    if (++i === 20) {
       console.log(JSON.stringify(mockCallback.mock.calls));
       throw new Error('mockCallback should be called twice');
     }
