@@ -192,7 +192,7 @@ while true; do
           echo "############## New genesis detected, restarting fullnode ##############"
           kill "$pid" || true
           wait "$pid" || true
-          rm -rf "$ledger_config_dir" "$accounts_config_dir" "$vote_id_path".configured
+          rm -rf "$ledger_config_dir" "$accounts_config_dir" "$fullnode_vote_id_path".configured
           break
         fi
       fi
