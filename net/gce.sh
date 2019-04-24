@@ -271,32 +271,32 @@ EOF
     declare failOnFailure="$5"
     declare arrayName="$6"
 
-    ok=false
+    ok=true
     echo "Waiting for $name to finish booting..."
-    set -x
-    for i in $(seq 1 20); do
-      timeout 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
-      ret=$?
-      if [[ $ret -eq 0 ]]; then
-        echo "$name has booted."
-        ok=true
-        break
-      fi
-      sleep 2
-      echo "Retry $i..."
-    done
+    (
+      set -x +e
+      for i in $(seq 1 20); do
+        timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
+        ret=$?
+        if [[ $ret -eq 0 ]]; then
+          echo "$name has booted."
+          exit 0
+        fi
+        sleep 2
+        echo "Retry $i..."
+      done
+      echo "$name failed to boot."
+      exit 1
+    ) || ok=false
 
     if ! $ok; then
-      echo "$name failed to boot."
       if $failOnFailure; then
         exit 1
-      else
-        return
       fi
+    else
+      echo "$arrayName+=($publicIp)  # $name" >> "$configFile"
+      echo "${arrayName}Private+=($privateIp)  # $name" >> "$configFile"
     fi
-
-    echo "$arrayName+=($publicIp)  # $name" >> "$configFile"
-    echo "${arrayName}Private+=($privateIp)  # $name" >> "$configFile"
   }
 
   if $externalNodes; then
