@@ -5,6 +5,7 @@ use std::env;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 const DEFAULT_LOG_RATE: usize = 1000;
+const DEFAULT_METRICS_RATE: usize = 1;
 
 pub struct Counter {
     pub name: &'static str,
@@ -14,18 +15,20 @@ pub struct Counter {
     /// last accumulated value logged
     pub lastlog: AtomicUsize,
     pub lograte: AtomicUsize,
+    pub metricsrate: AtomicUsize,
     pub point: Option<influxdb::Point>,
 }
 
 #[macro_export]
 macro_rules! create_counter {
-    ($name:expr, $lograte:expr) => {
+    ($name:expr, $lograte:expr, $metricsrate:expr) => {
         Counter {
             name: $name,
             counts: std::sync::atomic::AtomicUsize::new(0),
             times: std::sync::atomic::AtomicUsize::new(0),
             lastlog: std::sync::atomic::AtomicUsize::new(0),
             lograte: std::sync::atomic::AtomicUsize::new($lograte),
+            metricsrate: std::sync::atomic::AtomicUsize::new($metricsrate),
             point: None,
         }
     };
@@ -47,8 +50,8 @@ macro_rules! inc_counter_info {
 
 #[macro_export]
 macro_rules! inc_new_counter {
-    ($name:expr, $count:expr, $level:expr, $lograte:expr) => {{
-        static mut INC_NEW_COUNTER: Counter = create_counter!($name, $lograte);
+    ($name:expr, $count:expr, $level:expr, $lograte:expr, $metricsrate:expr) => {{
+        static mut INC_NEW_COUNTER: Counter = create_counter!($name, $lograte, $metricsrate);
         static INIT_HOOK: std::sync::Once = std::sync::ONCE_INIT;
         unsafe {
             INIT_HOOK.call_once(|| {
@@ -62,10 +65,13 @@ macro_rules! inc_new_counter {
 #[macro_export]
 macro_rules! inc_new_counter_info {
     ($name:expr, $count:expr) => {{
-        inc_new_counter!($name, $count, log::Level::Info, 0);
+        inc_new_counter!($name, $count, log::Level::Info, 0, 0);
     }};
     ($name:expr, $count:expr, $lograte:expr) => {{
-        inc_new_counter!($name, $count, log::Level::Info, $lograte);
+        inc_new_counter!($name, $count, log::Level::Info, $lograte, 0);
+    }};
+    ($name:expr, $count:expr, $lograte:expr, $metricsrate:expr) => {{
+        inc_new_counter!($name, $count, log::Level::Info, $lograte, $metricsrate);
     }};
 }
 
@@ -95,6 +101,11 @@ impl Counter {
             lograte = Counter::default_log_rate();
             self.lograte.store(lograte, Ordering::Relaxed);
         }
+        let mut metricsrate = self.metricsrate.load(Ordering::Relaxed);
+        if metricsrate == 0 {
+            metricsrate = DEFAULT_METRICS_RATE;
+            self.metricsrate.store(metricsrate, Ordering::Relaxed);
+        }
         if times % lograte == 0 && times > 0 && log_enabled!(level) {
             log!(level,
                 "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
@@ -105,20 +116,25 @@ impl Counter {
                 events,
             );
         }
-        let lastlog = self.lastlog.load(Ordering::Relaxed);
-        let prev = self
-            .lastlog
-            .compare_and_swap(lastlog, counts, Ordering::Relaxed);
-        if prev == lastlog {
-            if let Some(ref mut point) = self.point {
-                point
-                    .fields
-                    .entry("count".to_string())
-                    .and_modify(|v| *v = influxdb::Value::Integer(counts as i64 - lastlog as i64))
-                    .or_insert(influxdb::Value::Integer(0));
-            }
-            if let Some(ref mut point) = self.point {
-                submit(point.to_owned());
+
+        if times % metricsrate == 0 && times > 0 {
+            let lastlog = self.lastlog.load(Ordering::Relaxed);
+            let prev = self
+                .lastlog
+                .compare_and_swap(lastlog, counts, Ordering::Relaxed);
+            if prev == lastlog {
+                if let Some(ref mut point) = self.point {
+                    point
+                        .fields
+                        .entry("count".to_string())
+                        .and_modify(|v| {
+                            *v = influxdb::Value::Integer(counts as i64 - lastlog as i64)
+                        })
+                        .or_insert(influxdb::Value::Integer(0));
+                }
+                if let Some(ref mut point) = self.point {
+                    submit(point.to_owned());
+                }
             }
         }
     }
@@ -146,7 +162,7 @@ mod tests {
     #[test]
     fn test_counter() {
         let _readlock = get_env_lock().read();
-        static mut COUNTER: Counter = create_counter!("test", 1000);
+        static mut COUNTER: Counter = create_counter!("test", 1000, 1);
         let count = 1;
         inc_counter!(COUNTER, Level::Info, count);
         unsafe {
@@ -173,7 +189,8 @@ mod tests {
         //make sure that macros are syntactically correct
         //the variable is internal to the macro scope so there is no way to introspect it
         inc_new_counter_info!("counter-1", 1);
-        inc_new_counter_info!("counter-2", 1, 2);
+        inc_new_counter_info!("counter-2", 1, 3);
+        inc_new_counter_info!("counter-3", 1, 2, 1);
     }
     #[test]
     fn test_lograte() {
@@ -185,7 +202,7 @@ mod tests {
             Counter::default_log_rate(),
             DEFAULT_LOG_RATE,
         );
-        static mut COUNTER: Counter = create_counter!("test_lograte", 0);
+        static mut COUNTER: Counter = create_counter!("test_lograte", 0, 1);
         inc_counter!(COUNTER, Level::Info, 2);
         unsafe {
             assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), DEFAULT_LOG_RATE);
@@ -196,14 +213,14 @@ mod tests {
     fn test_lograte_env() {
         assert_ne!(DEFAULT_LOG_RATE, 0);
         let _writelock = get_env_lock().write();
-        static mut COUNTER: Counter = create_counter!("test_lograte_env", 0);
+        static mut COUNTER: Counter = create_counter!("test_lograte_env", 0, 1);
         env::set_var("SOLANA_DEFAULT_LOG_RATE", "50");
         inc_counter!(COUNTER, Level::Info, 2);
         unsafe {
             assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), 50);
         }
 
-        static mut COUNTER2: Counter = create_counter!("test_lograte_env", 0);
+        static mut COUNTER2: Counter = create_counter!("test_lograte_env", 0, 1);
         env::set_var("SOLANA_DEFAULT_LOG_RATE", "0");
         inc_counter!(COUNTER2, Level::Info, 2);
         unsafe {
