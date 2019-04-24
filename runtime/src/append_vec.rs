@@ -161,18 +161,10 @@ impl AppendVec {
         //crash on some architectures.
         let pos = align_up!(*offset, mem::size_of::<u64>());
         for val in vals {
-            self.append_ptr(&mut offset, val.0, val.1)
+            self.append_ptr(offset, val.0, val.1)
         }
         self.current_len.store(*offset, Ordering::Relaxed);
         Some(pos)
-    }
-
-    #[allow(clippy::mutex_atomic)]
-    fn append_ptrs(&self, vals: &[(*const u8, usize)]) -> Option<usize> {
-        // This mutex forces append to be single threaded, but concurrent with reads
-        // See UNSAFE usage in `append_ptr`
-        let mut offset = self.append_offset.lock().unwrap();
-        self.append_ptrs_locked(&mut offset, vals)
     }
 
     fn get_type<'a, T>(&self, offset: usize) -> Option<(&'a T, usize)> {
@@ -211,6 +203,7 @@ impl AppendVec {
         accounts
     }
 
+    #[allow(clippy::mutex_atomic)]
     pub fn append_accounts(&self, accounts: &[(StorageMeta, &Account)]) -> Vec<usize> {
         let mut offset = self.append_offset.lock().unwrap();
         let mut rv = vec![];

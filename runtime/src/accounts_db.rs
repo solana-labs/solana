@@ -268,7 +268,7 @@ impl AccountsDB {
             let mut stores = self.storage.write().unwrap();
             let path_idx = thread_rng().gen_range(0, self.paths.len());
             let storage = Arc::new(self.new_storage_entry(fork_id, &self.paths[path_idx]));
-            stores.insert(storage.id, storage);
+            stores.insert(storage.id, storage.clone());
             candidates.push(storage);
         }
         let rv = thread_rng().gen_range(0, candidates.len());
@@ -308,11 +308,12 @@ impl AccountsDB {
         let mut infos: Vec<AccountInfo> = vec![];
         while infos.len() < with_meta.len() {
             let storage = self.fork_storage(fork_id);
-            let mut rvs = storage.accounts.append_accounts(&with_meta[infos.len()..]);
+            let rvs = storage.accounts.append_accounts(&with_meta[infos.len()..]);
             if rvs.len() == 0 {
                 storage.set_status(AccountStorageStatus::StorageFull);
             }
             for (offset, (_, account)) in rvs.iter().zip(&with_meta[infos.len()..]) {
+                storage.add_account();
                 infos.push(AccountInfo {
                     id: storage.id,
                     offset: *offset,
