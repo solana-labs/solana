@@ -207,10 +207,10 @@ cloud_DeleteInstances() {
 
   declare names=("${instances[@]/:*/}")
   declare zones=("${instances[@]/*:/}")
-  declare uniq_zones=()
-  read -r -a uniq_zones <<< "$(echo "${zones[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+  declare unique_zones=()
+  read -r -a unique_zones <<< "$(echo "${zones[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
 
-  for zone in "${uniq_zones[@]}"; do
+  for zone in "${unique_zones[@]}"; do
     set -x
     # Try deleting instances in all zones
     gcloud beta compute instances delete --zone "$zone" --quiet "${names[@]}" || true
