@@ -34,7 +34,7 @@ fn main() {
         panic!("Failed to discover nodes");
     });
 
-    let clients = get_clients(nodes);
+    let clients = get_clients(&nodes);
 
     info!("{} nodes found", clients.len());
     if clients.len() < num_nodes {
