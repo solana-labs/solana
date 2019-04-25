@@ -192,7 +192,13 @@ cloud_CreateInstances() {
   fi
 
   if [[ -n $optionalBootDiskType ]]; then
-    echo Boot disk type not configurable
+    args+=(
+      --storage-sku "$optionalBootDiskType"
+    )
+  else
+    args+=(
+      --storage-sku StandardSSD_LRS
+    )
   fi
 
   if [[ -n $optionalAddress ]]; then
@@ -222,13 +228,12 @@ cloud_CreateInstances() {
       az vm create --name "$nodeName" "${args[@]}" --no-wait
     done
 
-    # 3: Wait until all nodes are created
-    for nodeName in "${nodes[@]}"; do
-      az vm wait --created --name "$nodeName" --resource-group "$networkName"
-    done
-
-    # 4. If GPU is to be enabled, install the appropriate extension
+    # 3. If GPU is to be enabled, wait until nodes are created, then install the appropriate extension
     if $enableGpu; then
+      for nodeName in "${nodes[@]}"; do
+        az vm wait --created --name "$nodeName" --resource-group "$networkName" --verbose --timeout 600
+      done
+
       for nodeName in "${nodes[@]}"; do
         az vm extension set \
         --resource-group "$networkName" \
@@ -239,9 +244,9 @@ cloud_CreateInstances() {
         --no-wait
       done
 
-      # 5. Wait until all nodes have GPU extension installed
+      # 4. Wait until all nodes have GPU extension installed
       for nodeName in "${nodes[@]}"; do
-        az vm wait --updated --name "$nodeName" --resource-group "$networkName"
+        az vm wait --updated --name "$nodeName" --resource-group "$networkName" --verbose --timeout 600
       done
     fi
   )
@@ -270,7 +275,7 @@ cloud_DeleteInstances() {
     done
 
     # Delete all instances in the id_list and return once they are all deleted
-    az vm delete --ids "${id_list[@]}" --yes --verbose
+    az vm delete --ids "${id_list[@]}" --yes --verbose --no-wait
   )
 }
 
