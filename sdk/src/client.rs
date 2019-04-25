@@ -50,6 +50,16 @@ pub trait SyncClient {
 
     /// Get transaction count
     fn get_transaction_count(&self) -> Result<u64>;
+
+    /// Poll until the signature has been confirmed by at least `min_confirmed_blocks`
+    fn poll_for_signature_confirmation(
+        &self,
+        signature: &Signature,
+        min_confirmed_blocks: usize,
+    ) -> Result<()>;
+
+    /// Poll to confirm a transaction.
+    fn poll_for_signature(&self, signature: &Signature) -> Result<()>;
 }
 
 pub trait AsyncClient {

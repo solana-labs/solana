@@ -137,19 +137,6 @@ impl ThinClient {
         self.rpc_client.wait_for_balance(pubkey, expected_balance)
     }
 
-    pub fn poll_for_signature(&self, signature: &Signature) -> io::Result<()> {
-        self.rpc_client.poll_for_signature(signature)
-    }
-    /// Poll the server until the signature has been confirmed by at least `min_confirmed_blocks`
-    pub fn poll_for_signature_confirmation(
-        &self,
-        signature: &Signature,
-        min_confirmed_blocks: usize,
-    ) -> io::Result<()> {
-        self.rpc_client
-            .poll_for_signature_confirmation(signature, min_confirmed_blocks)
-    }
-
     /// Check a signature in the bank. This method blocks
     /// until the server sends a response.
     pub fn check_signature(&self, signature: &Signature) -> bool {
@@ -235,6 +222,21 @@ impl SyncClient for ThinClient {
     fn get_transaction_count(&self) -> TransportResult<u64> {
         let transaction_count = self.rpc_client.get_transaction_count()?;
         Ok(transaction_count)
+    }
+
+    /// Poll the server until the signature has been confirmed by at least `min_confirmed_blocks`
+    fn poll_for_signature_confirmation(
+        &self,
+        signature: &Signature,
+        min_confirmed_blocks: usize,
+    ) -> TransportResult<()> {
+        Ok(self
+            .rpc_client
+            .poll_for_signature_confirmation(signature, min_confirmed_blocks)?)
+    }
+
+    fn poll_for_signature(&self, signature: &Signature) -> TransportResult<()> {
+        Ok(self.rpc_client.poll_for_signature(signature)?)
     }
 }
 

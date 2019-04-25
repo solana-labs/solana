@@ -17,7 +17,7 @@ use solana_sdk::system_transaction;
 use solana_sdk::timing::{
     duration_as_ms, DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS, NUM_TICKS_PER_SECOND,
 };
-use std::io;
+use solana_sdk::transport::TransportError;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -202,7 +202,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 );
                 match sig {
                     Err(e) => {
-                        result = Err(e);
+                        result = Err(TransportError::IoError(e));
                         continue;
                     }
 
@@ -227,7 +227,7 @@ fn poll_all_nodes_for_signature(
     cluster_nodes: &[ContactInfo],
     sig: &Signature,
     confs: usize,
-) -> io::Result<()> {
+) -> Result<(), TransportError> {
     for validator in cluster_nodes {
         if validator.id == entry_point_info.id {
             continue;
