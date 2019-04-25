@@ -42,20 +42,28 @@ steps:
             value: "testnet-beta"
           - label: "testnet-beta-perf"
             value: "testnet-beta-perf"
+          - label: "testnet-demo"
+            value: "testnet-demo"
       - select: "Operation"
         key: "testnet-operation"
         default: "sanity-or-restart"
         options:
-          - label: "Sanity check.  Restart network on failure"
-            value: "sanity-or-restart"
-          - label: "Start (or restart) the network"
+          - label: "Create new testnet nodes and then start network software.  If nodes are already created, they will be deleted and then re-created."
+            value: "create-and-start"
+          - label: "Create new testnet nodes, but do not start network software.  If nodes are already created, they will be deleted and then re-created."
+            value: "create"
+          - label: "Start network software on already-created testnet nodes.  If software is already running, it will be restarted."
             value: "start"
-          - label: "Update the network software.  Restart network on failure"
-            value: "update-or-restart"
-          - label: "Stop the network"
+          - label: "Stop network software without deleting testnet nodes"
             value: "stop"
+          - label: "Update the network software.  Restart network software on failure"
+            value: "update-or-restart"
+          - label: "Sanity check.  Restart network software on failure"
+            value: "sanity-or-restart"
           - label: "Sanity check only"
             value: "sanity"
+          - label: "Delete all nodes on a testnet.  Network software will be stopped first if it is running"
+            value: "delete"
   - command: "ci/$(basename "$0")"
     agents:
       - "queue=$BUILDKITE_AGENT_META_DATA_QUEUE"
@@ -87,6 +95,10 @@ testnet|testnet-perf)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
   CHANNEL_BRANCH=$STABLE_CHANNEL
   ;;
+testnet-demo)
+  CHANNEL_OR_TAG=edge
+  CHANNEL_BRANCH=$EDGE_CHANNEL
+  ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
   exit 1
@@ -104,6 +116,7 @@ source scripts/configure-metrics.sh
 if [[ -n $TESTNET_TAG ]]; then
   CHANNEL_OR_TAG=$TESTNET_TAG
 else
+
   if [[ $BUILDKITE_BRANCH != "$CHANNEL_BRANCH" ]]; then
     (
       cat <<EOF
@@ -196,15 +209,37 @@ sanity() {
   esac
 }
 
+deploy() {
+  declare maybeCreate=$1
+  declare maybeStart=$2
+  declare maybeStop=$3
+  declare maybeDelete=$4
 
-start() {
-  declare maybeDelete=$1
-  if [[ -z $maybeDelete ]]; then
-    echo "--- start $TESTNET"
+  # If $1 is set, we will [re]create the nodes
+  if [[ -z $maybeCreate ]]; then
+    skipCreate=skip
   else
+    skipCreate=""
+    echo "--- create $TESTNET"
+  fi
+
+  # If $2 is set, we will [re]start the network software on the nodes
+  if [[ -z $maybeStart ]]; then
+    skipStart=skip
+  else
+    skipStart=""
+    echo "--- start $TESTNET"
+  fi
+
+  # If $3 is set, we will stop the nodes
+  if [[ ! -z $maybeStop ]]; then
     echo "--- stop $TESTNET"
   fi
-  declare maybeReuseLedger=$2
+
+  # If $4 is set, we will delete the nodes
+  if [[ ! -z $maybeDelete ]]; then
+    echo "--- delete $TESTNET"
+  fi
 
   case $TESTNET in
   testnet-edge)
@@ -212,7 +247,9 @@ start() {
       set -x
       ci/testnet-deploy.sh -p edge-testnet-solana-com -C ec2 -z us-west-1a \
         -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0ccd4f2239886fa94 \
-        ${maybeReuseLedger:+-r} \
+        ${skipCreate:+-r} \
+        ${skipStart:+-s} \
+        ${maybeStop:+-S} \
         ${maybeDelete:+-D}
     )
     ;;
@@ -225,7 +262,9 @@ start() {
         ci/testnet-deploy.sh -p edge-perf-testnet-solana-com -C ec2 -z us-west-2b \
           -g -t "$CHANNEL_OR_TAG" -c 2 \
           -b \
-          ${maybeReuseLedger:+-r} \
+          ${skipCreate:+-r} \
+          ${skipStart:+-s} \
+          ${maybeStop:+-S} \
           ${maybeDelete:+-D}
     )
     ;;
@@ -245,19 +284,25 @@ start() {
       done
 
       if [[ -n $EC2_NODE_COUNT ]]; then
+        if [[ -n $GCE_NODE_COUNT ]]; then
+          skipStart="skip"
+        fi
         # shellcheck disable=SC2068
         ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
           -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
-          ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-D} \
-          ${GCE_NODE_COUNT:+-s}
+          ${skipCreate:+-r} \
+          ${skipStart:+-s} \
+          ${maybeStop:+-S} \
+          ${maybeDelete:+-D}
       fi
 
       if [[ -n $GCE_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
         ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
           -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P \
-          ${maybeReuseLedger:+-r} \
+          ${skipCreate:+-r} \
+          ${skipStart:+-s} \
+          ${maybeStop:+-S} \
           ${maybeDelete:+-D} \
           ${EC2_NODE_COUNT:+-x}
       fi
@@ -272,7 +317,9 @@ start() {
         ci/testnet-deploy.sh -p beta-perf-testnet-solana-com -C ec2 -z us-west-2b \
           -g -t "$CHANNEL_OR_TAG" -c 2 \
           -b \
-          ${maybeReuseLedger:+-r} \
+          ${skipCreate:+-r} \
+          ${skipStart:+-s} \
+          ${maybeStop:+-S} \
           ${maybeDelete:+-D}
     )
     ;;
@@ -302,13 +349,22 @@ start() {
           -t "$CHANNEL_OR_TAG" -c 2 \
           -b \
           -d pd-ssd \
-          ${maybeReuseLedger:+-r} \
+          ${skipCreate:+-r} \
+          ${skipStart:+-s} \
+          ${maybeStop:+-S} \
           ${maybeDelete:+-D}
         #ci/testnet-deploy.sh -p perf-testnet-solana-com -C ec2 -z us-east-1a \
         #  -g \
         #  -t "$CHANNEL_OR_TAG" -c 2 \
         #  ${maybeReuseLedger:+-r} \
         #  ${maybeDelete:+-D}
+    )
+    ;;
+  testnet-demo)
+    (
+      set -x
+      echo "Demo net not yet implemented!"
+      exit 666
     )
     ;;
   *)
@@ -318,13 +374,49 @@ start() {
   esac
 }
 
+CREATED_LOCKFILE="~/${TESTNET}.is_created"
+STARTED_LOCKFILE="~/${TESTNET}.is_started"
+
+create-and-start() {
+  rm -f ${CREATED_LOCKFILE}
+  rm -f ${STARTED_LOCKFILE}
+  deploy create start
+  touch ${CREATED_LOCKFILE}
+  touch ${STARTED_LOCKFILE}
+}
+create() {
+  rm -f ${CREATED_LOCKFILE}
+  rm -f ${STARTED_LOCKFILE}
+  deploy create
+  touch ${CREATED_LOCKFILE}
+}
+start() {
+  if [[ -f ${CREATED_LOCKFILE} ]]; then
+    rm -f ${STARTED_LOCKFILE}
+    deploy "" start
+    touch ${STARTED_LOCKFILE}
+  else
+    echo "Unable to start ${TESTNET}.  Are the nodes created?
+    Re-run ci/testnet-manager.sh with \$TESTNET_OP=create or \$TESTNET_OP=create-and-start"
+    exit 1
+  fi
+}
 stop() {
-  start delete
+  deploy "" ""
+  rm -f ${STARTED_LOCKFILE}
+}
+delete() {
+  deploy "" "" "" delete
+  rm -f ${CREATED_LOCKFILE}
+  rm -f ${STARTED_LOCKFILE}
 }
 
 case $TESTNET_OP in
-sanity)
-  sanity
+create-and-start)
+  create-and-start
+  ;;
+create)
+  create
   ;;
 start)
   start
@@ -332,8 +424,14 @@ start)
 stop)
   stop
   ;;
+sanity)
+  sanity
+  ;;
+delete)
+  delete
+  ;;
 update-or-restart)
-  if start "" update; then
+  if start; then
     echo Update successful
   else
     echo "+++ Update failed, restarting the network"
@@ -351,7 +449,7 @@ sanity-or-restart)
     # TODO: Restore attempt to restart the cluster before recreating it
     #       See https://github.com/solana-labs/solana/issues/3774
     if false; then
-      if start "" update; then
+      if start; then
         echo Update successful
       else
         echo "+++ Update failed, restarting the network"
@@ -362,6 +460,10 @@ sanity-or-restart)
       start
     fi
   fi
+  ;;
+*)
+  echo "Error: Invalid TESTNET_OP=$TESTNET_OP"
+  exit 1
   ;;
 esac
 
