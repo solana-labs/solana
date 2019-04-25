@@ -296,7 +296,7 @@ impl ExchangeProcessor {
         // Trade holds the tokens in escrow
         account.tokens[from_token] -= info.tokens;
 
-        inc_new_counter_info!("exchange_processor-trades", 1);
+        inc_new_counter_info!("exchange_processor-trades", 1, 1000, 1000);
 
         Self::serialize(
             &ExchangeState::Trade(TradeOrderInfo {
@@ -390,7 +390,7 @@ impl ExchangeProcessor {
             Err(e)?
         }
 
-        inc_new_counter_info!("exchange_processor-swap", 1);
+        inc_new_counter_info!("exchange_processor-swap", 1, 1000, 1000);
 
         if to_trade.tokens == 0 {
             // Turn into token account
