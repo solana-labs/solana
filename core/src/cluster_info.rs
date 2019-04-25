@@ -338,6 +338,17 @@ impl ClusterInfo {
             .collect()
     }
 
+    // All nodes in gossip, including spy nodes
+    pub(crate) fn all_peers(&self) -> Vec<ContactInfo> {
+        self.gossip
+            .crds
+            .table
+            .values()
+            .filter_map(|x| x.value.contact_info())
+            .cloned()
+            .collect()
+    }
+
     pub fn gossip_peers(&self) -> Vec<ContactInfo> {
         let me = self.my_data().id;
         self.gossip
