@@ -207,7 +207,8 @@ cloud_DeleteInstances() {
 
   declare names=("${instances[@]/:*/}")
   declare zones=("${instances[@]/*:/}")
-  declare unique_zones=($(echo "${zones[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+  declare uniq_zones=()
+  read -a uniq_zones <<< "$(echo "${zones[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
 
   for zone in "${unique_zones[@]}"; do
     set -x
