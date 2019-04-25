@@ -64,6 +64,35 @@ EOF
   exit 0
 fi
 
+ci/channel-info.sh
+eval "$(ci/channel-info.sh)"
+
+
+EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
+GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
+case $TESTNET in
+testnet-edge|testnet-edge-perf)
+  CHANNEL_OR_TAG=edge
+  CHANNEL_BRANCH=$EDGE_CHANNEL
+  : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
+  ;;
+testnet-beta|testnet-beta-perf)
+  CHANNEL_OR_TAG=beta
+  CHANNEL_BRANCH=$BETA_CHANNEL
+  : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
+  : "${EC2_NODE_COUNT:=10}"
+  : "${GCE_NODE_COUNT:=}"
+  ;;
+testnet|testnet-perf)
+  CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
+  CHANNEL_BRANCH=$STABLE_CHANNEL
+  ;;
+*)
+  echo "Error: Invalid TESTNET=$TESTNET"
+  exit 1
+  ;;
+esac
+
 if [[ -n $TESTNET_DB_HOST ]]; then
   SOLANA_METRICS_PARTIAL_CONFIG="host=$TESTNET_DB_HOST,$SOLANA_METRICS_PARTIAL_CONFIG"
 fi
@@ -72,34 +101,9 @@ export SOLANA_METRICS_CONFIG="db=$TESTNET,$SOLANA_METRICS_PARTIAL_CONFIG"
 echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
 source scripts/configure-metrics.sh
 
-EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
-GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
-
-ci/channel-info.sh
-eval "$(ci/channel-info.sh)"
-
 if [[ -n $TESTNET_TAG ]]; then
   CHANNEL_OR_TAG=$TESTNET_TAG
 else
-  case $TESTNET in
-  testnet-edge|testnet-edge-perf)
-    CHANNEL_OR_TAG=edge
-    CHANNEL_BRANCH=$EDGE_CHANNEL
-    ;;
-  testnet-beta|testnet-beta-perf)
-    CHANNEL_OR_TAG=beta
-    CHANNEL_BRANCH=$BETA_CHANNEL
-    ;;
-  testnet|testnet-perf)
-    CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
-    CHANNEL_BRANCH=$STABLE_CHANNEL
-    ;;
-  *)
-    echo "Error: Invalid TESTNET=$TESTNET"
-    exit 1
-    ;;
-  esac
-
   if [[ $BUILDKITE_BRANCH != "$CHANNEL_BRANCH" ]]; then
     (
       cat <<EOF
