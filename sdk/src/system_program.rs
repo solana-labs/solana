@@ -1,6 +1,8 @@
 use crate::pubkey::Pubkey;
 
-const SYSTEM_PROGRAM_ID: [u8; 32] = [0u8; 32];
+const SYSTEM_PROGRAM_ID: [u8; 32] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
 
 pub fn id() -> Pubkey {
     Pubkey::new(&SYSTEM_PROGRAM_ID)
