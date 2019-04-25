@@ -985,6 +985,14 @@ impl Blocktree {
         Ok(())
     }
 
+    fn data_blob_exists(&self, slot: u64, index: u64) -> bool {
+        self.erasure_meta_cf
+            .get((slot, ErasureMeta::set_index_for(index)))
+            .expect("Expect database get to succeed")
+            .map(|e| e.is_data_present(index))
+            .unwrap_or(false)
+    }
+
     fn is_orphan(meta: &SlotMeta) -> bool {
         // If we have no parent, then this is the head of a detached chain of
         // slots
@@ -1313,10 +1321,7 @@ impl Blocktree {
         // Check that the blob doesn't already exist
         if blob_index < slot.consumed
             || prev_inserted_blob_datas.contains_key(&(blob_slot, blob_index))
-            || self
-                .get_data_blob_bytes(blob_slot, blob_index)
-                .unwrap()
-                .is_some()
+            || self.data_blob_exists(blob_slot, blob_index)
         {
             return false;
         }
