@@ -2817,7 +2817,6 @@ pub mod tests {
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
-    #[cfg(feature = "erasure")]
     mod erasure {
         use super::*;
         use crate::blocktree::meta::ErasureMetaStatus;
@@ -3099,6 +3098,7 @@ pub mod tests {
         }
 
         #[test]
+        #[ignore]
         fn test_recovery_multi_slot_multi_thread() {
             use rand::{rngs::SmallRng, seq::SliceRandom, SeedableRng};
             use std::thread;
@@ -3156,7 +3156,7 @@ pub mod tests {
             // is a 50/50 chance of attempting to write the coding blobs first or the data blobs
             // first.
             // The goal is to be as racey as possible and cover a wide range of situations
-            for _ in 0..N_THREADS {
+            for thread_id in 0..N_THREADS {
                 let blocktree = Arc::clone(&blocktree);
                 let mut rng = SmallRng::from_rng(&mut rng).unwrap();
                 let model = model.clone();
@@ -3169,55 +3169,78 @@ pub mod tests {
                             .choose_multiple(&mut rng, num_erasure_sets);
 
                         for erasure_set in unordered_sets {
-                            if rng.gen() {
-                                blocktree
-                                    .write_shared_blobs(&erasure_set.data)
-                                    .expect("Writing data blobs must succeed");
-                                debug!(
-                                    "multislot: wrote data: slot: {}, erasure_set: {}",
-                                    slot, erasure_set.set_index
-                                );
-
-                                for shared_coding_blob in &erasure_set.coding {
-                                    let blob = shared_coding_blob.read().unwrap();
-                                    let size = blob.size() + BLOB_HEADER_SIZE;
+                            let mut attempt = 0;
+                            loop {
+                                if rng.gen() {
                                     blocktree
-                                        .put_coding_blob_bytes(
-                                            slot,
-                                            blob.index(),
-                                            &blob.data[..size],
-                                        )
-                                        .expect("Writing coding blobs must succeed");
-                                }
-                                debug!(
-                                    "multislot: wrote coding: slot: {}, erasure_set: {}",
-                                    slot, erasure_set.set_index
-                                );
-                            } else {
-                                // write coding blobs first, then write the data blobs.
-                                for shared_coding_blob in &erasure_set.coding {
-                                    let blob = shared_coding_blob.read().unwrap();
-                                    let size = blob.size() + BLOB_HEADER_SIZE;
-                                    blocktree
-                                        .put_coding_blob_bytes(
-                                            slot,
-                                            blob.index(),
-                                            &blob.data[..size],
-                                        )
-                                        .expect("Writing coding blobs must succeed");
-                                }
-                                debug!(
-                                    "multislot: wrote coding: slot: {}, erasure_set: {}",
-                                    slot, erasure_set.set_index
-                                );
+                                        .write_shared_blobs(&erasure_set.data)
+                                        .expect("Writing data blobs must succeed");
+                                    debug!(
+                                        "multislot: wrote data: slot: {}, erasure_set: {}",
+                                        slot, erasure_set.set_index
+                                    );
 
-                                blocktree
-                                    .write_shared_blobs(&erasure_set.data)
-                                    .expect("Writing data blobs must succeed");
-                                debug!(
-                                    "multislot: wrote data: slot: {}, erasure_set: {}",
-                                    slot, erasure_set.set_index
+                                    for shared_coding_blob in &erasure_set.coding {
+                                        let blob = shared_coding_blob.read().unwrap();
+                                        let size = blob.size() + BLOB_HEADER_SIZE;
+                                        blocktree
+                                            .put_coding_blob_bytes(
+                                                slot,
+                                                blob.index(),
+                                                &blob.data[..size],
+                                            )
+                                            .expect("Writing coding blobs must succeed");
+                                    }
+                                    debug!(
+                                        "multislot: wrote coding: slot: {}, erasure_set: {}",
+                                        slot, erasure_set.set_index
+                                    );
+                                } else {
+                                    // write coding blobs first, then write the data blobs.
+                                    for shared_coding_blob in &erasure_set.coding {
+                                        let blob = shared_coding_blob.read().unwrap();
+                                        let size = blob.size() + BLOB_HEADER_SIZE;
+                                        blocktree
+                                            .put_coding_blob_bytes(
+                                                slot,
+                                                blob.index(),
+                                                &blob.data[..size],
+                                            )
+                                            .expect("Writing coding blobs must succeed");
+                                    }
+                                    debug!(
+                                        "multislot: wrote coding: slot: {}, erasure_set: {}",
+                                        slot, erasure_set.set_index
+                                    );
+
+                                    blocktree
+                                        .write_shared_blobs(&erasure_set.data)
+                                        .expect("Writing data blobs must succeed");
+                                    debug!(
+                                        "multislot: wrote data: slot: {}, erasure_set: {}",
+                                        slot, erasure_set.set_index
+                                    );
+                                }
+
+                                // due to racing, some blobs might not be inserted. don't stop
+                                // trying until *some* thread succeeds in writing everything and
+                                // triggering recovery.
+                                let erasure_meta = blocktree
+                                    .erasure_meta_cf
+                                    .get((slot, erasure_set.set_index))
+                                    .unwrap()
+                                    .unwrap();
+
+                                let status = erasure_meta.status();
+                                attempt += 1;
+
+                                info!(
+                                    "[multi_slot] thread_id: {}, attempt: {}, slot: {}, set_index: {}, status: {:?}",
+                                    thread_id, attempt, slot, erasure_set.set_index, status
                                 );
+                                if status == ErasureMetaStatus::DataFull {
+                                    break;
+                                }
                             }
                         }
                     }
