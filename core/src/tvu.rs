@@ -151,6 +151,7 @@ impl Tvu {
             &storage_keypair,
             &exit,
             bank_forks_info[0].entry_height, // TODO: StorageStage needs to deal with BankForks somehow still
+            &bank_forks,
             storage_rotate_count,
             &cluster_info,
         );
