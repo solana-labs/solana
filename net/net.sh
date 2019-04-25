@@ -515,7 +515,7 @@ start() {
     networkVersion="$(
       (
         set -o pipefail
-        grep "^version: " "$SOLANA_ROOT"/solana-release/version.yml | head -n1 | cut -d\  -f2
+        grep "^commit: " "$SOLANA_ROOT"/solana-release/version.yml | head -n1 | cut -d\  -f2
       ) || echo "tar-unknown"
     )"
     ;;
