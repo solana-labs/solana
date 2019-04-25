@@ -25,6 +25,7 @@ use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use solana_vote_api::vote_state::{self, Vote};
+use std::cmp;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -409,12 +410,17 @@ impl Bank {
     pub fn last_blockhash(&self) -> Hash {
         self.blockhash_queue.read().unwrap().last_hash()
     }
-    /// Return the root bank's blockhash
+
+    /// Return a confirmed blockhash with NUM_BLOCKHASH_CONFIRMATIONS
     pub fn confirmed_last_blockhash(&self) -> Hash {
-        if let Some(bank) = self.parents().last() {
-            bank.last_blockhash()
-        } else {
+        const NUM_BLOCKHASH_CONFIRMATIONS: usize = 3;
+
+        let parents = self.parents();
+        if parents.is_empty() {
             self.last_blockhash()
+        } else {
+            let index = cmp::min(NUM_BLOCKHASH_CONFIRMATIONS, parents.len() - 1);
+            parents[index].last_blockhash()
         }
     }
 
