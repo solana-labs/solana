@@ -155,7 +155,7 @@ while true; do
     $solana_ledger_tool --ledger "$ledger_config_dir" verify
   fi
 
-  trap 'kill "$pid" && wait "$pid"' INT TERM ERR
+  trap '[[ -n $pid ]] && kill "$pid" >/dev/null 2>&1 && wait "$pid"' INT TERM ERR
 
   if ((stake)); then
     setup_vote_account "${leader_address%:*}" "$fullnode_id_path" "$fullnode_vote_id_path" "$stake"
@@ -175,28 +175,28 @@ while true; do
   oom_score_adj "$pid" 1000
 
   set +x
-
   while true; do
+
     if ! kill -0 "$pid"; then
       wait "$pid"
       exit 0
     fi
+
     sleep 1
 
-    if ((poll_for_new_genesis_block)); then
-      if ((!secs_to_next_genesis_poll)); then
-        secs_to_next_genesis_poll=60
+    ((poll_for_new_genesis_block)) || continue
+    ((secs_to_next_genesis_poll--)) && continue
 
-        $rsync -r "$rsync_leader_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR" || true
-        if [[ -n $(diff "$SOLANA_RSYNC_CONFIG_DIR"/ledger/genesis.json "$ledger_config_dir"/genesis.json 2>&1) ]]; then
-          echo "############## New genesis detected, restarting fullnode ##############"
-          kill "$pid" || true
-          wait "$pid" || true
-          rm -rf "$ledger_config_dir" "$accounts_config_dir" "$fullnode_vote_id_path".configured
-          break
-        fi
-      fi
-      ((secs_to_next_genesis_poll--))
-    fi
+    $rsync -r "$rsync_leader_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR" || true
+    diff -q "$SOLANA_RSYNC_CONFIG_DIR"/ledger/genesis.json "$ledger_config_dir"/genesis.json >/dev/null 2>&1 || break
+    secs_to_next_genesis_poll=60
+
   done
+
+  echo "############## New genesis detected, restarting fullnode ##############"
+  kill "$pid" || true
+  wait "$pid" || true
+  rm -rf "$ledger_config_dir" "$accounts_config_dir" "$fullnode_vote_id_path".configured
+  sleep 60 # give the network time to come back up
+
 done
