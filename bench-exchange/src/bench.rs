@@ -1048,7 +1048,7 @@ mod tests {
                 exit(1);
             });
 
-        let clients = get_clients(nodes);
+        let clients = get_clients(&nodes);
 
         if clients.len() < NUM_NODES {
             error!(
