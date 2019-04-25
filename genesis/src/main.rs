@@ -123,43 +123,39 @@ mod tests {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
         ]);
-        let native = Pubkey::new(&[
-            1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0,
-        ]);
-        let bpf = Pubkey::new(&[
-            128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
-        let budget = Pubkey::new(&[
-            129, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
-        let storage = Pubkey::new(&[
-            130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
-        let token = Pubkey::new(&[
-            131, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
-        let vote = Pubkey::new(&[
-            132, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
-        let config = Pubkey::new(&[
-            133, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
-        let exchange = Pubkey::new(&[
-            134, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
+        let native_loader = "NativeLoader1111111111111111111111111111111"
+            .parse::<Pubkey>()
+            .unwrap();
+        let bpf_loader = "BPFLoader1111111111111111111111111111111111"
+            .parse::<Pubkey>()
+            .unwrap();
+        let budget = "Budget1111111111111111111111111111111111111"
+            .parse::<Pubkey>()
+            .unwrap();
+        let stake = "Stake11111111111111111111111111111111111111"
+            .parse::<Pubkey>()
+            .unwrap();
+        let storage = "Storage111111111111111111111111111111111111"
+            .parse::<Pubkey>()
+            .unwrap();
+        let token = "Token11111111111111111111111111111111111111"
+            .parse::<Pubkey>()
+            .unwrap();
+        let vote = "Vote111111111111111111111111111111111111111"
+            .parse::<Pubkey>()
+            .unwrap();
+        let config = "Config1111111111111111111111111111111111111"
+            .parse::<Pubkey>()
+            .unwrap();
+        let exchange = "Exchange11111111111111111111111111111111111"
+            .parse::<Pubkey>()
+            .unwrap();
 
         assert_eq!(solana_sdk::system_program::id(), system);
-        assert_eq!(solana_sdk::native_loader::id(), native);
-        assert_eq!(solana_sdk::bpf_loader::id(), bpf);
+        assert_eq!(solana_sdk::native_loader::id(), native_loader);
+        assert_eq!(solana_sdk::bpf_loader::id(), bpf_loader);
         assert_eq!(solana_budget_api::id(), budget);
+        assert_eq!(solana_stake_api::id(), stake);
         assert_eq!(solana_storage_api::id(), storage);
         assert_eq!(solana_token_api::id(), token);
         assert_eq!(solana_vote_api::id(), vote);
