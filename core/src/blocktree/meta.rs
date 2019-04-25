@@ -35,7 +35,22 @@ impl SlotMeta {
         if self.last_index == std::u64::MAX {
             return false;
         }
-        assert!(self.consumed <= self.last_index + 1);
+
+        // Should never happen
+        if self.consumed > self.last_index + 1 {
+            solana_metrics::submit(
+                solana_metrics::influxdb::Point::new("blocktree_error")
+                    .add_field(
+                        "error",
+                        solana_metrics::influxdb::Value::String(format!(
+                            "Observed a slot meta with consumed: {} > meta.last_index + 1: {}",
+                            self.consumed,
+                            self.last_index + 1
+                        )),
+                    )
+                    .to_owned(),
+            );
+        }
 
         self.consumed == self.last_index + 1
     }
