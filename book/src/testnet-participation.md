@@ -57,7 +57,7 @@ software on Linux x86_64 systems.
 
 Install the latest release with a single shell command:
 ```bash
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.13.0/install/solana-install-init.sh | \
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.14.0/install/solana-install-init.sh | \
   sh -s - --url https://api.beta.testnet.solana.com
 ```
 
