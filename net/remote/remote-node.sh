@@ -114,10 +114,10 @@ local|tar)
       else
         args+=("--stake" 0)
       fi
+      args+=(--enable-rpc-exit)
     fi
 
     args+=(
-      --enable-rpc-exit
       --gossip-port 8001
       --rpc-port 8899
     )
