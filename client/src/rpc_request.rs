@@ -4,21 +4,23 @@ use std::{error, fmt};
 #[derive(Debug, PartialEq)]
 pub enum RpcRequest {
     ConfirmTransaction,
+    DeregisterNode,
+    FullnodeExit,
     GetAccountInfo,
     GetBalance,
+    GetClusterNodes,
+    GetNumBlocksSinceSignatureConfirmation,
     GetRecentBlockhash,
     GetSignatureStatus,
-    GetTransactionCount,
-    RequestAirdrop,
-    SendTransaction,
-    RegisterNode,
-    SignVote,
-    DeregisterNode,
+    GetSlotLeader,
     GetStorageBlockhash,
     GetStorageEntryHeight,
     GetStoragePubkeysForEntryHeight,
-    FullnodeExit,
-    GetNumBlocksSinceSignatureConfirmation,
+    GetTransactionCount,
+    RegisterNode,
+    RequestAirdrop,
+    SendTransaction,
+    SignVote,
 }
 
 impl RpcRequest {
@@ -26,23 +28,25 @@ impl RpcRequest {
         let jsonrpc = "2.0";
         let method = match self {
             RpcRequest::ConfirmTransaction => "confirmTransaction",
+            RpcRequest::DeregisterNode => "deregisterNode",
+            RpcRequest::FullnodeExit => "fullnodeExit",
             RpcRequest::GetAccountInfo => "getAccountInfo",
             RpcRequest::GetBalance => "getBalance",
-            RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
-            RpcRequest::GetSignatureStatus => "getSignatureStatus",
-            RpcRequest::GetTransactionCount => "getTransactionCount",
-            RpcRequest::RequestAirdrop => "requestAirdrop",
-            RpcRequest::SendTransaction => "sendTransaction",
-            RpcRequest::RegisterNode => "registerNode",
-            RpcRequest::SignVote => "signVote",
-            RpcRequest::DeregisterNode => "deregisterNode",
-            RpcRequest::GetStorageBlockhash => "getStorageBlockhash",
-            RpcRequest::GetStorageEntryHeight => "getStorageEntryHeight",
-            RpcRequest::GetStoragePubkeysForEntryHeight => "getStoragePubkeysForEntryHeight",
-            RpcRequest::FullnodeExit => "fullnodeExit",
+            RpcRequest::GetClusterNodes => "getClusterNodes",
             RpcRequest::GetNumBlocksSinceSignatureConfirmation => {
                 "getNumBlocksSinceSignatureConfirmation"
             }
+            RpcRequest::GetRecentBlockhash => "getRecentBlockhash",
+            RpcRequest::GetSignatureStatus => "getSignatureStatus",
+            RpcRequest::GetSlotLeader => "getSlotLeader",
+            RpcRequest::GetStorageBlockhash => "getStorageBlockhash",
+            RpcRequest::GetStorageEntryHeight => "getStorageEntryHeight",
+            RpcRequest::GetStoragePubkeysForEntryHeight => "getStoragePubkeysForEntryHeight",
+            RpcRequest::GetTransactionCount => "getTransactionCount",
+            RpcRequest::RegisterNode => "registerNode",
+            RpcRequest::RequestAirdrop => "requestAirdrop",
+            RpcRequest::SendTransaction => "sendTransaction",
+            RpcRequest::SignVote => "signVote",
         };
         let mut request = json!({
            "jsonrpc": jsonrpc,
