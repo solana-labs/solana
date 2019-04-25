@@ -1,13 +1,28 @@
 use crate::instruction::{AccountMeta, Instruction};
+use crate::instruction_processor_utils::DecodeError;
 use crate::pubkey::Pubkey;
 use crate::system_program;
+use num_derive::FromPrimitive;
 
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq, FromPrimitive)]
 pub enum SystemError {
     AccountAlreadyInUse,
     ResultWithNegativeLamports,
     SourceNotSystemAccount,
 }
+
+impl<T> DecodeError<T> for SystemError {
+    fn type_of(&self) -> &'static str {
+        "SystemError"
+    }
+}
+
+impl std::fmt::Display for SystemError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "error")
+    }
+}
+impl std::error::Error for SystemError {}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum SystemInstruction {

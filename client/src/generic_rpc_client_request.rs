@@ -1,3 +1,4 @@
+use crate::client_error::ClientError;
 use crate::rpc_request::RpcRequest;
 
 pub(crate) trait GenericRpcClientRequest {
@@ -6,5 +7,5 @@ pub(crate) trait GenericRpcClientRequest {
         request: &RpcRequest,
         params: Option<serde_json::Value>,
         retries: usize,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error>>;
+    ) -> Result<serde_json::Value, ClientError>;
 }

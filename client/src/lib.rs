@@ -1,3 +1,4 @@
+pub mod client_error;
 mod generic_rpc_client_request;
 pub mod mock_rpc_client_request;
 pub mod rpc_client;
