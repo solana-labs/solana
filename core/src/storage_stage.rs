@@ -14,9 +14,10 @@ use bincode::deserialize;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_sdk::hash::Hash;
+use solana_sdk::instruction::Instruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_transaction;
+use solana_sdk::system_instruction;
 use solana_sdk::transaction::Transaction;
 use solana_storage_api::storage_instruction::{self, StorageInstruction};
 use std::collections::HashSet;
@@ -67,7 +68,7 @@ pub const NUM_STORAGE_SAMPLES: usize = 4;
 pub const ENTRIES_PER_SEGMENT: u64 = 16;
 const KEY_SIZE: usize = 64;
 
-type TransactionSender = Sender<Transaction>;
+type InstructionSender = Sender<Instruction>;
 
 pub fn get_segment_from_entry(entry_height: u64) -> u64 {
     entry_height / ENTRIES_PER_SEGMENT
@@ -157,7 +158,7 @@ impl StorageStage {
         let exit0 = exit.clone();
         let keypair0 = storage_keypair.clone();
 
-        let (tx_sender, tx_receiver) = channel();
+        let (instruction_sender, instruction_receiver) = channel();
 
         let t_storage_mining_verifier = Builder::new()
             .name("solana-storage-mining-verify-stage".to_string())
@@ -176,7 +177,7 @@ impl StorageStage {
                             &mut entry_height,
                             &mut current_key,
                             storage_rotate_count,
-                            &tx_sender,
+                            &instruction_sender,
                         ) {
                             match e {
                                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -202,21 +203,20 @@ impl StorageStage {
             .spawn(move || {
                 let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
                 loop {
-                    match tx_receiver.recv_timeout(Duration::from_secs(1)) {
-                        Ok(mut tx) => {
+                    match instruction_receiver.recv_timeout(Duration::from_secs(1)) {
+                        Ok(instruction) => {
                             if Self::send_transaction(
                                 &bank_forks1,
                                 &cluster_info0,
-                                &mut tx,
-                                &exit1,
+                                instruction,
                                 &keypair1,
                                 &storage_keypair1,
                                 Some(storage_keypair1.pubkey()),
                                 &transactions_socket,
                             )
-                            .is_ok()
+                            .is_err()
                             {
-                                debug!("sent transaction: {:?}", tx);
+                                debug!("Failed to send storage transaction");
                             }
                         }
                         Err(e) => match e {
@@ -242,8 +242,7 @@ impl StorageStage {
     fn send_transaction(
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        transaction: &mut Transaction,
-        exit: &Arc<AtomicBool>,
+        instruction: Instruction,
         keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         account_to_create: Option<Pubkey>,
@@ -251,34 +250,29 @@ impl StorageStage {
     ) -> io::Result<()> {
         let working_bank = bank_forks.read().unwrap().working_bank();
         let blockhash = working_bank.confirmed_last_blockhash();
-
+        let mut instructions = vec![];
+        let mut signing_keys = vec![];
         if let Some(account) = account_to_create {
             if working_bank.get_account(&account).is_none() {
                 // TODO the account space needs to be well defined somewhere
-                let tx = system_transaction::create_account(
-                    keypair,
+                let create_instruction = system_instruction::create_account(
+                    &keypair.pubkey(),
                     &storage_keypair.pubkey(),
-                    blockhash,
                     1,
                     1024 * 4,
                     &solana_storage_api::id(),
-                    0,
                 );
-                // send this to our tpu
-                transactions_socket.send_to(
-                    &bincode::serialize(&tx).unwrap(),
-                    cluster_info.read().unwrap().my_data().tpu,
-                )?;
+                instructions.push(create_instruction);
+                signing_keys.push(keypair.as_ref());
                 info!("storage account requested");
             }
         }
-        transaction.sign(&[storage_keypair.as_ref()], blockhash);
-
-        if exit.load(Ordering::Relaxed) {
-            Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;
-        }
+        instructions.push(instruction);
+        signing_keys.push(storage_keypair.as_ref());
+        let mut transaction = Transaction::new_unsigned_instructions(instructions);
+        transaction.sign(&signing_keys, blockhash);
         transactions_socket.send_to(
-            &bincode::serialize(transaction).unwrap(),
+            &bincode::serialize(&transaction).unwrap(),
             cluster_info.read().unwrap().my_data().tpu,
         )?;
         Ok(())
@@ -290,7 +284,7 @@ impl StorageStage {
         _blocktree: &Arc<Blocktree>,
         entry_id: Hash,
         entry_height: u64,
-        tx_sender: &TransactionSender,
+        instruction_sender: &InstructionSender,
     ) -> Result<()> {
         let mut seed = [0u8; 32];
         let signature = keypair.sign(&entry_id.as_ref());
@@ -300,8 +294,7 @@ impl StorageStage {
             entry_id,
             entry_height,
         );
-        let tx = Transaction::new_unsigned_instructions(vec![ix]);
-        tx_sender.send(tx)?;
+        instruction_sender.send(ix)?;
 
         seed.copy_from_slice(&signature.to_bytes()[..32]);
 
@@ -370,7 +363,7 @@ impl StorageStage {
         entry_height: &mut u64,
         current_key_idx: &mut usize,
         storage_rotate_count: u64,
-        tx_sender: &TransactionSender,
+        instruction_sender: &InstructionSender,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let entries: Vec<Entry> = entry_receiver.recv_timeout(timeout)?;
@@ -441,7 +434,7 @@ impl StorageStage {
                     &blocktree,
                     entry.hash,
                     *entry_height,
-                    tx_sender,
+                    instruction_sender,
                 )?;
             }
             *entry_height += 1;
