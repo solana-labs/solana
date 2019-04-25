@@ -48,7 +48,6 @@ main() {
     need_cmd chmod
     need_cmd mkdir
     need_cmd rm
-    need_cmd rmdir
     need_cmd sed
     need_cmd grep
 
@@ -113,7 +112,7 @@ main() {
     retval=$?
 
     ignore rm "$solana_install"
-    ignore rmdir "$temp_dir"
+    ignore rm -rf "$temp_dir"
 
     return "$retval"
 }
