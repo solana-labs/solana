@@ -521,10 +521,12 @@ pub fn airdrop_lamports<T: Client>(
                 let signature = client.async_send_transaction(transaction).unwrap();
                 client
                     .poll_for_signature_confirmation(&signature, 1)
-                    .expect(&format!(
-                        "Error requesting airdrop: to addr: {:?} amount: {}",
-                        drone_addr, airdrop_amount
-                    ));
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "Error requesting airdrop: to addr: {:?} amount: {}",
+                            drone_addr, airdrop_amount
+                        )
+                    })
             }
             Err(err) => {
                 panic!(

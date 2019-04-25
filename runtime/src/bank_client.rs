@@ -123,20 +123,16 @@ impl SyncClient for BankClient {
         let mut confirmed_blocks = 0;
         loop {
             let response = self.bank.get_signature_confirmation_status(signature);
-            match response {
-                Some((confirmations, res)) => match res {
-                    Ok(_) => {
-                        if confirmed_blocks != confirmations {
-                            now = Instant::now();
-                            confirmed_blocks = confirmations;
-                        }
-                        if confirmations >= min_confirmed_blocks {
-                            break;
-                        }
+            if let Some((confirmations, res)) = response {
+                if res.is_ok() {
+                    if confirmed_blocks != confirmations {
+                        now = Instant::now();
+                        confirmed_blocks = confirmations;
                     }
-                    Err(_) => (),
-                },
-                None => (),
+                    if confirmations >= min_confirmed_blocks {
+                        break;
+                    }
+                }
             };
             if now.elapsed().as_secs() > 15 {
                 // TODO: Return a better error.
@@ -154,12 +150,10 @@ impl SyncClient for BankClient {
         let now = Instant::now();
         loop {
             let response = self.bank.get_signature_status(signature);
-            match response {
-                Some(res) => match res {
-                    Ok(_) => break,
-                    Err(_) => (),
-                },
-                None => (),
+            if let Some(res) = response {
+                if res.is_ok() {
+                    break;
+                }
             }
             if now.elapsed().as_secs() > 15 {
                 // TODO: Return a better error.
