@@ -8,12 +8,13 @@ use solana_sdk::signature::Signature;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction;
 use solana_sdk::transaction::{self, Transaction};
-use solana_sdk::transport::Result;
+use solana_sdk::transport::{Result, TransportError};
 use std::io;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::thread::Builder;
+use std::thread::{sleep, Builder};
+use std::time::{Duration, Instant};
 
 pub struct BankClient {
     bank: Arc<Bank>,
@@ -111,6 +112,59 @@ impl SyncClient for BankClient {
 
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank.transaction_count())
+    }
+
+    fn poll_for_signature_confirmation(
+        &self,
+        signature: &Signature,
+        min_confirmed_blocks: usize,
+    ) -> Result<()> {
+        let mut now = Instant::now();
+        let mut confirmed_blocks = 0;
+        loop {
+            let response = self.bank.get_signature_confirmation_status(signature);
+            if let Some((confirmations, res)) = response {
+                if res.is_ok() {
+                    if confirmed_blocks != confirmations {
+                        now = Instant::now();
+                        confirmed_blocks = confirmations;
+                    }
+                    if confirmations >= min_confirmed_blocks {
+                        break;
+                    }
+                }
+            };
+            if now.elapsed().as_secs() > 15 {
+                // TODO: Return a better error.
+                return Err(TransportError::IoError(io::Error::new(
+                    io::ErrorKind::Other,
+                    "signature not found",
+                )));
+            }
+            sleep(Duration::from_millis(250));
+        }
+        Ok(())
+    }
+
+    fn poll_for_signature(&self, signature: &Signature) -> Result<()> {
+        let now = Instant::now();
+        loop {
+            let response = self.bank.get_signature_status(signature);
+            if let Some(res) = response {
+                if res.is_ok() {
+                    break;
+                }
+            }
+            if now.elapsed().as_secs() > 15 {
+                // TODO: Return a better error.
+                return Err(TransportError::IoError(io::Error::new(
+                    io::ErrorKind::Other,
+                    "signature not found",
+                )));
+            }
+            sleep(Duration::from_millis(250));
+        }
+        Ok(())
     }
 }
 

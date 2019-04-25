@@ -519,7 +519,14 @@ pub fn airdrop_lamports<T: Client>(
         match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, blockhash) {
             Ok(transaction) => {
                 let signature = client.async_send_transaction(transaction).unwrap();
-                client.get_signature_status(&signature).unwrap();
+                client
+                    .poll_for_signature_confirmation(&signature, 1)
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "Error requesting airdrop: to addr: {:?} amount: {}",
+                            drone_addr, airdrop_amount
+                        )
+                    })
             }
             Err(err) => {
                 panic!(

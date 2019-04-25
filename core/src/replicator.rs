@@ -25,6 +25,7 @@ use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction;
 use solana_sdk::transaction::Transaction;
+use solana_sdk::transport::TransportError;
 use solana_storage_api::storage_instruction;
 use std::fs::File;
 use std::io;
@@ -405,7 +406,7 @@ impl Replicator {
         client: &ThinClient,
         keypair: &Keypair,
         storage_keypair: &Keypair,
-    ) -> io::Result<()> {
+    ) -> Result<()> {
         // make sure replicator has some balance
         if client.poll_get_balance(&keypair.pubkey())? == 0 {
             Err(io::Error::new(
@@ -429,7 +430,14 @@ impl Replicator {
                 0,
             );
             let signature = client.async_send_transaction(tx)?;
-            client.poll_for_signature(&signature)?;
+            client
+                .poll_for_signature(&signature)
+                .map_err(|err| match err {
+                    TransportError::IoError(e) => e,
+                    TransportError::TransactionError(_) => {
+                        io::Error::new(ErrorKind::Other, "signature not found")
+                    }
+                })?;
         }
         Ok(())
     }
