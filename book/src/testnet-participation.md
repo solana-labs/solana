@@ -39,11 +39,6 @@ $ curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, 
 
 Inspect the blockexplorer at [http://beta.testnet.solana.com/](http://beta.testnet.solana.com/) for activity.
 
-Run the following command to join the gossip network and view all the other nodes in the cluster:
-```bash
-$ solana-gossip --network beta.testnet.solana.com:8001 spy
-```
-
 View the [metrics dashboard](
 https://metrics.solana.com:3000/d/U9-26Cqmk/testnet-monitor-cloud?refresh=60s&orgId=2&var-testnet=testnet-beta&var-hostid=All)
 for more detail on cluster activity.
@@ -101,6 +96,12 @@ $ solana-wallet -n beta.testnet.solana.com airdrop 123
 $ solana-wallet -n beta.testnet.solana.com balance
 ```
 
+Also try running following command to join the gossip network and view all the other nodes in the cluster:
+```bash
+$ solana-gossip --network beta.testnet.solana.com:8001 spy
+# Press ^C to exit
+```
+
 Then the following command will start a new validator node.
 
 If this is a `solana-install`-installation:
@@ -132,7 +133,7 @@ validator to ports 11000-11011.
 From another console, confirm the IP address of your validator is visible in the
 gossip network by running:
 ```bash
-$ solana-gossip --network edge.testnet.solana.com:8001
+$ solana-gossip --network edge.testnet.solana.com:8001 spy
 ```
 
 When `fullnode.sh` starts, it will output a fullnode configuration that looks
