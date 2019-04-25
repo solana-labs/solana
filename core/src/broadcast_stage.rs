@@ -77,10 +77,10 @@ impl Broadcast {
         let mut broadcast_table = cluster_info.read().unwrap().sorted_tvu_peers(
             &staking_utils::delegated_stakes_at_epoch(&bank, bank_epoch).unwrap(),
         );
+        inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
         // Layer 1, leader nodes are limited to the fanout size.
         broadcast_table.truncate(NEIGHBORHOOD_SIZE);
 
-        inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
 
         let to_blobs_start = Instant::now();
