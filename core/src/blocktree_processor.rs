@@ -9,7 +9,7 @@ use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::timing::MAX_RECENT_BLOCKHASHES;
-use solana_sdk::transaction::{Result, TransactionError};
+use solana_sdk::transaction::Result;
 use std::result;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -19,13 +19,6 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
         r.clone()?;
     }
     Ok(())
-}
-
-fn is_unexpected_validator_error(r: &Result<()>) -> bool {
-    match r {
-        Err(TransactionError::DuplicateSignature) => true,
-        _ => false,
-    }
 }
 
 fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults)]) -> Result<()> {
@@ -44,7 +37,7 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults)])
                     if first_err.is_none() {
                         first_err = Some(r.clone());
                     }
-                    if is_unexpected_validator_error(&r) {
+                    if !Bank::can_commit(&r) {
                         warn!("Unexpected validator error: {:?}", e);
                         solana_metrics::submit(
                             solana_metrics::influxdb::Point::new("validator_process_entry_error")
