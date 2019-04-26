@@ -158,7 +158,6 @@ pub fn do_bench_tps<T>(
             &keypairs[len..],
             threads,
             reclaim_lamports_back_to_source_account,
-            &client,
         );
         // In sustained mode overlap the transfers with generation
         // this has higher average performance but lower peak performance
@@ -280,7 +279,6 @@ fn generate_txs<T: Client>(
     dest: &[Keypair],
     threads: usize,
     reclaim: bool,
-    client: &Arc<T>,
 ) {
     let tx_count = source.len();
     println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
