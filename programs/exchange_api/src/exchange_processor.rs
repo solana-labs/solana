@@ -579,17 +579,7 @@ mod test {
     }
 
     fn create_token_account(client: &BankClient, owner: &Keypair) -> Pubkey {
-        let new = Pubkey::new_rand();
-        let instruction = system_instruction::create_account(
-            &owner.pubkey(),
-            &new,
-            1,
-            mem::size_of::<ExchangeState>() as u64,
-            &id(),
-        );
-        client
-            .send_instruction(owner, instruction)
-            .expect(&format!("{}:{}", line!(), file!()));
+        let new = create_account(&client, &owner);
         let instruction = exchange_instruction::account_request(&owner.pubkey(), &new);
         client
             .send_instruction(owner, instruction)
