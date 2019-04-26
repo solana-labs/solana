@@ -4,6 +4,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signable, Signature};
 use solana_sdk::transaction::Transaction;
 use std::fmt;
+use std::collections::HashMap;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -12,6 +13,14 @@ pub enum CrdsValue {
     ContactInfo(ContactInfo),
     /// * Merge Strategy - Latest wallclock is picked
     Vote(Vote),
+    /// * Merge Strategy - Latest wallclock is picked
+    EpochSlots(EpochSlots),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct EpochSlots {
+    pub epoch: u64,
+    pub slots: HashMap<u64, u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
