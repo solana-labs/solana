@@ -1297,12 +1297,12 @@ fn try_erasure_recover(
                 Err(e) => return Err(e),
             }
         }
-        ErasureMetaStatus::StillNeed(needed) => {
-            inc_new_counter_info!("blocktree-erasure-blobs_needed", needed);
+        ErasureMetaStatus::StillNeed(_needed) => {
+            // inc_new_counter_info!("blocktree-erasure-blobs_needed", needed);
             None
         }
         ErasureMetaStatus::DataFull => {
-            inc_new_counter_info!("blocktree-erasure-complete", 1);
+            // inc_new_counter_info!("blocktree-erasure-complete", 1);
             None
         }
     };
