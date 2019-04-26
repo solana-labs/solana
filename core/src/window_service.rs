@@ -80,15 +80,17 @@ fn process_blobs(blobs: &[SharedBlob], blocktree: &Arc<Blocktree>) -> Result<()>
 ///  blob's slot
 fn should_retransmit_and_persist(
     blob: &Blob,
-    bank: Option<&Arc<Bank>>,
+    root_bank: Option<&Arc<Bank>>,
     leader_schedule_cache: Option<&Arc<LeaderScheduleCache>>,
     my_id: &Pubkey,
 ) -> bool {
-    let slot_leader_id = match bank {
+    let slot_leader_id = match root_bank {
         None => leader_schedule_cache.and_then(|cache| cache.slot_leader_at(blob.slot())),
-        Some(bank) => match leader_schedule_cache {
+        Some(root_bank) => match leader_schedule_cache {
             None => slot_leader_at(blob.slot(), &bank),
-            Some(cache) => cache.slot_leader_at_else_compute(blob.slot(), bank),
+            Some(cache) => {
+                cache.slot_leader_at_else_compute(blob.slot(), root_bank, root_bank.slot())
+            }
         },
     };
 
@@ -128,7 +130,7 @@ fn recv_window(
         should_retransmit_and_persist(
             &blob.read().unwrap(),
             bank_forks
-                .map(|bank_forks| bank_forks.read().unwrap().working_bank())
+                .map(|bank_forks| bank_forks.read().unwrap().root())
                 .as_ref(),
             leader_schedule_cache,
             my_id,

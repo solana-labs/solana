@@ -39,8 +39,13 @@ impl LeaderScheduleCache {
             .map(|schedule| schedule[slot_index])
     }
 
-    pub fn slot_leader_at_else_compute(&self, slot: u64, bank: &Bank) -> Option<Pubkey> {
+    pub fn slot_leader_at_else_compute(&self, slot: u64, bank: &Bank, root: u64) -> Option<Pubkey> {
         let cache_result = self.slot_leader_at(slot);
+        // Forbid asking for slots in an unconfirmed epoch
+        let max_slot = self.epoch_schedule.get_stakers_epoch(root);
+        if bank.slot() > max_slot {
+            return None;
+        }
         if cache_result.is_some() {
             cache_result
         } else {
@@ -160,7 +165,7 @@ mod tests {
 
         // Add something to the cache
         assert!(cache
-            .slot_leader_at_else_compute(bank.slot(), &bank)
+            .slot_leader_at_else_compute(bank.slot(), &bank, bank.slot())
             .is_some());
         assert!(cache.slot_leader_at(bank.slot()).is_some());
         assert_eq!(cache.cached_schedules.read().unwrap().0.len(), 1);
@@ -210,7 +215,7 @@ mod tests {
                         .name("test_thread_race_leader_schedule_cache".to_string())
                         .spawn(move || {
                             let _ = receiver.recv();
-                            cache.slot_leader_at_else_compute(bank.slot(), &bank);
+                            cache.slot_leader_at_else_compute(bank.slot(), &bank, bank.slot());
                         })
                         .unwrap(),
                     sender,
@@ -247,7 +252,7 @@ mod tests {
 
         assert_eq!(
             cache
-                .slot_leader_at_else_compute(bank.slot(), &bank)
+                .slot_leader_at_else_compute(bank.slot(), &bank, bank.slot())
                 .unwrap(),
             pubkey
         );
@@ -295,7 +300,7 @@ mod tests {
 
             assert_eq!(
                 cache
-                    .slot_leader_at_else_compute(bank.slot(), &bank)
+                    .slot_leader_at_else_compute(bank.slot(), &bank, bank.slot())
                     .unwrap(),
                 pubkey
             );
