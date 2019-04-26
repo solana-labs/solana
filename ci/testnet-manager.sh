@@ -189,6 +189,7 @@ sanity() {
     (
       set -x
       NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
         ci/testnet-sanity.sh testnet-solana-com ec2 us-west-1a
       #ci/testnet-sanity.sh testnet-solana-com gce us-east1-c
     )
