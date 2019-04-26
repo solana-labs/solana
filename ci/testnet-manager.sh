@@ -371,8 +371,27 @@ deploy() {
   testnet-demo)
     (
       set -x
-      echo "Demo net not yet implemented!"
-      exit 1
+
+    # TODO: Increase zone list to maximum
+#      GCE_DEMO_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
+      GCE_DEMO_ZONES=(us-west1-b us-east4-c)
+
+      # Build an array to pass as opts to testnet-deploy.sh: "-z zone1 -z zone2 ..."
+      GCE_ZONE_ARGS=()
+      for val in "${GCE_DEMO_ZONES[@]}"; do
+        GCE_ZONE_ARGS+=("-z $val")
+      done
+
+      if [[ -n $GCE_NODE_COUNT ]]; then
+        # shellcheck disable=SC2068
+        ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 2 -P -u \
+          -a demo-testnet-solana-com \
+          ${skipCreate:+-r} \
+          ${skipStart:+-s} \
+          ${maybeStop:+-S} \
+          ${maybeDelete:+-D}
+      fi
     )
     ;;
   *)
