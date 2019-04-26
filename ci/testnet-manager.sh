@@ -284,14 +284,15 @@ deploy() {
       done
 
       if [[ -n $EC2_NODE_COUNT ]]; then
-        if [[ -n $GCE_NODE_COUNT ]]; then
-          skipStart="skip"
+        if [[ -n $GCE_NODE_COUNT ]] || [[ -n $skipStart ]]; then
+          maybeSkipStart="skip"
         fi
+
         # shellcheck disable=SC2068
         ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
           -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
           ${skipCreate:+-r} \
-          ${skipStart:+-s} \
+          ${maybeSkipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D}
       fi
