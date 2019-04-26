@@ -166,6 +166,18 @@ impl SyncClient for BankClient {
         }
         Ok(())
     }
+
+    fn get_new_blockhash(&self, blockhash: &Hash) -> Result<Hash> {
+        let last_blockhash = self.bank.last_blockhash();
+        if last_blockhash != *blockhash {
+            Ok(last_blockhash)
+        } else {
+            Err(TransportError::IoError(io::Error::new(
+                io::ErrorKind::Other,
+                "Unable to get new blockhash",
+            )))
+        }
+    }
 }
 
 impl BankClient {
@@ -179,7 +191,8 @@ impl BankClient {
         }
     }
 
-    pub fn new_shared(bank: &Arc<Bank>) -> Self {
+    pub fn new(bank: Bank) -> Self {
+        let bank = Arc::new(bank);
         let (transaction_sender, transaction_receiver) = channel();
         let transaction_sender = Mutex::new(transaction_sender);
         let thread_bank = bank.clone();
@@ -192,10 +205,6 @@ impl BankClient {
             bank,
             transaction_sender,
         }
-    }
-
-    pub fn new(bank: Bank) -> Self {
-        Self::new_shared(&Arc::new(bank))
     }
 }
 

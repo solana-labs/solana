@@ -67,7 +67,7 @@ fn main() {
     // Sample the first keypair, see if it has lamports, if so then resume.
     // This logic is to prevent lamport loss on repeated solana-bench-tps executions
     let keypair0_balance = clients[0]
-        .get_balance(&keypairs.last().unwrap().pubkey())
+        .get_balance(&keypairs[tx_count * 2 - 1].pubkey())
         .unwrap_or(0);
 
     if NUM_LAMPORTS_PER_ACCOUNT > keypair0_balance {
@@ -77,7 +77,7 @@ fn main() {
         println!("adding more lamports {}", extra);
         fund_keys(&clients[0], &id, &keypairs, extra);
     }
-    // `generate_keypairs` generates more keys than we care about. filter down to tx_count * 2 for correct spends later
+    // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.
     keypairs.truncate(2 * tx_count);
 
     let config = Config {

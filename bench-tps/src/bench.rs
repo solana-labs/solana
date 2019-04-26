@@ -135,27 +135,27 @@ pub fn do_bench_tps<T>(
 
     // generate and send transactions for the specified duration
     let start = Instant::now();
-    let mut blockhash_time = Instant::now();
     let mut reclaim_lamports_back_to_source_account = false;
     let mut i = keypair0_balance;
     let mut blockhash = Hash::default();
+    let mut blockhash_time = Instant::now();
     while start.elapsed() < duration {
         // ping-pong between source and destination accounts for each loop iteration
         // this seems to be faster than trying to determine the balance of individual
         // accounts
         let len = tx_count as usize;
-        let new_blockhash = client.get_recent_blockhash().unwrap_or_default();
-        if new_blockhash == blockhash {
-            if blockhash_time.elapsed().as_secs() > 10 {
-                println!("Blockhash has not updating");
+        if let Ok(new_blockhash) = client.get_new_blockhash(&blockhash) {
+            blockhash = new_blockhash;
+        } else {
+            if blockhash_time.elapsed().as_secs() > 30 {
+                panic!("Blockhash has not updating");
             }
             sleep(Duration::from_millis(100));
             continue;
         }
+        blockhash_time = Instant::now();
         let balance = client.get_balance(&id.pubkey()).unwrap_or(0);
         metrics_submit_lamport_balance(balance);
-        blockhash_time = Instant::now();
-        blockhash = new_blockhash;
         generate_txs(
             &shared_txs,
             &blockhash,
@@ -644,10 +644,7 @@ pub fn generate_keypairs(id: &Keypair, tx_count: usize) -> Vec<Keypair> {
     while target > 1 {
         total_keys += target;
         // Use the upper bound for this division otherwise it may not generate enough keys
-        target = match target.checked_rem(MAX_SPENDS_PER_TX) {
-            Some(0) => target / MAX_SPENDS_PER_TX,
-            _ => target / MAX_SPENDS_PER_TX + 1,
-        };
+        target = (target + MAX_SPENDS_PER_TX - 1) / MAX_SPENDS_PER_TX;
     }
     rnd.gen_n_keypairs(total_keys as u64)
 }
@@ -663,7 +660,6 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::hash::hash;
     use std::sync::mpsc::channel;
 
     #[test]
@@ -716,8 +712,8 @@ mod tests {
     #[test]
     fn test_bench_tps_bank_client() {
         let (genesis_block, id) = GenesisBlock::new(10_000);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let clients = vec![BankClient::new_shared(&bank)];
+        let bank = Bank::new(&genesis_block);
+        let clients = vec![BankClient::new(bank)];
 
         let mut config = Config::default();
         config.id = id;
@@ -727,22 +723,6 @@ mod tests {
         let keypairs = generate_keypairs(&config.id, config.tx_count);
         fund_keys(&clients[0], &config.id, &keypairs, 20);
 
-        let exit = Arc::new(AtomicBool::new(false));
-        let exit1 = exit.clone();
-        // A thread to produce ticks so that the bank's blockhash keeps moving
-        let t_ticker = Builder::new()
-            .name("solana-bench-ticker".to_string())
-            .spawn(move || loop {
-                &bank.register_tick(&hash(&bank.last_blockhash().as_ref()));
-                if exit1.load(Ordering::Relaxed) {
-                    break;
-                }
-                sleep(Duration::from_millis(100));
-            })
-            .unwrap();
-
         do_bench_tps(clients, config, keypairs, 0);
-        exit.store(true, Ordering::Relaxed);
-        t_ticker.join().unwrap()
     }
 }
