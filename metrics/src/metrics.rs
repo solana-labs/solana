@@ -223,7 +223,6 @@ pub fn flush() {
 /// Hook the panic handler to generate a data point on each panic
 pub fn set_panic_hook(program: &'static str) {
     use std::panic;
-    use std::sync::{Once, ONCE_INIT};
     static SET_HOOK: Once = ONCE_INIT;
     SET_HOOK.call_once(|| {
         let default_hook = panic::take_hook();
