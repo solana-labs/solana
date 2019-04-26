@@ -659,6 +659,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::hash::hash;
     use std::sync::mpsc::channel;
 
     #[test]
@@ -711,8 +712,8 @@ mod tests {
     #[test]
     fn test_bench_tps_bank_client() {
         let (genesis_block, id) = GenesisBlock::new(10_000);
-        let bank = Bank::new(&genesis_block);
-        let clients = vec![BankClient::new(bank)];
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let clients = vec![BankClient::new_shared(&bank)];
 
         let mut config = Config::default();
         config.id = id;
@@ -722,6 +723,22 @@ mod tests {
         let keypairs = generate_keypairs(&config.id, config.tx_count);
         fund_keys(&clients[0], &config.id, &keypairs, 20);
 
+        let exit = Arc::new(AtomicBool::new(false));
+        let exit1 = exit.clone();
+        // A thread to produce ticks so that the bank's blockhash keeps moving
+        let t_ticker = Builder::new()
+            .name("solana-bench-ticker".to_string())
+            .spawn(move || loop {
+                &bank.register_tick(&hash(&bank.last_blockhash().as_ref()));
+                if exit1.load(Ordering::Relaxed) {
+                    break;
+                }
+                sleep(Duration::from_millis(100));
+            })
+            .unwrap();
+
         do_bench_tps(clients, config, keypairs, 0);
+        exit.store(true, Ordering::Relaxed);
+        t_ticker.join().unwrap()
     }
 }
