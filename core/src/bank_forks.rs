@@ -11,7 +11,6 @@ use std::time::Instant;
 pub struct BankForks {
     banks: HashMap<u64, Arc<Bank>>,
     working_bank: Arc<Bank>,
-    root: u64,
 }
 
 impl Index<u64> for BankForks {
@@ -80,7 +79,7 @@ impl BankForks {
         self.banks.get(&bank_slot)
     }
 
-    pub fn new_from_banks(initial_banks: &[Arc<Bank>], root: u64) -> Self {
+    pub fn new_from_banks(initial_banks: &[Arc<Bank>]) -> Self {
         let mut banks = HashMap::new();
         let working_bank = initial_banks[0].clone();
         for bank in initial_banks {
@@ -89,7 +88,6 @@ impl BankForks {
         Self {
             banks,
             working_bank,
-            root,
         }
     }
 
@@ -106,12 +104,7 @@ impl BankForks {
         self.working_bank.clone()
     }
 
-    pub fn root(&self) -> u64 {
-        self.root
-    }
-
     pub fn set_root(&mut self, root: u64) {
-        self.root = root;
         let set_root_start = Instant::now();
         let root_bank = self
             .banks

@@ -484,7 +484,7 @@ mod tests {
         let cluster_info = test_cluster_info(&keypair.pubkey());
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank], bank.slot())));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank])));
         let (_storage_entry_sender, storage_entry_receiver) = channel();
         let storage_state = StorageState::new();
         let storage_stage = StorageStage::new(
@@ -523,7 +523,7 @@ mod tests {
         let entries = make_tiny_test_entries(64);
         let blocktree = Blocktree::open(&ledger_path).unwrap();
         let bank = Arc::new(Bank::new(&genesis_block));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank], bank.slot())));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank])));
         blocktree
             .write_entries(1, 0, 0, ticks_per_slot, &entries)
             .unwrap();
@@ -595,7 +595,7 @@ mod tests {
             .write_entries(1, 0, 0, ticks_per_slot, &entries)
             .unwrap();
         let bank = Arc::new(Bank::new(&genesis_block));
-        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank], bank.slot())));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank])));
         let cluster_info = test_cluster_info(&keypair.pubkey());
 
         let (storage_entry_sender, storage_entry_receiver) = channel();

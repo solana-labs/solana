@@ -131,11 +131,10 @@ pub fn process_blocktree(
         vec![(slot, meta, bank, entry_height, last_entry_hash)]
     };
 
-    let leader_schedule_cache = LeaderScheduleCache::new(*pending_slots[0].2.epoch_schedule());
+    let leader_schedule_cache = LeaderScheduleCache::new(*pending_slots[0].2.epoch_schedule(), 0);
 
     let mut fork_info = vec![];
     let mut last_status_report = Instant::now();
-    let mut root_slot = 0;
     while !pending_slots.is_empty() {
         let (slot, meta, bank, mut entry_height, mut last_entry_hash) =
             pending_slots.pop().unwrap();
@@ -189,7 +188,7 @@ pub fn process_blocktree(
         bank.freeze(); // all banks handled by this routine are created from complete slots
 
         if blocktree.is_root(slot) {
-            root_slot = slot;
+            leader_schedule_cache.set_root(slot);
             bank.squash();
             pending_slots.clear();
             fork_info.clear();
@@ -221,7 +220,7 @@ pub fn process_blocktree(
                 let next_bank = Arc::new(Bank::new_from_parent(
                     &bank,
                     &leader_schedule_cache
-                        .slot_leader_at_else_compute(next_slot, &bank, root_slot)
+                        .slot_leader_at_else_compute(next_slot, &bank)
                         .unwrap(),
                     next_slot,
                 ));
@@ -249,7 +248,7 @@ pub fn process_blocktree(
     }
 
     let (banks, bank_forks_info): (Vec<_>, Vec<_>) = fork_info.into_iter().unzip();
-    let bank_forks = BankForks::new_from_banks(&banks, root_slot);
+    let bank_forks = BankForks::new_from_banks(&banks);
     info!(
         "processing ledger...complete in {}ms, forks={}...",
         duration_as_ms(&now.elapsed()),
