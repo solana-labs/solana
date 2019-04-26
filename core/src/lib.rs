@@ -7,6 +7,7 @@
 
 pub mod bank_forks;
 pub mod banking_stage;
+pub mod blob;
 pub mod blob_fetch_stage;
 pub mod broadcast_stage;
 #[cfg(feature = "chacha")]
