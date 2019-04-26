@@ -147,9 +147,9 @@ pub fn do_bench_tps<T>(
         // accounts
         let len = tx_count as usize;
         let mut new_blockhash = client.get_recent_blockhash().unwrap();
-        while new_blockhash == blockhash {
+        if new_blockhash == blockhash {
             sleep(Duration::from_millis(100));
-            new_blockhash = client.get_recent_blockhash().unwrap();
+            continue;
         }
         blockhash = new_blockhash;
         generate_txs(
