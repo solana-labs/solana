@@ -24,11 +24,11 @@ if channel == 'stable':
     # testnet databases
     data['title'] = 'Testnet Monitor'
     data['uid'] = 'testnet'
-    data['templating']['list'] = [{'current': {'text': '$database',
-                                               'value': '$database'},
+    data['templating']['list'] = [{'current': {'text': '$datasource',
+                                               'value': '$datasource'},
                                    'hide': 1,
-                                   'label': 'Database',
-                                   'name': 'database',
+                                   'label': 'Data Source',
+                                   'name': 'datasource',
                                    'options': [],
                                    'query': 'influxdb',
                                    'refresh': 1,
@@ -55,11 +55,11 @@ else:
     # databases
     data['title'] = 'Testnet Monitor ({})'.format(channel)
     data['uid'] = 'testnet-' + channel
-    data['templating']['list'] = [{'current': {'text': '$database',
-                                               'value': '$database'},
+    data['templating']['list'] = [{'current': {'text': '$datasource',
+                                               'value': '$datasource'},
                                    'hide': 1,
-                                   'label': 'Database',
-                                   'name': 'database',
+                                   'label': 'Data Source',
+                                   'name': 'datasource',
                                    'options': [],
                                    'query': 'influxdb',
                                    'refresh': 1,
@@ -68,7 +68,7 @@ else:
                                    {'allValue': ".*",
                                    'current': {'text': 'testnet',
                                                'value': 'testnet'},
-                                   'datasource': '$database',
+                                   'datasource': '$datasource',
                                    'hide': 1,
                                    'includeAll': False,
                                    'label': 'Testnet',
@@ -85,7 +85,7 @@ else:
                                    'type': 'query',
                                    'useTags': False},
                                    {'allValue': ".*",
-                                    'datasource': '$database',
+                                    'datasource': '$datasource',
                                     'hide': 0,
                                     'includeAll': True,
                                     'label': 'HostID',
