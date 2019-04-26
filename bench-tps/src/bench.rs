@@ -272,7 +272,7 @@ fn sample_tx_count<T: Client>(
     }
 }
 
-fn generate_txs<T: Client>(
+fn generate_txs(
     shared_txs: &SharedTransactions,
     blockhash: &Hash,
     source: &[Keypair],

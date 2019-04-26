@@ -79,10 +79,6 @@ fn main() {
     }
     // `generate_keypairs` generates more keys than we care about. filter down to tx_count * 2 for correct spends later
     keypairs.truncate(2 * tx_count);
-    // make sure every keypair has balance, otherwise we end up sending invalid(AccountNotFound) txs to the cluster
-    for key in &keypairs {
-        clients[0].get_balance(&key.pubkey()).unwrap();
-    }
 
     let config = Config {
         id,
