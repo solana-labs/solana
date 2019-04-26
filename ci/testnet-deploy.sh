@@ -53,6 +53,9 @@ Deploys a CD testnet
    -D                   - Delete the network
    -r                   - Reuse existing node/ledger configuration from a
                           previous |start| (ie, don't run ./multinode-demo/setup.sh).
+   -x                   - External node.  Default: false
+   -s                   - Skip start.  Nodes will still be created or configured, but network software will not be started.
+   -S                   - Stop network software without tearing down nodes.
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
@@ -62,7 +65,7 @@ EOF
 
 zone=()
 
-while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:" opt; do
+while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:S" opt; do
   case $opt in
   h | \?)
     usage
@@ -126,6 +129,9 @@ while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:" opt; do
   u)
     blockstreamer=true
     ;;
+  S)
+    stopNetwork=true
+    ;;
   *)
     usage "Error: unhandled option: $opt"
     ;;
@@ -162,6 +168,11 @@ for val in "${zone[@]}"; do
   zone_args+=("-z $val")
 done
 
+if $stopNetwork; then
+  skipSetup=true
+fi
+
+# Create the network
 if ! $skipSetup; then
   echo "--- $cloudProvider.sh delete"
   # shellcheck disable=SC2068
@@ -226,6 +237,12 @@ net/init-metrics.sh -e
 
 echo "+++ $cloudProvider.sh info"
 net/"$cloudProvider".sh info
+
+if $stopNetwork; then
+  echo --- net.sh stop
+  time net/net.sh stop
+  exit 0
+fi
 
 echo --- net.sh start
 maybeRejectExtraNodes=
