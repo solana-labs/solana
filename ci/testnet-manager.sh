@@ -64,6 +64,10 @@ steps:
             value: "sanity"
           - label: "Delete all nodes on a testnet.  Network software will be stopped first if it is running"
             value: "delete"
+          - label: "Enable/unlock the testnet."
+            value: "enable"
+          - label: "Delete and then lock the testnet from further operation until it is re-enabled."
+            value: "disable"
   - command: "ci/$(basename "$0")"
     agents:
       - "queue=$BUILDKITE_AGENT_META_DATA_QUEUE"
