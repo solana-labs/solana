@@ -48,6 +48,11 @@ Deploys a CD testnet
    -a [address]         - Set the bootstrap fullnode's external IP address to this GCE address
    -d [disk-type]       - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
    -D                   - Delete the network
+   -r                   - Reuse existing node/ledger configuration from a
+                          previous |start| (ie, don't run ./multinode-demo/setup.sh).
+   -x                   - External node.  Default: false
+   -s                   - Skip start.  Nodes will still be created or configured, but network software will not be started.
+   -S                   - Stop network software without tearing down nodes.
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
@@ -63,7 +68,7 @@ zone=$3
 [[ -n $zone ]] || usage "Zone not specified"
 shift 3
 
-while getopts "h?p:Pn:c:s:t:gG:a:Dbd:" opt; do
+while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:S" opt; do
   case $opt in
   h | \?)
     usage
@@ -117,12 +122,79 @@ while getopts "h?p:Pn:c:s:t:gG:a:Dbd:" opt; do
   D)
     delete=true
     ;;
+  r)
+    skipSetup=true
+    ;;
+  s)
+    skipStart=true
+    ;;
+  x)
+    externalNode=true
+    ;;
+  u)
+    blockstreamer=true
+    ;;
+  S)
+    stopNetwork=true
+    ;;
   *)
     usage "Error: unhandled option: $opt"
     ;;
   esac
 done
 
+[[ -n $netName ]] || usage
+[[ -n $cloudProvider ]] || usage "Cloud provider not specified"
+[[ -n ${zone[*]} ]] || usage "At least one zone must be specified"
+
+shutdown() {
+  exitcode=$?
+
+  set +e
+  if [[ -d net/log ]]; then
+    mv net/log net/log-deploy
+    for logfile in net/log-deploy/*; do
+      if [[ -f $logfile ]]; then
+        upload-ci-artifact "$logfile"
+        tail "$logfile"
+      fi
+    done
+  fi
+  exit $exitcode
+}
+rm -rf net/{log,-deploy}
+trap shutdown EXIT INT
+
+set -x
+
+# Build a string to pass zone opts to $cloudProvider.sh: "-z zone1 -z zone2 ..."
+zone_args=()
+for val in "${zone[@]}"; do
+  zone_args+=("-z $val")
+done
+
+if $stopNetwork; then
+  skipSetup=true
+fi
+
+# Create the network
+if ! $skipSetup; then
+  echo "--- $cloudProvider.sh delete"
+  # shellcheck disable=SC2068
+  time net/"$cloudProvider".sh delete ${zone_args[@]} -p "$netName" ${externalNode:+-x}
+  if $delete; then
+    exit 0
+  fi
+
+  echo "--- $cloudProvider.sh create"
+  create_args=(
+    -p "$netName"
+    -a "$bootstrapFullNodeAddress"
+    -c "$clientNodeCount"
+    -n "$additionalFullNodeCount"
+  )
+  # shellcheck disable=SC2206
+  create_args+=(${zone_args[@]})
 
 create_args=(
   -a "$bootstrapFullNodeAddress"
@@ -163,6 +235,12 @@ fi
 echo "--- $cloudProvider.sh create"
 time net/"$cloudProvider".sh create "${create_args[@]}"
 net/init-metrics.sh -e
+
+if $stopNetwork; then
+  echo --- net.sh stop
+  time net/net.sh stop
+  exit 0
+fi
 
 echo --- net.sh start
 maybeRejectExtraNodes=
