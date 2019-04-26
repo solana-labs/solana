@@ -137,7 +137,7 @@ impl FetchStage {
         sockets: Vec<Arc<UdpSocket>>,
         tpu_via_blobs_sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
-        sig_verify_sender: &PacketSender,
+        sender: &PacketSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Self {
@@ -147,8 +147,8 @@ impl FetchStage {
             .map(|socket| streamer::receiver(socket, &exit, tpu_sender.clone()));
 
         let cluster_info = cluster_info.clone();
-        let tpu_sig_verify_sender = sig_verify_sender.clone();
-        let tpu_poh_recorder = poh_recorder.clone();
+        let t_sender = sender.clone();
+        let t_poh_recorder = poh_recorder.clone();
         let tpu_thread_hdl = Builder::new()
             .name("solana-fetch-stage-tpu_rcvr".to_string())
             .spawn(move || {
@@ -161,9 +161,9 @@ impl FetchStage {
                         .map(|data| data.tpu_via_blobs);
                     if let Err(e) = Self::handle_new_packets(
                         &tpu_receiver,
-                        &tpu_sig_verify_sender,
+                        &t_sender,
                         &socket,
-                        &tpu_poh_recorder,
+                        &t_poh_recorder,
                         &leader_tpu,
                     ) {
                         match e {
@@ -183,14 +183,13 @@ impl FetchStage {
             .into_iter()
             .map(|socket| streamer::blob_packet_receiver(socket, &exit, forward_sender.clone()));
 
-        let sender = sig_verify_sender.clone();
-        let poh_recorder = poh_recorder.clone();
-
+        let t_sender = sender.clone();
+        let t_poh_recorder = poh_recorder.clone();
         let fwd_thread_hdl = Builder::new()
             .name("solana-fetch-stage-fwd-rcvr".to_string())
             .spawn(move || loop {
                 if let Err(e) =
-                    Self::handle_forwarded_packets(&forward_receiver, &sender, &poh_recorder)
+                    Self::handle_forwarded_packets(&forward_receiver, &t_sender, &t_poh_recorder)
                 {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
