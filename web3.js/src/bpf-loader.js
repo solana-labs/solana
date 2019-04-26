@@ -16,7 +16,7 @@ export class BpfLoader {
    */
   static get programId(): PublicKey {
     return new PublicKey(
-      '0x8000000000000000000000000000000000000000000000000000000000000000',
+      'BPFLoader1111111111111111111111111111111111',
     );
   }
 

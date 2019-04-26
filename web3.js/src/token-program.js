@@ -138,7 +138,7 @@ type TokenAndPublicKey = [Token, PublicKey]; // This type exists to workaround a
  * The built-in token program
  */
 export const SYSTEM_TOKEN_PROGRAM_ID = new PublicKey(
-  '0x8300000000000000000000000000000000000000000000000000000000000000',
+  'Token11111111111111111111111111111111111111',
 );
 
 /**
