@@ -65,7 +65,7 @@ EOF
 
 zone=()
 
-while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:" opt; do
+while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:S" opt; do
   case $opt in
   h | \?)
     usage
@@ -169,7 +169,7 @@ for val in "${zone[@]}"; do
 done
 
 if $stopNetwork; then
-  $skipSetup=true
+  skipSetup=true
 fi
 
 # Create the network

@@ -96,8 +96,8 @@ testnet|testnet-perf)
   CHANNEL_BRANCH=$STABLE_CHANNEL
   ;;
 testnet-demo)
-  CHANNEL_OR_TAG=edge
-  CHANNEL_BRANCH=$EDGE_CHANNEL
+  CHANNEL_OR_TAG=beta
+  CHANNEL_BRANCH=$BETA_CHANNEL
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
@@ -215,7 +215,7 @@ deploy() {
   declare maybeStop=$3
   declare maybeDelete=$4
 
-  # If $1 is set, we will [re]create the nodes
+  # Create or recreate the nodes
   if [[ -z $maybeCreate ]]; then
     skipCreate=skip
   else
@@ -223,7 +223,7 @@ deploy() {
     echo "--- create $TESTNET"
   fi
 
-  # If $2 is set, we will [re]start the network software on the nodes
+  # Start or restart the network software on the nodes
   if [[ -z $maybeStart ]]; then
     skipStart=skip
   else
@@ -231,13 +231,13 @@ deploy() {
     echo "--- start $TESTNET"
   fi
 
-  # If $3 is set, we will stop the nodes
-  if [[ ! -z $maybeStop ]]; then
+  # Stop the nodes
+  if [[ -n $maybeStop ]]; then
     echo "--- stop $TESTNET"
   fi
 
-  # If $4 is set, we will delete the nodes
-  if [[ ! -z $maybeDelete ]]; then
+  # Delete the nodes
+  if [[ -n $maybeDelete ]]; then
     echo "--- delete $TESTNET"
   fi
 
@@ -330,7 +330,9 @@ deploy() {
         ci/testnet-deploy.sh -p testnet-solana-com -C ec2 -z us-west-1a \
           -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0fa502bf95f6f18b2 \
           -b \
-          ${maybeReuseLedger:+-r} \
+          ${skipCreate:+-r} \
+          ${skipStart:+-s} \
+          ${maybeStop:+-S} \
           ${maybeDelete:+-D}
         #ci/testnet-deploy.sh -p testnet-solana-com -C gce -z us-east1-c \
         #  -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a testnet-solana-com  \
@@ -364,7 +366,7 @@ deploy() {
     (
       set -x
       echo "Demo net not yet implemented!"
-      exit 666
+      exit 1
     )
     ;;
   *)
@@ -374,27 +376,27 @@ deploy() {
   esac
 }
 
-CREATED_LOCKFILE="~/${TESTNET}.is_created"
-STARTED_LOCKFILE="~/${TESTNET}.is_started"
+CREATED_LOCKFILE="${HOME}/${TESTNET}.is_created"
+STARTED_LOCKFILE="${HOME}/${TESTNET}.is_started"
 
 create-and-start() {
-  rm -f ${CREATED_LOCKFILE}
-  rm -f ${STARTED_LOCKFILE}
+  rm -f "${CREATED_LOCKFILE}"
+  rm -f "${STARTED_LOCKFILE}"
   deploy create start
-  touch ${CREATED_LOCKFILE}
-  touch ${STARTED_LOCKFILE}
+  touch "${CREATED_LOCKFILE}"
+  touch "${STARTED_LOCKFILE}"
 }
 create() {
-  rm -f ${CREATED_LOCKFILE}
-  rm -f ${STARTED_LOCKFILE}
+  rm -f "${CREATED_LOCKFILE}"
+  rm -f "${STARTED_LOCKFILE}"
   deploy create
-  touch ${CREATED_LOCKFILE}
+  touch "${CREATED_LOCKFILE}"
 }
 start() {
   if [[ -f ${CREATED_LOCKFILE} ]]; then
-    rm -f ${STARTED_LOCKFILE}
+    rm -f "${STARTED_LOCKFILE}"
     deploy "" start
-    touch ${STARTED_LOCKFILE}
+    touch "${STARTED_LOCKFILE}"
   else
     echo "Unable to start ${TESTNET}.  Are the nodes created?
     Re-run ci/testnet-manager.sh with \$TESTNET_OP=create or \$TESTNET_OP=create-and-start"
@@ -403,12 +405,12 @@ start() {
 }
 stop() {
   deploy "" ""
-  rm -f ${STARTED_LOCKFILE}
+  rm -f "${STARTED_LOCKFILE}"
 }
 delete() {
   deploy "" "" "" delete
-  rm -f ${CREATED_LOCKFILE}
-  rm -f ${STARTED_LOCKFILE}
+  rm -f "${CREATED_LOCKFILE}"
+  rm -f "${STARTED_LOCKFILE}"
 }
 
 case $TESTNET_OP in
