@@ -19,6 +19,7 @@ enableGpu=false
 bootDiskType=""
 leaderRotation=true
 blockstreamer=false
+stopNetwork=false
 
 usage() {
   exitcode=0

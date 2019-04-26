@@ -207,6 +207,21 @@ sanity() {
       #ci/testnet-sanity.sh perf-testnet-solana-com ec2 us-east-1a
     )
     ;;
+  testnet-demo)
+    (
+      set -x
+
+      ok=true
+      if [[ -n $GCE_NODE_COUNT ]]; then
+        NO_LEDGER_VERIFY=1 \
+          ci/testnet-sanity.sh demo-testnet-solana-com gce "${GCE_ZONES[0]}" || ok=false
+      else
+        echo "Error: no GCE nodes"
+        ok=false
+      fi
+      $ok
+    )
+    ;;
   *)
     echo "Error: Invalid TESTNET=$TESTNET"
     exit 1
