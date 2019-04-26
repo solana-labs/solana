@@ -44,8 +44,7 @@ Run the following command to join the gossip network and view all the other node
 $ solana-gossip --network beta.testnet.solana.com:8001
 ```
 
-View the [metrics dashboard](
-https://metrics.solana.com:3000/d/U9-26Cqmk/testnet-monitor-cloud?refresh=60s&orgId=2&var-testnet=testnet-beta&var-hostid=All)
+View the [metrics dashboard](https://metrics.solana.com:3000/d/testnet-edge/testnet-monitor-edge?var-testnet=testnet-beta)
 for more detail on cluster activity.
 
 ### Validator Setup
