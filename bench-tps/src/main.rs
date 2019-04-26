@@ -60,7 +60,7 @@ fn main() {
         .collect();
 
     println!("Creating {} keypairs...", tx_count * 2);
-    let keypairs = generate_keypairs(&id, tx_count);
+    let mut keypairs = generate_keypairs(&id, tx_count);
 
     println!("Get lamports...");
 
@@ -76,6 +76,12 @@ fn main() {
         airdrop_lamports(&clients[0], &drone_addr, &id, total);
         println!("adding more lamports {}", extra);
         fund_keys(&clients[0], &id, &keypairs, extra);
+    }
+    // `generate_keypairs` generates more keys than we care about. filter down to tx_count * 2 for correct spends later
+    keypairs.truncate(2 * tx_count);
+    // make sure every keypair has balance, otherwise we end up sending invalid(AccountNotFound) txs to the cluster
+    for key in &keypairs {
+        clients[0].get_balance(&key.pubkey()).unwrap();
     }
 
     let config = Config {
