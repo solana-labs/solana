@@ -18,7 +18,7 @@ pub struct UpdateManifest {
 pub struct SignedUpdateManifest {
     pub manifest: UpdateManifest,
     pub manifest_signature: Signature,
-    #[serde(skip_serializing)]
+    #[serde(skip)]
     pub account_pubkey: Pubkey,
 }
 
