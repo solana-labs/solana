@@ -135,6 +135,7 @@ pub fn do_bench_tps<T>(
 
     // generate and send transactions for the specified duration
     let start = Instant::now();
+    let mut blockhash_time = Instant::now();
     let mut reclaim_lamports_back_to_source_account = false;
     let mut i = keypair0_balance;
     let mut blockhash = Hash::default();
@@ -146,11 +147,15 @@ pub fn do_bench_tps<T>(
         // this seems to be faster than trying to determine the balance of individual
         // accounts
         let len = tx_count as usize;
-        let mut new_blockhash = client.get_recent_blockhash().unwrap();
+        let new_blockhash = client.get_recent_blockhash().unwrap_or_default();
         if new_blockhash == blockhash {
+            if blockhash_time.elapsed().as_secs() > 10 {
+                println!("Blockhash has not updating");
+            }
             sleep(Duration::from_millis(100));
             continue;
         }
+        blockhash_time = Instant::now();
         blockhash = new_blockhash;
         generate_txs(
             &shared_txs,
