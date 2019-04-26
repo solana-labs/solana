@@ -16,7 +16,7 @@ export class NativeLoader {
    */
   static get programId(): PublicKey {
     return new PublicKey(
-      '0x100000000000000000000000000000000000000000000000000000000000000',
+      'NativeLoader1111111111111111111111111111111',
     );
   }
 
