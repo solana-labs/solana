@@ -140,9 +140,6 @@ pub fn do_bench_tps<T>(
     let mut i = keypair0_balance;
     let mut blockhash = Hash::default();
     while start.elapsed() < duration {
-        let balance = client.get_balance(&id.pubkey()).unwrap_or(0);
-        metrics_submit_lamport_balance(balance);
-
         // ping-pong between source and destination accounts for each loop iteration
         // this seems to be faster than trying to determine the balance of individual
         // accounts
@@ -155,6 +152,8 @@ pub fn do_bench_tps<T>(
             sleep(Duration::from_millis(100));
             continue;
         }
+        let balance = client.get_balance(&id.pubkey()).unwrap_or(0);
+        metrics_submit_lamport_balance(balance);
         blockhash_time = Instant::now();
         blockhash = new_blockhash;
         generate_txs(
