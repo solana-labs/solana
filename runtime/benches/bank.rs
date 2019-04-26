@@ -126,6 +126,10 @@ fn do_bench_transactions(
     let bank_client = BankClient::new_shared(&bank);
     let transactions = create_transactions(&bank_client, &mint_keypair);
 
+    // Do once to fund accounts, load modules, etc...
+    let results = bank.process_transactions(&transactions);
+    assert!(results.iter().all(Result::is_ok));
+
     bencher.iter(|| {
         bench_work(&bank, &bank_client, &transactions);
     });
