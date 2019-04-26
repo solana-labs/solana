@@ -378,27 +378,22 @@ deploy() {
   esac
 }
 
+ENABLED_LOCKFILE="${HOME}/${TESTNET}.is_enabled"
 CREATED_LOCKFILE="${HOME}/${TESTNET}.is_created"
-STARTED_LOCKFILE="${HOME}/${TESTNET}.is_started"
 
 create-and-start() {
   rm -f "${CREATED_LOCKFILE}"
-  rm -f "${STARTED_LOCKFILE}"
   deploy create start
   touch "${CREATED_LOCKFILE}"
-  touch "${STARTED_LOCKFILE}"
 }
 create() {
   rm -f "${CREATED_LOCKFILE}"
-  rm -f "${STARTED_LOCKFILE}"
   deploy create
   touch "${CREATED_LOCKFILE}"
 }
 start() {
   if [[ -f ${CREATED_LOCKFILE} ]]; then
-    rm -f "${STARTED_LOCKFILE}"
     deploy "" start
-    touch "${STARTED_LOCKFILE}"
   else
     echo "Unable to start ${TESTNET}.  Are the nodes created?
     Re-run ci/testnet-manager.sh with \$TESTNET_OP=create or \$TESTNET_OP=create-and-start"
@@ -407,43 +402,68 @@ start() {
 }
 stop() {
   deploy "" ""
-  rm -f "${STARTED_LOCKFILE}"
 }
 delete() {
   deploy "" "" "" delete
   rm -f "${CREATED_LOCKFILE}"
-  rm -f "${STARTED_LOCKFILE}"
+}
+enable_testnet() {
+  touch "${ENABLED_LOCKFILE}"
+}
+disable_testnet() {
+  rm -f "${ENABLED_LOCKFILE}"
+}
+is_testnet_enabled() {
+  if [[ ! -f ${ENABLED_LOCKFILE} ]]; then
+    echo "--- ${TESTNET} is currently disabled.  Enable ${TESTNET} by running ci/testnet-manager.sh with \$TESTNET_OP=enable, then re-run with current settings."
+    exit 0
+  fi
 }
 
 case $TESTNET_OP in
+enable)
+  enable_testnet
+  ;;
+disable)
+  delete
+  disable_testnet
+  ;;
 create-and-start)
+  is_testnet_enabled
   create-and-start
   ;;
 create)
+  is_testnet_enabled
   create
   ;;
 start)
+  is_testnet_enabled
   start
   ;;
 stop)
+  is_testnet_enabled
   stop
   ;;
 sanity)
+  is_testnet_enabled
   sanity
   ;;
 delete)
+  is_testnet_enabled
   delete
   ;;
 update-or-restart)
+  is_testnet_enabled
   if start; then
     echo Update successful
   else
     echo "+++ Update failed, restarting the network"
     $metricsWriteDatapoint "testnet-manager update-failure=1"
-    start
+    create-and-start
   fi
   ;;
 sanity-or-restart)
+  is_testnet_enabled
   if sanity; then
     echo Pass
   else
@@ -458,10 +478,10 @@ sanity-or-restart)
       else
         echo "+++ Update failed, restarting the network"
         $metricsWriteDatapoint "testnet-manager update-failure=1"
-        start
+        create-and-start
       fi
     else
-      start
+      create-and-start
     fi
   fi
   ;;
