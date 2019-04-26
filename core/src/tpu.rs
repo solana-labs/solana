@@ -54,6 +54,7 @@ impl Tpu {
             &exit,
             &packet_sender,
             &poh_recorder,
+            &cluster_info,
         );
         let (verified_sender, verified_receiver) = channel();
 
