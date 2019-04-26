@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 399,
-  "iteration": 1554844431890,
+  "id": 494,
+  "iteration": 1556239909221,
   "links": [
     {
       "asDropdown": true,
@@ -54,7 +54,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "decimals": null,
       "format": "none",
       "gauge": {
@@ -167,7 +167,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -279,7 +279,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -391,7 +391,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -499,7 +499,7 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 7,
@@ -656,7 +656,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -767,7 +767,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -878,7 +878,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -989,7 +989,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -1100,7 +1100,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "ms",
       "gauge": {
         "maxValue": 100,
@@ -1211,7 +1211,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -1323,7 +1323,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -1431,7 +1431,7 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 8,
@@ -1583,7 +1583,7 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 7,
@@ -1789,7 +1789,7 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 8,
@@ -1905,7 +1905,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 4,
@@ -2020,7 +2020,7 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 4,
@@ -2154,7 +2154,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -2272,7 +2272,7 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -2433,7 +2433,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -2540,7 +2540,7 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -2662,7 +2662,7 @@
         "rgba(237, 129, 40, 0.89)",
         "#d44a3a"
       ],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "format": "none",
       "gauge": {
         "maxValue": 100,
@@ -2766,7 +2766,7 @@
     },
     {
       "columns": [],
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fontSize": "100%",
       "gridPos": {
         "h": 6,
@@ -2854,7 +2854,7 @@
       "bars": true,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -2985,7 +2985,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -3100,7 +3100,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -3291,7 +3291,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -3420,7 +3420,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -3573,7 +3573,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -3767,7 +3767,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -3923,7 +3923,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -3931,7 +3931,7 @@
         "x": 12,
         "y": 48
       },
-      "id": 47,
+      "id": 35,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4038,7 +4038,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -4378,7 +4378,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -4609,7 +4609,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -4881,7 +4881,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -4889,7 +4889,7 @@
         "x": 12,
         "y": 59
       },
-      "id": 46,
+      "id": 39,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5076,7 +5076,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -5084,7 +5084,7 @@
         "x": 0,
         "y": 65
       },
-      "id": 35,
+      "id": 40,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5235,7 +5235,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -5243,7 +5243,7 @@
         "x": 12,
         "y": 65
       },
-      "id": 48,
+      "id": 41,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5392,7 +5392,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -5400,7 +5400,7 @@
         "x": 0,
         "y": 70
       },
-      "id": 44,
+      "id": 42,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5552,7 +5552,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -5560,7 +5560,7 @@
         "x": 12,
         "y": 70
       },
-      "id": 45,
+      "id": 43,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5706,7 +5706,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -5714,7 +5714,7 @@
         "x": 0,
         "y": 76
       },
-      "id": 40,
+      "id": 44,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5939,7 +5939,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -5947,7 +5947,7 @@
         "x": 12,
         "y": 76
       },
-      "id": 41,
+      "id": 45,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6102,7 +6102,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 6,
@@ -6110,7 +6110,7 @@
         "x": 0,
         "y": 81
       },
-      "id": 39,
+      "id": 46,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6221,7 +6221,7 @@
         "x": 0,
         "y": 87
       },
-      "id": 42,
+      "id": 47,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -6231,7 +6231,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "Solana Influx Cloud (read-only)",
+      "datasource": "$database",
       "fill": 1,
       "gridPos": {
         "h": 5,
@@ -6239,7 +6239,7 @@
         "x": 0,
         "y": 88
       },
-      "id": 43,
+      "id": 48,
       "legend": {
         "avg": false,
         "current": false,
@@ -6349,12 +6349,27 @@
   "templating": {
     "list": [
       {
-        "allValue": null,
         "current": {
+          "text": "$database",
+          "value": "$database"
+        },
+        "hide": 1,
+        "label": "Database",
+        "name": "database",
+        "options": [],
+        "query": "influxdb",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": false,
           "text": "testnet-beta",
           "value": "testnet-beta"
         },
-        "datasource": "Solana Influx Cloud (read-only)",
+        "datasource": "$database",
         "hide": 1,
         "includeAll": false,
         "label": "Testnet",
@@ -6377,7 +6392,7 @@
           "text": "All",
           "value": "$__all"
         },
-        "datasource": "Solana Influx Cloud (read-only)",
+        "datasource": "$database",
         "hide": 0,
         "includeAll": true,
         "label": "HostID",
@@ -6428,5 +6443,5 @@
   "timezone": "",
   "title": "Testnet Monitor (edge)",
   "uid": "testnet-edge",
-  "version": 119
+  "version": 2
 }
