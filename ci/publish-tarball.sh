@@ -111,10 +111,10 @@ for file in solana-release-$TARGET.tar.bz2 solana-install-$TARGET; do
       --env AWS_SECRET_ACCESS_KEY \
       --volume "$PWD:/solana" \
       eremite/aws-cli:2018.12.18 \
-      /usr/bin/s3cmd --acl-public put /solana/"$file" s3://solana-release/"$CHANNEL_OR_TAG"/"$file"
+      /usr/bin/s3cmd --acl-public put /solana/"$file" s3://release.solana.com/"$CHANNEL_OR_TAG"/"$file"
 
     echo Published to:
-    $DRYRUN ci/format-url.sh http://solana-release.s3.amazonaws.com/"$CHANNEL_OR_TAG"/"$file"
+    $DRYRUN ci/format-url.sh http://release.solana.com/"$CHANNEL_OR_TAG"/"$file"
   )
 
   if [[ -n $TAG ]]; then
