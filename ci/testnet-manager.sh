@@ -399,7 +399,7 @@ deploy() {
 
       if [[ -n $GCE_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
-        ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
+        ci/testnet-deploy.sh -p testnet-demo -C gce ${GCE_ZONE_ARGS[@]} \
           -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 2 -P -u \
           -a demo-testnet-solana-com \
           ${skipCreate:+-r} \
@@ -417,33 +417,21 @@ deploy() {
 }
 
 ENABLED_LOCKFILE="${HOME}/${TESTNET}.is_enabled"
-CREATED_LOCKFILE="${HOME}/${TESTNET}.is_created"
 
 create-and-start() {
-  rm -f "${CREATED_LOCKFILE}"
   deploy create start
-  touch "${CREATED_LOCKFILE}"
 }
 create() {
-  rm -f "${CREATED_LOCKFILE}"
   deploy create
-  touch "${CREATED_LOCKFILE}"
 }
 start() {
-  if [[ -f ${CREATED_LOCKFILE} ]]; then
-    deploy "" start
-  else
-    echo "Unable to start ${TESTNET}.  Are the nodes created?
-    Re-run ci/testnet-manager.sh with \$TESTNET_OP=create or \$TESTNET_OP=create-and-start"
-    exit 1
-  fi
+  deploy "" start
 }
 stop() {
   deploy "" ""
 }
 delete() {
   deploy "" "" "" delete
-  rm -f "${CREATED_LOCKFILE}"
 }
 enable_testnet() {
   touch "${ENABLED_LOCKFILE}"
