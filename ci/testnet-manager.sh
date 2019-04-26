@@ -86,6 +86,7 @@ testnet-beta|testnet-beta-perf)
 testnet|testnet-perf)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
   CHANNEL_BRANCH=$STABLE_CHANNEL
+  : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
