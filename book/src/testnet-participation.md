@@ -40,7 +40,7 @@ $ curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1, 
 Inspect the blockexplorer at [http://beta.testnet.solana.com/](http://beta.testnet.solana.com/) for activity.
 
 View the [metrics dashboard](
-https://metrics.solana.com:3000/d/U9-26Cqmk/testnet-monitor-cloud?refresh=60s&orgId=2&var-testnet=testnet-beta&var-hostid=All)
+https://metrics.solana.com:3000/d/testnet-beta/testnet-monitor-beta?var-testnet=testnet-beta)
 for more detail on cluster activity.
 
 ### Validator Setup
