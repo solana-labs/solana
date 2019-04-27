@@ -173,6 +173,10 @@ if $stopNetwork; then
   skipSetup=true
 fi
 
+if $delete; then
+  skipSetup=false
+fi
+
 # Create the network
 if ! $skipSetup; then
   echo "--- $cloudProvider.sh delete"

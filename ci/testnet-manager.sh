@@ -95,10 +95,14 @@ testnet-beta|testnet-beta-perf)
   : "${EC2_NODE_COUNT:=10}"
   : "${GCE_NODE_COUNT:=}"
   ;;
-testnet|testnet-perf)
+testnet)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
   CHANNEL_BRANCH=$STABLE_CHANNEL
   : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
+  ;;
+testnet-perf)
+  CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
+  CHANNEL_BRANCH=$STABLE_CHANNEL
   ;;
 testnet-demo)
   CHANNEL_OR_TAG=beta
@@ -220,12 +224,13 @@ deploy() {
   declare maybeStop=$3
   declare maybeDelete=$4
 
+  echo "--- deploy \"$maybeCreate\" \"$maybeStart\" \"$maybeStop\" \"$maybeDelete\""
+
   # Create or recreate the nodes
   if [[ -z $maybeCreate ]]; then
     skipCreate=skip
   else
     skipCreate=""
-    echo "--- create $TESTNET"
   fi
 
   # Start or restart the network software on the nodes
@@ -233,17 +238,6 @@ deploy() {
     skipStart=skip
   else
     skipStart=""
-    echo "--- start $TESTNET"
-  fi
-
-  # Stop the nodes
-  if [[ -n $maybeStop ]]; then
-    echo "--- stop $TESTNET"
-  fi
-
-  # Delete the nodes
-  if [[ -n $maybeDelete ]]; then
-    echo "--- delete $TESTNET"
   fi
 
   case $TESTNET in
@@ -340,10 +334,6 @@ deploy() {
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D}
-        #ci/testnet-deploy.sh -p testnet-solana-com -C gce -z us-east1-c \
-        #  -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a testnet-solana-com  \
-        #  ${maybeReuseLedger:+-r} \
-        #  ${maybeDelete:+-D}
     )
     ;;
   testnet-perf)
@@ -361,11 +351,6 @@ deploy() {
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D}
-        #ci/testnet-deploy.sh -p perf-testnet-solana-com -C ec2 -z us-east-1a \
-        #  -g \
-        #  -t "$CHANNEL_OR_TAG" -c 2 \
-        #  ${maybeReuseLedger:+-r} \
-        #  ${maybeDelete:+-D}
     )
     ;;
   testnet-demo)
@@ -413,9 +398,11 @@ delete() {
 }
 enable_testnet() {
   touch "${ENABLED_LOCKFILE}"
+  echo "+++ $TESTNET now enabled"
 }
 disable_testnet() {
   rm -f "${ENABLED_LOCKFILE}"
+  echo "+++ $TESTNET now disabled"
 }
 is_testnet_enabled() {
   if [[ ! -f ${ENABLED_LOCKFILE} ]]; then
@@ -429,8 +416,8 @@ enable)
   enable_testnet
   ;;
 disable)
-  delete
   disable_testnet
+  delete
   ;;
 create-and-start)
   is_testnet_enabled
