@@ -20,6 +20,7 @@
   - [Ledger Replication](ledger-replication.md)
   - [Secure Vote Signing](vote-signing.md)
   - [Staking Delegation and Rewards](stake-delegation-and-rewards.md)
+  - [Performance Metrics](performance-metrics.md)
 
 - [Anatomy of a Fullnode](fullnode.md)
   - [TPU](tpu.md)
