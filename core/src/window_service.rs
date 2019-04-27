@@ -36,7 +36,12 @@ fn retransmit_blobs(blobs: &[SharedBlob], retransmit: &BlobSender, id: &Pubkey) 
     }
 
     if !retransmit_queue.is_empty() {
-        inc_new_counter_info!("streamer-recv_window-retransmit", retransmit_queue.len(), 0, 1000);
+        inc_new_counter_info!(
+            "streamer-recv_window-retransmit",
+            retransmit_queue.len(),
+            0,
+            1000
+        );
         retransmit.send(retransmit_queue)?;
     }
     Ok(())
