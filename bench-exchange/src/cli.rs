@@ -1,10 +1,10 @@
-use std::net::SocketAddr;
-use std::time::Duration;
-
 use clap::{crate_description, crate_name, crate_version, value_t, App, Arg, ArgMatches};
 use solana::gen_keys::GenKeys;
 use solana_drone::drone::DRONE_PORT;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
+use std::net::SocketAddr;
+use std::process::exit;
+use std::time::Duration;
 
 pub struct Config {
     pub network_addr: SocketAddr,
@@ -146,16 +146,17 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
 pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     let mut args = Config::default();
 
-    args.network_addr = matches
-        .value_of("network")
-        .unwrap()
-        .parse()
-        .expect("Failed to parse network");
-    args.drone_addr = matches
-        .value_of("drone")
-        .unwrap()
-        .parse()
-        .expect("Failed to parse drone address");
+    args.network_addr = solana_netutil::parse_host_port(matches.value_of("network").unwrap())
+        .unwrap_or_else(|e| {
+            eprintln!("failed to parse network address: {}", e);
+            exit(1)
+        });
+
+    args.drone_addr = solana_netutil::parse_host_port(matches.value_of("drone").unwrap())
+        .unwrap_or_else(|e| {
+            eprintln!("failed to parse drone address: {}", e);
+            exit(1)
+        });
 
     if matches.is_present("identity") {
         args.identity = read_keypair(matches.value_of("identity").unwrap())
