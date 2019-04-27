@@ -621,5 +621,6 @@ logs)
 
 *)
   echo "Internal error: Unknown command: $command"
+  usage
   exit 1
 esac
