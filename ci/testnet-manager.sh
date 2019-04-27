@@ -52,7 +52,7 @@ steps:
             value: "create-and-start"
           - label: "Create testnet, but do not start software.  If the testnet already exists it will be deleted and re-created"
             value: "create"
-          - label: "Start network software on an existing testnet.  If software is already running it will be restarted."
+          - label: "Start network software on an existing testnet.  If software is already running it will be restarted"
             value: "start"
           - label: "Stop network software without deleting testnet nodes"
             value: "stop"
@@ -62,11 +62,11 @@ steps:
             value: "sanity-or-restart"
           - label: "Sanity check only"
             value: "sanity"
-          - label: "Delete the testnet.
+          - label: "Delete the testnet"
             value: "delete"
-          - label: "Enable/unlock the testnet."
+          - label: "Enable/unlock the testnet"
             value: "enable"
-          - label: "Delete and then lock the testnet from further operation until it is re-enabled."
+          - label: "Delete and then lock the testnet from further operation until it is re-enabled"
             value: "disable"
   - command: "ci/$(basename "$0")"
     agents:
