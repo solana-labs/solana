@@ -250,7 +250,10 @@ fn get_update_manifest(
 fn check_env_path_for_bin_dir(config: &Config) {
     use std::env;
 
-    let bin_dir = config.active_release_bin_dir();
+    let bin_dir = config
+        .active_release_bin_dir()
+        .canonicalize()
+        .unwrap_or_default();
     let found = match env::var_os("PATH") {
         Some(paths) => env::split_paths(&paths).any(|path| {
             if let Ok(path) = path.canonicalize() {
