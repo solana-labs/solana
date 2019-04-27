@@ -1132,7 +1132,7 @@ impl ClusterInfo {
         data: &[CrdsValue],
     ) -> Vec<SharedBlob> {
         let self_id = me.read().unwrap().gossip.id;
-        inc_new_counter_info!("cluster_info-push_message", 1);
+        inc_new_counter_info!("cluster_info-push_message", 1, 0, 1000);
         let prunes: Vec<_> = me
             .write()
             .unwrap()

@@ -36,7 +36,12 @@ fn retransmit_blobs(blobs: &[SharedBlob], retransmit: &BlobSender, id: &Pubkey) 
     }
 
     if !retransmit_queue.is_empty() {
-        inc_new_counter_info!("streamer-recv_window-retransmit", retransmit_queue.len());
+        inc_new_counter_info!(
+            "streamer-recv_window-retransmit",
+            retransmit_queue.len(),
+            0,
+            1000
+        );
         retransmit.send(retransmit_queue)?;
     }
     Ok(())
@@ -117,7 +122,7 @@ fn recv_window(
         blobs.append(&mut blob)
     }
     let now = Instant::now();
-    inc_new_counter_info!("streamer-recv_window-recv", blobs.len());
+    inc_new_counter_info!("streamer-recv_window-recv", blobs.len(), 0, 1000);
 
     blobs.retain(|blob| {
         should_retransmit_and_persist(
