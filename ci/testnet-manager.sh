@@ -81,7 +81,11 @@ eval "$(ci/channel-info.sh)"
 
 
 EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
-GCE_ZONES=(us-west1-b asia-east2-a europe-west4-a southamerica-east1-b us-east4-c)
+GCE_ZONES=(
+  us-west1-a us-west1-b us-west1-c us-east1-b us-east1-c us-east1-d
+  europe-west4-a europe-west4-b europe-west4-c us-central1-a us-central1
+)
+
 case $TESTNET in
 testnet-edge|testnet-edge-perf)
   CHANNEL_OR_TAG=edge
@@ -370,7 +374,7 @@ deploy() {
       if [[ -n $GCE_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
         ci/testnet-deploy.sh -p testnet-demo -C gce ${GCE_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 1 -P -u \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u \
           -a demo-testnet-solana-com \
           ${skipCreate:+-r} \
           ${skipStart:+-s} \
