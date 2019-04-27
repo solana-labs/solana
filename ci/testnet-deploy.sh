@@ -10,7 +10,6 @@ bootstrapFullNodeMachineType=
 clientNodeCount=0
 additionalFullNodeCount=10
 publicNetwork=false
-stopNetwork=false
 skipSetup=false
 skipStart=false
 externalNode=false
