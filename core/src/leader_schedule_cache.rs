@@ -420,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn test_schedule_for_uncofirmed_epoch() {
+    fn test_schedule_for_unconfirmed_epoch() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let cache = LeaderScheduleCache::new_from_bank(&bank);
