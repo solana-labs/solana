@@ -115,10 +115,6 @@ impl ThinClient {
         ))
     }
 
-    pub fn get_new_blockhash(&self, blockhash: &Hash) -> io::Result<Hash> {
-        self.rpc_client.get_new_blockhash(blockhash)
-    }
-
     pub fn poll_balance_with_timeout(
         &self,
         pubkey: &Pubkey,
@@ -237,6 +233,11 @@ impl SyncClient for ThinClient {
 
     fn poll_for_signature(&self, signature: &Signature) -> TransportResult<()> {
         Ok(self.rpc_client.poll_for_signature(signature)?)
+    }
+
+    fn get_new_blockhash(&self, blockhash: &Hash) -> TransportResult<Hash> {
+        let new_blockhash = self.rpc_client.get_new_blockhash(blockhash)?;
+        Ok(new_blockhash)
     }
 }
 

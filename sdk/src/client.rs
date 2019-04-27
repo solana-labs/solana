@@ -60,6 +60,8 @@ pub trait SyncClient {
 
     /// Poll to confirm a transaction.
     fn poll_for_signature(&self, signature: &Signature) -> Result<()>;
+
+    fn get_new_blockhash(&self, blockhash: &Hash) -> Result<Hash>;
 }
 
 pub trait AsyncClient {

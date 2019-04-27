@@ -5,6 +5,7 @@ use solana::gen_keys::GenKeys;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_metrics::influxdb;
 use solana_sdk::client::Client;
+use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_instruction;
 use solana_sdk::system_transaction;
@@ -136,21 +137,32 @@ pub fn do_bench_tps<T>(
     let start = Instant::now();
     let mut reclaim_lamports_back_to_source_account = false;
     let mut i = keypair0_balance;
+    let mut blockhash = Hash::default();
+    let mut blockhash_time = Instant::now();
     while start.elapsed() < duration {
-        let balance = client.get_balance(&id.pubkey()).unwrap_or(0);
-        metrics_submit_lamport_balance(balance);
-
         // ping-pong between source and destination accounts for each loop iteration
         // this seems to be faster than trying to determine the balance of individual
         // accounts
         let len = tx_count as usize;
+        if let Ok(new_blockhash) = client.get_new_blockhash(&blockhash) {
+            blockhash = new_blockhash;
+        } else {
+            if blockhash_time.elapsed().as_secs() > 30 {
+                panic!("Blockhash is not updating");
+            }
+            sleep(Duration::from_millis(100));
+            continue;
+        }
+        blockhash_time = Instant::now();
+        let balance = client.get_balance(&id.pubkey()).unwrap_or(0);
+        metrics_submit_lamport_balance(balance);
         generate_txs(
             &shared_txs,
+            &blockhash,
             &keypairs[..len],
             &keypairs[len..],
             threads,
             reclaim_lamports_back_to_source_account,
-            &client,
         );
         // In sustained mode overlap the transfers with generation
         // this has higher average performance but lower peak performance
@@ -265,15 +277,14 @@ fn sample_tx_count<T: Client>(
     }
 }
 
-fn generate_txs<T: Client>(
+fn generate_txs(
     shared_txs: &SharedTransactions,
+    blockhash: &Hash,
     source: &[Keypair],
     dest: &[Keypair],
     threads: usize,
     reclaim: bool,
-    client: &Arc<T>,
 ) {
-    let blockhash = client.get_recent_blockhash().unwrap();
     let tx_count = source.len();
     println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
     let signing_start = Instant::now();
@@ -287,7 +298,7 @@ fn generate_txs<T: Client>(
         .par_iter()
         .map(|(id, keypair)| {
             (
-                system_transaction::create_user_account(id, &keypair.pubkey(), 1, blockhash, 0),
+                system_transaction::create_user_account(id, &keypair.pubkey(), 1, *blockhash, 0),
                 timestamp(),
             )
         })
@@ -630,9 +641,10 @@ pub fn generate_keypairs(id: &Keypair, tx_count: usize) -> Vec<Keypair> {
 
     let mut total_keys = 0;
     let mut target = tx_count * 2;
-    while target > 0 {
+    while target > 1 {
         total_keys += target;
-        target /= MAX_SPENDS_PER_TX;
+        // Use the upper bound for this division otherwise it may not generate enough keys
+        target = (target + MAX_SPENDS_PER_TX - 1) / MAX_SPENDS_PER_TX;
     }
     rnd.gen_n_keypairs(total_keys as u64)
 }
