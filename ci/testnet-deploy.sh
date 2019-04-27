@@ -12,6 +12,7 @@ additionalFullNodeCount=10
 publicNetwork=false
 skipSetup=false
 skipStart=false
+stopNetwork=false
 externalNode=false
 tarChannelOrTag=edge
 delete=false
@@ -176,7 +177,7 @@ fi
 if ! $skipSetup; then
   echo "--- $cloudProvider.sh delete"
   # shellcheck disable=SC2068
-  time net/"$cloudProvider".sh delete ${zone_args[@]} -p "$netName" ${externalNode:+-x}
+  time net/"$cloudProvider".sh delete ${zone_args[@]} -p "$netName"
   if $delete; then
     exit 0
   fi
@@ -235,9 +236,6 @@ else
 fi
 net/init-metrics.sh -e
 
-echo "+++ $cloudProvider.sh info"
-net/"$cloudProvider".sh info
-
 if $stopNetwork; then
   echo --- net.sh stop
   time net/net.sh stop
@@ -289,8 +287,6 @@ if ! $skipStart; then
       $maybeNoValidatorSanity \
       $maybeNoLedgerVerify
   ) || ok=false
-
-  net/net.sh logs
 fi
 
 $ok

@@ -350,7 +350,7 @@ deploy() {
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=warn \
         ci/testnet-deploy.sh -p perf-testnet-solana-com -C gce -z us-west1-b \
-          -G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
+          -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
           -t "$CHANNEL_OR_TAG" -c 2 \
           -b \
           -d pd-ssd \
