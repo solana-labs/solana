@@ -48,11 +48,11 @@ steps:
         key: "testnet-operation"
         default: "sanity-or-restart"
         options:
-          - label: "Create new testnet nodes and then start network software.  If nodes are already created, they will be deleted and then re-created."
+          - label: "Create testnet and then start software.  If the testnet already exists it will be deleted and re-created"
             value: "create-and-start"
-          - label: "Create new testnet nodes, but do not start network software.  If nodes are already created, they will be deleted and then re-created."
+          - label: "Create testnet, but do not start software.  If the testnet already exists it will be deleted and re-created"
             value: "create"
-          - label: "Start network software on already-created testnet nodes.  If software is already running, it will be restarted."
+          - label: "Start network software on an existing testnet.  If software is already running it will be restarted."
             value: "start"
           - label: "Stop network software without deleting testnet nodes"
             value: "stop"
@@ -62,7 +62,7 @@ steps:
             value: "sanity-or-restart"
           - label: "Sanity check only"
             value: "sanity"
-          - label: "Delete all nodes on a testnet.  Network software will be stopped first if it is running"
+          - label: "Delete the testnet.
             value: "delete"
           - label: "Enable/unlock the testnet."
             value: "enable"
@@ -105,14 +105,30 @@ testnet-perf)
   CHANNEL_BRANCH=$STABLE_CHANNEL
   ;;
 testnet-demo)
-  CHANNEL_OR_TAG=beta
-  CHANNEL_BRANCH=$BETA_CHANNEL
+  CHANNEL_OR_TAG=edge
+  CHANNEL_BRANCH=$EDGE_CHANNEL
+  #CHANNEL_OR_TAG=beta
+  #CHANNEL_BRANCH=$BETA_CHANNEL
+
+  : "${GCE_NODE_COUNT:=10}"
+
+  # TODO: Increase zone list to maximum
+  GCE_ZONES=(us-west1-b us-east4-c)
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
   exit 1
   ;;
 esac
+
+EC2_ZONE_ARGS=()
+for val in "${EC2_ZONES[@]}"; do
+  EC2_ZONE_ARGS+=("-z $val")
+done
+GCE_ZONE_ARGS=()
+for val in "${GCE_ZONES[@]}"; do
+  GCE_ZONE_ARGS+=("-z $val")
+done
 
 if [[ -n $TESTNET_DB_HOST ]]; then
   SOLANA_METRICS_PARTIAL_CONFIG="host=$TESTNET_DB_HOST,$SOLANA_METRICS_PARTIAL_CONFIG"
@@ -211,6 +227,21 @@ sanity() {
       #ci/testnet-sanity.sh perf-testnet-solana-com ec2 us-east-1a
     )
     ;;
+  testnet-demo)
+    (
+      set -x
+
+      ok=true
+      if [[ -n $GCE_NODE_COUNT ]]; then
+        NO_LEDGER_VERIFY=1 \
+          ci/testnet-sanity.sh demo-testnet-solana-com gce "${GCE_ZONES[0]}" || ok=false
+      else
+        echo "Error: no GCE nodes"
+        ok=false
+      fi
+      $ok
+    )
+    ;;
   *)
     echo "Error: Invalid TESTNET=$TESTNET"
     exit 1
@@ -270,17 +301,6 @@ deploy() {
   testnet-beta)
     (
       set -x
-
-      # Build an array to pass as opts to testnet-deploy.sh: "-z zone1 -z zone2 ..."
-      GCE_ZONE_ARGS=()
-      for val in "${GCE_ZONES[@]}"; do
-        GCE_ZONE_ARGS+=("-z $val")
-      done
-
-      EC2_ZONE_ARGS=()
-      for val in "${EC2_ZONES[@]}"; do
-        EC2_ZONE_ARGS+=("-z $val")
-      done
 
       if [[ -n $EC2_NODE_COUNT ]]; then
         if [[ -n $GCE_NODE_COUNT ]] || [[ -n $skipStart ]]; then
@@ -356,8 +376,16 @@ deploy() {
   testnet-demo)
     (
       set -x
-      echo "Demo net not yet implemented!"
-      exit 1
+      if [[ -n $GCE_NODE_COUNT ]]; then
+        # shellcheck disable=SC2068
+        ci/testnet-deploy.sh -p testnet-demo -C gce ${GCE_ZONE_ARGS[@]} \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 1 -P -u \
+          -a demo-testnet-solana-com \
+          ${skipCreate:+-r} \
+          ${skipStart:+-s} \
+          ${maybeStop:+-S} \
+          ${maybeDelete:+-D}
+      fi
     )
     ;;
   *)
