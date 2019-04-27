@@ -148,7 +148,7 @@ pub fn do_bench_tps<T>(
             blockhash = new_blockhash;
         } else {
             if blockhash_time.elapsed().as_secs() > 30 {
-                panic!("Blockhash has not updating");
+                panic!("Blockhash is not updating");
             }
             sleep(Duration::from_millis(100));
             continue;
