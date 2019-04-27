@@ -92,12 +92,12 @@ testnet-beta|testnet-beta-perf)
   CHANNEL_OR_TAG=beta
   CHANNEL_BRANCH=$BETA_CHANNEL
   : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
-  : "${EC2_NODE_COUNT:=10}"
-  : "${GCE_NODE_COUNT:=}"
   ;;
 testnet)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
   CHANNEL_BRANCH=$STABLE_CHANNEL
+  : "${EC2_NODE_COUNT:=10}"
+  : "${GCE_NODE_COUNT:=}"
   : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
   ;;
 testnet-perf)
@@ -105,15 +105,9 @@ testnet-perf)
   CHANNEL_BRANCH=$STABLE_CHANNEL
   ;;
 testnet-demo)
-  CHANNEL_OR_TAG=edge
-  CHANNEL_BRANCH=$EDGE_CHANNEL
-  #CHANNEL_OR_TAG=beta
-  #CHANNEL_BRANCH=$BETA_CHANNEL
-
-  : "${GCE_NODE_COUNT:=10}"
-
-  # TODO: Increase zone list to maximum
-  GCE_ZONES=(us-west1-b us-east4-c)
+  CHANNEL_OR_TAG=beta
+  CHANNEL_BRANCH=$BETA_CHANNEL
+  : "${GCE_NODE_COUNT:=200}"
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
@@ -185,19 +179,8 @@ sanity() {
   testnet-beta)
     (
       set -x
-
-      ok=true
-      if [[ -n $EC2_NODE_COUNT ]]; then
-        NO_LEDGER_VERIFY=1 \
-          ci/testnet-sanity.sh beta-testnet-solana-com ec2 "${EC2_ZONES[0]}" || ok=false
-      elif [[ -n $GCE_NODE_COUNT ]]; then
-        NO_LEDGER_VERIFY=1 \
-          ci/testnet-sanity.sh beta-testnet-solana-com gce "${GCE_ZONES[0]}" || ok=false
-      else
-        echo "Error: no EC2 or GCE nodes"
-        ok=false
-      fi
-      $ok
+      NO_LEDGER_VERIFY=1 \
+        ci/testnet-sanity.sh beta-testnet-solana-com ec2 us-west-1a
     )
     ;;
   testnet-beta-perf)
@@ -212,9 +195,19 @@ sanity() {
   testnet)
     (
       set -x
-      NO_LEDGER_VERIFY=1 \
-        ci/testnet-sanity.sh testnet-solana-com ec2 us-west-1a
-      #ci/testnet-sanity.sh testnet-solana-com gce us-east1-c
+
+      ok=true
+      if [[ -n $EC2_NODE_COUNT ]]; then
+        NO_LEDGER_VERIFY=1 \
+          ci/testnet-sanity.sh testnet-solana-com ec2 "${EC2_ZONES[0]}" || ok=false
+      elif [[ -n $GCE_NODE_COUNT ]]; then
+        NO_LEDGER_VERIFY=1 \
+          ci/testnet-sanity.sh testnet-solana-com gce "${GCE_ZONES[0]}" || ok=false
+      else
+        echo "Error: no EC2 or GCE nodes"
+        ok=false
+      fi
+      $ok
     )
     ;;
   testnet-perf)
@@ -301,31 +294,14 @@ deploy() {
   testnet-beta)
     (
       set -x
-
-      if [[ -n $EC2_NODE_COUNT ]]; then
-        if [[ -n $GCE_NODE_COUNT ]] || [[ -n $skipStart ]]; then
-          maybeSkipStart="skip"
-        fi
-
-        # shellcheck disable=SC2068
-        ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
-          ${skipCreate:+-r} \
-          ${maybeSkipStart:+-s} \
-          ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
-      fi
-
-      if [[ -n $GCE_NODE_COUNT ]]; then
-        # shellcheck disable=SC2068
-        ci/testnet-deploy.sh -p beta-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 -z us-west-1a \
+          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
+          -b \
           ${skipCreate:+-r} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D} \
-          ${EC2_NODE_COUNT:+-x}
-      fi
+          ${maybeDelete:+-D}
     )
     ;;
   testnet-beta-perf)
@@ -346,14 +322,29 @@ deploy() {
   testnet)
     (
       set -x
-      NO_VALIDATOR_SANITY=1 \
-        ci/testnet-deploy.sh -p testnet-solana-com -C ec2 -z us-west-1a \
-          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0fa502bf95f6f18b2 \
-          -b \
+
+      if [[ -n $GCE_NODE_COUNT ]] || [[ -n $skipStart ]]; then
+        maybeSkipStart="skip"
+      fi
+
+      # shellcheck disable=SC2068
+      ci/testnet-deploy.sh -p testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
+        -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -a eipalloc-0fa502bf95f6f18b2 \
+        ${skipCreate:+-r} \
+        ${maybeSkipStart:+-s} \
+        ${maybeStop:+-S} \
+        ${maybeDelete:+-D}
+
+      if [[ -n $GCE_NODE_COUNT ]]; then
+        # shellcheck disable=SC2068
+        ci/testnet-deploy.sh -p testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P \
           ${skipCreate:+-r} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
+          ${maybeDelete:+-D} \
+          ${EC2_NODE_COUNT:+-x}
+      fi
     )
     ;;
   testnet-perf)
