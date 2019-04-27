@@ -368,33 +368,21 @@ deploy() {
 }
 
 ENABLED_LOCKFILE="${HOME}/${TESTNET}.is_enabled"
-CREATED_LOCKFILE="${HOME}/${TESTNET}.is_created"
 
 create-and-start() {
-  rm -f "${CREATED_LOCKFILE}"
   deploy create start
-  touch "${CREATED_LOCKFILE}"
 }
 create() {
-  rm -f "${CREATED_LOCKFILE}"
   deploy create
-  touch "${CREATED_LOCKFILE}"
 }
 start() {
-  if [[ -f ${CREATED_LOCKFILE} ]]; then
-    deploy "" start
-  else
-    echo "Unable to start ${TESTNET}.  Are the nodes created?
-    Re-run ci/testnet-manager.sh with \$TESTNET_OP=create or \$TESTNET_OP=create-and-start"
-    exit 1
-  fi
+  deploy "" start
 }
 stop() {
   deploy "" ""
 }
 delete() {
   deploy "" "" "" delete
-  rm -f "${CREATED_LOCKFILE}"
 }
 enable_testnet() {
   touch "${ENABLED_LOCKFILE}"
@@ -406,7 +394,7 @@ disable_testnet() {
 }
 is_testnet_enabled() {
   if [[ ! -f ${ENABLED_LOCKFILE} ]]; then
-    echo "--- ${TESTNET} is currently disabled.  Enable ${TESTNET} by running ci/testnet-manager.sh with \$TESTNET_OP=enable, then re-run with current settings."
+    echo "+++ ${TESTNET} is currently disabled.  Enable ${TESTNET} by running ci/testnet-manager.sh with \$TESTNET_OP=enable, then re-run with current settings."
     exit 0
   fi
 }
