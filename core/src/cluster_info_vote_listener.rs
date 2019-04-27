@@ -58,12 +58,14 @@ impl ClusterInfoVoteListener {
                 last_ts = new_ts;
                 inc_new_counter_info!("cluster_info_vote_listener-recv_count", votes.len());
                 let msgs = packet::to_packets(&votes);
-                let r = if sigverify_disabled {
-                    sigverify::ed25519_verify_disabled(&msgs)
-                } else {
-                    sigverify::ed25519_verify_cpu(&msgs)
-                };
-                sender.send(msgs.into_iter().zip(r).collect())?;
+                if !msgs.is_empty() {
+                    let r = if sigverify_disabled {
+                        sigverify::ed25519_verify_disabled(&msgs)
+                    } else {
+                        sigverify::ed25519_verify_cpu(&msgs)
+                    };
+                    sender.send(msgs.into_iter().zip(r).collect())?;
+                }
             }
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
         }

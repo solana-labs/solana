@@ -147,16 +147,18 @@ impl BankingStage {
     ) -> Result<UnprocessedPackets> {
         let mut unprocessed_packets = vec![];
         let mut bank_shutdown = false;
+        let mut rebuffered_packets = 0;
+        let mut new_tx_count = 0;
         for (msgs, offset, vers) in buffered_packets {
             if bank_shutdown {
-                inc_new_counter_info!("banking_stage-rebuffered_packets", vers.len() - *offset);
+                rebuffered_packets += vers.len() - *offset;
                 unprocessed_packets.push((msgs.to_owned(), *offset, vers.to_owned()));
                 continue;
             }
 
             let bank = poh_recorder.lock().unwrap().bank();
             if bank.is_none() {
-                inc_new_counter_info!("banking_stage-rebuffered_packets", vers.len() - *offset);
+                rebuffered_packets += vers.len() - *offset;
                 unprocessed_packets.push((msgs.to_owned(), *offset, vers.to_owned()));
                 continue;
             }
@@ -164,13 +166,11 @@ impl BankingStage {
 
             let (processed, verified_txs, verified_indexes) =
                 Self::process_received_packets(&bank, &poh_recorder, &msgs, &vers, *offset)?;
-            inc_new_counter_info!("banking_stage-consumed_buffered_packets", processed);
-            inc_new_counter_info!("banking_stage-process_transactions", processed);
-            inc_new_counter_info!(
-                "banking_stage-rebuffered_packets",
-                verified_txs.len() - processed
-            );
+
+            new_tx_count += processed;
+
             if processed < verified_txs.len() {
+                rebuffered_packets += verified_txs.len() - processed;
                 bank_shutdown = true;
                 // Collect any unprocessed transactions in this batch for forwarding
                 unprocessed_packets.push((
@@ -180,6 +180,11 @@ impl BankingStage {
                 ));
             }
         }
+
+        inc_new_counter_info!("banking_stage-rebuffered_packets", rebuffered_packets);
+        inc_new_counter_info!("banking_stage-consumed_buffered_packets", new_tx_count);
+        inc_new_counter_info!("banking_stage-process_transactions", new_tx_count);
+
         Ok(unprocessed_packets)
     }
 
@@ -314,6 +319,9 @@ impl BankingStage {
             {
                 Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                 Ok(unprocessed_packets) => {
+                    if unprocessed_packets.is_empty() {
+                        continue;
+                    }
                     if Self::should_buffer_packets(
                         poh_recorder,
                         cluster_info,
