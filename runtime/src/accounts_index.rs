@@ -158,8 +158,15 @@ mod tests {
     fn test_max_last_root() {
         let mut index = AccountsIndex::<bool>::default();
         index.add_root(1);
-        index.add_root(0);
         assert_eq!(index.last_root, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_max_last_root_old() {
+        let mut index = AccountsIndex::<bool>::default();
+        index.add_root(1);
+        index.add_root(0);
     }
 
     #[test]
