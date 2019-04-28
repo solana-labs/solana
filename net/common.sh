@@ -28,10 +28,13 @@ externalNodeSshKey=
 sshOptions=()
 fullnodeIpList=()
 fullnodeIpListPrivate=()
+fullnodeIpListZone=()
 clientIpList=()
 clientIpListPrivate=()
+clientIpListZone=()
 blockstreamerIpList=()
 blockstreamerIpListPrivate=()
+blockstreamerIpListZone=()
 leaderRotation=
 
 buildSshOptions() {

@@ -227,6 +227,7 @@ esac
 #               name     - name of the instance
 #               publicIp - The public IP address of this instance
 #               privateIp - The private IP address of this instance
+#               zone     - Zone of this instance
 #               count    - Monotonically increasing count for each
 #                          invocation of cmd, starting at 1
 #               ...      - Extra args to cmd..
@@ -242,7 +243,7 @@ cloud_ForEachInstance() {
     declare name publicIp privateIp
     IFS=: read -r name publicIp privateIp zone < <(echo "$info")
 
-    eval "$cmd" "$name" "$publicIp" "$privateIp" "$count" "$@"
+    eval "$cmd" "$name" "$publicIp" "$privateIp" "$zone" "$count" "$@"
     count=$((count + 1))
   done
 }
@@ -269,9 +270,11 @@ EOF
     declare name="$1"
     declare publicIp="$2"
     declare privateIp="$3"
+    declare zone="$4"
+    #declare index="$5"
 
-    declare failOnFailure="$5"
-    declare arrayName="$6"
+    declare failOnFailure="$6"
+    declare arrayName="$7"
 
     # This check should eventually be moved to cloud provider specific script
     if [ "$publicIp" = "TERMINATED" ] || [ "$privateIp" = "TERMINATED" ]; then
@@ -305,8 +308,11 @@ EOF
         exit 1
       fi
     else
-      echo "$arrayName+=($publicIp)  # $name" >> "$configFile"
-      echo "${arrayName}Private+=($privateIp)  # $name" >> "$configFile"
+      {
+        echo "$arrayName+=($publicIp)  # $name"
+        echo "${arrayName}Private+=($privateIp)  # $name"
+        echo "${arrayName}Zone+=($zone)  # $name"
+      } >> "$configFile"
     fi
   }
 
@@ -588,7 +594,8 @@ info)
     declare nodeType=$1
     declare ip=$2
     declare ipPrivate=$3
-    printf "  %-16s | %-15s | %-15s\n" "$nodeType" "$ip" "$ipPrivate"
+    declare zone=$4
+    printf "  %-16s | %-15s | %-15s | %s\n" "$nodeType" "$ip" "$ipPrivate" "$zone"
   }
 
   printNode "Node Type" "Public IP" "Private IP"
@@ -597,20 +604,23 @@ info)
   for i in $(seq 0 $(( ${#fullnodeIpList[@]} - 1)) ); do
     ipAddress=${fullnodeIpList[$i]}
     ipAddressPrivate=${fullnodeIpListPrivate[$i]}
-    printNode $nodeType "$ipAddress" "$ipAddressPrivate"
+    zone=${fullnodeIpListZone[$i]}
+    printNode $nodeType "$ipAddress" "$ipAddressPrivate" "$zone"
     nodeType=fullnode
   done
 
   for i in $(seq 0 $(( ${#clientIpList[@]} - 1)) ); do
     ipAddress=${clientIpList[$i]}
     ipAddressPrivate=${clientIpListPrivate[$i]}
-    printNode bench-tps "$ipAddress" "$ipAddressPrivate"
+    zone=${clientIpListZone[$i]}
+    printNode bench-tps "$ipAddress" "$ipAddressPrivate" "$zone"
   done
 
   for i in $(seq 0 $(( ${#blockstreamerIpList[@]} - 1)) ); do
     ipAddress=${blockstreamerIpList[$i]}
     ipAddressPrivate=${blockstreamerIpListPrivate[$i]}
-    printNode blockstreamer "$ipAddress" "$ipAddressPrivate"
+    zone=${blockstreamerIpListZone[$i]}
+    printNode blockstreamer "$ipAddress" "$ipAddressPrivate" "$zone"
   done
   ;;
 *)
