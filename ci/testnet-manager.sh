@@ -413,7 +413,7 @@ deploy() {
       fi
 
       # shellcheck disable=SC2068
-      ci/testnet-deploy.sh -p testnet-demo -C gce ${GCE_ZONE_ARGS[@]} \
+      ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
         -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
         -a demo-testnet-solana-com \
         ${skipCreate:+-r} \
@@ -423,13 +423,12 @@ deploy() {
 
       if [[ -n $GCE_LOW_QUOTA_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
-        ci/testnet-deploy.sh -p testnet-solana-com -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f \
+        ci/testnet-deploy.sh -p demo-testnet-solana-com2 -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x \
           ${skipCreate:+-r} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D} \
-          -x
+          ${maybeDelete:+-D}
       fi
     )
     ;;

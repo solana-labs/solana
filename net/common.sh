@@ -19,6 +19,7 @@ mkdir -p "$netConfigDir" "$netLogDir"
 source "$(dirname "${BASH_SOURCE[0]}")"/../scripts/configure-metrics.sh
 
 configFile="$netConfigDir/config"
+geoipConfigFile="$netConfigDir/geoip.yml"
 
 entrypointIp=
 publicNetwork=
