@@ -172,8 +172,8 @@ mod tests {
     #[test]
     fn test_cleanup_first() {
         let mut index = AccountsIndex::<bool>::default();
-        index.add_root(1);
         index.add_root(0);
+        index.add_root(1);
         index.cleanup_dead_fork(0);
         assert!(index.is_root(1));
         assert!(!index.is_root(0));
@@ -183,8 +183,8 @@ mod tests {
     fn test_cleanup_last() {
         //this behavior might be undefined, clean up should only occur on older forks
         let mut index = AccountsIndex::<bool>::default();
-        index.add_root(1);
         index.add_root(0);
+        index.add_root(1);
         index.cleanup_dead_fork(1);
         assert!(!index.is_root(1));
         assert!(index.is_root(0));
