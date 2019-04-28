@@ -66,11 +66,11 @@ impl<T: Clone> AccountsIndex<T> {
         self.roots.contains(&fork)
     }
     pub fn add_root(&mut self, fork: Fork) {
-        if fork > self.last_root {
-            self.last_root = fork;
-        } else {
-            assert!(fork == 0, "new roots must be increasing");
-        }
+        assert!(
+            fork == 0 || fork > self.last_root,
+            "new roots must be increasing"
+        );
+        self.last_root = fork;
         self.roots.insert(fork);
     }
     /// Remove the fork when the storage for the fork is freed
