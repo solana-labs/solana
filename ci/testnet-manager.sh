@@ -231,7 +231,7 @@ sanity() {
       ok=true
       if [[ -n $GCE_NODE_COUNT ]]; then
         NO_LEDGER_VERIFY=1 \
-          ci/testnet-sanity.sh demo-testnet-solana-com gce "${GCE_ZONES[0]}" || ok=false
+          ci/testnet-sanity.sh demo-testnet-solana-com gce "${GCE_ZONES[0]}" -f || ok=false
       else
         echo "Error: no GCE nodes"
         ok=false
@@ -374,7 +374,7 @@ deploy() {
       if [[ -n $GCE_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
         ci/testnet-deploy.sh -p testnet-demo -C gce ${GCE_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
           -a demo-testnet-solana-com \
           ${skipCreate:+-r} \
           ${skipStart:+-s} \

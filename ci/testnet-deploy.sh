@@ -14,6 +14,7 @@ stopNetwork=false
 skipSetup=false
 skipStart=false
 externalNode=false
+failOnValidatorBootupFailure=true
 tarChannelOrTag=edge
 delete=false
 enableGpu=false
@@ -57,6 +58,7 @@ Deploys a CD testnet
    -x                   - External node.  Default: false
    -s                   - Skip start.  Nodes will still be created or configured, but network software will not be started.
    -S                   - Stop network software without tearing down nodes.
+   -f                   - Discard validator nodes that didn't bootup successfully
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
@@ -66,7 +68,7 @@ EOF
 
 zone=()
 
-while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:S" opt; do
+while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:Sf" opt; do
   case $opt in
   h | \?)
     usage
@@ -126,6 +128,9 @@ while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:S" opt; do
     ;;
   x)
     externalNode=true
+    ;;
+  f)
+    failOnValidatorBootupFailure=false
     ;;
   u)
     blockstreamer=true
@@ -224,6 +229,10 @@ if ! $skipSetup; then
     create_args+=(-x)
   fi
 
+  if ! $failOnValidatorBootupFailure; then
+    create_args+=(-f)
+  fi
+
   time net/"$cloudProvider".sh create "${create_args[@]}"
 else
   echo "--- $cloudProvider.sh config"
@@ -234,6 +243,10 @@ else
   config_args+=(${zone_args[@]})
   if $publicNetwork; then
     config_args+=(-P)
+  fi
+
+  if ! $failOnValidatorBootupFailure; then
+    config_args+=(-f)
   fi
 
   time net/"$cloudProvider".sh config "${config_args[@]}"
