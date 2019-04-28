@@ -114,6 +114,7 @@ testnet-demo)
   CHANNEL_OR_TAG=beta
   CHANNEL_BRANCH=$BETA_CHANNEL
   : "${GCE_NODE_COUNT:=200}"
+  : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
