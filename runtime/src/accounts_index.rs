@@ -68,6 +68,8 @@ impl<T: Clone> AccountsIndex<T> {
     pub fn add_root(&mut self, fork: Fork) {
         if fork > self.last_root {
             self.last_root = fork;
+        } else {
+            assert!(fork == 0, "new roots must be increasing");
         }
         self.roots.insert(fork);
     }
