@@ -293,7 +293,7 @@ impl Bank {
         *self.parent.write().unwrap() = None;
 
         let squash_accounts_start = Instant::now();
-        for p in &parents {
+        for p in parents.iter().rev() {
             // root forks cannot be purged
             self.accounts.add_root(p.slot());
         }
