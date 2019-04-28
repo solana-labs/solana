@@ -163,11 +163,13 @@ while getopts "h?p:Pn:c:z:gG:a:d:buxf" opt; do
     enableGpu=true
     bootstrapLeaderMachineType=$gpuBootstrapLeaderMachineType
     fullNodeMachineType=$bootstrapLeaderMachineType
+    blockstreamerMachineType=$bootstrapLeaderMachineType
     ;;
   G)
     enableGpu=true
     bootstrapLeaderMachineType="$OPTARG"
     fullNodeMachineType=$bootstrapLeaderMachineType
+    blockstreamerMachineType=$bootstrapLeaderMachineType
     ;;
   a)
     customAddress=$OPTARG
