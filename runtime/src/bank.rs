@@ -124,7 +124,7 @@ pub struct Bank {
     parent: RwLock<Option<Arc<Bank>>>,
 
     /// The set of parents including this bank
-    ancestors: HashMap<u64, usize>,
+    pub ancestors: HashMap<u64, usize>,
 
     /// Hash of this Bank's state. Only meaningful after freezing.
     hash: RwLock<Hash>,
