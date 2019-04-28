@@ -188,9 +188,9 @@ else
 fi
 
 annotate() {
-  ${BUILDKITE:-false} && {
+  [[ -z $BUILDKITE ]] || {
     buildkite-agent annotate "$@"
-  } || true
+  }
 }
 
 annotateBlockexplorerUrl() {
