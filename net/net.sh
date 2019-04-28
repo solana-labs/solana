@@ -190,7 +190,7 @@ fi
 annotate() {
   ${BUILDKITE:-false} && {
     buildkite-agent annotate "$@"
-  }
+  } || true
 }
 
 annotateBlockexplorerUrl() {
