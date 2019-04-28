@@ -3,6 +3,7 @@
 use crate::order_book::*;
 use itertools::izip;
 use log::*;
+use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::contact_info::ContactInfo;
@@ -384,8 +385,9 @@ fn swapper<T>(
     'outer: loop {
         if let Ok(trade_infos) = receiver.try_recv() {
             let mut tries = 0;
+            let mut trade_index = 0;
             while client
-                .get_balance(&trade_infos[0].trade_account)
+                .get_balance(&trade_infos[trade_index].trade_account)
                 .unwrap_or(0)
                 == 0
             {
@@ -399,6 +401,7 @@ fn swapper<T>(
                 }
                 debug!("{} waiting for trades batch to clear", tries);
                 sleep(Duration::from_millis(100));
+                trade_index = thread_rng().gen_range(0, trade_infos.len());
             }
 
             trade_infos.iter().for_each(|info| {
