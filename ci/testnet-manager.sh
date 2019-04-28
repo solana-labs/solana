@@ -82,8 +82,10 @@ eval "$(ci/channel-info.sh)"
 
 EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
 GCE_ZONES=(
-  us-west1-a us-west1-b us-west1-c us-east1-b us-east1-c us-east1-d
-  europe-west4-a europe-west4-b europe-west4-c us-central1-a us-central1
+  us-west1-a     us-west1-b     us-west1-c
+  us-central1-a  us-central1-b
+  us-east1-b     us-east1-c     us-east1-d
+  europe-west4-a europe-west4-b europe-west4-c
 )
 
 case $TESTNET in
