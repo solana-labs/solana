@@ -67,7 +67,7 @@ impl<T: Clone> AccountsIndex<T> {
     }
     pub fn add_root(&mut self, fork: Fork) {
         assert!(
-            fork == 0 || fork > self.last_root,
+            (self.last_root == 0 && fork == 0) || (fork > self.last_root),
             "new roots must be increasing"
         );
         self.last_root = fork;
