@@ -310,18 +310,24 @@ cloud_DeleteInstances() {
     return
   fi
 
-  declare names=("${instances[@]/:*/}")
-  declare zones=("${instances[@]/*:/}")
-  declare region=
-  region=$(__cloud_GetRegion "${zones[0]}")
-
-  (
-    set -x
-    aws ec2 terminate-instances --region "$region" --instance-ids "${names[@]}"
-  )
+  # Terminate the instances
+  for instance in "${instances[@]}"; do
+    declare name="${instance/:*/}"
+    declare zone="${instance/*:/}"
+    declare region=
+    region=$(__cloud_GetRegion "$zone")
+    (
+      set -x
+      aws ec2 terminate-instances --region "$region" --instance-ids "$name"
+    )
+  done
 
   # Wait until the instances are terminated
-  for name in "${names[@]}"; do
+  for instance in "${instances[@]}"; do
+    declare name="${instance/:*/}"
+    declare zone="${instance/*:/}"
+    declare region=
+    region=$(__cloud_GetRegion "$zone")
     while true; do
       declare instanceState
       instanceState=$(\
