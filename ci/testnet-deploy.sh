@@ -262,27 +262,27 @@ if $stopNetwork; then
   exit 0
 fi
 
-echo --- net.sh start
-maybeRejectExtraNodes=
-if ! $publicNetwork; then
-  maybeRejectExtraNodes="-o rejectExtraNodes"
-fi
-maybeNoValidatorSanity=
-if [[ -n $NO_VALIDATOR_SANITY ]]; then
-  maybeNoValidatorSanity="-o noValidatorSanity"
-fi
-maybeNoLedgerVerify=
-if [[ -n $NO_LEDGER_VERIFY ]]; then
-  maybeNoLedgerVerify="-o noLedgerVerify"
-fi
-
-maybeSkipSetup=
-if $skipSetup; then
-  maybeSkipSetup="-r"
-fi
-
 ok=true
 if ! $skipStart; then
+  echo --- net.sh start
+  maybeRejectExtraNodes=
+  if ! $publicNetwork; then
+    maybeRejectExtraNodes="-o rejectExtraNodes"
+  fi
+  maybeNoValidatorSanity=
+  if [[ -n $NO_VALIDATOR_SANITY ]]; then
+    maybeNoValidatorSanity="-o noValidatorSanity"
+  fi
+  maybeNoLedgerVerify=
+  if [[ -n $NO_LEDGER_VERIFY ]]; then
+    maybeNoLedgerVerify="-o noLedgerVerify"
+  fi
+
+  maybeSkipSetup=
+  if $skipSetup; then
+    maybeSkipSetup="-r"
+  fi
+
   (
     if $skipSetup; then
       # TODO: Enable rolling updates
