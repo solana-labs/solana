@@ -81,11 +81,38 @@ eval "$(ci/channel-info.sh)"
 
 
 EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
+
+# GCE zones with _lots_ of quota
 GCE_ZONES=(
-  us-west1-a     us-west1-b     us-west1-c
-  us-central1-a  us-central1-b
-  us-east1-b     us-east1-c     us-east1-d
-  europe-west4-a europe-west4-b europe-west4-c
+  us-west1-a
+  us-central1-a
+  us-east1-b
+  europe-west4-a
+
+  us-west1-b
+  us-central1-b
+  us-east1-c
+  europe-west4-b
+
+  us-west1-c
+  us-east1-d
+  europe-west4-c
+)
+
+# GCE zones with enough quota for one CPU-only fullnode
+GCE_LOW_QUOTA_ZONES=(
+  asia-east2-a
+  asia-northeast1-b
+  asia-northeast2-b
+  asia-south1-c
+  asia-southeast1-b
+  australia-southeast1-b
+  europe-north1-a
+  europe-west2-b
+  europe-west3-c
+  europe-west6-a
+  northamerica-northeast1-a
+  southamerica-east1-b
 )
 
 case $TESTNET in
@@ -113,7 +140,8 @@ testnet-perf)
 testnet-demo)
   CHANNEL_OR_TAG=beta
   CHANNEL_BRANCH=$BETA_CHANNEL
-  : "${GCE_NODE_COUNT:=200}"
+  : "${GCE_NODE_COUNT:=186}"
+  : "${GCE_LOW_QUOTA_NODE_COUNT:=12}"
   : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
   ;;
 *)
@@ -129,6 +157,10 @@ done
 GCE_ZONE_ARGS=()
 for val in "${GCE_ZONES[@]}"; do
   GCE_ZONE_ARGS+=("-z $val")
+done
+GCE_LOW_QUOTA_ZONE_ARGS=()
+for val in "${GCE_LOW_QUOTA_ZONES[@]}"; do
+  GCE_LOW_QUOTA_ZONE_ARGS+=("-z $val")
 done
 
 if [[ -n $TESTNET_DB_HOST ]]; then
@@ -158,6 +190,7 @@ steps:
         TESTNET_DB_HOST: "$TESTNET_DB_HOST"
         EC2_NODE_COUNT: "$EC2_NODE_COUNT"
         GCE_NODE_COUNT: "$GCE_NODE_COUNT"
+        GCE_LOW_QUOTA_NODE_COUNT: "$GCE_LOW_QUOTA_NODE_COUNT"
 EOF
     ) | buildkite-agent pipeline upload
     exit 0
@@ -350,7 +383,7 @@ deploy() {
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D} \
-          ${EC2_NODE_COUNT:+-x}
+          -x
       fi
     )
     ;;
@@ -374,15 +407,29 @@ deploy() {
   testnet-demo)
     (
       set -x
-      if [[ -n $GCE_NODE_COUNT ]]; then
+
+      if [[ -n $GCE_LOW_QUOTA_NODE_COUNT ]] || [[ -n $skipStart ]]; then
+        maybeSkipStart="skip"
+      fi
+
+      # shellcheck disable=SC2068
+      ci/testnet-deploy.sh -p testnet-demo -C gce ${GCE_ZONE_ARGS[@]} \
+        -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
+        -a demo-testnet-solana-com \
+        ${skipCreate:+-r} \
+        ${maybeSkipStart:+-s} \
+        ${maybeStop:+-S} \
+        ${maybeDelete:+-D}
+
+      if [[ -n $GCE_LOW_QUOTA_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
-        ci/testnet-deploy.sh -p testnet-demo -C gce ${GCE_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
-          -a demo-testnet-solana-com \
+        ci/testnet-deploy.sh -p testnet-solana-com -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f \
           ${skipCreate:+-r} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
+          ${maybeDelete:+-D} \
+          -x
       fi
     )
     ;;

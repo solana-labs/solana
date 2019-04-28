@@ -273,7 +273,7 @@ EOF
     declare failOnFailure="$5"
     declare arrayName="$6"
 
-    # This check should eventually be moved to cloud provider specific script 
+    # This check should eventually be moved to cloud provider specific script
     if [ "$publicIp" = "TERMINATED" ] || [ "$privateIp" = "TERMINATED" ]; then
       if $failOnFailure; then
         exit 1
@@ -286,7 +286,7 @@ EOF
     echo "Waiting for $name to finish booting..."
     (
       set -x +e
-      for i in $(seq 1 20); do
+      for i in $(seq 1 30); do
         timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
         ret=$?
         if [[ $ret -eq 0 ]]; then
