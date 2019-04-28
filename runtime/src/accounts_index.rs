@@ -66,9 +66,11 @@ impl<T: Clone> AccountsIndex<T> {
         self.roots.contains(&fork)
     }
     pub fn add_root(&mut self, fork: Fork) {
-        if fork > self.last_root {
-            self.last_root = fork;
-        }
+        assert!(
+            (self.last_root == 0 && fork == 0) || (fork > self.last_root),
+            "new roots must be increasing"
+        );
+        self.last_root = fork;
         self.roots.insert(fork);
     }
     /// Remove the fork when the storage for the fork is freed
@@ -156,15 +158,22 @@ mod tests {
     fn test_max_last_root() {
         let mut index = AccountsIndex::<bool>::default();
         index.add_root(1);
-        index.add_root(0);
         assert_eq!(index.last_root, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_max_last_root_old() {
+        let mut index = AccountsIndex::<bool>::default();
+        index.add_root(1);
+        index.add_root(0);
     }
 
     #[test]
     fn test_cleanup_first() {
         let mut index = AccountsIndex::<bool>::default();
-        index.add_root(1);
         index.add_root(0);
+        index.add_root(1);
         index.cleanup_dead_fork(0);
         assert!(index.is_root(1));
         assert!(!index.is_root(0));
@@ -174,8 +183,8 @@ mod tests {
     fn test_cleanup_last() {
         //this behavior might be undefined, clean up should only occur on older forks
         let mut index = AccountsIndex::<bool>::default();
-        index.add_root(1);
         index.add_root(0);
+        index.add_root(1);
         index.cleanup_dead_fork(1);
         assert!(!index.is_root(1));
         assert!(index.is_root(0));
