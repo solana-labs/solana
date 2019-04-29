@@ -15,39 +15,43 @@ reasons:
 * The cluster rolled back the ledger
 * A validator responded to queries maliciously
 
-### The Transact Trait
+### The AsyncClient and SyncClient Traits
 
 To troubleshoot, the application should retarget a lower-level component, where
 fewer errors are possible. Retargeting can be done with different
-implementations of the Transact trait.
+implementations of the AsyncClient and SyncClient traits.
 
-When Futures 0.3.0 is released, the Transact trait may look like this:
+Components implement the following primary methods:
 
 ```rust,ignore
-trait Transact {
-    async fn send_transactions(txs: &[Transaction]) -> Vec<Result<(), TransactionError>>;
+trait AsyncClient {
+    fn async_send_transaction(&self, transaction: Transaction) -> io::Result<Signature>;
+}
+
+trait SyncClient {
+    fn get_signature_status(&self, signature: &Signature) -> Result<Option<transaction::Result<()>>>;
 }
 ```
 
-Users send transactions and asynchrounously await their results.
+Users send transactions and asynchrounously and synchrounously await results.
 
-#### Transact with Clusters
+#### ThinClient for Clusters
 
-The highest level implementation targets a Solana cluster, which may be a
-deployed testnet or a local cluster running on a development machine.
+The highest level implementation, ThinClient, targets a Solana cluster, which
+may be a deployed testnet or a local cluster running on a development machine.
 
-#### Transact with the TPU
+#### TpuClient for the TPU
 
-The next level is the TPU implementation of Transact. At the TPU level, the
-application sends transactions over Rust channels, where there can be no
-surprises from network queues or dropped packets. The TPU implements all
-"normal" transaction errors. It does signature verification, may report
+The next level is the TPU implementation, which is not yet implemented. At the
+TPU level, the application sends transactions over Rust channels, where there
+can be no surprises from network queues or dropped packets. The TPU implements
+all "normal" transaction errors. It does signature verification, may report
 account-in-use errors, and otherwise results in the ledger, complete with proof
 of history hashes.
 
 ### Low-level testing
 
-### Testing with the Bank
+#### BankClient for the Bank
 
 Below the TPU level is the Bank. The Bank doesn't do signature verification or
 generate a ledger. The Bank is a convenient layer at which to test new on-chain

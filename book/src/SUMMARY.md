@@ -56,7 +56,6 @@
 	- [Economic Design MVP](ed_mvp.md)
     - [References](ed_references.md)
   - [Cluster Test Framework](cluster-test-framework.md)
-  - [Testing Programs](testing-programs.md)
   - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
   - [Cluster Software Installation and Updates](installer.md)
   - [Deterministic Transaction Fees](transaction-fees.md)
@@ -66,3 +65,4 @@
   - [Leader-to-Leader Transition](leader-leader-transition.md)
   - [Leader-to-Validator Transition](leader-validator-transition.md)
   - [Testnet Participation](testnet-participation.md)
+  - [Testing Programs](testing-programs.md)
