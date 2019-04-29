@@ -99,10 +99,6 @@ We use [github's Releases UI](https://github.com/solana-labs/solana/releases) fo
    release should be `<branchname>.X-rc.0`.
 1. Verify release automation:
    1. [Crates.io](https://crates.io/crates/solana) should have an updated Solana version.
-   1. ...
-1. After testnet deployment, verify that testnets are running correct software.
-   http://metrics.solana.com should show testnet running on a hash from your
-   newly created branch.
 1. Once the release has been made, update Cargo.toml on the release branch to the next
    semantic version (e.g. 0.9.0 -> 0.9.1) by running
    `./scripts/increment-cargo-version.sh patch`, then rebuild with `cargo
