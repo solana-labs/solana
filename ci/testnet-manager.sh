@@ -310,7 +310,7 @@ deploy() {
       set -x
       ci/testnet-deploy.sh -p edge-testnet-solana-com -C ec2 -z us-west-1a \
         -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0ccd4f2239886fa94 \
-        ${skipCreate:+-r} \
+        ${skipCreate:+-e} \
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
         ${maybeDelete:+-D}
@@ -325,7 +325,7 @@ deploy() {
         ci/testnet-deploy.sh -p edge-perf-testnet-solana-com -C ec2 -z us-west-2b \
           -g -t "$CHANNEL_OR_TAG" -c 2 \
           -b \
-          ${skipCreate:+-r} \
+          ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D}
@@ -338,7 +338,7 @@ deploy() {
         ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 -z us-west-1a \
           -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
           -b \
-          ${skipCreate:+-r} \
+          ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D}
@@ -353,7 +353,7 @@ deploy() {
         ci/testnet-deploy.sh -p beta-perf-testnet-solana-com -C ec2 -z us-west-2b \
           -g -t "$CHANNEL_OR_TAG" -c 2 \
           -b \
-          ${skipCreate:+-r} \
+          ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D}
@@ -370,7 +370,7 @@ deploy() {
       # shellcheck disable=SC2068
       ci/testnet-deploy.sh -p testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
         -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -a eipalloc-0fa502bf95f6f18b2 \
-        ${skipCreate:+-r} \
+        ${skipCreate:+-e} \
         ${maybeSkipStart:+-s} \
         ${maybeStop:+-S} \
         ${maybeDelete:+-D}
@@ -379,7 +379,7 @@ deploy() {
         # shellcheck disable=SC2068
         ci/testnet-deploy.sh -p testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
           -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P \
-          ${skipCreate:+-r} \
+          ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D} \
@@ -398,7 +398,7 @@ deploy() {
           -t "$CHANNEL_OR_TAG" -c 2 \
           -b \
           -d pd-ssd \
-          ${skipCreate:+-r} \
+          ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D}
@@ -416,7 +416,7 @@ deploy() {
       ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
         -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
         -a demo-testnet-solana-com \
-        ${skipCreate:+-r} \
+        ${skipCreate:+-e} \
         ${maybeSkipStart:+-s} \
         ${maybeStop:+-S} \
         ${maybeDelete:+-D}
@@ -425,7 +425,7 @@ deploy() {
         # shellcheck disable=SC2068
         ci/testnet-deploy.sh -p demo-testnet-solana-com2 -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
           -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x \
-          ${skipCreate:+-r} \
+          ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D}
