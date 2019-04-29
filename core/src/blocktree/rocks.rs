@@ -170,6 +170,21 @@ impl TypedColumn<Rocks> for cf::Orphans {
     type Type = bool;
 }
 
+impl Column<Rocks> for cf::Root {
+    const NAME: &'static str = super::ROOT_CF;
+    type Index = ();
+
+    fn key(_: ()) -> Vec<u8> {
+        vec![0; 8]
+    }
+
+    fn index(_: &[u8]) {}
+}
+
+impl TypedColumn<Rocks> for cf::Root {
+    type Type = u64;
+}
+
 impl Column<Rocks> for cf::SlotMeta {
     const NAME: &'static str = super::META_CF;
     type Index = u64;

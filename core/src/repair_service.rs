@@ -201,7 +201,7 @@ impl RepairService {
     fn generate_repairs(blocktree: &Blocktree, max_repairs: usize) -> Result<(Vec<RepairType>)> {
         // Slot height and blob indexes for blobs we want to repair
         let mut repairs: Vec<RepairType> = vec![];
-        let slot = *blocktree.root_slot.read().unwrap();
+        let slot = blocktree.get_root()?;
         Self::generate_repairs_for_fork(blocktree, &mut repairs, max_repairs, slot);
 
         // TODO: Incorporate gossip to determine priorities for repair?

@@ -9,6 +9,7 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::path::Path;
+use std::sync::Arc;
 
 pub mod columns {
     #[derive(Debug)]
@@ -30,6 +31,10 @@ pub mod columns {
     #[derive(Debug)]
     /// The erasure meta column
     pub struct ErasureMeta;
+
+    #[derive(Debug)]
+    /// The root column
+    pub struct Root;
 }
 
 pub trait Backend: Sized + Send + Sync {
@@ -112,7 +117,15 @@ pub struct Database<B>
 where
     B: Backend,
 {
-    backend: B,
+    backend: Arc<B>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BatchProcessor<B>
+where
+    B: Backend,
+{
+    backend: Arc<B>,
 }
 
 #[derive(Debug, Clone)]
@@ -132,7 +145,7 @@ where
     B: Backend,
     C: Column<B>,
 {
-    backend: PhantomData<B>,
+    backend: Arc<B>,
     column: PhantomData<C>,
 }
 
@@ -151,7 +164,7 @@ where
     B: Backend,
 {
     pub fn open(path: &Path) -> Result<Self> {
-        let backend = B::open(path)?;
+        let backend = Arc::new(B::open(path)?);
 
         Ok(Database { backend })
     }
@@ -170,7 +183,7 @@ where
             .get_cf(self.cf_handle::<C>(), C::key(key).borrow())
     }
 
-    pub fn put_bytes<C>(&mut self, key: C::Index, data: &[u8]) -> Result<()>
+    pub fn put_bytes<C>(&self, key: C::Index, data: &[u8]) -> Result<()>
     where
         C: Column<B>,
     {
@@ -178,7 +191,7 @@ where
             .put_cf(self.cf_handle::<C>(), C::key(key).borrow(), data)
     }
 
-    pub fn delete<C>(&mut self, key: C::Index) -> Result<()>
+    pub fn delete<C>(&self, key: C::Index) -> Result<()>
     where
         C: Column<B>,
     {
@@ -202,7 +215,7 @@ where
         }
     }
 
-    pub fn put<C>(&mut self, key: C::Index, value: &C::Type) -> Result<()>
+    pub fn put<C>(&self, key: C::Index, value: &C::Type) -> Result<()>
     where
         C: TypedColumn<B>,
     {
@@ -240,6 +253,35 @@ where
         Ok(iter)
     }
 
+    #[inline]
+    pub fn cf_handle<C>(&self) -> B::ColumnFamily
+    where
+        C: Column<B>,
+    {
+        self.backend.cf_handle(C::NAME).clone()
+    }
+
+    pub fn column<C>(&self) -> LedgerColumn<B, C>
+    where
+        C: Column<B>,
+    {
+        LedgerColumn {
+            backend: Arc::clone(&self.backend),
+            column: PhantomData,
+        }
+    }
+
+    pub fn batch_processor(&self) -> BatchProcessor<B> {
+        BatchProcessor {
+            backend: Arc::clone(&self.backend),
+        }
+    }
+}
+
+impl<B> BatchProcessor<B>
+where
+    B: Backend,
+{
     pub fn batch(&mut self) -> Result<WriteBatch<B>> {
         let db_write_batch = self.backend.batch()?;
         let map = self
@@ -258,24 +300,6 @@ where
 
     pub fn write(&mut self, batch: WriteBatch<B>) -> Result<()> {
         self.backend.write(batch.write_batch)
-    }
-
-    #[inline]
-    pub fn cf_handle<C>(&self) -> B::ColumnFamily
-    where
-        C: Column<B>,
-    {
-        self.backend.cf_handle(C::NAME).clone()
-    }
-
-    pub fn column<C>(&self) -> LedgerColumn<B, C>
-    where
-        C: Column<B>,
-    {
-        LedgerColumn {
-            backend: PhantomData,
-            column: PhantomData,
-        }
     }
 }
 
@@ -333,41 +357,47 @@ where
     B: Backend,
     C: Column<B>,
 {
-    pub fn get_bytes(&self, db: &Database<B>, key: C::Index) -> Result<Option<Vec<u8>>> {
-        db.backend.get_cf(self.handle(db), C::key(key).borrow())
+    pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
+        self.backend.get_cf(self.handle(), C::key(key).borrow())
     }
 
-    pub fn cursor(&self, db: &Database<B>) -> Result<Cursor<B, C>> {
-        db.cursor()
+    pub fn cursor(&self) -> Result<Cursor<B, C>> {
+        let db_cursor = self.backend.raw_iterator_cf(self.handle())?;
+
+        Ok(Cursor {
+            db_cursor,
+            column: PhantomData,
+            backend: PhantomData,
+        })
     }
 
-    pub fn iter(&self, db: &Database<B>) -> Result<impl Iterator<Item = (C::Index, Vec<u8>)>> {
-        db.iter::<C>()
+    pub fn iter(&self) -> Result<impl Iterator<Item = (C::Index, Vec<u8>)>> {
+        let iter = self
+            .backend
+            .iterator_cf(self.handle())?
+            .map(|(key, value)| (C::index(&key), value.into()));
+
+        Ok(iter)
     }
 
-    pub fn handle(&self, db: &Database<B>) -> B::ColumnFamily {
-        db.cf_handle::<C>()
+    #[inline]
+    pub fn handle(&self) -> B::ColumnFamily {
+        self.backend.cf_handle(C::NAME).clone()
     }
 
-    pub fn is_empty(&self, db: &Database<B>) -> Result<bool> {
-        let mut cursor = self.cursor(db)?;
+    pub fn is_empty(&self) -> Result<bool> {
+        let mut cursor = self.cursor()?;
         cursor.seek_to_first();
         Ok(!cursor.valid())
     }
-}
 
-impl<B, C> LedgerColumn<B, C>
-where
-    B: Backend,
-    C: Column<B>,
-{
-    pub fn put_bytes(&self, db: &mut Database<B>, key: C::Index, value: &[u8]) -> Result<()> {
-        db.backend
-            .put_cf(self.handle(db), C::key(key).borrow(), value)
+    pub fn put_bytes(&self, key: C::Index, value: &[u8]) -> Result<()> {
+        self.backend
+            .put_cf(self.handle(), C::key(key).borrow(), value)
     }
 
-    pub fn delete(&self, db: &mut Database<B>, key: C::Index) -> Result<()> {
-        db.backend.delete_cf(self.handle(db), C::key(key).borrow())
+    pub fn delete(&self, key: C::Index) -> Result<()> {
+        self.backend.delete_cf(self.handle(), C::key(key).borrow())
     }
 }
 
@@ -376,18 +406,21 @@ where
     B: Backend,
     C: TypedColumn<B>,
 {
-    pub fn get(&self, db: &Database<B>, key: C::Index) -> Result<Option<C::Type>> {
-        db.get::<C>(key)
-    }
-}
+    pub fn get(&self, key: C::Index) -> Result<Option<C::Type>> {
+        if let Some(serialized_value) = self.backend.get_cf(self.handle(), C::key(key).borrow())? {
+            let value = deserialize(&serialized_value)?;
 
-impl<B, C> LedgerColumn<B, C>
-where
-    B: Backend,
-    C: TypedColumn<B>,
-{
-    pub fn put(&self, db: &mut Database<B>, key: C::Index, value: &C::Type) -> Result<()> {
-        db.put::<C>(key, value)
+            Ok(Some(value))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn put(&self, key: C::Index, value: &C::Type) -> Result<()> {
+        let serialized_value = serialize(value)?;
+
+        self.backend
+            .put_cf(self.handle(), C::key(key).borrow(), &serialized_value)
     }
 }
 
