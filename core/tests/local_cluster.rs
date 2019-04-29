@@ -6,7 +6,7 @@ use solana::fullnode::FullnodeConfig;
 use solana::gossip_service::discover_nodes;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::poh_service::PohServiceConfig;
-use solana_runtime::bank::MINIMUM_SLOT_LEN;
+use solana_runtime::bank::MINIMUM_SLOT_LENGTH;
 use solana_sdk::timing;
 use std::time::Duration;
 
@@ -116,7 +116,7 @@ fn test_two_unbalanced_stakes() {
     let mut fullnode_config = FullnodeConfig::default();
     let num_ticks_per_second = 100;
     let num_ticks_per_slot = 40;
-    let num_slots_per_epoch = MINIMUM_SLOT_LEN as u64;
+    let num_slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
     fullnode_config.tick_config =
         PohServiceConfig::Sleep(Duration::from_millis(100 / num_ticks_per_second));
     fullnode_config.rpc_config.enable_fullnode_exit = true;
@@ -167,7 +167,7 @@ fn test_forwarding() {
 #[test]
 fn test_restart_node() {
     let fullnode_config = FullnodeConfig::default();
-    let slots_per_epoch = MINIMUM_SLOT_LEN as u64;
+    let slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
     let ticks_per_slot = 16;
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![3],

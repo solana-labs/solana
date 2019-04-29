@@ -10,7 +10,7 @@ use crate::gossip_service::discover_nodes;
 use crate::locktower::VOTE_THRESHOLD_DEPTH;
 use crate::poh_service::PohServiceConfig;
 use solana_client::thin_client::create_client;
-use solana_runtime::bank::MINIMUM_SLOT_LEN;
+use solana_runtime::bank::MINIMUM_SLOT_LENGTH;
 use solana_sdk::client::SyncClient;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
@@ -154,7 +154,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     let cluster_nodes = discover_nodes(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let client = create_client(entry_point_info.client_facing_addr(), FULLNODE_PORT_RANGE);
-    let first_two_epoch_slots = MINIMUM_SLOT_LEN * 3;
+    let first_two_epoch_slots = MINIMUM_SLOT_LENGTH * 3;
     info!("sleeping for 2 leader fortnights");
     sleep(Duration::from_millis(
         slot_millis * first_two_epoch_slots as u64,
