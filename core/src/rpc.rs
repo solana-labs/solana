@@ -294,7 +294,7 @@ impl RpcSol for RpcSolImpl {
         Ok(cluster_info
             .all_peers()
             .iter()
-            .filter_map(|contact_info| {
+            .filter_map(|(contact_info, _)| {
                 if ContactInfo::is_valid_address(&contact_info.gossip) {
                     Some(RpcContactInfo {
                         id: contact_info.id.to_string(),
