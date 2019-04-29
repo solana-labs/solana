@@ -383,16 +383,7 @@ EOF
     fi
   }
 
-  if $externalNodes; then
-    echo "Bootstrap leader is already configured"
-  else
-    echo "Looking for bootstrap leader instance..."
-    cloud_FindInstance "$prefix-bootstrap-leader"
-    [[ ${#instances[@]} -eq 1 ]] || {
-      echo "Unable to find bootstrap leader"
-      exit 1
-    }
-
+  fetchPrivateKey() {
     (
       declare nodeName
       declare nodeIp
@@ -411,7 +402,9 @@ EOF
         set -x -o pipefail
         for i in $(seq 1 30); do
           if cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa "$sshPrivateKey" "$nodeZone"; then
-            break
+            if cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa.pub "$sshPrivateKey.pub" "$nodeZone"; then
+              break
+            fi
           fi
 
           sleep 1
@@ -422,6 +415,20 @@ EOF
         ls -l "$sshPrivateKey"
       fi
     )
+
+  }
+
+  if $externalNodes; then
+    echo "Bootstrap leader is already configured"
+  else
+    echo "Looking for bootstrap leader instance..."
+    cloud_FindInstance "$prefix-bootstrap-leader"
+    [[ ${#instances[@]} -eq 1 ]] || {
+      echo "Unable to find bootstrap leader"
+      exit 1
+    }
+
+    fetchPrivateKey
 
     echo "fullnodeIpList=()" >> "$configFile"
     echo "fullnodeIpListPrivate=()" >> "$configFile"
@@ -436,6 +443,8 @@ EOF
         echo "Unable to find additional fullnodes"
         exit 1
       }
+
+      fetchPrivateKey
       cloud_ForEachInstance recordInstanceIp "$failOnValidatorBootupFailure" fullnodeIpList
     done
   fi
