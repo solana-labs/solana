@@ -282,39 +282,34 @@ if ! $skipStart; then
       op=start
     fi
     echo "--- net.sh $op"
+    args=("$op" -t "$tarChannelOrTag")
 
-    maybeRejectExtraNodes=
     if ! $publicNetwork; then
-      maybeRejectExtraNodes="-o rejectExtraNodes"
+      args+=(-o rejectExtraNodes)
     fi
-    maybeNoValidatorSanity=
     if [[ -n $NO_VALIDATOR_SANITY ]]; then
-      maybeNoValidatorSanity="-o noValidatorSanity"
+      args+=(-o noValidatorSanity)
     fi
-    maybeNoLedgerVerify=
     if [[ -n $NO_LEDGER_VERIFY ]]; then
-      maybeNoLedgerVerify="-o noLedgerVerify"
+      args+=(-o noLedgerVerify)
     fi
 
-    maybeReuseLedger=
     if $reuseLedger; then
-      maybeReuseLedger="-r"
+      args+=(-r)
     fi
 
-    maybeUpdateManifestKeypairFile=
+    if ! $failOnValidatorBootupFailure; then
+      args+=(-F)
+    fi
+
     # shellcheck disable=SC2154 # SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu comes from .buildkite/env/
     if [[ -n $SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu ]]; then
       echo "$SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu" > update_manifest_keypair.json
-      maybeUpdateManifestKeypairFile="-i update_manifest_keypair.json"
+      args+=(-i update_manifest_keypair.json)
     fi
 
     # shellcheck disable=SC2086 # Don't want to double quote the $maybeXYZ variables
-    time net/net.sh $op -t "$tarChannelOrTag" \
-      $maybeUpdateManifestKeypairFile \
-      $maybeReuseLedger \
-      $maybeRejectExtraNodes \
-      $maybeNoValidatorSanity \
-      $maybeNoLedgerVerify
+    time net/net.sh "${args[@]}"
   ) || ok=false
 
   net/net.sh logs
