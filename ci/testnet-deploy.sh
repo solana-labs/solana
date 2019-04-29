@@ -245,6 +245,10 @@ else
     config_args+=(-P)
   fi
 
+  if $externalNode; then
+    config_args+=(-x)
+  fi
+
   if ! $failOnValidatorBootupFailure; then
     config_args+=(-f)
   fi
