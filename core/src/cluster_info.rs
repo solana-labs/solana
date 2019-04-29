@@ -249,7 +249,7 @@ impl ClusterInfo {
         let nodes: Vec<_> = self
             .all_peers()
             .into_iter()
-            .map(|node| {
+            .map(|(node, last_updated)| {
                 if !ContactInfo::is_valid_address(&node.gossip) {
                     spy_nodes += 1;
                 }
@@ -266,7 +266,7 @@ impl ClusterInfo {
                      tpu:    {:20} |         |\n  \
                      rpc:    {:20} |         |\n",
                     addr_to_string(&node.gossip),
-                    now.saturating_sub(node.wallclock),
+                    now.saturating_sub(last_updated),
                     node.id,
                     if node.id == my_id { "(me)" } else { "" }.to_string(),
                     addr_to_string(&node.tpu),
@@ -347,14 +347,17 @@ impl ClusterInfo {
             .collect()
     }
 
-    // All nodes in gossip, including spy nodes
-    pub(crate) fn all_peers(&self) -> Vec<ContactInfo> {
+    // All nodes in gossip (including spy nodes) and the last time we heard about them
+    pub(crate) fn all_peers(&self) -> Vec<(ContactInfo, u64)> {
         self.gossip
             .crds
             .table
             .values()
-            .filter_map(|x| x.value.contact_info())
-            .cloned()
+            .filter_map(|x| {
+                x.value
+                    .contact_info()
+                    .map(|ci| (ci.clone(), x.local_timestamp))
+            })
             .collect()
     }
 
