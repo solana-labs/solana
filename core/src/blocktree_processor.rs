@@ -189,6 +189,8 @@ pub fn process_blocktree(
 
         if blocktree.is_root(slot) {
             bank.squash();
+            pending_slots.clear();
+            fork_info.clear();
         }
 
         if meta.next_slots.is_empty() {
@@ -340,6 +342,78 @@ mod tests {
                 entry_height: ticks_per_slot,
             }
         );
+    }
+
+    #[test]
+    fn test_process_blocktree_with_two_forks_and_squash() {
+        solana_logger::setup();
+
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(10_000);
+        let ticks_per_slot = genesis_block.ticks_per_slot;
+
+        // Create a new ledger with slot 0 full of ticks
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        debug!("ledger_path: {:?}", ledger_path);
+        let mut last_entry_hash = blockhash;
+
+        /*
+            Build a blocktree in the ledger with the following fork structure:
+
+                 slot 0
+                   |
+                 slot 1
+                 /   \
+            slot 2   |
+               /     |
+            slot 3   |
+                     |
+                   slot 4 <-- set_root(true)
+
+        */
+        let blocktree =
+            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
+
+        // Fork 1, ending at slot 3
+        let last_slot1_entry_hash =
+            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 1, 0, last_entry_hash);
+        last_entry_hash =
+            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, last_slot1_entry_hash);
+        let last_fork1_entry_hash =
+            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 3, 2, last_entry_hash);
+
+        // Fork 2, ending at slot 4
+        let last_fork2_entry_hash =
+            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 4, 1, last_slot1_entry_hash);
+
+        info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
+        info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
+
+        blocktree.set_root(4).unwrap();
+
+        let (bank_forks, bank_forks_info, _) =
+            process_blocktree(&genesis_block, &blocktree, None).unwrap();
+
+        assert_eq!(bank_forks_info.len(), 1); // One fork, other one is ignored b/c not a descendant of the root
+
+        assert_eq!(
+            bank_forks_info[0],
+            BankForksInfo {
+                bank_slot: 4, // Fork 2's head is slot 4
+                entry_height: ticks_per_slot * 3,
+            }
+        );
+        assert!(&bank_forks[4]
+            .parents()
+            .iter()
+            .map(|bank| bank.slot())
+            .collect::<Vec<_>>()
+            .is_empty());
+
+        // Ensure bank_forks holds the right banks
+        for info in bank_forks_info {
+            assert_eq!(bank_forks[info.bank_slot].slot(), info.bank_slot);
+            assert!(bank_forks[info.bank_slot].is_frozen());
+        }
     }
 
     #[test]
