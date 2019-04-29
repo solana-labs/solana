@@ -191,8 +191,7 @@ impl BankClient {
         }
     }
 
-    pub fn new(bank: Bank) -> Self {
-        let bank = Arc::new(bank);
+    pub fn new_shared(bank: &Arc<Bank>) -> Self {
         let (transaction_sender, transaction_receiver) = channel();
         let transaction_sender = Mutex::new(transaction_sender);
         let thread_bank = bank.clone();
@@ -205,6 +204,10 @@ impl BankClient {
             bank,
             transaction_sender,
         }
+    }
+
+    pub fn new(bank: Bank) -> Self {
+        Self::new_shared(&Arc::new(bank))
     }
 }
 
