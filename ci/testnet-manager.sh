@@ -140,8 +140,8 @@ testnet-perf)
 testnet-demo)
   CHANNEL_OR_TAG=beta
   CHANNEL_BRANCH=$BETA_CHANNEL
-  : "${GCE_NODE_COUNT:=195}"
-  : "${GCE_LOW_QUOTA_NODE_COUNT:=12}"
+  : "${GCE_NODE_COUNT:=150}"
+  : "${GCE_LOW_QUOTA_NODE_COUNT:=70}"
   : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
   ;;
 *)
