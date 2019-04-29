@@ -12,9 +12,9 @@ fn entrypoint(
     tick_height: u64,
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
-    info!("noop: program_id: {:?}", program_id);
-    info!("noop: keyed_accounts: {:#?}", keyed_accounts);
-    info!("noop: data: {:?}", data);
-    info!("noop: tick_height: {:?}", tick_height);
+    trace!("noop: program_id: {:?}", program_id);
+    trace!("noop: keyed_accounts: {:#?}", keyed_accounts);
+    trace!("noop: data: {:?}", data);
+    trace!("noop: tick_height: {:?}", tick_height);
     Ok(())
 }
