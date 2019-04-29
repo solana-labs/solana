@@ -40,8 +40,6 @@
   - [Secure Vote Signing](vote-signing-to-implement.md)
   - [Staking Rewards](staking-rewards.md)
   - [Passive Stake Delegation and Rewards](passive-stake-delegation-and-rewards.md)
-  - [Reliable Vote Transmission](reliable-vote-transmission.md)
-  - [Persistent Account Storage](persistent-account-storage.md)
   - [Cluster Economics](ed_overview.md)
     - [Validation-client Economics](ed_validation_client_economics.md)
       - [State-validation Protocol-based Rewards](ed_vce_state_validation_protocol_based_rewards.md)
@@ -57,7 +55,6 @@
     - [References](ed_references.md)
   - [Cluster Test Framework](cluster-test-framework.md)
   - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
-  - [Cluster Software Installation and Updates](installer.md)
   - [Deterministic Transaction Fees](transaction-fees.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
@@ -66,3 +63,6 @@
   - [Leader-to-Validator Transition](leader-validator-transition.md)
   - [Testnet Participation](testnet-participation.md)
   - [Testing Programs](testing-programs.md)
+  - [Reliable Vote Transmission](reliable-vote-transmission.md)
+  - [Persistent Account Storage](persistent-account-storage.md)
+  - [Cluster Software Installation and Updates](installer.md)
