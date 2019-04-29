@@ -86,19 +86,15 @@ pub fn create_native_loader_transactions(
 }
 
 fn sync_bencher(bank: &Arc<Bank>, _bank_client: &BankClient, transactions: &Vec<Transaction>) {
-    // Since bencher runs this multiple times, we need to clear the signatures.
-    bank.clear_signatures();
     let results = bank.process_transactions(&transactions);
     assert!(results.iter().all(Result::is_ok));
 }
 
 fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &Vec<Transaction>) {
-    // Since bencher runs this multiple times, we need to clear the signatures.
-    bank.clear_signatures();
     for transaction in transactions.clone() {
         bank_client.async_send_transaction(transaction).unwrap();
     }
-    for _ in 0..1_000_000_u64 {
+    for _ in 0..1_000_000_000_u64 {
         if bank
             .get_signature_status(&transactions.last().unwrap().signatures.get(0).unwrap())
             .is_some()
@@ -107,10 +103,18 @@ fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &Vec<
         }
         sleep(Duration::from_nanos(1));
     }
-    assert!(bank
+    if !bank
         .get_signature_status(&transactions.last().unwrap().signatures.get(0).unwrap())
         .unwrap()
-        .is_ok());
+        .is_ok()
+    {
+        error!(
+            "transaction failed: {:?}",
+            bank.get_signature_status(&transactions.last().unwrap().signatures.get(0).unwrap())
+                .unwrap()
+        );
+        assert!(false);
+    }
 }
 
 fn do_bench_transactions(
@@ -132,6 +136,8 @@ fn do_bench_transactions(
     assert!(results.iter().all(Result::is_ok));
 
     bencher.iter(|| {
+        // Since bencher runs this multiple times, we need to clear the signatures.
+        bank.clear_signatures();
         bench_work(&bank, &bank_client, &transactions);
     });
 
