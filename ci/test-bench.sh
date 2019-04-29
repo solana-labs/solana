@@ -41,7 +41,7 @@ BENCH_FILE=bench_output.log
 BENCH_ARTIFACT=current_bench_results.log
 
 # Ensure all dependencies are built
-_ cargo +$rust_nightly --all --release
+_ cargo +$rust_nightly build --all --release
 
 # Remove "BENCH_FILE", if it exists so that the following commands can append
 rm -f "$BENCH_FILE"
