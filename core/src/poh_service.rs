@@ -2,7 +2,7 @@
 //! "ticks", a measure of time in the PoH stream
 use crate::poh_recorder::PohRecorder;
 use crate::service::Service;
-use solana_sdk::timing::NUM_TICKS_PER_SECOND;
+use solana_sdk::timing::{self, NUM_TICKS_PER_SECOND};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex};
@@ -25,6 +25,15 @@ impl Default for PohServiceConfig {
     fn default() -> PohServiceConfig {
         // TODO: Change this to Tick to enable PoH
         PohServiceConfig::Sleep(Duration::from_millis(1000 / NUM_TICKS_PER_SECOND))
+    }
+}
+
+impl PohServiceConfig {
+    pub fn ticks_to_ms(&self, num_ticks: u64) -> u64 {
+        match self {
+            PohServiceConfig::Sleep(d) => timing::duration_as_ms(d) * num_ticks,
+            _ => panic!("Unsuppported tick config"),
+        }
     }
 }
 

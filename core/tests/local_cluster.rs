@@ -6,6 +6,7 @@ use solana::fullnode::FullnodeConfig;
 use solana::gossip_service::discover_nodes;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::poh_service::PohServiceConfig;
+use solana_runtime::bank::MINIMUM_SLOT_LENGTH;
 use solana_sdk::timing;
 use std::time::Duration;
 
@@ -96,7 +97,7 @@ fn test_leader_failure_4() {
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; 4],
-        fullnode_config,
+        fullnode_config: fullnode_config.clone(),
         ..ClusterConfig::default()
     };
     let local = LocalCluster::new(&config);
@@ -104,6 +105,9 @@ fn test_leader_failure_4() {
         &local.entry_point_info,
         &local.funding_keypair,
         num_nodes,
+        fullnode_config
+            .tick_config
+            .ticks_to_ms(config.ticks_per_slot as u64),
     );
 }
 #[test]
@@ -111,8 +115,8 @@ fn test_two_unbalanced_stakes() {
     solana_logger::setup();
     let mut fullnode_config = FullnodeConfig::default();
     let num_ticks_per_second = 100;
-    let num_ticks_per_slot = 160;
-    let num_slots_per_epoch = 16;
+    let num_ticks_per_slot = 40;
+    let num_slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
     fullnode_config.tick_config =
         PohServiceConfig::Sleep(Duration::from_millis(100 / num_ticks_per_second));
     fullnode_config.rpc_config.enable_fullnode_exit = true;
@@ -124,13 +128,13 @@ fn test_two_unbalanced_stakes() {
         slots_per_epoch: num_slots_per_epoch,
         ..ClusterConfig::default()
     });
+
     cluster_tests::sleep_n_epochs(
         10.0,
         &fullnode_config.tick_config,
         num_ticks_per_slot,
         num_slots_per_epoch,
     );
-
     cluster.close_preserve_ledgers();
     let leader_id = cluster.entry_point_info.id;
     let leader_ledger = cluster.fullnode_infos[&leader_id].ledger_path.clone();
@@ -163,7 +167,7 @@ fn test_forwarding() {
 #[test]
 fn test_restart_node() {
     let fullnode_config = FullnodeConfig::default();
-    let slots_per_epoch = 8;
+    let slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
     let ticks_per_slot = 16;
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![3],

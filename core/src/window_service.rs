@@ -255,7 +255,7 @@ mod test {
     use crate::packet::{index_blobs, Blob};
     use crate::service::Service;
     use crate::streamer::{blob_receiver, responder};
-    use solana_runtime::bank::Bank;
+    use solana_runtime::bank::{Bank, MINIMUM_SLOT_LENGTH};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use std::fs::remove_dir_all;
@@ -320,8 +320,8 @@ mod test {
         );
 
         // with a Bank and no idea who leader is, we keep the blobs (for now)
-        // TODO: persistr in blocktree that we didn't know who the leader was at the time?
-        blob.set_slot(100);
+        // TODO: persist in blocktree that we didn't know who the leader was at the time?
+        blob.set_slot(MINIMUM_SLOT_LENGTH as u64 * 3);
         assert_eq!(
             should_retransmit_and_persist(&blob, Some(&bank), Some(&cache), &me_id),
             true

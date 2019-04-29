@@ -449,6 +449,7 @@ impl Drop for LocalCluster {
 #[cfg(test)]
 mod test {
     use super::*;
+    use solana_runtime::bank::MINIMUM_SLOT_LENGTH;
 
     #[test]
     fn test_local_cluster_start_and_exit() {
@@ -472,7 +473,7 @@ mod test {
             node_stakes: vec![3; NUM_NODES],
             cluster_lamports: 100,
             ticks_per_slot: 16,
-            slots_per_epoch: 16,
+            slots_per_epoch: MINIMUM_SLOT_LENGTH as u64,
             ..ClusterConfig::default()
         };
         let cluster = LocalCluster::new(&config);

@@ -140,7 +140,7 @@ mod tests {
     use super::*;
     use crate::blocktree::tests::make_slot_entries;
     use crate::voting_keypair::tests::new_vote_account;
-    use solana_runtime::bank::{Bank, EpochSchedule};
+    use solana_runtime::bank::{Bank, EpochSchedule, MINIMUM_SLOT_LENGTH};
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::mpsc::channel;
@@ -151,11 +151,9 @@ mod tests {
 
     #[test]
     fn test_slot_leader_at_else_compute() {
-        let slots_per_epoch = 10;
-        let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
-        let cache = LeaderScheduleCache::new(epoch_schedule);
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Bank::new(&genesis_block);
+        let cache = LeaderScheduleCache::new_from_bank(&bank);
 
         // Nothing in the cache, should return None
         assert!(cache.slot_leader_at(bank.slot()).is_none());
@@ -195,7 +193,7 @@ mod tests {
     }
 
     fn run_thread_race() {
-        let slots_per_epoch = 10;
+        let slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
         let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
         let cache = Arc::new(LeaderScheduleCache::new(epoch_schedule));
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);

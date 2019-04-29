@@ -24,11 +24,13 @@ use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
-use solana_vote_api::vote_state::{self, Vote};
+use solana_vote_api::vote_state::{self, Vote, MAX_LOCKOUT_HISTORY};
 use std::cmp;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
+
+pub const MINIMUM_SLOT_LENGTH: usize = MAX_LOCKOUT_HISTORY + 1;
 
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct EpochSchedule {
@@ -38,20 +40,26 @@ pub struct EpochSchedule {
     /// A number of slots before slot_index 0. Used to calculate finalized staked nodes.
     pub stakers_slot_offset: u64,
 
-    /// basically: log2(slots_per_epoch)
+    /// basically: log2(slots_per_epoch) - log2(MINIMUM_SLOT_LEN)
     pub first_normal_epoch: u64,
 
-    /// basically: 2.pow(first_normal_epoch)
+    /// basically: 2.pow(first_normal_epoch) - MINIMUM_SLOT_LEN
     pub first_normal_slot: u64,
 }
 
 impl EpochSchedule {
     pub fn new(slots_per_epoch: u64, stakers_slot_offset: u64, warmup: bool) -> Self {
+        assert!(slots_per_epoch >= MINIMUM_SLOT_LENGTH as u64);
         let (first_normal_epoch, first_normal_slot) = if warmup {
             let next_power_of_two = slots_per_epoch.next_power_of_two();
-            let log2_slots_per_epoch = next_power_of_two.trailing_zeros();
+            let log2_slots_per_epoch = next_power_of_two
+                .trailing_zeros()
+                .saturating_sub(MINIMUM_SLOT_LENGTH.trailing_zeros());
 
-            (u64::from(log2_slots_per_epoch), next_power_of_two - 1)
+            (
+                u64::from(log2_slots_per_epoch),
+                next_power_of_two.saturating_sub(MINIMUM_SLOT_LENGTH as u64),
+            )
         } else {
             (0, 0)
         };
@@ -66,7 +74,7 @@ impl EpochSchedule {
     /// get the length of the given epoch (in slots)
     pub fn get_slots_in_epoch(&self, epoch: u64) -> u64 {
         if epoch < self.first_normal_epoch {
-            2u64.pow(epoch as u32)
+            2u64.pow(epoch as u32 + MINIMUM_SLOT_LENGTH.trailing_zeros() as u32)
         } else {
             self.slots_per_epoch
         }
@@ -88,15 +96,18 @@ impl EpochSchedule {
     /// get epoch and offset into the epoch for the given slot
     pub fn get_epoch_and_slot_index(&self, slot: u64) -> (u64, u64) {
         if slot < self.first_normal_slot {
-            let epoch = if slot < 2 {
-                slot as u32
-            } else {
-                (slot + 2).next_power_of_two().trailing_zeros() - 1
-            };
+            let epoch = (slot + MINIMUM_SLOT_LENGTH as u64 + 1)
+                .next_power_of_two()
+                .trailing_zeros()
+                - MINIMUM_SLOT_LENGTH.trailing_zeros()
+                - 1;
 
-            let epoch_len = 2u64.pow(epoch);
+            let epoch_len = 2u64.pow(epoch + MINIMUM_SLOT_LENGTH.trailing_zeros());
 
-            (u64::from(epoch), slot - (epoch_len - 1))
+            (
+                u64::from(epoch),
+                slot - (epoch_len - MINIMUM_SLOT_LENGTH as u64),
+            )
         } else {
             (
                 self.first_normal_epoch + ((slot - self.first_normal_slot) / self.slots_per_epoch),
@@ -1651,9 +1662,9 @@ mod tests {
         let (mut genesis_block, _) = GenesisBlock::new_with_leader(5, &leader_id, leader_lamports);
 
         // set this up weird, forces future generation, odd mod(), etc.
-        //  this says: "stakes for slot X should be generated at slot index 3 in slot X-2...
-        const SLOTS_PER_EPOCH: u64 = 8;
-        const STAKERS_SLOT_OFFSET: u64 = 21;
+        //  this says: "stakes for epoch X should be generated at slot index 3 in epoch X-2...
+        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOT_LENGTH as u64;
+        const STAKERS_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
         genesis_block.slots_per_epoch = SLOTS_PER_EPOCH;
         genesis_block.stakers_slot_offset = STAKERS_SLOT_OFFSET;
         genesis_block.epoch_warmup = false; // allows me to do the normal division stuff below
@@ -1734,8 +1745,8 @@ mod tests {
 
         let bank = Bank::new(&genesis_block);
 
-        assert_eq!(bank.get_slots_in_epoch(0), 1);
-        assert_eq!(bank.get_slots_in_epoch(2), 4);
+        assert_eq!(bank.get_slots_in_epoch(0), MINIMUM_SLOT_LENGTH as u64);
+        assert_eq!(bank.get_slots_in_epoch(2), (MINIMUM_SLOT_LENGTH * 4) as u64);
         assert_eq!(bank.get_slots_in_epoch(5000), genesis_block.slots_per_epoch);
     }
 
@@ -1744,16 +1755,16 @@ mod tests {
         // one week of slots at 8 ticks/slot, 10 ticks/sec is
         // (1 * 7 * 24 * 4500u64).next_power_of_two();
 
-        // test values between 1 and 16, should cover a good mix
-        for slots_per_epoch in 1..=16 {
+        // test values between MINIMUM_SLOT_LEN and MINIMUM_SLOT_LEN * 16, should cover a good mix
+        for slots_per_epoch in MINIMUM_SLOT_LENGTH as u64..=MINIMUM_SLOT_LENGTH as u64 * 16 {
             let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
 
             let mut last_stakers = 0;
             let mut last_epoch = 0;
-            let mut last_slots_in_epoch = 1;
+            let mut last_slots_in_epoch = MINIMUM_SLOT_LENGTH as u64;
             for slot in 0..(2 * slots_per_epoch) {
                 // verify that stakers_epoch is continuous over the warmup
-                //   and into the first normal epoch
+                // and into the first normal epoch
 
                 let stakers = epoch_schedule.get_stakers_epoch(slot);
                 if stakers != last_stakers {

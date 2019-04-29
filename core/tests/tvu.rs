@@ -16,6 +16,7 @@ use solana::storage_stage::StorageState;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer;
 use solana::tvu::{Sockets, Tvu};
+use solana_runtime::bank::MINIMUM_SLOT_LENGTH;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction;
@@ -78,7 +79,7 @@ fn test_replay() {
     let (mut genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(total_balance, &leader.info.id, leader_balance);
     genesis_block.ticks_per_slot = 160;
-    genesis_block.slots_per_epoch = 16;
+    genesis_block.slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
     let (blocktree_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     let tvu_addr = target1.info.tvu;
