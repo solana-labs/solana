@@ -2,6 +2,7 @@
 
 extern crate test;
 
+use log::*;
 use solana_runtime::bank::*;
 use solana_runtime::bank_client::BankClient;
 use solana_runtime::loader_utils::{create_invoke_instruction, load_program};
@@ -20,8 +21,8 @@ use std::time::Duration;
 use test::Bencher;
 
 const BUILTIN_PROGRAM_ID: [u8; 32] = [
-    134, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0,
+    098, 117, 105, 108, 116, 105, 110, 095, 112, 114, 111, 103, 114, 097, 109, 095, 105, 100, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 fn process_instruction(
@@ -135,11 +136,11 @@ fn do_bench_transactions(
     });
 
     let summary = bencher.bench(|_bencher| {}).unwrap();
-    println!("  {:?} transactions", transactions.len());
-    println!("  {:?} ns/iter median", summary.median as u64);
+    info!("  {:?} transactions", transactions.len());
+    info!("  {:?} ns/iter median", summary.median as u64);
     assert!(0f64 != summary.median);
     let tps = transactions.len() as u64 * (ns_per_s / summary.median as u64);
-    println!("  {:?} TPS", tps);
+    info!("  {:?} TPS", tps);
 }
 
 #[bench]
