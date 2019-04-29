@@ -135,6 +135,7 @@ local|tar)
       scp "$entrypointIp":~/solana/config-local/mint-id.json config-local/
       ./multinode-demo/drone.sh > drone.log 2>&1 &
 
+      export BLOCKEXPLORER_GEOIP_WHITELIST=$PWD/net/config/geoip.yml
       npm install @solana/blockexplorer@1
       npx solana-blockexplorer > blockexplorer.log 2>&1 &
 

@@ -11,7 +11,8 @@ clientNodeCount=0
 additionalFullNodeCount=10
 publicNetwork=false
 stopNetwork=false
-skipSetup=false
+reuseLedger=false
+skipCreate=false
 skipStart=false
 externalNode=false
 failOnValidatorBootupFailure=true
@@ -56,6 +57,7 @@ Deploys a CD testnet
    -r                   - Reuse existing node/ledger configuration from a
                           previous |start| (ie, don't run ./multinode-demo/setup.sh).
    -x                   - External node.  Default: false
+   -e                   - Skip create.  Assume the nodes have already been created
    -s                   - Skip start.  Nodes will still be created or configured, but network software will not be started.
    -S                   - Stop network software without tearing down nodes.
    -f                   - Discard validator nodes that didn't bootup successfully
@@ -68,7 +70,7 @@ EOF
 
 zone=()
 
-while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:Sf" opt; do
+while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:Sfe" opt; do
   case $opt in
   h | \?)
     usage
@@ -121,7 +123,10 @@ while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:Sf" opt; do
     delete=true
     ;;
   r)
-    skipSetup=true
+    reuseLedger=true
+    ;;
+  e)
+    skipCreate=true
     ;;
   s)
     skipStart=true
@@ -175,15 +180,15 @@ for val in "${zone[@]}"; do
 done
 
 if $stopNetwork; then
-  skipSetup=true
+  skipCreate=true
 fi
 
 if $delete; then
-  skipSetup=false
+  skipCreate=false
 fi
 
 # Create the network
-if ! $skipSetup; then
+if ! $skipCreate; then
   echo "--- $cloudProvider.sh delete"
   # shellcheck disable=SC2068
   time net/"$cloudProvider".sh delete ${zone_args[@]} -p "$netName" ${externalNode:+-x}
@@ -245,6 +250,10 @@ else
     config_args+=(-P)
   fi
 
+  if $externalNode; then
+    config_args+=(-x)
+  fi
+
   if ! $failOnValidatorBootupFailure; then
     config_args+=(-f)
   fi
@@ -262,34 +271,34 @@ if $stopNetwork; then
   exit 0
 fi
 
-echo --- net.sh start
-maybeRejectExtraNodes=
-if ! $publicNetwork; then
-  maybeRejectExtraNodes="-o rejectExtraNodes"
-fi
-maybeNoValidatorSanity=
-if [[ -n $NO_VALIDATOR_SANITY ]]; then
-  maybeNoValidatorSanity="-o noValidatorSanity"
-fi
-maybeNoLedgerVerify=
-if [[ -n $NO_LEDGER_VERIFY ]]; then
-  maybeNoLedgerVerify="-o noLedgerVerify"
-fi
-
-maybeSkipSetup=
-if $skipSetup; then
-  maybeSkipSetup="-r"
-fi
-
 ok=true
 if ! $skipStart; then
   (
-    if $skipSetup; then
+    if $skipCreate; then
       # TODO: Enable rolling updates
       #op=update
       op=restart
     else
       op=start
+    fi
+    echo "--- net.sh $op"
+
+    maybeRejectExtraNodes=
+    if ! $publicNetwork; then
+      maybeRejectExtraNodes="-o rejectExtraNodes"
+    fi
+    maybeNoValidatorSanity=
+    if [[ -n $NO_VALIDATOR_SANITY ]]; then
+      maybeNoValidatorSanity="-o noValidatorSanity"
+    fi
+    maybeNoLedgerVerify=
+    if [[ -n $NO_LEDGER_VERIFY ]]; then
+      maybeNoLedgerVerify="-o noLedgerVerify"
+    fi
+
+    maybeReuseLedger=
+    if $reuseLedger; then
+      maybeReuseLedger="-r"
     fi
 
     maybeUpdateManifestKeypairFile=
@@ -302,7 +311,7 @@ if ! $skipStart; then
     # shellcheck disable=SC2086 # Don't want to double quote the $maybeXYZ variables
     time net/net.sh $op -t "$tarChannelOrTag" \
       $maybeUpdateManifestKeypairFile \
-      $maybeSkipSetup \
+      $maybeReuseLedger \
       $maybeRejectExtraNodes \
       $maybeNoValidatorSanity \
       $maybeNoLedgerVerify

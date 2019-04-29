@@ -19,6 +19,7 @@ mkdir -p "$netConfigDir" "$netLogDir"
 source "$(dirname "${BASH_SOURCE[0]}")"/../scripts/configure-metrics.sh
 
 configFile="$netConfigDir/config"
+geoipConfigFile="$netConfigDir/geoip.yml"
 
 entrypointIp=
 publicNetwork=
@@ -28,10 +29,13 @@ externalNodeSshKey=
 sshOptions=()
 fullnodeIpList=()
 fullnodeIpListPrivate=()
+fullnodeIpListZone=()
 clientIpList=()
 clientIpListPrivate=()
+clientIpListZone=()
 blockstreamerIpList=()
 blockstreamerIpListPrivate=()
+blockstreamerIpListZone=()
 leaderRotation=
 
 buildSshOptions() {
