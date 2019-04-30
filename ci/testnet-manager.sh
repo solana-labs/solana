@@ -429,7 +429,7 @@ deploy() {
         NO_LEDGER_VERIFY=1 \
         NO_VALIDATOR_SANITY=1 \
           ci/testnet-deploy.sh -p demo-testnet-solana-com2 -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
-            -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x \
+            -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x -w \
             ${skipCreate:+-e} \
             ${skipStart:+-s} \
             ${maybeStop:+-S} \
