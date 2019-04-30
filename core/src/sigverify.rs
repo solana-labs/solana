@@ -42,6 +42,7 @@ extern "C" {
         signature_offsets: *const u32,
         signed_message_offsets: *const u32,
         out: *mut u8, //combined length of all the items in vecs
+        use_non_default_stream: u8,
     ) -> u32;
 
     pub fn chacha_cbc_encrypt_many_sample(
@@ -245,6 +246,7 @@ pub fn ed25519_verify(batches: &[Packets]) -> Vec<Vec<u8>> {
     trace!("elem len: {}", elems.len() as u32);
     trace!("packet sizeof: {}", size_of::<Packet>() as u32);
     trace!("len offset: {}", PACKET_DATA_SIZE as u32);
+    const USE_NON_DEFAULT_STREAM: u8 = 1;
     unsafe {
         let res = ed25519_verify_many(
             elems.as_ptr(),
@@ -257,6 +259,7 @@ pub fn ed25519_verify(batches: &[Packets]) -> Vec<Vec<u8>> {
             signature_offsets.as_ptr(),
             msg_start_offsets.as_ptr(),
             out.as_mut_ptr(),
+            USE_NON_DEFAULT_STREAM,
         );
         if res != 0 {
             trace!("RETURN!!!: {}", res);
