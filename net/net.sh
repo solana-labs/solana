@@ -449,13 +449,14 @@ start() {
 
   declare bootstrapLeader=true
   declare nodeType=fullnode
+  declare loopCount=0
   for ipAddress in "${fullnodeIpList[@]}" - "${blockstreamerIpList[@]}"; do
     if [[ $ipAddress = - ]]; then
       nodeType=blockstreamer
       continue
     fi
     if $updateNodes; then
-      stopNode "$ipAddress"
+      stopNode "$ipAddress" true
     fi
     if $bootstrapLeader; then
       SECONDS=0
@@ -467,7 +468,6 @@ start() {
       bootstrapLeader=false
       SECONDS=0
       pids=()
-      loopCount=0
     else
       startNode "$ipAddress" $nodeType
 
@@ -499,7 +499,7 @@ start() {
 
   if $updateNodes; then
     for ipAddress in "${clientIpList[@]}"; do
-      stopNode "$ipAddress"
+      stopNode "$ipAddress" true
     done
   fi
   sanity
@@ -553,7 +553,10 @@ start() {
 
 stopNode() {
   local ipAddress=$1
+  local block=$2
+  declare logFile="$netLogDir/stop-fullnode-$ipAddress.log"
   echo "--- Stopping node: $ipAddress"
+  echo "stop log: $logFile"
   (
     set -x
     # shellcheck disable=SC2029 # It's desired that PS4 be expanded on the client side
@@ -569,16 +572,37 @@ stopNode() {
         pkill -9 \$pattern
       done
     "
-  ) || true
+  ) >> "$logFile" 2>&1 &
+
+  declare pid=$!
+  ln -sfT "stop-fullnode-$ipAddress.log" "$netLogDir/stop-fullnode-$pid.log"
+  if $block; then
+    wait $pid
+  else
+    pids+=("$pid")
+  fi
 }
 
 stop() {
   SECONDS=0
   $metricsWriteDatapoint "testnet-deploy net-stop-begin=1"
 
+  declare loopCount=0
+  pids=()
   for ipAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${clientIpList[@]}"; do
-    stopNode "$ipAddress"
+    stopNode "$ipAddress" false
+
+    # Stagger additional node stop time to avoid too many concurrent ssh
+    # sessions
+    ((loopCount++ % 4 == 0)) && sleep 2
   done
+
+  echo --- Waiting for nodes to finish stopping
+  for pid in "${pids[@]}"; do
+    echo -n "$pid "
+    wait "$pid" || true
+  done
+  echo
 
   $metricsWriteDatapoint "testnet-deploy net-stop-complete=1"
   echo "Stopping nodes took $SECONDS seconds"
