@@ -15,41 +15,34 @@ pub struct LeaderScheduleCache {
     // Map from an epoch to a leader schedule for that epoch
     pub cached_schedules: RwLock<CachedSchedules>,
     epoch_schedule: EpochSchedule,
+    max_epoch: RwLock<u64>,
 }
 
 impl LeaderScheduleCache {
     pub fn new_from_bank(bank: &Bank) -> Self {
-        Self::new(*bank.epoch_schedule())
+        Self::new(*bank.epoch_schedule(), bank.slot())
     }
 
-    pub fn new(epoch_schedule: EpochSchedule) -> Self {
-        Self {
+    pub fn new(epoch_schedule: EpochSchedule, root: u64) -> Self {
+        let cache = Self {
             cached_schedules: RwLock::new((HashMap::new(), VecDeque::new())),
             epoch_schedule,
-        }
+            max_epoch: RwLock::new(0),
+        };
+
+        cache.set_root(root);
+        cache
     }
 
-    pub fn slot_leader_at(&self, slot: u64) -> Option<Pubkey> {
-        let (epoch, slot_index) = self.epoch_schedule.get_epoch_and_slot_index(slot);
-        self.cached_schedules
-            .read()
-            .unwrap()
-            .0
-            .get(&epoch)
-            .map(|schedule| schedule[slot_index])
+    pub fn set_root(&self, root: u64) {
+        *self.max_epoch.write().unwrap() = self.epoch_schedule.get_stakers_epoch(root);
     }
 
-    pub fn slot_leader_at_else_compute(&self, slot: u64, bank: &Bank) -> Option<Pubkey> {
-        let cache_result = self.slot_leader_at(slot);
-        if cache_result.is_some() {
-            cache_result
+    pub fn slot_leader_at(&self, slot: u64, bank: Option<&Bank>) -> Option<Pubkey> {
+        if let Some(bank) = bank {
+            self.slot_leader_at_else_compute(slot, bank)
         } else {
-            let (epoch, slot_index) = bank.get_epoch_and_slot_index(slot);
-            if let Some(epoch_schedule) = self.compute_epoch_schedule(epoch, bank) {
-                Some(epoch_schedule[slot_index])
-            } else {
-                None
-            }
+            self.slot_leader_at_no_compute(slot)
         }
     }
 
@@ -92,6 +85,39 @@ impl LeaderScheduleCache {
             start_index = 0;
         }
         None
+    }
+
+    fn slot_leader_at_no_compute(&self, slot: u64) -> Option<Pubkey> {
+        let (epoch, slot_index) = self.epoch_schedule.get_epoch_and_slot_index(slot);
+        self.cached_schedules
+            .read()
+            .unwrap()
+            .0
+            .get(&epoch)
+            .map(|schedule| schedule[slot_index])
+    }
+
+    fn slot_leader_at_else_compute(&self, slot: u64, bank: &Bank) -> Option<Pubkey> {
+        let cache_result = self.slot_leader_at_no_compute(slot);
+        // Forbid asking for slots in an unconfirmed epoch
+        let bank_epoch = self.epoch_schedule.get_epoch_and_slot_index(slot).0;
+        if bank_epoch > *self.max_epoch.read().unwrap() {
+            error!(
+                "Requested leader in slot: {} of unconfirmed epoch: {}",
+                slot, bank_epoch
+            );
+            return None;
+        }
+        if cache_result.is_some() {
+            cache_result
+        } else {
+            let (epoch, slot_index) = bank.get_epoch_and_slot_index(slot);
+            if let Some(epoch_schedule) = self.compute_epoch_schedule(epoch, bank) {
+                Some(epoch_schedule[slot_index])
+            } else {
+                None
+            }
+        }
     }
 
     fn get_epoch_schedule_else_compute(
@@ -150,19 +176,17 @@ mod tests {
     use crate::blocktree::get_tmp_ledger_path;
 
     #[test]
-    fn test_slot_leader_at_else_compute() {
+    fn test_slot_leader_at() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Bank::new(&genesis_block);
         let cache = LeaderScheduleCache::new_from_bank(&bank);
 
         // Nothing in the cache, should return None
-        assert!(cache.slot_leader_at(bank.slot()).is_none());
+        assert!(cache.slot_leader_at(bank.slot(), None).is_none());
 
         // Add something to the cache
-        assert!(cache
-            .slot_leader_at_else_compute(bank.slot(), &bank)
-            .is_some());
-        assert!(cache.slot_leader_at(bank.slot()).is_some());
+        assert!(cache.slot_leader_at(bank.slot(), Some(&bank)).is_some());
+        assert!(cache.slot_leader_at(bank.slot(), None).is_some());
         assert_eq!(cache.cached_schedules.read().unwrap().0.len(), 1);
     }
 
@@ -195,9 +219,9 @@ mod tests {
     fn run_thread_race() {
         let slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
         let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
-        let cache = Arc::new(LeaderScheduleCache::new(epoch_schedule));
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
+        let cache = Arc::new(LeaderScheduleCache::new(epoch_schedule, bank.slot()));
 
         let num_threads = 10;
         let (threads, senders): (Vec<_>, Vec<_>) = (0..num_threads)
@@ -210,7 +234,7 @@ mod tests {
                         .name("test_thread_race_leader_schedule_cache".to_string())
                         .spawn(move || {
                             let _ = receiver.recv();
-                            cache.slot_leader_at_else_compute(bank.slot(), &bank);
+                            cache.slot_leader_at(bank.slot(), Some(&bank));
                         })
                         .unwrap(),
                     sender,
@@ -246,9 +270,7 @@ mod tests {
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         assert_eq!(
-            cache
-                .slot_leader_at_else_compute(bank.slot(), &bank)
-                .unwrap(),
+            cache.slot_leader_at(bank.slot(), Some(&bank)).unwrap(),
             pubkey
         );
         assert_eq!(cache.next_leader_slot(&pubkey, 0, &bank, None), Some(1));
@@ -294,9 +316,7 @@ mod tests {
             );
 
             assert_eq!(
-                cache
-                    .slot_leader_at_else_compute(bank.slot(), &bank)
-                    .unwrap(),
+                cache.slot_leader_at(bank.slot(), Some(&bank)).unwrap(),
                 pubkey
             );
             // Check that the next leader slot after 0 is slot 1
@@ -399,5 +419,36 @@ mod tests {
             cache.next_leader_slot(&delegate_id, 0, &bank, None),
             Some(expected_slot),
         );
+    }
+
+    #[test]
+    fn test_schedule_for_unconfirmed_epoch() {
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let cache = LeaderScheduleCache::new_from_bank(&bank);
+
+        assert_eq!(*cache.max_epoch.read().unwrap(), 1);
+
+        // Asking for the leader for the last slot in epoch 1 is ok b/c
+        // epoch 1 is confirmed
+        assert_eq!(bank.get_epoch_and_slot_index(95).0, 1);
+        assert!(cache.slot_leader_at(95, Some(&bank)).is_some());
+
+        // Asking for the lader for the first slot in epoch 2 is not ok
+        // b/c epoch 2 is unconfirmed
+        assert_eq!(bank.get_epoch_and_slot_index(96).0, 2);
+        assert!(cache.slot_leader_at(96, Some(&bank)).is_none());
+
+        let bank2 = Bank::new_from_parent(&bank, &Pubkey::new_rand(), 95);
+        assert!(bank2.epoch_vote_accounts(2).is_some());
+
+        // Set root for a slot in epoch 1, so that epoch 2 is now confirmed
+        cache.set_root(95);
+        assert_eq!(*cache.max_epoch.read().unwrap(), 2);
+        assert!(cache.slot_leader_at(96, Some(&bank2)).is_some());
+        assert_eq!(bank2.get_epoch_and_slot_index(223).0, 2);
+        assert!(cache.slot_leader_at(223, Some(&bank2)).is_some());
+        assert_eq!(bank2.get_epoch_and_slot_index(224).0, 3);
+        assert!(cache.slot_leader_at(224, Some(&bank2)).is_none());
     }
 }

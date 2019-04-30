@@ -157,6 +157,7 @@ impl ReplayStage {
                             &vote_account,
                             &cluster_info,
                             &blocktree,
+                            &leader_schedule_cache,
                         )?;
 
                         Self::reset_poh_recorder(
@@ -235,7 +236,7 @@ impl ReplayStage {
             };
             assert!(parent.is_frozen());
 
-            leader_schedule_cache.slot_leader_at_else_compute(poh_slot, &parent)
+            leader_schedule_cache.slot_leader_at(poh_slot, Some(&parent))
                 .map(|next_leader| {
                     debug!(
                         "me: {} leader {} at poh slot {}",
@@ -308,12 +309,14 @@ impl ReplayStage {
         vote_account_pubkey: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: &Arc<Blocktree>,
+        leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) -> Result<()>
     where
         T: 'static + KeypairUtil + Send + Sync,
     {
         if let Some(new_root) = locktower.record_vote(bank.slot()) {
             bank_forks.write().unwrap().set_root(new_root);
+            leader_schedule_cache.set_root(new_root);
             blocktree.set_root(new_root)?;
             Self::handle_new_root(&bank_forks, progress);
         }
@@ -593,7 +596,7 @@ impl ReplayStage {
                     continue;
                 }
                 let leader = leader_schedule_cache
-                    .slot_leader_at_else_compute(child_id, &parent_bank)
+                    .slot_leader_at(child_id, Some(&parent_bank))
                     .unwrap();
                 info!("new fork:{} parent:{}", child_id, parent_id);
                 forks.insert(Bank::new_from_parent(&parent_bank, &leader, child_id));

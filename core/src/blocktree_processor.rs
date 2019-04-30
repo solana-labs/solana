@@ -131,7 +131,7 @@ pub fn process_blocktree(
         vec![(slot, meta, bank, entry_height, last_entry_hash)]
     };
 
-    let leader_schedule_cache = LeaderScheduleCache::new(*pending_slots[0].2.epoch_schedule());
+    let leader_schedule_cache = LeaderScheduleCache::new(*pending_slots[0].2.epoch_schedule(), 0);
 
     let mut fork_info = vec![];
     let mut last_status_report = Instant::now();
@@ -188,6 +188,7 @@ pub fn process_blocktree(
         bank.freeze(); // all banks handled by this routine are created from complete slots
 
         if blocktree.is_root(slot) {
+            leader_schedule_cache.set_root(slot);
             bank.squash();
             pending_slots.clear();
             fork_info.clear();
@@ -219,7 +220,7 @@ pub fn process_blocktree(
                 let next_bank = Arc::new(Bank::new_from_parent(
                     &bank,
                     &leader_schedule_cache
-                        .slot_leader_at_else_compute(next_slot, &bank)
+                        .slot_leader_at(next_slot, Some(&bank))
                         .unwrap(),
                     next_slot,
                 ));

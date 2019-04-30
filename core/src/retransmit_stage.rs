@@ -51,7 +51,7 @@ fn retransmit(
     );
     for blob in &blobs {
         let leader = leader_schedule_cache
-            .slot_leader_at_else_compute(blob.read().unwrap().slot(), r_bank.as_ref());
+            .slot_leader_at(blob.read().unwrap().slot(), Some(r_bank.as_ref()));
         if blob.read().unwrap().meta.forward {
             ClusterInfo::retransmit_to(&cluster_info, &neighbors, blob, leader, sock, true)?;
             ClusterInfo::retransmit_to(&cluster_info, &children, blob, leader, sock, false)?;
