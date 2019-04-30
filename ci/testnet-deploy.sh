@@ -22,6 +22,8 @@ enableGpu=false
 bootDiskType=""
 leaderRotation=true
 blockstreamer=false
+deployUpdateManifest=true
+fetchLogs=true
 
 usage() {
   exitcode=0
@@ -61,6 +63,8 @@ Deploys a CD testnet
    -s                   - Skip start.  Nodes will still be created or configured, but network software will not be started.
    -S                   - Stop network software without tearing down nodes.
    -f                   - Discard validator nodes that didn't bootup successfully
+   -w                   - Skip time-consuming "bells and whistles" that are
+                          unnecessary for a high-node count demo testnet
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
@@ -70,7 +74,7 @@ EOF
 
 zone=()
 
-while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:Sfe" opt; do
+while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:Sfew" opt; do
   case $opt in
   h | \?)
     usage
@@ -142,6 +146,10 @@ while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:Sfe" opt; do
     ;;
   S)
     stopNetwork=true
+    ;;
+  w)
+    fetchLogs=false
+    deployUpdateManifest=false
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -303,7 +311,7 @@ if ! $skipStart; then
     fi
 
     # shellcheck disable=SC2154 # SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu comes from .buildkite/env/
-    if [[ -n $SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu ]]; then
+    if $deployUpdateManifest && [[ -n $SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu ]]; then
       echo "$SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu" > update_manifest_keypair.json
       args+=(-i update_manifest_keypair.json)
     fi
@@ -312,7 +320,9 @@ if ! $skipStart; then
     time net/net.sh "${args[@]}"
   ) || ok=false
 
-  net/net.sh logs
+  if $fetchLogs; then
+    net/net.sh logs
+  fi
 fi
 
 $ok

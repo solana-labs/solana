@@ -417,7 +417,7 @@ deploy() {
       NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f -w \
           -a demo-testnet-solana-com \
           ${skipCreate:+-e} \
           ${maybeSkipStart:+-s} \
