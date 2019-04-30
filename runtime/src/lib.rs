@@ -17,6 +17,3 @@ mod system_instruction_processor;
 
 #[macro_use]
 extern crate solana_metrics;
-
-#[macro_use]
-extern crate serde_derive;

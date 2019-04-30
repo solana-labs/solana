@@ -149,9 +149,7 @@ impl BankForks {
             .collect();
         let descendants = self.descendants();
         self.banks
-            .retain(|slot, _| descendants[&root].contains(slot))
-        self.banks
-            .retain(|slot, bank| *slot >= root || bank.is_in_subtree_of(root));
+            .retain(|slot, _| descendants[&root].contains(slot));
         let diff: HashSet<_> = slots.symmetric_difference(&self.slots).collect();
         for slot in diff.iter() {
             if **slot > root {
@@ -212,6 +210,7 @@ impl BankForks {
         names.sort();
         let mut banks: HashMap<u64, Arc<Bank>> = HashMap::new();
         let mut slots = HashSet::new();
+        let mut last_slot: u64 = 0;
         for bank_slot in names.clone() {
             let bank_path = format!("{}", bank_slot);
             let bank_file_path = path.join(bank_path.clone());
@@ -224,11 +223,13 @@ impl BankForks {
                 Ok(v) => {
                     banks.insert(bank_slot, Arc::new(v));
                     slots.insert(bank_slot);
+                    last_slot = bank_slot;
                 }
                 Err(_) => warn!("Load snapshot failed for {}", bank_slot),
             }
         }
-        let working_bank = banks[&names[names.len() - 1]].clone();
+        info!("last slot: {}", last_slot);
+        let working_bank = banks[&last_slot].clone();
         Ok(BankForks {
             banks,
             working_bank,

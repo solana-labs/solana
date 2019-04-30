@@ -7,8 +7,11 @@ pub type Fork = u64;
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct AccountsIndex<T> {
-    account_maps: HashMap<Pubkey, Vec<(Fork, T)>>,
-    roots: HashSet<Fork>,
+    #[serde(skip)]
+    pub account_maps: HashMap<Pubkey, Vec<(Fork, T)>>,
+
+    pub roots: HashSet<Fork>,
+
     //This value that needs to be stored to recover the index from AppendVec
     pub last_root: Fork,
 }

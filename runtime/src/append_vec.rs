@@ -47,6 +47,7 @@ pub struct StoredAccount<'a> {
     /// account data
     pub balance: &'a AccountBalance,
     pub data: &'a [u8],
+    pub offset: usize,
 }
 
 impl<'a> StoredAccount<'a> {
@@ -192,6 +193,7 @@ impl AppendVec {
                 meta,
                 balance,
                 data,
+                offset,
             },
             next,
         ))
@@ -301,7 +303,7 @@ impl Serialize for AppendVec {
     {
         use serde::ser::Error;
         let len =
-            serialized_size(&self.path).unwrap() + 4 * serialized_size(&self.file_size).unwrap();
+            serialized_size(&self.path).unwrap() + 2 * serialized_size(&self.file_size).unwrap();
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);
         serialize_into(&mut wr, &self.path).map_err(Error::custom)?;

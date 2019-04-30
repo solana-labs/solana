@@ -1,6 +1,6 @@
 use crate::accounts_db::{
-    get_paths_vec, AccountInfo, AccountStorage, AccountsDB, ErrorCounters, InstructionAccounts,
-    InstructionLoaders,
+    get_paths_vec, AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters,
+    InstructionAccounts, InstructionLoaders,
 };
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::StoredAccount;
@@ -57,9 +57,11 @@ pub struct Accounts {
     pub accounts_db: Arc<AccountsDB>,
 
     /// set of accounts which are currently in the pipeline
+    #[serde(skip)]
     account_locks: AccountLocks,
 
     /// set of accounts which are about to record + commit
+    #[serde(skip)]
     record_locks: Mutex<RecordLocks>,
 
     /// List of persistent stores
@@ -326,7 +328,9 @@ impl Accounts {
     pub fn load_by_program(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
         let accumulator: Vec<Vec<(Pubkey, u64, Account)>> = self.accounts_db.scan_account_storage(
             fork,
-            |stored_account: &StoredAccount, accum: &mut Vec<(Pubkey, u64, Account)>| {
+            |stored_account: &StoredAccount,
+             _id: AppendVecId,
+             accum: &mut Vec<(Pubkey, u64, Account)>| {
                 if stored_account.balance.owner == *program_id {
                     let val = (
                         stored_account.meta.pubkey,
@@ -437,7 +441,9 @@ impl Accounts {
     pub fn hash_internal_state(&self, fork_id: Fork) -> Option<Hash> {
         let accumulator: Vec<Vec<(Pubkey, u64, Hash)>> = self.accounts_db.scan_account_storage(
             fork_id,
-            |stored_account: &StoredAccount, accum: &mut Vec<(Pubkey, u64, Hash)>| {
+            |stored_account: &StoredAccount,
+             _id: AppendVecId,
+             accum: &mut Vec<(Pubkey, u64, Hash)>| {
                 accum.push((
                     stored_account.meta.pubkey,
                     stored_account.meta.write_version,
@@ -1143,6 +1149,7 @@ mod tests {
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_accounts(&accounts, &mut pubkeys, 100);
         check_accounts(&accounts, &pubkeys, 100);
+        accounts.add_root(0);
 
         let mut buf = vec![0u8; serialized_size(&accounts).unwrap() as usize];
         let mut writer = Cursor::new(&mut buf[..]);
