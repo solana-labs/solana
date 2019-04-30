@@ -82,13 +82,13 @@ local|tar)
 esac
 
 if $failOnValidatorBootupFailure; then
+  numSanityNodes="$numNodes"
+else
   numSanityNodes=1
   if $rejectExtraNodes; then
     echo "rejectExtraNodes cannot be used with failOnValidatorBootupFailure"
     exit 1
   fi
-else
-  numSanityNodes="$numNodes"
 fi
 
 echo "+++ $entrypointIp: node count ($numSanityNodes expected)"
