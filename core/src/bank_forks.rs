@@ -35,7 +35,8 @@ impl BankForks {
     pub fn ancestors(&self) -> HashMap<u64, HashSet<u64>> {
         let mut ancestors = HashMap::new();
         for bank in self.banks.values() {
-            let set = bank.parents().into_iter().map(|b| b.slot()).collect();
+            let mut set: HashSet<u64> = bank.ancestors.keys().cloned().collect();
+            set.remove(&bank.slot());
             ancestors.insert(bank.slot(), set);
         }
         ancestors
@@ -46,9 +47,11 @@ impl BankForks {
         let mut descendants = HashMap::new();
         for bank in self.banks.values() {
             let _ = descendants.entry(bank.slot()).or_insert(HashSet::new());
-            for parent in bank.parents() {
+            let mut set: HashSet<u64> = bank.ancestors.keys().cloned().collect();
+            set.remove(&bank.slot());
+            for parent in set {
                 descendants
-                    .entry(parent.slot())
+                    .entry(parent)
                     .or_insert(HashSet::new())
                     .insert(bank.slot());
             }
@@ -116,8 +119,9 @@ impl BankForks {
     }
 
     fn prune_non_root(&mut self, root: u64) {
+        let descendants = self.descendants();
         self.banks
-            .retain(|slot, bank| *slot >= root || bank.is_in_subtree_of(root))
+            .retain(|slot, _| descendants[&root].contains(slot))
     }
 }
 

@@ -124,7 +124,7 @@ pub struct Bank {
     parent: RwLock<Option<Arc<Bank>>>,
 
     /// The set of parents including this bank
-    ancestors: HashMap<u64, usize>,
+    pub ancestors: HashMap<u64, usize>,
 
     /// Hash of this Bank's state. Only meaningful after freezing.
     hash: RwLock<Hash>,
@@ -293,7 +293,7 @@ impl Bank {
         *self.parent.write().unwrap() = None;
 
         let squash_accounts_start = Instant::now();
-        for p in &parents {
+        for p in parents.iter().rev() {
             // root forks cannot be purged
             self.accounts.add_root(p.slot());
         }
@@ -1025,24 +1025,6 @@ impl Bank {
 
         // Register a bogus executable account, which will be loaded and ignored.
         self.register_native_instruction_processor("", &program_id);
-    }
-
-    pub fn is_in_subtree_of(&self, parent: u64) -> bool {
-        if self.slot() == parent {
-            return true;
-        }
-        let mut next_parent = self.parent();
-
-        while let Some(p) = next_parent {
-            if p.slot() == parent {
-                return true;
-            } else if p.slot() < parent {
-                return false;
-            }
-            next_parent = p.parent();
-        }
-
-        false
     }
 }
 
@@ -1839,30 +1821,6 @@ mod tests {
         }
 
         assert_eq!(bank.is_votable(), true);
-    }
-
-    #[test]
-    fn test_is_in_subtree_of() {
-        let (genesis_block, _) = GenesisBlock::new(1);
-        let parent = Arc::new(Bank::new(&genesis_block));
-        // Bank 1
-        let bank = Arc::new(new_from_parent(&parent));
-        // Bank 2
-        let bank2 = new_from_parent(&bank);
-        // Bank 5
-        let bank5 = Bank::new_from_parent(&bank, &Pubkey::default(), 5);
-
-        // Parents of bank 2: 0 -> 1 -> 2
-        assert!(bank2.is_in_subtree_of(0));
-        assert!(bank2.is_in_subtree_of(1));
-        assert!(bank2.is_in_subtree_of(2));
-        assert!(!bank2.is_in_subtree_of(3));
-
-        // Parents of bank 5: 0 -> 1 -> 5
-        assert!(bank5.is_in_subtree_of(0));
-        assert!(bank5.is_in_subtree_of(1));
-        assert!(!bank5.is_in_subtree_of(2));
-        assert!(!bank5.is_in_subtree_of(4));
     }
 
     #[test]
