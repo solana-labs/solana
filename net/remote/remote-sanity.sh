@@ -9,6 +9,7 @@ cd "$(dirname "$0")"/../..
 deployMethod=
 entrypointIp=
 numNodes=
+failOnValidatorBootupFailure=
 
 [[ -r deployConfig ]] || {
   echo deployConfig missing
@@ -26,6 +27,7 @@ missing() {
 [[ -n $entrypointIp ]]   || missing entrypointIp
 [[ -n $numNodes ]]       || missing numNodes
 [[ -n $leaderRotation ]] || missing leaderRotation
+[[ -n $failOnValidatorBootupFailure ]] || missing failOnValidatorBootupFailure
 
 ledgerVerify=true
 validatorSanity=true
@@ -79,7 +81,17 @@ local|tar)
   exit 1
 esac
 
-echo "+++ $entrypointIp: node count ($numNodes expected)"
+if $failOnValidatorBootupFailure; then
+  numSanityNodes=1
+  if $rejectExtraNodes; then
+    echo "rejectExtraNodes cannot be used with failOnValidatorBootupFailure"
+    exit 1
+  fi
+else
+  numSanityNodes="$numNodes"
+fi
+
+echo "+++ $entrypointIp: node count ($numSanityNodes expected)"
 (
   set -x
   $solana_keygen -o "$client_id"
@@ -90,7 +102,7 @@ echo "+++ $entrypointIp: node count ($numNodes expected)"
   fi
 
   timeout 2m $solana_gossip --network "$entrypointIp:8001" \
-    spy --$nodeArg "$numNodes" \
+    spy --$nodeArg "$numSanityNodes" \
 )
 
 echo "--- RPC API: getTransactionCount"

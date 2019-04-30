@@ -34,8 +34,10 @@ __cloud_FindInstances() {
     instances+=("$name:$publicIp:$privateIp:$zone")
   done < <(gcloud compute instances list \
              --filter "$filter" \
-             --format 'value(name,networkInterfaces[0].accessConfigs[0].natIP,networkInterfaces[0].networkIP,status,zone)')
+             --format 'value(name,networkInterfaces[0].accessConfigs[0].natIP,networkInterfaces[0].networkIP,status,zone)' \
+           | grep RUNNING)
 }
+
 #
 # cloud_FindInstances [namePrefix]
 #

@@ -439,13 +439,15 @@ EOF
     for zone in "${zones[@]}"; do
       echo "Looking for additional fullnode instances in $zone ..."
       cloud_FindInstances "$prefix-$zone-fullnode"
-      [[ ${#instances[@]} -gt 0 ]] || {
+      if [[ ${#instances[@]} -gt 0 ]]; then
+        fetchPrivateKey
+        cloud_ForEachInstance recordInstanceIp "$failOnValidatorBootupFailure" fullnodeIpList
+      else
         echo "Unable to find additional fullnodes"
-        exit 1
-      }
-
-      fetchPrivateKey
-      cloud_ForEachInstance recordInstanceIp "$failOnValidatorBootupFailure" fullnodeIpList
+        if $failOnValidatorBootupFailure; then
+          exit 1
+        fi
+      fi
     done
   fi
 

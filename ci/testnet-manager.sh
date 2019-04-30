@@ -267,6 +267,7 @@ sanity() {
       ok=true
       if [[ -n $GCE_NODE_COUNT ]]; then
         NO_LEDGER_VERIFY=1 \
+        NO_VALIDATOR_SANITY=1 \
           ci/testnet-sanity.sh demo-testnet-solana-com gce "${GCE_ZONES[0]}" -f || ok=false
       else
         echo "Error: no GCE nodes"
@@ -413,22 +414,26 @@ deploy() {
       fi
 
       # shellcheck disable=SC2068
-      ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-        -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
-        -a demo-testnet-solana-com \
-        ${skipCreate:+-e} \
-        ${maybeSkipStart:+-s} \
-        ${maybeStop:+-S} \
-        ${maybeDelete:+-D}
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-deploy.sh -p demo-testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -u -f \
+          -a demo-testnet-solana-com \
+          ${skipCreate:+-e} \
+          ${maybeSkipStart:+-s} \
+          ${maybeStop:+-S} \
+          ${maybeDelete:+-D}
 
       if [[ -n $GCE_LOW_QUOTA_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
-        ci/testnet-deploy.sh -p demo-testnet-solana-com2 -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x \
-          ${skipCreate:+-e} \
-          ${skipStart:+-s} \
-          ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
+        NO_LEDGER_VERIFY=1 \
+        NO_VALIDATOR_SANITY=1 \
+          ci/testnet-deploy.sh -p demo-testnet-solana-com2 -C gce ${GCE_LOW_QUOTA_ZONE_ARGS[@]} \
+            -t "$CHANNEL_OR_TAG" -n "$GCE_LOW_QUOTA_NODE_COUNT" -c 0 -P -f -x \
+            ${skipCreate:+-e} \
+            ${skipStart:+-s} \
+            ${maybeStop:+-S} \
+            ${maybeDelete:+-D}
       fi
     )
     ;;
