@@ -9,6 +9,8 @@ set -e
 cd "$(dirname "$0")/.."
 source ci/_
 
+_ scripts/install-grcov.sh
+
 : "${BUILDKITE_COMMIT:=local}"
 reportName="lcov-${BUILDKITE_COMMIT:0:9}"
 
@@ -37,8 +39,6 @@ rm -rf target/cov/$reportName
 source ci/rust-version.sh nightly
 _ cargo +$rust_nightly build --target-dir target/cov "$crate"
 _ cargo +$rust_nightly test --target-dir target/cov --lib "$crate" -- --test-threads=1
-
-_ scripts/install-grcov.sh
 
 echo "--- grcov"
 
