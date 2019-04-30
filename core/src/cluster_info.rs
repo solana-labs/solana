@@ -250,7 +250,7 @@ impl ClusterInfo {
             .all_peers()
             .into_iter()
             .map(|(node, last_updated)| {
-                if !ContactInfo::is_valid_address(&node.gossip) {
+                if Self::is_spy_node(&node) {
                     spy_nodes += 1;
                 }
                 fn addr_to_string(addr: &SocketAddr) -> String {
@@ -410,6 +410,12 @@ impl ClusterInfo {
             .filter(|x| x.id != me)
             .filter(|x| ContactInfo::is_valid_address(&x.gossip))
             .collect()
+    }
+
+    fn is_spy_node(contact_info: &ContactInfo) -> bool {
+        !ContactInfo::is_valid_address(&contact_info.tpu)
+            || !ContactInfo::is_valid_address(&contact_info.gossip)
+            || !ContactInfo::is_valid_address(&contact_info.tvu)
     }
 
     fn sort_by_stake<S: std::hash::BuildHasher>(
@@ -1377,6 +1383,26 @@ impl ClusterInfo {
             .unwrap()
     }
 
+    /// An alternative to Spy Node that has a valid gossip address and fully participate in Gossip.
+    pub fn gossip_node(id: &Pubkey, gossip_addr: &SocketAddr) -> (ContactInfo, UdpSocket) {
+        let (port, gossip_socket) = Node::get_gossip_port(gossip_addr, FULLNODE_PORT_RANGE);
+        let daddr = socketaddr_any!();
+
+        let node = ContactInfo::new(
+            id,
+            SocketAddr::new(gossip_addr.ip(), port),
+            daddr,
+            daddr,
+            daddr,
+            daddr,
+            daddr,
+            daddr,
+            timestamp(),
+        );
+        (node, gossip_socket)
+    }
+
+    /// A Node with invalid ports to spy on gossip via pull requests
     pub fn spy_node(id: &Pubkey) -> (ContactInfo, UdpSocket) {
         let (_, gossip_socket) = bind_in_range(FULLNODE_PORT_RANGE).unwrap();
         let daddr = socketaddr_any!();
@@ -1637,6 +1663,16 @@ mod tests {
     use std::collections::HashSet;
     use std::net::{IpAddr, Ipv4Addr};
     use std::sync::{Arc, RwLock};
+
+    #[test]
+    fn test_gossip_node() {
+        //check that a gossip nodes always show up as spies
+        let (node, _) = ClusterInfo::spy_node(&Pubkey::new_rand());
+        assert!(ClusterInfo::is_spy_node(&node));
+        let (node, _) =
+            ClusterInfo::gossip_node(&Pubkey::new_rand(), &"1.1.1.1:1111".parse().unwrap());
+        assert!(ClusterInfo::is_spy_node(&node));
+    }
 
     #[test]
     fn test_cluster_spy_gossip() {

@@ -53,22 +53,24 @@ impl GossipService {
 }
 
 pub fn discover_nodes(
-    gossip_addr: &SocketAddr,
+    entry_point: &SocketAddr,
     num_nodes: usize,
 ) -> std::io::Result<Vec<ContactInfo>> {
-    discover(gossip_addr, Some(num_nodes), Some(30), None)
+    discover(entry_point, Some(num_nodes), Some(30), None, None)
 }
 
 pub fn discover(
-    gossip_addr: &SocketAddr,
+    entry_point: &SocketAddr,
     num_nodes: Option<usize>,
     timeout: Option<u64>,
     find_node: Option<Pubkey>,
+    gossip_addr: Option<&SocketAddr>,
 ) -> std::io::Result<Vec<ContactInfo>> {
     let exit = Arc::new(AtomicBool::new(false));
-    let (gossip_service, spy_ref) = make_spy_node(gossip_addr, &exit);
+    let (gossip_service, spy_ref) = make_gossip_node(entry_point, &exit, gossip_addr);
+
     let id = spy_ref.read().unwrap().keypair.pubkey();
-    info!("Gossip entry point: {:?}", gossip_addr);
+    info!("Gossip entry point: {:?}", entry_point);
     info!("Spy node id: {:?}", id);
 
     let (met_criteria, secs, tvu_peers) = spy(spy_ref.clone(), num_nodes, timeout, find_node);
@@ -153,14 +155,21 @@ fn spy(
     (met_criteria, now.elapsed().as_secs(), tvu_peers)
 }
 
-fn make_spy_node(
-    gossip_addr: &SocketAddr,
+/// Makes a spy or gossip node based on whether or not a gossip_addr was passed in
+/// Pass in a gossip addr to fully participate in gossip instead of relying on just pulls
+fn make_gossip_node(
+    entry_point: &SocketAddr,
     exit: &Arc<AtomicBool>,
+    gossip_addr: Option<&SocketAddr>,
 ) -> (GossipService, Arc<RwLock<ClusterInfo>>) {
     let keypair = Arc::new(Keypair::new());
-    let (node, gossip_socket) = ClusterInfo::spy_node(&keypair.pubkey());
+    let (node, gossip_socket) = if let Some(gossip_addr) = gossip_addr {
+        ClusterInfo::gossip_node(&keypair.pubkey(), gossip_addr)
+    } else {
+        ClusterInfo::spy_node(&keypair.pubkey())
+    };
     let mut cluster_info = ClusterInfo::new(node, keypair);
-    cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(gossip_addr));
+    cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entry_point));
     let cluster_info = Arc::new(RwLock::new(cluster_info));
     let gossip_service =
         GossipService::new(&cluster_info.clone(), None, None, gossip_socket, &exit);
