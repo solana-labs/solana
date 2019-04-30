@@ -3,6 +3,7 @@
 # runs grcov, installs if not already here
 #
 
+set -e
 cd "$(dirname "$0")/.."
 source ci/_
 
