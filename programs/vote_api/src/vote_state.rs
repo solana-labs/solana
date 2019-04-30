@@ -102,10 +102,10 @@ impl VoteState {
         })
     }
 
-    /// returns commission split as (voter_portion, staker_portion) tuple
+    /// returns commission split as (voter_portion, staker_portion, was_split) tuple
     ///
     ///  if commission calculation is 100% one way or other,
-    ///   indicate with None for the 0% side
+    ///   indicate with false for was_split
     pub fn commission_split(&self, on: f64) -> (f64, f64, bool) {
         match self.commission {
             0 => (0.0, on, false),
@@ -228,7 +228,7 @@ pub fn initialize_account(
     ))
 }
 
-pub fn process_vote(
+pub fn process_votes(
     vote_account: &mut KeyedAccount,
     other_signers: &[KeyedAccount],
     votes: &[Vote],
@@ -277,7 +277,7 @@ pub fn vote(
     vote_account: &mut Account,
     vote: &Vote,
 ) -> Result<VoteState, InstructionError> {
-    process_vote(
+    process_votes(
         &mut KeyedAccount::new(vote_id, true, vote_account),
         &[],
         &[vote.clone()],
@@ -355,7 +355,7 @@ mod tests {
         let vote = vec![Vote::new(1)];
 
         // unsigned
-        let res = process_vote(
+        let res = process_votes(
             &mut KeyedAccount::new(&vote_id, false, &mut vote_account),
             &[],
             &vote,
@@ -363,7 +363,7 @@ mod tests {
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         // unsigned
-        let res = process_vote(
+        let res = process_votes(
             &mut KeyedAccount::new(&vote_id, true, &mut vote_account),
             &[],
             &vote,
@@ -399,7 +399,7 @@ mod tests {
 
         // not signed by authorized voter
         let vote = vec![Vote::new(2)];
-        let res = process_vote(
+        let res = process_votes(
             &mut KeyedAccount::new(&vote_id, true, &mut vote_account),
             &[],
             &vote,
@@ -408,7 +408,7 @@ mod tests {
 
         // signed by authorized voter
         let vote = vec![Vote::new(2)];
-        let res = process_vote(
+        let res = process_votes(
             &mut KeyedAccount::new(&vote_id, false, &mut vote_account),
             &[KeyedAccount::new(
                 &authorized_voter_id,
@@ -607,4 +607,23 @@ mod tests {
         vote_state_b.process_votes(&votes);
         assert_eq!(recent_votes(&vote_state_a), recent_votes(&vote_state_b));
     }
+
+    #[test]
+    fn test_vote_state_commission_split() {
+        let vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), 0);
+
+        assert_eq!(vote_state.commission_split(1.0), (0.0, 1.0, false));
+
+        let vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), std::u32::MAX);
+        assert_eq!(vote_state.commission_split(1.0), (1.0, 0.0, false));
+
+        let vote_state = VoteState::new(&Pubkey::default(), &Pubkey::default(), std::u32::MAX / 2);
+        let (voter_portion, staker_portion, was_split) = vote_state.commission_split(10.0);
+
+        assert_eq!(
+            (voter_portion.round(), staker_portion.round(), was_split),
+            (5.0, 5.0, true)
+        );
+    }
+
 }

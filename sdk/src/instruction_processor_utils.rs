@@ -32,6 +32,26 @@ macro_rules! solana_entrypoint(
     )
 );
 
+#[macro_export]
+macro_rules! solana_program_id(
+    ($program_id:ident) => (
+
+        pub fn check_id(program_id: &solana_sdk::pubkey::Pubkey) -> bool {
+            program_id.as_ref() == $program_id
+        }
+
+        pub fn id() -> solana_sdk::pubkey::Pubkey {
+            solana_sdk::pubkey::Pubkey::new(&$program_id)
+        }
+
+        #[cfg(test)]
+        #[test]
+        fn test_program_id() {
+            assert!(check_id(&id()));
+        }
+    )
+);
+
 /// Conveinence trait to covert bincode errors to instruction errors.
 pub trait State<T> {
     fn state(&self) -> Result<T, InstructionError>;
