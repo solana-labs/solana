@@ -373,6 +373,11 @@ fn swapper<T>(
     let mut now = Instant::now();
     let start_time = now;
     let mut total_elapsed = start_time.elapsed();
+
+    const CHECK_TX_TIMEOUT_MAX_MS: u64 = 15000;
+    const CHECK_TX_DELAY_MS: u64 = 100;
+    let mut max_tries = CHECK_TX_TIMEOUT_MAX_MS / CHECK_TX_DELAY_MS;
+
     'outer: loop {
         if let Ok(trade_infos) = receiver.try_recv() {
             let mut tries = 0;
@@ -383,17 +388,19 @@ fn swapper<T>(
                 == 0
             {
                 tries += 1;
-                if tries > 300 {
+                if tries > max_tries {
                     if exit_signal.load(Ordering::Relaxed) {
                         break 'outer;
                     }
                     error!("Give up waiting, dump batch");
+                    max_tries /= 2;
                     continue 'outer;
                 }
                 debug!("{} waiting for trades batch to clear", tries);
-                sleep(Duration::from_millis(100));
+                sleep(Duration::from_millis(CHECK_TX_DELAY_MS));
                 trade_index = thread_rng().gen_range(0, trade_infos.len());
             }
+            max_tries = CHECK_TX_TIMEOUT_MAX_MS / CHECK_TX_DELAY_MS;
 
             trade_infos.iter().for_each(|info| {
                 order_book
@@ -403,6 +410,7 @@ fn swapper<T>(
             let mut swaps = Vec::new();
             while let Some((to, from)) = order_book.pop() {
                 swaps.push((to, from));
+                // TODO get rid of this
                 if swaps.len() >= batch_size {
                     break;
                 }
@@ -473,6 +481,7 @@ fn swapper<T>(
                     shared_txs_wl.push_back(chunk.to_vec());
                 }
             }
+            sleep(Duration::from_millis(50));
         }
 
         if exit_signal.load(Ordering::Relaxed) {
