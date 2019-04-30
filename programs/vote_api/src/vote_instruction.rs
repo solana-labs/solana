@@ -71,7 +71,7 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    if keyed_accounts.len() < 1 {
+    if keyed_accounts.is_empty() {
         Err(InstructionError::InvalidInstructionData)?;
     }
 
