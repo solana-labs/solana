@@ -39,6 +39,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .about("Monitor the gossip network")
                 .setting(AppSettings::DisableVersion)
                 .arg(
+                    clap::Arg::with_name("public_address")
+                        .long("public-address")
+                        .takes_value(false)
+                        .help("Advertise public machine address in gossip. By default the local machine address is advertised"),
+                )
+                .arg(
+                    clap::Arg::with_name("pull_only")
+                        .long("pull-only")
+                        .takes_value(false)
+                        .help("Use a partial gossip node (Pulls only) to spy on the network. By default it will use a full fledged gossip node(Pushes and Pulls). Useful when behind a NAT"),
+                )
+                .arg(
                     Arg::with_name("num_nodes")
                         .short("N")
                         .long("num-nodes")
@@ -111,7 +123,25 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_of("node_pubkey")
                 .map(|pubkey_str| pubkey_str.parse::<Pubkey>().unwrap());
 
-            let nodes = discover(&network_addr, num_nodes, timeout, pubkey)?;
+            let gossip_addr = if matches.is_present("pull_only") {
+                None
+            } else {
+                let mut addr: SocketAddr = "0.0.0.0:0000".parse().unwrap();
+                if matches.is_present("public_address") {
+                    addr.set_ip(solana_netutil::get_public_ip_addr().unwrap());
+                } else {
+                    addr.set_ip(solana_netutil::get_ip_addr(false).unwrap());
+                }
+                Some(addr)
+            };
+
+            let nodes = discover(
+                &network_addr,
+                num_nodes,
+                timeout,
+                pubkey,
+                gossip_addr.as_ref(),
+            )?;
 
             if timeout.is_some() {
                 if let Some(num) = num_nodes {
@@ -146,7 +176,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .unwrap()
                 .parse::<Pubkey>()
                 .unwrap();
-            let nodes = discover(&network_addr, None, None, Some(pubkey))?;
+            let nodes = discover(&network_addr, None, None, Some(pubkey), None)?;
             let node = nodes.iter().find(|x| x.id == pubkey).unwrap();
 
             if !ContactInfo::is_valid_address(&node.rpc) {
