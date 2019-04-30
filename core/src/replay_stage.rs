@@ -236,7 +236,7 @@ impl ReplayStage {
             };
             assert!(parent.is_frozen());
 
-            leader_schedule_cache.slot_leader_at_else_compute(poh_slot, &parent)
+            leader_schedule_cache.slot_leader_at(poh_slot, Some(&parent))
                 .map(|next_leader| {
                     debug!(
                         "me: {} leader {} at poh slot {}",
@@ -596,7 +596,7 @@ impl ReplayStage {
                     continue;
                 }
                 let leader = leader_schedule_cache
-                    .slot_leader_at_else_compute(child_id, &parent_bank)
+                    .slot_leader_at(child_id, Some(&parent_bank))
                     .unwrap();
                 info!("new fork:{} parent:{}", child_id, parent_id);
                 forks.insert(Bank::new_from_parent(&parent_bank, &leader, child_id));

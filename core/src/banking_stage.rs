@@ -266,7 +266,7 @@ impl BankingStage {
         let poh = poh_recorder.lock().unwrap();
         let leader_id = match poh.bank() {
             Some(bank) => leader_schedule_cache
-                .slot_leader_at_else_compute(bank.slot() + 1, &bank)
+                .slot_leader_at(bank.slot() + 1, Some(&bank))
                 .unwrap_or_default(),
             None => {
                 if poh.would_be_leader(DEFAULT_TICKS_PER_SLOT) {

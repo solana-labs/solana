@@ -220,7 +220,7 @@ pub fn process_blocktree(
                 let next_bank = Arc::new(Bank::new_from_parent(
                     &bank,
                     &leader_schedule_cache
-                        .slot_leader_at_else_compute(next_slot, &bank)
+                        .slot_leader_at(next_slot, Some(&bank))
                         .unwrap(),
                     next_slot,
                 ));

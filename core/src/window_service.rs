@@ -85,10 +85,10 @@ fn should_retransmit_and_persist(
     my_id: &Pubkey,
 ) -> bool {
     let slot_leader_id = match bank {
-        None => leader_schedule_cache.and_then(|cache| cache.slot_leader_at(blob.slot())),
+        None => leader_schedule_cache.and_then(|cache| cache.slot_leader_at(blob.slot(), None)),
         Some(bank) => match leader_schedule_cache {
             None => slot_leader_at(blob.slot(), &bank),
-            Some(cache) => cache.slot_leader_at_else_compute(blob.slot(), bank),
+            Some(cache) => cache.slot_leader_at(blob.slot(), Some(bank)),
         },
     };
 
