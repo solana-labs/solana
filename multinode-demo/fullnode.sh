@@ -44,7 +44,8 @@ fi
 fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id$label.json
 fullnode_vote_id_path=$SOLANA_CONFIG_DIR/fullnode-vote-id$label.json
 ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger$label
-accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts$label
+#accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts$label
+accounts_config_dir=/mnt/disks/nvme0n1,/mnt/disks/nvme0n2,/mnt/disks/nvme0n3,/mnt/disks/nvme0n4
 
 mkdir -p "$SOLANA_CONFIG_DIR"
 [[ -r "$fullnode_id_path" ]] || $solana_keygen -o "$fullnode_id_path"
