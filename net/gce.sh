@@ -13,6 +13,8 @@ gce)
   source "$here"/scripts/gce-provider.sh
 
   cpuBootstrapLeaderMachineType="--machine-type n1-standard-16"
+  localSSD="--local-ssd interface=nvme --local-ssd interface=nvme --local-ssd
+   interface=nvme --local-ssd interface=nvme"
   gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80"
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
@@ -57,6 +59,7 @@ clientBootDiskSizeInGb=75
 externalNodes=false
 failOnValidatorBootupFailure=true
 
+useLocalSSD=""
 publicNetwork=false
 enableGpu=false
 customAddress=
@@ -135,7 +138,7 @@ shift
 [[ $command = create || $command = config || $command = info || $command = delete ]] ||
   usage "Invalid command: $command"
 
-while getopts "h?p:Pn:c:z:gG:a:d:buxf" opt; do
+while getopts "h?p:Pn:c:z:gG:a:d:buxfs" opt; do
   case $opt in
   h | \?)
     usage
@@ -185,6 +188,9 @@ while getopts "h?p:Pn:c:z:gG:a:d:buxf" opt; do
     ;;
   f)
     failOnValidatorBootupFailure=false
+    ;;
+  s)
+    useLocalSSD=$localSSD
     ;;
   *)
     usage "unhandled option: $opt"
@@ -626,7 +632,7 @@ EOF
   else
     cloud_CreateInstances "$prefix" "$prefix-bootstrap-leader" 1 \
       "$enableGpu" "$bootstrapLeaderMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
-      "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType"
+      "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType" "$useLocalSSD"
   fi
 
   if [[ $additionalFullNodeCount -gt 0 ]]; then
@@ -640,7 +646,7 @@ EOF
       fi
       cloud_CreateInstances "$prefix" "$prefix-$zone-fullnode" "$numNodesPerZone" \
         "$enableGpu" "$fullNodeMachineType" "$zone" "$fullNodeBootDiskSizeInGb" \
-        "$startupScript" "" "$bootDiskType" &
+        "$startupScript" "" "$bootDiskType" "$useLocalSSD" &
     done
 
     wait
@@ -655,7 +661,7 @@ EOF
   if $blockstreamer; then
     cloud_CreateInstances "$prefix" "$prefix-blockstreamer" "1" \
       "$enableGpu" "$blockstreamerMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
-      "$startupScript" "$blockstreamerAddress" "$bootDiskType"
+      "$startupScript" "$blockstreamerAddress" "$bootDiskType" "$useLocalSSD"
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"

@@ -126,6 +126,7 @@ cloud_CreateInstances() {
   declare optionalStartupScript="$8"
   declare optionalAddress="$9"
   declare optionalBootDiskType="${10}"
+  declare optionalLocalSSD="${11}"
 
   if $enableGpu; then
     # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
@@ -157,6 +158,7 @@ cloud_CreateInstances() {
     --image "$imageName"
     --maintenance-policy TERMINATE
     --no-restart-on-failure
+    $optionalLocalSSD
   )
 
   # shellcheck disable=SC2206 # Do not want to quote $imageName as it may contain extra args
