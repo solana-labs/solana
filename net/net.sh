@@ -51,6 +51,7 @@ Operate a configured testnet
                                         to the bench-tps client.
 
  sanity/start/update-specific options:
+   -F                   - Discard validator nodes that didn't bootup successfully
    -o noLedgerVerify    - Skip ledger verification
    -o noValidatorSanity - Skip fullnode sanity
    -o rejectExtraNodes  - Require the exact number of nodes
@@ -80,12 +81,13 @@ numBenchTpsClients=0
 numBenchExchangeClients=0
 benchTpsExtraArgs=
 benchExchangeExtraArgs=
+failOnValidatorBootupFailure=true
 
 command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?T:t:o:f:rD:i:c:" opt; do
+while getopts "h?T:t:o:f:rD:i:c:F" opt; do
   case $opt in
   h | \?)
     usage
@@ -166,6 +168,9 @@ while getopts "h?T:t:o:f:rD:i:c:" opt; do
       esac
     }
     getClientTypeAndNum
+    ;;
+  F)
+    failOnValidatorBootupFailure=false
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -291,6 +296,7 @@ startBootstrapLeader() {
          \"$RUST_LOG\" \
          $skipSetup \
          $leaderRotation \
+         $failOnValidatorBootupFailure \
       "
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
@@ -319,6 +325,7 @@ startNode() {
          \"$RUST_LOG\" \
          $skipSetup \
          $leaderRotation \
+         $failOnValidatorBootupFailure \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -475,9 +482,13 @@ start() {
     declare ok=true
     wait "$pid" || ok=false
     if ! $ok; then
+      echo "+++ fullnode failed to start"
       cat "$netLogDir/fullnode-$pid.log"
-      echo ^^^ +++
-      exit 1
+      if $failOnValidatorBootupFailure; then
+        exit 1
+      else
+        echo "Failure is non-fatal"
+      fi
     fi
   done
 

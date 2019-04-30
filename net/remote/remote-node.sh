@@ -12,6 +12,7 @@ numNodes="$5"
 RUST_LOG="$6"
 skipSetup="$7"
 leaderRotation="$8"
+failOnValidatorBootupFailure="$9"
 set +x
 export RUST_LOG
 
@@ -35,12 +36,14 @@ missing() {
 [[ -n $numNodes ]]      || missing numNodes
 [[ -n $skipSetup ]]     || missing skipSetup
 [[ -n $leaderRotation ]] || missing leaderRotation
+[[ -n $failOnValidatorBootupFailure ]] || missing failOnValidatorBootupFailure
 
 cat > deployConfig <<EOF
 deployMethod="$deployMethod"
 entrypointIp="$entrypointIp"
 numNodes="$numNodes"
 leaderRotation=$leaderRotation
+failOnValidatorBootupFailure=$failOnValidatorBootupFailure
 EOF
 
 source net/common.sh
