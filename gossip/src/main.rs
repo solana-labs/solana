@@ -1,11 +1,15 @@
 //! A command-line executable for monitoring a cluster's gossip plane.
 
+#[macro_use]
+extern crate solana;
+
 use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg, SubCommand};
 use solana::contact_info::ContactInfo;
 use solana::gossip_service::discover;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use std::error;
+use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::process::exit;
 
@@ -126,7 +130,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let gossip_addr = if matches.is_present("pull_only") {
                 None
             } else {
-                let mut addr: SocketAddr = "0.0.0.0:0000".parse().unwrap();
+                let mut addr = socketaddr_any!();
                 if matches.is_present("public_address") {
                     addr.set_ip(solana_netutil::get_public_ip_addr().unwrap());
                 } else {
