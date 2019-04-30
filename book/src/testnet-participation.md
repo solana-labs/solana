@@ -29,6 +29,16 @@ traversal issues.  A cloud-hosted machine works best.  **Ensure that IP ports
 Prebuilt binaries are available for Linux x86_64 (Ubuntu 18.04 recommended).
 MacOS or WSL users may build from source.
 
+For a performance testnet with many transactions we have some preliminary recomended setups:
+
+| | Low end | Medium end | High end | Notes |
+| --- | ---------|------------|----------| -- |
+| CPU | AMD Threadripper 1900x | AMD Threadripper 2920x | AMD Threadripper 2950x | Consider a 10Gb-capable motherboard with as many PCIe lanes and m.2 slots as possible. |
+| RAM | 16GB | 32GB | 64GB | |
+| OS Drive | Samsung 860 Evo 2TB | Samsung 860 Evo 4TB | Samsung 860 Evo 4TB | Or equivalent SSD |
+| Accounts Drive(s) | None | Samsung 970 Pro 1TB | 2x Samsung 970 Pro 1TB | |
+| GPU | 4x Nvidia 1070 or 2x Nvidia 1080 Ti or 2x Nvidia 2070 | 2x Nvidia 2080 Ti | 4x Nvidia 2080 Ti | Any number of cuda-capable GPUs are supported on Linux platforms. |
+
 #### Confirm The Testnet Is Reachable
 Before attaching a validator node, sanity check that the cluster is accessible
 to your machine by running some simple commands.  If any of the commands fail,
