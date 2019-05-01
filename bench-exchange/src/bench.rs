@@ -8,6 +8,7 @@ use rayon::prelude::*;
 use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::contact_info::ContactInfo;
 use solana::gen_keys::GenKeys;
+use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
 use solana_drone::drone::request_airdrop_transaction;
@@ -66,16 +67,6 @@ impl Default for Config {
             account_groups: 100,
         }
     }
-}
-
-#[derive(Default)]
-pub struct SampleStats {
-    /// Maximum TPS reported by this node
-    pub tps: f32,
-    /// Total time taken for those txs
-    pub elapsed: Duration,
-    /// Total transactions reported by this node
-    pub txs: u64,
 }
 
 pub fn do_bench_exchange<T>(clients: Vec<T>, config: Config)
@@ -249,62 +240,6 @@ where
         &sample_stats,
         total_txs_sent_count.load(Ordering::Relaxed) as u64,
     );
-}
-
-fn sample_txs<T>(
-    exit_signal: &Arc<AtomicBool>,
-    sample_stats: &Arc<RwLock<Vec<SampleStats>>>,
-    sample_period: u64,
-    client: &Arc<T>,
-) where
-    T: Client,
-{
-    let mut max_tps = 0.0;
-    let mut total_elapsed;
-    let mut total_txs;
-    let mut now = Instant::now();
-    let start_time = now;
-    let initial_txs = client.get_transaction_count().expect("transaction count");
-    let mut last_txs = initial_txs;
-
-    loop {
-        total_elapsed = start_time.elapsed();
-        let elapsed = now.elapsed();
-        now = Instant::now();
-        let mut txs = client.get_transaction_count().expect("transaction count");
-
-        if txs < last_txs {
-            info!("Expected txs({}) >= last_txs({})", txs, last_txs);
-            txs = last_txs;
-        }
-        total_txs = txs - initial_txs;
-        let sample_txs = txs - last_txs;
-        last_txs = txs;
-
-        let tps = sample_txs as f32 / duration_as_s(&elapsed);
-        if tps > max_tps {
-            max_tps = tps;
-        }
-
-        info!(
-            "Sampler {:9.2} TPS, Transactions: {:6}, Total transactions: {} over {} s",
-            tps,
-            sample_txs,
-            total_txs,
-            total_elapsed.as_secs(),
-        );
-
-        if exit_signal.load(Ordering::Relaxed) {
-            let stats = SampleStats {
-                tps: max_tps,
-                elapsed: total_elapsed,
-                txs: total_txs,
-            };
-            sample_stats.write().unwrap().push(stats);
-            return;
-        }
-        sleep(Duration::from_secs(sample_period));
-    }
 }
 
 fn do_tx_transfers<T>(
@@ -873,13 +808,13 @@ pub fn create_token_accounts(client: &Client, signers: &[Arc<Keypair>], accounts
     }
 }
 
-fn compute_and_report_stats(maxes: &Arc<RwLock<Vec<(SampleStats)>>>, total_txs_sent: u64) {
+fn compute_and_report_stats(maxes: &Arc<RwLock<Vec<(String, SampleStats)>>>, total_txs_sent: u64) {
     let mut max_txs = 0;
     let mut max_elapsed = Duration::new(0, 0);
     info!("|       Max TPS | Total Transactions");
     info!("+---------------+--------------------");
 
-    for stats in maxes.read().unwrap().iter() {
+    for (_sock, stats) in maxes.read().unwrap().iter() {
         let maybe_flag = match stats.txs {
             0 => "!!!!!",
             _ => "",
