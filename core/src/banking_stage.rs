@@ -241,11 +241,22 @@ impl BankingStage {
             }
             BufferedPacketsDecision::Forward => {
                 if enable_forwarding {
-                    let _ = Self::forward_unprocessed_packets(
-                        &socket,
-                        &rcluster_info.leader_data().unwrap().tpu_via_blobs,
-                        &buffered_packets,
-                    );
+                    if let Some(leader_id) = poh_recorder
+                        .lock()
+                        .unwrap()
+                        .next_slot_leader(DEFAULT_TICKS_PER_SLOT, None)
+                    {
+                        if let Some(sock) = rcluster_info
+                            .lookup(&leader_id)
+                            .map_or(None, |x| Some(x.tpu_via_blobs))
+                        {
+                            let _ = Self::forward_unprocessed_packets(
+                                &socket,
+                                &sock,
+                                &buffered_packets,
+                            );
+                        }
+                    }
                 }
                 Ok(vec![])
             }
@@ -337,12 +348,22 @@ impl BankingStage {
                     }
 
                     if enable_forwarding {
-                        if let Some(leader) = cluster_info.read().unwrap().leader_data() {
-                            let _ = Self::forward_unprocessed_packets(
-                                &socket,
-                                &leader.tpu_via_blobs,
-                                &unprocessed_packets,
-                            );
+                        let rcluster_info = cluster_info.read().unwrap();
+                        if let Some(leader_id) = poh_recorder
+                            .lock()
+                            .unwrap()
+                            .next_slot_leader(DEFAULT_TICKS_PER_SLOT, None)
+                        {
+                            if let Some(sock) = rcluster_info
+                                .lookup(&leader_id)
+                                .map_or(None, |x| Some(x.tpu_via_blobs))
+                            {
+                                let _ = Self::forward_unprocessed_packets(
+                                    &socket,
+                                    &sock,
+                                    &unprocessed_packets,
+                                );
+                            }
                         }
                     }
                 }

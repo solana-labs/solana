@@ -13,6 +13,7 @@
 use crate::blocktree::Blocktree;
 use crate::entry::Entry;
 use crate::leader_schedule_cache::LeaderScheduleCache;
+use crate::leader_schedule_utils;
 use crate::poh::Poh;
 use crate::result::{Error, Result};
 use solana_runtime::bank::Bank;
@@ -89,6 +90,11 @@ impl PohRecorder {
         });
 
         self.working_bank.is_some() || close_to_leader_tick
+    }
+
+    pub fn next_slot_leader(&self, ticks_per_slot: u64, bank: Option<&Bank>) -> Option<Pubkey> {
+        let slot = leader_schedule_utils::tick_height_to_slot(ticks_per_slot, self.tick_height());
+        self.leader_schedule_cache.slot_leader_at(slot + 1, bank)
     }
 
     pub fn hash(&mut self) {
