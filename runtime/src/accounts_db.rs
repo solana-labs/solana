@@ -73,17 +73,6 @@ pub enum AccountStorageStatus {
     StorageFull = 1,
 }
 
-impl From<usize> for AccountStorageStatus {
-    fn from(status: usize) -> Self {
-        use self::AccountStorageStatus::*;
-        match status {
-            0 => StorageAvailable,
-            1 => StorageFull,
-            _ => unreachable!(),
-        }
-    }
-}
-
 /// Persistent storage structure holding the accounts
 pub struct AccountStorageEntry {
     id: AppendVecId,
@@ -117,9 +106,25 @@ impl AccountStorageEntry {
         }
     }
 
-    pub fn set_status(&self, status: AccountStorageStatus) {
+    pub fn set_status(&self, mut status: AccountStorageStatus) {
         let mut count_and_status = self.count_and_status.write().unwrap();
-        *count_and_status = (count_and_status.0, status);
+
+        let count = count_and_status.0;
+
+        if status == AccountStorageStatus::StorageFull && count == 0 {
+            // this case arises when the append_vec is full (store_ptrs fails),
+            //  but all accounts have already been removed from the storage
+            //
+            // the only time it's safe to call reset() on an append_vec is when
+            //  every account has been removed
+            //          **and**
+            //  the append_vec has previously been completely full
+            //
+            self.accounts.reset();
+            status = AccountStorageStatus::StorageAvailable;
+        }
+
+        *count_and_status = (count, status);
     }
 
     pub fn status(&self) -> AccountStorageStatus {
@@ -140,10 +145,14 @@ impl AccountStorageEntry {
         let (count, mut status) = *count_and_status;
 
         if count == 1 && status == AccountStorageStatus::StorageFull {
+            // this case arises when we remove the last account from the
+            //  storage, but we've learned from previous write attempts that
+            //  the storage is full
+            //
             // the only time it's safe to call reset() on an append_vec is when
             //  every account has been removed
             //          **and**
-            //  the append_vec was previously completely full
+            //  the append_vec has previously been completely full
             //
             // otherwise, the storage may be in flight with a store()
             //   call
@@ -612,15 +621,15 @@ mod tests {
         {
             let stores = db.storage.read().unwrap();
             assert_eq!(stores.len(), 2);
-            assert_eq!(stores[&0].count.load(Ordering::Relaxed), 2);
-            assert_eq!(stores[&1].count.load(Ordering::Relaxed), 2);
+            assert_eq!(stores[&0].count(), 2);
+            assert_eq!(stores[&1].count(), 2);
         }
         db.add_root(1);
         {
             let stores = db.storage.read().unwrap();
             assert_eq!(stores.len(), 2);
-            assert_eq!(stores[&0].count.load(Ordering::Relaxed), 2);
-            assert_eq!(stores[&1].count.load(Ordering::Relaxed), 2);
+            assert_eq!(stores[&0].count(), 2);
+            assert_eq!(stores[&1].count(), 2);
         }
     }
 
@@ -695,7 +704,7 @@ mod tests {
         let stores = accounts.storage.read().unwrap();
         assert_eq!(stores.len(), 1);
         assert_eq!(stores[&0].status(), AccountStorageStatus::StorageAvailable);
-        stores[&0].count.load(Ordering::Relaxed) == count
+        stores[&0].count() == count
     }
 
     fn check_accounts(accounts: &AccountsDB, pubkeys: &Vec<Pubkey>, fork: Fork) {
@@ -785,8 +794,8 @@ mod tests {
         {
             let stores = accounts.storage.read().unwrap();
             assert_eq!(stores.len(), 1);
-            assert_eq!(stores[&0].count.load(Ordering::Relaxed), 1);
-            assert_eq!(stores[&0].status(), status[0]);
+            assert_eq!(stores[&0].count(), 1);
+            assert_eq!(stores[&0].status(), AccountStorageStatus::StorageAvailable);
         }
 
         let pubkey2 = Pubkey::new_rand();
@@ -795,26 +804,27 @@ mod tests {
         {
             let stores = accounts.storage.read().unwrap();
             assert_eq!(stores.len(), 2);
-            assert_eq!(stores[&0].count.load(Ordering::Relaxed), 1);
-            assert_eq!(stores[&0].status(), status[1]);
-            assert_eq!(stores[&1].count.load(Ordering::Relaxed), 1);
-            assert_eq!(stores[&1].status(), status[0]);
+            assert_eq!(stores[&0].count(), 1);
+            assert_eq!(stores[&0].status(), AccountStorageStatus::StorageFull);
+            assert_eq!(stores[&1].count(), 1);
+            assert_eq!(stores[&1].status(), AccountStorageStatus::StorageAvailable);
         }
         let ancestors = vec![(0, 0)].into_iter().collect();
         assert_eq!(accounts.load_slow(&ancestors, &pubkey1).unwrap(), account1);
         assert_eq!(accounts.load_slow(&ancestors, &pubkey2).unwrap(), account2);
 
+        // lots of stores, but 3 storages should be enough for everything
         for i in 0..25 {
             let index = i % 2;
             accounts.store(0, &[(&pubkey1, &account1)]);
             {
                 let stores = accounts.storage.read().unwrap();
                 assert_eq!(stores.len(), 3);
-                assert_eq!(stores[&0].count.load(Ordering::Relaxed), count[index]);
+                assert_eq!(stores[&0].count(), count[index]);
                 assert_eq!(stores[&0].status(), status[0]);
-                assert_eq!(stores[&1].count.load(Ordering::Relaxed), 1);
+                assert_eq!(stores[&1].count(), 1);
                 assert_eq!(stores[&1].status(), status[1]);
-                assert_eq!(stores[&2].count.load(Ordering::Relaxed), count[index ^ 1]);
+                assert_eq!(stores[&2].count(), count[index ^ 1]);
                 assert_eq!(stores[&2].status(), status[0]);
             }
             let ancestors = vec![(0, 0)].into_iter().collect();
