@@ -248,7 +248,7 @@ impl BankingStage {
                     {
                         if let Some(sock) = rcluster_info
                             .lookup(&leader_id)
-                            .map_or(None, |x| Some(x.tpu_via_blobs))
+                            .and_then(|x| Some(x.tpu_via_blobs))
                         {
                             let _ = Self::forward_unprocessed_packets(
                                 &socket,
@@ -356,7 +356,7 @@ impl BankingStage {
                         {
                             if let Some(sock) = rcluster_info
                                 .lookup(&leader_id)
-                                .map_or(None, |x| Some(x.tpu_via_blobs))
+                                .and_then(|x| Some(x.tpu_via_blobs))
                             {
                                 let _ = Self::forward_unprocessed_packets(
                                     &socket,
