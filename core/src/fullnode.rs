@@ -255,7 +255,6 @@ impl Fullnode {
             config.sigverify_disabled,
             &blocktree,
             sender,
-            &leader_schedule_cache,
             &exit,
             &genesis_blockhash,
         );

@@ -10,7 +10,6 @@ use solana::banking_stage::{create_test_recorder, BankingStage};
 use solana::blocktree::{get_tmp_ledger_path, Blocktree};
 use solana::cluster_info::ClusterInfo;
 use solana::cluster_info::Node;
-use solana::leader_schedule_cache::LeaderScheduleCache;
 use solana::packet::to_packets_chunked;
 use solana::poh_recorder::WorkingBankEntries;
 use solana::service::Service;
@@ -58,7 +57,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let (verified_sender, verified_receiver) = channel();
     let (vote_sender, vote_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
-    let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
     let dummy = system_transaction::transfer(
         &mint_keypair,
         &mint_keypair.pubkey(),
@@ -124,7 +122,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             &poh_recorder,
             verified_receiver,
             vote_receiver,
-            &leader_schedule_cache,
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
@@ -167,7 +164,6 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let (verified_sender, verified_receiver) = channel();
     let (vote_sender, vote_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
-    let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
     let dummy = system_transaction::transfer(
         &mint_keypair,
         &mint_keypair.pubkey(),
@@ -249,7 +245,6 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             &poh_recorder,
             verified_receiver,
             vote_receiver,
-            &leader_schedule_cache,
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
