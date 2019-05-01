@@ -1,15 +1,11 @@
 mod bench;
 mod cli;
 
-use crate::bench::{
-    airdrop_lamports, do_bench_tps, fund_keys, generate_keypairs, Config, NUM_LAMPORTS_PER_ACCOUNT,
-};
+use crate::bench::{do_bench_tps, generate_and_fund_keypairs, Config, NUM_LAMPORTS_PER_ACCOUNT};
 use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::contact_info::ContactInfo;
 use solana::gossip_service::discover_nodes;
 use solana_client::thin_client::create_client;
-use solana_sdk::client::SyncClient;
-use solana_sdk::signature::KeypairUtil;
 use std::process::exit;
 
 fn main() {
@@ -59,26 +55,13 @@ fn main() {
         })
         .collect();
 
-    println!("Creating {} keypairs...", tx_count * 2);
-    let mut keypairs = generate_keypairs(&id, tx_count);
-
-    println!("Get lamports...");
-
-    // Sample the first keypair, see if it has lamports, if so then resume.
-    // This logic is to prevent lamport loss on repeated solana-bench-tps executions
-    let keypair0_balance = clients[0]
-        .get_balance(&keypairs[tx_count * 2 - 1].pubkey())
-        .unwrap_or(0);
-
-    if NUM_LAMPORTS_PER_ACCOUNT > keypair0_balance {
-        let extra = NUM_LAMPORTS_PER_ACCOUNT - keypair0_balance;
-        let total = extra * (keypairs.len() as u64);
-        airdrop_lamports(&clients[0], &drone_addr, &id, total);
-        println!("adding more lamports {}", extra);
-        fund_keys(&clients[0], &id, &keypairs, extra);
-    }
-    // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.
-    keypairs.truncate(2 * tx_count);
+    let (keypairs, keypair_balance) = generate_and_fund_keypairs(
+        &clients[0],
+        Some(drone_addr),
+        &id,
+        tx_count,
+        NUM_LAMPORTS_PER_ACCOUNT,
+    );
 
     let config = Config {
         id,
@@ -89,5 +72,5 @@ fn main() {
         sustained,
     };
 
-    do_bench_tps(clients, config, keypairs, keypair0_balance);
+    do_bench_tps(clients, config, keypairs, keypair_balance);
 }

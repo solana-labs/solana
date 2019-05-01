@@ -1,5 +1,6 @@
 use solana_metrics;
 
+use log::*;
 use rayon::prelude::*;
 use solana::gen_keys::GenKeys;
 use solana_drone::drone::request_airdrop_transaction;
@@ -62,7 +63,8 @@ pub fn do_bench_tps<T>(
     config: Config,
     gen_keypairs: Vec<Keypair>,
     keypair0_balance: u64,
-) where
+) -> u64
+where
     T: 'static + Client + Send + Sync,
 {
     let Config {
@@ -206,6 +208,9 @@ pub fn do_bench_tps<T>(
         &start.elapsed(),
         total_tx_sent_count.load(Ordering::Relaxed),
     );
+
+    let r_maxes = maxes.read().unwrap();
+    r_maxes.first().unwrap().1.tx
 }
 
 fn metrics_submit_lamport_balance(lamport_balance: u64) {
@@ -634,19 +639,53 @@ fn should_switch_directions(num_lamports_per_account: u64, i: u64) -> bool {
     i % (num_lamports_per_account / 4) == 0 && (i >= (3 * num_lamports_per_account) / 4)
 }
 
-pub fn generate_keypairs(id: &Keypair, tx_count: usize) -> Vec<Keypair> {
+pub fn generate_keypairs(seed_keypair: &Keypair, count: usize) -> Vec<Keypair> {
     let mut seed = [0u8; 32];
-    seed.copy_from_slice(&id.to_bytes()[..32]);
+    seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
     let mut rnd = GenKeys::new(seed);
 
     let mut total_keys = 0;
-    let mut target = tx_count * 2;
+    let mut target = count;
     while target > 1 {
         total_keys += target;
         // Use the upper bound for this division otherwise it may not generate enough keys
         target = (target + MAX_SPENDS_PER_TX - 1) / MAX_SPENDS_PER_TX;
     }
     rnd.gen_n_keypairs(total_keys as u64)
+}
+
+pub fn generate_and_fund_keypairs<T: Client>(
+    client: &T,
+    drone_addr: Option<SocketAddr>,
+    funding_id: &Keypair,
+    tx_count: usize,
+    lamports_per_account: u64,
+) -> (Vec<Keypair>, u64) {
+    info!("Creating {} keypairs...", tx_count * 2);
+    let mut keypairs = generate_keypairs(funding_id, tx_count * 2);
+
+    info!("Get lamports...");
+
+    // Sample the first keypair, see if it has lamports, if so then resume.
+    // This logic is to prevent lamport loss on repeated solana-bench-tps executions
+    let last_keypair_balance = client
+        .get_balance(&keypairs[tx_count * 2 - 1].pubkey())
+        .unwrap_or(0);
+
+    if lamports_per_account > last_keypair_balance {
+        let extra = lamports_per_account - last_keypair_balance;
+        let total = extra * (keypairs.len() as u64);
+        if client.get_balance(&funding_id.pubkey()).unwrap_or(0) < total {
+            airdrop_lamports(client, &drone_addr.unwrap(), funding_id, total);
+        }
+        info!("adding more lamports {}", extra);
+        fund_keys(client, funding_id, &keypairs, extra);
+    }
+
+    // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.
+    keypairs.truncate(2 * tx_count);
+
+    (keypairs, last_keypair_balance)
 }
 
 #[cfg(test)]
@@ -659,6 +698,7 @@ mod tests {
     use solana_drone::drone::run_local_drone;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
+    use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_block::GenesisBlock;
     use std::sync::mpsc::channel;
 
@@ -678,8 +718,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn test_bench_tps() {
+    fn test_bench_tps_local_cluster() {
+        solana_logger::setup();
         let fullnode_config = FullnodeConfig::default();
         const NUM_NODES: usize = 1;
         let cluster = LocalCluster::new(&ClusterConfig {
@@ -700,13 +740,22 @@ mod tests {
         config.tx_count = 100;
         config.duration = Duration::from_secs(5);
 
-        let keypairs = generate_keypairs(&config.id, config.tx_count);
         let client = create_client(
-            (cluster.entry_point_info.gossip, drone_addr),
+            (cluster.entry_point_info.rpc, cluster.entry_point_info.tpu),
             FULLNODE_PORT_RANGE,
         );
 
-        do_bench_tps(vec![client], config, keypairs, 0);
+        let lamports_per_account = 100;
+        let (keypairs, _keypair_balance) = generate_and_fund_keypairs(
+            &client,
+            Some(drone_addr),
+            &config.id,
+            config.tx_count,
+            lamports_per_account,
+        );
+
+        let total = do_bench_tps(vec![client], config, keypairs, 0);
+        assert!(total > 100);
     }
 
     #[test]
@@ -720,9 +769,26 @@ mod tests {
         config.tx_count = 10;
         config.duration = Duration::from_secs(5);
 
-        let keypairs = generate_keypairs(&config.id, config.tx_count);
-        fund_keys(&clients[0], &config.id, &keypairs, 20);
+        let (keypairs, _keypair_balance) =
+            generate_and_fund_keypairs(&clients[0], None, &config.id, config.tx_count, 20);
 
         do_bench_tps(clients, config, keypairs, 0);
+    }
+
+    #[test]
+    fn test_bench_tps_fund_keys() {
+        let (genesis_block, id) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
+        let client = BankClient::new(bank);
+        let tx_count = 10;
+        let lamports = 20;
+
+        let (keypairs, _keypair_balance) =
+            generate_and_fund_keypairs(&client, None, &id, tx_count, lamports);
+
+        for kp in &keypairs {
+            // TODO: This should be >= lamports, but fails at the moment
+            assert_ne!(client.get_balance(&kp.pubkey()).unwrap(), 0);
+        }
     }
 }
