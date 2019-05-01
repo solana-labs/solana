@@ -329,7 +329,7 @@ startNode() {
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
-  ln -sfT "fullnode-$ipAddress.log" "$netLogDir/fullnode-$pid.log"
+  ln -sf "fullnode-$ipAddress.log" "$netLogDir/fullnode-$pid.log"
   pids+=("$pid")
 }
 
@@ -575,7 +575,7 @@ stopNode() {
   ) >> "$logFile" 2>&1 &
 
   declare pid=$!
-  ln -sfT "stop-fullnode-$ipAddress.log" "$netLogDir/stop-fullnode-$pid.log"
+  ln -sf "stop-fullnode-$ipAddress.log" "$netLogDir/stop-fullnode-$pid.log"
   if $block; then
     wait $pid
   else
