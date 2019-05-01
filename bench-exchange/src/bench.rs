@@ -892,7 +892,7 @@ pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana::gossip_service::{discover_cluster, get_clients};
+    use solana::gossip_service::{discover_cluster, get_multi_client};
     use solana::local_cluster::{ClusterConfig, LocalCluster};
     use solana::validator::ValidatorConfig;
     use solana_drone::drone::run_local_drone;
@@ -952,25 +952,20 @@ mod tests {
                 exit(1);
             });
 
-        let clients = get_clients(&nodes);
+        let (client, num_clients) = get_multi_client(&nodes);
 
-        if clients.len() < NUM_NODES {
-            error!(
-                "Error: Insufficient nodes discovered.  Expecting {} or more",
-                NUM_NODES
-            );
-            exit(1);
-        }
+        info!("clients: {}", num_clients);
+        assert!(num_clients >= NUM_NODES);
 
         const NUM_SIGNERS: u64 = 2;
         airdrop_lamports(
-            &clients[0],
+            &client,
             &drone_addr,
             &config.identity,
             fund_amount * (accounts_in_groups + 1) as u64 * NUM_SIGNERS,
         );
 
-        do_bench_exchange(clients, config);
+        do_bench_exchange(vec![client], config);
     }
 
     #[test]

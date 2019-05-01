@@ -8,7 +8,7 @@ extern crate solana_exchange_program;
 
 use crate::bench::{airdrop_lamports, do_bench_exchange, Config};
 use log::*;
-use solana::gossip_service::{discover_cluster, get_clients};
+use solana::gossip_service::{discover_cluster, get_multi_client};
 use solana_sdk::signature::KeypairUtil;
 
 fn main() {
@@ -39,10 +39,10 @@ fn main() {
             panic!("Failed to discover nodes");
         });
 
-    let clients = get_clients(&nodes);
+    let (client, num_clients) = get_multi_client(&nodes);
 
-    info!("{} nodes found", clients.len());
-    if clients.len() < num_nodes {
+    info!("{} nodes found", num_clients);
+    if num_clients < num_nodes {
         panic!("Error: Insufficient nodes discovered");
     }
 
@@ -51,7 +51,7 @@ fn main() {
     let accounts_in_groups = batch_size * account_groups;
     const NUM_SIGNERS: u64 = 2;
     airdrop_lamports(
-        &clients[0],
+        &client,
         &drone_addr,
         &identity,
         fund_amount * (accounts_in_groups + 1) as u64 * NUM_SIGNERS,
@@ -68,5 +68,5 @@ fn main() {
         account_groups,
     };
 
-    do_bench_exchange(clients, config);
+    do_bench_exchange(vec![client], config);
 }

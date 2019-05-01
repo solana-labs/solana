@@ -2,7 +2,7 @@ mod bench;
 mod cli;
 
 use crate::bench::{do_bench_tps, generate_and_fund_keypairs, Config, NUM_LAMPORTS_PER_ACCOUNT};
-use solana::gossip_service::{discover_cluster, get_clients};
+use solana::gossip_service::{discover_cluster, get_multi_client};
 use std::process::exit;
 
 fn main() {
@@ -30,7 +30,10 @@ fn main() {
             eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
             exit(1);
         });
-    if nodes.len() < num_nodes {
+
+    let (client, num_clients) = get_multi_client(&nodes);
+
+    if nodes.len() < num_clients {
         eprintln!(
             "Error: Insufficient nodes discovered.  Expecting {} or more",
             num_nodes
@@ -38,10 +41,8 @@ fn main() {
         exit(1);
     }
 
-    let clients = get_clients(&nodes);
-
     let (keypairs, keypair_balance) = generate_and_fund_keypairs(
-        &clients[0],
+        &client,
         Some(drone_addr),
         &id,
         tx_count,
@@ -57,5 +58,5 @@ fn main() {
         sustained,
     };
 
-    do_bench_tps(clients, config, keypairs, keypair_balance);
+    do_bench_tps(vec![client], config, keypairs, keypair_balance);
 }
