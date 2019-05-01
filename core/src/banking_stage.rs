@@ -224,7 +224,7 @@ impl BankingStage {
             let next_leader = poh.next_slot_leader(DEFAULT_TICKS_PER_SLOT, None);
             (
                 Self::consume_or_forward_packets(
-                    next_leader.clone(),
+                    next_leader,
                     poh.bank().is_some(),
                     poh.would_be_leader(DEFAULT_TICKS_PER_SLOT * 2),
                     &rcluster_info.id(),
