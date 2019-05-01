@@ -64,7 +64,7 @@ impl FetchStage {
         if poh_recorder
             .lock()
             .unwrap()
-            .would_be_leader(DEFAULT_TICKS_PER_SLOT)
+            .would_be_leader(DEFAULT_TICKS_PER_SLOT * 2)
         {
             inc_new_counter_info!("fetch_stage-honor_forwards", len);
             for packets in batch {
