@@ -397,7 +397,7 @@ fn swapper<T>(
                 == 0
             {
                 tries += 1;
-                if tries > max_tries {
+                if tries >= max_tries {
                     if exit_signal.load(Ordering::Relaxed) {
                         break 'outer;
                     }
@@ -417,6 +417,7 @@ fn swapper<T>(
                 trade_index = thread_rng().gen_range(0, trade_infos.len());
             }
             max_tries = CHECK_TX_TIMEOUT_MAX_MS / CHECK_TX_DELAY_MS;
+            dumps = 0;
 
             trade_infos.iter().for_each(|info| {
                 order_book
@@ -1011,9 +1012,9 @@ mod tests {
 
         let mut config = Config::default();
         config.identity = Keypair::new();
-        config.threads = 1;
         config.duration = Duration::from_secs(1);
         config.fund_amount = 100_000;
+        config.threads = 1;
         config.transfer_delay = 20; // 15
         config.batch_size = 100; // 1000;
         config.chunk_size = 10; // 200;
@@ -1083,9 +1084,9 @@ mod tests {
 
         let mut config = Config::default();
         config.identity = identity;
-        config.threads = 1;
         config.duration = Duration::from_secs(1);
         config.fund_amount = 100_000;
+        config.threads = 1;
         config.transfer_delay = 20; // 0;
         config.batch_size = 100; // 1500;
         config.chunk_size = 10; // 1500;
