@@ -9,8 +9,6 @@ set -e
 cd "$(dirname "$0")/.."
 source ci/_
 
-_ scripts/install-grcov.sh
-
 : "${BUILDKITE_COMMIT:=local}"
 reportName="lcov-${BUILDKITE_COMMIT:0:9}"
 
