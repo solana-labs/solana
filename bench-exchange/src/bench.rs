@@ -1018,7 +1018,6 @@ mod tests {
         config.batch_size = 100; // 1000;
         config.chunk_size = 10; // 200;
         config.account_groups = 1; // 10;
-
         let Config {
             fund_amount,
             batch_size,
