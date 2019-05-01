@@ -246,13 +246,10 @@ impl BankingStage {
                         .unwrap()
                         .next_slot_leader(DEFAULT_TICKS_PER_SLOT, None)
                     {
-                        if let Some(sock) = rcluster_info
-                            .lookup(&leader_id)
-                            .and_then(|x| Some(x.tpu_via_blobs))
-                        {
+                        if let Some(leader) = rcluster_info.lookup(&leader_id) {
                             let _ = Self::forward_unprocessed_packets(
                                 &socket,
-                                &sock,
+                                &leader.tpu_via_blobs,
                                 &buffered_packets,
                             );
                         }
@@ -354,13 +351,10 @@ impl BankingStage {
                             .unwrap()
                             .next_slot_leader(DEFAULT_TICKS_PER_SLOT, None)
                         {
-                            if let Some(sock) = rcluster_info
-                                .lookup(&leader_id)
-                                .and_then(|x| Some(x.tpu_via_blobs))
-                            {
+                            if let Some(leader) = rcluster_info.lookup(&leader_id) {
                                 let _ = Self::forward_unprocessed_packets(
                                     &socket,
-                                    &sock,
+                                    &leader.tpu_via_blobs,
                                     &unprocessed_packets,
                                 );
                             }
