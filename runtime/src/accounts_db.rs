@@ -67,7 +67,7 @@ pub type AccountStorage = HashMap<usize, Arc<AccountStorageEntry>>;
 pub type InstructionAccounts = Vec<Account>;
 pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum AccountStorageStatus {
     StorageAvailable = 0,
     StorageFull = 1,
@@ -94,12 +94,11 @@ pub struct AccountStorageEntry {
     accounts: AppendVec,
 
     /// Keeps track of the number of accounts stored in a specific AppendVec.
-    /// This is periodically checked to reuse the stores that do not have
-    /// any accounts in it.
-    count: AtomicUsize,
-
-    /// status corresponding to the storage
-    status: AtomicUsize,
+    ///  This is periodically checked to reuse the stores that do not have
+    ///  any accounts in it
+    /// status corresponding to the storage, lets us know that
+    ///  the append_vec, once maxed out, then emptied, can be reclaimed
+    count_and_status: RwLock<(usize, AccountStorageStatus)>,
 }
 
 impl AccountStorageEntry {
@@ -114,28 +113,45 @@ impl AccountStorageEntry {
             id,
             fork_id,
             accounts,
-            count: AtomicUsize::new(0),
-            status: AtomicUsize::new(AccountStorageStatus::StorageAvailable as usize),
+            count_and_status: RwLock::new((0, AccountStorageStatus::StorageAvailable)),
         }
     }
 
     pub fn set_status(&self, status: AccountStorageStatus) {
-        self.status.store(status as usize, Ordering::Relaxed);
+        let mut count_and_status = self.count_and_status.write().unwrap();
+        *count_and_status = (count_and_status.0, status);
     }
 
-    pub fn get_status(&self) -> AccountStorageStatus {
-        self.status.load(Ordering::Relaxed).into()
+    pub fn status(&self) -> AccountStorageStatus {
+        self.count_and_status.read().unwrap().1
+    }
+
+    pub fn count(&self) -> usize {
+        self.count_and_status.read().unwrap().0
     }
 
     fn add_account(&self) {
-        self.count.fetch_add(1, Ordering::Relaxed);
+        let mut count_and_status = self.count_and_status.write().unwrap();
+        *count_and_status = (count_and_status.0 + 1, count_and_status.1);
     }
 
     fn remove_account(&self) {
-        if self.count.fetch_sub(1, Ordering::Relaxed) == 1 {
+        let mut count_and_status = self.count_and_status.write().unwrap();
+        let (count, mut status) = *count_and_status;
+
+        if count == 1 && status == AccountStorageStatus::StorageFull {
+            // the only time it's safe to call reset() on an append_vec is when
+            //  every account has been removed
+            //          **and**
+            //  the append_vec was previously completely full
+            //
+            // otherwise, the storage may be in flight with a store()
+            //   call
             self.accounts.reset();
-            self.set_status(AccountStorageStatus::StorageAvailable);
+            status = AccountStorageStatus::StorageAvailable;
         }
+
+        *count_and_status = (count - 1, status);
     }
 }
 
@@ -193,7 +209,7 @@ impl AccountsDB {
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
         for x in self.storage.read().unwrap().values() {
-            if x.fork_id == fork && x.count.load(Ordering::Relaxed) > 0 {
+            if x.fork_id == fork && x.count() > 0 {
                 return true;
             }
         }
@@ -254,8 +270,7 @@ impl AccountsDB {
             stores
                 .values()
                 .filter_map(|x| {
-                    if x.get_status() == AccountStorageStatus::StorageAvailable
-                        && x.fork_id == fork_id
+                    if x.status() == AccountStorageStatus::StorageAvailable && x.fork_id == fork_id
                     {
                         Some(x.clone())
                     } else {
@@ -354,7 +369,7 @@ impl AccountsDB {
         let dead_forks: HashSet<Fork> = storage
             .values()
             .filter_map(|x| {
-                if x.count.load(Ordering::Relaxed) == 0 {
+                if x.count() == 0 {
                     Some(x.fork_id)
                 } else {
                     None
@@ -363,13 +378,7 @@ impl AccountsDB {
             .collect();
         let live_forks: HashSet<Fork> = storage
             .values()
-            .filter_map(|x| {
-                if x.count.load(Ordering::Relaxed) > 0 {
-                    Some(x.fork_id)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|x| if x.count() > 0 { Some(x.fork_id) } else { None })
             .collect();
         dead_forks.difference(&live_forks).cloned().collect()
     }
@@ -685,10 +694,7 @@ mod tests {
     fn check_storage(accounts: &AccountsDB, count: usize) -> bool {
         let stores = accounts.storage.read().unwrap();
         assert_eq!(stores.len(), 1);
-        assert_eq!(
-            stores[&0].get_status(),
-            AccountStorageStatus::StorageAvailable
-        );
+        assert_eq!(stores[&0].status(), AccountStorageStatus::StorageAvailable);
         stores[&0].count.load(Ordering::Relaxed) == count
     }
 
@@ -780,7 +786,7 @@ mod tests {
             let stores = accounts.storage.read().unwrap();
             assert_eq!(stores.len(), 1);
             assert_eq!(stores[&0].count.load(Ordering::Relaxed), 1);
-            assert_eq!(stores[&0].get_status(), status[0]);
+            assert_eq!(stores[&0].status(), status[0]);
         }
 
         let pubkey2 = Pubkey::new_rand();
@@ -790,9 +796,9 @@ mod tests {
             let stores = accounts.storage.read().unwrap();
             assert_eq!(stores.len(), 2);
             assert_eq!(stores[&0].count.load(Ordering::Relaxed), 1);
-            assert_eq!(stores[&0].get_status(), status[1]);
+            assert_eq!(stores[&0].status(), status[1]);
             assert_eq!(stores[&1].count.load(Ordering::Relaxed), 1);
-            assert_eq!(stores[&1].get_status(), status[0]);
+            assert_eq!(stores[&1].status(), status[0]);
         }
         let ancestors = vec![(0, 0)].into_iter().collect();
         assert_eq!(accounts.load_slow(&ancestors, &pubkey1).unwrap(), account1);
@@ -805,11 +811,11 @@ mod tests {
                 let stores = accounts.storage.read().unwrap();
                 assert_eq!(stores.len(), 3);
                 assert_eq!(stores[&0].count.load(Ordering::Relaxed), count[index]);
-                assert_eq!(stores[&0].get_status(), status[0]);
+                assert_eq!(stores[&0].status(), status[0]);
                 assert_eq!(stores[&1].count.load(Ordering::Relaxed), 1);
-                assert_eq!(stores[&1].get_status(), status[1]);
+                assert_eq!(stores[&1].status(), status[1]);
                 assert_eq!(stores[&2].count.load(Ordering::Relaxed), count[index ^ 1]);
-                assert_eq!(stores[&2].get_status(), status[0]);
+                assert_eq!(stores[&2].status(), status[0]);
             }
             let ancestors = vec![(0, 0)].into_iter().collect();
             assert_eq!(accounts.load_slow(&ancestors, &pubkey1).unwrap(), account1);
