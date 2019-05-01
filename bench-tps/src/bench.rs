@@ -3,6 +3,7 @@ use solana_metrics;
 use log::*;
 use rayon::prelude::*;
 use solana::gen_keys::GenKeys;
+use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_drone::drone::request_airdrop_transaction;
 use solana_metrics::influxdb;
 use solana_sdk::client::Client;
@@ -23,13 +24,6 @@ use std::thread::sleep;
 use std::thread::Builder;
 use std::time::Duration;
 use std::time::Instant;
-
-pub struct NodeStats {
-    /// Maximum TPS reported by this node
-    pub tps: f64,
-    /// Total transactions reported by this node
-    pub tx: u64,
-}
 
 pub const MAX_SPENDS_PER_TX: usize = 4;
 pub const NUM_LAMPORTS_PER_ACCOUNT: u64 = 20;
@@ -101,7 +95,7 @@ where
             Builder::new()
                 .name("solana-client-sample".to_string())
                 .spawn(move || {
-                    sample_tx_count(&exit_signal, &maxes, first_tx_count, sample_period, &client);
+                    sample_txs(&exit_signal, &maxes, sample_period, &client);
                 })
                 .unwrap()
         })
@@ -210,7 +204,7 @@ where
     );
 
     let r_maxes = maxes.read().unwrap();
-    r_maxes.first().unwrap().1.tx
+    r_maxes.first().unwrap().1.txs
 }
 
 fn metrics_submit_lamport_balance(lamport_balance: u64) {
@@ -221,65 +215,6 @@ fn metrics_submit_lamport_balance(lamport_balance: u64) {
             .add_field("balance", influxdb::Value::Integer(lamport_balance as i64))
             .to_owned(),
     );
-}
-
-fn sample_tx_count<T: Client>(
-    exit_signal: &Arc<AtomicBool>,
-    maxes: &Arc<RwLock<Vec<(String, NodeStats)>>>,
-    first_tx_count: u64,
-    sample_period: u64,
-    client: &Arc<T>,
-) {
-    let mut now = Instant::now();
-    let mut initial_tx_count = client.get_transaction_count().expect("transaction count");
-    let mut max_tps = 0.0;
-    let mut total;
-
-    let log_prefix = format!("{:21}:", client.transactions_addr());
-
-    loop {
-        let mut tx_count = client.get_transaction_count().expect("transaction count");
-        if tx_count < initial_tx_count {
-            println!(
-                "expected tx_count({}) >= initial_tx_count({})",
-                tx_count, initial_tx_count
-            );
-            tx_count = initial_tx_count;
-        }
-        let duration = now.elapsed();
-        now = Instant::now();
-        let sample = tx_count - initial_tx_count;
-        initial_tx_count = tx_count;
-
-        let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
-        let tps = (sample * 1_000_000_000) as f64 / ns as f64;
-        if tps > max_tps {
-            max_tps = tps;
-        }
-        if tx_count > first_tx_count {
-            total = tx_count - first_tx_count;
-        } else {
-            total = 0;
-        }
-        println!(
-            "{} {:9.2} TPS, Transactions: {:6}, Total transactions: {}",
-            log_prefix, tps, sample, total
-        );
-        sleep(Duration::new(sample_period, 0));
-
-        if exit_signal.load(Ordering::Relaxed) {
-            println!("{} Exiting validator thread", log_prefix);
-            let stats = NodeStats {
-                tps: max_tps,
-                tx: total,
-            };
-            maxes
-                .write()
-                .unwrap()
-                .push((client.transactions_addr(), stats));
-            break;
-        }
-    }
 }
 
 fn generate_txs(
@@ -572,7 +507,7 @@ pub fn airdrop_lamports<T: Client>(
 }
 
 fn compute_and_report_stats(
-    maxes: &Arc<RwLock<Vec<(String, NodeStats)>>>,
+    maxes: &Arc<RwLock<Vec<(String, SampleStats)>>>,
     sample_period: u64,
     tx_send_elapsed: &Duration,
     total_tx_send_count: usize,
@@ -586,14 +521,14 @@ fn compute_and_report_stats(
     println!("---------------------+---------------+--------------------");
 
     for (sock, stats) in maxes.read().unwrap().iter() {
-        let maybe_flag = match stats.tx {
+        let maybe_flag = match stats.txs {
             0 => "!!!!!",
             _ => "",
         };
 
         println!(
             "{:20} | {:13.2} | {} {}",
-            sock, stats.tps, stats.tx, maybe_flag
+            sock, stats.tps, stats.txs, maybe_flag
         );
 
         if stats.tps == 0.0 {
@@ -604,27 +539,33 @@ fn compute_and_report_stats(
         if stats.tps > max_of_maxes {
             max_of_maxes = stats.tps;
         }
-        if stats.tx > max_tx_count {
-            max_tx_count = stats.tx;
+        if stats.txs > max_tx_count {
+            max_tx_count = stats.txs;
         }
     }
 
     if total_maxes > 0.0 {
         let num_nodes_with_tps = maxes.read().unwrap().len() - nodes_with_zero_tps;
-        let average_max = total_maxes / num_nodes_with_tps as f64;
+        let average_max = total_maxes / num_nodes_with_tps as f32;
         println!(
             "\nAverage max TPS: {:.2}, {} nodes had 0 TPS",
             average_max, nodes_with_zero_tps
         );
     }
 
+    let total_tx_send_count = total_tx_send_count as u64;
+    let drop_rate = if total_tx_send_count > max_tx_count {
+        (total_tx_send_count - max_tx_count) as f64 / total_tx_send_count as f64
+    } else {
+        0.0
+    };
     println!(
         "\nHighest TPS: {:.2} sampling period {}s max transactions: {} clients: {} drop rate: {:.2}",
         max_of_maxes,
         sample_period,
         max_tx_count,
         maxes.read().unwrap().len(),
-        (total_tx_send_count as u64 - max_tx_count) as f64 / total_tx_send_count as f64,
+        drop_rate,
     );
     println!(
         "\tAverage TPS: {}",
