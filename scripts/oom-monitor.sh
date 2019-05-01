@@ -30,7 +30,7 @@ while read -r victim; do
   ./metrics-write-datapoint.sh "oom-killer,victim=$victim,hostname=$HOSTNAME killed=1"
 done < <( \
   tail --follow=name --retry -n0 $syslog \
-  | sed --unbuffered -n 's/^.* Out of memory: Kill process [1-9][0-9]* (\([^)]*\)) .*/\1/p' \
+  | sed --unbuffered -n "s/^.* earlyoom\[[0-9]*\]: Killing process .\(.*\). with signal .*/\1/p" \
 )
 
 exit 1
