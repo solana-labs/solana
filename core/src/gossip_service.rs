@@ -3,9 +3,11 @@
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
+use crate::cluster_info::FULLNODE_PORT_RANGE;
 use crate::contact_info::ContactInfo;
 use crate::service::Service;
 use crate::streamer;
+use solana_client::thin_client::{create_client, ThinClient};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::SocketAddr;
@@ -103,6 +105,14 @@ pub fn discover(
         std::io::ErrorKind::Other,
         "Failed to converge",
     ))
+}
+
+pub fn get_clients(nodes: &[ContactInfo]) -> Vec<ThinClient> {
+    nodes
+        .iter()
+        .filter_map(ContactInfo::valid_client_facing_addr)
+        .map(|addrs| create_client(addrs, FULLNODE_PORT_RANGE))
+        .collect()
 }
 
 fn spy(

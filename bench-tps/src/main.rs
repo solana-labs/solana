@@ -2,10 +2,7 @@ mod bench;
 mod cli;
 
 use crate::bench::{do_bench_tps, generate_and_fund_keypairs, Config, NUM_LAMPORTS_PER_ACCOUNT};
-use solana::cluster_info::FULLNODE_PORT_RANGE;
-use solana::contact_info::ContactInfo;
-use solana::gossip_service::discover_nodes;
-use solana_client::thin_client::create_client;
+use solana::gossip_service::{discover_nodes, get_clients};
 use std::process::exit;
 
 fn main() {
@@ -39,21 +36,8 @@ fn main() {
         );
         exit(1);
     }
-    let clients: Vec<_> = nodes
-        .iter()
-        .filter_map(|node| {
-            let cluster_entrypoint = node.clone();
-            let cluster_addrs = cluster_entrypoint.client_facing_addr();
-            if ContactInfo::is_valid_address(&cluster_addrs.0)
-                && ContactInfo::is_valid_address(&cluster_addrs.1)
-            {
-                let client = create_client(cluster_addrs, FULLNODE_PORT_RANGE);
-                Some(client)
-            } else {
-                None
-            }
-        })
-        .collect();
+
+    let clients = get_clients(&nodes);
 
     let (keypairs, keypair_balance) = generate_and_fund_keypairs(
         &clients[0],

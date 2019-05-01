@@ -210,6 +210,14 @@ impl ContactInfo {
     pub fn client_facing_addr(&self) -> (SocketAddr, SocketAddr) {
         (self.rpc, self.tpu)
     }
+
+    pub fn valid_client_facing_addr(&self) -> Option<(SocketAddr, SocketAddr)> {
+        if ContactInfo::is_valid_address(&self.rpc) && ContactInfo::is_valid_address(&self.tpu) {
+            Some((self.rpc, self.tpu))
+        } else {
+            None
+        }
+    }
 }
 
 impl Signable for ContactInfo {
@@ -272,6 +280,7 @@ mod tests {
         assert!(ContactInfo::is_valid_address(&loopback));
         //        assert!(!ContactInfo::is_valid_ip_internal(loopback.ip(), false));
     }
+
     #[test]
     fn test_default() {
         let ci = ContactInfo::default();
@@ -332,5 +341,15 @@ mod tests {
         assert_eq!(d1.tpu, socketaddr!("127.0.0.1:1234"));
         assert_eq!(d1.rpc, socketaddr!("127.0.0.1:8899"));
         assert_eq!(d1.rpc_pubsub, socketaddr!("127.0.0.1:8900"));
+    }
+
+    #[test]
+    fn test_valid_client_facing() {
+        let mut ci = ContactInfo::default();
+        assert_eq!(ci.valid_client_facing_addr(), None);
+        ci.tpu = socketaddr!("127.0.0.1:123");
+        assert_eq!(ci.valid_client_facing_addr(), None);
+        ci.rpc = socketaddr!("127.0.0.1:234");
+        assert!(ci.valid_client_facing_addr().is_some());
     }
 }
