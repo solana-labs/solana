@@ -263,7 +263,7 @@ mod tests {
     use super::*;
     use crate::blocktree::create_new_tmp_ledger;
     use crate::blocktree::tests::entries_to_blobs;
-    use crate::entry::{create_ticks, next_entry, Entry};
+    use crate::entry::{create_ticks, next_entry, next_entry_mut, Entry};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::InstructionError;
@@ -1035,5 +1035,78 @@ mod tests {
 
         // Should not see duplicate signature error
         assert_eq!(bank.process_transaction(&fail_tx), Ok(()));
+    }
+
+    #[test]
+    #[ignore]
+    fn test_process_entries_stress() {
+        // this test throws lots of rayon threads at process_entries()
+        //  finds bugs in very low-layer stuff
+        solana_logger::setup();
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1_000_000_000);
+        let mut bank = Bank::new(&genesis_block);
+
+        const NUM_TRANSFERS: usize = 100;
+        let keypairs: Vec<_> = (0..NUM_TRANSFERS * 2).map(|_| Keypair::new()).collect();
+
+        // give everybody one lamport
+        for keypair in &keypairs {
+            bank.transfer(1, &mint_keypair, &keypair.pubkey())
+                .expect("funding failed");
+        }
+
+        let mut i = 0;
+        let mut hash = bank.last_blockhash();
+        loop {
+            let entries: Vec<_> = (0..NUM_TRANSFERS)
+                .map(|i| {
+                    next_entry_mut(
+                        &mut hash,
+                        0,
+                        vec![system_transaction::transfer(
+                            &keypairs[i],
+                            &keypairs[i + NUM_TRANSFERS].pubkey(),
+                            1,
+                            bank.last_blockhash(),
+                            0,
+                        )],
+                    )
+                })
+                .collect();
+            info!("paying iteration {}", i);
+            process_entries(&bank, &entries).expect("paying failed");
+
+            let entries: Vec<_> = (0..NUM_TRANSFERS)
+                .map(|i| {
+                    next_entry_mut(
+                        &mut hash,
+                        0,
+                        vec![system_transaction::transfer(
+                            &keypairs[i + NUM_TRANSFERS],
+                            &keypairs[i].pubkey(),
+                            1,
+                            bank.last_blockhash(),
+                            0,
+                        )],
+                    )
+                })
+                .collect();
+
+            info!("refunding iteration {}", i);
+            process_entries(&bank, &entries).expect("refunding failed");
+
+            // advance to next block
+            process_entries(
+                &bank,
+                &(0..bank.ticks_per_slot())
+                    .map(|_| next_entry_mut(&mut hash, 1, vec![]))
+                    .collect::<Vec<_>>(),
+            )
+            .expect("process ticks failed");
+
+            i += 1;
+            bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), i as u64);
+            bank.squash();
+        }
     }
 }
