@@ -181,6 +181,7 @@ where
                     &shared_txs,
                     &swapper_signers,
                     &profit_pubkeys,
+                    transfer_delay,
                     batch_size,
                     chunk_size,
                     account_groups,
@@ -358,6 +359,7 @@ fn swapper<T>(
     shared_txs: &SharedTransactions,
     signers: &[Arc<Keypair>],
     profit_pubkeys: &[Pubkey],
+    transfer_delay: u64,
     batch_size: usize,
     chunk_size: usize,
     account_groups: usize,
@@ -374,9 +376,16 @@ fn swapper<T>(
     let start_time = now;
     let mut total_elapsed = start_time.elapsed();
 
+    // Chunks may have been dropped and we don't want to wait a long time
+    // for each time, Back-off each time we fail to confirm a chunk
     const CHECK_TX_TIMEOUT_MAX_MS: u64 = 15000;
     const CHECK_TX_DELAY_MS: u64 = 100;
     let mut max_tries = CHECK_TX_TIMEOUT_MAX_MS / CHECK_TX_DELAY_MS;
+
+    // If we dump too many chunks maybe we are just waiting on a back-log
+    // rather than a series of dropped packets, reset to max waits
+    const MAX_DUMPS: u64 = 50;
+    let mut dumps = 0;
 
     'outer: loop {
         if let Ok(trade_infos) = receiver.try_recv() {
@@ -392,8 +401,15 @@ fn swapper<T>(
                     if exit_signal.load(Ordering::Relaxed) {
                         break 'outer;
                     }
-                    error!("Give up waiting, dump batch");
-                    max_tries /= 2;
+                    error!("Give up and dump batch");
+                    if dumps >= MAX_DUMPS {
+                        error!("Max batches dumped, reset wait back-off");
+                        max_tries = CHECK_TX_TIMEOUT_MAX_MS / CHECK_TX_DELAY_MS;
+                        dumps = 0;
+                    } else {
+                        dumps += 1;
+                        max_tries /= 2;
+                    }
                     continue 'outer;
                 }
                 debug!("{} waiting for trades batch to clear", tries);
@@ -410,7 +426,6 @@ fn swapper<T>(
             let mut swaps = Vec::new();
             while let Some((to, from)) = order_book.pop() {
                 swaps.push((to, from));
-                // TODO get rid of this
                 if swaps.len() >= batch_size {
                     break;
                 }
@@ -481,7 +496,8 @@ fn swapper<T>(
                     shared_txs_wl.push_back(chunk.to_vec());
                 }
             }
-            sleep(Duration::from_millis(50));
+            // Throttle the swapper so it doesn't try to catchup unbridled
+            sleep(Duration::from_millis(transfer_delay / 2));
         }
 
         if exit_signal.load(Ordering::Relaxed) {
@@ -1002,6 +1018,7 @@ mod tests {
         config.batch_size = 100; // 1000;
         config.chunk_size = 10; // 200;
         config.account_groups = 1; // 10;
+
         let Config {
             fund_amount,
             batch_size,
