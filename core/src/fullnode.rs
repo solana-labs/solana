@@ -390,7 +390,6 @@ pub fn make_active_set_entries(
 
 pub fn new_fullnode_for_tests() -> (Fullnode, ContactInfo, Keypair, String) {
     use crate::blocktree::create_new_tmp_ledger;
-    use crate::cluster_info::Node;
 
     let node_keypair = Arc::new(Keypair::new());
     let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());

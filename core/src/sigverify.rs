@@ -68,9 +68,6 @@ pub fn init() {
 }
 
 fn verify_packet(packet: &Packet) -> u8 {
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::Signature;
-
     let (sig_len, sig_start, msg_start, pubkey_start) = get_packet_offsets(packet, 0);
     let mut sig_start = sig_start as usize;
     let mut pubkey_start = pubkey_start as usize;
