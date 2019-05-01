@@ -18,8 +18,8 @@ else
   apt install --quiet --yes ./earlyoom_1.2-*_amd64.deb
 
   cat > earlyoom <<OOM
-  # use the kernel OOM killer, trigger at 20% available RAM,
-  EARLYOOM_ARGS="-k -m 20"
+  # trigger at 20% available RAM,
+  EARLYOOM_ARGS="-m 20"
 OOM
   cp earlyoom /etc/default/
   rm earlyoom
