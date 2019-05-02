@@ -621,64 +621,6 @@ mod test {
     use std::sync::{Arc, RwLock};
 
     #[test]
-    fn test_vote_error_replay_stage_correctness() {
-        solana_logger::setup();
-        // Set up dummy node to host a ReplayStage
-        let my_keypair = Keypair::new();
-        let my_id = my_keypair.pubkey();
-        let my_node = Node::new_localhost_with_pubkey(&my_id);
-
-        // Create keypair for the leader
-        let leader_id = Pubkey::new_rand();
-
-        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10_000, &leader_id, 500);
-
-        let (my_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
-
-        // Set up the cluster info
-        let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
-            my_node.info.clone(),
-        )));
-
-        // Set up the replay stage
-        {
-            let voting_keypair = Arc::new(Keypair::new());
-            let (bank_forks, _bank_forks_info, blocktree, l_receiver, leader_schedule_cache) =
-                new_banks_from_blocktree(&my_ledger_path, None);
-            let bank = bank_forks.working_bank();
-            let leader_schedule_cache = Arc::new(leader_schedule_cache);
-            let blocktree = Arc::new(blocktree);
-            let (exit, poh_recorder, poh_service, _entry_receiver) =
-                create_test_recorder(&bank, &blocktree);
-            let (replay_stage, _slot_full_receiver, _) = ReplayStage::new(
-                &my_keypair.pubkey(),
-                &voting_keypair.pubkey(),
-                Some(voting_keypair.clone()),
-                blocktree.clone(),
-                &Arc::new(RwLock::new(bank_forks)),
-                cluster_info_me.clone(),
-                &exit,
-                l_receiver,
-                &Arc::new(RpcSubscriptions::default()),
-                &poh_recorder,
-                &leader_schedule_cache,
-            );
-            let vote_ix = vote_instruction::vote(&voting_keypair.pubkey(), vec![Vote::new(0)]);
-            let vote_tx = Transaction::new_signed_instructions(
-                &[voting_keypair.as_ref()],
-                vec![vote_ix],
-                bank.last_blockhash(),
-            );
-            cluster_info_me.write().unwrap().push_vote(vote_tx);
-
-            exit.store(true, Ordering::Relaxed);
-            replay_stage.join().unwrap();
-            poh_service.join().unwrap();
-        }
-        let _ignored = remove_dir_all(&my_ledger_path);
-    }
-
-    #[test]
     fn test_child_slots_of_same_parent() {
         let ledger_path = get_tmp_ledger_path!();
         {
