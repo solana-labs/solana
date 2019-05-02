@@ -1324,7 +1324,8 @@ mod tests {
         // send a bogus instruction to system_program, cause an instruction error
         tx.message.instructions[0].data[0] = 40;
 
-        bank.process_transaction(&tx).is_err(); // fails with an instruction error
+        bank.process_transaction(&tx)
+            .expect_err("instruction error"); // fails with an instruction error
         assert_eq!(bank.get_balance(&leader), initial_balance + 5); // gots our bucks
         assert_eq!(bank.get_balance(&key2.pubkey()), 1); //  our fee ------V
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5 - 3 - 1);
