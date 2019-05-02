@@ -607,16 +607,11 @@ impl Service for ReplayStage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::banking_stage::create_test_recorder;
-    use crate::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path};
-    use crate::cluster_info::{ClusterInfo, Node};
-    use crate::fullnode::new_banks_from_blocktree;
+    use crate::blocktree::get_tmp_ledger_path;
     use crate::packet::Blob;
     use crate::replay_stage::ReplayStage;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_api::vote_state::Vote;
     use std::fs::remove_dir_all;
     use std::sync::{Arc, RwLock};
 
