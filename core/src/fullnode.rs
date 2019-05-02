@@ -51,7 +51,7 @@ impl Default for FullnodeConfig {
         // TODO: remove this, temporary parameter to configure
         // storage amount differently for test configurations
         // so tests don't take forever to run.
-        const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 32;
+        const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 128;
         Self {
             sigverify_disabled: false,
             voting_disabled: false,
