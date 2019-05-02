@@ -74,7 +74,7 @@ impl AppendVec {
             .open(file)
             .expect("Unable to open data file");
 
-        data.seek(SeekFrom::Start(size as u64)).unwrap();
+        data.seek(SeekFrom::Start((size - 1) as u64)).unwrap();
         data.write_all(&[0]).unwrap();
         data.seek(SeekFrom::Start(0)).unwrap();
         data.flush().unwrap();
@@ -153,7 +153,7 @@ impl AppendVec {
             end += val.1;
         }
 
-        if (self.file_size as usize) <= end {
+        if (self.file_size as usize) < end {
             return None;
         }
 
