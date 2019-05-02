@@ -49,7 +49,7 @@ use reed_solomon_erasure::ReedSolomon;
 
 //TODO(sakridge) pick these values
 /// Number of data blobs
-pub const NUM_DATA: usize = 16;
+pub const NUM_DATA: usize = 8;
 /// Number of coding blobs; also the maximum number that can go missing.
 pub const NUM_CODING: usize = 4;
 /// Total number of blobs in an erasure set; includes data and coding blobs
