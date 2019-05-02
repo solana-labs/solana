@@ -12,6 +12,12 @@ source ci/_
 : "${BUILDKITE_COMMIT:=local}"
 reportName="lcov-${BUILDKITE_COMMIT:0:9}"
 
+if [[ -n $1 ]]; then
+  crate=--manifest-path=$1
+else
+  crate=--all
+fi
+
 coverageFlags=(-Zprofile)                # Enable coverage
 coverageFlags+=("-Clink-dead-code")      # Dead code should appear red in the report
 coverageFlags+=("-Ccodegen-units=1")     # Disable ThinLTO which corrupts debuginfo (see [rustc issue #45511]).
@@ -29,12 +35,12 @@ fi
 rm -rf target/cov/$reportName
 
 source ci/rust-version.sh nightly
-_ cargo +$rust_nightly build --target-dir target/cov --all
-_ cargo +$rust_nightly test --target-dir target/cov --lib --all -- --test-threads=1
+_ cargo +$rust_nightly build --target-dir target/cov "$crate"
+_ cargo +$rust_nightly test --target-dir target/cov --lib "$crate" -- --test-threads=1
 
-_ scripts/fetch-grcov.sh
 echo "--- grcov"
-./grcov target/cov/debug/deps/ > target/cov/lcov-full.info
+
+_ grcov target/cov/debug/deps/ > target/cov/lcov-full.info
 
 echo "--- filter-files-from-lcov"
 
