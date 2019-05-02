@@ -244,7 +244,6 @@ where
 
 impl Write for SharedWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-
         let mut vec = self.buf.write().expect(BACKING_ERR);
 
         // Calc ranges
