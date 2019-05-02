@@ -21,9 +21,9 @@ RUN set -x \
       rsync \
       sudo \
       \
+ && rm -rf /var/lib/apt/lists/* \
  && rustup component add rustfmt \
  && rustup component add clippy \
- && rm -rf /var/lib/apt/lists/* \
+ && cargo install cargo-audit \
  && rustc --version \
  && cargo --version
-
