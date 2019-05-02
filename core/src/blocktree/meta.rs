@@ -286,11 +286,15 @@ fn test_meta_coding_present() {
 
 #[test]
 fn test_erasure_meta_status() {
+    use rand::{seq::SliceRandom, thread_rng};
     // Local constansts just used to avoid repetitive casts
     const N_DATA: u64 = crate::erasure::NUM_DATA as u64;
     const N_CODING: u64 = crate::erasure::NUM_CODING as u64;
 
     let mut e_meta = ErasureMeta::default();
+    let mut rng = thread_rng();
+    let data_indexes: Vec<u64> = (0..N_DATA).collect();
+    let coding_indexes: Vec<u64> = (0..N_CODING).collect();
 
     assert_eq!(e_meta.status(), ErasureMetaStatus::StillNeed(NUM_DATA));
 
@@ -298,32 +302,24 @@ fn test_erasure_meta_status() {
 
     assert_eq!(e_meta.status(), ErasureMetaStatus::DataFull);
 
-    e_meta.set_coding_multi(1..N_CODING, true);
     e_meta.size = 1;
+    e_meta.set_coding_multi(0..N_CODING, true);
+
     assert_eq!(e_meta.status(), ErasureMetaStatus::DataFull);
 
-    e_meta.set_data_present(N_DATA - 1, false);
-    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
+    for &idx in data_indexes.choose_multiple(&mut rng, NUM_CODING) {
+        e_meta.set_data_present(idx, false);
 
-    e_meta.set_data_present(0, false);
-    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
+        assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
+    }
 
-    e_meta.set_data_present(N_DATA / 2, false);
-    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
+    e_meta.set_data_multi(0..N_DATA, true);
 
-    e_meta.set_data_present(N_DATA / 2 + 1, false);
-    assert_eq!(e_meta.status(), ErasureMetaStatus::StillNeed(1));
+    for &idx in coding_indexes.choose_multiple(&mut rng, NUM_CODING) {
+        e_meta.set_coding_present(idx, false);
 
-    e_meta.set_data_present(N_DATA / 2 + 1, true);
-    e_meta.set_data_present(N_DATA / 2 - 1, false);
-    assert_eq!(e_meta.status(), ErasureMetaStatus::StillNeed(1));
-
-    e_meta.set_coding_multi(1..N_CODING, true);
-    e_meta.set_data_multi(1..N_DATA, true);
-    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
-
-    e_meta.set_data_multi(0..N_CODING - 1, false);
-    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
+        assert_eq!(e_meta.status(), ErasureMetaStatus::DataFull);
+    }
 }
 
 #[test]

@@ -3138,12 +3138,8 @@ pub mod tests {
             let shared_coding_blobs = coding_generator.next(&data_blobs);
             assert_eq!(shared_coding_blobs.len(), NUM_CODING);
 
-            // Insert data blobs and coding. Not enough to do recovery
-            blocktree
-                .write_shared_blobs(&data_blobs[..NUM_DATA - 5])
-                .unwrap();
-
-            for shared_blob in shared_coding_blobs {
+            // Insert coding blobs except 1 and no data. Not enough to do recovery
+            for shared_blob in shared_coding_blobs.iter().skip(1) {
                 let blob = shared_blob.read().unwrap();
                 let size = blob.size() + BLOB_HEADER_SIZE;
 
