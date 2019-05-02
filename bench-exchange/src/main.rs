@@ -2,9 +2,9 @@ pub mod bench;
 mod cli;
 pub mod order_book;
 
-use crate::bench::{airdrop_lamports, do_bench_exchange, get_clients, Config};
+use crate::bench::{airdrop_lamports, do_bench_exchange, Config};
 use log::*;
-use solana::gossip_service::discover_nodes;
+use solana::gossip_service::{discover_nodes, get_clients};
 use solana_sdk::signature::KeypairUtil;
 
 fn main() {

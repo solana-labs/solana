@@ -5,12 +5,8 @@ use itertools::izip;
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana::cluster_info::FULLNODE_PORT_RANGE;
-use solana::contact_info::ContactInfo;
 use solana::gen_keys::GenKeys;
 use solana_client::perf_utils::{sample_txs, SampleStats};
-use solana_client::thin_client::create_client;
-use solana_client::thin_client::ThinClient;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_exchange_api::exchange_instruction;
 use solana_exchange_api::exchange_state::*;
@@ -907,29 +903,11 @@ pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, 
     }
 }
 
-pub fn get_clients(nodes: &[ContactInfo]) -> Vec<ThinClient> {
-    nodes
-        .iter()
-        .filter_map(|node| {
-            let cluster_entrypoint = node;
-            let cluster_addrs = cluster_entrypoint.client_facing_addr();
-            if ContactInfo::is_valid_address(&cluster_addrs.0)
-                && ContactInfo::is_valid_address(&cluster_addrs.1)
-            {
-                let client = create_client(cluster_addrs, FULLNODE_PORT_RANGE);
-                Some(client)
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use solana::fullnode::FullnodeConfig;
-    use solana::gossip_service::discover_nodes;
+    use solana::gossip_service::{discover_nodes, get_clients};
     use solana::local_cluster::{ClusterConfig, LocalCluster};
     use solana_drone::drone::run_local_drone;
     use solana_exchange_api::exchange_processor::process_instruction;
