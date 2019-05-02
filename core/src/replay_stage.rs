@@ -298,6 +298,7 @@ impl ReplayStage {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn handle_votable_bank<T>(
         bank: &Arc<Bank>,
         bank_forks: &Arc<RwLock<BankForks>>,
