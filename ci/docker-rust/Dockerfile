@@ -25,5 +25,7 @@ RUN set -x \
  && rustup component add rustfmt \
  && rustup component add clippy \
  && cargo install cargo-audit \
+ && cargo install svgbob_cli \
+ && cargo install mdbook \
  && rustc --version \
  && cargo --version
