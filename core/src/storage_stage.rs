@@ -249,7 +249,7 @@ impl StorageStage {
                 );
                 instructions.push(create_instruction);
                 signing_keys.push(keypair.as_ref());
-                println!("storage account requested");
+                info!("storage account requested");
             }
         }
         instructions.push(instruction);
@@ -414,7 +414,7 @@ impl StorageStage {
                     }
                 }
                 if *slot_count % storage_rotate_count == 0 {
-                    println!(
+                    debug!(
                         "crosses sending at slot: {}! hashes: {}",
                         slot, entry.num_hashes
                     );

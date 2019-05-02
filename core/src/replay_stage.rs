@@ -680,11 +680,9 @@ mod test {
             blocktree
                 .write_entries(slot, 0, 0, genesis_block.ticks_per_slot, next_tick.clone())
                 .unwrap();
-            println!("got here");
             let received_slot = root_slot_receiver
                 .recv()
                 .expect("Expected to receive an entry on the ledger writer receiver");
-            println!("got root slot");
             assert_eq!(slot, received_slot);
 
             exit.store(true, Ordering::Relaxed);
