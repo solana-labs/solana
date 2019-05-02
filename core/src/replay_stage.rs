@@ -610,7 +610,6 @@ mod test {
     use crate::banking_stage::create_test_recorder;
     use crate::blocktree::{create_new_tmp_ledger, get_tmp_ledger_path};
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::entry::create_ticks;
     use crate::fullnode::new_banks_from_blocktree;
     use crate::packet::Blob;
     use crate::replay_stage::ReplayStage;
@@ -621,9 +620,7 @@ mod test {
     use std::fs::remove_dir_all;
     use std::sync::{Arc, RwLock};
 
-    //TODO(sagar-solana) there's no way to make this work as is. Need to be making roots in replay stage
     #[test]
-    #[ignore]
     fn test_vote_error_replay_stage_correctness() {
         solana_logger::setup();
         // Set up dummy node to host a ReplayStage
@@ -653,7 +650,7 @@ mod test {
             let blocktree = Arc::new(blocktree);
             let (exit, poh_recorder, poh_service, _entry_receiver) =
                 create_test_recorder(&bank, &blocktree);
-            let (replay_stage, _slot_full_receiver, root_slot_receiver) = ReplayStage::new(
+            let (replay_stage, _slot_full_receiver, _) = ReplayStage::new(
                 &my_keypair.pubkey(),
                 &voting_keypair.pubkey(),
                 Some(voting_keypair.clone()),
@@ -673,17 +670,6 @@ mod test {
                 bank.last_blockhash(),
             );
             cluster_info_me.write().unwrap().push_vote(vote_tx);
-
-            info!("Send ReplayStage an entry, should see it on the root slot receiver");
-            let next_tick = create_ticks(genesis_block.ticks_per_slot, bank.last_blockhash());
-            let slot = 1;
-            blocktree
-                .write_entries(slot, 0, 0, genesis_block.ticks_per_slot, next_tick.clone())
-                .unwrap();
-            let received_slot = root_slot_receiver
-                .recv()
-                .expect("Expected to receive an entry on the ledger writer receiver");
-            assert_eq!(slot, received_slot);
 
             exit.store(true, Ordering::Relaxed);
             replay_stage.join().unwrap();

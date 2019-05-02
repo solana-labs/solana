@@ -56,6 +56,7 @@ pub struct ClusterConfig {
     /// The fullnode config that should be applied to every node in the cluster
     pub fullnode_config: FullnodeConfig,
     /// Number of replicators in the cluster
+    /// Note- replicators will timeout if ticks_per_slot is much larger than the default 8
     pub num_replicators: u64,
     /// Number of nodes that are unstaked and not voting (a.k.a listening)
     pub num_listeners: u64,
@@ -474,7 +475,7 @@ mod test {
             num_replicators: 1,
             node_stakes: vec![3; NUM_NODES],
             cluster_lamports: 100,
-            ticks_per_slot: 16,
+            ticks_per_slot: 8,
             slots_per_epoch: MINIMUM_SLOT_LENGTH as u64,
             ..ClusterConfig::default()
         };
