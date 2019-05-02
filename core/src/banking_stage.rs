@@ -482,7 +482,7 @@ impl BankingStage {
         let (verified_transactions, verified_indexes): (Vec<_>, Vec<_>) = transactions
             .into_iter()
             .zip(vers)
-            .zip(0..)
+            .zip(offset..)
             .filter_map(|((tx, ver), index)| match tx {
                 None => None,
                 Some(tx) => {
