@@ -449,6 +449,7 @@ impl Drop for LocalCluster {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use solana_runtime::bank::MINIMUM_SLOT_LENGTH;
 
     #[test]
@@ -465,6 +466,7 @@ mod test {
         solana_logger::setup();
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.rpc_config.enable_fullnode_exit = true;
+        fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
         const NUM_NODES: usize = 1;
         let num_replicators = 1;
         let config = ClusterConfig {

@@ -5,7 +5,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::storage_stage::ENTRIES_PER_SEGMENT;
+use crate::storage_stage::SLOTS_PER_SEGMENT;
 
 pub const CHACHA_BLOCK_SIZE: usize = 64;
 pub const CHACHA_KEY_SIZE: usize = 32;
@@ -50,8 +50,7 @@ pub fn chacha_cbc_encrypt_ledger(
     let mut entry = slice;
 
     loop {
-        match blocktree.read_blobs_bytes(entry, ENTRIES_PER_SEGMENT - total_entries, &mut buffer, 0)
-        {
+        match blocktree.read_blobs_bytes(entry, SLOTS_PER_SEGMENT - total_entries, &mut buffer, 0) {
             Ok((num_entries, entry_len)) => {
                 debug!(
                     "chacha: encrypting slice: {} num_entries: {} entry_len: {}",

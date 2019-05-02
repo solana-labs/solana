@@ -32,7 +32,7 @@ use solana_vote_api::vote_instruction;
 use solana_vote_api::vote_state::Vote;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::Result;
 
@@ -216,14 +216,10 @@ impl Fullnode {
             Some(Arc::new(voting_keypair))
         };
 
-        // Setup channel for sending entries to storage stage
-        let (sender, receiver) = channel();
-
         let tvu = Tvu::new(
             vote_account,
             voting_keypair,
             &bank_forks,
-            &bank_forks_info,
             &cluster_info,
             sockets,
             blocktree.clone(),
@@ -233,8 +229,6 @@ impl Fullnode {
             ledger_signal_receiver,
             &subscriptions,
             &poh_recorder,
-            sender.clone(),
-            receiver,
             &leader_schedule_cache,
             &exit,
             &genesis_blockhash,
@@ -254,7 +248,6 @@ impl Fullnode {
             node.sockets.broadcast,
             config.sigverify_disabled,
             &blocktree,
-            sender,
             &exit,
             &genesis_blockhash,
         );

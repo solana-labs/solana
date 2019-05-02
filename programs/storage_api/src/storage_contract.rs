@@ -1,4 +1,4 @@
-use crate::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
+use crate::get_segment_from_slot;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::Account;
@@ -44,7 +44,7 @@ pub enum StorageContract {
     Default,
 
     ValidatorStorage {
-        entry_height: u64,
+        slot: u64,
         hash: Hash,
         lockout_validations: Vec<Vec<CheckedProof>>,
         reward_validations: Vec<Vec<CheckedProof>>,
@@ -68,7 +68,7 @@ impl<'a> StorageAccount<'a> {
         &mut self,
         id: Pubkey,
         sha_state: Hash,
-        entry_height: u64,
+        slot: u64,
         signature: Signature,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
@@ -80,7 +80,7 @@ impl<'a> StorageAccount<'a> {
         };
 
         if let StorageContract::ReplicatorStorage { proofs, .. } = &mut storage_contract {
-            let segment_index = get_segment_from_entry(entry_height);
+            let segment_index = get_segment_from_slot(slot);
             if segment_index > proofs.len() || proofs.is_empty() {
                 proofs.resize(cmp::max(1, segment_index), Proof::default());
             }
@@ -91,8 +91,8 @@ impl<'a> StorageAccount<'a> {
             }
 
             debug!(
-                "Mining proof submitted with contract {:?} entry_height: {}",
-                sha_state, entry_height
+                "Mining proof submitted with contract {:?} slot: {}",
+                sha_state, slot
             );
 
             let proof_info = Proof {
@@ -110,12 +110,12 @@ impl<'a> StorageAccount<'a> {
     pub fn advertise_storage_recent_blockhash(
         &mut self,
         hash: Hash,
-        entry_height: u64,
+        slot: u64,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::Default = storage_contract {
             *storage_contract = StorageContract::ValidatorStorage {
-                entry_height: 0,
+                slot: 0,
                 hash: Hash::default(),
                 lockout_validations: vec![],
                 reward_validations: vec![],
@@ -123,14 +123,14 @@ impl<'a> StorageAccount<'a> {
         };
 
         if let StorageContract::ValidatorStorage {
-            entry_height: state_entry_height,
+            slot: state_slot,
             hash: state_hash,
             reward_validations,
             lockout_validations,
         } = &mut storage_contract
         {
-            let original_segments = *state_entry_height / ENTRIES_PER_SEGMENT;
-            let segments = entry_height / ENTRIES_PER_SEGMENT;
+            let original_segments = get_segment_from_slot(*state_slot);
+            let segments = get_segment_from_slot(slot);
             debug!(
                 "advertise new last id segments: {} orig: {}",
                 segments, original_segments
@@ -139,7 +139,7 @@ impl<'a> StorageAccount<'a> {
                 return Err(InstructionError::InvalidArgument);
             }
 
-            *state_entry_height = entry_height;
+            *state_slot = slot;
             *state_hash = hash;
 
             // move lockout_validations to reward_validations
@@ -154,14 +154,14 @@ impl<'a> StorageAccount<'a> {
 
     pub fn proof_validation(
         &mut self,
-        entry_height: u64,
+        slot: u64,
         proofs: Vec<CheckedProof>,
         replicator_accounts: &mut [StorageAccount],
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::Default = storage_contract {
             *storage_contract = StorageContract::ValidatorStorage {
-                entry_height: 0,
+                slot: 0,
                 hash: Hash::default(),
                 lockout_validations: vec![],
                 reward_validations: vec![],
@@ -169,16 +169,16 @@ impl<'a> StorageAccount<'a> {
         };
 
         if let StorageContract::ValidatorStorage {
-            entry_height: current_entry_height,
+            slot: current_slot,
             lockout_validations,
             ..
         } = &mut storage_contract
         {
-            if entry_height >= *current_entry_height {
+            if slot >= *current_slot {
                 return Err(InstructionError::InvalidArgument);
             }
 
-            let segment_index = get_segment_from_entry(entry_height);
+            let segment_index = get_segment_from_slot(slot);
             let mut previous_proofs = replicator_accounts
                 .iter_mut()
                 .filter_map(|account| {
@@ -224,7 +224,7 @@ impl<'a> StorageAccount<'a> {
 
     pub fn claim_storage_reward(
         &mut self,
-        entry_height: u64,
+        slot: u64,
         tick_height: u64,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
@@ -236,7 +236,7 @@ impl<'a> StorageAccount<'a> {
             reward_validations, ..
         } = &mut storage_contract
         {
-            let claims_index = get_segment_from_entry(entry_height);
+            let claims_index = get_segment_from_slot(slot);
             let _num_validations = count_valid_proofs(&reward_validations[claims_index]);
             // TODO can't just create lamports out of thin air
             // self.account.lamports += TOTAL_VALIDATOR_REWARDS * num_validations;
@@ -248,8 +248,8 @@ impl<'a> StorageAccount<'a> {
         {
             // if current tick height is a full segment away? then allow reward collection
             // storage needs to move to tick heights too, until then this makes little sense
-            let current_index = get_segment_from_entry(tick_height);
-            let claims_index = get_segment_from_entry(entry_height);
+            let current_index = get_segment_from_slot(tick_height);
+            let claims_index = get_segment_from_slot(slot);
             if current_index <= claims_index || claims_index >= reward_validations.len() {
                 debug!(
                     "current {:?}, claim {:?}, rewards {:?}",
@@ -348,7 +348,7 @@ mod tests {
         }
 
         contract = StorageContract::ValidatorStorage {
-            entry_height: 0,
+            slot: 0,
             hash: Hash::default(),
             lockout_validations: vec![],
             reward_validations: vec![],
