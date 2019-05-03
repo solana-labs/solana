@@ -73,7 +73,7 @@ pub trait RpcSolPubSub {
     fn signature_subscribe(
         &self,
         _: Self::Metadata,
-        _: Subscriber<Option<transaction::Result<()>>>,
+        _: Subscriber<transaction::Result<()>>,
         _: String,
         _: Option<Depth>,
     );
@@ -198,7 +198,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn signature_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: Subscriber<Option<transaction::Result<()>>>,
+        subscriber: Subscriber<transaction::Result<()>>,
         signature_str: String,
         depth: Option<Depth>,
     ) {

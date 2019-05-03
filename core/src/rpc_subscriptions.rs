@@ -21,9 +21,8 @@ type RpcAccountSubscriptions =
     RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Account>, Depth)>>>;
 type RpcProgramSubscriptions =
     RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<(String, Account)>, Depth)>>>;
-type RpcSignatureSubscriptions = RwLock<
-    HashMap<Signature, HashMap<SubscriptionId, (Sink<Option<transaction::Result<()>>>, Depth)>>,
->;
+type RpcSignatureSubscriptions =
+    RwLock<HashMap<Signature, HashMap<SubscriptionId, (Sink<transaction::Result<()>>, Depth)>>>;
 
 fn add_subscription<K, S>(
     subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, Depth)>>,
@@ -152,13 +151,20 @@ impl RpcSubscriptions {
         }
     }
 
-    pub fn check_signature(&self, signature: &Signature, bank_error: &transaction::Result<()>) {
+    pub fn check_signature(
+        &self,
+        signature: &Signature,
+        current_slot: u64,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) {
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
-        if let Some(hashmap) = subscriptions.get(signature) {
-            for (_bank_sub_id, (sink, depth)) in hashmap.iter() {
-                sink.notify(Ok(Some(bank_error.clone()))).wait().unwrap();
-            }
-        }
+        check_depth_and_notify(
+            &subscriptions,
+            signature,
+            current_slot,
+            bank_forks,
+            Bank::get_signature_status,
+        );
         subscriptions.remove(&signature);
     }
 
@@ -199,7 +205,7 @@ impl RpcSubscriptions {
         signature: &Signature,
         depth: Option<Depth>,
         sub_id: &SubscriptionId,
-        sink: &Sink<Option<transaction::Result<()>>>,
+        sink: &Sink<transaction::Result<()>>,
     ) {
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
         add_subscription(&mut subscriptions, signature, depth, sub_id, sink);
@@ -243,8 +249,7 @@ impl RpcSubscriptions {
             subs.keys().cloned().collect()
         };
         for signature in &signatures {
-            let status = bank.get_signature_status(signature).unwrap();
-            self.check_signature(signature, &status);
+            self.check_signature(signature, current_slot, bank_forks);
         }
     }
 }
