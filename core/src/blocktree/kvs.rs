@@ -119,6 +119,36 @@ impl TypedColumn<Kvs> for cf::Orphans {
     type Type = bool;
 }
 
+impl Column<Kvs> for cf::Root {
+    const NAME: &'static str = super::ROOT_CF;
+    type Index = ();
+
+    fn key(_: ()) -> Key {
+        Key::default()
+    }
+
+    fn index(_: &Key) {}
+}
+
+impl TypedColumn<Kvs> for cf::Root {
+    type Type = u64;
+}
+
+impl Column<Kvs> for cf::SlotMeta {
+    const NAME: &'static str = super::META_CF;
+    type Index = u64;
+
+    fn key(slot: u64) -> Key {
+        let mut key = Key::default();
+        BigEndian::write_u64(&mut key.0[8..16], slot);
+        key
+    }
+
+    fn index(key: &Key) -> u64 {
+        BigEndian::read_u64(&key.0[8..16])
+    }
+}
+
 impl Column<Kvs> for cf::SlotMeta {
     const NAME: &'static str = super::META_CF;
     type Index = u64;
