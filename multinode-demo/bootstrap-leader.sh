@@ -4,4 +4,4 @@
 #
 
 here=$(dirname "$0")
-exec "$here"/fullnode.sh --bootstrap-leader x$$ "$@"
+exec "$here"/fullnode.sh --bootstrap-leader "$@"
