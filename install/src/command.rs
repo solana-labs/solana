@@ -386,10 +386,7 @@ pub fn info(config_file: &str, local_info_only: bool) -> Result<Option<UpdateMan
 
     fn print_update_manifest(update_manifest: &UpdateManifest) {
         let when = Local.timestamp(update_manifest.timestamp_secs as i64, 0);
-        println_name_value(
-            &format!("{}release date", BULLET),
-            &when.format("%c").to_string(),
-        );
+        println_name_value(&format!("{}release date", BULLET), &when.to_string());
         println_name_value(
             &format!("{}download URL", BULLET),
             &update_manifest.download_url,
