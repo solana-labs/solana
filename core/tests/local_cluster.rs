@@ -110,7 +110,9 @@ fn test_leader_failure_4() {
             .ticks_to_ms(config.ticks_per_slot as u64),
     );
 }
+
 #[test]
+#[ignore]
 fn test_two_unbalanced_stakes() {
     solana_logger::setup();
     let mut fullnode_config = FullnodeConfig::default();
