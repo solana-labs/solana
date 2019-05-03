@@ -259,15 +259,20 @@ impl AccountsDB {
         ancestors: &HashMap<Fork, usize>,
         accounts_index: &AccountsIndex<AccountInfo>,
         pubkey: &Pubkey,
-    ) -> Option<Account> {
-        let info = accounts_index.get(pubkey, ancestors)?;
+    ) -> Option<(Account, Fork)> {
+        let (info, fork) = accounts_index.get(pubkey, ancestors)?;
         //TODO: thread this as a ref
         storage
             .get(&info.id)
             .and_then(|store| Some(store.accounts.get_account(info.offset)?.0.clone_account()))
+            .map(|account| (account, fork))
     }
 
-    pub fn load_slow(&self, ancestors: &HashMap<Fork, usize>, pubkey: &Pubkey) -> Option<Account> {
+    pub fn load_slow(
+        &self,
+        ancestors: &HashMap<Fork, usize>,
+        pubkey: &Pubkey,
+    ) -> Option<(Account, Fork)> {
         let accounts_index = self.accounts_index.read().unwrap();
         let storage = self.storage.read().unwrap();
         Self::load(&storage, ancestors, &accounts_index, pubkey)

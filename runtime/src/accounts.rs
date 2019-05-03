@@ -163,7 +163,9 @@ impl Accounts {
             let mut called_accounts: Vec<Account> = vec![];
             for key in &message.account_keys {
                 called_accounts.push(
-                    AccountsDB::load(storage, ancestors, accounts_index, key).unwrap_or_default(),
+                    AccountsDB::load(storage, ancestors, accounts_index, key)
+                        .map(|(account, _)| account)
+                        .unwrap_or_default(),
                 );
             }
             if called_accounts.is_empty() || called_accounts[0].lamports == 0 {
@@ -201,7 +203,9 @@ impl Accounts {
             }
             depth += 1;
 
-            let program = match AccountsDB::load(storage, ancestors, accounts_index, &program_id) {
+            let program = match AccountsDB::load(storage, ancestors, accounts_index, &program_id)
+                .map(|(account, _)| account)
+            {
                 Some(program) => program,
                 None => {
                     error_counters.account_not_found += 1;
@@ -289,10 +293,14 @@ impl Accounts {
     }
 
     /// Slow because lock is held for 1 operation instead of many
-    pub fn load_slow(&self, ancestors: &HashMap<Fork, usize>, pubkey: &Pubkey) -> Option<Account> {
+    pub fn load_slow(
+        &self,
+        ancestors: &HashMap<Fork, usize>,
+        pubkey: &Pubkey,
+    ) -> Option<(Account, Fork)> {
         self.accounts_db
             .load_slow(ancestors, pubkey)
-            .filter(|acc| acc.lamports != 0)
+            .filter(|(acc, _)| acc.lamports != 0)
     }
 
     pub fn load_by_program(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
