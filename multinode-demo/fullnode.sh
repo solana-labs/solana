@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Start a full node
+# Start a fullnode
 #
 here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
@@ -9,13 +9,32 @@ source "$here"/common.sh
 # shellcheck source=scripts/oom-score-adj.sh
 source "$here"/../scripts/oom-score-adj.sh
 
-# shellcheck source=multinode-demo/extra-fullnode-args.sh
-source "$here"/extra-fullnode-args.sh
-
 if [[ -z $CI ]]; then # Skip in CI
   # shellcheck source=scripts/tune-system.sh
-  source "$SOLANA_ROOT"/scripts/tune-system.sh
+  source "$here"/../scripts/tune-system.sh
 fi
+
+fullnode_usage() {
+  if [[ -n $1 ]]; then
+    echo "$*"
+    echo
+  fi
+  cat <<EOF
+usage: $0 [--blockstream PATH] [--init-complete-file FILE] [--label LABEL] [--stake LAMPORTS] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
+
+Start a full node
+
+  --blockstream PATH        - open blockstream at this unix domain socket location
+  --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
+  --label LABEL             - Append the given label to the fullnode configuration files, useful when running
+                              multiple fullnodes from the same filesystem location
+  --stake LAMPORTS          - Number of lamports to stake
+  --no-voting               - start node without vote signer
+  --rpc-port port           - custom RPC port for this node
+
+EOF
+  exit 1
+}
 
 find_leader() {
   declare leader leader_address
@@ -120,7 +139,80 @@ ledger_not_setup() {
   exit 1
 }
 
+default_fullnode_arg() {
+  declare name=$1
+  declare value=$2
+
+  for arg in "${extra_fullnode_args[@]}"; do
+    if [[ $arg = "$name" ]]; then
+      return
+    fi
+  done
+
+  if [[ -n $value ]]; then
+    extra_fullnode_args+=("$name" "$value")
+  else
+    extra_fullnode_args+=("$name")
+  fi
+}
+
+extra_fullnode_args=()
+bootstrap_leader=false
+stake=43 # number of lamports to assign as stake (plus transaction fee to setup the stake)
+poll_for_new_genesis_block=0
+label=
+
+while [[ ${1:0:1} = - ]]; do
+  if [[ $1 = --label ]]; then
+    label="-$2"
+    shift 2
+  elif [[ $1 = --bootstrap-leader ]]; then
+    bootstrap_leader=true
+    shift
+  elif [[ $1 = --poll-for-new-genesis-block ]]; then
+    poll_for_new_genesis_block=1
+    shift
+  elif [[ $1 = --blockstream ]]; then
+    stake=0
+    extra_fullnode_args+=("$1" "$2")
+    shift 2
+  elif [[ $1 = --enable-rpc-exit ]]; then
+    extra_fullnode_args+=("$1")
+    shift
+  elif [[ $1 = --init-complete-file ]]; then
+    extra_fullnode_args+=("$1" "$2")
+    shift 2
+  elif [[ $1 = --stake ]]; then
+    stake="$2"
+    shift 2
+  elif [[ $1 = --no-voting ]]; then
+    extra_fullnode_args+=("$1")
+    shift
+  elif [[ $1 = --no-sigverify ]]; then
+    extra_fullnode_args+=("$1")
+    shift
+  elif [[ $1 = --rpc-port ]]; then
+    extra_fullnode_args+=("$1" "$2")
+    shift 2
+  elif [[ $1 = --dynamic-port-range ]]; then
+    extra_fullnode_args+=("$1" "$2")
+    shift 2
+  elif [[ $1 = --gossip-port ]]; then
+    extra_fullnode_args+=("$1" "$2")
+    shift 2
+  elif [[ $1 = -h ]]; then
+    fullnode_usage "$@"
+  else
+    echo "Unknown argument: $1"
+    exit 1
+  fi
+done
+
 if $bootstrap_leader; then
+  if [[ -n $1 ]]; then
+    fullnode_usage "$@"
+  fi
+
   [[ -f "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json ]] ||
     ledger_not_setup "$SOLANA_CONFIG_DIR/bootstrap-leader-id.json not found"
 
@@ -135,6 +227,10 @@ if $bootstrap_leader; then
   default_fullnode_arg --rpc-drone-address 127.0.0.1:9900
   default_fullnode_arg --gossip-port 8001
 else
+  if [[ -n $3 ]]; then
+    fullnode_usage "$@"
+  fi
+
   read -r leader leader_address shift < <(find_leader "${@:1:2}")
   shift "$shift"
 
