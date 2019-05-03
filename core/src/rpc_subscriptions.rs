@@ -66,16 +66,19 @@ where
     found
 }
 
-fn check_depth_and_notify<K, S, F>(
+fn check_depth_and_notify<K, S, F, N, X>(
     subscriptions: &HashMap<K, HashMap<SubscriptionId, (Sink<S>, Depth)>>,
     hashmap_key: &K,
     current_slot: u64,
     bank_forks: &Arc<RwLock<BankForks>>,
     bank_method: F,
+    notify: N,
 ) where
     K: Eq + Hash + Clone + Copy,
     S: Clone + Serialize,
-    F: Fn(&Bank, &K) -> Option<S>,
+    F: Fn(&Bank, &K) -> X,
+    N: Fn(X, &Sink<S>),
+    X: Clone + Serialize,
 {
     let current_ancestors = bank_forks
         .read()
@@ -99,11 +102,27 @@ fn check_depth_and_notify<K, S, F>(
                     .get(desired_slot[0])
                     .unwrap()
                     .clone();
-                if let Some(result) = bank_method(&desired_bank, hashmap_key) {
-                    sink.notify(Ok(result)).wait().unwrap();
-                }
+                let result = bank_method(&desired_bank, hashmap_key);
+                notify(result, &sink);
             }
         }
+    }
+}
+
+fn notify_single<S>(result: Option<S>, sink: &Sink<S>)
+where
+    S: Clone + Serialize,
+{
+    if let Some(result) = result {
+        sink.notify(Ok(result)).wait().unwrap();
+    }
+}
+
+fn notify_program(accounts: Vec<(Pubkey, Account)>, sink: &Sink<(String, Account)>) {
+    for (pubkey, account) in accounts.iter() {
+        sink.notify(Ok((bs58::encode(pubkey).into_string(), account.clone())))
+            .wait()
+            .unwrap();
     }
 }
 
@@ -137,18 +156,25 @@ impl RpcSubscriptions {
             current_slot,
             bank_forks,
             Bank::get_account_modified_since_parent,
+            notify_single,
         );
     }
 
-    pub fn check_program(&self, program_id: &Pubkey, pubkey: &Pubkey, account: &Account) {
+    pub fn check_program(
+        &self,
+        program_id: &Pubkey,
+        current_slot: u64,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) {
         let subscriptions = self.program_subscriptions.write().unwrap();
-        if let Some(hashmap) = subscriptions.get(program_id) {
-            for (_bank_sub_id, (sink, depth)) in hashmap.iter() {
-                sink.notify(Ok((bs58::encode(pubkey).into_string(), account.clone())))
-                    .wait()
-                    .unwrap();
-            }
-        }
+        check_depth_and_notify(
+            &subscriptions,
+            program_id,
+            current_slot,
+            bank_forks,
+            Bank::get_program_accounts_modified_since_parent,
+            notify_program,
+        );
     }
 
     pub fn check_signature(
@@ -164,6 +190,7 @@ impl RpcSubscriptions {
             current_slot,
             bank_forks,
             Bank::get_signature_status,
+            notify_single,
         );
         subscriptions.remove(&signature);
     }
@@ -227,21 +254,12 @@ impl RpcSubscriptions {
             self.check_account(pubkey, current_slot, bank_forks);
         }
 
-        let bank = bank_forks
-            .read()
-            .unwrap()
-            .get(current_slot)
-            .unwrap()
-            .clone();
         let programs: Vec<_> = {
             let subs = self.program_subscriptions.read().unwrap();
             subs.keys().cloned().collect()
         };
         for program_id in &programs {
-            let accounts = &bank.get_program_accounts_modified_since_parent(program_id);
-            for (pubkey, account) in accounts.iter() {
-                self.check_program(program_id, pubkey, account);
-            }
+            self.check_program(program_id, current_slot, bank_forks);
         }
 
         let signatures: Vec<_> = {
