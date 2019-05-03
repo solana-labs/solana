@@ -101,7 +101,7 @@ echo "+++ $entrypointIp: node count ($numSanityNodes expected)"
     nodeArg="num-nodes-exactly"
   fi
 
-  timeout 2m $solana_gossip --network "$entrypointIp:8001" \
+  timeout 2m $solana_gossip --entrypoint "$entrypointIp:8001" \
     spy --$nodeArg "$numSanityNodes" \
 )
 

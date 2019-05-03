@@ -243,7 +243,7 @@ else
   [[ -r "$fullnode_id_path" ]] || $solana_keygen -o "$fullnode_id_path"
   [[ -r "$fullnode_vote_id_path" ]] || $solana_keygen -o "$fullnode_vote_id_path"
 
-  default_fullnode_arg --network "$leader_address"
+  default_fullnode_arg --entrypoint "$leader_address"
   default_fullnode_arg --rpc-drone-address "${leader_address%:*}:9900"
 fi
 

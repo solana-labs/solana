@@ -7,7 +7,7 @@ use std::process::exit;
 use std::time::Duration;
 
 pub struct Config {
-    pub network_addr: SocketAddr,
+    pub entrypoint_addr: SocketAddr,
     pub drone_addr: SocketAddr,
     pub identity: Keypair,
     pub threads: usize,
@@ -23,7 +23,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            network_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
+            entrypoint_addr: SocketAddr::from(([127, 0, 0, 1], 8001)),
             drone_addr: SocketAddr::from(([127, 0, 0, 1], DRONE_PORT)),
             identity: Keypair::new(),
             num_nodes: 1,
@@ -43,14 +43,14 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
         .about(crate_description!())
         .version(crate_version!())
         .arg(
-            Arg::with_name("network")
+            Arg::with_name("entrypoint")
                 .short("n")
-                .long("network")
+                .long("entrypoint")
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .required(false)
                 .default_value("127.0.0.1:8001")
-                .help("Network's gossip entry point; defaults to 127.0.0.1:8001"),
+                .help("Cluster entry point; defaults to 127.0.0.1:8001"),
         )
         .arg(
             Arg::with_name("drone")
@@ -146,9 +146,9 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
 pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     let mut args = Config::default();
 
-    args.network_addr = solana_netutil::parse_host_port(matches.value_of("network").unwrap())
+    args.entrypoint_addr = solana_netutil::parse_host_port(matches.value_of("entrypoint").unwrap())
         .unwrap_or_else(|e| {
-            eprintln!("failed to parse network address: {}", e);
+            eprintln!("failed to parse entrypoint address: {}", e);
             exit(1)
         });
 
