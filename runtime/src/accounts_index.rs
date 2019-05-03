@@ -123,7 +123,7 @@ mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 0)));
     }
 
     #[test]
@@ -143,7 +143,7 @@ mod tests {
 
         let ancestors = vec![].into_iter().collect();
         index.add_root(0);
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 0)));
     }
 
     #[test]
@@ -197,11 +197,11 @@ mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         let gc = index.insert(0, &key.pubkey(), true);
         assert!(gc.is_empty());
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 0)));
 
         let gc = index.insert(0, &key.pubkey(), false);
         assert_eq!(gc, vec![(0, true)]);
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&false));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&false, 0)));
     }
 
     #[test]
@@ -213,9 +213,9 @@ mod tests {
         assert!(gc.is_empty());
         let gc = index.insert(1, &key.pubkey(), false);
         assert!(gc.is_empty());
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 0)));
         let ancestors = vec![(1, 0)].into_iter().collect();
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&false));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&false, 1)));
     }
 
     #[test]
@@ -228,6 +228,6 @@ mod tests {
         let gc = index.insert(1, &key.pubkey(), false);
         assert_eq!(gc, vec![(0, true)]);
         let ancestors = vec![].into_iter().collect();
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&false));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&false, 1)));
     }
 }
