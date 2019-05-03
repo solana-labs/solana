@@ -13,6 +13,7 @@ fi
 
 extra_fullnode_args=()
 
+bootstrap_leader=false
 stake=43 # number of lamports to assign as stake (plus transaction fee to setup the stake)
 poll_for_new_genesis_block=0
 label=
@@ -21,6 +22,9 @@ while [[ ${1:0:1} = - ]]; do
   if [[ $1 = --label ]]; then
     label="-$2"
     shift 2
+  elif [[ $1 = --bootstrap-leader ]]; then
+    bootstrap_leader=true
+    shift
   elif [[ $1 = --poll-for-new-genesis-block ]]; then
     poll_for_new_genesis_block=1
     shift
