@@ -272,12 +272,13 @@ impl PohRecorder {
     }
 
     pub fn tick(&mut self) {
+        let tick = self.generate_tick();
+        trace!("tick {}", tick.1);
+
         if self.start_leader_at_tick.is_none() {
             return;
         }
 
-        let tick = self.generate_tick();
-        trace!("tick {}", tick.1);
         self.tick_cache.push(tick);
         let _ = self.flush_cache(true);
     }
