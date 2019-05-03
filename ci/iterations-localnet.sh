@@ -25,8 +25,7 @@ fi
 build() {
   $genPipeline && return
   source ci/rust-version.sh stable
-
-  _ scripts/ulimit-n.sh
+  source scripts/ulimit-n.sh
   _ cargo +$rust_stable build --all
 }
 
