@@ -1,4 +1,5 @@
 use crate::erasure::{NUM_CODING, NUM_DATA};
+use std::borrow::Borrow;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family
@@ -81,9 +82,9 @@ pub struct ErasureMeta {
     /// Size of shards in this erasure set
     pub size: usize,
     /// Bitfield representing presence/absence of data blobs
-    pub data: u64,
+    data: u64,
     /// Bitfield representing presence/absence of coding blobs
-    pub coding: u64,
+    coding: u64,
 }
 
 #[derive(Debug, PartialEq)]
@@ -104,10 +105,8 @@ impl ErasureMeta {
     }
 
     pub fn status(&self) -> ErasureMetaStatus {
-        let (data_missing, coding_missing) = (
-            NUM_DATA - self.data.count_ones() as usize,
-            NUM_CODING - self.coding.count_ones() as usize,
-        );
+        let (data_missing, coding_missing) =
+            (NUM_DATA - self.num_data(), NUM_CODING - self.num_coding());
         if data_missing > 0 && data_missing + coding_missing <= NUM_CODING {
             assert!(self.size != 0);
             ErasureMetaStatus::CanRecover
@@ -116,6 +115,14 @@ impl ErasureMeta {
         } else {
             ErasureMetaStatus::StillNeed(data_missing + coding_missing - NUM_CODING)
         }
+    }
+
+    pub fn num_coding(&self) -> usize {
+        self.coding.count_ones() as usize
+    }
+
+    pub fn num_data(&self) -> usize {
+        self.data.count_ones() as usize
     }
 
     pub fn is_coding_present(&self, index: u64) -> bool {
@@ -162,6 +169,26 @@ impl ErasureMeta {
         }
     }
 
+    pub fn set_data_multi<I, Idx>(&mut self, indexes: I, present: bool)
+    where
+        I: IntoIterator<Item = Idx>,
+        Idx: Borrow<u64>,
+    {
+        for index in indexes.into_iter() {
+            self.set_data_present(*index.borrow(), present);
+        }
+    }
+
+    pub fn set_coding_multi<I, Idx>(&mut self, indexes: I, present: bool)
+    where
+        I: IntoIterator<Item = Idx>,
+        Idx: Borrow<u64>,
+    {
+        for index in indexes.into_iter() {
+            self.set_coding_present(*index.borrow(), present);
+        }
+    }
+
     pub fn set_index_for(index: u64) -> u64 {
         index / NUM_DATA as u64
     }
@@ -201,7 +228,7 @@ fn test_meta_indexes() {
 
     for _ in 0..100 {
         let set_index = rng.gen_range(0, 1_000);
-        let blob_index = (set_index * NUM_DATA) + rng.gen_range(0, 16);
+        let blob_index = (set_index * NUM_DATA) + rng.gen_range(0, NUM_DATA);
 
         assert_eq!(set_index, ErasureMeta::set_index_for(blob_index));
         let e_meta = ErasureMeta::new(set_index);
@@ -236,8 +263,8 @@ fn test_meta_indexes() {
 fn test_meta_coding_present() {
     let mut e_meta = ErasureMeta::default();
 
+    e_meta.set_coding_multi(0..NUM_CODING as u64, true);
     for i in 0..NUM_CODING as u64 {
-        e_meta.set_coding_present(i, true);
         assert_eq!(e_meta.is_coding_present(i), true);
     }
     for i in NUM_CODING as u64..NUM_DATA as u64 {
@@ -245,60 +272,62 @@ fn test_meta_coding_present() {
     }
 
     e_meta.set_index = ErasureMeta::set_index_for((NUM_DATA * 17) as u64);
+    let start_idx = e_meta.start_index();
+    e_meta.set_coding_multi(start_idx..start_idx + NUM_CODING as u64, true);
 
-    for i in (NUM_DATA * 17) as u64..((NUM_DATA * 17) + NUM_CODING) as u64 {
+    for i in start_idx..start_idx + NUM_CODING as u64 {
         e_meta.set_coding_present(i, true);
         assert_eq!(e_meta.is_coding_present(i), true);
     }
-    for i in (NUM_DATA * 17 + NUM_CODING) as u64..((NUM_DATA * 17) + NUM_DATA) as u64 {
+    for i in start_idx + NUM_CODING as u64..start_idx + NUM_DATA as u64 {
         assert_eq!(e_meta.is_coding_present(i), false);
     }
 }
 
 #[test]
 fn test_erasure_meta_status() {
+    use rand::{seq::SliceRandom, thread_rng};
+    // Local constansts just used to avoid repetitive casts
+    const N_DATA: u64 = crate::erasure::NUM_DATA as u64;
+    const N_CODING: u64 = crate::erasure::NUM_CODING as u64;
+
     let mut e_meta = ErasureMeta::default();
+    let mut rng = thread_rng();
+    let data_indexes: Vec<u64> = (0..N_DATA).collect();
+    let coding_indexes: Vec<u64> = (0..N_CODING).collect();
 
     assert_eq!(e_meta.status(), ErasureMetaStatus::StillNeed(NUM_DATA));
 
-    e_meta.data = 0b1111_1111_1111_1111;
-    e_meta.coding = 0x00;
+    e_meta.set_data_multi(0..N_DATA, true);
 
     assert_eq!(e_meta.status(), ErasureMetaStatus::DataFull);
 
-    e_meta.coding = 0x0e;
     e_meta.size = 1;
+    e_meta.set_coding_multi(0..N_CODING, true);
+
     assert_eq!(e_meta.status(), ErasureMetaStatus::DataFull);
 
-    e_meta.data = 0b0111_1111_1111_1111;
-    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
+    for &idx in data_indexes.choose_multiple(&mut rng, NUM_CODING) {
+        e_meta.set_data_present(idx, false);
 
-    e_meta.data = 0b0111_1111_1111_1110;
-    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
+        assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
+    }
 
-    e_meta.data = 0b0111_1111_1011_1110;
-    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
+    e_meta.set_data_multi(0..N_DATA, true);
 
-    e_meta.data = 0b0111_1011_1011_1110;
-    assert_eq!(e_meta.status(), ErasureMetaStatus::StillNeed(1));
+    for &idx in coding_indexes.choose_multiple(&mut rng, NUM_CODING) {
+        e_meta.set_coding_present(idx, false);
 
-    e_meta.data = 0b0111_1011_1011_1110;
-    assert_eq!(e_meta.status(), ErasureMetaStatus::StillNeed(1));
-
-    e_meta.coding = 0b0000_1110;
-    e_meta.data = 0b1111_1111_1111_1100;
-    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
-
-    e_meta.data = 0b1111_1111_1111_1000;
-    assert_eq!(e_meta.status(), ErasureMetaStatus::CanRecover);
+        assert_eq!(e_meta.status(), ErasureMetaStatus::DataFull);
+    }
 }
 
 #[test]
 fn test_meta_data_present() {
     let mut e_meta = ErasureMeta::default();
 
+    e_meta.set_data_multi(0..NUM_DATA as u64, true);
     for i in 0..NUM_DATA as u64 {
-        e_meta.set_data_present(i, true);
         assert_eq!(e_meta.is_data_present(i), true);
     }
     for i in NUM_DATA as u64..2 * NUM_DATA as u64 {
@@ -306,12 +335,13 @@ fn test_meta_data_present() {
     }
 
     e_meta.set_index = ErasureMeta::set_index_for((NUM_DATA * 23) as u64);
+    let start_idx = e_meta.start_index();
+    e_meta.set_data_multi(start_idx..start_idx + NUM_DATA as u64, true);
 
-    for i in (NUM_DATA * 23) as u64..(NUM_DATA * 24) as u64 {
-        e_meta.set_data_present(i, true);
+    for i in start_idx..start_idx + NUM_DATA as u64 {
         assert_eq!(e_meta.is_data_present(i), true);
     }
-    for i in (NUM_DATA * 22) as u64..(NUM_DATA * 23) as u64 {
+    for i in start_idx - NUM_DATA as u64..start_idx {
         assert_eq!(e_meta.is_data_present(i), false);
     }
 }

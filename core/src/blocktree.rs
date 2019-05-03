@@ -1259,6 +1259,7 @@ fn try_erasure_recover(
 ) -> Result<Option<(Vec<Blob>, Vec<Blob>)>> {
     use crate::erasure::ERASURE_SET_SIZE;
 
+    let set_index = erasure_meta.set_index;
     let blobs = match erasure_meta.status() {
         ErasureMetaStatus::CanRecover => {
             let erasure_result = recover(
@@ -1275,20 +1276,21 @@ fn try_erasure_recover(
                     let recovered = data.len() + coding.len();
                     assert_eq!(
                         ERASURE_SET_SIZE,
-                        recovered
-                            + (erasure_meta.coding.count_ones() + erasure_meta.data.count_ones())
-                                as usize,
+                        recovered + (erasure_meta.num_coding() + erasure_meta.num_data()) as usize,
                         "Recovery should always complete a set"
                     );
 
-                    info!("[try_erasure] recovered {} blobs", recovered);
+                    debug!(
+                        "[try_erasure] slot: {}, set_index: {}, recovered {} blobs",
+                        slot, set_index, recovered
+                    );
                     inc_new_counter_info!("blocktree-erasure-blobs_recovered", recovered);
                     Some((data, coding))
                 }
                 Err(Error::ErasureError(e)) => {
                     inc_new_counter_info!("blocktree-erasure-recovery_failed", 1);
                     error!(
-                        "[try_erasure] recovery failed: slot: {}, set_index: {}, cause: {}",
+                        "[try_erasure] slot: {}, set_index: {}, recovery failed: cause: {}",
                         slot, erasure_meta.set_index, e
                     );
                     None
@@ -1298,10 +1300,18 @@ fn try_erasure_recover(
             }
         }
         ErasureMetaStatus::StillNeed(needed) => {
+            debug!(
+                "[try_erasure] slot: {}, set_index: {}, still need {} blobs",
+                slot, set_index, needed
+            );
             inc_new_counter_info!("blocktree-erasure-blobs_needed", needed, 0, 1000);
             None
         }
         ErasureMetaStatus::DataFull => {
+            debug!(
+                "[try_erasure] slot: {}, set_index: {}, set full",
+                slot, set_index,
+            );
             inc_new_counter_info!("blocktree-erasure-complete", 1, 0, 1000);
             None
         }
@@ -2922,13 +2932,14 @@ pub mod tests {
 
         #[test]
         fn test_erasure_meta_accuracy() {
+            use crate::erasure::ERASURE_SET_SIZE;
             use ErasureMetaStatus::{DataFull, StillNeed};
 
             let path = get_tmp_ledger_path!();
             let blocktree = Blocktree::open(&path).unwrap();
 
             // two erasure sets
-            let num_blobs = 32;
+            let num_blobs = NUM_DATA as u64 * 2;
             let slot = 0;
 
             let (blobs, _) = make_slot_entries(slot, 0, num_blobs);
@@ -2938,7 +2949,7 @@ pub mod tests {
                 .map(|blob| Arc::new(RwLock::new(blob)))
                 .collect();
 
-            blocktree.write_blobs(&blobs[8..16]).unwrap();
+            blocktree.write_blobs(&blobs[..2]).unwrap();
 
             let erasure_meta_opt = blocktree
                 .erasure_meta(slot, 0)
@@ -2947,17 +2958,19 @@ pub mod tests {
             assert!(erasure_meta_opt.is_some());
             let erasure_meta = erasure_meta_opt.unwrap();
 
-            assert_eq!(erasure_meta.status(), StillNeed(8));
+            let should_need = ERASURE_SET_SIZE - NUM_CODING - 2;
+            match erasure_meta.status() {
+                StillNeed(n) => assert_eq!(n, should_need),
+                _ => panic!("Should still need more blobs"),
+            };
 
-            blocktree.write_blobs(&blobs[..8]).unwrap();
+            blocktree.write_blobs(&blobs[2..NUM_DATA]).unwrap();
 
             let erasure_meta = blocktree
                 .erasure_meta(slot, 0)
                 .expect("DB get must succeed")
                 .unwrap();
 
-            assert_eq!(erasure_meta.data, 0xFFFF);
-            assert_eq!(erasure_meta.coding, 0x0);
             assert_eq!(erasure_meta.status(), DataFull);
 
             // insert all coding blobs in first set
@@ -2977,23 +2990,29 @@ pub mod tests {
                 .expect("DB get must succeed")
                 .unwrap();
 
-            assert_eq!(erasure_meta.data, 0xFFFF);
-            assert_eq!(erasure_meta.coding, 0x0F);
             assert_eq!(erasure_meta.status(), DataFull);
 
-            // insert 8 of 16 data blobs in 2nd set
-            blocktree.write_blobs(&blobs[16..24]).unwrap();
+            // insert blobs in the 2nd set until recovery should be possible given all coding blobs
+            let set2 = &blobs[NUM_DATA..];
+            let mut end = 1;
+            let blobs_needed = ERASURE_SET_SIZE - NUM_CODING;
+            while end < blobs_needed {
+                blocktree.write_blobs(&set2[end - 1..end]).unwrap();
 
-            let erasure_meta = blocktree
-                .erasure_meta(slot, 1)
-                .expect("DB get must succeed")
-                .unwrap();
+                let erasure_meta = blocktree
+                    .erasure_meta(slot, 1)
+                    .expect("DB get must succeed")
+                    .unwrap();
 
-            assert_eq!(erasure_meta.data, 0x00FF);
-            assert_eq!(erasure_meta.coding, 0x0);
-            assert_eq!(erasure_meta.status(), StillNeed(8));
+                match erasure_meta.status() {
+                    StillNeed(n) => assert_eq!(n, blobs_needed - end),
+                    _ => panic!("Should still need more blobs"),
+                };
 
-            // insert all coding blobs in 2nd set
+                end += 1;
+            }
+
+            // insert all coding blobs in 2nd set. Should trigger recovery
             let mut coding_generator = CodingGenerator::new(Arc::clone(&blocktree.session));
             let coding_blobs = coding_generator.next(&shared_blobs[NUM_DATA..]);
 
@@ -3004,30 +3023,6 @@ pub mod tests {
                     .put_coding_blob_bytes(blob.slot(), blob.index(), &blob.data[..size])
                     .unwrap();
             }
-
-            let erasure_meta = blocktree
-                .erasure_meta(slot, 1)
-                .expect("DB get must succeed")
-                .unwrap();
-
-            assert_eq!(erasure_meta.data, 0x00FF);
-            assert_eq!(erasure_meta.coding, 0x0F);
-            assert_eq!(erasure_meta.status(), StillNeed(4));
-
-            // insert 3 more data blobs in 2nd erasure set.
-            blocktree.write_blobs(&blobs[24..27]).unwrap();
-
-            let erasure_meta = blocktree
-                .erasure_meta(slot, 1)
-                .expect("DB get must succeed")
-                .unwrap();
-
-            assert_eq!(erasure_meta.data, 0x07FF);
-            assert_eq!(erasure_meta.coding, 0x0F);
-            assert_eq!(erasure_meta.status(), StillNeed(1));
-
-            // insert 1 more data blob, should trigger erasure
-            blocktree.write_blobs(&blobs[28..29]).unwrap();
 
             let erasure_meta = blocktree
                 .erasure_meta(slot, 1)
@@ -3050,8 +3045,6 @@ pub mod tests {
                 .unwrap();
 
             assert_eq!(erasure_meta.status(), ErasureMetaStatus::DataFull);
-            assert_eq!(erasure_meta.data, 0xFFFF);
-            assert_eq!(erasure_meta.coding, 0x0);
         }
 
         #[test]
@@ -3107,8 +3100,7 @@ pub mod tests {
                     .expect("Erasure Meta should be present")
                     .unwrap();
 
-                assert_eq!(erasure_meta.data, 0xFFFF);
-                assert_eq!(erasure_meta.coding, 0x0F);
+                assert_eq!(erasure_meta.status(), ErasureMetaStatus::DataFull);
 
                 let retrieved_data = blocktree
                     .data_cf
@@ -3146,12 +3138,8 @@ pub mod tests {
             let shared_coding_blobs = coding_generator.next(&data_blobs);
             assert_eq!(shared_coding_blobs.len(), NUM_CODING);
 
-            // Insert data blobs and coding. Not enough to do recovery
-            blocktree
-                .write_shared_blobs(&data_blobs[..NUM_DATA - 5])
-                .unwrap();
-
-            for shared_blob in shared_coding_blobs {
+            // Insert coding blobs except 1 and no data. Not enough to do recovery
+            for shared_blob in shared_coding_blobs.iter().skip(1) {
                 let blob = shared_blob.read().unwrap();
                 let size = blob.size() + BLOB_HEADER_SIZE;
 
@@ -3364,9 +3352,9 @@ pub mod tests {
                     // all possibility for recovery should be exhausted
                     assert_eq!(erasure_meta.status(), ErasureMetaStatus::DataFull);
                     // Should have all data
-                    assert_eq!(erasure_meta.data, 0xFFFF);
+                    assert_eq!(erasure_meta.num_data(), NUM_DATA);
                     // Should have all coding
-                    assert_eq!(erasure_meta.coding, 0x0F);
+                    assert_eq!(erasure_meta.num_coding(), NUM_CODING);
                 }
             }
 
