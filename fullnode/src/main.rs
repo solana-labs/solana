@@ -5,6 +5,7 @@ use solana::contact_info::ContactInfo;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
+use solana::socketaddr;
 use solana_netutil::parse_port_range;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::fs::File;
@@ -132,15 +133,9 @@ fn main() {
                 .help("Comma separated persistent accounts location"),
         )
         .arg(
-            clap::Arg::with_name("public_address")
-                .long("public-address")
-                .takes_value(false)
-                .help("Advertise public machine address in gossip.  By default the local machine address is advertised"),
-        )
-        .arg(
             clap::Arg::with_name("gossip_port")
                 .long("gossip-port")
-                .value_name("PORT")
+                .value_name("HOST:PORT")
                 .takes_value(true)
                 .help("Gossip port number for the node"),
         )
@@ -195,19 +190,14 @@ fn main() {
     let dynamic_port_range = parse_port_range(matches.value_of("dynamic_port_range").unwrap())
         .expect("invalid dynamic_port_range");
 
-    let gossip_addr = {
-        let mut addr = solana_netutil::parse_port_or_addr(
-            matches.value_of("gossip_port"),
+    let mut gossip_addr = solana_netutil::parse_port_or_addr(
+        matches.value_of("gossip_port"),
+        socketaddr!(
+            [127, 0, 0, 1],
             solana_netutil::find_available_port_in_range(dynamic_port_range)
-                .expect("unable to allocate gossip_port"),
-        );
-        if matches.is_present("public_address") {
-            addr.set_ip(solana_netutil::get_public_ip_addr().unwrap());
-        } else {
-            addr.set_ip(solana_netutil::get_ip_addr(false).unwrap());
-        }
-        addr
-    };
+                .expect("unable to find an available gossip port")
+        ),
+    );
 
     if let Some(paths) = matches.value_of("accounts") {
         fullnode_config.account_paths = Some(paths.to_string());
@@ -215,9 +205,11 @@ fn main() {
         fullnode_config.account_paths = None;
     }
     let cluster_entrypoint = matches.value_of("network").map(|network| {
-        let gossip_addr =
+        let entrypoint_addr =
             solana_netutil::parse_host_port(network).expect("failed to parse network address");
-        ContactInfo::new_gossip_entry_point(&gossip_addr)
+        gossip_addr.set_ip(solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap());
+
+        ContactInfo::new_gossip_entry_point(&entrypoint_addr)
     });
     let (_signer_service, _signer_addr) = if let Some(signer_addr) = matches.value_of("signer") {
         (

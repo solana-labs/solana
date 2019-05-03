@@ -6,13 +6,12 @@ cd "$(dirname "$0")"/../..
 set -x
 deployMethod="$1"
 nodeType="$2"
-publicNetwork="$3"
-entrypointIp="$4"
-numNodes="$5"
-RUST_LOG="$6"
-skipSetup="$7"
-leaderRotation="$8"
-failOnValidatorBootupFailure="$9"
+entrypointIp="$3"
+numNodes="$4"
+RUST_LOG="$5"
+skipSetup="$6"
+leaderRotation="$7"
+failOnValidatorBootupFailure="$8"
 set +x
 export RUST_LOG
 
@@ -31,7 +30,6 @@ missing() {
 
 [[ -n $deployMethod ]]  || missing deployMethod
 [[ -n $nodeType ]]      || missing nodeType
-[[ -n $publicNetwork ]] || missing publicNetwork
 [[ -n $entrypointIp ]]  || missing entrypointIp
 [[ -n $numNodes ]]      || missing numNodes
 [[ -n $skipSetup ]]     || missing skipSetup
@@ -84,11 +82,10 @@ local|tar)
     fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
 
-    args=()
-    if $publicNetwork; then
-      args+=(--public-address)
-    fi
-    args+=(--enable-rpc-exit)
+    args=(
+      --enable-rpc-exit
+      --gossip-port "$entrypointIp":8001
+    )
 
     ./multinode-demo/bootstrap-leader.sh "${args[@]}" > bootstrap-leader.log 2>&1 &
     ln -sTf bootstrap-leader.log fullnode.log
@@ -102,9 +99,6 @@ local|tar)
     fi
 
     args=()
-    if $publicNetwork; then
-      args+=("--public-address")
-    fi
     if [[ $nodeType = blockstreamer ]]; then
       args+=(
         --blockstream /tmp/solana-blockstream.sock
