@@ -62,7 +62,11 @@ accounts: $accounts_config_dir
 ======================================================================
 EOF
 
-tune_system
+if [[ -z $CI ]]; then # Skip in CI
+  # shellcheck source=scripts/tune-system.sh
+  source "$SOLANA_ROOT"/scripts/tune-system.sh
+fi
+
 
 rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   declare url="$1"
