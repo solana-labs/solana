@@ -618,7 +618,7 @@ mod tests {
     use solana_sdk::system_transaction;
     use std::io;
     use std::io::Write;
-    use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
+    use std::net::{SocketAddr, UdpSocket};
 
     #[test]
     fn test_packets_set_addr() {
