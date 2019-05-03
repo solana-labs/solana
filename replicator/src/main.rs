@@ -4,14 +4,14 @@ use solana::contact_info::ContactInfo;
 use solana::replicator::Replicator;
 use solana::socketaddr;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
-use std::net::Ipv4Addr;
 use std::process::exit;
 use std::sync::Arc;
 
 fn main() {
     solana_logger::setup();
 
-    let matches = App::new(crate_name!()).about(crate_description!())
+    let matches = App::new(crate_name!())
+        .about(crate_description!())
         .version(crate_version!())
         .arg(
             Arg::with_name("identity")
@@ -39,12 +39,6 @@ fn main() {
                 .required(true)
                 .help("use DIR as persistent ledger location"),
         )
-        .arg(
-            clap::Arg::with_name("public_address")
-                .long("public-address")
-                .takes_value(false)
-                .help("Advertise public machine address in gossip.  By default the local machine address is advertised"),
-        )
         .get_matches();
 
     let ledger_path = matches.value_of("ledger").unwrap();
@@ -58,13 +52,16 @@ fn main() {
         Keypair::new()
     };
 
+    let network_addr = matches
+        .value_of("network")
+        .map(|network| {
+            solana_netutil::parse_host_port(network).expect("failed to parse network address")
+        })
+        .unwrap();
+
     let gossip_addr = {
         let mut addr = socketaddr!([127, 0, 0, 1], 8700);
-        if matches.is_present("public_address") {
-            addr.set_ip(solana_netutil::get_public_ip_addr().unwrap());
-        } else {
-            addr.set_ip(solana_netutil::get_ip_addr(false).unwrap());
-        }
+        addr.set_ip(solana_netutil::get_public_ip_addr(&network_addr).unwrap());
         addr
     };
     let node =
@@ -75,13 +72,6 @@ fn main() {
         keypair.pubkey(),
         gossip_addr
     );
-
-    let network_addr = matches
-        .value_of("network")
-        .map(|network| {
-            solana_netutil::parse_host_port(network).expect("failed to parse network address")
-        })
-        .unwrap();
 
     let leader_info = ContactInfo::new_gossip_entry_point(&network_addr);
     let storage_keypair = Arc::new(Keypair::new());

@@ -9,7 +9,6 @@ use solana::gossip_service::discover;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use std::error;
-use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::process::exit;
 
@@ -42,12 +41,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             SubCommand::with_name("spy")
                 .about("Monitor the gossip network")
                 .setting(AppSettings::DisableVersion)
-                .arg(
-                    clap::Arg::with_name("public_address")
-                        .long("public-address")
-                        .takes_value(false)
-                        .help("Advertise public machine address in gossip. By default the local machine address is advertised"),
-                )
                 .arg(
                     clap::Arg::with_name("pull_only")
                         .long("pull-only")
@@ -131,11 +124,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 None
             } else {
                 let mut addr = socketaddr_any!();
-                if matches.is_present("public_address") {
-                    addr.set_ip(solana_netutil::get_public_ip_addr().unwrap());
-                } else {
-                    addr.set_ip(solana_netutil::get_ip_addr(false).unwrap());
-                }
+                addr.set_ip(
+                    solana_netutil::get_public_ip_addr(&network_addr).unwrap_or_else(|err| {
+                        eprintln!("failed to contact {}: {}", network_addr, err);
+                        exit(1)
+                    }),
+                );
                 Some(addr)
             };
 

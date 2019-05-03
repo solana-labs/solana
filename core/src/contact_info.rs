@@ -7,7 +7,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::signature::{Signable, Signature};
 use solana_sdk::timing::timestamp;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 
 /// Structure representing a node on the network
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -56,7 +56,7 @@ impl Eq for ContactInfo {}
 #[macro_export]
 macro_rules! socketaddr {
     ($ip:expr, $port:expr) => {
-        std::net::SocketAddr::from((Ipv4Addr::from($ip), $port))
+        std::net::SocketAddr::from((std::net::Ipv4Addr::from($ip), $port))
     };
     ($str:expr) => {{
         let a: std::net::SocketAddr = $str.parse().unwrap();

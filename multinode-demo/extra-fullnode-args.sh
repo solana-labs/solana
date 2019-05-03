@@ -34,9 +34,6 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = --init-complete-file ]]; then
     extra_fullnode_args+=("$1" "$2")
     shift 2
-  elif [[ $1 = --public-address ]]; then
-    extra_fullnode_args+=("$1")
-    shift
   elif [[ $1 = --stake ]]; then
     stake="$2"
     shift 2
@@ -64,3 +61,20 @@ done
 if [[ -n $3 ]]; then
   fullnode_usage "$@"
 fi
+
+default_fullnode_arg() {
+  declare name=$1
+  declare value=$2
+
+  for arg in "${extra_fullnode_args[@]}"; do
+    if [[ $arg = "$name" ]]; then
+      return
+    fi
+  done
+
+  if [[ -n $value ]]; then
+    extra_fullnode_args+=("$name" "$value")
+  else
+    extra_fullnode_args+=("$name")
+  fi
+}
