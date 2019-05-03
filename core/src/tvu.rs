@@ -16,9 +16,7 @@ use crate::bank_forks::BankForks;
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blockstream_service::BlockstreamService;
 use crate::blocktree::Blocktree;
-use crate::blocktree_processor::BankForksInfo;
 use crate::cluster_info::ClusterInfo;
-use crate::entry::{EntryReceiver, EntrySender};
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::ReplayStage;
@@ -61,7 +59,6 @@ impl Tvu {
         vote_account: &Pubkey,
         voting_keypair: Option<Arc<T>>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        bank_forks_info: &[BankForksInfo],
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
         blocktree: Arc<Blocktree>,
@@ -71,8 +68,6 @@ impl Tvu {
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        storage_entry_sender: EntrySender,
-        storage_entry_receiver: EntryReceiver,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
         genesis_blockhash: &Hash,
@@ -115,7 +110,7 @@ impl Tvu {
             genesis_blockhash,
         );
 
-        let (replay_stage, slot_full_receiver) = ReplayStage::new(
+        let (replay_stage, slot_full_receiver, root_slot_receiver) = ReplayStage::new(
             &keypair.pubkey(),
             vote_account,
             voting_keypair,
@@ -126,7 +121,6 @@ impl Tvu {
             ledger_signal_receiver,
             subscriptions,
             poh_recorder,
-            storage_entry_sender,
             leader_schedule_cache,
         );
 
@@ -145,12 +139,11 @@ impl Tvu {
         let storage_keypair = Arc::new(Keypair::new());
         let storage_stage = StorageStage::new(
             storage_state,
-            storage_entry_receiver,
+            root_slot_receiver,
             Some(blocktree),
             &keypair,
             &storage_keypair,
             &exit,
-            bank_forks_info[0].entry_height, // TODO: StorageStage needs to deal with BankForks somehow still
             &bank_forks,
             storage_rotate_count,
             &cluster_info,
@@ -203,10 +196,6 @@ pub mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(starting_balance);
 
         let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
-        let bank_forks_info = vec![BankForksInfo {
-            bank_slot: 0,
-            entry_height: 0,
-        }];
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new_with_invalid_keypair(target1.info.clone());
@@ -221,13 +210,11 @@ pub mod tests {
         let (exit, poh_recorder, poh_service, _entry_receiver) =
             create_test_recorder(&bank, &blocktree);
         let voting_keypair = Keypair::new();
-        let (storage_entry_sender, storage_entry_receiver) = channel();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
             Some(Arc::new(voting_keypair)),
             &Arc::new(RwLock::new(bank_forks)),
-            &bank_forks_info,
             &cref1,
             {
                 Sockets {
@@ -243,8 +230,6 @@ pub mod tests {
             l_receiver,
             &Arc::new(RpcSubscriptions::default()),
             &poh_recorder,
-            storage_entry_sender,
-            storage_entry_receiver,
             &leader_schedule_cache,
             &exit,
             &Hash::default(),

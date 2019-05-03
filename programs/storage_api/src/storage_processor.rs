@@ -37,44 +37,36 @@ pub fn process_instruction(
     match bincode::deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StorageInstruction::SubmitMiningProof {
             sha_state,
-            entry_height,
+            slot,
             signature,
         } => {
             if num_keyed_accounts != 1 {
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.submit_mining_proof(
-                storage_account_pubkey,
-                sha_state,
-                entry_height,
-                signature,
-            )
+            storage_account.submit_mining_proof(storage_account_pubkey, sha_state, slot, signature)
         }
-        StorageInstruction::AdvertiseStorageRecentBlockhash { hash, entry_height } => {
+        StorageInstruction::AdvertiseStorageRecentBlockhash { hash, slot } => {
             if num_keyed_accounts != 1 {
                 // keyed_accounts[0] should be the main storage key
                 // to access its data
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.advertise_storage_recent_blockhash(hash, entry_height)
+            storage_account.advertise_storage_recent_blockhash(hash, slot)
         }
-        StorageInstruction::ClaimStorageReward { entry_height } => {
+        StorageInstruction::ClaimStorageReward { slot } => {
             if num_keyed_accounts != 1 {
                 // keyed_accounts[0] should be the main storage key
                 // to access its data
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.claim_storage_reward(entry_height, tick_height)
+            storage_account.claim_storage_reward(slot, tick_height)
         }
-        StorageInstruction::ProofValidation {
-            entry_height,
-            proofs,
-        } => {
+        StorageInstruction::ProofValidation { slot, proofs } => {
             if num_keyed_accounts == 1 {
                 // have to have at least 1 replicator to do any verification
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.proof_validation(entry_height, proofs, &mut rest)
+            storage_account.proof_validation(slot, proofs, &mut rest)
         }
     }
 }
@@ -85,7 +77,7 @@ mod tests {
     use crate::id;
     use crate::storage_contract::{CheckedProof, Proof, ProofStatus, StorageContract};
     use crate::storage_instruction;
-    use crate::ENTRIES_PER_SEGMENT;
+    use crate::SLOTS_PER_SEGMENT;
     use bincode::deserialize;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
@@ -134,7 +126,7 @@ mod tests {
         let ix = storage_instruction::advertise_recent_blockhash(
             &pubkey,
             Hash::default(),
-            ENTRIES_PER_SEGMENT,
+            SLOTS_PER_SEGMENT,
         );
 
         assert_eq!(
@@ -158,7 +150,7 @@ mod tests {
     }
 
     #[test]
-    fn test_submit_mining_invalid_entry_height() {
+    fn test_submit_mining_invalid_slot() {
         solana_logger::setup();
         let pubkey = Pubkey::new_rand();
         let mut accounts = [Account::default(), Account::default()];
@@ -197,7 +189,7 @@ mod tests {
 
         let mut bank = Bank::new(&genesis_block);
         bank.add_instruction_processor(id(), process_instruction);
-        let entry_height = 0;
+        let slot = 0;
         let bank_client = BankClient::new(bank);
 
         let ix = system_instruction::create_account(&mint_pubkey, &validator, 10, 4 * 1042, &id());
@@ -209,7 +201,7 @@ mod tests {
         let ix = storage_instruction::advertise_recent_blockhash(
             &validator,
             Hash::default(),
-            ENTRIES_PER_SEGMENT,
+            SLOTS_PER_SEGMENT,
         );
 
         bank_client
@@ -219,7 +211,7 @@ mod tests {
         let ix = storage_instruction::mining_proof(
             &replicator,
             Hash::default(),
-            entry_height,
+            slot,
             Signature::default(),
         );
         bank_client
@@ -229,7 +221,7 @@ mod tests {
         let ix = storage_instruction::advertise_recent_blockhash(
             &validator,
             Hash::default(),
-            ENTRIES_PER_SEGMENT * 2,
+            SLOTS_PER_SEGMENT * 2,
         );
         bank_client
             .send_instruction(&validator_keypair, ix)
@@ -237,7 +229,7 @@ mod tests {
 
         let ix = storage_instruction::proof_validation(
             &validator,
-            entry_height,
+            slot,
             vec![CheckedProof {
                 proof: Proof {
                     id: replicator,
@@ -254,13 +246,13 @@ mod tests {
         let ix = storage_instruction::advertise_recent_blockhash(
             &validator,
             Hash::default(),
-            ENTRIES_PER_SEGMENT * 3,
+            SLOTS_PER_SEGMENT * 3,
         );
         bank_client
             .send_instruction(&validator_keypair, ix)
             .unwrap();
 
-        let ix = storage_instruction::reward_claim(&validator, entry_height);
+        let ix = storage_instruction::reward_claim(&validator, slot);
         bank_client
             .send_instruction(&validator_keypair, ix)
             .unwrap();
@@ -274,7 +266,7 @@ mod tests {
         //    bank.register_tick(&bank.last_blockhash());
         //}
 
-        let ix = storage_instruction::reward_claim(&replicator, entry_height);
+        let ix = storage_instruction::reward_claim(&replicator, slot);
         bank_client
             .send_instruction(&replicator_keypair, ix)
             .unwrap();
@@ -283,21 +275,21 @@ mod tests {
         // assert_eq!(bank_client.get_balance(&replicator).unwrap(), TOTAL_REPLICATOR_REWARDS);
     }
 
-    fn get_storage_entry_height<C: SyncClient>(client: &C, account: &Pubkey) -> u64 {
+    fn get_storage_slot<C: SyncClient>(client: &C, account: &Pubkey) -> u64 {
         match client.get_account_data(&account).unwrap() {
             Some(storage_system_account_data) => {
                 let contract = deserialize(&storage_system_account_data);
                 if let Ok(contract) = contract {
                     match contract {
-                        StorageContract::ValidatorStorage { entry_height, .. } => {
-                            return entry_height;
+                        StorageContract::ValidatorStorage { slot, .. } => {
+                            return slot;
                         }
-                        _ => info!("error in reading entry_height"),
+                        _ => info!("error in reading slot"),
                     }
                 }
             }
             None => {
-                info!("error in reading entry_height");
+                info!("error in reading slot");
             }
         }
         0
@@ -357,18 +349,18 @@ mod tests {
         let ix = storage_instruction::advertise_recent_blockhash(
             &validator_pubkey,
             storage_blockhash,
-            ENTRIES_PER_SEGMENT,
+            SLOTS_PER_SEGMENT,
         );
 
         bank_client
             .send_instruction(&validator_keypair, ix)
             .unwrap();
 
-        let entry_height = 0;
+        let slot = 0;
         let ix = storage_instruction::mining_proof(
             &replicator_pubkey,
             Hash::default(),
-            entry_height,
+            slot,
             Signature::default(),
         );
         let _result = bank_client
@@ -376,8 +368,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            get_storage_entry_height(&bank_client, &validator_pubkey),
-            ENTRIES_PER_SEGMENT
+            get_storage_slot(&bank_client, &validator_pubkey),
+            SLOTS_PER_SEGMENT
         );
         assert_eq!(
             get_storage_blockhash(&bank_client, &validator_pubkey),

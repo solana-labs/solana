@@ -6,7 +6,6 @@ use crate::blocktree::Blocktree;
 use crate::broadcast_stage::BroadcastStage;
 use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
-use crate::entry::EntrySender;
 use crate::fetch_stage::FetchStage;
 use crate::poh_recorder::{PohRecorder, WorkingBankEntries};
 use crate::service::Service;
@@ -39,7 +38,6 @@ impl Tpu {
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
         blocktree: &Arc<Blocktree>,
-        storage_entry_sender: EntrySender,
         exit: &Arc<AtomicBool>,
         genesis_blockhash: &Hash,
     ) -> Self {
@@ -80,7 +78,6 @@ impl Tpu {
             entry_receiver,
             &exit,
             blocktree,
-            storage_entry_sender,
             genesis_blockhash,
         );
 

@@ -4,10 +4,10 @@ pub mod storage_processor;
 
 use solana_sdk::pubkey::Pubkey;
 
-pub const ENTRIES_PER_SEGMENT: u64 = 16;
+pub const SLOTS_PER_SEGMENT: u64 = 2;
 
-pub fn get_segment_from_entry(entry_height: u64) -> usize {
-    (entry_height / ENTRIES_PER_SEGMENT) as usize
+pub fn get_segment_from_slot(slot: u64) -> usize {
+    (slot / SLOTS_PER_SEGMENT) as usize
 }
 
 const STORAGE_PROGRAM_ID: [u8; 32] = [
