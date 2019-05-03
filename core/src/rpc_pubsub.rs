@@ -1,6 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_subscriptions::RpcSubscriptions;
+use crate::rpc_subscriptions::{Depth, RpcSubscriptions};
 use bs58;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
@@ -24,7 +24,13 @@ pub trait RpcSolPubSub {
         subscribe,
         name = "accountSubscribe"
     )]
-    fn account_subscribe(&self, _: Self::Metadata, _: Subscriber<Account>, _: String);
+    fn account_subscribe(
+        &self,
+        _: Self::Metadata,
+        _: Subscriber<Account>,
+        _: String,
+        _: Option<Depth>,
+    );
 
     // Unsubscribe from account notification subscription.
     #[pubsub(
@@ -41,7 +47,13 @@ pub trait RpcSolPubSub {
         subscribe,
         name = "programSubscribe"
     )]
-    fn program_subscribe(&self, _: Self::Metadata, _: Subscriber<(String, Account)>, _: String);
+    fn program_subscribe(
+        &self,
+        _: Self::Metadata,
+        _: Subscriber<(String, Account)>,
+        _: String,
+        _: Option<Depth>,
+    );
 
     // Unsubscribe from account notification subscription.
     #[pubsub(
@@ -63,6 +75,7 @@ pub trait RpcSolPubSub {
         _: Self::Metadata,
         _: Subscriber<Option<transaction::Result<()>>>,
         _: String,
+        _: Option<Depth>,
     );
 
     // Unsubscribe from signature notification subscription.
@@ -95,6 +108,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<Account>,
         pubkey_str: String,
+        depth: Option<Depth>,
     ) {
         let pubkey_vec = bs58::decode(pubkey_str).into_vec().unwrap();
         if pubkey_vec.len() != mem::size_of::<Pubkey>() {
@@ -108,6 +122,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             return;
         }
         let pubkey = Pubkey::new(&pubkey_vec);
+        let depth = depth.unwrap_or(0);
 
         let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
         let sub_id = SubscriptionId::Number(id as u64);
@@ -115,7 +130,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
 
         self.subscriptions
-            .add_account_subscription(&pubkey, &sub_id, &sink)
+            .add_account_subscription(&pubkey, depth, &sub_id, &sink)
     }
 
     fn account_unsubscribe(
@@ -140,6 +155,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<(String, Account)>,
         pubkey_str: String,
+        depth: Option<Depth>,
     ) {
         let pubkey_vec = bs58::decode(pubkey_str).into_vec().unwrap();
         if pubkey_vec.len() != mem::size_of::<Pubkey>() {
@@ -153,6 +169,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             return;
         }
         let pubkey = Pubkey::new(&pubkey_vec);
+        let depth = depth.unwrap_or(0);
 
         let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
         let sub_id = SubscriptionId::Number(id as u64);
@@ -160,7 +177,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
 
         self.subscriptions
-            .add_program_subscription(&pubkey, &sub_id, &sink)
+            .add_program_subscription(&pubkey, depth, &sub_id, &sink)
     }
 
     fn program_unsubscribe(
@@ -185,6 +202,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<Option<transaction::Result<()>>>,
         signature_str: String,
+        depth: Option<Depth>,
     ) {
         info!("signature_subscribe");
         let signature_vec = bs58::decode(signature_str).into_vec().unwrap();
@@ -199,12 +217,18 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             return;
         }
         let signature = Signature::new(&signature_vec);
+        let depth = depth.unwrap_or(0);
+
         let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
         let sub_id = SubscriptionId::Number(id as u64);
+        info!(
+            "signature_subscribe: signature={:?} id={:?}",
+            signature, sub_id
+        );
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
 
         self.subscriptions
-            .add_signature_subscription(&signature, &sub_id, &sink);
+            .add_signature_subscription(&signature, depth, &sub_id, &sink);
     }
 
     fn signature_unsubscribe(
