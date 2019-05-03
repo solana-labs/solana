@@ -1,17 +1,19 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
+use crate::bank_forks::BankForks;
 use bs58;
 use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::typed::Sink;
 use jsonrpc_pubsub::SubscriptionId;
+use serde::Serialize;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction;
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 pub type Depth = u8;
 
@@ -26,13 +28,15 @@ type RpcSignatureSubscriptions = RwLock<
 fn add_subscription<K, S>(
     subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, Depth)>>,
     hashmap_key: &K,
-    depth: Depth,
+    depth: Option<Depth>,
     sub_id: &SubscriptionId,
     sink: &Sink<S>,
 ) where
     K: Eq + Hash + Clone + Copy,
     S: Clone,
 {
+    let depth = depth.unwrap_or(0);
+    let depth = if depth > 31 { 31 } else { depth };
     if let Some(current_hashmap) = subscriptions.get_mut(hashmap_key) {
         current_hashmap.insert(sub_id.clone(), (sink.clone(), depth));
         return;
@@ -63,6 +67,47 @@ where
     found
 }
 
+fn check_depth_and_notify<K, S, F>(
+    subscriptions: &HashMap<K, HashMap<SubscriptionId, (Sink<S>, Depth)>>,
+    hashmap_key: &K,
+    current_slot: u64,
+    bank_forks: &Arc<RwLock<BankForks>>,
+    bank_method: F,
+) where
+    K: Eq + Hash + Clone + Copy,
+    S: Clone + Serialize,
+    F: Fn(&Bank, &K) -> Option<S>,
+{
+    let current_ancestors = bank_forks
+        .read()
+        .unwrap()
+        .get(current_slot)
+        .unwrap()
+        .ancestors
+        .clone();
+    if let Some(hashmap) = subscriptions.get(hashmap_key) {
+        for (_bank_sub_id, (sink, depth)) in hashmap.iter() {
+            let desired_slot: Vec<u64> = current_ancestors
+                .iter()
+                .filter(|(_, &v)| v == *depth as usize)
+                .map(|(k, _)| k)
+                .cloned()
+                .collect();
+            if desired_slot.len() == 1 {
+                let desired_bank = bank_forks
+                    .read()
+                    .unwrap()
+                    .get(desired_slot[0])
+                    .unwrap()
+                    .clone();
+                if let Some(result) = bank_method(&desired_bank, hashmap_key) {
+                    sink.notify(Ok(result)).wait().unwrap();
+                }
+            }
+        }
+    }
+}
+
 pub struct RpcSubscriptions {
     account_subscriptions: RpcAccountSubscriptions,
     program_subscriptions: RpcProgramSubscriptions,
@@ -80,14 +125,20 @@ impl Default for RpcSubscriptions {
 }
 
 impl RpcSubscriptions {
-    pub fn check_account(&self, pubkey: &Pubkey, account: &Account) {
+    pub fn check_account(
+        &self,
+        pubkey: &Pubkey,
+        current_slot: u64,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) {
         let subscriptions = self.account_subscriptions.read().unwrap();
-        if let Some(hashmap) = subscriptions.get(pubkey) {
-            for (_bank_sub_id, (sink, depth)) in hashmap.iter() {
-                error!("notification: {:?}, {:?}", pubkey, account.lamports);
-                sink.notify(Ok(account.clone())).wait().unwrap();
-            }
-        }
+        check_depth_and_notify(
+            &subscriptions,
+            pubkey,
+            current_slot,
+            bank_forks,
+            Bank::get_account_modified_since_parent,
+        );
     }
 
     pub fn check_program(&self, program_id: &Pubkey, pubkey: &Pubkey, account: &Account) {
@@ -114,7 +165,7 @@ impl RpcSubscriptions {
     pub fn add_account_subscription(
         &self,
         pubkey: &Pubkey,
-        depth: Depth,
+        depth: Option<Depth>,
         sub_id: &SubscriptionId,
         sink: &Sink<Account>,
     ) {
@@ -130,7 +181,7 @@ impl RpcSubscriptions {
     pub fn add_program_subscription(
         &self,
         program_id: &Pubkey,
-        depth: Depth,
+        depth: Option<Depth>,
         sub_id: &SubscriptionId,
         sink: &Sink<(String, Account)>,
     ) {
@@ -146,7 +197,7 @@ impl RpcSubscriptions {
     pub fn add_signature_subscription(
         &self,
         signature: &Signature,
-        depth: Depth,
+        depth: Option<Depth>,
         sub_id: &SubscriptionId,
         sink: &Sink<Option<transaction::Result<()>>>,
     ) {
@@ -161,17 +212,21 @@ impl RpcSubscriptions {
 
     /// Notify subscribers of changes to any accounts or new signatures since
     /// the bank's last checkpoint.
-    pub fn notify_subscribers(&self, bank: &Bank) {
+    pub fn notify_subscribers(&self, current_slot: u64, bank_forks: &Arc<RwLock<BankForks>>) {
         let pubkeys: Vec<_> = {
             let subs = self.account_subscriptions.read().unwrap();
             subs.keys().cloned().collect()
         };
         for pubkey in &pubkeys {
-            if let Some(account) = &bank.get_account_modified_since_parent(pubkey) {
-                self.check_account(pubkey, account);
-            }
+            self.check_account(pubkey, current_slot, bank_forks);
         }
 
+        let bank = bank_forks
+            .read()
+            .unwrap()
+            .get(current_slot)
+            .unwrap()
+            .clone();
         let programs: Vec<_> = {
             let subs = self.program_subscriptions.read().unwrap();
             subs.keys().cloned().collect()

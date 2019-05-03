@@ -122,7 +122,6 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             return;
         }
         let pubkey = Pubkey::new(&pubkey_vec);
-        let depth = depth.unwrap_or(0);
 
         let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
         let sub_id = SubscriptionId::Number(id as u64);
@@ -169,7 +168,6 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             return;
         }
         let pubkey = Pubkey::new(&pubkey_vec);
-        let depth = depth.unwrap_or(0);
 
         let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
         let sub_id = SubscriptionId::Number(id as u64);
@@ -217,7 +215,6 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             return;
         }
         let signature = Signature::new(&signature_vec);
-        let depth = depth.unwrap_or(0);
 
         let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
         let sub_id = SubscriptionId::Number(id as u64);
