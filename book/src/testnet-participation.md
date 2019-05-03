@@ -119,20 +119,20 @@ Then the following command will start a new validator node.
 If this is a `solana-install`-installation:
 ```bash
 $ clear-fullnode-config.sh
-$ fullnode.sh --public-address --poll-for-new-genesis-block testnet.solana.com
+$ fullnode.sh --poll-for-new-genesis-block testnet.solana.com
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
 $ clear-fullnode-config.sh
-$ solana-install run fullnode.sh -- --public-address --poll-for-new-genesis-block testnet.solana.com
+$ solana-install run fullnode.sh -- --poll-for-new-genesis-block testnet.solana.com
 ```
 
 If you built from source:
 ```bash
 $ USE_INSTALL=1 ./multinode-demo/clear-fullnode-config.sh
-$ USE_INSTALL=1 ./multinode-demo/fullnode.sh --public-address --poll-for-new-genesis-block testnet.solana.com
+$ USE_INSTALL=1 ./multinode-demo/fullnode.sh --poll-for-new-genesis-block testnet.solana.com
 ```
 
 #### Controlling local network port allocation

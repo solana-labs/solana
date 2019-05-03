@@ -290,7 +290,6 @@ startBootstrapLeader() {
       "./solana/net/remote/remote-node.sh \
          $deployMethod \
          bootstrap-leader \
-         $publicNetwork \
          $entrypointIp \
          $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]})) \
          \"$RUST_LOG\" \
@@ -319,7 +318,6 @@ startNode() {
       "./solana/net/remote/remote-node.sh \
          $deployMethod \
          $nodeType \
-         $publicNetwork \
          $entrypointIp \
          $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]})) \
          \"$RUST_LOG\" \

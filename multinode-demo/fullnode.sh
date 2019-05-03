@@ -164,23 +164,21 @@ while true; do
   if ((stake)); then
     setup_vote_account "${leader_address%:*}" "$fullnode_id_path" "$fullnode_vote_id_path" "$stake"
   fi
+  set +x
 
-  $program \
-    --identity "$fullnode_id_path" \
-    --voting-keypair "$fullnode_vote_id_path" \
-    --vote-account "$fullnode_vote_id" \
-    --network "$leader_address" \
-    --ledger "$ledger_config_dir" \
-    --accounts "$accounts_config_dir" \
-    --rpc-drone-address "${leader_address%:*}:9900" \
-    "${extra_fullnode_args[@]}" \
-    > >($fullnode_logger) 2>&1 &
+  default_fullnode_arg --identity "$fullnode_id_path"
+  default_fullnode_arg --voting-keypair "$fullnode_vote_id_path"
+  default_fullnode_arg --vote-account "$fullnode_vote_id"
+  default_fullnode_arg --network "$leader_address"
+  default_fullnode_arg --ledger "$ledger_config_dir"
+  default_fullnode_arg --accounts "$accounts_config_dir"
+  default_fullnode_arg --rpc-drone-address "${leader_address%:*}:9900"
+  echo "$PS4 $program ${extra_fullnode_args[*]}"
+  $program "${extra_fullnode_args[@]}" > >($fullnode_logger) 2>&1 &
   pid=$!
   oom_score_adj "$pid" 1000
 
-  set +x
   while true; do
-
     if ! kill -0 "$pid"; then
       wait "$pid"
       exit 0

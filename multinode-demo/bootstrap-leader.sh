@@ -44,17 +44,18 @@ bootstrap_leader_vote_id_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-id.json
 bootstrap_leader_vote_id=$($solana_keygen pubkey "$bootstrap_leader_vote_id_path")
 
 trap 'kill "$pid" && wait "$pid"' INT TERM ERR
-$program \
-  --identity "$bootstrap_leader_id_path" \
-  --voting-keypair "$bootstrap_leader_vote_id_path" \
-  --vote-account  "$bootstrap_leader_vote_id" \
-  --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger \
-  --accounts "$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts \
-  --gossip-port 8001 \
-  --rpc-port 8899 \
-  --rpc-drone-address 127.0.0.1:9900 \
-  "${extra_fullnode_args[@]}" \
-  > >($bootstrap_leader_logger) 2>&1 &
+
+default_fullnode_arg --identity "$bootstrap_leader_id_path"
+default_fullnode_arg --voting-keypair "$bootstrap_leader_vote_id_path"
+default_fullnode_arg --vote-account  "$bootstrap_leader_vote_id"
+default_fullnode_arg --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
+default_fullnode_arg --accounts "$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts
+default_fullnode_arg --rpc-port 8899
+default_fullnode_arg --rpc-drone-address 127.0.0.1:9900
+default_fullnode_arg --gossip-port 8001
+
+echo "$PS4 $program ${extra_fullnode_args[*]}"
+$program "${extra_fullnode_args[@]}" > >($bootstrap_leader_logger) 2>&1 &
 pid=$!
 oom_score_adj "$pid" 1000
 

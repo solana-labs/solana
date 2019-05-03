@@ -82,7 +82,6 @@ Start a full node
   --label LABEL             - Append the given label to the fullnode configuration files, useful when running
                               multiple fullnodes from the same filesystem location
   --stake LAMPORTS          - Number of lamports to stake
-  --public-address          - advertise public machine address in gossip.  By default the local machine address is advertised
   --no-voting               - start node without vote signer
   --rpc-port port           - custom RPC port for this node
 

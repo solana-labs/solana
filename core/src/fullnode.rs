@@ -74,6 +74,7 @@ pub struct Fullnode {
     poh_service: PohService,
     tpu: Tpu,
     tvu: Tvu,
+    ip_echo_server: solana_netutil::IpEchoServer,
 }
 
 impl Fullnode {
@@ -158,6 +159,9 @@ impl Fullnode {
                 &exit,
             ))
         };
+
+        let ip_echo_server =
+            solana_netutil::ip_echo_server(node.sockets.gossip.local_addr().unwrap().port());
 
         let subscriptions = Arc::new(RpcSubscriptions::default());
         let rpc_pubsub_service = if node.info.rpc_pubsub.port() == 0 {
@@ -270,6 +274,7 @@ impl Fullnode {
             exit,
             poh_service,
             poh_recorder,
+            ip_echo_server,
         }
     }
 
@@ -329,6 +334,7 @@ impl Service for Fullnode {
         self.gossip_service.join()?;
         self.tpu.join()?;
         self.tvu.join()?;
+        self.ip_echo_server.shutdown_now();
 
         Ok(())
     }
