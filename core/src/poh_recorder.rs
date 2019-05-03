@@ -1027,16 +1027,6 @@ mod tests {
             // Test that with no leader slot, we don't reach the leader tick
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
-            for _ in 0..bank.ticks_per_slot() {
-                poh_recorder.tick();
-            }
-
-            // Tick should not be recorded
-            assert_eq!(poh_recorder.tick_height(), 0);
-
-            // Test that with no leader slot, we don't reach the leader tick after sending some ticks
-            assert_eq!(poh_recorder.reached_leader_tick().0, false);
-
             poh_recorder.reset(
                 poh_recorder.tick_height(),
                 bank.last_blockhash(),
@@ -1196,16 +1186,6 @@ mod tests {
             );
 
             // Test that with no leader slot, we don't reach the leader tick
-            assert_eq!(
-                poh_recorder.would_be_leader(2 * bank.ticks_per_slot()),
-                false
-            );
-
-            for _ in 0..bank.ticks_per_slot() {
-                poh_recorder.tick();
-            }
-
-            // Test that with no leader slot, we don't reach the leader tick after sending some ticks
             assert_eq!(
                 poh_recorder.would_be_leader(2 * bank.ticks_per_slot()),
                 false
