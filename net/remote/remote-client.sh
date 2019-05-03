@@ -56,7 +56,7 @@ case $clientToRun in
 solana-bench-tps)
   clientCommand="\
     solana-bench-tps \
-      --network $entrypointIp:8001 \
+      --entrypoint $entrypointIp:8001 \
       --drone $entrypointIp:9900 \
       --duration 7500 \
       --sustained \
@@ -68,7 +68,7 @@ solana-bench-exchange)
   solana-keygen -o bench.keypair
   clientCommand="\
     solana-bench-exchange \
-      --network $entrypointIp:8001 \
+      --entrypoint $entrypointIp:8001 \
       --drone $entrypointIp:9900 \
       --threads $threadCount \
       --batch-size 1000 \

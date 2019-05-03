@@ -76,12 +76,12 @@ fn main() {
                 .help("Use DIR as persistent ledger location"),
         )
         .arg(
-            Arg::with_name("network")
+            Arg::with_name("entrypoint")
                 .short("n")
-                .long("network")
+                .long("entrypoint")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .help("Rendezvous with the cluster at this gossip entry point"),
+                .help("Rendezvous with the cluster at this entry point"),
         )
         .arg(
             Arg::with_name("no_voting")
@@ -204,9 +204,9 @@ fn main() {
     } else {
         fullnode_config.account_paths = None;
     }
-    let cluster_entrypoint = matches.value_of("network").map(|network| {
-        let entrypoint_addr =
-            solana_netutil::parse_host_port(network).expect("failed to parse network address");
+    let cluster_entrypoint = matches.value_of("entrypoint").map(|entrypoint| {
+        let entrypoint_addr = solana_netutil::parse_host_port(entrypoint)
+            .expect("failed to parse entrypoint address");
         gossip_addr.set_ip(solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap());
 
         ContactInfo::new_gossip_entry_point(&entrypoint_addr)

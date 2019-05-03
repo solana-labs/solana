@@ -13,7 +13,7 @@ fn main() {
     let cli_config = cli::extract_args(&matches);
 
     let cli::Config {
-        network_addr,
+        entrypoint_addr,
         drone_addr,
         id,
         threads,
@@ -25,7 +25,7 @@ fn main() {
     } = cli_config;
 
     println!("Connecting to the cluster");
-    let nodes = discover_nodes(&network_addr, num_nodes).unwrap_or_else(|err| {
+    let nodes = discover_nodes(&entrypoint_addr, num_nodes).unwrap_or_else(|err| {
         eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
         exit(1);
     });
