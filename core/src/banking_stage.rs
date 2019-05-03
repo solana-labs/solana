@@ -125,7 +125,7 @@ impl BankingStage {
             .iter()
             .flat_map(|(p, start_index)| &p.packets[**start_index..])
             .collect();
-        inc_new_counter_info!("banking_stage-forwarded_packets", locked_packets.len());
+        inc_new_counter_info!("banking_stage-forwarded_packets", packets.len());
         let blobs = packet::packets_to_blobs(&packets);
 
         for blob in blobs {
