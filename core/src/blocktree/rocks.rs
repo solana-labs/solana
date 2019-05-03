@@ -30,7 +30,7 @@ impl Backend for Rocks {
     type Error = rocksdb::Error;
 
     fn open(path: &Path) -> Result<Rocks> {
-        use crate::blocktree::db::columns::{Coding, Data, ErasureMeta, Orphans, SlotMeta};
+        use crate::blocktree::db::columns::{Coding, Data, ErasureMeta, Orphans, Root, SlotMeta};
 
         fs::create_dir_all(&path)?;
 
@@ -44,6 +44,7 @@ impl Backend for Rocks {
         let erasure_meta_cf_descriptor =
             ColumnFamilyDescriptor::new(ErasureMeta::NAME, get_cf_options());
         let orphans_cf_descriptor = ColumnFamilyDescriptor::new(Orphans::NAME, get_cf_options());
+        let root_cf_descriptor = ColumnFamilyDescriptor::new(Root::NAME, get_cf_options());
 
         let cfs = vec![
             meta_cf_descriptor,
@@ -51,6 +52,7 @@ impl Backend for Rocks {
             erasure_cf_descriptor,
             erasure_meta_cf_descriptor,
             orphans_cf_descriptor,
+            root_cf_descriptor,
         ];
 
         // Open the database
@@ -60,13 +62,14 @@ impl Backend for Rocks {
     }
 
     fn columns(&self) -> Vec<&'static str> {
-        use crate::blocktree::db::columns::{Coding, Data, ErasureMeta, Orphans, SlotMeta};
+        use crate::blocktree::db::columns::{Coding, Data, ErasureMeta, Orphans, Root, SlotMeta};
 
         vec![
             Coding::NAME,
             ErasureMeta::NAME,
             Data::NAME,
             Orphans::NAME,
+            Root::NAME,
             SlotMeta::NAME,
         ]
     }
