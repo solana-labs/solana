@@ -1,6 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::rpc_subscriptions::{Depth, RpcSubscriptions};
+use crate::rpc_subscriptions::{Confirmations, RpcSubscriptions};
 use bs58;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
@@ -29,7 +29,7 @@ pub trait RpcSolPubSub {
         _: Self::Metadata,
         _: Subscriber<Account>,
         _: String,
-        _: Option<Depth>,
+        _: Option<Confirmations>,
     );
 
     // Unsubscribe from account notification subscription.
@@ -52,7 +52,7 @@ pub trait RpcSolPubSub {
         _: Self::Metadata,
         _: Subscriber<(String, Account)>,
         _: String,
-        _: Option<Depth>,
+        _: Option<Confirmations>,
     );
 
     // Unsubscribe from account notification subscription.
@@ -75,7 +75,7 @@ pub trait RpcSolPubSub {
         _: Self::Metadata,
         _: Subscriber<transaction::Result<()>>,
         _: String,
-        _: Option<Depth>,
+        _: Option<Confirmations>,
     );
 
     // Unsubscribe from signature notification subscription.
@@ -108,7 +108,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<Account>,
         pubkey_str: String,
-        depth: Option<Depth>,
+        confirmations: Option<Confirmations>,
     ) {
         let pubkey_vec = bs58::decode(pubkey_str).into_vec().unwrap();
         if pubkey_vec.len() != mem::size_of::<Pubkey>() {
@@ -129,7 +129,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
 
         self.subscriptions
-            .add_account_subscription(&pubkey, depth, &sub_id, &sink)
+            .add_account_subscription(&pubkey, confirmations, &sub_id, &sink)
     }
 
     fn account_unsubscribe(
@@ -154,7 +154,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<(String, Account)>,
         pubkey_str: String,
-        depth: Option<Depth>,
+        confirmations: Option<Confirmations>,
     ) {
         let pubkey_vec = bs58::decode(pubkey_str).into_vec().unwrap();
         if pubkey_vec.len() != mem::size_of::<Pubkey>() {
@@ -175,7 +175,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
 
         self.subscriptions
-            .add_program_subscription(&pubkey, depth, &sub_id, &sink)
+            .add_program_subscription(&pubkey, confirmations, &sub_id, &sink)
     }
 
     fn program_unsubscribe(
@@ -200,7 +200,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         _meta: Self::Metadata,
         subscriber: Subscriber<transaction::Result<()>>,
         signature_str: String,
-        depth: Option<Depth>,
+        confirmations: Option<Confirmations>,
     ) {
         info!("signature_subscribe");
         let signature_vec = bs58::decode(signature_str).into_vec().unwrap();
@@ -225,7 +225,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
 
         self.subscriptions
-            .add_signature_subscription(&signature, depth, &sub_id, &sink);
+            .add_signature_subscription(&signature, confirmations, &sub_id, &sink);
     }
 
     fn signature_unsubscribe(

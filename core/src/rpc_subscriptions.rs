@@ -12,41 +12,47 @@ use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction;
+use solana_vote_api::vote_state::MAX_LOCKOUT_HISTORY;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-pub type Depth = u8;
+pub type Confirmations = usize;
 
 type RpcAccountSubscriptions =
-    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Account>, Depth)>>>;
+    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Account>, Confirmations)>>>;
 type RpcProgramSubscriptions =
-    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<(String, Account)>, Depth)>>>;
-type RpcSignatureSubscriptions =
-    RwLock<HashMap<Signature, HashMap<SubscriptionId, (Sink<transaction::Result<()>>, Depth)>>>;
+    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<(String, Account)>, Confirmations)>>>;
+type RpcSignatureSubscriptions = RwLock<
+    HashMap<Signature, HashMap<SubscriptionId, (Sink<transaction::Result<()>>, Confirmations)>>,
+>;
 
 fn add_subscription<K, S>(
-    subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, Depth)>>,
+    subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, Confirmations)>>,
     hashmap_key: &K,
-    depth: Option<Depth>,
+    confirmations: Option<Confirmations>,
     sub_id: &SubscriptionId,
     sink: &Sink<S>,
 ) where
     K: Eq + Hash + Clone + Copy,
     S: Clone,
 {
-    let depth = depth.unwrap_or(0);
-    let depth = if depth > 31 { 31 } else { depth };
+    let confirmations = confirmations.unwrap_or(0);
+    let confirmations = if confirmations > MAX_LOCKOUT_HISTORY {
+        MAX_LOCKOUT_HISTORY
+    } else {
+        confirmations
+    };
     if let Some(current_hashmap) = subscriptions.get_mut(hashmap_key) {
-        current_hashmap.insert(sub_id.clone(), (sink.clone(), depth));
+        current_hashmap.insert(sub_id.clone(), (sink.clone(), confirmations));
         return;
     }
     let mut hashmap = HashMap::new();
-    hashmap.insert(sub_id.clone(), (sink.clone(), depth));
+    hashmap.insert(sub_id.clone(), (sink.clone(), confirmations));
     subscriptions.insert(*hashmap_key, hashmap);
 }
 
 fn remove_subscription<K, S>(
-    subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, Depth)>>,
+    subscriptions: &mut HashMap<K, HashMap<SubscriptionId, (Sink<S>, Confirmations)>>,
     sub_id: &SubscriptionId,
 ) -> bool
 where
@@ -66,8 +72,8 @@ where
     found
 }
 
-fn check_depth_and_notify<K, S, F, N, X>(
-    subscriptions: &HashMap<K, HashMap<SubscriptionId, (Sink<S>, Depth)>>,
+fn check_confirmations_and_notify<K, S, F, N, X>(
+    subscriptions: &HashMap<K, HashMap<SubscriptionId, (Sink<S>, Confirmations)>>,
     hashmap_key: &K,
     current_slot: u64,
     bank_forks: &Arc<RwLock<BankForks>>,
@@ -77,7 +83,7 @@ fn check_depth_and_notify<K, S, F, N, X>(
     K: Eq + Hash + Clone + Copy,
     S: Clone + Serialize,
     F: Fn(&Bank, &K) -> X,
-    N: Fn(X, &Sink<S>),
+    N: Fn(X, &Sink<S>, u64),
     X: Clone + Serialize,
 {
     let current_ancestors = bank_forks
@@ -88,13 +94,20 @@ fn check_depth_and_notify<K, S, F, N, X>(
         .ancestors
         .clone();
     if let Some(hashmap) = subscriptions.get(hashmap_key) {
-        for (_bank_sub_id, (sink, depth)) in hashmap.iter() {
+        for (_bank_sub_id, (sink, confirmations)) in hashmap.iter() {
             let desired_slot: Vec<u64> = current_ancestors
                 .iter()
-                .filter(|(_, &v)| v == *depth as usize)
+                .filter(|(_, &v)| v == *confirmations)
                 .map(|(k, _)| k)
                 .cloned()
                 .collect();
+            let root: Vec<u64> = current_ancestors
+                .iter()
+                .filter(|(_, &v)| v == 32)
+                .map(|(k, _)| k)
+                .cloned()
+                .collect();
+            let root = if root.len() == 1 { root[0] } else { 0 };
             if desired_slot.len() == 1 {
                 let desired_bank = bank_forks
                     .read()
@@ -103,13 +116,25 @@ fn check_depth_and_notify<K, S, F, N, X>(
                     .unwrap()
                     .clone();
                 let result = bank_method(&desired_bank, hashmap_key);
-                notify(result, &sink);
+                notify(result, &sink, root);
             }
         }
     }
 }
 
-fn notify_single<S>(result: Option<S>, sink: &Sink<S>)
+fn notify_account<S>(result: Option<(S, u64)>, sink: &Sink<S>, root: u64)
+where
+    S: Clone + Serialize,
+{
+    if let Some((account, fork)) = result {
+        if fork >= root {
+            error!("root {:?}, fork {:?}", root, fork);
+            sink.notify(Ok(account)).wait().unwrap();
+        }
+    }
+}
+
+fn notify_signature<S>(result: Option<S>, sink: &Sink<S>, _root: u64)
 where
     S: Clone + Serialize,
 {
@@ -118,7 +143,7 @@ where
     }
 }
 
-fn notify_program(accounts: Vec<(Pubkey, Account)>, sink: &Sink<(String, Account)>) {
+fn notify_program(accounts: Vec<(Pubkey, Account)>, sink: &Sink<(String, Account)>, _root: u64) {
     for (pubkey, account) in accounts.iter() {
         sink.notify(Ok((bs58::encode(pubkey).into_string(), account.clone())))
             .wait()
@@ -150,13 +175,13 @@ impl RpcSubscriptions {
         bank_forks: &Arc<RwLock<BankForks>>,
     ) {
         let subscriptions = self.account_subscriptions.read().unwrap();
-        check_depth_and_notify(
+        check_confirmations_and_notify(
             &subscriptions,
             pubkey,
             current_slot,
             bank_forks,
             Bank::get_account_modified_since_parent,
-            notify_single,
+            notify_account,
         );
     }
 
@@ -167,7 +192,7 @@ impl RpcSubscriptions {
         bank_forks: &Arc<RwLock<BankForks>>,
     ) {
         let subscriptions = self.program_subscriptions.write().unwrap();
-        check_depth_and_notify(
+        check_confirmations_and_notify(
             &subscriptions,
             program_id,
             current_slot,
@@ -184,13 +209,13 @@ impl RpcSubscriptions {
         bank_forks: &Arc<RwLock<BankForks>>,
     ) {
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
-        check_depth_and_notify(
+        check_confirmations_and_notify(
             &subscriptions,
             signature,
             current_slot,
             bank_forks,
             Bank::get_signature_status,
-            notify_single,
+            notify_signature,
         );
         subscriptions.remove(&signature);
     }
@@ -198,12 +223,12 @@ impl RpcSubscriptions {
     pub fn add_account_subscription(
         &self,
         pubkey: &Pubkey,
-        depth: Option<Depth>,
+        confirmations: Option<Confirmations>,
         sub_id: &SubscriptionId,
         sink: &Sink<Account>,
     ) {
         let mut subscriptions = self.account_subscriptions.write().unwrap();
-        add_subscription(&mut subscriptions, pubkey, depth, sub_id, sink);
+        add_subscription(&mut subscriptions, pubkey, confirmations, sub_id, sink);
     }
 
     pub fn remove_account_subscription(&self, id: &SubscriptionId) -> bool {
@@ -214,12 +239,12 @@ impl RpcSubscriptions {
     pub fn add_program_subscription(
         &self,
         program_id: &Pubkey,
-        depth: Option<Depth>,
+        confirmations: Option<Confirmations>,
         sub_id: &SubscriptionId,
         sink: &Sink<(String, Account)>,
     ) {
         let mut subscriptions = self.program_subscriptions.write().unwrap();
-        add_subscription(&mut subscriptions, program_id, depth, sub_id, sink);
+        add_subscription(&mut subscriptions, program_id, confirmations, sub_id, sink);
     }
 
     pub fn remove_program_subscription(&self, id: &SubscriptionId) -> bool {
@@ -230,12 +255,12 @@ impl RpcSubscriptions {
     pub fn add_signature_subscription(
         &self,
         signature: &Signature,
-        depth: Option<Depth>,
+        confirmations: Option<Confirmations>,
         sub_id: &SubscriptionId,
         sink: &Sink<transaction::Result<()>>,
     ) {
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
-        add_subscription(&mut subscriptions, signature, depth, sub_id, sink);
+        add_subscription(&mut subscriptions, signature, confirmations, sub_id, sink);
     }
 
     pub fn remove_signature_subscription(&self, id: &SubscriptionId) -> bool {
