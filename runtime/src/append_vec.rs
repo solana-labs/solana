@@ -302,8 +302,9 @@ impl Serialize for AppendVec {
         S: serde::ser::Serializer,
     {
         use serde::ser::Error;
-        let len =
-            serialized_size(&self.path).unwrap() + 2 * serialized_size(&self.file_size).unwrap();
+        let len = serialized_size(&self.path).unwrap()
+            + std::mem::size_of::<u64>() as u64
+            + serialized_size(&self.file_size).unwrap();
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);
         serialize_into(&mut wr, &self.path).map_err(Error::custom)?;
@@ -340,7 +341,7 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
             .write(true)
             .create(false)
             .open(path.as_path())
-            .unwrap();
+            .map_err(Error::custom)?;
 
         let map = unsafe { MmapMut::map_mut(&data).expect("failed to map the data file") };
         Ok(AppendVec {

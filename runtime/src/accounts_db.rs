@@ -24,6 +24,8 @@ use bincode::{deserialize_from, serialize_into, serialized_size};
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
+use serde::de::{MapAccess, Visitor};
+use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
@@ -67,9 +69,57 @@ pub struct AccountInfo {
 }
 /// An offset into the AccountsDB::storage vector
 pub type AppendVecId = usize;
-pub type AccountStorage = HashMap<usize, Arc<AccountStorageEntry>>;
 pub type InstructionAccounts = Vec<Account>;
 pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
+
+#[derive(Default, Debug)]
+pub struct AccountStorage(HashMap<usize, Arc<AccountStorageEntry>>);
+
+struct AccountStorageVisitor;
+
+impl<'de> Visitor<'de> for AccountStorageVisitor {
+    type Value = AccountStorage;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Expecting AccountStorage")
+    }
+
+    #[allow(clippy::mutex_atomic)]
+    fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+    where
+        M: MapAccess<'de>,
+    {
+        let mut map = HashMap::new();
+
+        while let Some((key, value)) = access.next_entry()? {
+            map.insert(key, Arc::new(value));
+        }
+
+        Ok(AccountStorage(map))
+    }
+}
+
+impl Serialize for AccountStorage {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (k, v) in &self.0 {
+            map.serialize_entry(k, &**v)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for AccountStorage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_map(AccountStorageVisitor)
+    }
+}
 
 #[derive(Debug, PartialEq, Copy, Clone, Deserialize, Serialize)]
 pub enum AccountStorageStatus {
@@ -200,7 +250,7 @@ impl AccountsDB {
         let paths = get_paths_vec(&paths);
         AccountsDB {
             accounts_index: RwLock::new(AccountsIndex::default()),
-            storage: RwLock::new(HashMap::new()),
+            storage: RwLock::new(AccountStorage(HashMap::new())),
             next_id: AtomicUsize::new(0),
             write_version: AtomicUsize::new(0),
             paths,
@@ -222,7 +272,7 @@ impl AccountsDB {
     }
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
-        for x in self.storage.read().unwrap().values() {
+        for x in self.storage.read().unwrap().0.values() {
             if x.fork_id == fork && x.count() > 0 {
                 return true;
             }
@@ -242,6 +292,7 @@ impl AccountsDB {
             .storage
             .read()
             .unwrap()
+            .0
             .values()
             .filter(|store| store.fork_id == fork_id)
             .cloned()
@@ -268,6 +319,7 @@ impl AccountsDB {
         let (info, fork) = accounts_index.get(pubkey, ancestors)?;
         //TODO: thread this as a ref
         storage
+            .0
             .get(&info.id)
             .and_then(|store| Some(store.accounts.get_account(info.offset)?.0.clone_account()))
             .map(|account| (account, fork))
@@ -287,6 +339,7 @@ impl AccountsDB {
         let mut candidates: Vec<Arc<AccountStorageEntry>> = {
             let stores = self.storage.read().unwrap();
             stores
+                .0
                 .values()
                 .filter_map(|x| {
                     if x.status() == AccountStorageStatus::StorageAvailable && x.fork_id == fork_id
@@ -302,7 +355,7 @@ impl AccountsDB {
             let mut stores = self.storage.write().unwrap();
             let path_idx = thread_rng().gen_range(0, self.paths.len());
             let storage = Arc::new(self.new_storage_entry(fork_id, &self.paths[path_idx]));
-            stores.insert(storage.id, storage.clone());
+            stores.0.insert(storage.id, storage.clone());
             candidates.push(storage);
         }
         let rv = thread_rng().gen_range(0, candidates.len());
@@ -314,7 +367,7 @@ impl AccountsDB {
         let is_root = self.accounts_index.read().unwrap().is_root(fork);
         trace!("PURGING {} {}", fork, is_root);
         if !is_root {
-            self.storage.write().unwrap().retain(|_, v| {
+            self.storage.write().unwrap().0.retain(|_, v| {
                 trace!("PURGING {} {}", v.fork_id, fork);
                 v.fork_id != fork
             });
@@ -376,7 +429,7 @@ impl AccountsDB {
     fn remove_dead_accounts(&self, reclaims: Vec<(Fork, AccountInfo)>) -> HashSet<Fork> {
         let storage = self.storage.read().unwrap();
         for (fork_id, account_info) in reclaims {
-            if let Some(store) = storage.get(&account_info.id) {
+            if let Some(store) = storage.0.get(&account_info.id) {
                 assert_eq!(
                     fork_id, store.fork_id,
                     "AccountDB::accounts_index corrupted. Storage should only point to one fork"
@@ -386,6 +439,7 @@ impl AccountsDB {
         }
         //TODO: performance here could be improved if AccountsDB::storage was organized by fork
         let dead_forks: HashSet<Fork> = storage
+            .0
             .values()
             .filter_map(|x| {
                 if x.count() == 0 {
@@ -396,6 +450,7 @@ impl AccountsDB {
             })
             .collect();
         let live_forks: HashSet<Fork> = storage
+            .0
             .values()
             .filter_map(|x| if x.count() > 0 { Some(x.fork_id) } else { None })
             .collect();
@@ -447,6 +502,7 @@ impl AccountsDB {
             .storage
             .read()
             .unwrap()
+            .0
             .values()
             .map(|x| x.fork_id)
             .collect();
@@ -474,11 +530,9 @@ impl AccountsDB {
             while let Some(maps) = accumulator.pop() {
                 AccountsDB::merge(&mut account_maps, &maps);
             }
-            let storage = self.fork_storage(*fork_id);
             let mut accounts_index = self.accounts_index.write().unwrap();
             for (pubkey, (_, account_info)) in account_maps.iter() {
                 accounts_index.insert(*fork_id, pubkey, account_info.clone());
-                storage.add_account();
             }
         }
     }
@@ -533,7 +587,7 @@ impl<'a> serde::de::Visitor<'a> for AccountsDBVisitor {
         let write_version: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
         let file_size: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
 
-        let mut ids: Vec<usize> = storage.read().unwrap().keys().cloned().collect();
+        let mut ids: Vec<usize> = storage.read().unwrap().0.keys().cloned().collect();
         ids.sort();
 
         let mut accounts_db = AccountsDB {
@@ -761,16 +815,16 @@ mod tests {
         db.store(1, &[(&pubkeys[0], &account)]);
         {
             let stores = db.storage.read().unwrap();
-            assert_eq!(stores.len(), 2);
-            assert_eq!(stores[&0].count(), 2);
-            assert_eq!(stores[&1].count(), 2);
+            assert_eq!(stores.0.len(), 2);
+            assert_eq!(stores.0[&0].count(), 2);
+            assert_eq!(stores.0[&1].count(), 2);
         }
         db.add_root(1);
         {
             let stores = db.storage.read().unwrap();
-            assert_eq!(stores.len(), 2);
-            assert_eq!(stores[&0].count(), 2);
-            assert_eq!(stores[&1].count(), 2);
+            assert_eq!(stores.0.len(), 2);
+            assert_eq!(stores.0[&0].count(), 2);
+            assert_eq!(stores.0[&1].count(), 2);
         }
     }
 
@@ -843,9 +897,12 @@ mod tests {
 
     fn check_storage(accounts: &AccountsDB, count: usize) -> bool {
         let stores = accounts.storage.read().unwrap();
-        assert_eq!(stores.len(), 1);
-        assert_eq!(stores[&0].status(), AccountStorageStatus::StorageAvailable);
-        stores[&0].count() == count
+        assert_eq!(stores.0.len(), 1);
+        assert_eq!(
+            stores.0[&0].status(),
+            AccountStorageStatus::StorageAvailable
+        );
+        stores.0[&0].count() == count
     }
 
     fn check_accounts(
@@ -930,7 +987,7 @@ mod tests {
         }
 
         let mut append_vec_histogram = HashMap::new();
-        for storage in accounts.storage.read().unwrap().values() {
+        for storage in accounts.storage.read().unwrap().0.values() {
             *append_vec_histogram.entry(storage.fork_id).or_insert(0) += 1;
         }
         for count in append_vec_histogram.values() {
@@ -952,9 +1009,12 @@ mod tests {
         accounts.store(0, &[(&pubkey1, &account1)]);
         {
             let stores = accounts.storage.read().unwrap();
-            assert_eq!(stores.len(), 1);
-            assert_eq!(stores[&0].count(), 1);
-            assert_eq!(stores[&0].status(), AccountStorageStatus::StorageAvailable);
+            assert_eq!(stores.0.len(), 1);
+            assert_eq!(stores.0[&0].count(), 1);
+            assert_eq!(
+                stores.0[&0].status(),
+                AccountStorageStatus::StorageAvailable
+            );
         }
 
         let pubkey2 = Pubkey::new_rand();
@@ -962,11 +1022,14 @@ mod tests {
         accounts.store(0, &[(&pubkey2, &account2)]);
         {
             let stores = accounts.storage.read().unwrap();
-            assert_eq!(stores.len(), 2);
-            assert_eq!(stores[&0].count(), 1);
-            assert_eq!(stores[&0].status(), AccountStorageStatus::StorageFull);
-            assert_eq!(stores[&1].count(), 1);
-            assert_eq!(stores[&1].status(), AccountStorageStatus::StorageAvailable);
+            assert_eq!(stores.0.len(), 2);
+            assert_eq!(stores.0[&0].count(), 1);
+            assert_eq!(stores.0[&0].status(), AccountStorageStatus::StorageFull);
+            assert_eq!(stores.0[&1].count(), 1);
+            assert_eq!(
+                stores.0[&1].status(),
+                AccountStorageStatus::StorageAvailable
+            );
         }
         let ancestors = vec![(0, 0)].into_iter().collect();
         assert_eq!(
@@ -984,13 +1047,13 @@ mod tests {
             accounts.store(0, &[(&pubkey1, &account1)]);
             {
                 let stores = accounts.storage.read().unwrap();
-                assert_eq!(stores.len(), 3);
-                assert_eq!(stores[&0].count(), count[index]);
-                assert_eq!(stores[&0].status(), status[0]);
-                assert_eq!(stores[&1].count(), 1);
-                assert_eq!(stores[&1].status(), status[1]);
-                assert_eq!(stores[&2].count(), count[index ^ 1]);
-                assert_eq!(stores[&2].status(), status[0]);
+                assert_eq!(stores.0.len(), 3);
+                assert_eq!(stores.0[&0].count(), count[index]);
+                assert_eq!(stores.0[&0].status(), status[0]);
+                assert_eq!(stores.0[&1].count(), 1);
+                assert_eq!(stores.0[&1].status(), status[1]);
+                assert_eq!(stores.0[&2].count(), count[index ^ 1]);
+                assert_eq!(stores.0[&2].status(), status[0]);
             }
             let ancestors = vec![(0, 0)].into_iter().collect();
             assert_eq!(
@@ -1053,13 +1116,13 @@ mod tests {
         assert!(accounts.accounts_index.read().unwrap().is_purged(0));
 
         //fork is still there, since gc is lazy
-        assert!(accounts.storage.read().unwrap().get(&info.id).is_some());
+        assert!(accounts.storage.read().unwrap().0.get(&info.id).is_some());
 
         //store causes cleanup
         accounts.store(1, &[(&pubkey, &account)]);
 
         //fork is gone
-        assert!(accounts.storage.read().unwrap().get(&info.id).is_none());
+        assert!(accounts.storage.read().unwrap().0.get(&info.id).is_none());
 
         //new value is there
         let ancestors = vec![(1, 1)].into_iter().collect();

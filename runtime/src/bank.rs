@@ -4,7 +4,7 @@
 //! already been signed and verified.
 
 use crate::accounts::{AccountLockType, Accounts};
-use crate::accounts_db::{ErrorCounters, InstructionAccounts, InstructionLoaders};
+use crate::accounts_db::{AccountsDB, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::locked_accounts_results::LockedAccountsResults;
@@ -13,7 +13,7 @@ use crate::serde_utils::{
     deserialize_atomicbool, deserialize_atomicusize, serialize_atomicbool, serialize_atomicusize,
 };
 use crate::status_cache::StatusCache;
-use bincode::serialize;
+use bincode::{deserialize_from, serialize, serialize_into, serialized_size};
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_metrics::counter::Counter;
@@ -32,6 +32,8 @@ use solana_vote_api::vote_state::MAX_LOCKOUT_HISTORY;
 use std::borrow::Borrow;
 use std::cmp;
 use std::collections::HashMap;
+use std::fmt;
+use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -136,20 +138,84 @@ impl EpochSchedule {
 
 type BankStatusCache = StatusCache<Result<()>>;
 
-/// Manager for the state of all accounts and programs after processing its entries.
-#[derive(Deserialize, Serialize, Default)]
-pub struct Bank {
+#[derive(Default)]
+pub struct BankRc {
     /// where all the Accounts are stored
     accounts: Arc<Accounts>,
 
     /// A cache of signature statuses
     status_cache: Arc<RwLock<BankStatusCache>>,
 
-    /// FIFO queue of `recent_blockhash` items
-    blockhash_queue: RwLock<BlockhashQueue>,
-
     /// Previous checkpoint of this bank
     parent: RwLock<Option<Arc<Bank>>>,
+}
+
+impl Serialize for BankRc {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        use serde::ser::Error;
+        let len = serialized_size(&*self.accounts.accounts_db).unwrap()
+            + serialized_size(&*self.accounts).unwrap()
+            + serialized_size(&*self.status_cache).unwrap();
+        let mut buf = vec![0u8; len as usize];
+        let mut wr = Cursor::new(&mut buf[..]);
+        serialize_into(&mut wr, &*self.accounts.accounts_db).map_err(Error::custom)?;
+        serialize_into(&mut wr, &*self.accounts).map_err(Error::custom)?;
+        serialize_into(&mut wr, &*self.status_cache).map_err(Error::custom)?;
+        let len = wr.position() as usize;
+        serializer.serialize_bytes(&wr.into_inner()[..len])
+    }
+}
+
+struct BankRcVisitor;
+
+impl<'a> serde::de::Visitor<'a> for BankRcVisitor {
+    type Value = BankRc;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Expecting BankRc")
+    }
+
+    #[allow(clippy::mutex_atomic)]
+    fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        use serde::de::Error;
+        let mut rd = Cursor::new(&data[..]);
+        let accounts_db: AccountsDB = deserialize_from(&mut rd).map_err(Error::custom)?;
+        let mut accounts: Accounts = deserialize_from(&mut rd).map_err(Error::custom)?;
+        let status_cache: BankStatusCache = deserialize_from(&mut rd).map_err(Error::custom)?;
+
+        accounts.accounts_db = Arc::new(accounts_db);
+        Ok(BankRc {
+            accounts: Arc::new(accounts),
+            status_cache: Arc::new(RwLock::new(status_cache)),
+            parent: RwLock::new(None),
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for BankRc {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_bytes(BankRcVisitor)
+    }
+}
+
+/// Manager for the state of all accounts and programs after processing its entries.
+#[derive(Default, Deserialize, Serialize)]
+pub struct Bank {
+    /// References to accounts, parent and signature status
+    #[serde(skip)]
+    pub rc: BankRc,
+
+    /// FIFO queue of `recent_blockhash` items
+    blockhash_queue: RwLock<BlockhashQueue>,
 
     /// The set of parents including this bank
     pub ancestors: HashMap<u64, usize>,
@@ -222,7 +288,7 @@ impl Bank {
     pub fn new_with_paths(genesis_block: &GenesisBlock, paths: Option<String>) -> Self {
         let mut bank = Self::default();
         bank.ancestors.insert(bank.slot(), 0);
-        bank.accounts = Arc::new(Accounts::new(paths));
+        bank.rc.accounts = Arc::new(Accounts::new(paths));
         bank.process_genesis_block(genesis_block);
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
@@ -240,7 +306,7 @@ impl Bank {
 
         let mut bank = Self::default();
         bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
-        bank.status_cache = parent.status_cache.clone();
+        bank.rc.status_cache = parent.rc.status_cache.clone();
         bank.bank_height = parent.bank_height + 1;
         bank.fee_calculator = parent.fee_calculator.clone();
 
@@ -265,11 +331,11 @@ impl Bank {
                 .to_owned(),
         );
 
-        bank.parent = RwLock::new(Some(parent.clone()));
+        bank.rc.parent = RwLock::new(Some(parent.clone()));
         bank.parent_hash = parent.hash();
         bank.collector_id = *collector_id;
 
-        bank.accounts = Arc::new(Accounts::new_from_parent(&parent.accounts));
+        bank.rc.accounts = Arc::new(Accounts::new_from_parent(&parent.rc.accounts));
 
         bank.epoch_vote_accounts = {
             let mut epoch_vote_accounts = parent.epoch_vote_accounts.clone();
@@ -325,19 +391,19 @@ impl Bank {
         self.freeze();
 
         let parents = self.parents();
-        *self.parent.write().unwrap() = None;
+        *self.rc.parent.write().unwrap() = None;
 
         let squash_accounts_start = Instant::now();
         for p in parents.iter().rev() {
             // root forks cannot be purged
-            self.accounts.add_root(p.slot());
+            self.rc.accounts.add_root(p.slot());
         }
         let squash_accounts_ms = duration_as_ms(&squash_accounts_start.elapsed());
 
         let squash_cache_start = Instant::now();
         parents
             .iter()
-            .for_each(|p| self.status_cache.write().unwrap().add_root(p.slot()));
+            .for_each(|p| self.rc.status_cache.write().unwrap().add_root(p.slot()));
         let squash_cache_ms = duration_as_ms(&squash_cache_start.elapsed());
 
         solana_metrics::submit(
@@ -356,7 +422,7 @@ impl Bank {
 
     /// Return the more recent checkpoint of this bank instance.
     pub fn parent(&self) -> Option<Arc<Bank>> {
-        self.parent.read().unwrap().clone()
+        self.rc.parent.read().unwrap().clone()
     }
 
     fn process_genesis_block(&mut self, genesis_block: &GenesisBlock) {
@@ -428,7 +494,7 @@ impl Bank {
 
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
-        self.status_cache.write().unwrap().clear_signatures();
+        self.rc.status_cache.write().unwrap().clear_signatures();
     }
 
     pub fn can_commit(result: &Result<()>) -> bool {
@@ -440,7 +506,7 @@ impl Bank {
     }
 
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
-        let mut status_cache = self.status_cache.write().unwrap();
+        let mut status_cache = self.rc.status_cache.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
             if Self::can_commit(&res[i]) && !tx.signatures.is_empty() {
                 status_cache.insert(
@@ -525,7 +591,7 @@ impl Bank {
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
-        let results = self.accounts.lock_accounts(txs);
+        let results = self.rc.accounts.lock_accounts(txs);
         LockedAccountsResults::new(results, &self, txs, AccountLockType::AccountLock)
     }
 
@@ -536,11 +602,12 @@ impl Bank {
         if locked_accounts_results.needs_unlock {
             locked_accounts_results.needs_unlock = false;
             match locked_accounts_results.lock_type() {
-                AccountLockType::AccountLock => self.accounts.unlock_accounts(
+                AccountLockType::AccountLock => self.rc.accounts.unlock_accounts(
                     locked_accounts_results.transactions(),
                     locked_accounts_results.locked_accounts_results(),
                 ),
                 AccountLockType::RecordLock => self
+                    .rc
                     .accounts
                     .unlock_record_accounts(locked_accounts_results.transactions()),
             }
@@ -554,12 +621,12 @@ impl Bank {
     where
         I: std::borrow::Borrow<Transaction>,
     {
-        self.accounts.lock_record_accounts(txs);
+        self.rc.accounts.lock_record_accounts(txs);
         LockedAccountsResults::new(vec![], &self, txs, AccountLockType::RecordLock)
     }
 
     pub fn unlock_record_accounts(&self, txs: &[Transaction]) {
-        self.accounts.unlock_record_accounts(txs)
+        self.rc.accounts.unlock_record_accounts(txs)
     }
 
     fn load_accounts(
@@ -568,7 +635,7 @@ impl Bank {
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        self.accounts.load_accounts(
+        self.rc.accounts.load_accounts(
             &self.ancestors,
             txs,
             results,
@@ -622,7 +689,7 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let rcache = self.status_cache.read().unwrap();
+        let rcache = self.rc.status_cache.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
@@ -816,7 +883,8 @@ impl Bank {
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
         let now = Instant::now();
-        self.accounts
+        self.rc
+            .accounts
             .store_accounts(self.slot(), txs, executed, loaded_accounts);
 
         self.store_vote_accounts(txs, executed, loaded_accounts);
@@ -884,7 +952,7 @@ impl Bank {
     }
 
     fn store(&self, pubkey: &Pubkey, account: &Account) {
-        self.accounts.store_slow(self.slot(), pubkey, account);
+        self.rc.accounts.store_slow(self.slot(), pubkey, account);
         if solana_vote_api::check_id(&account.owner) {
             let mut vote_accounts = self.vote_accounts.write().unwrap();
             if account.lamports != 0 {
@@ -918,15 +986,21 @@ impl Bank {
     }
 
     pub fn accounts(&self) -> Arc<Accounts> {
-        self.accounts.clone()
+        self.rc.accounts.clone()
     }
 
-    pub fn set_accounts(&mut self, accounts: &Arc<Accounts>) {
-        self.accounts = accounts.clone();
+    pub fn set_bank_rc(&mut self, bank_rc: &BankRc) {
+        self.rc.accounts = bank_rc.accounts.clone();
+        self.rc.status_cache = bank_rc.status_cache.clone()
+    }
+
+    pub fn set_parent(&mut self, parent: &Arc<Bank>) {
+        self.rc.parent = RwLock::new(Some(parent.clone()));
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts
+        self.rc
+            .accounts
             .load_slow(&self.ancestors, pubkey)
             .map(|(account, _)| account)
     }
@@ -935,12 +1009,12 @@ impl Bank {
         &self,
         program_id: &Pubkey,
     ) -> Vec<(Pubkey, Account)> {
-        self.accounts.load_by_program(self.slot(), program_id)
+        self.rc.accounts.load_by_program(self.slot(), program_id)
     }
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Fork)> {
         let just_self: HashMap<u64, usize> = vec![(self.slot(), 0)].into_iter().collect();
-        self.accounts.load_slow(&just_self, pubkey)
+        self.rc.accounts.load_slow(&just_self, pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
@@ -955,7 +1029,7 @@ impl Bank {
         &self,
         signature: &Signature,
     ) -> Option<(usize, Result<()>)> {
-        let rcache = self.status_cache.read().unwrap();
+        let rcache = self.rc.status_cache.read().unwrap();
         rcache.get_signature_status_slow(signature, &self.ancestors)
     }
 
@@ -973,11 +1047,11 @@ impl Bank {
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the same hash as we did before
         // checkpointing.
-        if !self.accounts.has_accounts(self.slot()) {
+        if !self.rc.accounts.has_accounts(self.slot()) {
             return self.parent_hash;
         }
 
-        let accounts_delta_hash = self.accounts.hash_internal_state(self.slot());
+        let accounts_delta_hash = self.rc.accounts.hash_internal_state(self.slot());
         extend_and_hash(&self.parent_hash, &serialize(&accounts_delta_hash).unwrap())
     }
 
@@ -1102,12 +1176,12 @@ impl Bank {
         let dbhq = dbank.blockhash_queue.read().unwrap();
         assert_eq!(*bhq, *dbhq);
 
-        let sc = self.status_cache.read().unwrap();
-        let dsc = dbank.status_cache.read().unwrap();
+        let sc = self.rc.status_cache.read().unwrap();
+        let dsc = dbank.rc.status_cache.read().unwrap();
         assert_eq!(*sc, *dsc);
         assert_eq!(
-            self.accounts.hash_internal_state(self.slot),
-            dbank.accounts.hash_internal_state(dbank.slot)
+            self.rc.accounts.hash_internal_state(self.slot),
+            dbank.rc.accounts.hash_internal_state(dbank.slot)
         );
     }
 }
@@ -1115,7 +1189,7 @@ impl Bank {
 impl Drop for Bank {
     fn drop(&mut self) {
         // For root forks this is a noop
-        self.accounts.purge_fork(self.slot());
+        self.rc.accounts.purge_fork(self.slot());
     }
 }
 
@@ -1133,41 +1207,6 @@ mod tests {
     use solana_vote_api::vote_instruction;
     use solana_vote_api::vote_state::VoteState;
     use std::io::Cursor;
-
-    // The default stake placed with the bootstrap leader
-    pub(crate) const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
-
-    pub(crate) fn create_genesis_block_with_leader(
-        mint_lamports: u64,
-        leader_id: &Pubkey,
-        leader_stake_lamports: u64,
-    ) -> (GenesisBlock, Keypair, Keypair) {
-        let mint_keypair = Keypair::new();
-        let voting_keypair = Keypair::new();
-
-        let genesis_block = GenesisBlock::new(
-            &leader_id,
-            &[
-                (
-                    mint_keypair.pubkey(),
-                    Account::new(mint_lamports, 0, &system_program::id()),
-                ),
-                (
-                    voting_keypair.pubkey(),
-                    vote_state::create_bootstrap_leader_account(
-                        &voting_keypair.pubkey(),
-                        &leader_id,
-                        0,
-                        leader_stake_lamports,
-                    ),
-                ),
-            ],
-            &[],
-        );
-
-        (genesis_block, mint_keypair, voting_keypair)
-    }
->>>>>>> 639513c0... Be able to create bank snapshots
 
     #[test]
     fn test_bank_new() {
@@ -2075,16 +2114,26 @@ mod tests {
 
     #[test]
     fn test_bank_serialize() {
-        let (genesis_block, _) = GenesisBlock::new(500);
+        let (genesis_block, _) = create_genesis_block(500);
         let bank0 = Arc::new(Bank::new(&genesis_block));
         let bank = new_from_parent(&bank0);
 
-        let mut buf = vec![0u8; serialized_size(&bank).unwrap() as usize];
+        // Test new account
+        let key = Keypair::new();
+        bank.deposit(&key.pubkey(), 10);
+        assert_eq!(bank.get_balance(&key.pubkey()), 10);
+
+        let len = serialized_size(&bank).unwrap() + serialized_size(&bank.rc).unwrap();
+        let mut buf = vec![0u8; len as usize];
         let mut writer = Cursor::new(&mut buf[..]);
         serialize_into(&mut writer, &bank).unwrap();
+        serialize_into(&mut writer, &bank.rc).unwrap();
 
         let mut reader = Cursor::new(&mut buf[..]);
-        let dbank: Bank = deserialize_from(&mut reader).unwrap();
+        let mut dbank: Bank = deserialize_from(&mut reader).unwrap();
+        let dbank_rc: BankRc = deserialize_from(&mut reader).unwrap();
+        dbank.rc = dbank_rc;
+        assert_eq!(dbank.get_balance(&key.pubkey()), 10);
         bank.compare_bank(&dbank);
     }
 }

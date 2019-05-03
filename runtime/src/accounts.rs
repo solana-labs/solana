@@ -54,6 +54,7 @@ type RecordLocks = (
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Accounts {
     /// Single global AccountsDB
+    #[serde(skip)]
     pub accounts_db: Arc<AccountsDB>,
 
     /// set of accounts which are currently in the pipeline
@@ -77,7 +78,7 @@ impl Drop for Accounts {
         if self.own_paths && (Arc::strong_count(&self.accounts_db) == 1) {
             let paths = get_paths_vec(&self.paths);
             paths.iter().for_each(|p| {
-                info!("drop remove {:?}", p);
+                info!("drop called for {:?}", p);
                 let _ignored = remove_dir_all(p);
 
                 // it is safe to delete the parent
@@ -1151,12 +1152,17 @@ mod tests {
         check_accounts(&accounts, &pubkeys, 100);
         accounts.add_root(0);
 
-        let mut buf = vec![0u8; serialized_size(&accounts).unwrap() as usize];
+        let sz =
+            serialized_size(&accounts).unwrap() + serialized_size(&*accounts.accounts_db).unwrap();
+        let mut buf = vec![0u8; sz as usize];
         let mut writer = Cursor::new(&mut buf[..]);
         serialize_into(&mut writer, &accounts).unwrap();
+        serialize_into(&mut writer, &*accounts.accounts_db).unwrap();
 
         let mut reader = Cursor::new(&mut buf[..]);
-        let daccounts: Accounts = deserialize_from(&mut reader).unwrap();
+        let mut daccounts: Accounts = deserialize_from(&mut reader).unwrap();
+        let accounts_db: AccountsDB = deserialize_from(&mut reader).unwrap();
+        daccounts.accounts_db = Arc::new(accounts_db);
         check_accounts(&daccounts, &pubkeys, 100);
         assert_eq!(
             accounts.hash_internal_state(0),

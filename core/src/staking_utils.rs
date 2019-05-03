@@ -152,7 +152,6 @@ pub mod tests {
         create_genesis_block, create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS,
     };
     use crate::voting_keypair::tests as voting_keypair_tests;
-    use hashbrown::HashSet;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;

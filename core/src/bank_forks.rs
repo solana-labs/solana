@@ -2,7 +2,7 @@
 
 use bincode::{deserialize_from, serialize_into};
 use solana_metrics::counter::Counter;
-use solana_runtime::bank::Bank;
+use solana_runtime::bank::{Bank, BankRc};
 use solana_sdk::timing;
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -178,8 +178,17 @@ impl BankForks {
         let bank_file_path = path.join(bank_file);
         let file = File::create(bank_file_path)?;
         let mut stream = BufWriter::new(file);
-        serialize_into(&mut stream, self.get(slot).unwrap())
+        let bank = self.get(slot).unwrap().clone();
+        serialize_into(&mut stream, &*bank)
             .map_err(|_| BankForks::get_io_error("serialize bank error"))?;
+        let mut parent_slot: u64 = 0;
+        if let Some(parent_bank) = bank.parent() {
+            parent_slot = parent_bank.slot();
+        }
+        serialize_into(&mut stream, &parent_slot)
+            .map_err(|_| BankForks::get_io_error("serialize bank parent error"))?;
+        serialize_into(&mut stream, &bank.rc)
+            .map_err(|_| BankForks::get_io_error("serialize bank rc error"))?;
         Ok(())
     }
 
@@ -192,6 +201,36 @@ impl BankForks {
 
     pub fn set_snapshot_config(&mut self, use_snapshot: bool) {
         self.use_snapshot = use_snapshot;
+    }
+
+    fn setup_banks(
+        bank_maps: &mut Vec<(u64, u64, Bank)>,
+        bank_rc: &BankRc,
+    ) -> (HashMap<u64, Arc<Bank>>, HashSet<u64>, u64) {
+        let mut banks = HashMap::new();
+        let mut slots = HashSet::new();
+        let (last_slot, last_parent_slot, mut last_bank) = bank_maps.remove(0);
+        last_bank.set_bank_rc(&bank_rc);
+
+        while let Some((slot, parent_slot, mut bank)) = bank_maps.pop() {
+            bank.set_bank_rc(&bank_rc);
+            if parent_slot != 0 {
+                if let Some(parent) = banks.get(&parent_slot) {
+                    bank.set_parent(parent);
+                }
+            }
+            banks.insert(slot, Arc::new(bank));
+            slots.insert(slot);
+        }
+        if last_parent_slot != 0 {
+            if let Some(parent) = banks.get(&last_parent_slot) {
+                last_bank.set_parent(parent);
+            }
+        }
+        banks.insert(last_slot, Arc::new(last_bank));
+        slots.insert(last_slot);
+
+        (banks, slots, last_slot)
     }
 
     pub fn load_from_snapshot() -> Result<Self, Error> {
@@ -208,9 +247,8 @@ impl BankForks {
             .collect::<Vec<u64>>();
 
         names.sort();
-        let mut banks: HashMap<u64, Arc<Bank>> = HashMap::new();
-        let mut slots = HashSet::new();
-        let mut last_slot: u64 = 0;
+        let mut bank_maps = vec![];
+        let mut bank_rc: Option<BankRc> = None;
         for bank_slot in names.clone() {
             let bank_path = format!("{}", bank_slot);
             let bank_file_path = path.join(bank_path.clone());
@@ -219,16 +257,26 @@ impl BankForks {
             let mut stream = BufReader::new(file);
             let bank: Result<Bank, std::io::Error> = deserialize_from(&mut stream)
                 .map_err(|_| BankForks::get_io_error("deserialize bank error"));
-            match bank {
-                Ok(v) => {
-                    banks.insert(bank_slot, Arc::new(v));
-                    slots.insert(bank_slot);
-                    last_slot = bank_slot;
+            let slot: Result<u64, std::io::Error> = deserialize_from(&mut stream)
+                .map_err(|_| BankForks::get_io_error("deserialize bank parent error"));
+            let parent_slot = if slot.is_ok() { slot.unwrap() } else { 0 };
+            if bank_rc.is_none() {
+                let rc: Result<BankRc, std::io::Error> = deserialize_from(&mut stream)
+                    .map_err(|_| BankForks::get_io_error("deserialize bank rc error"));
+                if rc.is_ok() {
+                    bank_rc = Some(rc.unwrap());
                 }
+            }
+            match bank {
+                Ok(v) => bank_maps.insert(0, (bank_slot, parent_slot, v)),
                 Err(_) => warn!("Load snapshot failed for {}", bank_slot),
             }
         }
-        info!("last slot: {}", last_slot);
+        if bank_maps.is_empty() {
+            return Err(Error::new(ErrorKind::Other, "no snapshots loaded"));
+        }
+
+        let (banks, slots, last_slot) = BankForks::setup_banks(&mut bank_maps, &bank_rc.unwrap());
         let working_bank = banks[&last_slot].clone();
         Ok(BankForks {
             banks,
@@ -242,7 +290,6 @@ impl BankForks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bincode::{deserialize, serialize};
     use crate::genesis_utils::create_genesis_block;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
@@ -363,11 +410,9 @@ mod tests {
     }
 
     fn save_and_load_snapshot(bank_forks: &BankForks) {
-        let bank = bank_forks.banks.get(&0).unwrap();
+        let bank = bank_forks.banks.get(&0).unwrap().clone();
         let tick_height = bank.tick_height();
-        let bank_ser = serialize(&bank).unwrap();
-        let child_bank = bank_forks.banks.get(&1).unwrap();
-        let child_bank_ser = serialize(&child_bank).unwrap();
+        let child_bank = bank_forks.banks.get(&1).unwrap().clone();
         for (slot, _) in bank_forks.banks.iter() {
             bank_forks.add_snapshot(*slot).unwrap();
         }
@@ -375,10 +420,8 @@ mod tests {
 
         let new = BankForks::load_from_snapshot().unwrap();
         assert_eq!(new[0].tick_height(), tick_height);
-        let bank: Bank = deserialize(&bank_ser).unwrap();
         let new_bank = new.banks.get(&0).unwrap();
         bank.compare_bank(&new_bank);
-        let child_bank: Bank = deserialize(&child_bank_ser).unwrap();
         let new_bank = new.banks.get(&1).unwrap();
         child_bank.compare_bank(&new_bank);
         for (slot, _) in new.banks.iter() {
@@ -391,7 +434,7 @@ mod tests {
     fn test_bank_forks_snapshot_n() {
         solana_logger::setup();
         let path = get_tmp_bank_accounts_path!();
-        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let (genesis_block, mint_keypair) = create_genesis_block(10_000);
         let bank0 = Bank::new_with_paths(&genesis_block, Some(path.paths.clone()));
         bank0.freeze();
         let mut bank_forks = BankForks::new(0, bank0);
