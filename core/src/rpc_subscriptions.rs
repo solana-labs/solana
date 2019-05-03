@@ -128,7 +128,6 @@ where
 {
     if let Some((account, fork)) = result {
         if fork >= root {
-            error!("root {:?}, fork {:?}", root, fork);
             sink.notify(Ok(account)).wait().unwrap();
         }
     }
@@ -311,8 +310,9 @@ mod tests {
     fn test_check_account_subscribe() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(100);
         let bank = Bank::new(&genesis_block);
-        let alice = Keypair::new();
         let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let alice = Keypair::new();
         let tx = system_transaction::create_account(
             &mint_keypair,
             &alice.pubkey(),
@@ -322,14 +322,20 @@ mod tests {
             &solana_budget_api::id(),
             0,
         );
-        bank.process_transaction(&tx).unwrap();
+        bank_forks
+            .write()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .process_transaction(&tx)
+            .unwrap();
 
         let (subscriber, _id_receiver, mut transport_receiver) =
             Subscriber::new_test("accountNotification");
         let sub_id = SubscriptionId::Number(0 as u64);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
         let subscriptions = RpcSubscriptions::default();
-        subscriptions.add_account_subscription(&alice.pubkey(), &sub_id, &sink);
+        subscriptions.add_account_subscription(&alice.pubkey(), None, &sub_id, &sink);
 
         assert!(subscriptions
             .account_subscriptions
@@ -337,8 +343,7 @@ mod tests {
             .unwrap()
             .contains_key(&alice.pubkey()));
 
-        let account = bank.get_account(&alice.pubkey()).unwrap();
-        subscriptions.check_account(&alice.pubkey(), &account);
+        subscriptions.check_account(&alice.pubkey(), 0, &bank_forks);
         let string = transport_receiver.poll();
         if let Async::Ready(Some(response)) = string.unwrap() {
             let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"executable":false,"lamports":1,"owner":[2,203,81,223,225,24,34,35,203,214,138,130,144,208,35,77,63,16,87,51,47,198,115,123,98,188,19,160,0,0,0,0]}},"subscription":0}}}}"#);
@@ -357,8 +362,9 @@ mod tests {
     fn test_check_program_subscribe() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(100);
         let bank = Bank::new(&genesis_block);
-        let alice = Keypair::new();
         let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let alice = Keypair::new();
         let tx = system_transaction::create_account(
             &mint_keypair,
             &alice.pubkey(),
@@ -368,14 +374,20 @@ mod tests {
             &solana_budget_api::id(),
             0,
         );
-        bank.process_transaction(&tx).unwrap();
+        bank_forks
+            .write()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .process_transaction(&tx)
+            .unwrap();
 
         let (subscriber, _id_receiver, mut transport_receiver) =
             Subscriber::new_test("programNotification");
         let sub_id = SubscriptionId::Number(0 as u64);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
         let subscriptions = RpcSubscriptions::default();
-        subscriptions.add_program_subscription(&solana_budget_api::id(), &sub_id, &sink);
+        subscriptions.add_program_subscription(&solana_budget_api::id(), None, &sub_id, &sink);
 
         assert!(subscriptions
             .program_subscriptions
@@ -383,8 +395,7 @@ mod tests {
             .unwrap()
             .contains_key(&solana_budget_api::id()));
 
-        let account = bank.get_account(&alice.pubkey()).unwrap();
-        subscriptions.check_program(&solana_budget_api::id(), &alice.pubkey(), &account);
+        subscriptions.check_program(&solana_budget_api::id(), 0, &bank_forks);
         let string = transport_receiver.poll();
         if let Async::Ready(Some(response)) = string.unwrap() {
             let expected = format!(r#"{{"jsonrpc":"2.0","method":"programNotification","params":{{"result":["{:?}",{{"data":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"executable":false,"lamports":1,"owner":[2,203,81,223,225,24,34,35,203,214,138,130,144,208,35,77,63,16,87,51,47,198,115,123,98,188,19,160,0,0,0,0]}}],"subscription":0}}}}"#, alice.pubkey());
@@ -402,18 +413,25 @@ mod tests {
     fn test_check_signature_subscribe() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(100);
         let bank = Bank::new(&genesis_block);
-        let alice = Keypair::new();
         let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let alice = Keypair::new();
         let tx = system_transaction::transfer(&mint_keypair, &alice.pubkey(), 20, blockhash, 0);
         let signature = tx.signatures[0];
-        bank.process_transaction(&tx).unwrap();
+        bank_forks
+            .write()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .process_transaction(&tx)
+            .unwrap();
 
         let (subscriber, _id_receiver, mut transport_receiver) =
             Subscriber::new_test("signatureNotification");
         let sub_id = SubscriptionId::Number(0 as u64);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
         let subscriptions = RpcSubscriptions::default();
-        subscriptions.add_signature_subscription(&signature, &sub_id, &sink);
+        subscriptions.add_signature_subscription(&signature, None, &sub_id, &sink);
 
         assert!(subscriptions
             .signature_subscriptions
@@ -421,7 +439,7 @@ mod tests {
             .unwrap()
             .contains_key(&signature));
 
-        subscriptions.check_signature(&signature, &Ok(()));
+        subscriptions.check_signature(&signature, 0, &bank_forks);
         let string = transport_receiver.poll();
         if let Async::Ready(Some(response)) = string.unwrap() {
             let expected_res: Option<transaction::Result<()>> = Some(Ok(()));

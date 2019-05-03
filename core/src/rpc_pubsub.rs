@@ -249,6 +249,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bank_forks::BankForks;
     use jsonrpc_core::futures::sync::mpsc;
     use jsonrpc_core::Response;
     use jsonrpc_pubsub::{PubSubHandler, Session};
@@ -260,24 +261,24 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use solana_sdk::transaction::{self, Transaction};
+    use std::sync::RwLock;
     use std::thread::sleep;
     use std::time::Duration;
     use tokio::prelude::{Async, Stream};
 
     fn process_transaction_and_notify(
-        bank: &Arc<Bank>,
+        bank_forks: &Arc<RwLock<BankForks>>,
         tx: &Transaction,
         subscriptions: &RpcSubscriptions,
-    ) -> transaction::Result<Arc<Bank>> {
-        bank.process_transaction(tx)?;
-        subscriptions.notify_subscribers(&bank);
-
-        // Simulate a block boundary
-        Ok(Arc::new(Bank::new_from_parent(
-            &bank,
-            &Pubkey::default(),
-            bank.slot() + 1,
-        )))
+    ) -> transaction::Result<()> {
+        bank_forks
+            .write()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .process_transaction(tx)?;
+        subscriptions.notify_subscribers(0, &bank_forks);
+        Ok(())
     }
 
     fn create_session() -> Arc<Session> {
@@ -290,8 +291,8 @@ mod tests {
         let bob = Keypair::new();
         let bob_pubkey = bob.pubkey();
         let bank = Bank::new(&genesis_block);
-        let arc_bank = Arc::new(bank);
-        let blockhash = arc_bank.last_blockhash();
+        let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
 
         let rpc = RpcSolPubSubImpl::default();
 
@@ -301,9 +302,9 @@ mod tests {
         let session = create_session();
         let (subscriber, _id_receiver, mut receiver) =
             Subscriber::new_test("signatureNotification");
-        rpc.signature_subscribe(session, subscriber, tx.signatures[0].to_string());
+        rpc.signature_subscribe(session, subscriber, tx.signatures[0].to_string(), None);
 
-        process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
         // Test signature confirmation notification
@@ -375,13 +376,18 @@ mod tests {
         let budget_program_id = solana_budget_api::id();
         let executable = false; // TODO
         let bank = Bank::new(&genesis_block);
-        let arc_bank = Arc::new(bank);
-        let blockhash = arc_bank.last_blockhash();
+        let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
 
         let rpc = RpcSolPubSubImpl::default();
         let session = create_session();
         let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
-        rpc.account_subscribe(session, subscriber, contract_state.pubkey().to_string());
+        rpc.account_subscribe(
+            session,
+            subscriber,
+            contract_state.pubkey().to_string(),
+            None,
+        );
 
         let tx = system_transaction::create_user_account(
             &alice,
@@ -390,7 +396,7 @@ mod tests {
             blockhash,
             0,
         );
-        let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
 
         let ixs = budget_instruction::when_signed(
             &contract_funds.pubkey(),
@@ -401,12 +407,19 @@ mod tests {
             51,
         );
         let tx = Transaction::new_signed_instructions(&[&contract_funds], ixs, blockhash);
-        let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
         // Test signature confirmation notification #1
         let string = receiver.poll();
-        let expected_data = arc_bank.get_account(&contract_state.pubkey()).unwrap().data;
+        let expected_data = bank_forks
+            .read()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .get_account(&contract_state.pubkey())
+            .unwrap()
+            .data;
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",
@@ -427,7 +440,7 @@ mod tests {
 
         let tx =
             system_transaction::create_user_account(&alice, &witness.pubkey(), 1, blockhash, 0);
-        let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
         let ix = budget_instruction::apply_signature(
             &witness.pubkey(),
@@ -435,10 +448,18 @@ mod tests {
             &bob_pubkey,
         );
         let tx = Transaction::new_signed_instructions(&[&witness], vec![ix], blockhash);
-        let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
+        process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
-        assert_eq!(arc_bank.get_account(&contract_state.pubkey()), None);
+        assert_eq!(
+            bank_forks
+                .read()
+                .unwrap()
+                .get(0)
+                .unwrap()
+                .get_account(&contract_state.pubkey()),
+            None
+        );
     }
 
     #[test]
