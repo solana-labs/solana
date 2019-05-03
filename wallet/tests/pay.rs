@@ -31,11 +31,12 @@ fn test_wallet_timestamp_tx() {
 
     let mut config_payer = WalletConfig::default();
     config_payer.drone_port = drone_addr.port();
-    config_payer.rpc_port = leader_data.rpc.port();
+    config_payer.json_rpc_url =
+        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let mut config_witness = WalletConfig::default();
-    config_witness.drone_port = drone_addr.port();
-    config_witness.rpc_port = leader_data.rpc.port();
+    config_witness.drone_port = config_payer.drone_port;
+    config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
 
     assert_ne!(
         config_payer.keypair.pubkey(),
@@ -95,11 +96,12 @@ fn test_wallet_witness_tx() {
 
     let mut config_payer = WalletConfig::default();
     config_payer.drone_port = drone_addr.port();
-    config_payer.rpc_port = leader_data.rpc.port();
+    config_payer.json_rpc_url =
+        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let mut config_witness = WalletConfig::default();
-    config_witness.drone_port = drone_addr.port();
-    config_witness.rpc_port = leader_data.rpc.port();
+    config_witness.drone_port = config_payer.drone_port;
+    config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
 
     assert_ne!(
         config_payer.keypair.pubkey(),
@@ -156,11 +158,12 @@ fn test_wallet_cancel_tx() {
 
     let mut config_payer = WalletConfig::default();
     config_payer.drone_port = drone_addr.port();
-    config_payer.rpc_port = leader_data.rpc.port();
+    config_payer.json_rpc_url =
+        format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
 
     let mut config_witness = WalletConfig::default();
-    config_witness.drone_port = drone_addr.port();
-    config_witness.rpc_port = leader_data.rpc.port();
+    config_witness.drone_port = config_payer.drone_port;
+    config_witness.json_rpc_url = config_payer.json_rpc_url.clone();
 
     assert_ne!(
         config_payer.keypair.pubkey(),

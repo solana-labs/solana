@@ -7,28 +7,12 @@ use solana_wallet::wallet::{parse_command, process_command, WalletConfig, Wallet
 use std::error;
 
 pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn error::Error>> {
-    let host = solana_netutil::parse_host(matches.value_of("host").unwrap()).or_else(|err| {
-        Err(WalletError::BadParameter(format!(
-            "Invalid host: {:?}",
-            err
-        )))
-    })?;
+    let json_rpc_url = matches.value_of("json_rpc_url").unwrap().to_string();
 
     let drone_host = if let Some(drone_host) = matches.value_of("drone_host") {
         Some(solana_netutil::parse_host(drone_host).or_else(|err| {
             Err(WalletError::BadParameter(format!(
                 "Invalid drone host: {:?}",
-                err
-            )))
-        })?)
-    } else {
-        None
-    };
-
-    let rpc_host = if let Some(rpc_host) = matches.value_of("rpc_host") {
-        Some(solana_netutil::parse_host(rpc_host).or_else(|err| {
-            Err(WalletError::BadParameter(format!(
-                "Invalid rpc host: {:?}",
                 err
             )))
         })?)
@@ -43,17 +27,6 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         .or_else(|err| {
             Err(WalletError::BadParameter(format!(
                 "Invalid drone port: {:?}",
-                err
-            )))
-        })?;
-
-    let rpc_port = matches
-        .value_of("rpc_port")
-        .unwrap()
-        .parse()
-        .or_else(|err| {
-            Err(WalletError::BadParameter(format!(
-                "Invalid rpc port: {:?}",
                 err
             )))
         })?;
@@ -80,16 +53,27 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
     let command = parse_command(&keypair.pubkey(), &matches)?;
 
     Ok(WalletConfig {
-        keypair,
         command,
         drone_host,
         drone_port,
-        host,
+        json_rpc_url,
+        keypair,
         rpc_client: None,
-        rpc_host,
-        rpc_port,
-        rpc_tls: matches.is_present("rpc_tls"),
     })
+}
+
+// Return an error if a url cannot be parsed.
+fn is_url(string: String) -> Result<(), String> {
+    match url::Url::parse(&string) {
+        Ok(url) => {
+            if url.has_host() {
+                Ok(())
+            } else {
+                Err("no host provided".to_string())
+            }
+        }
+        Err(err) => Err(format!("{:?}", err)),
+    }
 }
 
 // Return an error if a pubkey cannot be parsed.
@@ -103,54 +87,29 @@ fn is_pubkey(string: String) -> Result<(), String> {
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup();
 
-    let (default_host, default_rpc_port, default_drone_port) = {
-        let defaults = WalletConfig::default();
-        (
-            defaults.host.to_string(),
-            defaults.rpc_port.to_string(),
-            defaults.drone_port.to_string(),
-        )
-    };
+    let default = WalletConfig::default();
+    let default_drone_port = format!("{}", default.drone_port);
 
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
-        .setting(AppSettings::ArgRequiredElseHelp)
+        .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg(
-            Arg::with_name("host")
-                .short("n")
-                .long("host")
-                .value_name("IP ADDRESS")
+            Arg::with_name("json_rpc_url")
+                .short("u")
+                .long("url")
+                .value_name("URL")
                 .takes_value(true)
-                .default_value(&default_host)
-                .help("Host to use for both RPC and drone"),
-        )
-        .arg(
-            Arg::with_name("rpc_host")
-                .long("rpc-host")
-                .value_name("IP ADDRESS")
-                .takes_value(true)
-                .help("RPC host to use [default: same as --host]"),
-        )
-        .arg(
-            Arg::with_name("rpc_port")
-                .long("rpc-port")
-                .value_name("PORT")
-                .takes_value(true)
-                .default_value(&default_rpc_port)
-                .help("RPC port to use"),
-        )
-        .arg(
-            Arg::with_name("rpc_tps")
-                .long("rpc-tls")
-                .help("Enable TLS for the RPC endpoint"),
+                .default_value(&default.json_rpc_url)
+                .validator(is_url)
+                .help("JSON RPC URL for the solana cluster"),
         )
         .arg(
             Arg::with_name("drone_host")
                 .long("drone-host")
-                .value_name("IP ADDRESS")
+                .value_name("HOST")
                 .takes_value(true)
-                .help("Drone host to use [default: same as --host]"),
+                .help("Drone host to use [default: same as the --url host]"),
         )
         .arg(
             Arg::with_name("drone_port")

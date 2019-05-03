@@ -7,7 +7,7 @@ restartInterval=never
 rollingRestart=false
 maybeNoLeaderRotation=
 extraNodes=0
-walletRpcEndpoint=
+walletRpcPort=
 
 usage() {
   exitcode=0
@@ -61,7 +61,7 @@ while getopts "ch?i:k:brxR" opt; do
     extraNodes=$((extraNodes + 1))
     ;;
   r)
-    walletRpcEndpoint="--rpc-port 18899"
+    walletRpcPort=":18899"
     ;;
   R)
     rollingRestart=true
@@ -362,8 +362,7 @@ while [[ $iteration -le $iterations ]]; do
   }
   (
     set -x
-    # shellcheck disable=SC2086 # Don't want to double quote $walletRpcEndpoint
-    timeout 60s scripts/wallet-sanity.sh $walletRpcEndpoint
+    timeout 60s scripts/wallet-sanity.sh --url http://127.0.0.1"$walletRpcPort"
   ) || flag_error_if_no_leader_rotation
 
   iteration=$((iteration + 1))

@@ -2775,6 +2775,7 @@ dependencies = [
  "solana-sdk 0.15.0",
  "solana-vote-api 0.15.0",
  "solana-vote-signer 0.15.0",
+ "url 1.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

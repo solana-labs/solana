@@ -117,7 +117,7 @@ echo "--- RPC API: getTransactionCount"
 echo "--- $entrypointIp: wallet sanity"
 (
   set -x
-  scripts/wallet-sanity.sh --host "$entrypointIp"
+  scripts/wallet-sanity.sh --url http://"$entrypointIp":8899
 )
 
 echo "--- $entrypointIp: verify ledger"

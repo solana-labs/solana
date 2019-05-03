@@ -31,6 +31,6 @@ loadConfigFile
 PATH="$HOME"/.cargo/bin:"$PATH"
 
 set -x
-solana-wallet airdrop 42
+solana-wallet --url http://127.0.0.1:8899 airdrop 42
 solana-install deploy "$updateDownloadUrl" update_manifest_keypair.json \
-  --url http://localhost:8899
+  --url http://127.0.0.1:8899
