@@ -135,7 +135,7 @@ validator to ports 11000-11011.
 From another console, confirm the IP address of your validator is visible in the
 gossip network by running:
 ```bash
-$ solana-gossip --network edge.testnet.solana.com:8001 spy
+$ solana-gossip --network testnet.solana.com:8001 spy
 ```
 
 When `fullnode.sh` starts, it will output a fullnode configuration that looks
