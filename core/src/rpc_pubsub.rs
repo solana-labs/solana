@@ -259,6 +259,7 @@ mod tests {
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::system_program;
     use solana_sdk::system_transaction;
     use solana_sdk::transaction::{self, Transaction};
     use std::sync::RwLock;
@@ -497,5 +498,81 @@ mod tests {
 
         let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
         assert_eq!(expected, result);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_account_confirmations_not_fulfilled() {
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
+        let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bob = Keypair::new();
+
+        let rpc = RpcSolPubSubImpl::default();
+        let session = create_session();
+        let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
+        rpc.account_subscribe(session, subscriber, bob.pubkey().to_string(), Some(2));
+
+        let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash, 0);
+        bank_forks
+            .write()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .process_transaction(&tx)
+            .unwrap();
+        rpc.subscriptions.notify_subscribers(0, &bank_forks);
+        let _panic = receiver.poll();
+    }
+
+    #[test]
+    fn test_account_confirmations() {
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
+        let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let bob = Keypair::new();
+
+        let rpc = RpcSolPubSubImpl::default();
+        let session = create_session();
+        let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
+        rpc.account_subscribe(session, subscriber, bob.pubkey().to_string(), Some(2));
+
+        let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash, 0);
+        bank_forks
+            .write()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .process_transaction(&tx)
+            .unwrap();
+        rpc.subscriptions.notify_subscribers(0, &bank_forks);
+
+        let bank0 = bank_forks.read().unwrap()[0].clone();
+        let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+        bank_forks.write().unwrap().insert(bank1);
+        rpc.subscriptions.notify_subscribers(1, &bank_forks);
+        let bank1 = bank_forks.read().unwrap()[1].clone();
+        let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
+        bank_forks.write().unwrap().insert(bank2);
+        rpc.subscriptions.notify_subscribers(2, &bank_forks);
+        let string = receiver.poll();
+        let expected = json!({
+           "jsonrpc": "2.0",
+           "method": "accountNotification",
+           "params": {
+               "result": {
+                   "owner": system_program::id(),
+                   "lamports": 100,
+                   "data": [],
+                   "executable": false,
+               },
+               "subscription": 0,
+           }
+        });
+        if let Async::Ready(Some(response)) = string.unwrap() {
+            assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+        }
     }
 }
