@@ -316,6 +316,14 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 After connect to the RPC PubSub websocket at `ws://<ADDRESS>/`:
 - Submit subscription requests to the websocket using the methods below
 - Multiple subscriptions may be active at once
+- All subscriptions take an optional `confirmations` parameter, which defines
+  how many confirmed blocks the node should wait before sending a notification.
+  The greater the number, the more likely the notification is to represent
+  consensus across the cluster, and the less likely it is to be affected by
+  forking or rollbacks. If unspecified, the default value is 0; the node will
+  send a notification as soon as it witnesses the event. The maximum
+  `confirmations` wait length is the cluster's `MAX_LOCKOUT_HISTORY`, which
+  represents the economic finality of the chain.
 
 ---
 
@@ -325,6 +333,8 @@ for a given account public key changes
 
 ##### Parameters:
 * `string` - account Pubkey, as base-58 encoded string
+* `integer` - optional, number of confirmed blocks to wait before notification.
+  Default: 0, Max: `MAX_LOCKOUT_HISTORY` (greater integers rounded down)
 
 ##### Results:
 * `integer` - Subscription id (needed to unsubscribe)
@@ -333,6 +343,8 @@ for a given account public key changes
 ```bash
 // Request
 {"jsonrpc":"2.0", "id":1, "method":"accountSubscribe", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12"]}
+
+{"jsonrpc":"2.0", "id":1, "method":"accountSubscribe", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12", 15]}
 
 // Result
 {"jsonrpc": "2.0","result": 0,"id": 1}
@@ -371,6 +383,8 @@ for a given account owned by the program changes
 
 ##### Parameters:
 * `string` - program_id Pubkey, as base-58 encoded string
+* `integer` - optional, number of confirmed blocks to wait before notification.
+  Default: 0, Max: `MAX_LOCKOUT_HISTORY` (greater integers rounded down)
 
 ##### Results:
 * `integer` - Subscription id (needed to unsubscribe)
@@ -379,6 +393,8 @@ for a given account owned by the program changes
 ```bash
 // Request
 {"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["9gZbPtbtHrs6hEWgd6MbVY9VPFtS5Z8xKtnYwA2NynHV"]}
+
+{"jsonrpc":"2.0", "id":1, "method":"programSubscribe", "params":["9gZbPtbtHrs6hEWgd6MbVY9VPFtS5Z8xKtnYwA2NynHV", 15]}
 
 // Result
 {"jsonrpc": "2.0","result": 0,"id": 1}
@@ -419,6 +435,8 @@ On `signatureNotification`, the subscription is automatically cancelled
 
 ##### Parameters:
 * `string` - Transaction Signature, as base-58 encoded string
+* `integer` - optional, number of confirmed blocks to wait before notification.
+  Default: 0, Max: `MAX_LOCKOUT_HISTORY` (greater integers rounded down)
 
 ##### Results:
 * `integer` - subscription id (needed to unsubscribe)
@@ -427,6 +445,8 @@ On `signatureNotification`, the subscription is automatically cancelled
 ```bash
 // Request
 {"jsonrpc":"2.0", "id":1, "method":"signatureSubscribe", "params":["2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b"]}
+
+{"jsonrpc":"2.0", "id":1, "method":"signatureSubscribe", "params":["2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b", 15]}
 
 // Result
 {"jsonrpc": "2.0","result": 0,"id": 1}
