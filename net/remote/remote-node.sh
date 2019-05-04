@@ -106,6 +106,7 @@ local|tar)
         --stake 0
       )
     else
+      args+=("$entrypointIp":~/solana "$entrypointIp:8001")
       if $leaderRotation; then
         args+=("--stake" "$stake")
       else
@@ -148,7 +149,6 @@ local|tar)
       curl --head "$(curl ifconfig.io)"
     fi
 
-    args+=("$entrypointIp":~/solana "$entrypointIp:8001")
     ./multinode-demo/fullnode.sh "${args[@]}" > fullnode.log 2>&1 &
     ;;
   *)

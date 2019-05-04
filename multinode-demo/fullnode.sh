@@ -9,18 +9,13 @@ source "$here"/common.sh
 # shellcheck source=scripts/oom-score-adj.sh
 source "$here"/../scripts/oom-score-adj.sh
 
-if [[ -z $CI ]]; then # Skip in CI
-  # shellcheck source=scripts/tune-system.sh
-  source "$here"/../scripts/tune-system.sh
-fi
-
 fullnode_usage() {
   if [[ -n $1 ]]; then
     echo "$*"
     echo
   fi
   cat <<EOF
-usage: $0 [--blockstream PATH] [--init-complete-file FILE] [--label LABEL] [--stake LAMPORTS] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
+usage: $0 [--blockstream PATH] [--init-complete-file FILE] [--label LABEL] [--stake LAMPORTS] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [cluster entry point]
 
 Start a full node
 
@@ -162,55 +157,61 @@ stake=43 # number of lamports to assign as stake (plus transaction fee to setup 
 poll_for_new_genesis_block=0
 label=
 
-while [[ ${1:0:1} = - ]]; do
-  if [[ $1 = --label ]]; then
-    label="-$2"
-    shift 2
-  elif [[ $1 = --bootstrap-leader ]]; then
-    bootstrap_leader=true
-    shift
-  elif [[ $1 = --poll-for-new-genesis-block ]]; then
-    poll_for_new_genesis_block=1
-    shift
-  elif [[ $1 = --blockstream ]]; then
-    stake=0
-    extra_fullnode_args+=("$1" "$2")
-    shift 2
-  elif [[ $1 = --enable-rpc-exit ]]; then
-    extra_fullnode_args+=("$1")
-    shift
-  elif [[ $1 = --init-complete-file ]]; then
-    extra_fullnode_args+=("$1" "$2")
-    shift 2
-  elif [[ $1 = --stake ]]; then
-    stake="$2"
-    shift 2
-  elif [[ $1 = --no-voting ]]; then
-    extra_fullnode_args+=("$1")
-    shift
-  elif [[ $1 = --no-sigverify ]]; then
-    extra_fullnode_args+=("$1")
-    shift
-  elif [[ $1 = --rpc-port ]]; then
-    extra_fullnode_args+=("$1" "$2")
-    shift 2
-  elif [[ $1 = --dynamic-port-range ]]; then
-    extra_fullnode_args+=("$1" "$2")
-    shift 2
-  elif [[ $1 = --gossip-port ]]; then
-    extra_fullnode_args+=("$1" "$2")
-    shift 2
-  elif [[ $1 = -h ]]; then
-    fullnode_usage "$@"
+positional_args=()
+while [[ -n $1 ]]; do
+  if [[ ${1:0:1} = - ]]; then
+    if [[ $1 = --label ]]; then
+      label="-$2"
+      shift 2
+    elif [[ $1 = --bootstrap-leader ]]; then
+      bootstrap_leader=true
+      shift
+    elif [[ $1 = --poll-for-new-genesis-block ]]; then
+      poll_for_new_genesis_block=1
+      shift
+    elif [[ $1 = --blockstream ]]; then
+      stake=0
+      extra_fullnode_args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --enable-rpc-exit ]]; then
+      extra_fullnode_args+=("$1")
+      shift
+    elif [[ $1 = --init-complete-file ]]; then
+      extra_fullnode_args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --stake ]]; then
+      stake="$2"
+      shift 2
+    elif [[ $1 = --no-voting ]]; then
+      extra_fullnode_args+=("$1")
+      shift
+    elif [[ $1 = --no-sigverify ]]; then
+      extra_fullnode_args+=("$1")
+      shift
+    elif [[ $1 = --rpc-port ]]; then
+      extra_fullnode_args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --dynamic-port-range ]]; then
+      extra_fullnode_args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --gossip-port ]]; then
+      extra_fullnode_args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = -h ]]; then
+      fullnode_usage "$@"
+    else
+      echo "Unknown argument: $1"
+      exit 1
+    fi
   else
-    echo "Unknown argument: $1"
-    exit 1
+    positional_args+=("$1")
+    shift
   fi
 done
 
 if $bootstrap_leader; then
-  if [[ -n $1 ]]; then
-    fullnode_usage "$@"
+  if [[ ${#positional_args[@]} -ne 0 ]]; then
+    fullnode_usage "Unknown argument: ${positional_args[0]}"
   fi
 
   [[ -f "$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json ]] ||
@@ -227,11 +228,12 @@ if $bootstrap_leader; then
   default_fullnode_arg --rpc-drone-address 127.0.0.1:9900
   default_fullnode_arg --gossip-port 8001
 else
-  if [[ -n $3 ]]; then
+
+  if [[ ${#positional_args[@]} -gt 2 ]]; then
     fullnode_usage "$@"
   fi
 
-  read -r leader leader_address shift < <(find_leader "${@:1:2}")
+  read -r leader leader_address shift < <(find_leader "${positional_args[@]}")
   shift "$shift"
 
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id$label.json
@@ -258,6 +260,12 @@ ledger: $ledger_config_dir
 accounts: $accounts_config_dir
 ======================================================================
 EOF
+
+if [[ -z $CI ]]; then # Skip in CI
+  # shellcheck source=scripts/tune-system.sh
+  source "$here"/../scripts/tune-system.sh
+fi
+
 default_fullnode_arg --identity "$fullnode_id_path"
 default_fullnode_arg --voting-keypair "$fullnode_vote_id_path"
 default_fullnode_arg --vote-account "$fullnode_vote_id"
