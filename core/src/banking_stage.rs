@@ -347,7 +347,7 @@ impl BankingStage {
         // unlock all the accounts with errors which are filtered by the above `filter_map`
         if !processed_transactions.is_empty() {
             let hash = hash_transactions(&processed_transactions);
-            // record and unlock will unlock all the successfull transactions
+            // record and unlock will unlock all the successful transactions
             poh.lock()
                 .unwrap()
                 .record(bank_slot, hash, processed_transactions)?;
@@ -370,6 +370,7 @@ impl BankingStage {
             bank.load_and_execute_transactions(txs, lock_results, MAX_RECENT_BLOCKHASHES / 2);
         let load_execute_time = now.elapsed();
 
+        let lock_results = bank.lock_record_accounts(txs);
         let record_time = {
             let now = Instant::now();
             Self::record_transactions(bank.slot(), txs, &results, poh)?;
@@ -381,6 +382,8 @@ impl BankingStage {
             bank.commit_transactions(txs, &loaded_accounts, &results);
             now.elapsed()
         };
+
+        drop(lock_results);
 
         debug!(
             "bank: {} load_execute: {}us record: {}us commit: {}us txs_len: {}",

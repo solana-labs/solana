@@ -3,7 +3,7 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
-use crate::accounts::Accounts;
+use crate::accounts::{AccountLockType, Accounts};
 use crate::accounts_db::{ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
@@ -502,17 +502,34 @@ impl Bank {
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
         let results = self.accounts.lock_accounts(txs);
-        LockedAccountsResults::new(results, &self, txs)
+        LockedAccountsResults::new(results, &self, txs, AccountLockType::AccountLock)
     }
 
     pub fn unlock_accounts(&self, locked_accounts_results: &mut LockedAccountsResults) {
         if locked_accounts_results.needs_unlock {
             locked_accounts_results.needs_unlock = false;
-            self.accounts.unlock_accounts(
-                locked_accounts_results.transactions(),
-                locked_accounts_results.locked_accounts_results(),
-            )
+            match locked_accounts_results.lock_type() {
+                AccountLockType::AccountLock => self.accounts.unlock_accounts(
+                    locked_accounts_results.transactions(),
+                    locked_accounts_results.locked_accounts_results(),
+                ),
+                AccountLockType::RecordLock => self
+                    .accounts
+                    .unlock_record_accounts(locked_accounts_results.transactions()),
+            }
         }
+    }
+
+    pub fn lock_record_accounts<'a, 'b>(
+        &'a self,
+        txs: &'b [Transaction],
+    ) -> LockedAccountsResults<'a, 'b> {
+        self.accounts.lock_record_accounts(txs);
+        LockedAccountsResults::new(vec![], &self, txs, AccountLockType::RecordLock)
+    }
+
+    pub fn unlock_record_accounts(&self, txs: &[Transaction]) {
+        self.accounts.unlock_record_accounts(txs)
     }
 
     fn load_accounts(

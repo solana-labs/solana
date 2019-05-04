@@ -1,3 +1,4 @@
+use crate::accounts::AccountLockType;
 use crate::bank::Bank;
 use solana_sdk::transaction::{Result, Transaction};
 
@@ -6,6 +7,7 @@ pub struct LockedAccountsResults<'a, 'b> {
     locked_accounts_results: Vec<Result<()>>,
     bank: &'a Bank,
     transactions: &'b [Transaction],
+    lock_type: AccountLockType,
     pub(crate) needs_unlock: bool,
 }
 
@@ -14,13 +16,19 @@ impl<'a, 'b> LockedAccountsResults<'a, 'b> {
         locked_accounts_results: Vec<Result<()>>,
         bank: &'a Bank,
         transactions: &'b [Transaction],
+        lock_type: AccountLockType,
     ) -> Self {
         Self {
             locked_accounts_results,
             bank,
             transactions,
             needs_unlock: true,
+            lock_type,
         }
+    }
+
+    pub fn lock_type(&self) -> AccountLockType {
+        self.lock_type.clone()
     }
 
     pub fn locked_accounts_results(&self) -> &Vec<Result<()>> {
