@@ -249,7 +249,7 @@ impl BankForks {
         names.sort();
         let mut bank_maps = vec![];
         let mut bank_rc: Option<BankRc> = None;
-        for bank_slot in names.clone() {
+        for bank_slot in names.iter().rev() {
             let bank_path = format!("{}", bank_slot);
             let bank_file_path = path.join(bank_path.clone());
             info!("Load from {:?}", bank_file_path);
@@ -268,11 +268,11 @@ impl BankForks {
                 }
             }
             match bank {
-                Ok(v) => bank_maps.insert(0, (bank_slot, parent_slot, v)),
+                Ok(v) => bank_maps.push((*bank_slot, parent_slot, v)),
                 Err(_) => warn!("Load snapshot failed for {}", bank_slot),
             }
         }
-        if bank_maps.is_empty() {
+        if bank_maps.is_empty() || bank_rc.is_none() {
             return Err(Error::new(ErrorKind::Other, "no snapshots loaded"));
         }
 
@@ -410,24 +410,19 @@ mod tests {
     }
 
     fn save_and_load_snapshot(bank_forks: &BankForks) {
-        let bank = bank_forks.banks.get(&0).unwrap().clone();
-        let tick_height = bank.tick_height();
-        let child_bank = bank_forks.banks.get(&1).unwrap().clone();
         for (slot, _) in bank_forks.banks.iter() {
             bank_forks.add_snapshot(*slot).unwrap();
         }
-        drop(bank_forks);
 
         let new = BankForks::load_from_snapshot().unwrap();
-        assert_eq!(new[0].tick_height(), tick_height);
-        let new_bank = new.banks.get(&0).unwrap();
-        bank.compare_bank(&new_bank);
-        let new_bank = new.banks.get(&1).unwrap();
-        child_bank.compare_bank(&new_bank);
+        for (slot, _) in bank_forks.banks.iter() {
+            let bank = bank_forks.banks.get(slot).unwrap().clone();
+            let new_bank = new.banks.get(slot).unwrap();
+            bank.compare_bank(&new_bank);
+        }
         for (slot, _) in new.banks.iter() {
             new.remove_snapshot(*slot);
         }
-        drop(new);
     }
 
     #[test]
