@@ -98,7 +98,11 @@ local|tar)
       export SOLANA_CUDA=1
     fi
 
-    args=()
+    args=(
+      "$entrypointIp":~/solana "$entrypointIp:8001"
+      --gossip-port 8001
+      --rpc-port 8899
+    )
     if [[ $nodeType = blockstreamer ]]; then
       args+=(
         --blockstream /tmp/solana-blockstream.sock
@@ -106,7 +110,6 @@ local|tar)
         --stake 0
       )
     else
-      args+=("$entrypointIp":~/solana "$entrypointIp:8001")
       if $leaderRotation; then
         args+=("--stake" "$stake")
       else
@@ -114,11 +117,6 @@ local|tar)
       fi
       args+=(--enable-rpc-exit)
     fi
-
-    args+=(
-      --gossip-port 8001
-      --rpc-port 8899
-    )
 
     set -x
     if [[ $skipSetup != true ]]; then
