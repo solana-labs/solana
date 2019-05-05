@@ -80,7 +80,20 @@ ci/channel-info.sh
 eval "$(ci/channel-info.sh)"
 
 
-EC2_ZONES=(us-west-1a sa-east-1a ap-northeast-2a eu-central-1a ca-central-1a)
+EC2_ZONES=(
+  us-west-1a
+  us-west-2a
+  us-east-1a
+  us-east-2a
+  sa-east-1a
+  eu-west-1a
+  eu-west-2a
+  eu-central-1a
+  ap-northeast-2a
+  ap-southeast-2a
+  ap-south-1a
+  ca-central-1a
+)
 
 # GCE zones with _lots_ of quota
 GCE_ZONES=(
@@ -370,7 +383,7 @@ deploy() {
 
       # shellcheck disable=SC2068
       ci/testnet-deploy.sh -p testnet-solana-com -C ec2 ${EC2_ZONE_ARGS[@]} \
-        -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -a eipalloc-0fa502bf95f6f18b2 \
+        -t "$CHANNEL_OR_TAG" -n "$EC2_NODE_COUNT" -c 0 -u -P -f -a eipalloc-0fa502bf95f6f18b2 \
         ${skipCreate:+-e} \
         ${maybeSkipStart:+-s} \
         ${maybeStop:+-S} \
@@ -379,7 +392,7 @@ deploy() {
       if [[ -n $GCE_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
         ci/testnet-deploy.sh -p testnet-solana-com -C gce ${GCE_ZONE_ARGS[@]} \
-          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P \
+          -t "$CHANNEL_OR_TAG" -n "$GCE_NODE_COUNT" -c 0 -P -f \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
