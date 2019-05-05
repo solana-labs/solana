@@ -467,7 +467,7 @@ impl Accounts {
         let (_, ref mut parent_record_locks) = *self.record_locks.lock().unwrap();
         let mut error_counters = ErrorCounters::default();
         let rv = txs
-            .into_iter()
+            .iter()
             .map(|tx| {
                 Self::lock_account(
                     (&mut self.account_locks.lock().unwrap(), parent_record_locks),
@@ -502,7 +502,7 @@ impl Accounts {
     {
         let my_locks = &mut self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
-        txs.into_iter()
+        txs.iter()
             .zip(results.iter())
             .for_each(|(tx, result)| Self::unlock_account(tx.borrow(), result, my_locks));
     }

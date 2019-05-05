@@ -327,37 +327,36 @@ impl BankingStage {
             .collect()
     }
 
-    fn get_recordable_transactions<'a>(
+    fn record_transactions<'a, 'b>(
+        bank: &'a Bank,
+        txs: &'b [Transaction],
         results: &[transaction::Result<()>],
-        txs: &'a [Transaction],
-    ) -> Vec<&'a Transaction> {
-        results
+        poh: &Arc<Mutex<PohRecorder>>,
+        recordable_txs: &'b mut Vec<&'b Transaction>,
+    ) -> Result<LockedAccountsResults<'a, 'b, &'b Transaction>> {
+        let processed_transactions: Vec<_> = results
             .iter()
             .zip(txs.iter())
-            .filter_map(|(r, x)| if Bank::can_commit(r) { Some(x) } else { None })
-            .collect()
-    }
-
-    fn record_transactions<'a, 'b, I>(
-        bank: &'a Bank,
-        txs: &'b [I],
-        poh: &Arc<Mutex<PohRecorder>>,
-    ) -> Result<()>
-    where
-        I: Borrow<Transaction>,
-    {
-        let processed_transactions_cloned: Vec<Transaction> =
-            txs.into_iter().map(|tx| tx.borrow().clone()).collect();
-        debug!("processed: {} ", processed_transactions_cloned.len());
+            .filter_map(|(r, x)| {
+                if Bank::can_commit(r) {
+                    recordable_txs.push(x);
+                    Some(x.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let record_locks = bank.lock_record_accounts(recordable_txs);
+        debug!("processed: {} ", processed_transactions.len());
         // unlock all the accounts with errors which are filtered by the above `filter_map`
-        if !processed_transactions_cloned.is_empty() {
-            let hash = hash_transactions(&processed_transactions_cloned);
+        if !processed_transactions.is_empty() {
+            let hash = hash_transactions(&processed_transactions);
             // record and unlock will unlock all the successful transactions
             poh.lock()
                 .unwrap()
-                .record(bank.slot(), hash, processed_transactions_cloned)?;
+                .record(bank.slot(), hash, processed_transactions)?;
         }
-        Ok(())
+        Ok(record_locks)
     }
 
     fn process_and_record_transactions_locked(
@@ -375,12 +374,12 @@ impl BankingStage {
             bank.load_and_execute_transactions(txs, lock_results, MAX_RECENT_BLOCKHASHES / 2);
         let load_execute_time = now.elapsed();
 
-        let recordable_txs = Self::get_recordable_transactions(&results, txs);
-        let record_locks = bank.lock_record_accounts(&recordable_txs);
-        let record_time = {
+        let mut recordable_txs = vec![];
+        let (record_time, record_locks) = {
             let now = Instant::now();
-            Self::record_transactions(bank, &recordable_txs, poh)?;
-            now.elapsed()
+            let record_locks =
+                Self::record_transactions(bank, txs, &results, poh, &mut recordable_txs)?;
+            (now.elapsed(), record_locks)
         };
 
         let commit_time = {
@@ -990,15 +989,23 @@ mod tests {
 
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
             let pubkey = Pubkey::new_rand();
+            let keypair2 = Keypair::new();
+            let pubkey2 = Pubkey::new_rand();
 
             let transactions = vec![
                 system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-                system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
+                system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_block.hash(), 0),
             ];
 
             let mut results = vec![Ok(()), Ok(())];
-            BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
-                .unwrap();
+            BankingStage::record_transactions(
+                &bank,
+                &transactions,
+                &results,
+                &poh_recorder,
+                &mut vec![],
+            )
+            .unwrap();
             let (_, entries) = entry_receiver.recv().unwrap();
             assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
@@ -1007,15 +1014,27 @@ mod tests {
                 1,
                 InstructionError::new_result_with_negative_lamports(),
             ));
-            BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
-                .unwrap();
+            BankingStage::record_transactions(
+                &bank,
+                &transactions,
+                &results,
+                &poh_recorder,
+                &mut vec![],
+            )
+            .unwrap();
             let (_, entries) = entry_receiver.recv().unwrap();
             assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
             // Other TransactionErrors should not be recorded
             results[0] = Err(TransactionError::AccountNotFound);
-            BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
-                .unwrap();
+            BankingStage::record_transactions(
+                &bank,
+                &transactions,
+                &results,
+                &poh_recorder,
+                &mut vec![],
+            )
+            .unwrap();
             let (_, entries) = entry_receiver.recv().unwrap();
             assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
         }

@@ -37,8 +37,7 @@ impl<'a, 'b, I: Borrow<Transaction>> LockedAccountsResults<'a, 'b, I> {
     }
 
     pub fn transactions(&self) -> &[I] {
-        let result = self.transactions;
-        result
+        self.transactions
     }
 }
 
