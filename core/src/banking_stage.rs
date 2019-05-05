@@ -21,6 +21,7 @@ use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{self, Transaction, TransactionError};
+use std::borrow::Borrow;
 use std::cmp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -326,31 +327,35 @@ impl BankingStage {
             .collect()
     }
 
-    fn record_transactions(
-        bank_slot: u64,
-        txs: &[Transaction],
+    fn get_recordable_transactions<'a>(
         results: &[transaction::Result<()>],
-        poh: &Arc<Mutex<PohRecorder>>,
-    ) -> Result<()> {
-        let processed_transactions: Vec<_> = results
+        txs: &'a [Transaction],
+    ) -> Vec<&'a Transaction> {
+        results
             .iter()
             .zip(txs.iter())
-            .filter_map(|(r, x)| {
-                if Bank::can_commit(r) {
-                    Some(x.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-        debug!("processed: {} ", processed_transactions.len());
+            .filter_map(|(r, x)| if Bank::can_commit(r) { Some(x) } else { None })
+            .collect()
+    }
+
+    fn record_transactions<'a, 'b, I>(
+        bank: &'a Bank,
+        txs: &'b [I],
+        poh: &Arc<Mutex<PohRecorder>>,
+    ) -> Result<()>
+    where
+        I: Borrow<Transaction>,
+    {
+        let processed_transactions_cloned: Vec<Transaction> =
+            txs.into_iter().map(|tx| tx.borrow().clone()).collect();
+        debug!("processed: {} ", processed_transactions_cloned.len());
         // unlock all the accounts with errors which are filtered by the above `filter_map`
-        if !processed_transactions.is_empty() {
-            let hash = hash_transactions(&processed_transactions);
+        if !processed_transactions_cloned.is_empty() {
+            let hash = hash_transactions(&processed_transactions_cloned);
             // record and unlock will unlock all the successful transactions
             poh.lock()
                 .unwrap()
-                .record(bank_slot, hash, processed_transactions)?;
+                .record(bank.slot(), hash, processed_transactions_cloned)?;
         }
         Ok(())
     }
@@ -359,7 +364,7 @@ impl BankingStage {
         bank: &Bank,
         txs: &[Transaction],
         poh: &Arc<Mutex<PohRecorder>>,
-        lock_results: &LockedAccountsResults,
+        lock_results: &LockedAccountsResults<Transaction>,
     ) -> Result<()> {
         let now = Instant::now();
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
@@ -370,10 +375,11 @@ impl BankingStage {
             bank.load_and_execute_transactions(txs, lock_results, MAX_RECENT_BLOCKHASHES / 2);
         let load_execute_time = now.elapsed();
 
-        let lock_results = bank.lock_record_accounts(txs);
+        let recordable_txs = Self::get_recordable_transactions(&results, txs);
+        let record_locks = bank.lock_record_accounts(&recordable_txs);
         let record_time = {
             let now = Instant::now();
-            Self::record_transactions(bank.slot(), txs, &results, poh)?;
+            Self::record_transactions(bank, &recordable_txs, poh)?;
             now.elapsed()
         };
 
@@ -383,7 +389,7 @@ impl BankingStage {
             now.elapsed()
         };
 
-        drop(lock_results);
+        drop(record_locks);
 
         debug!(
             "bank: {} load_execute: {}us record: {}us commit: {}us txs_len: {}",

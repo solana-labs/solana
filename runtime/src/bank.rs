@@ -26,6 +26,7 @@ use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use solana_vote_api::vote_state::MAX_LOCKOUT_HISTORY;
+use std::borrow::Borrow;
 use std::cmp;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -492,10 +493,10 @@ impl Bank {
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
     }
 
-    pub fn lock_accounts<'a, 'b>(
-        &'a self,
-        txs: &'b [Transaction],
-    ) -> LockedAccountsResults<'a, 'b> {
+    pub fn lock_accounts<'a, 'b, I>(&'a self, txs: &'b [I]) -> LockedAccountsResults<'a, 'b, I>
+    where
+        I: std::borrow::Borrow<Transaction>,
+    {
         if self.is_frozen() {
             warn!("=========== FIXME: lock_accounts() working on a frozen bank! ================");
         }
@@ -505,7 +506,10 @@ impl Bank {
         LockedAccountsResults::new(results, &self, txs, AccountLockType::AccountLock)
     }
 
-    pub fn unlock_accounts(&self, locked_accounts_results: &mut LockedAccountsResults) {
+    pub fn unlock_accounts<I>(&self, locked_accounts_results: &mut LockedAccountsResults<I>)
+    where
+        I: Borrow<Transaction>,
+    {
         if locked_accounts_results.needs_unlock {
             locked_accounts_results.needs_unlock = false;
             match locked_accounts_results.lock_type() {
@@ -520,10 +524,13 @@ impl Bank {
         }
     }
 
-    pub fn lock_record_accounts<'a, 'b>(
+    pub fn lock_record_accounts<'a, 'b, I>(
         &'a self,
-        txs: &'b [Transaction],
-    ) -> LockedAccountsResults<'a, 'b> {
+        txs: &'b [I],
+    ) -> LockedAccountsResults<'a, 'b, I>
+    where
+        I: std::borrow::Borrow<Transaction>,
+    {
         self.accounts.lock_record_accounts(txs);
         LockedAccountsResults::new(vec![], &self, txs, AccountLockType::RecordLock)
     }
@@ -549,7 +556,7 @@ impl Bank {
     fn check_refs(
         &self,
         txs: &[Transaction],
-        lock_results: &LockedAccountsResults,
+        lock_results: &LockedAccountsResults<Transaction>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
         txs.iter()
@@ -620,7 +627,7 @@ impl Bank {
     pub fn load_and_execute_transactions(
         &self,
         txs: &[Transaction],
-        lock_results: &LockedAccountsResults,
+        lock_results: &LockedAccountsResults<Transaction>,
         max_age: usize,
     ) -> (
         Vec<Result<(InstructionAccounts, InstructionLoaders)>>,
@@ -791,7 +798,7 @@ impl Bank {
     pub fn load_execute_and_commit_transactions(
         &self,
         txs: &[Transaction],
-        lock_results: &LockedAccountsResults,
+        lock_results: &LockedAccountsResults<Transaction>,
         max_age: usize,
     ) -> Vec<Result<()>> {
         let (loaded_accounts, executed) =

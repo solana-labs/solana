@@ -1,21 +1,22 @@
 use crate::accounts::AccountLockType;
 use crate::bank::Bank;
 use solana_sdk::transaction::{Result, Transaction};
+use std::borrow::Borrow;
 
 // Represents the results of trying to lock a set of accounts
-pub struct LockedAccountsResults<'a, 'b> {
+pub struct LockedAccountsResults<'a, 'b, I: Borrow<Transaction>> {
     locked_accounts_results: Vec<Result<()>>,
     bank: &'a Bank,
-    transactions: &'b [Transaction],
+    transactions: &'b [I],
     lock_type: AccountLockType,
     pub(crate) needs_unlock: bool,
 }
 
-impl<'a, 'b> LockedAccountsResults<'a, 'b> {
+impl<'a, 'b, I: Borrow<Transaction>> LockedAccountsResults<'a, 'b, I> {
     pub fn new(
         locked_accounts_results: Vec<Result<()>>,
         bank: &'a Bank,
-        transactions: &'b [Transaction],
+        transactions: &'b [I],
         lock_type: AccountLockType,
     ) -> Self {
         Self {
@@ -35,13 +36,14 @@ impl<'a, 'b> LockedAccountsResults<'a, 'b> {
         &self.locked_accounts_results
     }
 
-    pub fn transactions(&self) -> &[Transaction] {
-        self.transactions
+    pub fn transactions(&self) -> &[I] {
+        let result = self.transactions;
+        result
     }
 }
 
 // Unlock all locked accounts in destructor.
-impl<'a, 'b> Drop for LockedAccountsResults<'a, 'b> {
+impl<'a, 'b, I: Borrow<Transaction>> Drop for LockedAccountsResults<'a, 'b, I> {
     fn drop(&mut self) {
         if self.needs_unlock {
             self.bank.unlock_accounts(self)

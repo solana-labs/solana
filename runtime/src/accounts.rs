@@ -17,6 +17,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
+use std::borrow::Borrow;
 use std::env;
 use std::fs::remove_dir_all;
 use std::iter::once;
@@ -415,8 +416,11 @@ impl Accounts {
         }
     }
 
-    fn unlock_record_account(tx: &Transaction, locks: &mut HashSet<Pubkey>) {
-        for k in &tx.message().account_keys {
+    fn unlock_record_account<I>(tx: &I, locks: &mut HashSet<Pubkey>)
+    where
+        I: Borrow<Transaction>,
+    {
+        for k in &tx.borrow().message().account_keys {
             locks.remove(k);
         }
     }
@@ -456,15 +460,18 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
-    pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
+    pub fn lock_accounts<I>(&self, txs: &[I]) -> Vec<Result<()>>
+    where
+        I: Borrow<Transaction>,
+    {
         let (_, ref mut parent_record_locks) = *self.record_locks.lock().unwrap();
         let mut error_counters = ErrorCounters::default();
         let rv = txs
-            .iter()
+            .into_iter()
             .map(|tx| {
                 Self::lock_account(
                     (&mut self.account_locks.lock().unwrap(), parent_record_locks),
-                    &tx.message().account_keys,
+                    &tx.borrow().message().account_keys,
                     &mut error_counters,
                 )
             })
@@ -478,27 +485,36 @@ impl Accounts {
         rv
     }
 
-    pub fn lock_record_accounts(&self, txs: &[Transaction]) {
+    pub fn lock_record_accounts<I>(&self, txs: &[I])
+    where
+        I: Borrow<Transaction>,
+    {
         let record_locks = self.record_locks.lock().unwrap();
         for tx in txs {
-            Self::lock_record_account(&record_locks.0, &tx.message().account_keys);
-        }
-    }
-
-    pub fn unlock_record_accounts(&self, txs: &[Transaction]) {
-        let (ref my_record_locks, _) = *self.record_locks.lock().unwrap();
-        for tx in txs.iter() {
-            Self::unlock_record_account(tx, &mut my_record_locks.lock().unwrap())
+            Self::lock_record_account(&record_locks.0, &tx.borrow().message().account_keys);
         }
     }
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
-    pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
+    pub fn unlock_accounts<I>(&self, txs: &[I], results: &[Result<()>])
+    where
+        I: Borrow<Transaction>,
+    {
         let my_locks = &mut self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
-        txs.iter()
+        txs.into_iter()
             .zip(results.iter())
-            .for_each(|(tx, result)| Self::unlock_account(tx, result, my_locks));
+            .for_each(|(tx, result)| Self::unlock_account(tx.borrow(), result, my_locks));
+    }
+
+    pub fn unlock_record_accounts<I>(&self, txs: &[I])
+    where
+        I: Borrow<Transaction>,
+    {
+        let (ref my_record_locks, _) = *self.record_locks.lock().unwrap();
+        for tx in txs {
+            Self::unlock_record_account(tx, &mut my_record_locks.lock().unwrap())
+        }
     }
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
