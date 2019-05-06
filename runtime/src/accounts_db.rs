@@ -259,15 +259,20 @@ impl AccountsDB {
         ancestors: &HashMap<Fork, usize>,
         accounts_index: &AccountsIndex<AccountInfo>,
         pubkey: &Pubkey,
-    ) -> Option<Account> {
-        let info = accounts_index.get(pubkey, ancestors)?;
+    ) -> Option<(Account, Fork)> {
+        let (info, fork) = accounts_index.get(pubkey, ancestors)?;
         //TODO: thread this as a ref
         storage
             .get(&info.id)
             .and_then(|store| Some(store.accounts.get_account(info.offset)?.0.clone_account()))
+            .map(|account| (account, fork))
     }
 
-    pub fn load_slow(&self, ancestors: &HashMap<Fork, usize>, pubkey: &Pubkey) -> Option<Account> {
+    pub fn load_slow(
+        &self,
+        ancestors: &HashMap<Fork, usize>,
+        pubkey: &Pubkey,
+    ) -> Option<(Account, Fork)> {
         let accounts_index = self.accounts_index.read().unwrap();
         let storage = self.storage.read().unwrap();
         Self::load(&storage, ancestors, &accounts_index, pubkey)
@@ -480,7 +485,7 @@ mod tests {
         db.store(0, &[(&key, &account0)]);
         db.add_root(0);
         let ancestors = vec![(1, 1)].into_iter().collect();
-        assert_eq!(db.load_slow(&ancestors, &key), Some(account0));
+        assert_eq!(db.load_slow(&ancestors, &key), Some((account0, 0)));
     }
 
     #[test]
@@ -497,10 +502,10 @@ mod tests {
         db.store(1, &[(&key, &account1)]);
 
         let ancestors = vec![(1, 1)].into_iter().collect();
-        assert_eq!(&db.load_slow(&ancestors, &key).unwrap(), &account1);
+        assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account1);
 
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
-        assert_eq!(&db.load_slow(&ancestors, &key).unwrap(), &account1);
+        assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account1);
     }
 
     #[test]
@@ -518,10 +523,10 @@ mod tests {
         db.add_root(0);
 
         let ancestors = vec![(1, 1)].into_iter().collect();
-        assert_eq!(&db.load_slow(&ancestors, &key).unwrap(), &account1);
+        assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account1);
 
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
-        assert_eq!(&db.load_slow(&ancestors, &key).unwrap(), &account1);
+        assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account1);
     }
 
     #[test]
@@ -552,18 +557,18 @@ mod tests {
         // original account (but could also accept "None", which is implemented
         // at the Accounts level)
         let ancestors = vec![(0, 0), (1, 1)].into_iter().collect();
-        assert_eq!(&db.load_slow(&ancestors, &key).unwrap(), &account1);
+        assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account1);
 
         // we should see 1 token in fork 2
         let ancestors = vec![(0, 0), (2, 2)].into_iter().collect();
-        assert_eq!(&db.load_slow(&ancestors, &key).unwrap(), &account0);
+        assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account0);
 
         db.add_root(0);
 
         let ancestors = vec![(1, 1)].into_iter().collect();
-        assert_eq!(db.load_slow(&ancestors, &key), Some(account1));
+        assert_eq!(db.load_slow(&ancestors, &key), Some((account1, 1)));
         let ancestors = vec![(2, 2)].into_iter().collect();
-        assert_eq!(db.load_slow(&ancestors, &key), Some(account0)); // original value
+        assert_eq!(db.load_slow(&ancestors, &key), Some((account0, 0))); // original value
     }
 
     #[test]
@@ -579,7 +584,7 @@ mod tests {
             let account = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
             let mut default_account = Account::default();
             default_account.lamports = (idx + 1) as u64;
-            assert_eq!(default_account, account);
+            assert_eq!((default_account, 0), account);
         }
 
         db.add_root(0);
@@ -593,8 +598,8 @@ mod tests {
             let account1 = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
             let mut default_account = Account::default();
             default_account.lamports = (idx + 1) as u64;
-            assert_eq!(&default_account, &account0);
-            assert_eq!(&default_account, &account1);
+            assert_eq!(&default_account, &account0.0);
+            assert_eq!(&default_account, &account1.0);
         }
     }
 
@@ -650,9 +655,9 @@ mod tests {
         // masking accounts is done at the Accounts level, at accountsDB we see
         // original account
         let ancestors = vec![(0, 0), (1, 1)].into_iter().collect();
-        assert_eq!(db0.load_slow(&ancestors, &key), Some(account1));
+        assert_eq!(db0.load_slow(&ancestors, &key), Some((account1, 1)));
         let ancestors = vec![(0, 0)].into_iter().collect();
-        assert_eq!(db0.load_slow(&ancestors, &key), Some(account0));
+        assert_eq!(db0.load_slow(&ancestors, &key), Some((account0, 0)));
     }
 
     fn create_account(
@@ -685,7 +690,7 @@ mod tests {
         for _ in 1..1000 {
             let idx = thread_rng().gen_range(0, range);
             let ancestors = vec![(fork, 0)].into_iter().collect();
-            if let Some(mut account) = accounts.load_slow(&ancestors, &pubkeys[idx]) {
+            if let Some((mut account, _)) = accounts.load_slow(&ancestors, &pubkeys[idx]) {
                 account.lamports = account.lamports + 1;
                 accounts.store(fork, &[(&pubkeys[idx], &account)]);
                 if account.lamports == 0 {
@@ -714,7 +719,7 @@ mod tests {
             let account = accounts.load_slow(&ancestors, &pubkeys[idx]).unwrap();
             let mut default_account = Account::default();
             default_account.lamports = (idx + 1) as u64;
-            assert_eq!(default_account, account);
+            assert_eq!((default_account, 0), account);
         }
     }
 
@@ -728,7 +733,7 @@ mod tests {
         let account = accounts.load_slow(&ancestors, &pubkeys[0]).unwrap();
         let mut default_account = Account::default();
         default_account.lamports = 1;
-        assert_eq!(default_account, account);
+        assert_eq!((default_account, 0), account);
     }
 
     #[test]
@@ -765,7 +770,7 @@ mod tests {
         for (i, key) in keys.iter().enumerate() {
             let ancestors = vec![(0, 0)].into_iter().collect();
             assert_eq!(
-                accounts.load_slow(&ancestors, &key).unwrap().lamports,
+                accounts.load_slow(&ancestors, &key).unwrap().0.lamports,
                 (i as u64) + 1
             );
         }
@@ -810,8 +815,14 @@ mod tests {
             assert_eq!(stores[&1].status(), AccountStorageStatus::StorageAvailable);
         }
         let ancestors = vec![(0, 0)].into_iter().collect();
-        assert_eq!(accounts.load_slow(&ancestors, &pubkey1).unwrap(), account1);
-        assert_eq!(accounts.load_slow(&ancestors, &pubkey2).unwrap(), account2);
+        assert_eq!(
+            accounts.load_slow(&ancestors, &pubkey1).unwrap().0,
+            account1
+        );
+        assert_eq!(
+            accounts.load_slow(&ancestors, &pubkey2).unwrap().0,
+            account2
+        );
 
         // lots of stores, but 3 storages should be enough for everything
         for i in 0..25 {
@@ -828,8 +839,14 @@ mod tests {
                 assert_eq!(stores[&2].status(), status[0]);
             }
             let ancestors = vec![(0, 0)].into_iter().collect();
-            assert_eq!(accounts.load_slow(&ancestors, &pubkey1).unwrap(), account1);
-            assert_eq!(accounts.load_slow(&ancestors, &pubkey2).unwrap(), account2);
+            assert_eq!(
+                accounts.load_slow(&ancestors, &pubkey1).unwrap().0,
+                account1
+            );
+            assert_eq!(
+                accounts.load_slow(&ancestors, &pubkey2).unwrap().0,
+                account2
+            );
         }
     }
 
@@ -875,6 +892,7 @@ mod tests {
             .unwrap()
             .get(&pubkey, &ancestors)
             .unwrap()
+            .0
             .clone();
         //fork 0 is behind root, but it is not root, therefore it is purged
         accounts.add_root(1);
@@ -891,7 +909,7 @@ mod tests {
 
         //new value is there
         let ancestors = vec![(1, 1)].into_iter().collect();
-        assert_eq!(accounts.load_slow(&ancestors, &pubkey), Some(account));;
+        assert_eq!(accounts.load_slow(&ancestors, &pubkey), Some((account, 1)));
     }
 
 }

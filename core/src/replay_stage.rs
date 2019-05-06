@@ -145,7 +145,7 @@ impl ReplayStage {
                         Self::generate_votable_banks(&bank_forks, &locktower, &mut progress);
 
                     if let Some((_, bank)) = votable.last() {
-                        subscriptions.notify_subscribers(&bank);
+                        subscriptions.notify_subscribers(bank.slot(), &bank_forks);
 
                         Self::handle_votable_bank(
                             &bank,

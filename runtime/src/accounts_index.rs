@@ -15,21 +15,21 @@ pub struct AccountsIndex<T> {
 impl<T: Clone> AccountsIndex<T> {
     /// Get an account
     /// The latest account that appears in `ancestors` or `roots` is returned.
-    pub fn get(&self, pubkey: &Pubkey, ancestors: &HashMap<Fork, usize>) -> Option<&T> {
+    pub fn get(&self, pubkey: &Pubkey, ancestors: &HashMap<Fork, usize>) -> Option<(&T, Fork)> {
         let list = self.account_maps.get(pubkey)?;
         let mut max = 0;
         let mut rv = None;
         for e in list.iter().rev() {
             if e.0 >= max && (ancestors.get(&e.0).is_some() || self.is_root(e.0)) {
                 trace!("GET {} {:?}", e.0, ancestors);
-                rv = Some(&e.1);
+                rv = Some((&e.1, e.0));
                 max = e.0;
             }
         }
         rv
     }
 
-    /// Insert a new fork.  
+    /// Insert a new fork.
     /// @retval - The return value contains any squashed accounts that can freed from storage.
     pub fn insert(&mut self, fork: Fork, pubkey: &Pubkey, account_info: T) -> Vec<(Fork, T)> {
         let mut rv = vec![];
@@ -123,7 +123,7 @@ mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 0)));
     }
 
     #[test]
@@ -143,7 +143,7 @@ mod tests {
 
         let ancestors = vec![].into_iter().collect();
         index.add_root(0);
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 0)));
     }
 
     #[test]
@@ -199,11 +199,11 @@ mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         let gc = index.insert(0, &key.pubkey(), true);
         assert!(gc.is_empty());
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 0)));
 
         let gc = index.insert(0, &key.pubkey(), false);
         assert_eq!(gc, vec![(0, true)]);
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&false));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&false, 0)));
     }
 
     #[test]
@@ -215,9 +215,9 @@ mod tests {
         assert!(gc.is_empty());
         let gc = index.insert(1, &key.pubkey(), false);
         assert!(gc.is_empty());
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&true));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 0)));
         let ancestors = vec![(1, 0)].into_iter().collect();
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&false));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&false, 1)));
     }
 
     #[test]
@@ -230,6 +230,6 @@ mod tests {
         let gc = index.insert(1, &key.pubkey(), false);
         assert_eq!(gc, vec![(0, true)]);
         let ancestors = vec![].into_iter().collect();
-        assert_eq!(index.get(&key.pubkey(), &ancestors), Some(&false));
+        assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&false, 1)));
     }
 }
