@@ -49,3 +49,76 @@ impl<'a, 'b, I: Borrow<Transaction>> Drop for LockedAccountsResults<'a, 'b, I> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::system_transaction;
+
+    #[test]
+    fn test_account_locks() {
+        let (bank, txs) = setup();
+
+        // Test getting locked accounts
+        let lock_results = bank.lock_accounts(&txs);
+
+        // Grab locks
+        assert!(lock_results
+            .locked_accounts_results()
+            .iter()
+            .all(|x| x.is_ok()));
+
+        // Trying to grab locks again should fail
+        let lock_results2 = bank.lock_accounts(&txs);
+        assert!(lock_results2
+            .locked_accounts_results()
+            .iter()
+            .all(|x| x.is_err()));
+
+        // Drop the first set of locks
+        drop(lock_results);
+
+        // Now grabbing locks should work again
+        let lock_results2 = bank.lock_accounts(&txs);
+        assert!(lock_results2
+            .locked_accounts_results()
+            .iter()
+            .all(|x| x.is_ok()));
+    }
+
+    #[test]
+    fn test_record_locks() {
+        let (bank, txs) = setup();
+
+        // Test getting record locks
+        let lock_results = bank.lock_record_accounts(&txs);
+
+        // Grabbing record locks doesn't return any results, must succeed or panic.
+        assert!(lock_results.locked_accounts_results().is_empty());
+
+        drop(lock_results);
+
+        // Now grabbing record locks should work again
+        let lock_results2 = bank.lock_record_accounts(&txs);
+        assert!(lock_results2.locked_accounts_results().is_empty());
+    }
+
+    fn setup() -> (Bank, Vec<Transaction>) {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(500);
+        let bank = Bank::new(&genesis_block);
+
+        let pubkey = Pubkey::new_rand();
+        let keypair2 = Keypair::new();
+        let pubkey2 = Pubkey::new_rand();
+
+        let txs = vec![
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
+            system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_block.hash(), 0),
+        ];
+
+        (bank, txs)
+    }
+}
