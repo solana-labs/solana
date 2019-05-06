@@ -17,10 +17,10 @@ strong distinction between leading and validating is blurred.
 ## Difference between validating and leading
 
 The fundamental difference between the pipelines is when the PoH is present. In
-a leader, we process transactions, booting bad ones, and then tag the result
+a leader, we process transactions, removing bad ones, and then tag the result
 with a PoH hash. In the validator, we verify that hash, peel it off, and
 process the transactions in exactly the same way. The only difference is that
-if a validator sees a bad transaction, it can't simply boot it like the leader
+if a validator sees a bad transaction, it can't simply remove it like the leader
 does, because that would cause the PoH hash to change.  Instead, it rejects the
 whole block. The other difference between the pipelines is what happens *after*
 banking. The leader broadcasts entries to downstream validators whereas the
@@ -42,7 +42,7 @@ leader schedule.
 
 * No threads are shut down to switch out of leader mode. Instead, FetchStage
   should forward transactions to the next leader.
-* FetchStage from TPU and BroadcastStage boot entirely
+* Hoist FetchStage and BroadcastStage out of TPU
 * Blocktree renamed to Blockstore
 * BankForks renamed to Banktree
 * TPU moves to new socket-free crate called solana-tpu.
