@@ -1,0 +1,16 @@
+# config file version
+apiVersion: 1
+
+datasources:
+- name: gdev-influxdb
+  type: influxdb
+  isDefault: true
+  access: proxy
+  database: local
+  user: admin
+  password: admin
+  basicAuth: true
+  basicAuthUser: admin
+  basicAuthPassword: admin
+  url: http://influxdb:8086
+  editable: true
