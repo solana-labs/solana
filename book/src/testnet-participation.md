@@ -104,13 +104,13 @@ $ export PATH=$PWD/bin:$PATH
 Sanity check that you are able to interact with the cluster by receiving a small
 airdrop of lamports from the testnet drone:
 ```bash
-$ solana-wallet -n testnet.solana.com airdrop 123
-$ solana-wallet -n testnet.solana.com balance
+$ solana-wallet airdrop 123
+$ solana-wallet balance
 ```
 
 Also try running following command to join the gossip network and view all the other nodes in the cluster:
 ```bash
-$ solana-gossip --network testnet.solana.com:8001 spy --public-address
+$ solana-gossip --entrypoint testnet.solana.com:8001 spy
 # Press ^C to exit
 ```
 
@@ -145,7 +145,7 @@ validator to ports 11000-11011.
 From another console, confirm the IP address of your validator is visible in the
 gossip network by running:
 ```bash
-$ solana-gossip --network edge.testnet.solana.com:8001 spy --public-address
+$ solana-gossip --entrypoint testnet.solana.com:8001 spy
 ```
 
 When `fullnode.sh` starts, it will output a fullnode configuration that looks

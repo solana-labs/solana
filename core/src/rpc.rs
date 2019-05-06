@@ -105,15 +105,13 @@ impl JsonRpcRequestProcessor {
         Ok(bs58::encode(hash).into_string())
     }
 
-    fn get_storage_entry_height(&self) -> Result<u64> {
-        let entry_height = self.storage_state.get_entry_height();
-        Ok(entry_height)
+    fn get_storage_slot(&self) -> Result<u64> {
+        let slot = self.storage_state.get_slot();
+        Ok(slot)
     }
 
-    fn get_storage_pubkeys_for_entry_height(&self, entry_height: u64) -> Result<Vec<Pubkey>> {
-        Ok(self
-            .storage_state
-            .get_pubkeys_for_entry_height(entry_height))
+    fn get_storage_pubkeys_for_slot(&self, slot: u64) -> Result<Vec<Pubkey>> {
+        Ok(self.storage_state.get_pubkeys_for_slot(slot))
     }
 
     pub fn fullnode_exit(&self) -> Result<bool> {
@@ -225,15 +223,11 @@ pub trait RpcSol {
     #[rpc(meta, name = "getStorageBlockhash")]
     fn get_storage_blockhash(&self, _: Self::Metadata) -> Result<String>;
 
-    #[rpc(meta, name = "getStorageEntryHeight")]
-    fn get_storage_entry_height(&self, _: Self::Metadata) -> Result<u64>;
+    #[rpc(meta, name = "getStorageSlot")]
+    fn get_storage_slot(&self, _: Self::Metadata) -> Result<u64>;
 
-    #[rpc(meta, name = "getStoragePubkeysForEntryHeight")]
-    fn get_storage_pubkeys_for_entry_height(
-        &self,
-        _: Self::Metadata,
-        _: u64,
-    ) -> Result<Vec<Pubkey>>;
+    #[rpc(meta, name = "getStoragePubkeysForSlot")]
+    fn get_storage_pubkeys_for_slot(&self, _: Self::Metadata, _: u64) -> Result<Vec<Pubkey>>;
 
     #[rpc(meta, name = "fullnodeExit")]
     fn fullnode_exit(&self, _: Self::Metadata) -> Result<bool>;
@@ -464,22 +458,15 @@ impl RpcSol for RpcSolImpl {
             .get_storage_blockhash()
     }
 
-    fn get_storage_entry_height(&self, meta: Self::Metadata) -> Result<u64> {
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_storage_entry_height()
+    fn get_storage_slot(&self, meta: Self::Metadata) -> Result<u64> {
+        meta.request_processor.read().unwrap().get_storage_slot()
     }
 
-    fn get_storage_pubkeys_for_entry_height(
-        &self,
-        meta: Self::Metadata,
-        entry_height: u64,
-    ) -> Result<Vec<Pubkey>> {
+    fn get_storage_pubkeys_for_slot(&self, meta: Self::Metadata, slot: u64) -> Result<Vec<Pubkey>> {
         meta.request_processor
             .read()
             .unwrap()
-            .get_storage_pubkeys_for_entry_height(entry_height)
+            .get_storage_pubkeys_for_slot(slot)
     }
 
     fn fullnode_exit(&self, meta: Self::Metadata) -> Result<bool> {

@@ -22,13 +22,13 @@ fn main() {
                 .help("File containing an identity (keypair)"),
         )
         .arg(
-            Arg::with_name("network")
+            Arg::with_name("entrypoint")
                 .short("n")
-                .long("network")
+                .long("entrypoint")
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .required(true)
-                .help("Rendezvous with the network at this gossip entry point"),
+                .help("Rendezvous with the cluster at this entry point"),
         )
         .arg(
             Arg::with_name("ledger")
@@ -52,16 +52,16 @@ fn main() {
         Keypair::new()
     };
 
-    let network_addr = matches
-        .value_of("network")
-        .map(|network| {
-            solana_netutil::parse_host_port(network).expect("failed to parse network address")
+    let entrypoint_addr = matches
+        .value_of("entrypoint")
+        .map(|entrypoint| {
+            solana_netutil::parse_host_port(entrypoint).expect("failed to parse entrypoint address")
         })
         .unwrap();
 
     let gossip_addr = {
         let mut addr = socketaddr!([127, 0, 0, 1], 8700);
-        addr.set_ip(solana_netutil::get_public_ip_addr(&network_addr).unwrap());
+        addr.set_ip(solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap());
         addr
     };
     let node =
@@ -73,12 +73,12 @@ fn main() {
         gossip_addr
     );
 
-    let leader_info = ContactInfo::new_gossip_entry_point(&network_addr);
+    let entrypoint_info = ContactInfo::new_gossip_entry_point(&entrypoint_addr);
     let storage_keypair = Arc::new(Keypair::new());
     let mut replicator = Replicator::new(
         ledger_path,
         node,
-        leader_info,
+        entrypoint_info,
         Arc::new(keypair),
         storage_keypair,
         None,

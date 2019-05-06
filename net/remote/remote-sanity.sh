@@ -101,7 +101,7 @@ echo "+++ $entrypointIp: node count ($numSanityNodes expected)"
     nodeArg="num-nodes-exactly"
   fi
 
-  timeout 2m $solana_gossip --network "$entrypointIp:8001" \
+  timeout 2m $solana_gossip --entrypoint "$entrypointIp:8001" \
     spy --$nodeArg "$numSanityNodes" \
 )
 
@@ -117,7 +117,7 @@ echo "--- RPC API: getTransactionCount"
 echo "--- $entrypointIp: wallet sanity"
 (
   set -x
-  scripts/wallet-sanity.sh --host "$entrypointIp"
+  scripts/wallet-sanity.sh --url http://"$entrypointIp":8899
 )
 
 echo "--- $entrypointIp: verify ledger"

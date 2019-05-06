@@ -67,28 +67,6 @@ export RUST_BACKTRACE=1
 # shellcheck source=scripts/configure-metrics.sh
 source "$SOLANA_ROOT"/scripts/configure-metrics.sh
 
-fullnode_usage() {
-  if [[ -n $1 ]]; then
-    echo "$*"
-    echo
-  fi
-  cat <<EOF
-usage: $0 [--blockstream PATH] [--init-complete-file FILE] [--label LABEL] [--stake LAMPORTS] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
-
-Start a full node
-
-  --blockstream PATH        - open blockstream at this unix domain socket location
-  --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
-  --label LABEL             - Append the given label to the fullnode configuration files, useful when running
-                              multiple fullnodes from the same filesystem location
-  --stake LAMPORTS          - Number of lamports to stake
-  --no-voting               - start node without vote signer
-  --rpc-port port           - custom RPC port for this node
-
-EOF
-  exit 1
-}
-
 # The directory on the cluster entrypoint that is rsynced by other full nodes
 SOLANA_RSYNC_CONFIG_DIR=$SOLANA_ROOT/config
 

@@ -22,30 +22,30 @@ fn pubkey_validator(pubkey: String) -> Result<(), String> {
 fn main() -> Result<(), Box<dyn error::Error>> {
     env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info")).init();
 
-    let mut network_addr = SocketAddr::from(([127, 0, 0, 1], 8001));
-    let network_string = network_addr.to_string();
+    let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], 8001));
+    let entrypoint_string = entrypoint_addr.to_string();
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg(
-            Arg::with_name("network")
+            Arg::with_name("entrypoint")
                 .short("n")
-                .long("network")
+                .long("entrypoint")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .default_value(&network_string)
-                .help("Rendezvous with the cluster at this gossip entry point"),
+                .default_value(&entrypoint_string)
+                .help("Rendezvous with the cluster at this entry point"),
         )
         .subcommand(
             SubCommand::with_name("spy")
-                .about("Monitor the gossip network")
+                .about("Monitor the gossip entrypoint")
                 .setting(AppSettings::DisableVersion)
                 .arg(
                     clap::Arg::with_name("pull_only")
                         .long("pull-only")
                         .takes_value(false)
-                        .help("Use a partial gossip node (Pulls only) to spy on the network. By default it will use a full fledged gossip node(Pushes and Pulls). Useful when behind a NAT"),
+                        .help("Use a partial gossip node (Pulls only) to spy on the cluster. By default it will use a full fledged gossip node (Pushes and Pulls). Useful when behind a NAT"),
                 )
                 .arg(
                     Arg::with_name("num_nodes")
@@ -98,9 +98,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .get_matches();
 
-    if let Some(addr) = matches.value_of("network") {
-        network_addr = solana_netutil::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse network address: {}", e);
+    if let Some(addr) = matches.value_of("entrypoint") {
+        entrypoint_addr = solana_netutil::parse_host_port(addr).unwrap_or_else(|e| {
+            eprintln!("failed to parse entrypoint address: {}", e);
             exit(1)
         });
     }
@@ -125,8 +125,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             } else {
                 let mut addr = socketaddr_any!();
                 addr.set_ip(
-                    solana_netutil::get_public_ip_addr(&network_addr).unwrap_or_else(|err| {
-                        eprintln!("failed to contact {}: {}", network_addr, err);
+                    solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
+                        eprintln!("failed to contact {}: {}", entrypoint_addr, err);
                         exit(1)
                     }),
                 );
@@ -134,7 +134,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             };
 
             let nodes = discover(
-                &network_addr,
+                &entrypoint_addr,
                 num_nodes,
                 timeout,
                 pubkey,
@@ -174,7 +174,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .unwrap()
                 .parse::<Pubkey>()
                 .unwrap();
-            let nodes = discover(&network_addr, None, None, Some(pubkey), None)?;
+            let nodes = discover(&entrypoint_addr, None, None, Some(pubkey), None)?;
             let node = nodes.iter().find(|x| x.id == pubkey).unwrap();
 
             if !ContactInfo::is_valid_address(&node.rpc) {

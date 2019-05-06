@@ -5,6 +5,7 @@
 
 use crate::accounts::Accounts;
 use crate::accounts_db::{ErrorCounters, InstructionAccounts, InstructionLoaders};
+use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::locked_accounts_results::LockedAccountsResults;
 use crate::message_processor::{MessageProcessor, ProcessInstruction};
@@ -888,7 +889,9 @@ impl Bank {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts.load_slow(&self.ancestors, pubkey)
+        self.accounts
+            .load_slow(&self.ancestors, pubkey)
+            .map(|(account, _)| account)
     }
 
     pub fn get_program_accounts_modified_since_parent(
@@ -898,7 +901,7 @@ impl Bank {
         self.accounts.load_by_program(self.slot(), program_id)
     }
 
-    pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<Account> {
+    pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Fork)> {
         let just_self: HashMap<u64, usize> = vec![(self.slot(), 0)].into_iter().collect();
         self.accounts.load_slow(&just_self, pubkey)
     }

@@ -56,6 +56,7 @@ pub struct ClusterConfig {
     /// The fullnode config that should be applied to every node in the cluster
     pub fullnode_config: FullnodeConfig,
     /// Number of replicators in the cluster
+    /// Note- replicators will timeout if ticks_per_slot is much larger than the default 8
     pub num_replicators: u64,
     /// Number of nodes that are unstaked and not voting (a.k.a listening)
     pub num_listeners: u64,
@@ -449,6 +450,7 @@ impl Drop for LocalCluster {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use solana_runtime::bank::MINIMUM_SLOT_LENGTH;
 
     #[test]
@@ -465,6 +467,7 @@ mod test {
         solana_logger::setup();
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.rpc_config.enable_fullnode_exit = true;
+        fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
         const NUM_NODES: usize = 1;
         let num_replicators = 1;
         let config = ClusterConfig {
@@ -472,7 +475,7 @@ mod test {
             num_replicators: 1,
             node_stakes: vec![3; NUM_NODES],
             cluster_lamports: 100,
-            ticks_per_slot: 16,
+            ticks_per_slot: 8,
             slots_per_epoch: MINIMUM_SLOT_LENGTH as u64,
             ..ClusterConfig::default()
         };

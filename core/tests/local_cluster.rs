@@ -118,7 +118,7 @@ fn test_two_unbalanced_stakes() {
     let num_ticks_per_slot = 40;
     let num_slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
     fullnode_config.tick_config =
-        PohServiceConfig::Sleep(Duration::from_millis(100 / num_ticks_per_second));
+        PohServiceConfig::Sleep(Duration::from_millis(1000 / num_ticks_per_second));
     fullnode_config.rpc_config.enable_fullnode_exit = true;
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![999_990, 3],

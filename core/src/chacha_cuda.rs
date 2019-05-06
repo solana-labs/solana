@@ -11,7 +11,7 @@ use std::io;
 use std::mem::size_of;
 use std::sync::Arc;
 
-use crate::storage_stage::ENTRIES_PER_SEGMENT;
+use crate::storage_stage::SLOTS_PER_SEGMENT;
 
 // Encrypt a file with multiple starting IV states, determined by ivecs.len()
 //
@@ -47,8 +47,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
-        match blocktree.read_blobs_bytes(entry, ENTRIES_PER_SEGMENT - total_entries, &mut buffer, 0)
-        {
+        match blocktree.read_blobs_bytes(entry, SLOTS_PER_SEGMENT - total_entries, &mut buffer, 0) {
             Ok((num_entries, entry_len)) => {
                 debug!(
                     "chacha_cuda: encrypting segment: {} num_entries: {} entry_len: {}",
@@ -78,9 +77,9 @@ pub fn chacha_cbc_encrypt_file_many_keys(
                 entry += num_entries;
                 debug!(
                     "total entries: {} entry: {} segment: {} entries_per_segment: {}",
-                    total_entries, entry, segment, ENTRIES_PER_SEGMENT
+                    total_entries, entry, segment, SLOTS_PER_SEGMENT
                 );
-                if (entry - segment) >= ENTRIES_PER_SEGMENT {
+                if (entry - segment) >= SLOTS_PER_SEGMENT {
                     break;
                 }
             }

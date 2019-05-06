@@ -9,7 +9,7 @@ use solana_budget_api;
 use solana_budget_api::budget_instruction;
 use solana_budget_api::budget_state::BudgetError;
 use solana_client::client_error::ClientError;
-use solana_client::rpc_client::{get_rpc_request_str, RpcClient};
+use solana_client::rpc_client::RpcClient;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone::DRONE_PORT;
@@ -21,7 +21,6 @@ use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils::DecodeError;
 use solana_sdk::loader_instruction;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::rpc_port::DEFAULT_RPC_PORT;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_instruction::SystemError;
 use solana_sdk::system_transaction;
@@ -29,7 +28,7 @@ use solana_sdk::transaction::{Transaction, TransactionError};
 use solana_vote_api::vote_instruction;
 use std::fs::File;
 use std::io::Read;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 use std::{error, fmt, mem};
 
 const USERDATA_CHUNK_SIZE: usize = 256;
@@ -88,15 +87,12 @@ impl error::Error for WalletError {
 }
 
 pub struct WalletConfig {
-    pub keypair: Keypair,
     pub command: WalletCommand,
     pub drone_host: Option<IpAddr>,
     pub drone_port: u16,
-    pub host: IpAddr,
+    pub json_rpc_url: String,
+    pub keypair: Keypair,
     pub rpc_client: Option<RpcClient>,
-    pub rpc_host: Option<IpAddr>,
-    pub rpc_port: u16,
-    pub rpc_tls: bool,
 }
 
 impl Default for WalletConfig {
@@ -105,25 +101,27 @@ impl Default for WalletConfig {
             command: WalletCommand::Balance(Pubkey::default()),
             drone_host: None,
             drone_port: DRONE_PORT,
-            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            json_rpc_url: "http://testnet.solana.com:8899".to_string(),
             keypair: Keypair::new(),
             rpc_client: None,
-            rpc_host: None,
-            rpc_port: DEFAULT_RPC_PORT,
-            rpc_tls: false,
         }
     }
 }
 
 impl WalletConfig {
     pub fn drone_addr(&self) -> SocketAddr {
-        SocketAddr::new(self.drone_host.unwrap_or(self.host), self.drone_port)
-    }
-
-    pub fn rpc_addr(&self) -> String {
-        get_rpc_request_str(
-            SocketAddr::new(self.rpc_host.unwrap_or(self.host), self.rpc_port),
-            self.rpc_tls,
+        SocketAddr::new(
+            self.drone_host.unwrap_or_else(|| {
+                let drone_host = url::Url::parse(&self.json_rpc_url)
+                    .unwrap()
+                    .host()
+                    .unwrap()
+                    .to_string();
+                solana_netutil::parse_host(&drone_host).unwrap_or_else(|err| {
+                    panic!("Unable to resolve {}: {}", drone_host, err);
+                })
+            }),
+            self.drone_port,
         )
     }
 }
@@ -645,8 +643,7 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
 
     let mut _rpc_client;
     let rpc_client = if config.rpc_client.is_none() {
-        let rpc_addr = config.rpc_addr();
-        _rpc_client = RpcClient::new(rpc_addr);
+        _rpc_client = RpcClient::new(config.json_rpc_url.to_string());
         &_rpc_client
     } else {
         // Primarily for testing
@@ -823,29 +820,21 @@ mod tests {
     #[test]
     fn test_wallet_config_drone_addr() {
         let mut config = WalletConfig::default();
+        config.json_rpc_url = "http://127.0.0.1:8899".to_string();
+        let rpc_host = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
         assert_eq!(
             config.drone_addr(),
-            SocketAddr::new(config.host, config.drone_port)
+            SocketAddr::new(rpc_host, config.drone_port)
         );
 
         config.drone_port = 1234;
-        assert_eq!(config.drone_addr(), SocketAddr::new(config.host, 1234));
+        assert_eq!(config.drone_addr(), SocketAddr::new(rpc_host, 1234));
 
-        config.drone_host = Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)));
+        config.drone_host = Some(rpc_host);
         assert_eq!(
             config.drone_addr(),
             SocketAddr::new(config.drone_host.unwrap(), 1234)
         );
-    }
-
-    #[test]
-    fn test_wallet_config_rpc_addr() {
-        let mut config = WalletConfig::default();
-        assert_eq!(config.rpc_addr(), "http://127.0.0.1:8899");
-        config.rpc_port = 1234;
-        assert_eq!(config.rpc_addr(), "http://127.0.0.1:1234");
-        config.rpc_host = Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)));
-        assert_eq!(config.rpc_addr(), "http://127.0.0.2:1234");
     }
 
     #[test]

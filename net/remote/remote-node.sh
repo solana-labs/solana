@@ -98,7 +98,11 @@ local|tar)
       export SOLANA_CUDA=1
     fi
 
-    args=()
+    args=(
+      "$entrypointIp":~/solana "$entrypointIp:8001"
+      --gossip-port 8001
+      --rpc-port 8899
+    )
     if [[ $nodeType = blockstreamer ]]; then
       args+=(
         --blockstream /tmp/solana-blockstream.sock
@@ -113,11 +117,6 @@ local|tar)
       fi
       args+=(--enable-rpc-exit)
     fi
-
-    args+=(
-      --gossip-port 8001
-      --rpc-port 8899
-    )
 
     set -x
     if [[ $skipSetup != true ]]; then
@@ -148,7 +147,6 @@ local|tar)
       curl --head "$(curl ifconfig.io)"
     fi
 
-    args+=("$entrypointIp":~/solana "$entrypointIp:8001")
     ./multinode-demo/fullnode.sh "${args[@]}" > fullnode.log 2>&1 &
     ;;
   *)
