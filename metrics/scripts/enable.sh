@@ -1,4 +1,6 @@
-#!/usr/bin/env bash -e
+#!/usr/bin/env bash
+
+set -e
 
 SOLANA_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. || exit 1; pwd)"
 
