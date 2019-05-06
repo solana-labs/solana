@@ -5,8 +5,6 @@
 
 cd "$(dirname "$0")"
 
-echo +++ status
-
 for container in influxdb grafana; do
   if [ "$(docker ps -q -f name=$container)" ]; then
   (

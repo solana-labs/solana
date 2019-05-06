@@ -5,8 +5,6 @@
 
 cd "$(dirname "$0")"
 
-echo +++ start
-
 # Stop if already running
 ./stop.sh
 
@@ -27,9 +25,9 @@ docker run \
   --user "$(id -u):$(id -g)" \
   --volume "$PWD"/influxdb.conf:/etc/influxdb/influxdb.conf:ro \
   --volume "$PWD"/lib/influxdb:/var/lib/influxdb \
-  -e INFLUXDB_DB=local \
-	-e INFLUXDB_ADMIN_USER=admin \
-	-e INFLUXDB_ADMIN_PASSWORD=admin \
+  --env INFLUXDB_DB=local \
+  --env INFLUXDB_ADMIN_USER=admin \
+  --env INFLUXDB_ADMIN_PASSWORD=admin \
   $INFLUXDB_IMAGE -config /etc/influxdb/influxdb.conf /init-influxdb.sh
 
 docker run \

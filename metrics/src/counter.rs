@@ -4,7 +4,7 @@ use solana_sdk::timing;
 use std::env;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-const DEFAULT_LOG_RATE: usize = 1000;
+const DEFAULT_LOG_RATE: usize = 1;
 const DEFAULT_METRICS_RATE: usize = 1;
 
 pub struct Counter {
@@ -106,16 +106,16 @@ impl Counter {
             metricsrate = DEFAULT_METRICS_RATE;
             self.metricsrate.store(metricsrate, Ordering::Relaxed);
         }
-        if times % lograte == 0 && times > 0 && log_enabled!(level) {
-            log!(level,
-                "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
-                self.name,
-                counts + events,
-                times,
-                timing::timestamp(),
-                events,
-            );
-        }
+        // if times % lograte == 0 && times > 0 && log_enabled!(level) {
+        //     log!(level,
+        //         "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
+        //         self.name,
+        //         counts + events,
+        //         times,
+        //         timing::timestamp(),
+        //         events,
+        //     );
+        // }
 
         if times % metricsrate == 0 && times > 0 {
             let lastlog = self.lastlog.load(Ordering::Relaxed);
