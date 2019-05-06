@@ -10,7 +10,6 @@
 # file:
 # shellcheck disable=2034
 #
-metricsWriteDatapoint="$(dirname "${BASH_SOURCE[0]}")"/metrics-write-datapoint.sh
 
 configureMetrics() {
   [[ -n $SOLANA_METRICS_CONFIG ]] || return 0
@@ -49,3 +48,5 @@ configureMetrics() {
   done
 }
 configureMetrics
+
+metricsWriteDatapoint="$(dirname "${BASH_SOURCE[0]}")"/metrics-write-datapoint.sh
