@@ -221,7 +221,7 @@ impl BankingStage {
 
         let (decision, next_leader) = {
             let poh = poh_recorder.lock().unwrap();
-            let next_leader = poh.next_slot_leader(DEFAULT_TICKS_PER_SLOT, None);
+            let next_leader = poh.next_slot_leader();
             (
                 Self::consume_or_forward_packets(
                     next_leader,

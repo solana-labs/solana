@@ -55,6 +55,7 @@ pub struct PohRecorder {
     id: Pubkey,
     blocktree: Arc<Blocktree>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
+    ticks_per_slot: u64,
 }
 
 impl PohRecorder {
@@ -92,9 +93,10 @@ impl PohRecorder {
         self.working_bank.is_some() || close_to_leader_tick
     }
 
-    pub fn next_slot_leader(&self, ticks_per_slot: u64, bank: Option<&Bank>) -> Option<Pubkey> {
-        let slot = leader_schedule_utils::tick_height_to_slot(ticks_per_slot, self.tick_height());
-        self.leader_schedule_cache.slot_leader_at(slot + 1, bank)
+    pub fn next_slot_leader(&self) -> Option<Pubkey> {
+        let slot =
+            leader_schedule_utils::tick_height_to_slot(self.ticks_per_slot, self.tick_height());
+        self.leader_schedule_cache.slot_leader_at(slot + 1, None)
     }
 
     pub fn hash(&mut self) {
@@ -190,6 +192,7 @@ impl PohRecorder {
         );
         self.start_leader_at_tick = start_leader_at_tick;
         self.last_leader_tick = last_leader_tick;
+        self.ticks_per_slot = ticks_per_slot;
     }
 
     pub fn set_working_bank(&mut self, working_bank: WorkingBank) {
@@ -203,6 +206,7 @@ impl PohRecorder {
             min_tick_height: bank.tick_height(),
             max_tick_height,
         };
+        self.ticks_per_slot = bank.ticks_per_slot();
         self.set_working_bank(working_bank);
     }
 
@@ -322,6 +326,7 @@ impl PohRecorder {
                 id: *id,
                 blocktree: blocktree.clone(),
                 leader_schedule_cache: leader_schedule_cache.clone(),
+                ticks_per_slot,
             },
             receiver,
         )
