@@ -73,7 +73,9 @@ impl Default for Packet {
 
 impl PartialEq for Packet {
     fn eq(&self, other: &Packet) -> bool {
-        self.meta == other.meta && self.data.as_ref() == other.data.as_ref()
+        let self_data: &[u8] = self.data.as_ref();
+        let other_data: &[u8] = other.data.as_ref();
+        self.meta == other.meta && self_data == other_data
     }
 }
 
@@ -164,7 +166,9 @@ impl Default for BlobData {
 
 impl PartialEq for BlobData {
     fn eq(&self, other: &BlobData) -> bool {
-        self.data.as_ref() == other.data.as_ref()
+        let self_data: &[u8] = self.data.as_ref();
+        let other_data: &[u8] = other.data.as_ref();
+        self_data == other_data
     }
 }
 
