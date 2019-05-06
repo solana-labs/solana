@@ -14,7 +14,7 @@ chrono = { version = "0.4.0", features = ["serde"] }
 log = "0.4.2"
 num-derive = "0.2"
 num-traits = "0.2"
-serde = "1.0.90"
+serde = "1.0.91"
 serde_derive = "1.0.90"
 solana-sdk = { path = "../../sdk", version = "0.15.0"  }
 
