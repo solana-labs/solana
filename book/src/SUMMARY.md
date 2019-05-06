@@ -56,6 +56,7 @@
   - [Cluster Test Framework](cluster-test-framework.md)
   - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
   - [Deterministic Transaction Fees](transaction-fees.md)
+  - [Validator](validator.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
   - [Fork Selection](fork-selection.md)
