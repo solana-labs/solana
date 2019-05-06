@@ -10,15 +10,23 @@ mod config;
 mod defaults;
 mod update_manifest;
 
-fn url_validator(url: String) -> Result<(), String> {
-    match url::Url::parse(&url) {
-        Ok(_) => Ok(()),
+// Return an error if a url cannot be parsed.
+fn is_url(string: String) -> Result<(), String> {
+    match url::Url::parse(&string) {
+        Ok(url) => {
+            if url.has_host() {
+                Ok(())
+            } else {
+                Err("no host provided".to_string())
+            }
+        }
         Err(err) => Err(format!("{:?}", err)),
     }
 }
 
-fn pubkey_validator(pubkey: String) -> Result<(), String> {
-    match pubkey.parse::<Pubkey>() {
+// Return an error if a pubkey cannot be parsed.
+fn is_pubkey(string: String) -> Result<(), String> {
+    match string.parse::<Pubkey>() {
         Ok(_) => Ok(()),
         Err(err) => Err(format!("{:?}", err)),
     }
@@ -67,7 +75,7 @@ fn main() -> Result<(), String> {
                         .value_name("URL")
                         .takes_value(true)
                         .default_value(defaults::JSON_RPC_URL)
-                        .validator(url_validator)
+                        .validator(is_url)
                         .help("JSON RPC URL for the solana cluster"),
                 )
                 .arg(
@@ -82,7 +90,7 @@ fn main() -> Result<(), String> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
-                        .validator(pubkey_validator)
+                        .validator(is_pubkey)
                         .help("Public key of the update manifest");
 
                     match defaults::update_manifest_pubkey(build_env::TARGET) {
@@ -128,14 +136,14 @@ fn main() -> Result<(), String> {
                         .value_name("URL")
                         .takes_value(true)
                         .default_value(defaults::JSON_RPC_URL)
-                        .validator(url_validator)
+                        .validator(is_url)
                         .help("JSON RPC URL for the solana cluster"),
                 )
                 .arg(
                     Arg::with_name("download_url")
                         .index(1)
                         .required(true)
-                        .validator(url_validator)
+                        .validator(is_url)
                         .help("URL to the solana release archive"),
                 )
                 .arg(

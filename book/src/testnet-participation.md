@@ -104,8 +104,8 @@ $ export PATH=$PWD/bin:$PATH
 Sanity check that you are able to interact with the cluster by receiving a small
 airdrop of lamports from the testnet drone:
 ```bash
-$ solana-wallet -n testnet.solana.com airdrop 123
-$ solana-wallet -n testnet.solana.com balance
+$ solana-wallet airdrop 123
+$ solana-wallet balance
 ```
 
 Also try running following command to join the gossip network and view all the other nodes in the cluster:
