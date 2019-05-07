@@ -119,7 +119,7 @@ impl BankingStage {
         unprocessed_packets: &[(Packets, Vec<usize>)],
     ) -> std::io::Result<()> {
         let packets: Vec<&Packet> = unprocessed_packets
-            .into_iter()
+            .iter()
             .flat_map(|(p, unprocessed_indexes)| {
                 unprocessed_indexes.iter().map(move |x| &p.packets[*x])
             })
@@ -579,8 +579,8 @@ impl BankingStage {
         for (msgs, vers) in mms {
             let packet_indexes: Vec<usize> = vers
                 .iter()
-                .zip(0..vers.len())
-                .filter_map(|(ver, index)| if *ver != 0 { Some(index) } else { None })
+                .enumerate()
+                .filter_map(|(index, ver)| if *ver != 0 { Some(index) } else { None })
                 .collect();
             if bank_shutdown {
                 unprocessed_packets.push((msgs, packet_indexes));
