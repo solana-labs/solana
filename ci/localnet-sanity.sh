@@ -7,7 +7,7 @@ restartInterval=never
 rollingRestart=false
 maybeNoLeaderRotation=
 extraNodes=0
-walletRpcPort=
+walletRpcPort=:8899
 
 usage() {
   exitcode=0
