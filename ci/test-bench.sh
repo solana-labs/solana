@@ -29,13 +29,14 @@ source ci/rust-version.sh nightly
 set -o pipefail
 export RUST_BACKTRACE=1
 
-#UPLOAD_METRICS=""
-#TARGET_BRANCH=$BUILDKITE_BRANCH
-#if [[ -z $BUILDKITE_BRANCH ]] || ./ci/is-pr.sh; then
-#  TARGET_BRANCH=$EDGE_CHANNEL
-#else
-#  UPLOAD_METRICS="upload"
-#fi
+# shellcheck disable=SC2034
+UPLOAD_METRICS=""
+TARGET_BRANCH=$BUILDKITE_BRANCH
+if [[ -z $BUILDKITE_BRANCH ]] || ./ci/is-pr.sh; then
+  TARGET_BRANCH=$EDGE_CHANNEL
+else
+  UPLOAD_METRICS="upload"
+fi
 
 BENCH_FILE=bench_output.log
 BENCH_ARTIFACT=current_bench_results.log
