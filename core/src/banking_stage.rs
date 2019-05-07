@@ -21,7 +21,6 @@ use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{self, Transaction, TransactionError};
-use std::borrow::Borrow;
 use std::cmp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
