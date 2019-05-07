@@ -1234,7 +1234,7 @@ dependencies = [
 
 [[package]]
 name = "librocksdb-sys"
-version = "5.17.2"
+version = "5.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bindgen 0.47.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1970,7 +1970,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.54 (registry+https://github.com/rust-lang/crates.io-index)",
- "librocksdb-sys 5.17.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "librocksdb-sys 5.18.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3519,7 +3519,7 @@ dependencies = [
 "checksum lazycell 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "b294d6fa9ee409a054354afc4352b0b9ef7ca222c69b8812cbea9e7d2bf3783f"
 "checksum libc 0.2.54 (registry+https://github.com/rust-lang/crates.io-index)" = "c6785aa7dd976f5fbf3b71cfd9cd49d7f783c1ff565a858d71031c6c313aa5c6"
 "checksum libloading 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9c3ad660d7cb8c5822cd83d10897b0f1f1526792737a179e73896152f85b88c2"
-"checksum librocksdb-sys 5.17.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7dfb546562f9b450237bb8df7a31961849ee9fb1186d9e356db1d7a6b7609ff2"
+"checksum librocksdb-sys 5.18.3 (registry+https://github.com/rust-lang/crates.io-index)" = "d19778314deaa7048f2ea7d07b8aa12e1c227acebe975a37eeab6d2f8c74e41b"
 "checksum linked-hash-map 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "70fb39025bc7cdd76305867c4eccf2f2dcf6e9a57f5b21a93e1c2d86cd03ec9e"
 "checksum lock_api 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "62ebf1391f6acad60e5c8b43706dde4582df75c06698ab44511d15016bc2442c"
 "checksum log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)" = "e19e8d5c34a3e0e2223db8e060f9e8264aeeb5c5fc64a4ee9965c062211c024b"
