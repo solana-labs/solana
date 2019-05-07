@@ -18,7 +18,7 @@ use crate::contact_info::ContactInfo;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-use crate::crds_value::{CrdsValue, CrdsValueLabel, Vote};
+use crate::crds_value::{CrdsValue, CrdsValueLabel, EpochSlots, Vote};
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::repair_service::RepairType;
 use crate::result::Result;
@@ -294,6 +294,13 @@ impl ClusterInfo {
             self.gossip.id, leader_id, self.gossip_leader_id,
         );
         self.gossip_leader_id = *leader_id;
+    }
+
+    pub fn push_epoch_slots(&mut self, epoch_slots: &EpochSlots) {
+        let now = timestamp();
+        let mut entry = CrdsValue::EpochSlots(epoch_slots.clone());
+        entry.sign(&self.keypair);
+        self.gossip.process_push_message(&[entry], now);
     }
 
     pub fn push_vote(&mut self, vote: Transaction) {

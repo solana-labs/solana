@@ -3,8 +3,8 @@ use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signable, Signature};
 use solana_sdk::transaction::Transaction;
+use std::collections::HashSet;
 use std::fmt;
-use std::collections::HashMap;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -19,8 +19,52 @@ pub enum CrdsValue {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct EpochSlots {
-    pub epoch: u64,
-    pub slots: HashMap<u64, u64>,
+    pub from: Pubkey,
+    pub root: u64,
+    pub slots: HashSet<u64>,
+    pub signature: Signature,
+    pub wallclock: u64,
+}
+
+impl EpochSlots {
+    pub fn new(from: Pubkey, root: u64, slots: HashSet<u64>, wallclock: u64) -> Self {
+        Self {
+            from,
+            root,
+            slots,
+            signature: Signature::default(),
+            wallclock,
+        }
+    }
+}
+
+impl Signable for EpochSlots {
+    fn pubkey(&self) -> Pubkey {
+        self.from
+    }
+
+    fn signable_data(&self) -> Vec<u8> {
+        #[derive(Serialize)]
+        struct SignData<'a> {
+            root: u64,
+            slots: &'a HashSet<u64>,
+            wallclock: u64,
+        }
+        let data = SignData {
+            root: self.root,
+            slots: &self.slots,
+            wallclock: self.wallclock,
+        };
+        serialize(&data).expect("unable to serialize EpochSlots")
+    }
+
+    fn get_signature(&self) -> Signature {
+        self.signature
+    }
+
+    fn set_signature(&mut self, signature: Signature) {
+        self.signature = signature;
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -31,6 +75,17 @@ pub struct Vote {
     pub wallclock: u64,
 }
 
+impl Vote {
+    pub fn new(from: &Pubkey, transaction: Transaction, wallclock: u64) -> Self {
+        Self {
+            from: *from,
+            transaction,
+            signature: Signature::default(),
+            wallclock,
+        }
+    }
+}
+
 impl Signable for Vote {
     fn pubkey(&self) -> Pubkey {
         self.from
@@ -38,12 +93,12 @@ impl Signable for Vote {
 
     fn signable_data(&self) -> Vec<u8> {
         #[derive(Serialize)]
-        struct SignData {
-            transaction: Transaction,
+        struct SignData<'a> {
+            transaction: &'a Transaction,
             wallclock: u64,
         }
         let data = SignData {
-            transaction: self.transaction.clone(),
+            transaction: &self.transaction,
             wallclock: self.wallclock,
         };
         serialize(&data).expect("unable to serialize Vote")
@@ -64,6 +119,7 @@ impl Signable for Vote {
 pub enum CrdsValueLabel {
     ContactInfo(Pubkey),
     Vote(Pubkey),
+    EpochSlots(Pubkey),
 }
 
 impl fmt::Display for CrdsValueLabel {
@@ -71,6 +127,7 @@ impl fmt::Display for CrdsValueLabel {
         match self {
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
             CrdsValueLabel::Vote(_) => write!(f, "Vote({})", self.pubkey()),
+            CrdsValueLabel::EpochSlots(_) => write!(f, "EpochSlots({})", self.pubkey()),
         }
     }
 }
@@ -80,17 +137,7 @@ impl CrdsValueLabel {
         match self {
             CrdsValueLabel::ContactInfo(p) => *p,
             CrdsValueLabel::Vote(p) => *p,
-        }
-    }
-}
-
-impl Vote {
-    pub fn new(from: &Pubkey, transaction: Transaction, wallclock: u64) -> Self {
-        Vote {
-            from: *from,
-            transaction,
-            signature: Signature::default(),
-            wallclock,
+            CrdsValueLabel::EpochSlots(p) => *p,
         }
     }
 }
@@ -103,6 +150,7 @@ impl CrdsValue {
         match self {
             CrdsValue::ContactInfo(contact_info) => contact_info.wallclock,
             CrdsValue::Vote(vote) => vote.wallclock,
+            CrdsValue::EpochSlots(vote) => vote.wallclock,
         }
     }
     pub fn label(&self) -> CrdsValueLabel {
@@ -111,6 +159,7 @@ impl CrdsValue {
                 CrdsValueLabel::ContactInfo(contact_info.pubkey())
             }
             CrdsValue::Vote(vote) => CrdsValueLabel::Vote(vote.pubkey()),
+            CrdsValue::EpochSlots(slots) => CrdsValueLabel::EpochSlots(slots.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -125,11 +174,18 @@ impl CrdsValue {
             _ => None,
         }
     }
+    pub fn epoch_slots(&self) -> Option<&EpochSlots> {
+        match self {
+            CrdsValue::EpochSlots(slots) => Some(slots),
+            _ => None,
+        }
+    }
     /// Return all the possible labels for a record identified by Pubkey.
-    pub fn record_labels(key: &Pubkey) -> [CrdsValueLabel; 2] {
+    pub fn record_labels(key: &Pubkey) -> [CrdsValueLabel; 3] {
         [
             CrdsValueLabel::ContactInfo(*key),
             CrdsValueLabel::Vote(*key),
+            CrdsValueLabel::EpochSlots(*key),
         ]
     }
 }
@@ -139,12 +195,15 @@ impl Signable for CrdsValue {
         match self {
             CrdsValue::ContactInfo(contact_info) => contact_info.sign(keypair),
             CrdsValue::Vote(vote) => vote.sign(keypair),
+            CrdsValue::EpochSlots(epoch_slots) => epoch_slots.sign(keypair),
         };
     }
+
     fn verify(&self) -> bool {
         match self {
             CrdsValue::ContactInfo(contact_info) => contact_info.verify(),
             CrdsValue::Vote(vote) => vote.verify(),
+            CrdsValue::EpochSlots(epoch_slots) => epoch_slots.verify(),
         }
     }
 
@@ -152,6 +211,7 @@ impl Signable for CrdsValue {
         match self {
             CrdsValue::ContactInfo(contact_info) => contact_info.pubkey(),
             CrdsValue::Vote(vote) => vote.pubkey(),
+            CrdsValue::EpochSlots(epoch_slots) => epoch_slots.pubkey(),
         }
     }
 
@@ -184,6 +244,7 @@ mod test {
             match v {
                 CrdsValueLabel::ContactInfo(_) => hits[0] = true,
                 CrdsValueLabel::Vote(_) => hits[1] = true,
+                CrdsValueLabel::EpochSlots(_) => hits[1] = true,
             }
         }
         assert!(hits.iter().all(|x| *x));
@@ -199,6 +260,11 @@ mod test {
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().vote().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::Vote(key));
+
+        let v = CrdsValue::EpochSlots(EpochSlots::new(Pubkey::default(), 0, HashSet::new(), 0));
+        assert_eq!(v.wallclock(), 0);
+        let key = v.clone().epoch_slots().unwrap().from;
+        assert_eq!(v.label(), CrdsValueLabel::EpochSlots(key));
     }
     #[test]
     fn test_signature() {
@@ -208,6 +274,13 @@ mod test {
             CrdsValue::ContactInfo(ContactInfo::new_localhost(&keypair.pubkey(), timestamp()));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
         v = CrdsValue::Vote(Vote::new(&keypair.pubkey(), test_tx(), timestamp()));
+        verify_signatures(&mut v, &keypair, &wrong_keypair);
+        v = CrdsValue::EpochSlots(EpochSlots::new(
+            keypair.pubkey(),
+            0,
+            HashSet::new(),
+            timestamp(),
+        ));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
     }
 
