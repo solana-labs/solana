@@ -86,9 +86,9 @@ fn test_replay() {
 
     let (bank_forks, _bank_forks_info, blocktree, ledger_signal_receiver, leader_schedule_cache) =
         fullnode::new_banks_from_blocktree(&blocktree_path, None);
-    let bank = bank_forks.working_bank();
+    let working_bank = bank_forks.working_bank();
     assert_eq!(
-        bank.get_balance(&mint_keypair.pubkey()),
+        working_bank.get_balance(&mint_keypair.pubkey()),
         starting_mint_balance
     );
 
@@ -104,7 +104,7 @@ fn test_replay() {
     let blocktree = Arc::new(blocktree);
     {
         let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
-            create_test_recorder(&bank, &blocktree);
+            create_test_recorder(&working_bank, &blocktree);
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
             Some(Arc::new(voting_keypair)),
