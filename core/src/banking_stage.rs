@@ -649,10 +649,10 @@ mod tests {
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::Node;
     use crate::entry::EntrySlice;
+    use crate::genesis_utils::create_genesis_block;
     use crate::packet::to_packets;
     use crate::poh_recorder::WorkingBank;
     use crate::{get_tmp_ledger_path, tmp_ledger_name};
-    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
@@ -662,7 +662,7 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown1() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let genesis_block = create_genesis_block(2).0;
         let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
         let (vote_sender, vote_receiver) = channel();
@@ -693,7 +693,7 @@ mod tests {
     #[test]
     fn test_banking_stage_tick() {
         solana_logger::setup();
-        let (mut genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (mut genesis_block, _mint_keypair) = create_genesis_block(2);
         genesis_block.ticks_per_slot = 4;
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_blockhash();
@@ -739,7 +739,7 @@ mod tests {
     #[test]
     fn test_banking_stage_entries_only() {
         solana_logger::setup();
-        let (genesis_block, mint_keypair) = GenesisBlock::new(10);
+        let (genesis_block, mint_keypair) = create_genesis_block(10);
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_blockhash();
         let (verified_sender, verified_receiver) = channel();
@@ -842,7 +842,7 @@ mod tests {
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, mint_keypair) = create_genesis_block(2);
         let (verified_sender, verified_receiver) = channel();
 
         // Process a batch that includes a transaction that receives two lamports.
@@ -931,7 +931,7 @@ mod tests {
 
     #[test]
     fn test_bank_record_transactions() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let (genesis_block, mint_keypair) = create_genesis_block(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
         let working_bank = WorkingBank {
             bank: bank.clone(),
@@ -990,7 +990,7 @@ mod tests {
 
     #[test]
     fn test_bank_process_received_transactions() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let (genesis_block, mint_keypair) = create_genesis_block(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -1140,7 +1140,7 @@ mod tests {
     #[test]
     fn test_bank_process_and_record_transactions() {
         solana_logger::setup();
-        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let (genesis_block, mint_keypair) = create_genesis_block(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
         let pubkey = Pubkey::new_rand();
 

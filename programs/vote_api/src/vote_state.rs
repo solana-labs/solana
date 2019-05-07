@@ -271,6 +271,21 @@ pub fn create_account(
     vote_account
 }
 
+// utility function, used by solana-genesis, tests
+pub fn create_bootstrap_leader_account(
+    vote_id: &Pubkey,
+    node_id: &Pubkey,
+    commission: u32,
+    lamports: u64,
+) -> Account {
+    // Construct a vote account for the bootstrap_leader such that the leader_scheduler
+    // will be forced to select it as the leader for height 0
+    let mut account = create_account(&vote_id, &node_id, commission, lamports);
+
+    vote(&vote_id, &mut account, &Vote::new(0)).unwrap();
+    account
+}
+
 // utility function, used by Bank, tests
 pub fn vote(
     vote_id: &Pubkey,

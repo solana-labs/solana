@@ -165,9 +165,10 @@ impl LeaderScheduleCache {
 mod tests {
     use super::*;
     use crate::blocktree::tests::make_slot_entries;
+    use crate::genesis_utils::create_genesis_block;
+    use crate::genesis_utils::{create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS};
     use crate::voting_keypair::tests::new_vote_account;
     use solana_runtime::bank::{Bank, EpochSchedule, MINIMUM_SLOT_LENGTH};
-    use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::mpsc::channel;
     use std::sync::Arc;
@@ -177,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_slot_leader_at() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, _mint_keypair) = create_genesis_block(2);
         let bank = Bank::new(&genesis_block);
         let cache = LeaderScheduleCache::new_from_bank(&bank);
 
@@ -219,7 +220,7 @@ mod tests {
     fn run_thread_race() {
         let slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
         let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, _mint_keypair) = create_genesis_block(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let cache = Arc::new(LeaderScheduleCache::new(epoch_schedule, bank.slot()));
 
@@ -258,7 +259,7 @@ mod tests {
     #[test]
     fn test_next_leader_slot() {
         let pubkey = Pubkey::new_rand();
-        let mut genesis_block = GenesisBlock::new_with_leader(
+        let mut genesis_block = create_genesis_block_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
             &pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
@@ -299,7 +300,7 @@ mod tests {
     #[test]
     fn test_next_leader_slot_blocktree() {
         let pubkey = Pubkey::new_rand();
-        let mut genesis_block = GenesisBlock::new_with_leader(
+        let mut genesis_block = create_genesis_block_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
             &pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
@@ -371,7 +372,7 @@ mod tests {
     #[test]
     fn test_next_leader_slot_next_epoch() {
         let pubkey = Pubkey::new_rand();
-        let (mut genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
+        let (mut genesis_block, mint_keypair, _voting_keypair) = create_genesis_block_with_leader(
             2 * BOOTSTRAP_LEADER_LAMPORTS,
             &pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
@@ -423,7 +424,7 @@ mod tests {
 
     #[test]
     fn test_schedule_for_unconfirmed_epoch() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, _mint_keypair) = create_genesis_block(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let cache = LeaderScheduleCache::new_from_bank(&bank);
 

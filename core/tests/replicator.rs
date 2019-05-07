@@ -16,7 +16,7 @@ use solana::replicator::ReplicatorRequest;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer::blob_receiver;
 use solana_client::thin_client::create_client;
-use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::fs::remove_dir_all;
@@ -153,7 +153,7 @@ fn test_replicator_startup_leader_hang() {
     info!("starting replicator test");
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (genesis_block, _mint_keypair) = GenesisBlock::new(10_000);
+    let (genesis_block, _mint_keypair) = create_genesis_block(10_000);
     let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
     {

@@ -3,7 +3,7 @@ mod bpf {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_runtime::loader_utils::{create_invoke_instruction, load_program};
-    use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::native_loader;
     use std::env;
     use std::fs::File;
@@ -40,7 +40,7 @@ mod bpf {
             let mut elf = Vec::new();
             file.read_to_end(&mut elf).unwrap();
 
-            let (genesis_block, alice_keypair) = GenesisBlock::new(50);
+            let (genesis_block, alice_keypair) = create_genesis_block(50);
             let bank = Bank::new(&genesis_block);
             let bank_client = BankClient::new(bank);
 
@@ -71,7 +71,7 @@ mod bpf {
                 let mut elf = Vec::new();
                 file.read_to_end(&mut elf).unwrap();
 
-                let (genesis_block, alice_keypair) = GenesisBlock::new(50);
+                let (genesis_block, alice_keypair) = create_genesis_block(50);
                 let bank = Bank::new(&genesis_block);
                 let bank_client = BankClient::new(bank);
 
@@ -116,7 +116,7 @@ mod bpf {
                 let mut elf = Vec::new();
                 file.read_to_end(&mut elf).unwrap();
 
-                let (genesis_block, alice_keypair) = GenesisBlock::new(50);
+                let (genesis_block, alice_keypair) = create_genesis_block(50);
                 let bank = Bank::new(&genesis_block);
                 let bank_client = BankClient::new(bank);
 

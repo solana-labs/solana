@@ -299,16 +299,16 @@ impl RpcSubscriptions {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::genesis_utils::create_genesis_block;
     use jsonrpc_pubsub::typed::Subscriber;
     use solana_budget_api;
-    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
     use tokio::prelude::{Async, Stream};
 
     #[test]
     fn test_check_account_subscribe() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(100);
+        let (genesis_block, mint_keypair) = create_genesis_block(100);
         let bank = Bank::new(&genesis_block);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -360,7 +360,7 @@ mod tests {
 
     #[test]
     fn test_check_program_subscribe() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(100);
+        let (genesis_block, mint_keypair) = create_genesis_block(100);
         let bank = Bank::new(&genesis_block);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -411,7 +411,7 @@ mod tests {
     }
     #[test]
     fn test_check_signature_subscribe() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(100);
+        let (genesis_block, mint_keypair) = create_genesis_block(100);
         let bank = Bank::new(&genesis_block);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));

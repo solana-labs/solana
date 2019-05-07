@@ -4,7 +4,7 @@ extern crate test;
 
 use solana_runtime::bank::*;
 use solana_sdk::account::Account;
-use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
 use test::Bencher;
@@ -22,7 +22,7 @@ fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) {
 
 #[bench]
 fn test_accounts_create(bencher: &mut Bencher) {
-    let (genesis_block, _) = GenesisBlock::new(10_000);
+    let (genesis_block, _) = create_genesis_block(10_000);
     let bank0 = Bank::new_with_paths(&genesis_block, Some("bench_a0".to_string()));
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
@@ -32,7 +32,7 @@ fn test_accounts_create(bencher: &mut Bencher) {
 
 #[bench]
 fn test_accounts_squash(bencher: &mut Bencher) {
-    let (genesis_block, _) = GenesisBlock::new(100_000);
+    let (genesis_block, _) = create_genesis_block(100_000);
     let mut banks: Vec<Arc<Bank>> = Vec::with_capacity(10);
     banks.push(Arc::new(Bank::new_with_paths(
         &genesis_block,

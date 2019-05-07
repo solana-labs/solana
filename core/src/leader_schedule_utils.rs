@@ -56,17 +56,14 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::genesis_utils::{create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS};
     use crate::staking_utils;
-    use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_LAMPORTS};
 
     #[test]
     fn test_leader_schedule_via_bank() {
         let pubkey = Pubkey::new_rand();
-        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(
-            BOOTSTRAP_LEADER_LAMPORTS,
-            &pubkey,
-            BOOTSTRAP_LEADER_LAMPORTS,
-        );
+        let genesis_block =
+            create_genesis_block_with_leader(0, &pubkey, BOOTSTRAP_LEADER_LAMPORTS).0;
         let bank = Bank::new(&genesis_block);
 
         let ids_and_stakes: Vec<_> = staking_utils::delegated_stakes(&bank).into_iter().collect();
@@ -86,7 +83,7 @@ mod tests {
     #[test]
     fn test_leader_scheduler1_basic() {
         let pubkey = Pubkey::new_rand();
-        let genesis_block = GenesisBlock::new_with_leader(
+        let genesis_block = create_genesis_block_with_leader(
             BOOTSTRAP_LEADER_LAMPORTS,
             &pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,

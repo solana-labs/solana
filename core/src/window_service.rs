@@ -252,11 +252,11 @@ mod test {
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::{make_consecutive_blobs, make_tiny_test_entries, EntrySlice};
+    use crate::genesis_utils::create_genesis_block_with_leader;
     use crate::packet::{index_blobs, Blob};
     use crate::service::Service;
     use crate::streamer::{blob_receiver, responder};
     use solana_runtime::bank::{Bank, MINIMUM_SLOT_LENGTH};
-    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
@@ -293,7 +293,7 @@ mod test {
         let me_id = Pubkey::new_rand();
         let leader_id = Pubkey::new_rand();
         let bank = Arc::new(Bank::new(
-            &GenesisBlock::new_with_leader(100, &leader_id, 10).0,
+            &create_genesis_block_with_leader(100, &leader_id, 10).0,
         ));
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
@@ -355,7 +355,7 @@ mod test {
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
 
-        let bank = Bank::new(&GenesisBlock::new_with_leader(100, &me_id, 10).0);
+        let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bank_forks = Some(Arc::new(RwLock::new(BankForks::new(0, bank))));
         let t_window = WindowService::new(
@@ -433,7 +433,7 @@ mod test {
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
-        let bank = Bank::new(&GenesisBlock::new_with_leader(100, &me_id, 10).0);
+        let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bank_forks = Some(Arc::new(RwLock::new(BankForks::new(0, bank))));
         let t_window = WindowService::new(

@@ -913,7 +913,7 @@ mod tests {
     use solana_exchange_api::exchange_processor::process_instruction;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
-    use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::genesis_block::create_genesis_block;
     use std::sync::mpsc::channel;
 
     #[test]
@@ -990,7 +990,7 @@ mod tests {
     #[test]
     fn test_exchange_bank_client() {
         solana_logger::setup();
-        let (genesis_block, identity) = GenesisBlock::new(100_000_000_000_000);
+        let (genesis_block, identity) = create_genesis_block(100_000_000_000_000);
         let mut bank = Bank::new(&genesis_block);
         bank.add_instruction_processor(id(), process_instruction);
         let clients = vec![BankClient::new(bank)];

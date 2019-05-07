@@ -608,9 +608,9 @@ impl Service for ReplayStage {
 mod test {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
+    use crate::genesis_utils::create_genesis_block;
     use crate::packet::Blob;
     use crate::replay_stage::ReplayStage;
-    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use std::fs::remove_dir_all;
     use std::sync::{Arc, RwLock};
@@ -623,7 +623,7 @@ mod test {
                 Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
             );
 
-            let genesis_block = GenesisBlock::new(10_000).0;
+            let genesis_block = create_genesis_block(10_000).0;
             let bank0 = Bank::new(&genesis_block);
             let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank0));
             let mut bank_forks = BankForks::new(0, bank0);
@@ -662,7 +662,7 @@ mod test {
 
     #[test]
     fn test_handle_new_root() {
-        let genesis_block = GenesisBlock::new(10_000).0;
+        let genesis_block = create_genesis_block(10_000).0;
         let bank0 = Bank::new(&genesis_block);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank0)));
         let mut progress = HashMap::new();

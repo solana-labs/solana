@@ -111,7 +111,7 @@ mod tests {
     use bincode::serialize;
     use solana_sdk::account::Account;
     use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_program;
@@ -280,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_system_unsigned_transaction() {
-        let (genesis_block, alice_keypair) = GenesisBlock::new(100);
+        let (genesis_block, alice_keypair) = create_genesis_block(100);
         let alice_pubkey = alice_keypair.pubkey();
         let mallory_keypair = Keypair::new();
         let mallory_pubkey = mallory_keypair.pubkey();

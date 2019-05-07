@@ -52,7 +52,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     //   a multiple of packet chunk  2X duplicates to avoid races
     let txes = 192 * 50 * num_threads * 2;
     let mint_total = 1_000_000_000_000;
-    let (genesis_block, mint_keypair) = GenesisBlock::new(mint_total);
+    let (genesis_block, mint_keypair) = create_genesis_block(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
     let (vote_sender, vote_receiver) = channel();
@@ -159,7 +159,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     //   a multiple of packet chunk  2X duplicates to avoid races
     let txes = 96 * 100 * num_threads * 2;
     let mint_total = 1_000_000_000_000;
-    let (genesis_block, mint_keypair) = GenesisBlock::new(mint_total);
+    let (genesis_block, mint_keypair) = create_genesis_block(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
     let (vote_sender, vote_receiver) = channel();
