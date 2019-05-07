@@ -114,12 +114,22 @@ impl BankForks {
             .banks
             .get(&root)
             .expect("root bank didn't exist in bank_forks");
+        let root_tx_count = root_bank
+            .parents()
+            .last()
+            .map(|bank| bank.transaction_count())
+            .unwrap_or(0);
         root_bank.squash();
+        let new_tx_count = root_bank.transaction_count();
         self.prune_non_root(root);
 
         inc_new_counter_info!(
             "bank-forks_set_root_ms",
             timing::duration_as_ms(&set_root_start.elapsed()) as usize
+        );
+        inc_new_counter_info!(
+            "bank-forks_set_root_tx_count",
+            (new_tx_count - root_tx_count) as usize
         );
     }
 

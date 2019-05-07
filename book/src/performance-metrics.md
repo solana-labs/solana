@@ -11,7 +11,7 @@ it on the dashboard.
 
 ## TPS
 
-The leader node's banking stage maintains a count of transactions that it processed.
+The leader node's banking stage maintains a count of transactions that it recorded.
 The dashboard displays the count averaged over 2 second period in the TPS time series
 graph. The dashboard also shows per second mean, maximum and total TPS as a running
 counter.

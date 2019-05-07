@@ -502,7 +502,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT ROUND(MEAN(\"sum\")) FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"banking_stage-process_transactions\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
+          "query": "SELECT ROUND(MEAN(\"sum\")) FROM ( SELECT sum(\"count\") FROM \"$testnet\".\"autogen\".\"counter-banking_stage-record_transactions\" WHERE $timeFilter GROUP BY time(1s) )\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
