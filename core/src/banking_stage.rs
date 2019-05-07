@@ -1253,4 +1253,53 @@ mod tests {
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }
+
+    #[test]
+    fn test_bank_process_and_record_transactions_account_in_use() {
+        solana_logger::setup();
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let pubkey = Pubkey::new_rand();
+        let pubkey1 = Pubkey::new_rand();
+
+        let transactions = vec![
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
+            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_block.hash(), 0),
+        ];
+
+        let working_bank = WorkingBank {
+            bank: bank.clone(),
+            min_tick_height: bank.tick_height(),
+            max_tick_height: bank.tick_height() + 1,
+        };
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blocktree =
+                Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let (poh_recorder, _entry_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.slot(),
+                Some(4),
+                bank.ticks_per_slot(),
+                &pubkey,
+                &Arc::new(blocktree),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+            );
+            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+
+            poh_recorder.lock().unwrap().set_working_bank(working_bank);
+
+            let (result, unprocessed) = BankingStage::process_and_record_transactions(
+                &bank,
+                &transactions,
+                &poh_recorder,
+                0,
+            );
+
+            assert!(result.is_ok());
+            assert_eq!(unprocessed.len(), 1);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
+    }
 }
