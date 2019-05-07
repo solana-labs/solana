@@ -141,82 +141,85 @@ impl StorageStage {
         storage_rotate_count: u64,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Self {
-        let storage_state_inner = storage_state.state.clone();
-        let exit0 = exit.clone();
-        let keypair0 = storage_keypair.clone();
-
         let (instruction_sender, instruction_receiver) = channel();
 
-        let t_storage_mining_verifier = Builder::new()
-            .name("solana-storage-mining-verify-stage".to_string())
-            .spawn(move || {
-                let mut current_key = 0;
-                let mut slot_count = 0;
-                loop {
-                    if let Some(ref some_blocktree) = blocktree {
-                        if let Err(e) = Self::process_entries(
-                            &keypair0,
-                            &storage_state_inner,
-                            &slot_receiver,
-                            &some_blocktree,
-                            &mut slot_count,
-                            &mut current_key,
-                            storage_rotate_count,
-                            &instruction_sender,
-                        ) {
-                            match e {
-                                Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                                Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                                _ => info!("Error from process_entries: {:?}", e),
+        let t_storage_mining_verifier = {
+            let storage_state_inner = storage_state.state.clone();
+            let exit = exit.clone();
+            let storage_keypair = storage_keypair.clone();
+            Builder::new()
+                .name("solana-storage-mining-verify-stage".to_string())
+                .spawn(move || {
+                    let mut current_key = 0;
+                    let mut slot_count = 0;
+                    loop {
+                        if let Some(ref some_blocktree) = blocktree {
+                            if let Err(e) = Self::process_entries(
+                                &storage_keypair,
+                                &storage_state_inner,
+                                &slot_receiver,
+                                &some_blocktree,
+                                &mut slot_count,
+                                &mut current_key,
+                                storage_rotate_count,
+                                &instruction_sender,
+                            ) {
+                                match e {
+                                    Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
+                                        break
+                                    }
+                                    Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                                    _ => info!("Error from process_entries: {:?}", e),
+                                }
                             }
                         }
-                    }
-                    if exit0.load(Ordering::Relaxed) {
-                        break;
-                    }
-                }
-            })
-            .unwrap();
-
-        let cluster_info0 = cluster_info.clone();
-        let exit1 = exit.clone();
-        let keypair1 = keypair.clone();
-        let storage_keypair1 = storage_keypair.clone();
-        let bank_forks1 = bank_forks.clone();
-        let t_storage_create_accounts = Builder::new()
-            .name("solana-storage-create-accounts".to_string())
-            .spawn(move || {
-                let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-                loop {
-                    match instruction_receiver.recv_timeout(Duration::from_secs(1)) {
-                        Ok(instruction) => {
-                            if Self::send_transaction(
-                                &bank_forks1,
-                                &cluster_info0,
-                                instruction,
-                                &keypair1,
-                                &storage_keypair1,
-                                Some(storage_keypair1.pubkey()),
-                                &transactions_socket,
-                            )
-                            .is_err()
-                            {
-                                debug!("Failed to send storage transaction");
-                            }
+                        if exit.load(Ordering::Relaxed) {
+                            break;
                         }
-                        Err(e) => match e {
-                            RecvTimeoutError::Disconnected => break,
-                            RecvTimeoutError::Timeout => (),
-                        },
-                    };
-
-                    if exit1.load(Ordering::Relaxed) {
-                        break;
                     }
-                    sleep(Duration::from_millis(100));
-                }
-            })
-            .unwrap();
+                })
+                .unwrap()
+        };
+
+        let t_storage_create_accounts = {
+            let cluster_info = cluster_info.clone();
+            let exit = exit.clone();
+            let keypair = keypair.clone();
+            let storage_keypair = storage_keypair.clone();
+            let bank_forks = bank_forks.clone();
+            Builder::new()
+                .name("solana-storage-create-accounts".to_string())
+                .spawn(move || {
+                    let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+                    loop {
+                        match instruction_receiver.recv_timeout(Duration::from_secs(1)) {
+                            Ok(instruction) => {
+                                Self::send_transaction(
+                                    &bank_forks,
+                                    &cluster_info,
+                                    instruction,
+                                    &keypair,
+                                    &storage_keypair,
+                                    &transactions_socket,
+                                )
+                                .unwrap_or_else(|err| {
+                                    info!("failed to send storage transaction: {:?}", err)
+                                });
+                            }
+                            Err(e) => match e {
+                                RecvTimeoutError::Disconnected => break,
+                                RecvTimeoutError::Timeout => (),
+                            },
+                        };
+
+                        if exit.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        sleep(Duration::from_millis(100));
+                    }
+                })
+                .unwrap()
+        };
 
         StorageStage {
             t_storage_mining_verifier,
@@ -230,27 +233,27 @@ impl StorageStage {
         instruction: Instruction,
         keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
-        account_to_create: Option<Pubkey>,
         transactions_socket: &UdpSocket,
     ) -> io::Result<()> {
         let working_bank = bank_forks.read().unwrap().working_bank();
         let blockhash = working_bank.confirmed_last_blockhash();
         let mut instructions = vec![];
         let mut signing_keys = vec![];
-        if let Some(account) = account_to_create {
-            if working_bank.get_account(&account).is_none() {
-                // TODO the account space needs to be well defined somewhere
-                let create_instruction = system_instruction::create_account(
-                    &keypair.pubkey(),
-                    &storage_keypair.pubkey(),
-                    1,
-                    1024 * 4,
-                    &solana_storage_api::id(),
-                );
-                instructions.push(create_instruction);
-                signing_keys.push(keypair.as_ref());
-                info!("storage account requested");
-            }
+        if working_bank
+            .get_account(&storage_keypair.pubkey())
+            .is_none()
+        {
+            // TODO the account space needs to be well defined somewhere
+            let create_instruction = system_instruction::create_account(
+                &keypair.pubkey(),
+                &storage_keypair.pubkey(),
+                1000,
+                1024 * 4,
+                &solana_storage_api::id(),
+            );
+            instructions.push(create_instruction);
+            signing_keys.push(keypair.as_ref());
+            info!("storage account requested");
         }
         instructions.push(instruction);
         signing_keys.push(storage_keypair.as_ref());
@@ -264,17 +267,21 @@ impl StorageStage {
     }
 
     fn process_entry_crossing(
+        storage_keypair: &Arc<Keypair>,
         state: &Arc<RwLock<StorageStateInner>>,
-        keypair: &Arc<Keypair>,
         _blocktree: &Arc<Blocktree>,
         entry_id: Hash,
         slot: u64,
         instruction_sender: &InstructionSender,
     ) -> Result<()> {
         let mut seed = [0u8; 32];
-        let signature = keypair.sign(&entry_id.as_ref());
+        let signature = storage_keypair.sign(&entry_id.as_ref());
 
-        let ix = storage_instruction::advertise_recent_blockhash(&keypair.pubkey(), entry_id, slot);
+        let ix = storage_instruction::advertise_recent_blockhash(
+            &storage_keypair.pubkey(),
+            entry_id,
+            slot,
+        );
         instruction_sender.send(ix)?;
 
         seed.copy_from_slice(&signature.to_bytes()[..32]);
@@ -383,7 +390,7 @@ impl StorageStage {
     }
 
     fn process_entries(
-        keypair: &Arc<Keypair>,
+        storage_keypair: &Arc<Keypair>,
         storage_state: &Arc<RwLock<StorageStateInner>>,
         slot_receiver: &Receiver<u64>,
         blocktree: &Arc<Blocktree>,
@@ -419,8 +426,8 @@ impl StorageStage {
                         slot, entry.num_hashes
                     );
                     Self::process_entry_crossing(
+                        &storage_keypair,
                         &storage_state,
-                        &keypair,
                         &blocktree,
                         entry.hash,
                         slot,
