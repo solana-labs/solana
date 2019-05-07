@@ -20,6 +20,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils::DecodeError;
 use solana_sdk::loader_instruction;
+use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_instruction::SystemError;
@@ -31,7 +32,7 @@ use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::{error, fmt, mem};
 
-const USERDATA_CHUNK_SIZE: usize = 256;
+const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
 #[derive(Debug, PartialEq)]
 pub enum WalletCommand {
@@ -352,7 +353,7 @@ fn process_authorize_voter(
     )];
 
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
+    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
 
@@ -373,7 +374,7 @@ fn process_create_staking(
         lamports,
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair)?;
+    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
 
@@ -452,12 +453,13 @@ fn process_deploy(
         0,
     );
     trace!("Creating program account");
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     log_instruction_custom_error::<SystemError>(result).map_err(|_| {
         WalletError::DynamicProgramError("Program allocate space failed".to_string())
     })?;
 
     trace!("Writing program data");
+    let signers = [&config.keypair, &program_id];
     let write_transactions: Vec<_> = program_data
         .chunks(USERDATA_CHUNK_SIZE)
         .zip(0..)
@@ -468,16 +470,18 @@ fn process_deploy(
                 (i * USERDATA_CHUNK_SIZE) as u32,
                 chunk.to_vec(),
             );
-            Transaction::new_signed_instructions(&[&program_id], vec![instruction], blockhash)
+            let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
+            Transaction::new(&signers, message, blockhash)
         })
         .collect();
-    rpc_client.send_and_confirm_transactions(write_transactions, &program_id)?;
+    rpc_client.send_and_confirm_transactions(write_transactions, &signers)?;
 
     trace!("Finalizing program account");
     let instruction = loader_instruction::finalize(&program_id.pubkey(), &bpf_loader::id());
-    let mut tx = Transaction::new_signed_instructions(&[&program_id], vec![instruction], blockhash);
+    let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
+    let mut tx = Transaction::new(&signers, message, blockhash);
     rpc_client
-        .send_and_confirm_transaction(&mut tx, &program_id)
+        .send_and_confirm_transaction(&mut tx, &signers)
         .map_err(|_| {
             WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
         })?;
@@ -502,7 +506,7 @@ fn process_pay(
 
     if timestamp == None && *witnesses == None {
         let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash, 0);
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
         let signature_str = log_instruction_custom_error::<SystemError>(result)?;
         Ok(signature_str.to_string())
     } else if *witnesses == None {
@@ -525,7 +529,7 @@ fn process_pay(
             lamports,
         );
         let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, blockhash);
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
         let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
         Ok(json!({
@@ -556,7 +560,7 @@ fn process_pay(
             lamports,
         );
         let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, blockhash);
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
         let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
         Ok(json!({
@@ -577,7 +581,7 @@ fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey
         &config.keypair.pubkey(),
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
     Ok(signature_str.to_string())
 }
@@ -605,7 +609,7 @@ fn process_time_elapsed(
 
     let ix = budget_instruction::apply_timestamp(&config.keypair.pubkey(), pubkey, to, dt);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
     Ok(signature_str.to_string())
@@ -627,7 +631,7 @@ fn process_witness(
     let blockhash = rpc_client.get_recent_blockhash()?;
     let ix = budget_instruction::apply_signature(&config.keypair.pubkey(), pubkey, to);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &config.keypair);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
     let signature_str = log_instruction_custom_error::<BudgetError>(result)?;
 
     Ok(signature_str.to_string())
@@ -774,7 +778,7 @@ pub fn request_and_confirm_airdrop(
     let blockhash = rpc_client.get_recent_blockhash()?;
     let keypair = DroneKeypair::new_keypair(drone_addr, to_pubkey, lamports, blockhash)?;
     let mut tx = keypair.airdrop_transaction();
-    let result = rpc_client.send_and_confirm_transaction(&mut tx, &keypair);
+    let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&keypair]);
     log_instruction_custom_error::<SystemError>(result)?;
     Ok(())
 }
