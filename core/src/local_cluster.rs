@@ -58,7 +58,7 @@ pub struct ClusterConfig {
     pub fullnode_config: FullnodeConfig,
     /// Number of replicators in the cluster
     /// Note- replicators will timeout if ticks_per_slot is much larger than the default 8
-    pub num_replicators: u64,
+    pub num_replicators: usize,
     /// Number of nodes that are unstaked and not voting (a.k.a listening)
     pub num_listeners: u64,
     /// The stakes of each node
