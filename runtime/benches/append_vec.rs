@@ -99,6 +99,9 @@ fn append_vec_concurrent_read_append(bencher: &mut Bencher) {
     let indexes1 = indexes.clone();
     spawn(move || loop {
         let len = indexes1.lock().unwrap().len();
+        if len == 0 {
+            continue;
+        }
         let random_index: usize = thread_rng().gen_range(0, len + 1);
         let (sample, pos) = indexes1
             .lock()
