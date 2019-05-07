@@ -1257,7 +1257,7 @@ mod tests {
     #[test]
     fn test_bank_process_and_record_transactions_account_in_use() {
         solana_logger::setup();
-        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let (genesis_block, mint_keypair) = create_genesis_block(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
         let pubkey = Pubkey::new_rand();
         let pubkey1 = Pubkey::new_rand();
