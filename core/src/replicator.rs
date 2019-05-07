@@ -22,6 +22,7 @@ use solana_client::rpc_request::RpcRequest;
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_sdk::client::{AsyncClient, SyncClient};
 use solana_sdk::hash::{Hash, Hasher};
+use solana_sdk::message::Message;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction;
 use solana_sdk::transaction::Transaction;
@@ -60,6 +61,7 @@ pub struct Replicator {
     exit: Arc<AtomicBool>,
     slot: u64,
     ledger_path: String,
+    keypair: Arc<Keypair>,
     storage_keypair: Arc<Keypair>,
     signature: ed25519_dalek::Signature,
     cluster_entrypoint: ContactInfo,
@@ -170,8 +172,6 @@ impl Replicator {
     /// * `node` - The replicator node
     /// * `cluster_entrypoint` - ContactInfo representing an entry into the network
     /// * `keypair` - Keypair for this replicator
-    /// * `timeout` - (optional) timeout for polling for leader/downloading the ledger. Defaults to
-    /// 30 seconds
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         ledger_path: &str,
@@ -179,7 +179,6 @@ impl Replicator {
         cluster_entrypoint: ContactInfo,
         keypair: Arc<Keypair>,
         storage_keypair: Arc<Keypair>,
-        _timeout: Option<Duration>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -277,6 +276,7 @@ impl Replicator {
             exit,
             slot,
             ledger_path: ledger_path.to_string(),
+            keypair,
             storage_keypair,
             signature,
             cluster_entrypoint,
@@ -443,23 +443,31 @@ impl Replicator {
             self.cluster_entrypoint.client_facing_addr(),
             FULLNODE_PORT_RANGE,
         );
-        // No point if we've got no storage account
+        // No point if we've got no storage account...
         assert!(
             client
                 .poll_get_balance(&self.storage_keypair.pubkey())
                 .unwrap()
                 > 0
         );
+        // ...or no lamports for fees
+        assert!(client.poll_get_balance(&self.keypair.pubkey()).unwrap() > 0);
 
-        let ix = storage_instruction::mining_proof(
+        let instruction = storage_instruction::mining_proof(
             &self.storage_keypair.pubkey(),
             self.hash,
             self.slot,
             Signature::new(&self.signature.to_bytes()),
         );
-        let mut tx = Transaction::new_unsigned_instructions(vec![ix]);
+        let message = Message::new_with_payer(vec![instruction], Some(&self.keypair.pubkey()));
+        let mut transaction = Transaction::new_unsigned(message);
         client
-            .retry_transfer(&self.storage_keypair, &mut tx, 10)
+            .send_and_confirm_transaction(
+                &[&self.keypair, &self.storage_keypair],
+                &mut transaction,
+                10,
+                0,
+            )
             .expect("transfer didn't work!");
     }
 

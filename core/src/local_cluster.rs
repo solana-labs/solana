@@ -300,7 +300,6 @@ impl LocalCluster {
             self.entry_point_info.clone(),
             replicator_keypair,
             storage_keypair,
-            None,
         )
         .unwrap();
 

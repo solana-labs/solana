@@ -81,7 +81,6 @@ fn main() {
         entrypoint_info,
         Arc::new(keypair),
         storage_keypair,
-        None,
     )
     .unwrap();
 

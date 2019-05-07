@@ -14,6 +14,7 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::Instruction;
+use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_instruction;
@@ -238,7 +239,7 @@ impl StorageStage {
         let working_bank = bank_forks.read().unwrap().working_bank();
         let blockhash = working_bank.confirmed_last_blockhash();
         let mut instructions = vec![];
-        let mut signing_keys = vec![];
+        let signer_keys = vec![keypair.as_ref(), storage_keypair.as_ref()];
         if working_bank
             .get_account(&storage_keypair.pubkey())
             .is_none()
@@ -252,13 +253,12 @@ impl StorageStage {
                 &solana_storage_api::id(),
             );
             instructions.push(create_instruction);
-            signing_keys.push(keypair.as_ref());
             info!("storage account requested");
         }
         instructions.push(instruction);
-        signing_keys.push(storage_keypair.as_ref());
-        let mut transaction = Transaction::new_unsigned_instructions(instructions);
-        transaction.sign(&signing_keys, blockhash);
+        let message = Message::new_with_payer(instructions, Some(&signer_keys[0].pubkey()));
+        let transaction = Transaction::new(&signer_keys, message, blockhash);
+
         transactions_socket.send_to(
             &bincode::serialize(&transaction).unwrap(),
             cluster_info.read().unwrap().my_data().tpu,
