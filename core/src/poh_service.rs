@@ -107,18 +107,18 @@ impl Service for PohService {
 mod tests {
     use super::*;
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
+    use crate::genesis_utils::create_genesis_block;
     use crate::leader_schedule_cache::LeaderScheduleCache;
     use crate::poh_recorder::WorkingBank;
     use crate::result::Result;
     use crate::test_tx::test_tx;
     use solana_runtime::bank::Bank;
-    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
     use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_poh_service() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, _mint_keypair) = create_genesis_block(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_hash = bank.last_blockhash();
         let ledger_path = get_tmp_ledger_path!();

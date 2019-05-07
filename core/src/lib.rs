@@ -35,6 +35,7 @@ pub mod erasure;
 pub mod fetch_stage;
 pub mod fullnode;
 pub mod gen_keys;
+pub mod genesis_utils;
 pub mod gossip_service;
 pub mod leader_schedule;
 pub mod leader_schedule_cache;

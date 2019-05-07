@@ -3,11 +3,9 @@ extern crate solana;
 
 use assert_cmd::prelude::*;
 use solana::blocktree::create_new_tmp_ledger;
-use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana::genesis_utils::create_genesis_block;
 use std::process::Command;
 use std::process::Output;
-use std::sync::Arc;
 
 fn run_ledger_tool(args: &[&str]) -> Output {
     Command::cargo_bin(env!("CARGO_PKG_NAME"))
@@ -34,8 +32,7 @@ fn bad_arguments() {
 
 #[test]
 fn nominal() {
-    let keypair = Arc::new(Keypair::new());
-    let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(100, &keypair.pubkey(), 50);
+    let genesis_block = create_genesis_block(100).0;
     let ticks_per_slot = genesis_block.ticks_per_slot;
 
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);

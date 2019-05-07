@@ -449,10 +449,10 @@ mod tests {
     use crate::cluster_info::ClusterInfo;
     use crate::contact_info::ContactInfo;
     use crate::entry::{make_tiny_test_entries, Entry};
+    use crate::genesis_utils::create_genesis_block;
     use crate::service::Service;
     use rayon::prelude::*;
     use solana_runtime::bank::Bank;
-    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::{Hash, Hasher};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -471,7 +471,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
 
         let cluster_info = test_cluster_info(&keypair.pubkey());
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
+        let (genesis_block, _mint_keypair) = create_genesis_block(1000);
         let bank = Arc::new(Bank::new(&genesis_block));
         let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(&[bank])));
         let (_slot_sender, slot_receiver) = channel();
@@ -504,7 +504,7 @@ mod tests {
         let storage_keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
+        let (genesis_block, _mint_keypair) = create_genesis_block(1000);
         let ticks_per_slot = genesis_block.ticks_per_slot;
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
@@ -577,7 +577,7 @@ mod tests {
         let storage_keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
+        let (genesis_block, _mint_keypair) = create_genesis_block(1000);
         let ticks_per_slot = genesis_block.ticks_per_slot;;
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 

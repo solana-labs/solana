@@ -83,7 +83,7 @@ mod tests {
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::account::{create_keyed_accounts, Account};
     use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
@@ -180,7 +180,7 @@ mod tests {
     #[ignore]
     fn test_validate_mining() {
         solana_logger::setup();
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
+        let (genesis_block, mint_keypair) = create_genesis_block(1000);
         let mint_pubkey = mint_keypair.pubkey();
         let replicator_keypair = Keypair::new();
         let replicator = replicator_keypair.pubkey();
@@ -312,7 +312,7 @@ mod tests {
 
     #[test]
     fn test_bank_storage() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
+        let (genesis_block, mint_keypair) = create_genesis_block(1000);
         let mint_pubkey = mint_keypair.pubkey();
         let replicator_keypair = Keypair::new();
         let replicator_pubkey = replicator_keypair.pubkey();

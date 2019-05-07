@@ -3,6 +3,7 @@ use crate::cluster::Cluster;
 use crate::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::fullnode::{Fullnode, FullnodeConfig};
+use crate::genesis_utils::create_genesis_block_with_leader;
 use crate::gossip_service::discover_nodes;
 use crate::replicator::Replicator;
 use crate::service::Service;
@@ -115,11 +116,10 @@ impl LocalCluster {
     }
 
     pub fn new(config: &ClusterConfig) -> Self {
-        let voting_keypair = Keypair::new();
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
-        let (mut genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
+        let (mut genesis_block, mint_keypair, voting_keypair) = create_genesis_block_with_leader(
             config.cluster_lamports,
             &leader_pubkey,
             config.node_stakes[0],
@@ -129,7 +129,7 @@ impl LocalCluster {
         genesis_block
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);
-        genesis_block.bootstrap_leader_vote_account_id = voting_keypair.pubkey();
+
         let (genesis_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
         let leader_contact_info = leader_node.info.clone();

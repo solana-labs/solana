@@ -250,13 +250,13 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 mod tests {
     use super::*;
     use crate::bank_forks::BankForks;
+    use crate::genesis_utils::create_genesis_block;
     use jsonrpc_core::futures::sync::mpsc;
     use jsonrpc_core::Response;
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use solana_budget_api;
     use solana_budget_api::budget_instruction;
     use solana_runtime::bank::Bank;
-    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_program;
@@ -288,7 +288,7 @@ mod tests {
 
     #[test]
     fn test_signature_subscribe() {
-        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let (genesis_block, alice) = create_genesis_block(10_000);
         let bob = Keypair::new();
         let bob_pubkey = bob.pubkey();
         let bank = Bank::new(&genesis_block);
@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn test_signature_unsubscribe() {
-        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let (genesis_block, alice) = create_genesis_block(10_000);
         let bob_pubkey = Pubkey::new_rand();
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
@@ -363,7 +363,7 @@ mod tests {
 
     #[test]
     fn test_account_subscribe() {
-        let (mut genesis_block, alice) = GenesisBlock::new(10_000);
+        let (mut genesis_block, alice) = create_genesis_block(10_000);
 
         // This test depends on the budget program
         genesis_block
@@ -503,7 +503,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_account_confirmations_not_fulfilled() {
-        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let (genesis_block, alice) = create_genesis_block(10_000);
         let bank = Bank::new(&genesis_block);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -528,7 +528,7 @@ mod tests {
 
     #[test]
     fn test_account_confirmations() {
-        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let (genesis_block, alice) = create_genesis_block(10_000);
         let bank = Bank::new(&genesis_block);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));

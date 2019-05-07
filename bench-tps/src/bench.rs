@@ -640,7 +640,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
-    use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::genesis_block::create_genesis_block;
     use std::sync::mpsc::channel;
 
     #[test]
@@ -701,7 +701,7 @@ mod tests {
 
     #[test]
     fn test_bench_tps_bank_client() {
-        let (genesis_block, id) = GenesisBlock::new(10_000);
+        let (genesis_block, id) = create_genesis_block(10_000);
         let bank = Bank::new(&genesis_block);
         let clients = vec![BankClient::new(bank)];
 
@@ -718,7 +718,7 @@ mod tests {
 
     #[test]
     fn test_bench_tps_fund_keys() {
-        let (genesis_block, id) = GenesisBlock::new(10_000);
+        let (genesis_block, id) = create_genesis_block(10_000);
         let bank = Bank::new(&genesis_block);
         let client = BankClient::new(bank);
         let tx_count = 10;

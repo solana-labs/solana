@@ -2,16 +2,14 @@
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana::blocktree::create_new_ledger;
+use solana_sdk::account::Account;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{read_keypair, KeypairUtil};
+use solana_sdk::system_program;
+use solana_vote_api::vote_state;
 use std::error;
 
-/**
- * Bootstrap leader gets two lamports:
- * - 42 lamports to use as stake
- * - One lamport to keep the node identity public key valid
- */
-pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 43;
+pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let default_bootstrap_leader_lamports = &BOOTSTRAP_LEADER_LAMPORTS.to_string();
@@ -85,16 +83,30 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_vote_keypair = read_keypair(bootstrap_vote_keypair_file)?;
     let mint_keypair = read_keypair(mint_keypair_file)?;
 
-    let (mut genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(
-        lamports,
+    let genesis_block = GenesisBlock::new(
         &bootstrap_leader_keypair.pubkey(),
-        bootstrap_leader_lamports,
-    );
-    genesis_block.mint_id = mint_keypair.pubkey();
-    genesis_block.bootstrap_leader_vote_account_id = bootstrap_vote_keypair.pubkey();
-    genesis_block
-        .native_instruction_processors
-        .extend_from_slice(&[
+        &[
+            (
+                mint_keypair.pubkey(),
+                Account::new(
+                    lamports - bootstrap_leader_lamports,
+                    0,
+                    &system_program::id(),
+                ),
+            ),
+            (
+                bootstrap_vote_keypair.pubkey(),
+                vote_state::create_bootstrap_leader_account(
+                    &bootstrap_vote_keypair.pubkey(),
+                    &bootstrap_leader_keypair.pubkey(),
+                    0,
+                    bootstrap_leader_lamports,
+                ),
+            ),
+        ],
+        &[
+            ("solana_vote_program".to_string(), solana_vote_api::id()),
+            ("solana_stake_program".to_string(), solana_stake_api::id()),
             ("solana_budget_program".to_string(), solana_budget_api::id()),
             (
                 "solana_storage_program".to_string(),
@@ -106,7 +118,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 "solana_exchange_program".to_string(),
                 solana_exchange_api::id(),
             ),
-        ]);
+        ],
+    );
 
     create_new_ledger(ledger_path, &genesis_block)?;
     Ok(())
@@ -115,52 +128,56 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 #[cfg(test)]
 mod tests {
     use hashbrown::HashSet;
-    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_program_ids() {
-        let system = Pubkey::new(&[
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0,
-        ]);
-        let native_loader = "NativeLoader1111111111111111111111111111111"
-            .parse::<Pubkey>()
-            .unwrap();
-        let bpf_loader = "BPFLoader1111111111111111111111111111111111"
-            .parse::<Pubkey>()
-            .unwrap();
-        let budget = "Budget1111111111111111111111111111111111111"
-            .parse::<Pubkey>()
-            .unwrap();
-        let stake = "Stake11111111111111111111111111111111111111"
-            .parse::<Pubkey>()
-            .unwrap();
-        let storage = "Storage111111111111111111111111111111111111"
-            .parse::<Pubkey>()
-            .unwrap();
-        let token = "Token11111111111111111111111111111111111111"
-            .parse::<Pubkey>()
-            .unwrap();
-        let vote = "Vote111111111111111111111111111111111111111"
-            .parse::<Pubkey>()
-            .unwrap();
-        let config = "Config1111111111111111111111111111111111111"
-            .parse::<Pubkey>()
-            .unwrap();
-        let exchange = "Exchange11111111111111111111111111111111111"
-            .parse::<Pubkey>()
-            .unwrap();
-
-        assert_eq!(solana_sdk::system_program::id(), system);
-        assert_eq!(solana_sdk::native_loader::id(), native_loader);
-        assert_eq!(solana_sdk::bpf_loader::id(), bpf_loader);
-        assert_eq!(solana_budget_api::id(), budget);
-        assert_eq!(solana_stake_api::id(), stake);
-        assert_eq!(solana_storage_api::id(), storage);
-        assert_eq!(solana_token_api::id(), token);
-        assert_eq!(solana_vote_api::id(), vote);
-        assert_eq!(solana_config_api::id(), config);
-        assert_eq!(solana_exchange_api::id(), exchange);
+        let ids = [
+            (
+                "11111111111111111111111111111111",
+                solana_sdk::system_program::id(),
+            ),
+            (
+                "NativeLoader1111111111111111111111111111111",
+                solana_sdk::native_loader::id(),
+            ),
+            (
+                "BPFLoader1111111111111111111111111111111111",
+                solana_sdk::bpf_loader::id(),
+            ),
+            (
+                "Budget1111111111111111111111111111111111111",
+                solana_budget_api::id(),
+            ),
+            (
+                "Stake11111111111111111111111111111111111111",
+                solana_stake_api::id(),
+            ),
+            (
+                "Storage111111111111111111111111111111111111",
+                solana_storage_api::id(),
+            ),
+            (
+                "Token11111111111111111111111111111111111111",
+                solana_token_api::id(),
+            ),
+            (
+                "Vote111111111111111111111111111111111111111",
+                solana_vote_api::id(),
+            ),
+            (
+                "Stake11111111111111111111111111111111111111",
+                solana_stake_api::id(),
+            ),
+            (
+                "Config1111111111111111111111111111111111111",
+                solana_config_api::id(),
+            ),
+            (
+                "Exchange11111111111111111111111111111111111",
+                solana_exchange_api::id(),
+            ),
+        ];
+        assert!(ids.iter().all(|(name, id)| *name == id.to_string()));
     }
 
     #[test]
@@ -174,6 +191,7 @@ mod tests {
             solana_storage_api::id(),
             solana_token_api::id(),
             solana_vote_api::id(),
+            solana_stake_api::id(),
             solana_config_api::id(),
             solana_exchange_api::id(),
         ];

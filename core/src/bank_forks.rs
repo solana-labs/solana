@@ -128,13 +128,13 @@ impl BankForks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::genesis_block::GenesisBlock;
+    use crate::genesis_utils::create_genesis_block;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_bank_forks() {
-        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let (genesis_block, _) = create_genesis_block(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn test_bank_forks_descendants() {
-        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let (genesis_block, _) = create_genesis_block(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
         let bank0 = bank_forks[0].clone();
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn test_bank_forks_ancestors() {
-        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let (genesis_block, _) = create_genesis_block(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
         let bank0 = bank_forks[0].clone();
@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_bank_forks_frozen_banks() {
-        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let (genesis_block, _) = create_genesis_block(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_bank_forks_active_banks() {
-        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let (genesis_block, _) = create_genesis_block(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);

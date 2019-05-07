@@ -8,6 +8,7 @@ use solana::cluster_info::{ClusterInfo, Node};
 use solana::entry::next_entry_mut;
 use solana::entry::EntrySlice;
 use solana::fullnode;
+use solana::genesis_utils::create_genesis_block_with_leader;
 use solana::gossip_service::GossipService;
 use solana::packet::index_blobs;
 use solana::rpc_subscriptions::RpcSubscriptions;
@@ -17,7 +18,6 @@ use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer;
 use solana::tvu::{Sockets, Tvu};
 use solana_runtime::bank::MINIMUM_SLOT_LENGTH;
-use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction;
 use std::fs::remove_dir_all;
@@ -73,11 +73,10 @@ fn test_replay() {
         r_responder,
     );
 
-    let total_balance = 10_000;
+    let mint_balance = 10_000;
     let leader_balance = 100;
-    let starting_mint_balance = total_balance - leader_balance;
-    let (mut genesis_block, mint_keypair) =
-        GenesisBlock::new_with_leader(total_balance, &leader.info.id, leader_balance);
+    let (mut genesis_block, mint_keypair, _voting_keypair) =
+        create_genesis_block_with_leader(mint_balance, &leader.info.id, leader_balance);
     genesis_block.ticks_per_slot = 160;
     genesis_block.slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
     let (blocktree_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
@@ -87,10 +86,7 @@ fn test_replay() {
     let (bank_forks, _bank_forks_info, blocktree, ledger_signal_receiver, leader_schedule_cache) =
         fullnode::new_banks_from_blocktree(&blocktree_path, None);
     let bank = bank_forks.working_bank();
-    assert_eq!(
-        bank.get_balance(&mint_keypair.pubkey()),
-        starting_mint_balance
-    );
+    assert_eq!(bank.get_balance(&mint_keypair.pubkey()), mint_balance);
 
     let leader_schedule_cache = Arc::new(leader_schedule_cache);
     // start cluster_info1
@@ -129,7 +125,7 @@ fn test_replay() {
             &solana_sdk::hash::Hash::default(),
         );
 
-        let mut mint_ref_balance = starting_mint_balance;
+        let mut mint_ref_balance = mint_balance;
         let mut msgs = Vec::new();
         let mut blob_idx = 0;
         let num_transfers = 10;
@@ -179,7 +175,7 @@ fn test_replay() {
         assert_eq!(final_mint_balance, mint_ref_balance);
 
         let bob_balance = working_bank.get_balance(&bob_keypair.pubkey());
-        assert_eq!(bob_balance, starting_mint_balance - mint_ref_balance);
+        assert_eq!(bob_balance, mint_balance - mint_ref_balance);
 
         exit.store(true, Ordering::Relaxed);
         poh_service_exit.store(true, Ordering::Relaxed);

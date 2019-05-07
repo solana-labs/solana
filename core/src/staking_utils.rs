@@ -146,11 +146,13 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
+    use crate::genesis_utils::{
+        create_genesis_block, create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS,
+    };
     use crate::voting_keypair::tests as voting_keypair_tests;
     use hashbrown::HashSet;
-    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::iter::FromIterator;
@@ -162,10 +164,9 @@ mod tests {
 
     #[test]
     fn test_bank_staked_nodes_at_epoch() {
-        let pubkey = Pubkey::new_rand();
-        let bootstrap_lamports = 2;
-        let (genesis_block, _) =
-            GenesisBlock::new_with_leader(bootstrap_lamports, &pubkey, bootstrap_lamports);
+        let (genesis_block, _mint_keypair, voting_keypair) =
+            create_genesis_block_with_leader(1, &Pubkey::new_rand(), BOOTSTRAP_LEADER_LAMPORTS);
+
         let bank = Bank::new(&genesis_block);
 
         // Epoch doesn't exist
@@ -173,7 +174,7 @@ mod tests {
         assert_eq!(vote_account_balances_at_epoch(&bank, 10), None);
 
         // First epoch has the bootstrap leader
-        expected.insert(genesis_block.bootstrap_leader_vote_account_id, 1);
+        expected.insert(voting_keypair.pubkey(), BOOTSTRAP_LEADER_LAMPORTS);
         let expected = Some(expected);
         assert_eq!(vote_account_balances_at_epoch(&bank, 0), expected);
 
@@ -187,7 +188,7 @@ mod tests {
     fn test_epoch_stakes_and_lockouts() {
         let validator = Keypair::new();
 
-        let (genesis_block, mint_keypair) = GenesisBlock::new(500);
+        let (genesis_block, mint_keypair) = create_genesis_block(500);
 
         let bank = Bank::new(&genesis_block);
         let bank_voter = Keypair::new();
@@ -221,10 +222,11 @@ mod tests {
         let bank = new_from_parent(&Arc::new(bank), slot);
 
         let result: Vec<_> = epoch_stakes_and_lockouts(&bank, 0);
-        assert_eq!(result, vec![(1, None)]);
+        assert_eq!(result, vec![(BOOTSTRAP_LEADER_LAMPORTS, None)]);
 
         let result: HashSet<_> = HashSet::from_iter(epoch_stakes_and_lockouts(&bank, epoch));
-        let expected: HashSet<_> = HashSet::from_iter(vec![(1, None), (499, None)]);
+        let expected: HashSet<_> =
+            HashSet::from_iter(vec![(BOOTSTRAP_LEADER_LAMPORTS, None), (499, None)]);
         assert_eq!(result, expected);
     }
 

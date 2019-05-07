@@ -10,11 +10,11 @@ use solana::banking_stage::{create_test_recorder, BankingStage};
 use solana::blocktree::{get_tmp_ledger_path, Blocktree};
 use solana::cluster_info::ClusterInfo;
 use solana::cluster_info::Node;
+use solana::genesis_utils::create_genesis_block;
 use solana::packet::to_packets_chunked;
 use solana::poh_recorder::WorkingBankEntries;
 use solana::service::Service;
 use solana_runtime::bank::Bank;
-use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{KeypairUtil, Signature};
@@ -52,7 +52,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     //   a multiple of packet chunk  2X duplicates to avoid races
     let txes = 192 * 50 * num_threads * 2;
     let mint_total = 1_000_000_000_000;
-    let (genesis_block, mint_keypair) = GenesisBlock::new(mint_total);
+    let (genesis_block, mint_keypair) = create_genesis_block(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
     let (vote_sender, vote_receiver) = channel();
@@ -159,7 +159,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     //   a multiple of packet chunk  2X duplicates to avoid races
     let txes = 96 * 100 * num_threads * 2;
     let mint_total = 1_000_000_000_000;
-    let (genesis_block, mint_keypair) = GenesisBlock::new(mint_total);
+    let (genesis_block, mint_keypair) = create_genesis_block(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
     let (vote_sender, vote_receiver) = channel();
