@@ -3,6 +3,7 @@
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana::blocktree::create_new_ledger;
 use solana_sdk::account::Account;
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{read_keypair, KeypairUtil};
 use solana_sdk::system_program;
@@ -13,6 +14,9 @@ pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let default_bootstrap_leader_lamports = &BOOTSTRAP_LEADER_LAMPORTS.to_string();
+    let default_lamports_per_signature =
+        &format!("{}", FeeCalculator::default().lamports_per_signature);
+
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
@@ -70,6 +74,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .required(true)
                 .help("Number of lamports to assign to the bootstrap leader"),
         )
+        .arg(
+            Arg::with_name("lamports_per_signature")
+                .long("lamports-per-signature")
+                .value_name("LAMPORTS")
+                .takes_value(true)
+                .default_value(default_lamports_per_signature)
+                .help("Number of lamports the cluster will charge for signature verification"),
+        )
         .get_matches();
 
     let bootstrap_leader_keypair_file = matches.value_of("bootstrap_leader_keypair_file").unwrap();
@@ -83,7 +95,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_vote_keypair = read_keypair(bootstrap_vote_keypair_file)?;
     let mint_keypair = read_keypair(mint_keypair_file)?;
 
-    let genesis_block = GenesisBlock::new(
+    let mut genesis_block = GenesisBlock::new(
         &bootstrap_leader_keypair.pubkey(),
         &[
             (
@@ -120,6 +132,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             ),
         ],
     );
+    genesis_block.fee_calculator.lamports_per_signature =
+        value_t_or_exit!(matches, "lamports_per_signature", u64);
 
     create_new_ledger(ledger_path, &genesis_block)?;
     Ok(())

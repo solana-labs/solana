@@ -154,7 +154,7 @@ default_fullnode_arg() {
 
 extra_fullnode_args=()
 bootstrap_leader=false
-stake=43 # number of lamports to assign as stake (plus transaction fee to setup the stake)
+stake=42 # number of lamports to assign as stake
 poll_for_new_genesis_block=0
 label=
 
