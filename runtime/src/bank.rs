@@ -1197,8 +1197,8 @@ impl Drop for Bank {
 mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS};
-    use solana_sdk::genesis_block::create_genesis_block;
     use bincode::{deserialize_from, serialize_into, serialized_size};
+    use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::hash;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};

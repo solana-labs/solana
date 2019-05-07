@@ -63,6 +63,12 @@ impl<T: Clone> AccountsIndex<T> {
         };
         rv
     }
+
+    pub fn add_index(&mut self, fork: Fork, pubkey: &Pubkey, account_info: T) {
+        let entry = self.account_maps.entry(*pubkey).or_insert_with(|| vec![]);
+        entry.push((fork, account_info));
+    }
+
     pub fn is_purged(&self, fork: Fork) -> bool {
         fork < self.last_root
     }

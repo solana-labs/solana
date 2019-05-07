@@ -498,7 +498,7 @@ impl AccountsDB {
     }
 
     pub fn generate_index(&mut self) {
-        let forks: HashSet<Fork> = self
+        let mut forks: Vec<Fork> = self
             .storage
             .read()
             .unwrap()
@@ -507,6 +507,7 @@ impl AccountsDB {
             .map(|x| x.fork_id)
             .collect();
 
+        forks.sort();
         for fork_id in forks.iter() {
             let mut accumulator: Vec<HashMap<Pubkey, (u64, AccountInfo)>> = self
                 .scan_account_storage(
@@ -532,7 +533,7 @@ impl AccountsDB {
             }
             let mut accounts_index = self.accounts_index.write().unwrap();
             for (pubkey, (_, account_info)) in account_maps.iter() {
-                accounts_index.insert(*fork_id, pubkey, account_info.clone());
+                accounts_index.add_index(*fork_id, pubkey, account_info.clone());
             }
         }
     }

@@ -150,12 +150,15 @@ impl BankForks {
         let descendants = self.descendants();
         self.banks
             .retain(|slot, _| descendants[&root].contains(slot));
-        let diff: HashSet<_> = slots.symmetric_difference(&self.slots).collect();
-        for slot in diff.iter() {
-            if **slot > root {
-                let _ = self.add_snapshot(**slot);
-            } else {
-                self.remove_snapshot(**slot);
+        if self.use_snapshot {
+            let diff: HashSet<_> = slots.symmetric_difference(&self.slots).collect();
+            trace!("prune non root {} - {:?}", root, diff);
+            for slot in diff.iter() {
+                if **slot > root {
+                    let _ = self.add_snapshot(**slot, root);
+                } else if **slot > 0 {
+                    self.remove_snapshot(**slot);
+                }
             }
         }
         self.slots = slots.clone();
@@ -171,11 +174,12 @@ impl BankForks {
         Path::new(&snapshot_dir).to_path_buf()
     }
 
-    pub fn add_snapshot(&self, slot: u64) -> Result<(), Error> {
+    pub fn add_snapshot(&self, slot: u64, root: u64) -> Result<(), Error> {
         let path = BankForks::get_snapshot_path();
         fs::create_dir_all(path.clone())?;
         let bank_file = format!("{}", slot);
         let bank_file_path = path.join(bank_file);
+        trace!("path: {:?}", bank_file_path);
         let file = File::create(bank_file_path)?;
         let mut stream = BufWriter::new(file);
         let bank = self.get(slot).unwrap().clone();
@@ -189,6 +193,8 @@ impl BankForks {
             .map_err(|_| BankForks::get_io_error("serialize bank parent error"))?;
         serialize_into(&mut stream, &bank.rc)
             .map_err(|_| BankForks::get_io_error("serialize bank rc error"))?;
+        serialize_into(&mut stream, &root)
+            .map_err(|_| BankForks::get_io_error("serialize root error"))?;
         Ok(())
     }
 
@@ -249,6 +255,7 @@ impl BankForks {
         names.sort();
         let mut bank_maps = vec![];
         let mut bank_rc: Option<BankRc> = None;
+        let mut root: u64 = 0;
         for bank_slot in names.iter().rev() {
             let bank_path = format!("{}", bank_slot);
             let bank_file_path = path.join(bank_path.clone());
@@ -265,6 +272,11 @@ impl BankForks {
                     .map_err(|_| BankForks::get_io_error("deserialize bank rc error"));
                 if rc.is_ok() {
                     bank_rc = Some(rc.unwrap());
+                    let r: Result<u64, std::io::Error> = deserialize_from(&mut stream)
+                        .map_err(|_| BankForks::get_io_error("deserialize root error"));
+                    if r.is_ok() {
+                        root = r.unwrap();
+                    }
                 }
             }
             match bank {
@@ -281,6 +293,7 @@ impl BankForks {
         Ok(BankForks {
             banks,
             working_bank,
+            root,
             slots,
             use_snapshot: true,
         })
@@ -411,7 +424,7 @@ mod tests {
 
     fn save_and_load_snapshot(bank_forks: &BankForks) {
         for (slot, _) in bank_forks.banks.iter() {
-            bank_forks.add_snapshot(*slot).unwrap();
+            bank_forks.add_snapshot(*slot, 0).unwrap();
         }
 
         let new = BankForks::load_from_snapshot().unwrap();
@@ -433,6 +446,7 @@ mod tests {
         let bank0 = Bank::new_with_paths(&genesis_block, Some(path.paths.clone()));
         bank0.freeze();
         let mut bank_forks = BankForks::new(0, bank0);
+        bank_forks.set_snapshot_config(true);
         for index in 0..10 {
             let bank = Bank::new_from_parent(&bank_forks[index], &Pubkey::default(), index + 1);
             let key1 = Keypair::new().pubkey();

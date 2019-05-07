@@ -104,7 +104,11 @@ impl Fullnode {
             ledger_signal_receiver,
             completed_slots_receiver,
             leader_schedule_cache,
-        ) = new_banks_from_blocktree(ledger_path, config.account_paths.clone(), config.use_snapshot);
+        ) = new_banks_from_blocktree(
+            ledger_path,
+            config.account_paths.clone(),
+            config.use_snapshot,
+        );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let exit = Arc::new(AtomicBool::new(false));
@@ -315,8 +319,14 @@ fn get_bank_forks(
             Err(_) => warn!("Failed to load from snapshot, fallback to load from ledger"),
         }
     }
-    blocktree_processor::process_blocktree(&genesis_block, &blocktree, account_paths)
-        .expect("process_blocktree failed")
+    let (mut bank_forks, bank_forks_info, leader_schedule_cache) =
+        blocktree_processor::process_blocktree(&genesis_block, &blocktree, account_paths)
+            .expect("process_blocktree failed");
+    if use_snapshot {
+        bank_forks.set_snapshot_config(true);
+        let _ = bank_forks.add_snapshot(0, 0);
+    }
+    (bank_forks, bank_forks_info, leader_schedule_cache)
 }
 
 pub fn new_banks_from_blocktree(

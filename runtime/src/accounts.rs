@@ -78,7 +78,7 @@ impl Drop for Accounts {
         if self.own_paths && (Arc::strong_count(&self.accounts_db) == 1) {
             let paths = get_paths_vec(&self.paths);
             paths.iter().for_each(|p| {
-                info!("drop called for {:?}", p);
+                debug!("drop called for {:?}", p);
                 let _ignored = remove_dir_all(p);
 
                 // it is safe to delete the parent
@@ -587,9 +587,9 @@ mod tests {
     use solana_sdk::instruction::CompiledInstruction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
+    use std::io::Cursor;
     use std::thread::{sleep, Builder};
     use std::time::{Duration, Instant};
-    use std::io::Cursor;
 
     fn load_accounts_with_fee(
         tx: Transaction,
