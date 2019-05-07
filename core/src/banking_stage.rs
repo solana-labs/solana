@@ -494,7 +494,7 @@ impl BankingStage {
         pending_txs: &[usize],
     ) -> Vec<usize> {
         let mut error_counters = ErrorCounters::default();
-        let mut mask = vec![Err(TransactionError::AccountNotFound); transactions.len()];
+        let mut mask = vec![Err(TransactionError::BlockhashNotFound); transactions.len()];
         pending_txs.iter().for_each(|x| mask[*x] = Ok(()));
 
         let result = bank.check_transactions(
