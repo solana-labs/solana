@@ -3,9 +3,9 @@ use serde::Serialize;
 use solana_sdk::client::SyncClient;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::loader_instruction;
+use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-
 use solana_sdk::system_instruction;
 
 pub fn load_program(
@@ -33,15 +33,17 @@ pub fn load_program(
     for chunk in program.chunks(chunk_size) {
         let instruction =
             loader_instruction::write(&program_pubkey, loader_id, offset, chunk.to_vec());
+        let message = Message::new_with_payer(vec![instruction], Some(&from_keypair.pubkey()));
         bank_client
-            .send_instruction(&program_keypair, instruction)
+            .send_message(&[from_keypair, &program_keypair], message)
             .unwrap();
         offset += chunk_size as u32;
     }
 
     let instruction = loader_instruction::finalize(&program_pubkey, loader_id);
+    let message = Message::new_with_payer(vec![instruction], Some(&from_keypair.pubkey()));
     bank_client
-        .send_instruction(&program_keypair, instruction)
+        .send_message(&[from_keypair, &program_keypair], message)
         .unwrap();
 
     program_pubkey
