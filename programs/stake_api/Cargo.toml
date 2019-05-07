@@ -18,9 +18,6 @@ solana-metrics = { path = "../../metrics", version = "0.15.0"  }
 solana-sdk = { path = "../../sdk", version = "0.15.0"  }
 solana-vote-api = { path = "../vote_api", version = "0.15.0"  }
 
-[dev-dependencies]
-solana-runtime = { path = "../../runtime", version = "0.15.0"  }
-
 [lib]
 name = "solana_stake_api"
 crate-type = ["lib"]

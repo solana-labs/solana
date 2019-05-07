@@ -22,14 +22,14 @@ pub enum StakeInstruction {
     RedeemVoteCredits,
 }
 
-pub fn create_account(from_id: &Pubkey, staker_id: &Pubkey, lamports: u64) -> Vec<Instruction> {
-    vec![system_instruction::create_account(
+pub fn create_account(from_id: &Pubkey, staker_id: &Pubkey, lamports: u64) -> Instruction {
+    system_instruction::create_account(
         from_id,
         staker_id,
         lamports,
         std::mem::size_of::<StakeState>() as u64,
         &id(),
-    )]
+    )
 }
 
 pub fn redeem_vote_credits(
@@ -104,13 +104,59 @@ mod tests {
     use bincode::serialize;
     use solana_sdk::account::Account;
 
+    fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
+        let mut accounts = vec![];
+        for _ in 0..instruction.accounts.len() {
+            accounts.push(Account::default());
+        }
+        {
+            let mut keyed_accounts: Vec<_> = instruction
+                .accounts
+                .iter()
+                .zip(accounts.iter_mut())
+                .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
+                .collect();
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut keyed_accounts,
+                &instruction.data,
+                0,
+            )
+        }
+    }
+
+    #[test]
+    fn test_stake_process_instruction() {
+        assert_eq!(
+            process_instruction(&create_account(&Pubkey::default(), &Pubkey::default(), 0)),
+            Err(InstructionError::InvalidInstructionData) // won't even decode ;)
+        );
+        assert_eq!(
+            process_instruction(&redeem_vote_credits(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                &Pubkey::default(),
+                &Pubkey::default()
+            )),
+            Err(InstructionError::InvalidAccountData),
+        );
+        assert_eq!(
+            process_instruction(&delegate_stake(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                &Pubkey::default()
+            )),
+            Err(InstructionError::InvalidAccountData),
+        );
+    }
+
     #[test]
     fn test_stake_process_instruction_decode_bail() {
         // these will not call stake_state, have bogus contents
 
         // gets the first check
         assert_eq!(
-            process_instruction(
+            super::process_instruction(
                 &Pubkey::default(),
                 &mut [KeyedAccount::new(
                     &Pubkey::default(),
@@ -123,12 +169,12 @@ mod tests {
             Err(InstructionError::InvalidInstructionData),
         );
 
-        // gets the check in delegate_stake
+        // gets the sub-check for number of args
         assert_eq!(
-            process_instruction(
+            super::process_instruction(
                 &Pubkey::default(),
                 &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                 ],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -137,9 +183,8 @@ mod tests {
             Err(InstructionError::InvalidInstructionData),
         );
 
-        // gets the check in redeem_vote_credits
         assert_eq!(
-            process_instruction(
+            super::process_instruction(
                 &Pubkey::default(),
                 &mut [
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
@@ -150,6 +195,37 @@ mod tests {
                 0,
             ),
             Err(InstructionError::InvalidInstructionData),
+        );
+
+        // gets the check in delegate_stake
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default()), // from
+                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default()),
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                ],
+                &serialize(&StakeInstruction::DelegateStake).unwrap(),
+                0,
+            ),
+            Err(InstructionError::InvalidAccountData),
+        );
+
+        // gets the check in redeem_vote_credits
+        assert_eq!(
+            super::process_instruction(
+                &Pubkey::default(),
+                &mut [
+                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default()), // from
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
+                ],
+                &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
+                0,
+            ),
+            Err(InstructionError::InvalidAccountData),
         );
     }
 

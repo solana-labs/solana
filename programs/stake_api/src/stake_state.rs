@@ -3,10 +3,9 @@
 //! * keep track of rewards
 //! * own mining pools
 
-//use crate::{check_id, id};
-//use log::*;
+use crate::id;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account::{Account, KeyedAccount};
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils::State;
 use solana_sdk::pubkey::Pubkey;
@@ -40,7 +39,7 @@ const CREDITS_PER_YEAR: f64 = (365f64 * 24f64 * 3600f64) * TICKS_PER_SECOND / TI
 const STAKE_REWARD_TARGET_RATE: f64 = 0.20;
 
 #[cfg(test)]
-const STAKE_GETS_PAID_EVERY_VOTE: u64 = 200_000_000; // if numbers above move, fix this
+const STAKE_GETS_PAID_EVERY_VOTE: u64 = 200_000_000; // if numbers above (TICKS_YEAR) move, fix this
 
 impl StakeState {
     pub fn calculate_rewards(
@@ -148,6 +147,24 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     }
 }
 
+// utility function, used by Bank, tests, genesis
+pub fn create_delegate_stake_account(
+    voter_id: &Pubkey,
+    vote_state: &VoteState,
+    lamports: u64,
+) -> Account {
+    let mut stake_account = Account::new(lamports, std::mem::size_of::<StakeState>(), &id());
+
+    stake_account
+        .set_state(&StakeState::Delegate {
+            voter_id: *voter_id,
+            credits_observed: vote_state.credits(),
+        })
+        .expect("set_state");
+
+    stake_account
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,6 +176,8 @@ mod tests {
 
     #[test]
     fn test_stake_delegate_stake() {
+        dbg!(std::env::var("CARGO_FOO").unwrap_or("not set".to_string()));
+
         let vote_keypair = Keypair::new();
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
@@ -176,6 +195,11 @@ mod tests {
 
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
 
+        {
+            let stake_state: StakeState = stake_keyed_account.state().unwrap();
+            assert_eq!(stake_state, StakeState::default());
+        }
+
         assert_eq!(
             stake_keyed_account.delegate_stake(&vote_keyed_account),
             Err(InstructionError::MissingRequiredSignature)
@@ -186,6 +210,13 @@ mod tests {
             .delegate_stake(&vote_keyed_account)
             .is_ok());
 
+        // verify that create_delegate_stake_account() matches the
+        //   resulting account from delegate_stake()
+        assert_eq!(
+            create_delegate_stake_account(&vote_pubkey, &vote_state, 0),
+            *stake_keyed_account.account,
+        );
+
         let stake_state: StakeState = stake_keyed_account.state().unwrap();
         assert_eq!(
             stake_state,
@@ -194,6 +225,7 @@ mod tests {
                 credits_observed: vote_state.credits()
             }
         );
+
         let stake_state = StakeState::MiningPool;
         stake_keyed_account.set_state(&stake_state).unwrap();
         assert!(stake_keyed_account
