@@ -491,7 +491,7 @@ impl BankingStage {
     fn filter_out_invalid_transactions(
         bank: &Bank,
         transactions: &[Transaction],
-        pending_txs: &Vec<usize>,
+        pending_txs: &[usize],
     ) -> Vec<usize> {
         let mut error_counters = ErrorCounters::default();
         let mut mask = vec![Err(TransactionError::AccountNotFound); transactions.len()];
@@ -524,7 +524,7 @@ impl BankingStage {
             &[Transaction],
             &'a Arc<Mutex<PohRecorder>>,
         ) -> Result<(usize, Vec<usize>)>,
-        FnFilterTxs: Fn(&'a Bank, &[Transaction], &Vec<usize>) -> Vec<usize>,
+        FnFilterTxs: Fn(&'a Bank, &[Transaction], &[usize]) -> Vec<usize>,
     {
         debug!("banking-stage-tx bank {}", bank.slot());
 
@@ -584,7 +584,7 @@ impl BankingStage {
             |x: &'a Bank, y: &[Transaction], z: &'a Arc<Mutex<PohRecorder>>| {
                 Self::process_transactions(x, y, z)
             },
-            |x: &'a Bank, y: &[Transaction], z: &Vec<usize>| {
+            |x: &'a Bank, y: &[Transaction], z: &[usize]| {
                 Self::filter_out_invalid_transactions(x, y, z)
             },
         )
@@ -1150,7 +1150,7 @@ mod tests {
                         y.len(),
                         vec![0, 1, 2, 3, 4, 5]
                     )),
-                    |_x: &Bank, _y: &[Transaction], _z: &Vec<usize>| vec![0, 1, 2, 3, 4, 5],
+                    |_x: &Bank, _y: &[Transaction], _z: &[usize]| vec![0, 1, 2, 3, 4, 5],
                 )
                 .ok(),
                 Some((6, 6, vec![0, 1, 2, 3, 4, 5]))
@@ -1166,7 +1166,7 @@ mod tests {
                         y.len(),
                         vec![0, 1, 2, 3, 4, 5]
                     )),
-                    |_x: &Bank, _y: &[Transaction], _z: &Vec<usize>| vec![0, 1, 2, 4, 5],
+                    |_x: &Bank, _y: &[Transaction], _z: &[usize]| vec![0, 1, 2, 4, 5],
                 )
                 .ok(),
                 Some((6, 6, vec![0, 1, 2, 4, 5]))
@@ -1182,7 +1182,7 @@ mod tests {
                         y.len() - 1,
                         vec![0, 1, 2, 4, 5]
                     )),
-                    |_x: &Bank, _y: &[Transaction], _z: &Vec<usize>| vec![0, 1, 2, 4, 5],
+                    |_x: &Bank, _y: &[Transaction], _z: &[usize]| vec![0, 1, 2, 4, 5],
                 )
                 .ok(),
                 Some((5, 6, vec![0, 1, 2, 4, 5]))
@@ -1198,7 +1198,7 @@ mod tests {
                         y.len() - 3,
                         vec![2, 4, 5]
                     )),
-                    |_x: &Bank, _y: &[Transaction], _z: &Vec<usize>| vec![2, 4, 5],
+                    |_x: &Bank, _y: &[Transaction], _z: &[usize]| vec![2, 4, 5],
                 )
                 .ok(),
                 Some((3, 6, vec![2, 4, 5]))
@@ -1214,7 +1214,7 @@ mod tests {
                         y.len() - 3,
                         vec![2, 4, 5]
                     )),
-                    |_x: &Bank, _y: &[Transaction], _z: &Vec<usize>| vec![2, 5],
+                    |_x: &Bank, _y: &[Transaction], _z: &[usize]| vec![2, 5],
                 )
                 .ok(),
                 Some((3, 6, vec![2, 5]))

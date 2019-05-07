@@ -556,7 +556,7 @@ impl Bank {
     fn check_refs(
         &self,
         txs: &[Transaction],
-        lock_results: &Vec<Result<()>>,
+        lock_results: &[Result<()>],
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
         txs.iter()
@@ -627,7 +627,7 @@ impl Bank {
     pub fn check_transactions(
         &self,
         txs: &[Transaction],
-        lock_results: &Vec<Result<()>>,
+        lock_results: &[Result<()>],
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
