@@ -1,7 +1,7 @@
 //! A stage to broadcast data from a leader node to validators
 //!
 use crate::blocktree::Blocktree;
-use crate::cluster_info::{ClusterInfo, ClusterInfoError, NEIGHBORHOOD_SIZE};
+use crate::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT};
 use crate::entry::EntrySlice;
 use crate::erasure::CodingGenerator;
 use crate::packet::index_blobs_with_genesis;
@@ -78,7 +78,7 @@ impl Broadcast {
         );
         inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
         // Layer 1, leader nodes are limited to the fanout size.
-        broadcast_table.truncate(NEIGHBORHOOD_SIZE);
+        broadcast_table.truncate(DATA_PLANE_FANOUT);
 
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
 

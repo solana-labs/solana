@@ -2,9 +2,7 @@
 
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
-use crate::cluster_info::{
-    compute_retransmit_peers, ClusterInfo, GROW_LAYER_CAPACITY, NEIGHBORHOOD_SIZE,
-};
+use crate::cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT};
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -45,9 +43,7 @@ fn retransmit(
     let (neighbors, children) = compute_retransmit_peers(
         &staking_utils::delegated_stakes_at_epoch(&r_bank, bank_epoch).unwrap(),
         cluster_info,
-        NEIGHBORHOOD_SIZE,
-        NEIGHBORHOOD_SIZE,
-        GROW_LAYER_CAPACITY,
+        DATA_PLANE_FANOUT,
     );
     for blob in &blobs {
         let leader = leader_schedule_cache

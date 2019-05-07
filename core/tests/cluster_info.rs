@@ -1,9 +1,7 @@
 use hashbrown::{HashMap, HashSet};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::prelude::*;
-use solana::cluster_info::{
-    compute_retransmit_peers, ClusterInfo, GROW_LAYER_CAPACITY, NEIGHBORHOOD_SIZE,
-};
+use solana::cluster_info::{compute_retransmit_peers, ClusterInfo};
 use solana::contact_info::ContactInfo;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::mpsc::channel;
@@ -28,7 +26,7 @@ fn find_insert_blob(id: &Pubkey, blob: i32, batches: &mut [Nodes]) {
     });
 }
 
-fn run_simulation(stakes: &[u64], fanout: usize, hood_size: usize) {
+fn run_simulation(stakes: &[u64], fanout: usize) {
     let num_threads = num_threads();
     // set timeout to 5 minutes
     let timeout = 60 * 5;
@@ -100,15 +98,17 @@ fn run_simulation(stakes: &[u64], fanout: usize, hood_size: usize) {
         > = HashMap::new();
         while remaining > 0 {
             for (id, (recv, r)) in batch.iter_mut() {
-                assert!(now.elapsed().as_secs() < timeout, "Timed out");
+                assert!(
+                    now.elapsed().as_secs() < timeout,
+                    "Timed out with {:?} remaining nodes",
+                    remaining
+                );
                 cluster.gossip.set_self(&*id);
                 if !mapped_peers.contains_key(id) {
                     let (neighbors, children) = compute_retransmit_peers(
                         &staked_nodes,
                         &Arc::new(RwLock::new(cluster.clone())),
                         fanout,
-                        hood_size,
-                        GROW_LAYER_CAPACITY,
                     );
                     let vec_children: Vec<_> = children
                         .iter()
@@ -172,30 +172,30 @@ fn run_simulation(stakes: &[u64], fanout: usize, hood_size: usize) {
 // Run with a single layer
 #[test]
 fn test_retransmit_small() {
-    let stakes: Vec<_> = (0..NEIGHBORHOOD_SIZE as u64).map(|i| i).collect();
-    run_simulation(&stakes, NEIGHBORHOOD_SIZE, NEIGHBORHOOD_SIZE);
+    let stakes: Vec<_> = (0..200).map(|i| i).collect();
+    run_simulation(&stakes, 200);
 }
 
 // Make sure at least 2 layers are used
 #[test]
 fn test_retransmit_medium() {
-    let num_nodes = NEIGHBORHOOD_SIZE as u64 * 10;
+    let num_nodes = 2000;
     let stakes: Vec<_> = (0..num_nodes).map(|i| i).collect();
-    run_simulation(&stakes, NEIGHBORHOOD_SIZE, NEIGHBORHOOD_SIZE);
+    run_simulation(&stakes, 200);
 }
 
 // Make sure at least 2 layers are used but with equal stakes
 #[test]
 fn test_retransmit_medium_equal_stakes() {
-    let num_nodes = NEIGHBORHOOD_SIZE as u64 * 10;
+    let num_nodes = 2000;
     let stakes: Vec<_> = (0..num_nodes).map(|_| 10).collect();
-    run_simulation(&stakes, NEIGHBORHOOD_SIZE, NEIGHBORHOOD_SIZE);
+    run_simulation(&stakes, 200);
 }
 
-// Scale down the network and make sure at least 3 layers are used
+// Scale down the network and make sure many layers are used
 #[test]
 fn test_retransmit_large() {
-    let num_nodes = NEIGHBORHOOD_SIZE as u64 * 20;
+    let num_nodes = 4000;
     let stakes: Vec<_> = (0..num_nodes).map(|i| i).collect();
-    run_simulation(&stakes, NEIGHBORHOOD_SIZE / 10, NEIGHBORHOOD_SIZE / 10);
+    run_simulation(&stakes, 2);
 }
