@@ -206,7 +206,7 @@ fn new_update_manifest(
         let mut transaction = Transaction::new_unsigned_instructions(vec![new_account]);
         transaction.sign(&[from_keypair], recect_blockhash);
 
-        rpc_client.send_and_confirm_transaction(&mut transaction, from_keypair)?;
+        rpc_client.send_and_confirm_transaction(&mut transaction, &[from_keypair])?;
     }
     Ok(())
 }
@@ -227,7 +227,7 @@ fn store_update_manifest(
     );
     let mut transaction = Transaction::new_unsigned_instructions(vec![new_store]);
     transaction.sign(&[from_keypair, update_manifest_keypair], recect_blockhash);
-    rpc_client.send_and_confirm_transaction(&mut transaction, from_keypair)?;
+    rpc_client.send_and_confirm_transaction(&mut transaction, &[from_keypair])?;
     Ok(())
 }
 

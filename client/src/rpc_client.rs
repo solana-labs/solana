@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_sdk::signature::{KeypairUtil, Signature};
 use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND};
 use solana_sdk::transaction::{self, Transaction, TransactionError};
 use std::error;
@@ -78,7 +78,7 @@ impl RpcClient {
     pub fn send_and_confirm_transaction<T: KeypairUtil>(
         &self,
         transaction: &mut Transaction,
-        signer: &T,
+        signer_keys: &[&T],
     ) -> Result<String, ClientError> {
         let mut send_retries = 5;
         loop {
@@ -106,7 +106,7 @@ impl RpcClient {
                     Ok(_) => return Ok(signature_str),
                     Err(TransactionError::AccountInUse) => {
                         // Fetch a new blockhash and re-sign the transaction before sending it again
-                        self.resign_transaction(transaction, signer)?;
+                        self.resign_transaction(transaction, signer_keys)?;
                         send_retries - 1
                     }
                     Err(_) => 0,
@@ -127,10 +127,10 @@ impl RpcClient {
         }
     }
 
-    pub fn send_and_confirm_transactions(
+    pub fn send_and_confirm_transactions<T: KeypairUtil>(
         &self,
         mut transactions: Vec<Transaction>,
-        signer: &Keypair,
+        signer_keys: &[&T],
     ) -> Result<(), Box<dyn error::Error>> {
         let mut send_retries = 5;
         loop {
@@ -192,7 +192,7 @@ impl RpcClient {
             transactions = transactions_signatures
                 .into_iter()
                 .map(|(mut transaction, _)| {
-                    transaction.sign(&[signer], blockhash);
+                    transaction.sign(signer_keys, blockhash);
                     transaction
                 })
                 .collect();
@@ -202,10 +202,10 @@ impl RpcClient {
     pub fn resign_transaction<T: KeypairUtil>(
         &self,
         tx: &mut Transaction,
-        signer_key: &T,
+        signer_keys: &[&T],
     ) -> Result<(), ClientError> {
         let blockhash = self.get_new_blockhash(&tx.message().recent_blockhash)?;
-        tx.sign(&[signer_key], blockhash);
+        tx.sign(signer_keys, blockhash);
         Ok(())
     }
 
@@ -710,15 +710,15 @@ mod tests {
         let blockhash = Hash::default();
         let mut tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
 
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &key);
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
         result.unwrap();
 
         let rpc_client = RpcClient::new_mock("account_in_use".to_string());
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &key);
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
         assert!(result.is_err());
 
         let rpc_client = RpcClient::new_mock("fails".to_string());
-        let result = rpc_client.send_and_confirm_transaction(&mut tx, &key);
+        let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
         assert!(result.is_err());
     }
 
@@ -735,7 +735,7 @@ mod tests {
         let prev_tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
         let mut tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
 
-        rpc_client.resign_transaction(&mut tx, &key).unwrap();
+        rpc_client.resign_transaction(&mut tx, &[&key]).unwrap();
 
         assert_ne!(prev_tx, tx);
         assert_ne!(prev_tx.signatures, tx.signatures);
