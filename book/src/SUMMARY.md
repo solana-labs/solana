@@ -57,6 +57,7 @@
   - [Cluster Test Framework](cluster-test-framework.md)
   - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
   - [Validator](validator-proposal.md)
+  - [Simple Payment and State Verification](simple-payment-and-state-verification.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
   - [Blocktree](blocktree.md)
