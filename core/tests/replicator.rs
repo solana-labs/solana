@@ -107,7 +107,7 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let config = ClusterConfig {
         fullnode_config,
-        num_replicators: num_replicators as u64,
+        num_replicators,
         node_stakes: vec![100; num_nodes],
         cluster_lamports: 10_000,
         ..ClusterConfig::default()
