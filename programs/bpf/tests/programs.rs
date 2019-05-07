@@ -40,7 +40,7 @@ mod bpf {
             let mut elf = Vec::new();
             file.read_to_end(&mut elf).unwrap();
 
-            let (genesis_block, alice_keypair) = GenesisBlock::new(50);
+            let (genesis_block, alice_keypair) = GenesisBlock::new(1_000_000);
             let bank = Bank::new(&genesis_block);
             let bank_client = BankClient::new(bank);
 
@@ -71,7 +71,7 @@ mod bpf {
                 let mut elf = Vec::new();
                 file.read_to_end(&mut elf).unwrap();
 
-                let (genesis_block, alice_keypair) = GenesisBlock::new(50);
+                let (genesis_block, alice_keypair) = GenesisBlock::new(1_000_000);
                 let bank = Bank::new(&genesis_block);
                 let bank_client = BankClient::new(bank);
 
@@ -116,7 +116,7 @@ mod bpf {
                 let mut elf = Vec::new();
                 file.read_to_end(&mut elf).unwrap();
 
-                let (genesis_block, alice_keypair) = GenesisBlock::new(50);
+                let (genesis_block, alice_keypair) = GenesisBlock::new(1_000_000);
                 let bank = Bank::new(&genesis_block);
                 let bank_client = BankClient::new(bank);
 

@@ -532,7 +532,7 @@ mod tests {
         ka: &Vec<(Pubkey, Account)>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        let fee_calculator = FeeCalculator::default();
+        let fee_calculator = FeeCalculator::new(0);
         load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
     }
 

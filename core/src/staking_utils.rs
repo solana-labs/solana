@@ -205,7 +205,7 @@ mod tests {
             &bank_voter,
             &mint_keypair.pubkey(),
             &bank,
-            499,
+            100,
         );
 
         // soonest slot that could be a new epoch is 1
@@ -224,7 +224,7 @@ mod tests {
         assert_eq!(result, vec![(1, None)]);
 
         let result: HashSet<_> = HashSet::from_iter(epoch_stakes_and_lockouts(&bank, epoch));
-        let expected: HashSet<_> = HashSet::from_iter(vec![(1, None), (499, None)]);
+        let expected: HashSet<_> = HashSet::from_iter(vec![(1, None), (100, None)]);
         assert_eq!(result, expected);
     }
 

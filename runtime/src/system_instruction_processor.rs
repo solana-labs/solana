@@ -280,6 +280,7 @@ mod tests {
 
     #[test]
     fn test_system_unsigned_transaction() {
+        let fee_calculator = solana_sdk::fee_calculator::FeeCalculator::default();
         let (genesis_block, alice_keypair) = GenesisBlock::new(100);
         let alice_pubkey = alice_keypair.pubkey();
         let mallory_keypair = Keypair::new();
@@ -310,7 +311,13 @@ mod tests {
                 .unwrap(),
             TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
         );
-        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 50);
-        assert_eq!(bank_client.get_balance(&mallory_pubkey).unwrap(), 50);
+        assert_eq!(
+            bank_client.get_balance(&alice_pubkey).unwrap(),
+            50 - fee_calculator.lamports_per_signature
+        );
+        assert_eq!(
+            bank_client.get_balance(&mallory_pubkey).unwrap(),
+            50 - fee_calculator.lamports_per_signature
+        );
     }
 }

@@ -148,6 +148,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
+    use solana_sdk::fee_calculator::FeeCalculator;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::message::Message;
@@ -272,7 +273,8 @@ mod tests {
 
     #[test]
     fn test_pay_on_date() {
-        let (bank, alice_keypair) = create_bank(2);
+        let fee_calculator = FeeCalculator::default();
+        let (bank, alice_keypair) = create_bank(2 + 3 * fee_calculator.lamports_per_signature);
         let bank_client = BankClient::new(bank);
         let alice_pubkey = alice_keypair.pubkey();
         let budget_pubkey = Pubkey::new_rand();
@@ -292,7 +294,10 @@ mod tests {
         bank_client
             .send_message(&[&alice_keypair], message)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+        assert_eq!(
+            bank_client.get_balance(&alice_pubkey).unwrap(),
+            1 + 2 * fee_calculator.lamports_per_signature
+        );
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 1);
 
         let contract_account = bank_client
@@ -315,7 +320,10 @@ mod tests {
                 InstructionError::CustomError(BudgetError::DestinationMissing as u32)
             )
         );
-        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
+        assert_eq!(
+            bank_client.get_balance(&alice_pubkey).unwrap(),
+            1 + fee_calculator.lamports_per_signature
+        );
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 1);
         assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 0);
 
@@ -341,7 +349,8 @@ mod tests {
 
     #[test]
     fn test_cancel_payment() {
-        let (bank, alice_keypair) = create_bank(3);
+        let fee_calculator = FeeCalculator::default();
+        let (bank, alice_keypair) = create_bank(3 + 2 * fee_calculator.lamports_per_signature);
         let bank_client = BankClient::new(bank);
         let alice_pubkey = alice_keypair.pubkey();
         let budget_pubkey = Pubkey::new_rand();
@@ -361,7 +370,10 @@ mod tests {
         bank_client
             .send_message(&[&alice_keypair], message)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 2);
+        assert_eq!(
+            bank_client.get_balance(&alice_pubkey).unwrap(),
+            2 + fee_calculator.lamports_per_signature
+        );
         assert_eq!(bank_client.get_balance(&budget_pubkey).unwrap(), 1);
 
         let contract_account = bank_client
@@ -395,7 +407,7 @@ mod tests {
         bank_client
             .send_instruction(&alice_keypair, instruction)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 2);
+        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 1);
         assert_eq!(bank_client.get_account_data(&budget_pubkey).unwrap(), None);
         assert_eq!(bank_client.get_account_data(&bob_pubkey).unwrap(), None);
     }

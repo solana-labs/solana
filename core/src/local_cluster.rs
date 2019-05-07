@@ -105,9 +105,9 @@ impl LocalCluster {
         cluster_lamports: u64,
         lamports_per_node: u64,
     ) -> Self {
-        let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
+        let node_stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
         let config = ClusterConfig {
-            node_stakes: stakes,
+            node_stakes,
             cluster_lamports,
             ..ClusterConfig::default()
         };
@@ -276,6 +276,7 @@ impl LocalCluster {
     }
 
     fn add_replicator(&mut self) {
+        let fee_calculator = solana_sdk::fee_calculator::FeeCalculator::default();
         let replicator_keypair = Arc::new(Keypair::new());
         let replicator_id = replicator_keypair.pubkey();
         let storage_keypair = Arc::new(Keypair::new());
@@ -289,7 +290,7 @@ impl LocalCluster {
             &client,
             &self.funding_keypair,
             &replicator_keypair.pubkey(),
-            1,
+            1 + fee_calculator.lamports_per_signature,
         );
         let replicator_node = Node::new_localhost_replicator(&replicator_id);
 
@@ -457,7 +458,7 @@ mod test {
     fn test_local_cluster_start_and_exit() {
         solana_logger::setup();
         let num_nodes = 1;
-        let cluster = LocalCluster::new_with_equal_stakes(num_nodes, 100, 3);
+        let cluster = LocalCluster::new_with_equal_stakes(num_nodes, 100, 10);
         assert_eq!(cluster.fullnodes.len(), num_nodes);
         assert_eq!(cluster.replicators.len(), 0);
     }
@@ -472,16 +473,16 @@ mod test {
         let num_replicators = 1;
         let config = ClusterConfig {
             fullnode_config,
-            num_replicators: 1,
-            node_stakes: vec![3; NUM_NODES],
-            cluster_lamports: 100,
+            num_replicators,
+            node_stakes: vec![100; NUM_NODES],
+            cluster_lamports: 1000,
             ticks_per_slot: 8,
             slots_per_epoch: MINIMUM_SLOT_LENGTH as u64,
             ..ClusterConfig::default()
         };
         let cluster = LocalCluster::new(&config);
         assert_eq!(cluster.fullnodes.len(), NUM_NODES);
-        assert_eq!(cluster.replicators.len(), num_replicators);
+        assert_eq!(cluster.replicators.len(), num_replicators as usize);
     }
 
 }

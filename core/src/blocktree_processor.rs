@@ -264,6 +264,7 @@ mod tests {
     use crate::blocktree::create_new_tmp_ledger;
     use crate::blocktree::tests::entries_to_blobs;
     use crate::entry::{create_ticks, next_entry, next_entry_mut, Entry};
+    use solana_sdk::fee_calculator::FeeCalculator;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::InstructionError;
@@ -570,12 +571,14 @@ mod tests {
     fn test_process_ledger_simple() {
         solana_logger::setup();
         let leader_pubkey = Pubkey::new_rand();
+        let fee_calculator = FeeCalculator::default();
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, &leader_pubkey, 50);
         let (ledger_path, mut last_entry_hash) = create_new_tmp_ledger!(&genesis_block);
         debug!("ledger_path: {:?}", ledger_path);
 
         let mut entries = vec![];
         let blockhash = genesis_block.hash();
+        let mut lamports_transfered = 0;
         for _ in 0..3 {
             // Transfer one token from the mint to a random account
             let keypair = Keypair::new();
@@ -586,6 +589,8 @@ mod tests {
                 blockhash,
                 0,
             );
+            lamports_transfered += 1 + fee_calculator.lamports_per_signature;
+
             let entry = Entry::new(&last_entry_hash, 1, vec![tx]);
             last_entry_hash = entry.hash;
             entries.push(entry);
@@ -627,7 +632,10 @@ mod tests {
         );
 
         let bank = bank_forks[1].clone();
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 50 - 3);
+        assert_eq!(
+            bank.get_balance(&mint_keypair.pubkey()),
+            50 - lamports_transfered,
+        );
         assert_eq!(bank.tick_height(), 2 * genesis_block.ticks_per_slot - 1);
         assert_eq!(bank.last_blockhash(), entries.last().unwrap().hash);
     }
@@ -700,6 +708,7 @@ mod tests {
 
     #[test]
     fn test_process_entries_2_txes_collision() {
+        let fee_calculator = FeeCalculator::default();
         let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
@@ -707,8 +716,22 @@ mod tests {
         let keypair3 = Keypair::new();
 
         // fund: put 4 in each of 1 and 2
-        assert_matches!(bank.transfer(4, &mint_keypair, &keypair1.pubkey()), Ok(_));
-        assert_matches!(bank.transfer(4, &mint_keypair, &keypair2.pubkey()), Ok(_));
+        assert_matches!(
+            bank.transfer(
+                4 + 2 * fee_calculator.lamports_per_signature,
+                &mint_keypair,
+                &keypair1.pubkey()
+            ),
+            Ok(_)
+        );
+        assert_matches!(
+            bank.transfer(
+                4 + fee_calculator.lamports_per_signature,
+                &mint_keypair,
+                &keypair2.pubkey()
+            ),
+            Ok(_)
+        );
 
         // construct an Entry whose 2nd transaction would cause a lock conflict with previous entry
         let entry_1_to_mint = next_entry(
@@ -756,6 +779,7 @@ mod tests {
 
     #[test]
     fn test_process_entries_2_txes_collision_and_error() {
+        let fee_calculator = FeeCalculator::default();
         let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
@@ -764,7 +788,14 @@ mod tests {
         let keypair4 = Keypair::new();
 
         // fund: put 4 in each of 1 and 2
-        assert_matches!(bank.transfer(4, &mint_keypair, &keypair1.pubkey()), Ok(_));
+        assert_matches!(
+            bank.transfer(
+                4 + fee_calculator.lamports_per_signature,
+                &mint_keypair,
+                &keypair1.pubkey()
+            ),
+            Ok(_)
+        );
         assert_matches!(bank.transfer(4, &mint_keypair, &keypair2.pubkey()), Ok(_));
         assert_matches!(bank.transfer(4, &mint_keypair, &keypair4.pubkey()), Ok(_));
 
@@ -838,6 +869,7 @@ mod tests {
 
     #[test]
     fn test_process_entries_2_entries_par() {
+        let fee_calculator = FeeCalculator::default();
         let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
@@ -849,7 +881,7 @@ mod tests {
         let tx = system_transaction::create_user_account(
             &mint_keypair,
             &keypair1.pubkey(),
-            1,
+            1 + fee_calculator.lamports_per_signature,
             bank.last_blockhash(),
             0,
         );
@@ -857,7 +889,7 @@ mod tests {
         let tx = system_transaction::create_user_account(
             &mint_keypair,
             &keypair2.pubkey(),
-            1,
+            1 + fee_calculator.lamports_per_signature,
             bank.last_blockhash(),
             0,
         );
@@ -889,6 +921,7 @@ mod tests {
 
     #[test]
     fn test_process_entries_2_entries_tick() {
+        let fee_calculator = FeeCalculator::default();
         let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
@@ -900,7 +933,7 @@ mod tests {
         let tx = system_transaction::create_user_account(
             &mint_keypair,
             &keypair1.pubkey(),
-            1,
+            1 + fee_calculator.lamports_per_signature,
             bank.last_blockhash(),
             0,
         );
@@ -908,7 +941,7 @@ mod tests {
         let tx = system_transaction::create_user_account(
             &mint_keypair,
             &keypair2.pubkey(),
-            1,
+            1 + fee_calculator.lamports_per_signature,
             bank.last_blockhash(),
             0,
         );

@@ -395,7 +395,7 @@ pub fn new_fullnode_for_tests() -> (Fullnode, ContactInfo, Keypair, String) {
     let contact_info = node.info.clone();
 
     let (mut genesis_block, mint_keypair) =
-        GenesisBlock::new_with_leader(10_000, &contact_info.id, 42);
+        GenesisBlock::new_with_leader(1_000_000, &contact_info.id, 10_000);
     genesis_block
         .native_instruction_processors
         .push(("solana_budget_program".to_string(), solana_budget_api::id()));

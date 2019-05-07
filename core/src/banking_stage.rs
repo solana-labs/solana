@@ -839,10 +839,13 @@ mod tests {
     #[test]
     fn test_banking_stage_entryfication() {
         solana_logger::setup();
+        let fee_calculator = solana_sdk::fee_calculator::FeeCalculator::default();
+
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new(2 + 2 * fee_calculator.lamports_per_signature);
         let (verified_sender, verified_receiver) = channel();
 
         // Process a batch that includes a transaction that receives two lamports.
@@ -850,7 +853,7 @@ mod tests {
         let tx = system_transaction::create_user_account(
             &mint_keypair,
             &alice.pubkey(),
-            2,
+            2 + fee_calculator.lamports_per_signature,
             genesis_block.hash(),
             0,
         );

@@ -95,8 +95,8 @@ fn test_leader_failure_4() {
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.rpc_config.enable_fullnode_exit = true;
     let config = ClusterConfig {
-        cluster_lamports: 10_000,
-        node_stakes: vec![100; 4],
+        cluster_lamports: 1_000_000_000,
+        node_stakes: vec![1_000_000; 4],
         fullnode_config: fullnode_config.clone(),
         ..ClusterConfig::default()
     };

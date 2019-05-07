@@ -370,11 +370,12 @@ mod tests {
 
     #[test]
     fn test_next_leader_slot_next_epoch() {
+        let fee_calculator = solana_sdk::fee_calculator::FeeCalculator::default();
         let pubkey = Pubkey::new_rand();
         let (mut genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
-            2 * BOOTSTRAP_LEADER_LAMPORTS,
+            10_000,
             &pubkey,
-            BOOTSTRAP_LEADER_LAMPORTS,
+            BOOTSTRAP_LEADER_LAMPORTS + 3 * fee_calculator.lamports_per_signature,
         );
         genesis_block.epoch_warmup = false;
 
@@ -383,7 +384,7 @@ mod tests {
         let delegate_id = Pubkey::new_rand();
 
         // Create new vote account
-        let new_voting_keypair = Keypair::new();
+        let new_voting_keypair = dbg!(Keypair::new());
         new_vote_account(
             &mint_keypair,
             &new_voting_keypair,

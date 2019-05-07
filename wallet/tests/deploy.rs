@@ -31,7 +31,7 @@ fn test_wallet_deploy_program() {
     let mut config = WalletConfig::default();
     config.drone_port = drone_addr.port();
     config.json_rpc_url = format!("http://{}:{}", leader_data.rpc.ip(), leader_data.rpc.port());
-    config.command = WalletCommand::Airdrop(50);
+    config.command = WalletCommand::Airdrop(1_000);
     process_command(&config).unwrap();
 
     config.command = WalletCommand::Deploy(pathbuf.to_str().unwrap().to_string());

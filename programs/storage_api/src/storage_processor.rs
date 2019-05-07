@@ -83,6 +83,7 @@ mod tests {
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::account::{create_keyed_accounts, Account};
     use solana_sdk::client::SyncClient;
+    use solana_sdk::fee_calculator::FeeCalculator;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::instruction::Instruction;
@@ -312,6 +313,7 @@ mod tests {
 
     #[test]
     fn test_bank_storage() {
+        let fee_calculator = FeeCalculator::default();
         let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
         let mint_pubkey = mint_keypair.pubkey();
         let replicator_keypair = Keypair::new();
@@ -334,15 +336,20 @@ mod tests {
         let ix = system_instruction::create_account(
             &mint_pubkey,
             &replicator_pubkey,
-            1,
+            1 + fee_calculator.lamports_per_signature,
             4 * 1024,
             &id(),
         );
 
         bank_client.send_instruction(&mint_keypair, ix).unwrap();
 
-        let ix =
-            system_instruction::create_account(&mint_pubkey, &validator_pubkey, 1, 4 * 1024, &id());
+        let ix = system_instruction::create_account(
+            &mint_pubkey,
+            &validator_pubkey,
+            1 + fee_calculator.lamports_per_signature,
+            4 * 1024,
+            &id(),
+        );
 
         bank_client.send_instruction(&mint_keypair, ix).unwrap();
 

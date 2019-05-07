@@ -1,8 +1,15 @@
 use crate::message::Message;
 
-#[derive(Default)]
 pub struct FeeCalculator {
     pub lamports_per_signature: u64,
+}
+
+impl Default for FeeCalculator {
+    fn default() -> Self {
+        Self {
+            lamports_per_signature: 1,
+        }
+    }
 }
 
 impl FeeCalculator {

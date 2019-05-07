@@ -363,6 +363,7 @@ mod tests {
 
     #[test]
     fn test_account_subscribe() {
+        let fee_calculator = solana_sdk::fee_calculator::FeeCalculator::default();
         let (mut genesis_block, alice) = GenesisBlock::new(10_000);
 
         // This test depends on the budget program
@@ -393,7 +394,7 @@ mod tests {
         let tx = system_transaction::create_user_account(
             &alice,
             &contract_funds.pubkey(),
-            51,
+            51 + fee_calculator.lamports_per_signature,
             blockhash,
             0,
         );

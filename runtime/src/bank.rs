@@ -1110,7 +1110,9 @@ mod tests {
 
     #[test]
     fn test_one_source_two_tx_one_batch() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let fee_calculator = FeeCalculator::default();
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new(1 + fee_calculator.lamports_per_signature);
         let key1 = Pubkey::new_rand();
         let key2 = Pubkey::new_rand();
         let bank = Bank::new(&genesis_block);
@@ -1133,7 +1135,9 @@ mod tests {
 
     #[test]
     fn test_one_tx_two_out_atomic_fail() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let fee_calculator = FeeCalculator::default();
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new(1 + fee_calculator.lamports_per_signature);
         let key1 = Pubkey::new_rand();
         let key2 = Pubkey::new_rand();
         let bank = Bank::new(&genesis_block);
@@ -1158,7 +1162,9 @@ mod tests {
 
     #[test]
     fn test_one_tx_two_out_atomic_pass() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let fee_calculator = FeeCalculator::default();
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new(2 + fee_calculator.lamports_per_signature);
         let key1 = Pubkey::new_rand();
         let key2 = Pubkey::new_rand();
         let bank = Bank::new(&genesis_block);
@@ -1224,6 +1230,7 @@ mod tests {
 
     #[test]
     fn test_insufficient_funds() {
+        let fee_calculator = FeeCalculator::default();
         let (genesis_block, mint_keypair) = GenesisBlock::new(11_000);
         let bank = Bank::new(&genesis_block);
         let pubkey = Pubkey::new_rand();
@@ -1240,7 +1247,10 @@ mod tests {
         assert_eq!(bank.transaction_count(), 1);
 
         let mint_pubkey = mint_keypair.pubkey();
-        assert_eq!(bank.get_balance(&mint_pubkey), 10_000);
+        assert_eq!(
+            bank.get_balance(&mint_pubkey),
+            10_000 - 2 * fee_calculator.lamports_per_signature
+        );
         assert_eq!(bank.get_balance(&pubkey), 1_000);
     }
 
@@ -1364,7 +1374,9 @@ mod tests {
 
     #[test]
     fn test_debits_before_credits() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let fee_calculator = FeeCalculator::default();
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new(2 + fee_calculator.lamports_per_signature);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
         let tx0 = system_transaction::create_user_account(
@@ -1402,7 +1414,9 @@ mod tests {
 
     #[test]
     fn test_interleaving_locks() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(3);
+        let fee_calculator = FeeCalculator::default();
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new(3 + 3 * fee_calculator.lamports_per_signature);
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let bob = Keypair::new();
@@ -1472,12 +1486,22 @@ mod tests {
 
     #[test]
     fn test_bank_pay_to_self() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let fee_calculator = FeeCalculator::default();
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new(1 + 2 * fee_calculator.lamports_per_signature);
         let key1 = Keypair::new();
         let bank = Bank::new(&genesis_block);
 
-        bank.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
-        assert_eq!(bank.get_balance(&key1.pubkey()), 1);
+        bank.transfer(
+            1 + fee_calculator.lamports_per_signature,
+            &mint_keypair,
+            &key1.pubkey(),
+        )
+        .unwrap();
+        assert_eq!(
+            bank.get_balance(&key1.pubkey()),
+            1 + fee_calculator.lamports_per_signature
+        );
         let tx = system_transaction::transfer(&key1, &key1.pubkey(), 1, genesis_block.hash(), 0);
         let res = bank.process_transactions(&vec![tx.clone()]);
         assert_eq!(res.len(), 1);
@@ -1525,13 +1549,20 @@ mod tests {
     /// Verifies that last ids and accounts are correctly referenced from parent
     #[test]
     fn test_bank_parent_account_spend() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let fee_calculator = FeeCalculator::default();
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new(2 + fee_calculator.lamports_per_signature);
         let key1 = Keypair::new();
         let key2 = Keypair::new();
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let tx =
-            system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        let tx = system_transaction::transfer(
+            &mint_keypair,
+            &key1.pubkey(),
+            1 + fee_calculator.lamports_per_signature,
+            genesis_block.hash(),
+            0,
+        );
         assert_eq!(parent.process_transaction(&tx), Ok(()));
         let bank = new_from_parent(&parent);
         let tx = system_transaction::transfer(&key1, &key2.pubkey(), 1, genesis_block.hash(), 0);
@@ -1586,17 +1617,24 @@ mod tests {
     #[test]
     fn test_bank_squash() {
         solana_logger::setup();
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let fee_calculator = FeeCalculator::default();
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new(2 + fee_calculator.lamports_per_signature);
         let key1 = Keypair::new();
         let key2 = Keypair::new();
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let tx_transfer_mint_to_1 =
-            system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash(), 0);
+        let tx_transfer_mint_to_1 = system_transaction::transfer(
+            &mint_keypair,
+            &key1.pubkey(),
+            1 + fee_calculator.lamports_per_signature,
+            genesis_block.hash(),
+            0,
+        );
         trace!("parent process tx ");
         assert_eq!(parent.process_transaction(&tx_transfer_mint_to_1), Ok(()));
         trace!("done parent process tx ");
-        assert_eq!(parent.transaction_count(), 1);
+        assert_eq!(parent.transaction_count(), 1,);
         assert_eq!(
             parent.get_signature_status(&tx_transfer_mint_to_1.signatures[0]),
             Some(Ok(()))

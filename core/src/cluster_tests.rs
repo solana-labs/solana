@@ -155,10 +155,12 @@ pub fn kill_entry_and_spend_and_verify_rest(
     assert!(cluster_nodes.len() >= nodes);
     let client = create_client(entry_point_info.client_facing_addr(), FULLNODE_PORT_RANGE);
     let first_two_epoch_slots = MINIMUM_SLOT_LENGTH * 3;
-    info!("sleeping for 2 leader fortnights");
-    sleep(Duration::from_millis(
-        slot_millis * first_two_epoch_slots as u64,
-    ));
+    let two_leader_fortnights = slot_millis * first_two_epoch_slots as u64;
+    info!(
+        "sleeping for 2 leader fortnights: {}ms",
+        two_leader_fortnights
+    );
+    sleep(Duration::from_millis(two_leader_fortnights));
     info!("done sleeping for first 2 warmup epochs");
     info!("killing entry point");
     assert!(client.fullnode_exit().unwrap());
