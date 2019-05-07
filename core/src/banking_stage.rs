@@ -16,6 +16,7 @@ use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use itertools::Itertools;
 use solana_metrics::counter::Counter;
+use solana_runtime::accounts_db::ErrorCounters;
 use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::pubkey::Pubkey;
@@ -487,15 +488,43 @@ impl BankingStage {
         Ok((chunk_start, unprocessed_txs))
     }
 
-    fn process_received_packets_using_closure<'a, F>(
+    fn filter_out_invalid_transactions(
+        bank: &Bank,
+        transactions: &[Transaction],
+        pending_txs: &Vec<usize>,
+    ) -> Vec<usize> {
+        let mut error_counters = ErrorCounters::default();
+        let mut mask = vec![Err(TransactionError::AccountNotFound); transactions.len()];
+        pending_txs.iter().for_each(|x| mask[*x] = Ok(()));
+
+        let result = bank.check_transactions(
+            transactions,
+            &mask,
+            MAX_RECENT_BLOCKHASHES / 2,
+            &mut error_counters,
+        );
+        result
+            .iter()
+            .enumerate()
+            .filter_map(|(index, x)| if x.is_ok() { Some(index) } else { None })
+            .collect_vec()
+    }
+
+    fn process_received_packets_using_closure<'a, FnProcessTxs, FnFilterTxs>(
         bank: &'a Arc<Bank>,
         poh: &'a Arc<Mutex<PohRecorder>>,
         transactions: Vec<Option<Transaction>>,
         indexes: &[usize],
-        f: F,
+        fn_proc: FnProcessTxs,
+        fn_filter: FnFilterTxs,
     ) -> Result<(usize, usize, Vec<usize>)>
     where
-        F: Fn(&'a Bank, &[Transaction], &'a Arc<Mutex<PohRecorder>>) -> Result<(usize, Vec<usize>)>,
+        FnProcessTxs: Fn(
+            &'a Bank,
+            &[Transaction],
+            &'a Arc<Mutex<PohRecorder>>,
+        ) -> Result<(usize, Vec<usize>)>,
+        FnFilterTxs: Fn(&'a Bank, &[Transaction], &Vec<usize>) -> Vec<usize>,
     {
         debug!("banking-stage-tx bank {}", bank.slot());
 
@@ -521,9 +550,10 @@ impl BankingStage {
 
         let tx_len = verified_transactions.len();
 
-        let (processed, unprocessed_txs) = f(bank, &verified_transactions, poh)?;
+        let (processed, unprocessed_txs) = fn_proc(bank, &verified_transactions, poh)?;
+        let valid_unprocessed_txs = fn_filter(bank, &verified_transactions, &unprocessed_txs);
 
-        let unprocessed_indexes: Vec<_> = unprocessed_txs
+        let unprocessed_indexes: Vec<_> = valid_unprocessed_txs
             .iter()
             .map(|x| verified_indexes[*x])
             .collect();
@@ -553,6 +583,9 @@ impl BankingStage {
             &packet_indexes,
             |x: &'a Bank, y: &[Transaction], z: &'a Arc<Mutex<PohRecorder>>| {
                 Self::process_transactions(x, y, z)
+            },
+            |x: &'a Bank, y: &[Transaction], z: &Vec<usize>| {
+                Self::filter_out_invalid_transactions(x, y, z)
             },
         )
     }
@@ -1117,6 +1150,7 @@ mod tests {
                         y.len(),
                         vec![0, 1, 2, 3, 4, 5]
                     )),
+                    |_x: &Bank, _y: &[Transaction], _z: &Vec<usize>| vec![0, 1, 2, 3, 4, 5],
                 )
                 .ok(),
                 Some((6, 6, vec![0, 1, 2, 3, 4, 5]))
@@ -1129,9 +1163,26 @@ mod tests {
                     transactions.clone(),
                     &vec![0, 1, 2, 3, 4, 5],
                     |_x: &Bank, y: &[Transaction], _z: &Arc<Mutex<PohRecorder>>| Ok((
+                        y.len(),
+                        vec![0, 1, 2, 3, 4, 5]
+                    )),
+                    |_x: &Bank, _y: &[Transaction], _z: &Vec<usize>| vec![0, 1, 2, 4, 5],
+                )
+                .ok(),
+                Some((6, 6, vec![0, 1, 2, 4, 5]))
+            );
+
+            assert_eq!(
+                BankingStage::process_received_packets_using_closure(
+                    &bank,
+                    &poh_recorder,
+                    transactions.clone(),
+                    &vec![0, 1, 2, 3, 4, 5],
+                    |_x: &Bank, y: &[Transaction], _z: &Arc<Mutex<PohRecorder>>| Ok((
                         y.len() - 1,
                         vec![0, 1, 2, 4, 5]
                     )),
+                    |_x: &Bank, _y: &[Transaction], _z: &Vec<usize>| vec![0, 1, 2, 4, 5],
                 )
                 .ok(),
                 Some((5, 6, vec![0, 1, 2, 4, 5]))
@@ -1147,9 +1198,26 @@ mod tests {
                         y.len() - 3,
                         vec![2, 4, 5]
                     )),
+                    |_x: &Bank, _y: &[Transaction], _z: &Vec<usize>| vec![2, 4, 5],
                 )
                 .ok(),
                 Some((3, 6, vec![2, 4, 5]))
+            );
+
+            assert_eq!(
+                BankingStage::process_received_packets_using_closure(
+                    &bank,
+                    &poh_recorder,
+                    transactions.clone(),
+                    &vec![0, 1, 2, 3, 4, 5],
+                    |_x: &Bank, y: &[Transaction], _z: &Arc<Mutex<PohRecorder>>| Ok((
+                        y.len() - 3,
+                        vec![2, 4, 5]
+                    )),
+                    |_x: &Bank, _y: &[Transaction], _z: &Vec<usize>| vec![2, 5],
+                )
+                .ok(),
+                Some((3, 6, vec![2, 5]))
             );
         }
         Blocktree::destroy(&ledger_path).unwrap();
