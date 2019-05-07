@@ -147,7 +147,6 @@ fn test_replicator_startup_2_nodes() {
 #[test]
 fn test_replicator_startup_leader_hang() {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use std::time::Duration;
 
     solana_logger::setup();
     info!("starting replicator test");
@@ -172,7 +171,6 @@ fn test_replicator_startup_leader_hang() {
             leader_info,
             replicator_keypair,
             storage_keypair,
-            Some(Duration::from_secs(3)),
         );
 
         assert!(replicator_res.is_err());
@@ -207,7 +205,6 @@ fn test_replicator_startup_ledger_hang() {
         cluster.entry_point_info.clone(),
         bad_keys,
         storage_keypair,
-        Some(Duration::from_secs(3)),
     );
 
     assert!(replicator_res.is_err());
