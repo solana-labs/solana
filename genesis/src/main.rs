@@ -7,6 +7,7 @@ use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{read_keypair, KeypairUtil};
 use solana_sdk::system_program;
+use solana_stake_api::stake_state;
 use solana_vote_api::vote_state;
 use std::error;
 
@@ -63,6 +64,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("BOOTSTRAP VOTE KEYPAIR")
                 .takes_value(true)
                 .required(true)
+                .help("Path to file containing the bootstrap leader's voting keypair"),
+        )
+        .arg(
+            Arg::with_name("bootstrap_stake_keypair_file")
+                .short("k")
+                .long("bootstrap-stake-keypair")
+                .value_name("BOOTSTRAP STAKE KEYPAIR")
+                .takes_value(true)
+                .required(true)
                 .help("Path to file containing the bootstrap leader's staking keypair"),
         )
         .arg(
@@ -86,35 +96,51 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let bootstrap_leader_keypair_file = matches.value_of("bootstrap_leader_keypair_file").unwrap();
     let bootstrap_vote_keypair_file = matches.value_of("bootstrap_vote_keypair_file").unwrap();
-    let ledger_path = matches.value_of("ledger_path").unwrap();
+    let bootstrap_stake_keypair_file = matches.value_of("bootstrap_stake_keypair_file").unwrap();
     let mint_keypair_file = matches.value_of("mint_keypair_file").unwrap();
+    let ledger_path = matches.value_of("ledger_path").unwrap();
     let lamports = value_t_or_exit!(matches, "lamports", u64);
-    let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
+    let bootstrap_leader_stake_lamports =
+        value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
 
     let bootstrap_leader_keypair = read_keypair(bootstrap_leader_keypair_file)?;
     let bootstrap_vote_keypair = read_keypair(bootstrap_vote_keypair_file)?;
+    let bootstrap_stake_keypair = read_keypair(bootstrap_stake_keypair_file)?;
     let mint_keypair = read_keypair(mint_keypair_file)?;
+
+    // TODO: de-duplicate the stake once passive staking
+    //  is fully implemented
+    //  https://github.com/solana-labs/solana/issues/4213
+    let (vote_account, vote_state) = vote_state::create_bootstrap_leader_account(
+        &bootstrap_vote_keypair.pubkey(),
+        &bootstrap_leader_keypair.pubkey(),
+        0,
+        bootstrap_leader_stake_lamports,
+    );
 
     let mut genesis_block = GenesisBlock::new(
         &bootstrap_leader_keypair.pubkey(),
         &[
+            // the mint
             (
                 mint_keypair.pubkey(),
-                Account::new(
-                    lamports - bootstrap_leader_lamports,
-                    0,
-                    &system_program::id(),
-                ),
+                Account::new(lamports, 0, &system_program::id()),
             ),
+            // node needs an account to issue votes from
             (
-                bootstrap_vote_keypair.pubkey(),
-                vote_state::create_bootstrap_leader_account(
+                bootstrap_leader_keypair.pubkey(),
+                Account::new(1, 0, &system_program::id()),
+            ),
+            // where votes go to
+            (bootstrap_vote_keypair.pubkey(), vote_account),
+            // passive bootstrap leader stake, duplicates above temporarily
+            (
+                bootstrap_stake_keypair.pubkey(),
+                stake_state::create_delegate_stake_account(
                     &bootstrap_vote_keypair.pubkey(),
-                    &bootstrap_leader_keypair.pubkey(),
-                    0,
-                    bootstrap_leader_lamports,
-                )
-                .0,
+                    &vote_state,
+                    bootstrap_leader_stake_lamports,
+                ),
             ),
         ],
         &[

@@ -41,6 +41,7 @@ dataDir=$PWD/target/"$(basename "$0" .sh)"
 set -x
 solana-keygen -o "$dataDir"/config/leader-keypair.json
 solana-keygen -o "$dataDir"/config/leader-vote-account-keypair.json
+solana-keygen -o "$dataDir"/config/leader-stake-account-keypair.json
 solana-keygen -o "$dataDir"/config/drone-keypair.json
 
 leaderVoteAccountPubkey=$(\
@@ -56,6 +57,7 @@ solana-genesis \
   --mint "$dataDir"/config/drone-keypair.json \
   --bootstrap-leader-keypair "$dataDir"/config/leader-keypair.json \
   --bootstrap-vote-keypair "$dataDir"/config/leader-vote-account-keypair.json \
+  --bootstrap-stake-keypair "$dataDir"/config/leader-stake-account-keypair.json \
   --ledger "$dataDir"/ledger
 
 solana-drone --keypair "$dataDir"/config/drone-keypair.json &
