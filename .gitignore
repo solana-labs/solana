@@ -1,13 +1,10 @@
 /book/html/
 /book/src/img/
 /book/src/tests.ok
-/core/target/
 /farf/
-/ledger-tool/target/
 /solana-release/
 solana-release.tar.bz2
 /target/
-/wallet/target/
 
 **/*.rs.bk
 .cargo
