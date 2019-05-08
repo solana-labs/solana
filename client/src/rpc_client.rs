@@ -4,7 +4,6 @@ use crate::mock_rpc_client_request::MockRpcClientRequest;
 use crate::rpc_client_request::RpcClientRequest;
 use crate::rpc_request::RpcRequest;
 use bincode::serialize;
-use bs58;
 use log::*;
 use serde_json::{json, Value};
 use solana_sdk::account::Account;
@@ -255,53 +254,40 @@ impl RpcClient {
     /// Request the transaction count.  If the response packet is dropped by the network,
     /// this method will try again 5 times.
     pub fn get_transaction_count(&self) -> io::Result<u64> {
-        debug!("get_transaction_count");
+        let response = self
+            .client
+            .send(&RpcRequest::GetTransactionCount, None, 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetTransactionCount request failure: {:?}", err),
+                )
+            })?;
 
-        let mut num_retries = 5;
-        while num_retries > 0 {
-            let response = self.client.send(&RpcRequest::GetTransactionCount, None, 0);
-
-            match response {
-                Ok(value) => {
-                    debug!("transaction_count response: {:?}", value);
-                    if let Some(transaction_count) = value.as_u64() {
-                        return Ok(transaction_count);
-                    }
-                }
-                Err(err) => {
-                    debug!("transaction_count failed: {:?}", err);
-                }
-            }
-            num_retries -= 1;
-        }
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Unable to get transaction count, too many retries",
-        ))?
+        serde_json::from_value(response).map_err(|error| {
+            debug!("ParseError: get_transaction_count: {}", error);
+            io::Error::new(io::ErrorKind::Other, "GetTransactionCount parse failure")
+        })
     }
 
     pub fn get_recent_blockhash(&self) -> io::Result<Hash> {
-        let mut num_retries = 5;
-        while num_retries > 0 {
-            match self.client.send(&RpcRequest::GetRecentBlockhash, None, 0) {
-                Ok(value) => {
-                    if let Some(blockhash_str) = value.as_str() {
-                        let blockhash_vec = bs58::decode(blockhash_str)
-                            .into_vec()
-                            .expect("bs58::decode");
-                        return Ok(Hash::new(&blockhash_vec));
-                    }
-                }
-                Err(err) => {
-                    debug!("retry_get_recent_blockhash failed: {:?}", err);
-                }
-            }
-            num_retries -= 1;
-        }
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Unable to get recent blockhash, too many retries",
-        ))
+        let response = self
+            .client
+            .send(&RpcRequest::GetRecentBlockhash, None, 0)
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetRecentBlockhash request failure: {:?}", err),
+                )
+            })?;
+
+        response
+            .as_str()
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::Other, "GetRecentBlockhash parse failure")
+            })?
+            .parse()
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "GetRecentBlockhash parse failure"))
     }
 
     pub fn get_new_blockhash(&self, blockhash: &Hash) -> io::Result<Hash> {
