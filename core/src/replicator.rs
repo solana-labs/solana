@@ -296,7 +296,7 @@ impl Replicator {
         info!("waiting for ledger download");
         self.thread_handles.pop().unwrap().join().unwrap();
         self.encrypt_ledger()
-            .expect("ledger encrypt not successful");;
+            .expect("ledger encrypt not successful");
         loop {
             self.create_sampling_offsets();
             if self.sample_file_to_create_mining_hash().is_err() {
