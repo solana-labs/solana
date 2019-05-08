@@ -191,10 +191,10 @@ impl WindowService {
             exit,
             repair_socket,
             cluster_info.clone(),
+            bank_forks.clone(),
             repair_slot_range,
         );
         let exit = exit.clone();
-        let bank_forks = bank_forks.clone();
         let leader_schedule_cache = leader_schedule_cache.clone();
         let hash = *genesis_blockhash;
         let t_window = Builder::new()
