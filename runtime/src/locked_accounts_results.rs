@@ -53,7 +53,7 @@ impl<'a, 'b, I: Borrow<Transaction>> Drop for LockedAccountsResults<'a, 'b, I> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bank::tests::create_genesis_block_with_leader;
+    use crate::genesis_utils::create_genesis_block_with_leader;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;

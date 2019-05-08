@@ -1042,52 +1042,17 @@ impl Drop for Bank {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use super::*;
-
+    use crate::genesis_utils::{create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS};
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::hash;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction;
-    use solana_sdk::system_program;
     use solana_sdk::system_transaction;
     use solana_vote_api::vote_instruction;
-    use solana_vote_api::vote_state::{self, VoteState};
-
-    // The default stake placed with the bootstrap leader
-    pub(crate) const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
-
-    pub(crate) fn create_genesis_block_with_leader(
-        mint_lamports: u64,
-        leader_id: &Pubkey,
-        leader_stake_lamports: u64,
-    ) -> (GenesisBlock, Keypair, Keypair) {
-        let mint_keypair = Keypair::new();
-        let voting_keypair = Keypair::new();
-
-        let genesis_block = GenesisBlock::new(
-            &leader_id,
-            &[
-                (
-                    mint_keypair.pubkey(),
-                    Account::new(mint_lamports, 0, &system_program::id()),
-                ),
-                (
-                    voting_keypair.pubkey(),
-                    vote_state::create_bootstrap_leader_account(
-                        &voting_keypair.pubkey(),
-                        &leader_id,
-                        0,
-                        leader_stake_lamports,
-                    ),
-                ),
-            ],
-            &[],
-        );
-
-        (genesis_block, mint_keypair, voting_keypair)
-    }
+    use solana_vote_api::vote_state::VoteState;
 
     #[test]
     fn test_bank_new() {

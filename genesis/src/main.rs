@@ -113,7 +113,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     &bootstrap_leader_keypair.pubkey(),
                     0,
                     bootstrap_leader_lamports,
-                ),
+                )
+                .0,
             ),
         ],
         &[
