@@ -277,13 +277,15 @@ pub fn create_bootstrap_leader_account(
     node_id: &Pubkey,
     commission: u32,
     lamports: u64,
-) -> Account {
+) -> (Account, VoteState) {
     // Construct a vote account for the bootstrap_leader such that the leader_scheduler
     // will be forced to select it as the leader for height 0
-    let mut account = create_account(&vote_id, &node_id, commission, lamports);
+    let mut vote_account = create_account(&vote_id, &node_id, commission, lamports);
 
-    vote(&vote_id, &mut account, &Vote::new(0)).unwrap();
-    account
+    vote(&vote_id, &mut vote_account, &Vote::new(0)).unwrap();
+
+    let vote_state = vote_account.state().expect("account.state()");
+    (vote_account, vote_state)
 }
 
 // utility function, used by Bank, tests
@@ -330,6 +332,16 @@ mod tests {
             vote_id,
             vote_state::create_account(&vote_id, &Pubkey::new_rand(), 0, 100),
         )
+    }
+
+    #[test]
+    fn test_vote_create_bootstrap_leader_account() {
+        let vote_id = Pubkey::new_rand();
+        let (_vote_account, vote_state) =
+            vote_state::create_bootstrap_leader_account(&vote_id, &Pubkey::new_rand(), 0, 100);
+
+        assert_eq!(vote_state.votes.len(), 1);
+        assert_eq!(vote_state.votes[0], Lockout::new(&Vote::new(0)));
     }
 
     #[test]

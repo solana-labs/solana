@@ -6,6 +6,7 @@ pub mod bank;
 pub mod bank_client;
 mod blockhash_queue;
 pub mod bloom;
+pub mod genesis_utils;
 pub mod loader_utils;
 pub mod locked_accounts_results;
 pub mod message_processor;
