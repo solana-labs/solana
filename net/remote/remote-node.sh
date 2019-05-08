@@ -78,7 +78,7 @@ local|tar)
     fi
     set -x
     if [[ $skipSetup != true ]]; then
-      ./multinode-demo/setup.sh -b $stake
+      ./multinode-demo/setup.sh --bootstrap-leader-lamports $stake
     fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
 

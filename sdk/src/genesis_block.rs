@@ -1,6 +1,7 @@
 //! The `genesis_block` module is a library for generating the chain's genesis block.
 
 use crate::account::Account;
+use crate::fee_calculator::FeeCalculator;
 use crate::hash::{hash, Hash};
 use crate::pubkey::Pubkey;
 use crate::signature::{Keypair, KeypairUtil};
@@ -12,13 +13,14 @@ use std::path::Path;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GenesisBlock {
+    pub accounts: Vec<(Pubkey, Account)>,
     pub bootstrap_leader_id: Pubkey,
-    pub ticks_per_slot: u64,
+    pub epoch_warmup: bool,
+    pub fee_calculator: FeeCalculator,
+    pub native_instruction_processors: Vec<(String, Pubkey)>,
     pub slots_per_epoch: u64,
     pub stakers_slot_offset: u64,
-    pub epoch_warmup: bool,
-    pub accounts: Vec<(Pubkey, Account)>,
-    pub native_instruction_processors: Vec<(String, Pubkey)>,
+    pub ticks_per_slot: u64,
 }
 
 // useful for basic tests
@@ -44,13 +46,14 @@ impl GenesisBlock {
         native_instruction_processors: &[(String, Pubkey)],
     ) -> Self {
         Self {
+            accounts: accounts.to_vec(),
             bootstrap_leader_id: *bootstrap_leader_id, // TODO: leader_schedule to derive from actual stakes, instead ;)
-            ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
+            epoch_warmup: true,
+            fee_calculator: FeeCalculator::default(),
+            native_instruction_processors: native_instruction_processors.to_vec(),
             slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
             stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
-            epoch_warmup: true,
-            accounts: accounts.to_vec(),
-            native_instruction_processors: native_instruction_processors.to_vec(),
+            ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
         }
     }
 

@@ -51,6 +51,8 @@ leaderVoteAccountPubkey=$(\
 
 solana-genesis \
   --lamports 1000000000 \
+  --bootstrap-leader-lamports 10000000 \
+  --lamports-per-signature 1 \
   --mint "$dataDir"/config/drone-keypair.json \
   --bootstrap-leader-keypair "$dataDir"/config/leader-keypair.json \
   --bootstrap-vote-keypair "$dataDir"/config/leader-vote-account-keypair.json \

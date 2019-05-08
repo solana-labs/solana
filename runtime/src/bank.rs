@@ -221,6 +221,7 @@ impl Bank {
         bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
         bank.status_cache = parent.status_cache.clone();
         bank.bank_height = parent.bank_height + 1;
+        bank.fee_calculator = parent.fee_calculator.clone();
 
         bank.transaction_count
             .store(parent.transaction_count() as usize, Ordering::Relaxed);
@@ -340,6 +341,7 @@ impl Bank {
     fn process_genesis_block(&mut self, genesis_block: &GenesisBlock) {
         // Bootstrap leader collects fees until `new_from_parent` is called.
         self.collector_id = genesis_block.bootstrap_leader_id;
+        self.fee_calculator = genesis_block.fee_calculator.clone();
 
         for (pubkey, account) in genesis_block.accounts.iter() {
             self.store(pubkey, account);
@@ -1879,6 +1881,18 @@ pub(crate) mod tests {
 
         bank6.squash();
         assert_eq!(bank6.transaction_count(), 1);
+    }
+
+    #[test]
+    fn test_bank_inherit_fee_calculator() {
+        let (mut genesis_block, _mint_keypair) = create_genesis_block(500);
+        genesis_block.fee_calculator.lamports_per_signature = 123;
+        let bank0 = Arc::new(Bank::new(&genesis_block));
+        let bank1 = Arc::new(new_from_parent(&bank0));
+        assert_eq!(
+            bank0.fee_calculator.lamports_per_signature,
+            bank1.fee_calculator.lamports_per_signature
+        );
     }
 
     #[test]

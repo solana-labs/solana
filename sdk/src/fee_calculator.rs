@@ -1,6 +1,6 @@
 use crate::message::Message;
 
-#[derive(Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct FeeCalculator {
     pub lamports_per_signature: u64,
 }
