@@ -31,26 +31,6 @@ EOF
   exit 1
 }
 
-find_leader() {
-  declare leader leader_address
-  declare shift=0
-
-  if [[ -z $1 ]]; then
-    leader=$PWD                   # Default to local tree for rsync
-    leader_address=127.0.0.1:8001 # Default to local leader
-  elif [[ -z $2 ]]; then
-    leader=$1
-    leader_address=$leader:8001
-    shift=1
-  else
-    leader=$1
-    leader_address=$2
-    shift=2
-  fi
-
-  echo "$leader" "$leader_address" "$shift"
-}
-
 rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   declare url="$1"
 
@@ -68,35 +48,6 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
 
   # Default to rsync:// URL
   echo "rsync://$url"
-}
-
-airdrop() {
-  declare keypair_file=$1
-  declare entrypoint_ip=$2
-  declare amount=$3
-
-  declare address
-  address=$($solana_wallet --keypair "$keypair_file" address)
-
-  # TODO: Until https://github.com/solana-labs/solana/issues/2355 is resolved
-  # a fullnode needs N lamports as its vote account gets re-created on every
-  # node restart, costing it lamports
-  declare retries=5
-
-  while ! $solana_wallet --keypair "$keypair_file" --url "http://$entrypoint_ip:8899" airdrop "$amount"; do
-
-    # TODO: Consider moving this retry logic into `solana-wallet airdrop`
-    #   itself, currently it does not retry on "Connection refused" errors.
-    ((retries--))
-    if [[ $retries -le 0 ]]; then
-        echo "Airdrop to $address failed."
-        return 1
-    fi
-    echo "Airdrop to $address failed. Remaining retries: $retries"
-    sleep 1
-  done
-
-  return 0
 }
 
 setup_vote_account() {
