@@ -34,9 +34,6 @@ setup_replicator_account() {
   declare node_id_path=$2
   declare stake=$3
 
-  declare node_id
-  node_id=$($solana_wallet --keypair "$node_id_path" address)
-
   if [[ -f "$node_id_path".configured ]]; then
     echo "Replicator account has already been configured"
   else
