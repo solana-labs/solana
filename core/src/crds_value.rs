@@ -238,13 +238,13 @@ mod test {
 
     #[test]
     fn test_labels() {
-        let mut hits = [false; 2];
+        let mut hits = [false; 3];
         // this method should cover all the possible labels
         for v in &CrdsValue::record_labels(&Pubkey::default()) {
             match v {
                 CrdsValueLabel::ContactInfo(_) => hits[0] = true,
                 CrdsValueLabel::Vote(_) => hits[1] = true,
-                CrdsValueLabel::EpochSlots(_) => hits[1] = true,
+                CrdsValueLabel::EpochSlots(_) => hits[2] = true,
             }
         }
         assert!(hits.iter().all(|x| *x));

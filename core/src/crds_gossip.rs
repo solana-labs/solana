@@ -41,7 +41,7 @@ impl CrdsGossip {
     }
     /// process a push message to the network
     pub fn process_push_message(&mut self, values: Vec<CrdsValue>, now: u64) -> Vec<Pubkey> {
-        let labels: Vec<_> = values.iter().map(|v| v.label()).collect();
+        let labels: Vec<_> = values.iter().map(CrdsValue::label).collect();
 
         let results: Vec<_> = values
             .into_iter()

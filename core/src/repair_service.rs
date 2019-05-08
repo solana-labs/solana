@@ -111,7 +111,7 @@ impl RepairService {
                         repair_slot_range,
                     )
                 } else {
-                    Self::update_fast_repair(id.clone(), &epoch_slots, &cluster_info);
+                    Self::update_fast_repair(id, &epoch_slots, &cluster_info);
                     Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH)
                 }
             };
