@@ -131,7 +131,7 @@ if [[ ! -d "$ledger_config_dir" ]]; then
   $solana_ledger_tool --ledger "$ledger_config_dir" verify
 fi
 
-setup_replicator_account ${leader_address%:*} $replicator_id_path 5
+setup_replicator_account "${leader_address%:*}" "$replicator_id_path" 5
 
 PS4="$(basename "$0"): "
 echo "$PS4$program ${replicator_args[*]}"
