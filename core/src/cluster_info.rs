@@ -297,7 +297,7 @@ impl ClusterInfo {
         self.gossip_leader_id = *leader_id;
     }
 
-    pub fn push_epoch_slots(&mut self, id: Pubkey, slots: HashSet<u64>, root: u64) {
+    pub fn push_epoch_slots(&mut self, id: Pubkey, root: u64, slots: HashSet<u64>) {
         let now = timestamp();
         let mut entry = CrdsValue::EpochSlots(EpochSlots::new(id, root, slots, now));
         entry.sign(&self.keypair);

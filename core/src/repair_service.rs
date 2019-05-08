@@ -6,6 +6,8 @@ use crate::cluster_info::ClusterInfo;
 use crate::result::Result;
 use crate::service::Service;
 use solana_metrics::{influxdb, submit};
+use solana_sdk::pubkey::Pubkey;
+use std::collections::HashSet;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -92,6 +94,7 @@ impl RepairService {
         repair_slot_range: Option<RepairSlotRange>,
     ) {
         let mut repair_info = RepairInfo::new();
+        let epoch_slots: HashSet<u64> = HashSet::new();
         let id = cluster_info.read().unwrap().id();
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -108,6 +111,7 @@ impl RepairService {
                         repair_slot_range,
                     )
                 } else {
+                    Self::update_fast_repair(id.clone(), &epoch_slots, &cluster_info);
                     Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH)
                 }
             };
@@ -265,6 +269,14 @@ impl RepairService {
                 break;
             }
         }
+    }
+
+    fn update_fast_repair(id: Pubkey, slots: &HashSet<u64>, cluster_info: &RwLock<ClusterInfo>) {
+        let root = 0;
+        cluster_info
+            .write()
+            .unwrap()
+            .push_epoch_slots(id, root, slots.clone());
     }
 }
 
