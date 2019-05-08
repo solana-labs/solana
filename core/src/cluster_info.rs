@@ -41,6 +41,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use solana_sdk::transaction::Transaction;
 use std::cmp::min;
+use std::collections::HashSet;
 use std::fmt;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
@@ -200,7 +201,7 @@ impl ClusterInfo {
         let mut entry = CrdsValue::ContactInfo(my_data);
         entry.sign(&self.keypair);
         self.gossip.refresh_push_active_set(stakes);
-        self.gossip.process_push_message(&[entry], now);
+        self.gossip.process_push_message(vec![entry], now);
     }
 
     // TODO kill insert_info, only used by tests
@@ -296,11 +297,11 @@ impl ClusterInfo {
         self.gossip_leader_id = *leader_id;
     }
 
-    pub fn push_epoch_slots(&mut self, epoch_slots: &EpochSlots) {
+    pub fn push_epoch_slots(&mut self, id: Pubkey, slots: HashSet<u64>, root: u64) {
         let now = timestamp();
-        let mut entry = CrdsValue::EpochSlots(epoch_slots.clone());
+        let mut entry = CrdsValue::EpochSlots(EpochSlots::new(id, root, slots, now));
         entry.sign(&self.keypair);
-        self.gossip.process_push_message(&[entry], now);
+        self.gossip.process_push_message(vec![entry], now);
     }
 
     pub fn push_vote(&mut self, vote: Transaction) {
@@ -308,7 +309,7 @@ impl ClusterInfo {
         let vote = Vote::new(&self.id(), vote, now);
         let mut entry = CrdsValue::Vote(vote);
         entry.sign(&self.keypair);
-        self.gossip.process_push_message(&[entry], now);
+        self.gossip.process_push_message(vec![entry], now);
     }
 
     /// Get votes in the crds
@@ -1140,7 +1141,7 @@ impl ClusterInfo {
     fn handle_push_message(
         me: &Arc<RwLock<Self>>,
         from: &Pubkey,
-        data: &[CrdsValue],
+        data: Vec<CrdsValue>,
     ) -> Vec<SharedBlob> {
         let self_id = me.read().unwrap().gossip.id;
         inc_new_counter_info!("cluster_info-push_message", 1, 0, 1000);
@@ -1148,7 +1149,7 @@ impl ClusterInfo {
             .write()
             .unwrap()
             .gossip
-            .process_push_message(&data, timestamp());
+            .process_push_message(data, timestamp());
         if !prunes.is_empty() {
             inc_new_counter_info!("cluster_info-push_message-prunes", prunes.len());
             let ci = me.read().unwrap().lookup(from).cloned();
@@ -1301,7 +1302,7 @@ impl ClusterInfo {
                     }
                     ret
                 });
-                Self::handle_push_message(me, &from, &data)
+                Self::handle_push_message(me, &from, data)
             }
             Protocol::PruneMessage(from, data) => {
                 if data.verify() {

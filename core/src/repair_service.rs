@@ -60,6 +60,30 @@ pub struct RepairService {
 }
 
 impl RepairService {
+    pub fn new(
+        blocktree: Arc<Blocktree>,
+        exit: &Arc<AtomicBool>,
+        repair_socket: Arc<UdpSocket>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
+        repair_slot_range: Option<RepairSlotRange>,
+    ) -> Self {
+        let exit = exit.clone();
+        let t_repair = Builder::new()
+            .name("solana-repair-service".to_string())
+            .spawn(move || {
+                Self::run(
+                    &blocktree,
+                    exit,
+                    &repair_socket,
+                    &cluster_info,
+                    repair_slot_range,
+                )
+            })
+            .unwrap();
+
+        RepairService { t_repair }
+    }
+
     fn run(
         blocktree: &Arc<Blocktree>,
         exit: Arc<AtomicBool>,
@@ -127,30 +151,6 @@ impl RepairService {
             }
             sleep(Duration::from_millis(REPAIR_MS));
         }
-    }
-
-    pub fn new(
-        blocktree: Arc<Blocktree>,
-        exit: &Arc<AtomicBool>,
-        repair_socket: Arc<UdpSocket>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
-        repair_slot_range: Option<RepairSlotRange>,
-    ) -> Self {
-        let exit = exit.clone();
-        let t_repair = Builder::new()
-            .name("solana-repair-service".to_string())
-            .spawn(move || {
-                Self::run(
-                    &blocktree,
-                    exit,
-                    &repair_socket,
-                    &cluster_info,
-                    repair_slot_range,
-                )
-            })
-            .unwrap();
-
-        RepairService { t_repair }
     }
 
     fn generate_repairs_in_range(

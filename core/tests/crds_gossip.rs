@@ -125,7 +125,7 @@ fn network_simulator(network: &mut Network) {
                 .and_then(|v| v.contact_info().cloned())
                 .unwrap();
             m.wallclock = now;
-            node.process_push_message(&[CrdsValue::ContactInfo(m.clone())], now);
+            node.process_push_message(vec![CrdsValue::ContactInfo(m)], now);
         });
         // push for a bit
         let (queue_size, bytes_tx) = network_run_push(network, start, end);
@@ -170,18 +170,18 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
             })
             .collect();
         let transfered: Vec<_> = requests
-            .par_iter()
+            .into_par_iter()
             .map(|(from, peers, msgs)| {
                 let mut bytes: usize = 0;
                 let mut delivered: usize = 0;
                 let mut num_msgs: usize = 0;
                 let mut prunes: usize = 0;
                 for to in peers {
-                    bytes += serialized_size(msgs).unwrap() as usize;
+                    bytes += serialized_size(&msgs).unwrap() as usize;
                     num_msgs += 1;
                     let rsps = network
                         .get(&to)
-                        .map(|node| node.lock().unwrap().process_push_message(&msgs, now))
+                        .map(|node| node.lock().unwrap().process_push_message(msgs.clone(), now))
                         .unwrap();
                     bytes += serialized_size(&rsps).unwrap() as usize;
                     prunes += rsps.len();
@@ -191,7 +191,7 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
                             let mut node = node.lock().unwrap();
                             let destination = node.id;
                             let now = timestamp();
-                            node.process_prune_msg(&*to, &destination, &rsps, now, now)
+                            node.process_prune_msg(&to, &destination, &rsps, now, now)
                                 .unwrap()
                         })
                         .unwrap();
