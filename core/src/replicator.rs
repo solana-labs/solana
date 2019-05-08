@@ -70,7 +70,6 @@ pub struct Replicator {
     hash: Hash,
     #[cfg(feature = "chacha")]
     num_chacha_blocks: usize,
-    #[cfg(feature = "chacha")]
     blocktree: Arc<Blocktree>,
 }
 
@@ -206,8 +205,9 @@ impl Replicator {
             &exit,
         );
 
-        info!("Looking for leader at {:?}", cluster_entrypoint);
-        crate::gossip_service::discover_nodes(&cluster_entrypoint.gossip, 1)?;
+        info!("Connecting to the cluster via {:?}", cluster_entrypoint);
+        let nodes = crate::gossip_service::discover_nodes(&cluster_entrypoint.gossip, 1)?;
+        let client = crate::gossip_service::get_client(&nodes);
 
         let (storage_blockhash, storage_slot) = Self::poll_for_blockhash_and_slot(&cluster_info)?;
 
@@ -242,30 +242,33 @@ impl Replicator {
             &Hash::default(),
         );
 
-        let client = create_client(cluster_entrypoint.client_facing_addr(), FULLNODE_PORT_RANGE);
         Self::setup_mining_account(&client, &keypair, &storage_keypair)?;
-
         let mut thread_handles =
             create_request_processor(node.sockets.storage.unwrap(), &exit, slot);
 
         // receive blobs from retransmit and drop them.
-        let exit2 = exit.clone();
-        let t_retransmit = spawn(move || loop {
-            let _ = retransmit_receiver.recv_timeout(Duration::from_secs(1));
-            if exit2.load(Ordering::Relaxed) {
-                break;
-            }
-        });
+        let t_retransmit = {
+            let exit = exit.clone();
+            spawn(move || loop {
+                let _ = retransmit_receiver.recv_timeout(Duration::from_secs(1));
+                if exit.load(Ordering::Relaxed) {
+                    break;
+                }
+            })
+        };
         thread_handles.push(t_retransmit);
 
-        let exit3 = exit.clone();
-        let blocktree1 = blocktree.clone();
-        let t_replicate = spawn(move || loop {
-            Self::wait_for_ledger_download(slot, &blocktree1, &exit3, &node_info, &cluster_info);
-            if exit3.load(Ordering::Relaxed) {
-                break;
-            }
-        });
+        let t_replicate = {
+            let exit = exit.clone();
+            let blocktree = blocktree.clone();
+            spawn(move || loop {
+                Self::wait_for_ledger_download(slot, &blocktree, &exit, &node_info, &cluster_info);
+                if exit.load(Ordering::Relaxed) {
+                    break;
+                }
+            })
+        };
+        //always push this last
         thread_handles.push(t_replicate);
 
         Ok(Self {
@@ -285,14 +288,15 @@ impl Replicator {
             hash: Hash::default(),
             #[cfg(feature = "chacha")]
             num_chacha_blocks: 0,
-            #[cfg(feature = "chacha")]
             blocktree,
         })
     }
 
     pub fn run(&mut self) {
+        info!("waiting for ledger download");
+        self.thread_handles.pop().unwrap().join().unwrap();
         self.encrypt_ledger()
-            .expect("ledger encrypt not successful");
+            .expect("ledger encrypt not successful");;
         loop {
             self.create_sampling_offsets();
             if self.sample_file_to_create_mining_hash().is_err() {

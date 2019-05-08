@@ -39,6 +39,15 @@ fn main() {
                 .required(true)
                 .help("use DIR as persistent ledger location"),
         )
+        .arg(
+            Arg::with_name("storage_keypair")
+                .short("s")
+                .long("storage_id")
+                .value_name("DIR")
+                .takes_value(true)
+                .required(true)
+                .help("File containing the storage account keypair"),
+        )
         .get_matches();
 
     let ledger_path = matches.value_of("ledger").unwrap();
@@ -46,6 +55,14 @@ fn main() {
     let keypair = if let Some(identity) = matches.value_of("identity") {
         read_keypair(identity).unwrap_or_else(|err| {
             eprintln!("{}: Unable to open keypair file: {}", err, identity);
+            exit(1);
+        })
+    } else {
+        Keypair::new()
+    };
+    let storage_keypair = if let Some(storage_keypair) = matches.value_of("storage_keypair") {
+        read_keypair(storage_keypair).unwrap_or_else(|err| {
+            eprintln!("{}: Unable to open keypair file: {}", err, storage_keypair);
             exit(1);
         })
     } else {
@@ -74,13 +91,12 @@ fn main() {
     );
 
     let entrypoint_info = ContactInfo::new_gossip_entry_point(&entrypoint_addr);
-    let storage_keypair = Arc::new(Keypair::new());
     let mut replicator = Replicator::new(
         ledger_path,
         node,
         entrypoint_info,
         Arc::new(keypair),
-        storage_keypair,
+        Arc::new(storage_keypair),
     )
     .unwrap();
 

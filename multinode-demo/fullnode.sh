@@ -31,26 +31,6 @@ EOF
   exit 1
 }
 
-find_entrypoint() {
-  declare entrypoint entrypoint_address
-  declare shift=0
-
-  if [[ -z $1 ]]; then
-    entrypoint=$PWD                   # Default to local tree for rsync
-    entrypoint_address=127.0.0.1:8001 # Default to local entrypoint
-  elif [[ -z $2 ]]; then
-    entrypoint=$1
-    entrypoint_address=$entrypoint:8001
-    shift=1
-  else
-    entrypoint=$1
-    entrypoint_address=$2
-    shift=2
-  fi
-
-  echo "$entrypoint" "$entrypoint_address" "$shift"
-}
-
 rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   declare url="$1"
 

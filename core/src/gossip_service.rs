@@ -7,6 +7,7 @@ use crate::cluster_info::FULLNODE_PORT_RANGE;
 use crate::contact_info::ContactInfo;
 use crate::service::Service;
 use crate::streamer;
+use rand::{thread_rng, Rng};
 use solana_client::thin_client::{create_client, ThinClient};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -107,12 +108,23 @@ pub fn discover(
     ))
 }
 
+/// Creates a ThinClient per valid node
 pub fn get_clients(nodes: &[ContactInfo]) -> Vec<ThinClient> {
     nodes
         .iter()
         .filter_map(ContactInfo::valid_client_facing_addr)
         .map(|addrs| create_client(addrs, FULLNODE_PORT_RANGE))
         .collect()
+}
+
+/// Creates a ThinClient by selecting a valid node at random
+pub fn get_client(nodes: &[ContactInfo]) -> ThinClient {
+    let nodes: Vec<_> = nodes
+        .iter()
+        .filter_map(ContactInfo::valid_client_facing_addr)
+        .collect();
+    let select = thread_rng().gen_range(0, nodes.len());
+    create_client(nodes[select], FULLNODE_PORT_RANGE)
 }
 
 fn spy(
