@@ -163,10 +163,10 @@ export class Transaction {
 
       instruction.keys.forEach(keySignerPair => {
         const keyStr = keySignerPair.pubkey.toString();
-        if (keySignerPair.isSigner) {
-          numRequiredSignatures += 1;
-        }
         if (!keys.includes(keyStr)) {
+          if (keySignerPair.isSigner) {
+            numRequiredSignatures += 1;
+          }
           keys.push(keyStr);
         }
       });
