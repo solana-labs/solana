@@ -197,7 +197,7 @@ fn new_update_manifest(
         .get_account_data(&update_manifest_keypair.pubkey())
         .is_err()
     {
-        let recect_blockhash = rpc_client.get_recent_blockhash()?;
+        let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
         let new_account = config_instruction::create_account::<SignedUpdateManifest>(
             &from_keypair.pubkey(),
@@ -205,7 +205,7 @@ fn new_update_manifest(
             1, // lamports
         );
         let mut transaction = Transaction::new_unsigned_instructions(vec![new_account]);
-        transaction.sign(&[from_keypair], recect_blockhash);
+        transaction.sign(&[from_keypair], recent_blockhash);
 
         rpc_client.send_and_confirm_transaction(&mut transaction, &[from_keypair])?;
     }
@@ -219,7 +219,7 @@ fn store_update_manifest(
     update_manifest_keypair: &Keypair,
     update_manifest: &SignedUpdateManifest,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let recect_blockhash = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let signers = [from_keypair, update_manifest_keypair];
     let instruction = config_instruction::store::<SignedUpdateManifest>(
@@ -228,7 +228,7 @@ fn store_update_manifest(
     );
 
     let message = Message::new_with_payer(vec![instruction], Some(&from_keypair.pubkey()));
-    let mut transaction = Transaction::new(&signers, message, recect_blockhash);
+    let mut transaction = Transaction::new(&signers, message, recent_blockhash);
     rpc_client.send_and_confirm_transaction(&mut transaction, &[from_keypair])?;
     Ok(())
 }

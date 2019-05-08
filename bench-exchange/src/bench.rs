@@ -371,7 +371,7 @@ fn swapper<T>(
             }
             account_group = (account_group + 1) % account_groups as usize;
 
-            let blockhash = client
+            let (blockhash, _fee_calculator) = client
                 .get_recent_blockhash()
                 .expect("Failed to get blockhash");
             let to_swap_txs: Vec<_> = to_swap
@@ -499,7 +499,7 @@ fn trader<T>(
         }
         account_group = (account_group + 1) % account_groups as usize;
 
-        let blockhash = client
+        let (blockhash, _fee_calculator) = client
             .get_recent_blockhash()
             .expect("Failed to get blockhash");
 
@@ -663,7 +663,8 @@ pub fn fund_keys(client: &Client, source: &Keypair, dests: &[Arc<Keypair>], lamp
                     to_fund_txs.len(),
                 );
 
-                let blockhash = client.get_recent_blockhash().expect("blockhash");
+                let (blockhash, _fee_calculator) =
+                    client.get_recent_blockhash().expect("blockhash");
                 to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
                     tx.sign(&[*k], blockhash);
                 });
@@ -738,7 +739,7 @@ pub fn create_token_accounts(client: &Client, signers: &[Arc<Keypair>], accounts
 
             let mut retries = 0;
             while !to_create_txs.is_empty() {
-                let blockhash = client
+                let (blockhash, _fee_calculator) = client
                     .get_recent_blockhash()
                     .expect("Failed to get blockhash");
                 to_create_txs.par_iter_mut().for_each(|(k, tx)| {
@@ -854,7 +855,7 @@ pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, 
 
     let mut tries = 0;
     loop {
-        let blockhash = client
+        let (blockhash, _fee_calculator) = client
             .get_recent_blockhash()
             .expect("Failed to get blockhash");
         match request_airdrop_transaction(&drone_addr, &id.pubkey(), amount_to_drop, blockhash) {

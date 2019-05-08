@@ -7,6 +7,7 @@ use crate::rpc_client::RpcClient;
 use bincode::{serialize_into, serialized_size};
 use log::*;
 use solana_sdk::client::{AsyncClient, Client, SyncClient};
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::message::Message;
@@ -107,7 +108,8 @@ impl ThinClient {
                 return Ok(transaction.signatures[0]);
             }
             info!("{} tries failed transfer to {}", x, self.transactions_addr);
-            transaction.sign(keypairs, self.rpc_client.get_recent_blockhash()?);
+            let (blockhash, _fee_calculator) = self.rpc_client.get_recent_blockhash()?;
+            transaction.sign(keypairs, blockhash);
         }
         Err(io::Error::new(
             io::ErrorKind::Other,
@@ -159,7 +161,7 @@ impl Client for ThinClient {
 
 impl SyncClient for ThinClient {
     fn send_message(&self, keypairs: &[&Keypair], message: Message) -> TransportResult<Signature> {
-        let blockhash = self.get_recent_blockhash()?;
+        let (blockhash, _fee_calculator) = self.get_recent_blockhash()?;
         let mut transaction = Transaction::new(&keypairs, message, blockhash);
         let signature = self.send_and_confirm_transaction(keypairs, &mut transaction, 5, 0)?;
         Ok(signature)
@@ -210,9 +212,8 @@ impl SyncClient for ThinClient {
         Ok(status)
     }
 
-    fn get_recent_blockhash(&self) -> TransportResult<Hash> {
-        let recent_blockhash = self.rpc_client.get_recent_blockhash()?;
-        Ok(recent_blockhash)
+    fn get_recent_blockhash(&self) -> TransportResult<(Hash, FeeCalculator)> {
+        Ok(self.rpc_client.get_recent_blockhash()?)
     }
 
     fn get_transaction_count(&self) -> TransportResult<u64> {
@@ -235,9 +236,8 @@ impl SyncClient for ThinClient {
         Ok(self.rpc_client.poll_for_signature(signature)?)
     }
 
-    fn get_new_blockhash(&self, blockhash: &Hash) -> TransportResult<Hash> {
-        let new_blockhash = self.rpc_client.get_new_blockhash(blockhash)?;
-        Ok(new_blockhash)
+    fn get_new_blockhash(&self, blockhash: &Hash) -> TransportResult<(Hash, FeeCalculator)> {
+        Ok(self.rpc_client.get_new_blockhash(blockhash)?)
     }
 }
 

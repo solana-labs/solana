@@ -1,6 +1,7 @@
 use crate::message::Message;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct FeeCalculator {
     pub lamports_per_signature: u64,
 }

@@ -388,7 +388,7 @@ fn process_create_vote_account(
         commission,
         lamports,
     );
-    let recent_blockhash = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
@@ -399,7 +399,7 @@ fn process_authorize_voter(
     config: &WalletConfig,
     authorized_voter_id: &Pubkey,
 ) -> ProcessResult {
-    let recent_blockhash = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::authorize_voter(
         &config.keypair.pubkey(),
         authorized_voter_id,
@@ -457,7 +457,7 @@ fn process_create_stake_account(
     staking_account_id: &Pubkey,
     lamports: u64,
 ) -> ProcessResult {
-    let recent_blockhash = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::create_account(
         &config.keypair.pubkey(),
         staking_account_id,
@@ -474,7 +474,7 @@ fn process_delegate_stake(
     staking_account_keypair: &Keypair,
     voting_account_id: &Pubkey,
 ) -> ProcessResult {
-    let recent_blockhash = rpc_client.get_recent_blockhash()?;
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::delegate_stake(
         &config.keypair.pubkey(),
         &staking_account_keypair.pubkey(),
@@ -527,7 +527,7 @@ fn process_deploy(
         }
     }
 
-    let blockhash = rpc_client.get_recent_blockhash()?;
+    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let program_id = Keypair::new();
     let mut file = File::open(program_location).map_err(|err| {
         WalletError::DynamicProgramError(
@@ -600,7 +600,7 @@ fn process_pay(
     witnesses: &Option<Vec<Pubkey>>,
     cancelable: Option<Pubkey>,
 ) -> ProcessResult {
-    let blockhash = rpc_client.get_recent_blockhash()?;
+    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     if timestamp == None && *witnesses == None {
         let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash, 0);
@@ -636,7 +636,7 @@ fn process_pay(
         })
         .to_string())
     } else if timestamp == None {
-        let blockhash = rpc_client.get_recent_blockhash()?;
+        let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
         let witness = if let Some(ref witness_vec) = *witnesses {
             witness_vec[0]
@@ -672,7 +672,7 @@ fn process_pay(
 }
 
 fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: &Pubkey) -> ProcessResult {
-    let blockhash = rpc_client.get_recent_blockhash()?;
+    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ix = budget_instruction::apply_signature(
         &config.keypair.pubkey(),
         pubkey,
@@ -703,7 +703,7 @@ fn process_time_elapsed(
         request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.keypair.pubkey(), 1)?;
     }
 
-    let blockhash = rpc_client.get_recent_blockhash()?;
+    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let ix = budget_instruction::apply_timestamp(&config.keypair.pubkey(), pubkey, to, dt);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
@@ -726,7 +726,7 @@ fn process_witness(
         request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.keypair.pubkey(), 1)?;
     }
 
-    let blockhash = rpc_client.get_recent_blockhash()?;
+    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ix = budget_instruction::apply_signature(&config.keypair.pubkey(), pubkey, to);
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], vec![ix], blockhash);
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
@@ -891,7 +891,7 @@ pub fn request_and_confirm_airdrop(
     to_pubkey: &Pubkey,
     lamports: u64,
 ) -> Result<(), Box<dyn error::Error>> {
-    let blockhash = rpc_client.get_recent_blockhash()?;
+    let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let keypair = {
         let mut retries = 5;
         loop {

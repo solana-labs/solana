@@ -2,6 +2,7 @@ use crate::client_error::ClientError;
 use crate::generic_rpc_client_request::GenericRpcClientRequest;
 use crate::rpc_request::RpcRequest;
 use serde_json::{Number, Value};
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::transaction::{self, TransactionError};
 
 pub const PUBKEY: &str = "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8";
@@ -44,7 +45,10 @@ impl GenericRpcClientRequest for MockRpcClientRequest {
                 let n = if self.url == "airdrop" { 0 } else { 50 };
                 Value::Number(Number::from(n))
             }
-            RpcRequest::GetRecentBlockhash => Value::String(PUBKEY.to_string()),
+            RpcRequest::GetRecentBlockhash => Value::Array(vec![
+                Value::String(PUBKEY.to_string()),
+                serde_json::to_value(FeeCalculator::default()).unwrap(),
+            ]),
             RpcRequest::GetSignatureStatus => {
                 let response: Option<transaction::Result<()>> = if self.url == "account_in_use" {
                     Some(Err(TransactionError::AccountInUse))
