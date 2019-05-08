@@ -56,6 +56,28 @@ test('transfer signatures', () => {
   expect(newTransaction).toEqual(orgTransaction);
 });
 
+test('dedup signatures', () => {
+  const account1 = new Account();
+  const account2 = new Account();
+  const recentBlockhash = account1.publicKey.toBase58(); // Fake recentBlockhash
+  const transfer1 = SystemProgram.transfer(
+    account1.publicKey,
+    account2.publicKey,
+    123,
+  );
+  const transfer2 = SystemProgram.transfer(
+    account1.publicKey,
+    account2.publicKey,
+    123,
+  );
+
+  const orgTransaction = new Transaction({recentBlockhash}).add(
+    transfer1,
+    transfer2,
+  );
+  orgTransaction.sign(account1);
+});
+
 test('parse wire format and serialize', () => {
   const keypair = nacl.sign.keyPair.fromSeed(
     Uint8Array.from(Array(32).fill(8)),
