@@ -157,6 +157,7 @@ pub fn process_blocktree(
 
     let mut fork_info = vec![];
     let mut last_status_report = Instant::now();
+    let mut root = 0;
     while !pending_slots.is_empty() {
         let (slot, meta, bank, mut entry_height, mut last_entry_hash) =
             pending_slots.pop().unwrap();
@@ -210,6 +211,7 @@ pub fn process_blocktree(
         bank.freeze(); // all banks handled by this routine are created from complete slots
 
         if blocktree.is_root(slot) {
+            root = slot;
             leader_schedule_cache.set_root(slot);
             bank.squash();
             pending_slots.clear();
@@ -270,7 +272,7 @@ pub fn process_blocktree(
     }
 
     let (banks, bank_forks_info): (Vec<_>, Vec<_>) = fork_info.into_iter().unzip();
-    let bank_forks = BankForks::new_from_banks(&banks);
+    let bank_forks = BankForks::new_from_banks(&banks, root);
     info!(
         "processing ledger...complete in {}ms, forks={}...",
         duration_as_ms(&now.elapsed()),
@@ -437,6 +439,8 @@ mod tests {
             assert_eq!(bank_forks[info.bank_slot].slot(), info.bank_slot);
             assert!(bank_forks[info.bank_slot].is_frozen());
         }
+
+        assert_eq!(bank_forks.root(), 4);
     }
 
     #[test]
@@ -520,6 +524,8 @@ mod tests {
                 .collect::<Vec<_>>(),
             &[1]
         );
+
+        assert_eq!(bank_forks.root(), 1);
 
         // Ensure bank_forks holds the right banks
         for info in bank_forks_info {
@@ -643,6 +649,7 @@ mod tests {
             process_blocktree(&genesis_block, &blocktree, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
+        assert_eq!(bank_forks.root(), 0);
         assert_eq!(
             bank_forks_info[0],
             BankForksInfo {
