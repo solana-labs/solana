@@ -558,11 +558,11 @@ impl Bank {
     fn check_refs(
         &self,
         txs: &[Transaction],
-        lock_results: &LockedAccountsResults<Transaction>,
+        lock_results: &[Result<()>],
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
         txs.iter()
-            .zip(lock_results.locked_accounts_results())
+            .zip(lock_results)
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok() && !tx.verify_refs() {
                     error_counters.invalid_account_index += 1;
@@ -625,6 +625,19 @@ impl Bank {
             })
             .collect()
     }
+
+    pub fn check_transactions(
+        &self,
+        txs: &[Transaction],
+        lock_results: &[Result<()>],
+        max_age: usize,
+        mut error_counters: &mut ErrorCounters,
+    ) -> Vec<Result<()>> {
+        let refs_results = self.check_refs(txs, lock_results, &mut error_counters);
+        let age_results = self.check_age(txs, refs_results, max_age, &mut error_counters);
+        self.check_signatures(txs, age_results, &mut error_counters)
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -638,9 +651,12 @@ impl Bank {
         debug!("processing transactions: {}", txs.len());
         let mut error_counters = ErrorCounters::default();
         let now = Instant::now();
-        let refs_results = self.check_refs(txs, lock_results, &mut error_counters);
-        let age_results = self.check_age(txs, refs_results, max_age, &mut error_counters);
-        let sig_results = self.check_signatures(txs, age_results, &mut error_counters);
+        let sig_results = self.check_transactions(
+            txs,
+            lock_results.locked_accounts_results(),
+            max_age,
+            &mut error_counters,
+        );
         let mut loaded_accounts = self.load_accounts(txs, sig_results, &mut error_counters);
         let tick_height = self.tick_height();
 

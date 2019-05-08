@@ -1,5 +1,5 @@
 mod accounts;
-mod accounts_db;
+pub mod accounts_db;
 mod accounts_index;
 pub mod append_vec;
 pub mod bank;
