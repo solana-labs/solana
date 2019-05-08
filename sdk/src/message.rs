@@ -1,7 +1,7 @@
 //! A library for generating a message from a sequence of instructions
 
 use crate::hash::Hash;
-use crate::instruction::{CompiledInstruction, Instruction};
+use crate::instruction::{AccountMeta, CompiledInstruction, Instruction};
 use crate::pubkey::Pubkey;
 use crate::short_vec;
 use itertools::Itertools;
@@ -39,13 +39,23 @@ fn compile_instructions(
 }
 
 /// Return pubkeys referenced by all instructions, with the ones needing signatures first.
+/// If the payer key is provided, it is always placed first in the list of signed keys.
 /// No duplicates and order is preserved.
-fn get_keys(instructions: &[Instruction]) -> (Vec<Pubkey>, Vec<Pubkey>) {
+fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> (Vec<Pubkey>, Vec<Pubkey>) {
     let mut keys_and_signed: Vec<_> = instructions
         .iter()
         .flat_map(|ix| ix.accounts.iter())
         .collect();
     keys_and_signed.sort_by(|x, y| y.is_signer.cmp(&x.is_signer));
+
+    let payer_account_meta;
+    if let Some(payer) = payer {
+        payer_account_meta = AccountMeta {
+            pubkey: *payer,
+            is_signer: true,
+        };
+        keys_and_signed.insert(0, &payer_account_meta);
+    }
 
     let mut signed_keys = vec![];
     let mut unsigned_keys = vec![];
@@ -114,12 +124,7 @@ impl Message {
 
     pub fn new_with_payer(instructions: Vec<Instruction>, payer: Option<&Pubkey>) -> Self {
         let program_ids = get_program_ids(&instructions);
-        let (mut signed_keys, unsigned_keys) = get_keys(&instructions);
-        if let Some(payer) = payer {
-            if signed_keys.is_empty() || signed_keys[0] != *payer {
-                signed_keys.insert(0, *payer);
-            }
-        }
+        let (mut signed_keys, unsigned_keys) = get_keys(&instructions, payer);
         let num_required_signatures = signed_keys.len() as u8;
         signed_keys.extend(&unsigned_keys);
         let instructions = compile_instructions(instructions, &signed_keys, &program_ids);
@@ -181,10 +186,43 @@ mod tests {
     fn test_message_unique_keys_both_signed() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
-        let keys = get_keys(&[
-            Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
-            Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
-        ]);
+        let keys = get_keys(
+            &[
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
+            ],
+            None,
+        );
+        assert_eq!(keys, (vec![id0], vec![]));
+    }
+
+    #[test]
+    fn test_message_unique_keys_signed_and_payer() {
+        let program_id = Pubkey::default();
+        let id0 = Pubkey::default();
+        let keys = get_keys(
+            &[Instruction::new(
+                program_id,
+                &0,
+                vec![AccountMeta::new(id0, true)],
+            )],
+            Some(&id0),
+        );
+        assert_eq!(keys, (vec![id0], vec![]));
+    }
+
+    #[test]
+    fn test_message_unique_keys_unsigned_and_payer() {
+        let program_id = Pubkey::default();
+        let id0 = Pubkey::default();
+        let keys = get_keys(
+            &[Instruction::new(
+                program_id,
+                &0,
+                vec![AccountMeta::new(id0, false)],
+            )],
+            Some(&id0),
+        );
         assert_eq!(keys, (vec![id0], vec![]));
     }
 
@@ -192,10 +230,13 @@ mod tests {
     fn test_message_unique_keys_one_signed() {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
-        let keys = get_keys(&[
-            Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
-            Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
-        ]);
+        let keys = get_keys(
+            &[
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
+            ],
+            None,
+        );
         assert_eq!(keys, (vec![id0], vec![]));
     }
 
@@ -204,10 +245,13 @@ mod tests {
         let program_id = Pubkey::default();
         let id0 = Pubkey::new_rand();
         let id1 = Pubkey::default(); // Key less than id0
-        let keys = get_keys(&[
-            Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
-            Instruction::new(program_id, &0, vec![AccountMeta::new(id1, false)]),
-        ]);
+        let keys = get_keys(
+            &[
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id1, false)]),
+            ],
+            None,
+        );
         assert_eq!(keys, (vec![], vec![id0, id1]));
     }
 
@@ -216,11 +260,14 @@ mod tests {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
         let id1 = Pubkey::new_rand();
-        let keys = get_keys(&[
-            Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
-            Instruction::new(program_id, &0, vec![AccountMeta::new(id1, false)]),
-            Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
-        ]);
+        let keys = get_keys(
+            &[
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id1, false)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
+            ],
+            None,
+        );
         assert_eq!(keys, (vec![id0], vec![id1]));
     }
 
@@ -229,10 +276,13 @@ mod tests {
         let program_id = Pubkey::default();
         let id0 = Pubkey::default();
         let id1 = Pubkey::new_rand();
-        let keys = get_keys(&[
-            Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
-            Instruction::new(program_id, &0, vec![AccountMeta::new(id1, true)]),
-        ]);
+        let keys = get_keys(
+            &[
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id1, true)]),
+            ],
+            None,
+        );
         assert_eq!(keys, (vec![id1], vec![id0]));
     }
 
