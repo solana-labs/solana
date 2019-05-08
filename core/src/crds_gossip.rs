@@ -40,20 +40,20 @@ impl CrdsGossip {
         self.id = *id;
     }
     /// process a push message to the network
-    pub fn process_push_message(&mut self, values: &[CrdsValue], now: u64) -> Vec<Pubkey> {
+    pub fn process_push_message(&mut self, values: Vec<CrdsValue>, now: u64) -> Vec<Pubkey> {
+        let labels: Vec<_> = values.iter().map(CrdsValue::label).collect();
+
         let results: Vec<_> = values
-            .iter()
-            .map(|val| {
-                self.push
-                    .process_push_message(&mut self.crds, val.clone(), now)
-            })
+            .into_iter()
+            .map(|val| self.push.process_push_message(&mut self.crds, val, now))
             .collect();
+
         results
             .into_iter()
-            .zip(values)
+            .zip(labels)
             .filter_map(|(r, d)| {
                 if r == Err(CrdsGossipError::PushMessagePrune) {
-                    Some(d.label().pubkey())
+                    Some(d.pubkey())
                 } else if let Ok(Some(val)) = r {
                     self.pull
                         .record_old_hash(val.value_hash, val.local_timestamp);

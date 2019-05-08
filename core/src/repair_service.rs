@@ -6,6 +6,8 @@ use crate::cluster_info::ClusterInfo;
 use crate::result::Result;
 use crate::service::Service;
 use solana_metrics::{influxdb, submit};
+use solana_sdk::pubkey::Pubkey;
+use std::collections::HashSet;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -60,6 +62,30 @@ pub struct RepairService {
 }
 
 impl RepairService {
+    pub fn new(
+        blocktree: Arc<Blocktree>,
+        exit: &Arc<AtomicBool>,
+        repair_socket: Arc<UdpSocket>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
+        repair_slot_range: Option<RepairSlotRange>,
+    ) -> Self {
+        let exit = exit.clone();
+        let t_repair = Builder::new()
+            .name("solana-repair-service".to_string())
+            .spawn(move || {
+                Self::run(
+                    &blocktree,
+                    exit,
+                    &repair_socket,
+                    &cluster_info,
+                    repair_slot_range,
+                )
+            })
+            .unwrap();
+
+        RepairService { t_repair }
+    }
+
     fn run(
         blocktree: &Arc<Blocktree>,
         exit: Arc<AtomicBool>,
@@ -68,6 +94,7 @@ impl RepairService {
         repair_slot_range: Option<RepairSlotRange>,
     ) {
         let mut repair_info = RepairInfo::new();
+        let epoch_slots: HashSet<u64> = HashSet::new();
         let id = cluster_info.read().unwrap().id();
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -84,6 +111,7 @@ impl RepairService {
                         repair_slot_range,
                     )
                 } else {
+                    Self::update_fast_repair(id, &epoch_slots, &cluster_info);
                     Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH)
                 }
             };
@@ -127,30 +155,6 @@ impl RepairService {
             }
             sleep(Duration::from_millis(REPAIR_MS));
         }
-    }
-
-    pub fn new(
-        blocktree: Arc<Blocktree>,
-        exit: &Arc<AtomicBool>,
-        repair_socket: Arc<UdpSocket>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
-        repair_slot_range: Option<RepairSlotRange>,
-    ) -> Self {
-        let exit = exit.clone();
-        let t_repair = Builder::new()
-            .name("solana-repair-service".to_string())
-            .spawn(move || {
-                Self::run(
-                    &blocktree,
-                    exit,
-                    &repair_socket,
-                    &cluster_info,
-                    repair_slot_range,
-                )
-            })
-            .unwrap();
-
-        RepairService { t_repair }
     }
 
     fn generate_repairs_in_range(
@@ -265,6 +269,14 @@ impl RepairService {
                 break;
             }
         }
+    }
+
+    fn update_fast_repair(id: Pubkey, slots: &HashSet<u64>, cluster_info: &RwLock<ClusterInfo>) {
+        let root = 0;
+        cluster_info
+            .write()
+            .unwrap()
+            .push_epoch_slots(id, root, slots.clone());
     }
 }
 
