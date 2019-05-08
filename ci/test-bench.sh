@@ -54,16 +54,15 @@ _ cargo +$rust_nightly bench --manifest-path sdk/Cargo.toml ${V:+--verbose} \
 _ cargo +$rust_nightly bench --manifest-path runtime/Cargo.toml ${V:+--verbose} \
   -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
 
-# Run core benches
-_ cargo +$rust_nightly bench --manifest-path core/Cargo.toml ${V:+--verbose} \
-  -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
-
 # Run bpf benches
 _ cargo +$rust_nightly bench --manifest-path programs/bpf/Cargo.toml ${V:+--verbose} --features=bpf_c \
   -- -Z unstable-options --format=json --nocapture | tee -a "$BENCH_FILE"
 
+# Run core benches
+_ cargo +$rust_nightly bench --manifest-path core/Cargo.toml ${V:+--verbose} \
+  -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
 
 _ cargo +$rust_nightly run --release --package solana-upload-perf \
   -- "$BENCH_FILE" "$TARGET_BRANCH" "$UPLOAD_METRICS" > "$BENCH_ARTIFACT"
 
-upload-ci-artifact "$BENCH_ARTIFACT"
+_ upload-ci-artifact "$BENCH_ARTIFACT"
