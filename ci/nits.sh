@@ -42,11 +42,11 @@ fi
 #  /target/ in it
 declare gitignores_ok=true
 for i in $(git ls-files \*/Cargo.toml ); do
-  dir=$(dirname $i)
+  dir=$(dirname "$i")
   if [[ ! -f $dir/.gitignore ]]; then
       echo 'error: nits.sh .gitnore missing for crate '"$dir" >&2
       gitignores_ok=false
-  elif ! grep -q -e ^/target/$ "$dir"/.gitignore; then
+  elif ! grep -q -e '^/target/$' "$dir"/.gitignore; then
       echo 'error: nits.sh "/target/" apparently missing from '"$dir"'/.gitignore' >&2
       gitignores_ok=false
   fi
