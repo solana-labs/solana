@@ -626,7 +626,6 @@ export class Connection {
         subscriptionId,
         programId,
       } = this._programAccountChangeSubscriptions[id];
-      console.log('program-id: ' + programId);
       if (subscriptionId === null) {
         try {
           this._programAccountChangeSubscriptions[

@@ -92,7 +92,7 @@ export class Transaction {
   signatures: Array<SignaturePubkeyPair> = [];
 
   /**
-   * The first (primary) Transaction signature
+   * The first (payer) Transaction signature
    */
   get signature(): Buffer | null {
     if (this.signatures.length > 0) {
@@ -171,6 +171,14 @@ export class Transaction {
         }
       });
     });
+
+    if (numRequiredSignatures > this.signatures.length) {
+      throw new Error(
+        `Insufficent signatures: expected ${numRequiredSignatures} but got ${
+          this.signatures.length
+        }`,
+      );
+    }
 
     let keyCount = [];
     shortvec.encodeLength(keyCount, keys.length);
@@ -252,7 +260,7 @@ export class Transaction {
     ]);
 
     const transaction = {
-      numRequiredSignatures: Buffer.from([numRequiredSignatures]),
+      numRequiredSignatures: Buffer.from([this.signatures.length]),
       keyCount: Buffer.from(keyCount),
       keys: keys.map(key => new PublicKey(key).toBuffer()),
       recentBlockhash: Buffer.from(bs58.decode(recentBlockhash)),

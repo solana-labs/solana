@@ -243,7 +243,12 @@ export class Token {
       programId,
       data,
     });
-    await sendAndConfirmTransaction(connection, transaction, tokenAccount);
+    await sendAndConfirmTransaction(
+      connection,
+      transaction,
+      owner,
+      tokenAccount,
+    );
 
     return [token, initialAccountPublicKey];
   }
@@ -299,7 +304,12 @@ export class Token {
       programId: this.programId,
       data,
     });
-    await sendAndConfirmTransaction(this.connection, transaction, tokenAccount);
+    await sendAndConfirmTransaction(
+      this.connection,
+      transaction,
+      owner,
+      tokenAccount,
+    );
 
     return tokenAccount.publicKey;
   }

@@ -3,8 +3,6 @@
 import {Account} from './account';
 import {PublicKey} from './publickey';
 import {Loader} from './loader';
-import {SystemProgram} from './system-program';
-import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import type {Connection} from './connection';
 
 /**
@@ -15,41 +13,29 @@ export class NativeLoader {
    * Public key that identifies the NativeLoader
    */
   static get programId(): PublicKey {
-    return new PublicKey(
-      'NativeLoader1111111111111111111111111111111',
-    );
+    return new PublicKey('NativeLoader1111111111111111111111111111111');
   }
 
   /**
    * Loads a native program
    *
    * @param connection The connection to use
-   * @param owner User account to load the program with
+   * @param payer System account that pays to load the program
    * @param programName Name of the native program
    */
-  static async load(
+  static load(
     connection: Connection,
-    owner: Account,
+    payer: Account,
     programName: string,
   ): Promise<PublicKey> {
     const bytes = [...Buffer.from(programName)];
-
-    const programAccount = new Account();
-
-    // Allocate memory for the program account
-    const transaction = SystemProgram.createAccount(
-      owner.publicKey,
-      programAccount.publicKey,
-      1 + 1 + 1,
-      bytes.length + 1,
+    const program = new Account();
+    return Loader.load(
+      connection,
+      payer,
+      program,
       NativeLoader.programId,
+      bytes,
     );
-    await sendAndConfirmTransaction(connection, transaction, owner);
-
-    const loader = new Loader(connection, NativeLoader.programId);
-    await loader.load(programAccount, bytes);
-    await loader.finalize(programAccount);
-
-    return programAccount.publicKey;
   }
 }
