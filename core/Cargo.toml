@@ -48,6 +48,7 @@ serde = "1.0.89"
 serde_derive = "1.0.91"
 serde_json = "1.0.39"
 solana-budget-api = { path = "../programs/budget_api", version = "0.15.0"  }
+solana-budget-program = { path = "../programs/budget_program", version = "0.15.0"  }
 solana-client = { path = "../client", version = "0.15.0"  }
 solana-drone = { path = "../drone", version = "0.15.0"  }
 solana-kvstore = { path = "../kvstore", version = "0.15.0" , optional = true  }
@@ -59,6 +60,7 @@ solana-sdk = { path = "../sdk", version = "0.15.0"  }
 solana-stake-api = { path = "../programs/stake_api", version = "0.15.0"  }
 solana-storage-api = { path = "../programs/storage_api", version = "0.15.0"  }
 solana-vote-api = { path = "../programs/vote_api", version = "0.15.0"  }
+solana-vote-program = { path = "../programs/vote_program", version = "0.15.0"  }
 solana-vote-signer = { path = "../vote-signer", version = "0.15.0"  }
 sys-info = "0.5.6"
 tokio = "0.1"
@@ -68,8 +70,7 @@ untrusted = "0.6.2"
 [dev-dependencies]
 hex-literal = "0.2.0"
 matches = "0.1.6"
-solana-vote-program = { path = "../programs/vote_program", version = "0.15.0"  }
-solana-budget-program = { path = "../programs/budget_program", version = "0.15.0"  }
+
 
 [[bench]]
 name = "banking_stage"
