@@ -1,12 +1,5 @@
 // @flow
-import {
-  Account,
-  Connection,
-  BpfLoader,
-  Loader,
-  SystemProgram,
-  sendAndConfirmTransaction,
-} from '../src';
+import {Account, Connection, BpfLoader, Loader, SystemProgram} from '../src';
 import {DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND} from '../src/timing';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetRecentBlockhash} from './mockrpc/get-recent-blockhash';
@@ -436,7 +429,11 @@ test('transaction', async () => {
       result: 2,
     },
   ]);
-  expect(await connection.getBalance(accountFrom.publicKey)).toBe(2);
+
+  // accountFrom may have less than 2 due to transaction fees
+  const balance = await connection.getBalance(accountFrom.publicKey);
+  expect(balance).toBeGreaterThan(0);
+  expect(balance).toBeLessThanOrEqual(2);
 
   mockRpc.push([
     url,
@@ -494,7 +491,12 @@ test('multi-instruction transaction', async () => {
     Ok: null,
   });
 
-  expect(await connection.getBalance(accountFrom.publicKey)).toBe(12);
+  // accountFrom may have less than 12 due to transaction fees
+  expect(await connection.getBalance(accountFrom.publicKey)).toBeGreaterThan(0);
+  expect(
+    await connection.getBalance(accountFrom.publicKey),
+  ).toBeLessThanOrEqual(12);
+
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
 });
 
@@ -516,28 +518,21 @@ test('account change notification', async () => {
   );
 
   await connection.requestAirdrop(owner.publicKey, 42);
-  const transaction = SystemProgram.createAccount(
-    owner.publicKey,
-    programAccount.publicKey,
-    42,
+  await Loader.load(connection, owner, programAccount, BpfLoader.programId, [
+    1,
+    2,
     3,
-    BpfLoader.programId,
-  );
-  await sendAndConfirmTransaction(connection, transaction, owner);
-
-  const loader = new Loader(connection, BpfLoader.programId);
-  await loader.load(programAccount, [1, 2, 3]);
+  ]);
 
   // Wait for mockCallback to receive a call
   let i = 0;
   for (;;) {
-    if (mockCallback.mock.calls.length === 1) {
+    if (mockCallback.mock.calls.length > 0) {
       break;
     }
 
-    if (++i === 5) {
-      console.log(JSON.stringify(mockCallback.mock.calls));
-      throw new Error('mockCallback should be called twice');
+    if (++i === 30) {
+      throw new Error('Account change notification not observed');
     }
     // Sleep for a 1/4 of a slot, notifications only occur after a block is
     // processed
@@ -546,10 +541,8 @@ test('account change notification', async () => {
 
   await connection.removeAccountChangeListener(subscriptionId);
 
-  expect(mockCallback.mock.calls[0][0].lamports).toBe(42);
+  expect(mockCallback.mock.calls[0][0].lamports).toBe(1);
   expect(mockCallback.mock.calls[0][0].owner).toEqual(BpfLoader.programId);
-  expect(mockCallback.mock.calls[0][0].executable).toBe(false);
-  expect(mockCallback.mock.calls[0][0].data).toEqual(Buffer.from([1, 2, 3]));
 });
 
 test('program account change notification', async () => {
@@ -562,36 +555,35 @@ test('program account change notification', async () => {
   const owner = new Account();
   const programAccount = new Account();
 
-  const mockCallback = jest.fn();
+  // const mockCallback = jest.fn();
 
+  let notified = false;
   const subscriptionId = connection.onProgramAccountChange(
     BpfLoader.programId,
-    mockCallback,
+    keyedAccountInfo => {
+      if (keyedAccountInfo.accountId !== programAccount.publicKey.toString()) {
+        //console.log('Ignoring another account', keyedAccountInfo);
+        return;
+      }
+      expect(keyedAccountInfo.accountInfo.lamports).toBe(1);
+      expect(keyedAccountInfo.accountInfo.owner).toEqual(BpfLoader.programId);
+      notified = true;
+    },
   );
 
   await connection.requestAirdrop(owner.publicKey, 42);
-  const transaction = SystemProgram.createAccount(
-    owner.publicKey,
-    programAccount.publicKey,
-    42,
+  await Loader.load(connection, owner, programAccount, BpfLoader.programId, [
+    1,
+    2,
     3,
-    BpfLoader.programId,
-  );
-  await sendAndConfirmTransaction(connection, transaction, owner);
-
-  const loader = new Loader(connection, BpfLoader.programId);
-  await loader.load(programAccount, [1, 2, 3]);
+  ]);
 
   // Wait for mockCallback to receive a call
   let i = 0;
-  for (;;) {
-    if (mockCallback.mock.calls.length === 1) {
-      break;
-    }
-
-    if (++i === 20) {
-      console.log(JSON.stringify(mockCallback.mock.calls));
-      throw new Error('mockCallback should be called twice');
+  while (!notified) {
+    //for (;;) {
+    if (++i === 30) {
+      throw new Error('Program change notification not observed');
     }
     // Sleep for a 1/4 of a slot, notifications only occur after a block is
     // processed
@@ -599,16 +591,4 @@ test('program account change notification', async () => {
   }
 
   await connection.removeProgramAccountChangeListener(subscriptionId);
-
-  expect(mockCallback.mock.calls[0][0].accountId).toEqual(
-    programAccount.publicKey.toString(),
-  );
-  expect(mockCallback.mock.calls[0][0].accountInfo.lamports).toBe(42);
-  expect(mockCallback.mock.calls[0][0].accountInfo.owner).toEqual(
-    BpfLoader.programId,
-  );
-  expect(mockCallback.mock.calls[0][0].accountInfo.executable).toBe(false);
-  expect(mockCallback.mock.calls[0][0].accountInfo.data).toEqual(
-    Buffer.from([1, 2, 3]),
-  );
 });

@@ -6,7 +6,7 @@ import {url} from './url';
 
 export async function newAccountWithLamports(
   connection: Connection,
-  lamports: number = 10,
+  lamports: number = 1000000,
 ): Promise<Account> {
   const account = new Account();
 

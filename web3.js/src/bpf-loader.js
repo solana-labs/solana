@@ -3,8 +3,6 @@
 import {Account} from './account';
 import {PublicKey} from './publickey';
 import {Loader} from './loader';
-import {SystemProgram} from './system-program';
-import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import type {Connection} from './connection';
 
 /**
@@ -15,9 +13,7 @@ export class BpfLoader {
    * Public key that identifies the BpfLoader
    */
   static get programId(): PublicKey {
-    return new PublicKey(
-      'BPFLoader1111111111111111111111111111111111',
-    );
+    return new PublicKey('BPFLoader1111111111111111111111111111111111');
   }
 
   /**
@@ -27,26 +23,12 @@ export class BpfLoader {
    * @param owner User account to load the program into
    * @param elfBytes The entire ELF containing the BPF program
    */
-  static async load(
+  static load(
     connection: Connection,
-    owner: Account,
+    payer: Account,
     elf: Array<number>,
   ): Promise<PublicKey> {
-    const programAccount = new Account();
-
-    const transaction = SystemProgram.createAccount(
-      owner.publicKey,
-      programAccount.publicKey,
-      1 + Math.ceil(elf.length / Loader.chunkSize) + 1,
-      elf.length,
-      BpfLoader.programId,
-    );
-    await sendAndConfirmTransaction(connection, transaction, owner);
-
-    const loader = new Loader(connection, BpfLoader.programId);
-    await loader.load(programAccount, elf);
-    await loader.finalize(programAccount);
-
-    return programAccount.publicKey;
+    const program = new Account();
+    return Loader.load(connection, payer, program, BpfLoader.programId, elf);
   }
 }

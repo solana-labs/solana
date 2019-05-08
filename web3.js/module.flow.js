@@ -249,9 +249,13 @@ declare module '@solana/web3.js' {
 
   // === src/loader.js ===
   declare export class Loader {
-    constructor(connection: Connection, programId: PublicKey): Loader;
-    load(program: Account, offset: number, bytes: Array<number>): Promise<void>;
-    finalize(program: Account): Promise<void>;
+    static load(
+      connection: Connection,
+      payer: Account,
+      program: Account,
+      programId: PublicKey,
+      data: Array<number>,
+    ): Promise<PublicKey>;
   }
 
   // === src/bpf-loader.js ===
@@ -259,7 +263,7 @@ declare module '@solana/web3.js' {
     static programId: PublicKey;
     static load(
       connection: Connection,
-      owner: Account,
+      payer: Account,
       elfBytes: Array<number>,
     ): Promise<PublicKey>;
   }
@@ -269,7 +273,7 @@ declare module '@solana/web3.js' {
     static programId: PublicKey;
     static load(
       connection: Connection,
-      owner: Account,
+      payer: Account,
       programName: string,
     ): Promise<PublicKey>;
   }

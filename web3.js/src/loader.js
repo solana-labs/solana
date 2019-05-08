@@ -9,43 +9,46 @@ import {Transaction} from './transaction';
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import {sleep} from './util/sleep';
 import type {Connection} from './connection';
+import {SystemProgram} from './system-program';
 
 /**
  * Program loader interface
  */
 export class Loader {
   /**
-   * @private
-   */
-  connection: Connection;
-
-  /**
-   * @private
-   */
-  programId: PublicKey;
-
-  /**
    * Amount of program data placed in each load Transaction
    */
   static get chunkSize(): number {
-    return 256;
+    return 229; // Keep program chunks under PACKET_DATA_SIZE
   }
 
   /**
-   * @param connection The connection to use
-   * @param programId Public key that identifies the loader
-   */
-  constructor(connection: Connection, programId: PublicKey) {
-    Object.assign(this, {connection, programId});
-  }
-
-  /**
-   * Load program data
+   * Loads a generic program
    *
-   * @param program Account to load the program info
-   * @param data Program data
+   * @param connection The connection to use
+   * @param payer System account that pays to load the program
+   * @param program Account to load the program into
+   * @param programId Public key that identifies the loader
+   * @param data Program octets
    */
-  async load(program: Account, data: Array<number>) {
+  static async load(
+    connection: Connection,
+    payer: Account,
+    program: Account,
+    programId: PublicKey,
+    data: Array<number>,
+  ): Promise<PublicKey> {
+    {
+      const transaction = SystemProgram.createAccount(
+        payer.publicKey,
+        program.publicKey,
+        1,
+        data.length,
+        programId,
+      );
+      await sendAndConfirmTransaction(connection, transaction, payer);
+    }
+
     const dataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
       BufferLayout.u32('offset'),
@@ -76,11 +79,11 @@ export class Loader {
 
       const transaction = new Transaction().add({
         keys: [{pubkey: program.publicKey, isSigner: true}],
-        programId: this.programId,
+        programId,
         data,
       });
       transactions.push(
-        sendAndConfirmTransaction(this.connection, transaction, program),
+        sendAndConfirmTransaction(connection, transaction, payer, program),
       );
 
       // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
@@ -100,29 +103,26 @@ export class Loader {
       array = array.slice(chunkSize);
     }
     await Promise.all(transactions);
-  }
 
-  /**
-   * Finalize an account loaded with program data for execution
-   *
-   * @param program `load()`ed Account
-   */
-  async finalize(program: Account) {
-    const dataLayout = BufferLayout.struct([BufferLayout.u32('instruction')]);
+    // Finalize the account loaded with program data for execution
+    {
+      const dataLayout = BufferLayout.struct([BufferLayout.u32('instruction')]);
 
-    const data = Buffer.alloc(dataLayout.span);
-    dataLayout.encode(
-      {
-        instruction: 1, // Finalize instruction
-      },
-      data,
-    );
+      const data = Buffer.alloc(dataLayout.span);
+      dataLayout.encode(
+        {
+          instruction: 1, // Finalize instruction
+        },
+        data,
+      );
 
-    const transaction = new Transaction().add({
-      keys: [{pubkey: program.publicKey, isSigner: true}],
-      programId: this.programId,
-      data,
-    });
-    await sendAndConfirmTransaction(this.connection, transaction, program);
+      const transaction = new Transaction().add({
+        keys: [{pubkey: program.publicKey, isSigner: true}],
+        programId,
+        data,
+      });
+      await sendAndConfirmTransaction(connection, transaction, payer, program);
+    }
+    return program.publicKey;
   }
 }

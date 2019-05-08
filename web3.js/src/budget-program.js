@@ -143,9 +143,7 @@ export class BudgetProgram {
    * Public key that identifies the Budget program
    */
   static get programId(): PublicKey {
-    return new PublicKey(
-      'Budget1111111111111111111111111111111111111',
-    );
+    return new PublicKey('Budget1111111111111111111111111111111111111');
   }
 
   /**
