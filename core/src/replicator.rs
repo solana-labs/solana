@@ -239,6 +239,7 @@ impl Replicator {
             repair_socket,
             &exit,
             Some(repair_slot_range),
+            None,
             &Hash::default(),
         );
 

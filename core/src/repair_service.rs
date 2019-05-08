@@ -2,7 +2,7 @@
 //! regularly finds missing blobs in the ledger and sends repair requests for those blobs
 
 use crate::bank_forks::BankForks;
-use crate::blocktree::{Blocktree, SlotMeta};
+use crate::blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta};
 use crate::cluster_info::ClusterInfo;
 use crate::result::Result;
 use crate::service::Service;
@@ -69,6 +69,7 @@ impl RepairService {
         repair_socket: Arc<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
+        _new_slots_receiver: Option<CompletedSlotsReceiver>,
         repair_slot_range: Option<RepairSlotRange>,
     ) -> Self {
         let exit = exit.clone();

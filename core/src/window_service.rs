@@ -2,7 +2,7 @@
 //!   blocktree and retransmitting where required
 //!
 use crate::bank_forks::BankForks;
-use crate::blocktree::Blocktree;
+use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::cluster_info::ClusterInfo;
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::leader_schedule_utils::slot_leader_at;
@@ -184,6 +184,7 @@ impl WindowService {
         repair_socket: Arc<UdpSocket>,
         exit: &Arc<AtomicBool>,
         repair_slot_range: Option<RepairSlotRange>,
+        completed_slots_receiver: Option<CompletedSlotsReceiver>,
         genesis_blockhash: &Hash,
     ) -> WindowService {
         let repair_service = RepairService::new(
@@ -192,6 +193,7 @@ impl WindowService {
             repair_socket,
             cluster_info.clone(),
             bank_forks.clone(),
+            completed_slots_receiver,
             repair_slot_range,
         );
         let exit = exit.clone();
@@ -351,9 +353,9 @@ mod test {
         let t_receiver = blob_receiver(Arc::new(leader_node.sockets.gossip), &exit, s_reader);
         let (s_retransmit, r_retransmit) = channel();
         let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Arc::new(
-            Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
-        );
+        let (blocktree, _, completed_slots_receiver) = Blocktree::open_with_signal(&blocktree_path)
+            .expect("Expected to be able to open database ledger");
+        let blocktree = Arc::new(blocktree);
 
         let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
@@ -368,6 +370,7 @@ mod test {
             Arc::new(leader_node.sockets.repair),
             &exit,
             None,
+            Some(completed_slots_receiver),
             &Hash::default(),
         );
         let t_responder = {
@@ -430,9 +433,10 @@ mod test {
         let t_receiver = blob_receiver(Arc::new(leader_node.sockets.gossip), &exit, s_reader);
         let (s_retransmit, r_retransmit) = channel();
         let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Arc::new(
-            Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
-        );
+        let (blocktree, _, completed_slots_receiver) = Blocktree::open_with_signal(&blocktree_path)
+            .expect("Expected to be able to open database ledger");
+
+        let blocktree = Arc::new(blocktree);
         let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bank_forks = Some(Arc::new(RwLock::new(BankForks::new(0, bank))));
@@ -446,6 +450,7 @@ mod test {
             Arc::new(leader_node.sockets.repair),
             &exit,
             None,
+            Some(completed_slots_receiver),
             &Hash::default(),
         );
         let t_responder = {

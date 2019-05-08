@@ -1,7 +1,7 @@
 //! The `fullnode` module hosts all the fullnode microservices.
 
 use crate::bank_forks::BankForks;
-use crate::blocktree::Blocktree;
+use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::blocktree_processor::{self, BankForksInfo};
 use crate::cluster_info::{ClusterInfo, Node};
 use crate::contact_info::ContactInfo;
@@ -95,8 +95,14 @@ impl Fullnode {
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
 
-        let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver, leader_schedule_cache) =
-            new_banks_from_blocktree(ledger_path, config.account_paths.clone());
+        let (
+            bank_forks,
+            bank_forks_info,
+            blocktree,
+            ledger_signal_receiver,
+            completed_slots_receiver,
+            leader_schedule_cache,
+        ) = new_banks_from_blocktree(ledger_path, config.account_paths.clone());
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let exit = Arc::new(AtomicBool::new(false));
@@ -236,6 +242,7 @@ impl Fullnode {
             &leader_schedule_cache,
             &exit,
             &genesis_blockhash,
+            completed_slots_receiver,
         );
 
         if config.sigverify_disabled {
@@ -290,13 +297,15 @@ pub fn new_banks_from_blocktree(
     Vec<BankForksInfo>,
     Blocktree,
     Receiver<bool>,
+    CompletedSlotsReceiver,
     LeaderScheduleCache,
 ) {
     let genesis_block =
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
 
-    let (blocktree, ledger_signal_receiver) = Blocktree::open_with_signal(blocktree_path)
-        .expect("Expected to successfully open database ledger");
+    let (blocktree, ledger_signal_receiver, completed_slots_receiver) =
+        Blocktree::open_with_signal(blocktree_path)
+            .expect("Expected to successfully open database ledger");
 
     let (bank_forks, bank_forks_info, leader_schedule_cache) =
         blocktree_processor::process_blocktree(&genesis_block, &blocktree, account_paths)
@@ -307,6 +316,7 @@ pub fn new_banks_from_blocktree(
         bank_forks_info,
         blocktree,
         ledger_signal_receiver,
+        completed_slots_receiver,
         leader_schedule_cache,
     )
 }

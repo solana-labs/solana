@@ -1,7 +1,7 @@
 //! The `retransmit_stage` retransmits blobs between validators
 
 use crate::bank_forks::BankForks;
-use crate::blocktree::Blocktree;
+use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT};
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::result::{Error, Result};
@@ -118,6 +118,7 @@ impl RetransmitStage {
         fetch_stage_receiver: BlobReceiver,
         exit: &Arc<AtomicBool>,
         genesis_blockhash: &Hash,
+        completed_slots_receiver: CompletedSlotsReceiver,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -138,6 +139,7 @@ impl RetransmitStage {
             repair_socket,
             exit,
             None,
+            Some(completed_slots_receiver),
             genesis_blockhash,
         );
 
