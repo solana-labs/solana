@@ -70,6 +70,7 @@ pub struct Replicator {
     hash: Hash,
     #[cfg(feature = "chacha")]
     num_chacha_blocks: usize,
+    #[cfg(feature = "chacha")]
     blocktree: Arc<Blocktree>,
 }
 
@@ -288,6 +289,7 @@ impl Replicator {
             hash: Hash::default(),
             #[cfg(feature = "chacha")]
             num_chacha_blocks: 0,
+            #[cfg(feature = "chacha")]
             blocktree,
         })
     }
