@@ -222,31 +222,7 @@ impl RpcClient {
         Ok(res)
     }
 
-    pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
-        let params = json!([format!("{}", pubkey)]);
-        let response = self
-            .client
-            .send(&RpcRequest::GetAccountInfo, Some(params), 0);
-        match response {
-            Ok(account_json) => {
-                let account: Account =
-                    serde_json::from_value(account_json).expect("deserialize account");
-                Ok(account.data)
-            }
-            Err(error) => {
-                debug!("get_account_data failed: {:?}", error);
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "get_account_data failed",
-                ))
-            }
-        }
-    }
-
-    /// Request the balance of the user holding `pubkey`. This method blocks
-    /// until the server sends a response. If the response packet is dropped
-    /// by the network, this method will hang indefinitely.
-    pub fn get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
+    pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
         let params = json!([format!("{}", pubkey)]);
         let response = self
             .client
@@ -257,13 +233,23 @@ impl RpcClient {
                 let account: Account =
                     serde_json::from_value(account_json).expect("deserialize account");
                 trace!("Response account {:?} {:?}", pubkey, account);
-                trace!("get_balance {:?}", account.lamports);
-                Ok(account.lamports)
+                Ok(account)
             })
             .map_err(|error| {
                 debug!("Response account {}: None (error: {:?})", pubkey, error);
                 io::Error::new(io::ErrorKind::Other, "AccountNotFound")
             })
+    }
+
+    pub fn get_account_data(&self, pubkey: &Pubkey) -> io::Result<Vec<u8>> {
+        self.get_account(pubkey).map(|account| account.data)
+    }
+
+    /// Request the balance of the user holding `pubkey`. This method blocks
+    /// until the server sends a response. If the response packet is dropped
+    /// by the network, this method will hang indefinitely.
+    pub fn get_balance(&self, pubkey: &Pubkey) -> io::Result<u64> {
+        self.get_account(pubkey).map(|account| account.lamports)
     }
 
     /// Request the transaction count.  If the response packet is dropped by the network,
