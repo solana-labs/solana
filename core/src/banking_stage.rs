@@ -171,9 +171,11 @@ impl BankingStage {
             if processed < verified_txs_len {
                 bank_shutdown = true;
             }
-            rebuffered_packets += new_unprocessed_indexes.len();
             // Collect any unprocessed transactions in this batch for forwarding
-            unprocessed_packets.push((msgs.to_owned(), new_unprocessed_indexes));
+            if !new_unprocessed_indexes.is_empty() {
+                rebuffered_packets += new_unprocessed_indexes.len();
+                unprocessed_packets.push((msgs.to_owned(), new_unprocessed_indexes));
+            }
         }
 
         inc_new_counter_info!("banking_stage-rebuffered_packets", rebuffered_packets);
@@ -637,7 +639,9 @@ impl BankingStage {
                 bank_shutdown = true;
             }
             // Collect any unprocessed transactions in this batch for forwarding
-            unprocessed_packets.push((msgs, unprocessed_indexes));
+            if !unprocessed_indexes.is_empty() {
+                unprocessed_packets.push((msgs, unprocessed_indexes));
+            }
 
             new_tx_count += processed;
         }
