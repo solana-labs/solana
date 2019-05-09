@@ -30,6 +30,8 @@ use solana_vote_api::vote_instruction;
 use std::fs::File;
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
+use std::thread::sleep;
+use std::time::Duration;
 use std::{error, fmt, mem};
 
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
@@ -776,7 +778,17 @@ pub fn request_and_confirm_airdrop(
     lamports: u64,
 ) -> Result<(), Box<dyn error::Error>> {
     let blockhash = rpc_client.get_recent_blockhash()?;
-    let keypair = DroneKeypair::new_keypair(drone_addr, to_pubkey, lamports, blockhash)?;
+    let keypair = {
+        let mut retries = 5;
+        loop {
+            let result = DroneKeypair::new_keypair(drone_addr, to_pubkey, lamports, blockhash);
+            if result.is_ok() || retries == 0 {
+                break result;
+            }
+            retries -= 1;
+            sleep(Duration::from_secs(1));
+        }
+    }?;
     let mut tx = keypair.airdrop_transaction();
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&keypair]);
     log_instruction_custom_error::<SystemError>(result)?;

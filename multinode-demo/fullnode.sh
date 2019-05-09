@@ -70,35 +70,6 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   echo "rsync://$url"
 }
 
-airdrop() {
-  declare keypair_file=$1
-  declare entrypoint_ip=$2
-  declare amount=$3
-
-  declare address
-  address=$($solana_wallet --keypair "$keypair_file" address)
-
-  # TODO: Until https://github.com/solana-labs/solana/issues/2355 is resolved
-  # a fullnode needs N lamports as its vote account gets re-created on every
-  # node restart, costing it lamports
-  declare retries=5
-
-  while ! $solana_wallet --keypair "$keypair_file" --url "http://$entrypoint_ip:8899" airdrop "$amount"; do
-
-    # TODO: Consider moving this retry logic into `solana-wallet airdrop`
-    #   itself, currently it does not retry on "Connection refused" errors.
-    ((retries--))
-    if [[ $retries -le 0 ]]; then
-        echo "Airdrop to $address failed."
-        return 1
-    fi
-    echo "Airdrop to $address failed. Remaining retries: $retries"
-    sleep 1
-  done
-
-  return 0
-}
-
 setup_vote_account() {
   declare entrypoint_ip=$1
   declare node_keypair_path=$2
@@ -114,7 +85,7 @@ setup_vote_account() {
   if [[ -f "$vote_keypair_path".configured ]]; then
     echo "Vote account has already been configured"
   else
-    airdrop "$node_keypair_path" "$entrypoint_ip" "$stake" || return $?
+    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop "$stake" || return $?
 
     # Fund the vote account from the node, with the node as the node_keypair
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
