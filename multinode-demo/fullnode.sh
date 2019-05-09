@@ -140,6 +140,7 @@ bootstrap_leader=false
 stake=42 # number of lamports to assign as stake by default
 poll_for_new_genesis_block=0
 label=
+fullnode_id_path=
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -155,6 +156,10 @@ while [[ -n $1 ]]; do
       shift
     elif [[ $1 = --blockstream ]]; then
       stake=0
+      args+=("$1" "$2")
+      shift 2
+    elif [[ $1 = --identity ]]; then
+      fullnode_id_path=$2
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --enable-rpc-exit ]]; then
@@ -203,7 +208,7 @@ if $bootstrap_leader; then
 
   $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger verify
 
-  fullnode_id_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json
+  : ${fullnode_id_path:="$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json}
   fullnode_vote_id_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-id.json
   ledger_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
   accounts_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts
@@ -219,7 +224,7 @@ else
   read -r entrypoint entrypoint_address shift < <(find_entrypoint "${positional_args[@]}")
   shift "$shift"
 
-  fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id$label.json
+  : ${fullnode_id_path:=$SOLANA_CONFIG_DIR/fullnode-id$label.json}
   fullnode_vote_id_path=$SOLANA_CONFIG_DIR/fullnode-vote-id$label.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger$label
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts$label
