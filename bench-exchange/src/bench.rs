@@ -11,7 +11,7 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_exchange_api::exchange_instruction;
 use solana_exchange_api::exchange_state::*;
 use solana_exchange_api::id;
-use solana_metrics::*;
+use solana_metrics::{datapoint, field};
 use solana_sdk::client::Client;
 use solana_sdk::client::SyncClient;
 use solana_sdk::pubkey::Pubkey;
@@ -262,10 +262,10 @@ fn do_tx_transfers<T>(
             let duration = now.elapsed();
 
             total_txs_sent_count.fetch_add(n, Ordering::Relaxed);
-            submit!(
+            datapoint!(
                 "bench-exchange-do_tx_transfers",
-                integer!("duration", duration_as_ms(&duration)),
-                integer!("count", n)
+                field!("duration", duration_as_ms(&duration), i64),
+                field!("count", n, i64)
             );
         }
         if exit_signal.load(Ordering::Relaxed) {
@@ -409,7 +409,10 @@ fn swapper<T>(
                 txs = 0;
             }
 
-            submit!("bench-exchange-swaps", integer!("count", to_swap_txs.len()));
+            datapoint!(
+                "bench-exchange-swaps",
+                field!("count", to_swap_txs.len(), i64)
+            );
 
             let chunks: Vec<_> = to_swap_txs.chunks(chunk_size).collect();
             {
@@ -541,7 +544,10 @@ fn trader<T>(
                     txs = 0;
                 }
 
-                submit!("bench-exchange-trades", integer!("count", trades_txs.len()));
+                datapoint!(
+                    "bench-exchange-trades",
+                    field!("count", trades_txs.len(), i64)
+                );
 
                 {
                     let mut shared_txs_wl = shared_txs

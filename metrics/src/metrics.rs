@@ -1,4 +1,4 @@
-//! The `metrics` module enables sending measurements to an InfluxDB instance
+//! The `metrics` module enables sending measurements to an `InfluxDB` instance
 
 use influx_db_client as influxdb;
 use lazy_static::lazy_static;
@@ -13,21 +13,26 @@ use std::time::{Duration, Instant};
 use sys_info::hostname;
 
 #[macro_export]
-macro_rules! integer {
-    ($name:expr, $value:expr) => {
-        ($name, influxdb::Value::Integer($value as i64))
-    };
-}
-
-#[macro_export]
-macro_rules! string {
-    ($name:expr, $string:expr) => {
+macro_rules! field {
+    ($name:expr, $string:expr, String) => {
         ($name, solana_metrics::influxdb::Value::String($string))
     };
+    ($name:expr, $value:expr, i64) => {
+        (
+            $name,
+            solana_metrics::influxdb::Value::Integer($value as i64),
+        )
+    };
+    ($name:expr, $value:expr, f64) => {
+        ($name, solana_metrics::influxdb::Value::Float($value as f32))
+    };
+    ($name:expr, $value:expr, bool) => {
+        ($name, solana_metrics::influxdb::Value::Bool($value as bool))
+    };
 }
 
 #[macro_export]
-macro_rules! field {
+macro_rules! add_field {
     ($var:ident, $field:expr) => {
         $var.add_field(
                     $field.0,
@@ -39,16 +44,16 @@ macro_rules! field {
                     $field.0,
                     $field.1,
                 );
-        field!($var, $($rest),+);
+        solana_metrics::add_field!($var, $($rest),+);
     };
 }
 
 #[macro_export]
-macro_rules! submit {
+macro_rules! datapoint {
     ($name:expr, $($rest:expr),+) => {
-        let mut point = influxdb::Point::new(&$name);
-        field!(point, $($rest),+);
-        submit(point.to_owned());
+        let mut point = solana_metrics::influxdb::Point::new(&$name);
+        solana_metrics::add_field!(point, $($rest),+);
+        solana_metrics::submit(point.to_owned());
     };
 }
 
@@ -88,7 +93,7 @@ struct InfluxDbMetricsWriter {
 
 impl InfluxDbMetricsWriter {
     fn new() -> Self {
-        InfluxDbMetricsWriter {
+        Self {
             client: Self::build_client().ok(),
         }
     }
@@ -136,7 +141,7 @@ impl MetricsAgent {
     fn new(writer: Arc<MetricsWriter + Send + Sync>, write_frequency: Duration) -> Self {
         let (sender, receiver) = channel::<MetricsCommand>();
         thread::spawn(move || Self::run(&receiver, &writer, write_frequency));
-        MetricsAgent { sender }
+        Self { sender }
     }
 
     fn run(

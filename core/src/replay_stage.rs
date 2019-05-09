@@ -14,8 +14,7 @@ use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use hashbrown::HashMap;
-use solana_metrics::counter::Counter;
-use solana_metrics::*;
+use solana_metrics::{datapoint, field, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -245,10 +244,10 @@ impl ReplayStage {
                     cluster_info.write().unwrap().set_leader(&next_leader);
                     if next_leader == *my_id && reached_leader_tick {
                         debug!("{} starting tpu for slot {}", my_id, poh_slot);
-                        submit!(
+                        datapoint!(
                             "replay_stage-new_leader",
-                            integer!("count", poh_slot),
-                            integer!("grace", grace_ticks));
+                            field!("count", poh_slot, i64),
+                            field!("grace", grace_ticks, i64));
                         let tpu_bank = Bank::new_from_parent(&parent, my_id, poh_slot);
                         bank_forks.write().unwrap().insert(tpu_bank);
                         if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
@@ -468,7 +467,10 @@ impl ReplayStage {
                     .unwrap_or(true)
             {
                 info!("validator fork confirmed {} {}", *slot, duration);
-                submit!("validator-confirmation", integer!("duration_ms", duration));
+                datapoint!(
+                    "validator-confirmation",
+                    field!("duration_ms", duration, i64)
+                );
                 false
             } else {
                 debug!(

@@ -4,7 +4,7 @@ use crate::exchange_instruction::*;
 use crate::exchange_state::*;
 use crate::id;
 use log::*;
-use solana_metrics::counter::Counter;
+use solana_metrics::inc_new_counter_info;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;

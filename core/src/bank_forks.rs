@@ -1,7 +1,7 @@
 //! The `bank_forks` module implments BankForks a DAG of checkpointed Banks
 
 use hashbrown::{HashMap, HashSet};
-use solana_metrics::counter::Counter;
+use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing;
 use std::ops::Index;

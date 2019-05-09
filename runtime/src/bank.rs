@@ -13,8 +13,7 @@ use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
 use log::*;
-use solana_metrics::counter::Counter;
-use solana_metrics::*;
+use solana_metrics::{datapoint, field, inc_new_counter_info};
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -246,10 +245,10 @@ impl Bank {
         bank.slot = slot;
         bank.max_tick_height = (bank.slot + 1) * bank.ticks_per_slot - 1;
 
-        submit!(
+        datapoint!(
             "bank-new_from_parent-heights",
-            integer!("slot_height", slot),
-            integer!("bank_height", bank.bank_height)
+            field!("slot_height", slot, i64),
+            field!("bank_height", bank.bank_height, i64)
         );
 
         bank.parent = RwLock::new(Some(parent.clone()));
@@ -327,10 +326,10 @@ impl Bank {
             .for_each(|p| self.status_cache.write().unwrap().add_root(p.slot()));
         let squash_cache_ms = duration_as_ms(&squash_cache_start.elapsed());
 
-        submit!(
+        datapoint!(
             "locktower-observed",
-            integer!("squash_accounts_ms", squash_accounts_ms),
-            integer!("squash_cache_ms", squash_cache_ms)
+            field!("squash_accounts_ms", squash_accounts_ms, i64),
+            field!("squash_cache_ms", squash_cache_ms, i64)
         );
     }
 

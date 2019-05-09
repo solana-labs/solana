@@ -10,8 +10,8 @@ use crate::service::Service;
 use crate::staking_utils;
 use crate::streamer::BlobReceiver;
 use crate::window_service::WindowService;
-use solana_metrics::counter::Counter;
-use solana_metrics::{influxdb, submit};
+use solana_metrics::inc_new_counter_info;
+use solana_metrics::{datapoint, field};
 use solana_sdk::hash::Hash;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
@@ -34,11 +34,8 @@ fn retransmit(
         blobs.append(&mut nq);
     }
 
-    submit(
-        influxdb::Point::new("retransmit-stage")
-            .add_field("count", influxdb::Value::Integer(blobs.len() as i64))
-            .to_owned(),
-    );
+    datapoint!("retransmit-stage", field!("count", blobs.len(), i64));
+
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());
     let (neighbors, children) = compute_retransmit_peers(

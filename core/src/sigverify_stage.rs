@@ -10,8 +10,8 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify;
 use crate::streamer::{self, PacketReceiver};
-use solana_metrics::counter::Counter;
-use solana_metrics::{influxdb, submit};
+use solana_metrics::inc_new_counter_info;
+use solana_metrics::{datapoint, field};
 use solana_sdk::timing;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
@@ -96,15 +96,11 @@ impl SigVerifyStage {
             (len as f32 / total_time_s)
         );
 
-        submit(
-            influxdb::Point::new("sigverify_stage-total_verify_time")
-                .add_field("batch_len", influxdb::Value::Integer(batch_len as i64))
-                .add_field("len", influxdb::Value::Integer(len as i64))
-                .add_field(
-                    "total_time_ms",
-                    influxdb::Value::Integer(total_time_ms as i64),
-                )
-                .to_owned(),
+        datapoint!(
+            "sigverify_stage-total_verify_time",
+            field!("batch_len", batch_len, i64),
+            field!("len", len, i64),
+            field!("total_time_ms", total_time_ms, i64)
         );
 
         Ok(())

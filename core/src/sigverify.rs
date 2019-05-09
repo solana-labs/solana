@@ -6,7 +6,7 @@
 
 use crate::packet::{Packet, Packets};
 use crate::result::Result;
-use solana_metrics::counter::Counter;
+use solana_metrics::inc_new_counter_info;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::short_vec::decode_len;
 use solana_sdk::signature::Signature;

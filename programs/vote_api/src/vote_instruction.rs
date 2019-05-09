@@ -6,7 +6,7 @@ use crate::vote_state::{self, Vote, VoteState};
 use bincode::deserialize;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_metrics::*;
+use solana_metrics::{datapoint, field};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
 use solana_sdk::pubkey::Pubkey;
@@ -89,7 +89,7 @@ pub fn process_instruction(
         }
         VoteInstruction::Vote(votes) => {
             // TODO should this be a counter instead of a direct submit?
-            submit!("vote-native", integer!("count", 1));
+            datapoint!("vote-native", field!("count", 1, i64));
             let (vote_account, other_signers) = keyed_accounts.split_at_mut(1);
             let vote_account = &mut vote_account[0];
 

@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use solana::gen_keys::GenKeys;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_drone::drone::request_airdrop_transaction;
-use solana_metrics::*;
+use solana_metrics::{datapoint, field};
 use solana_sdk::client::Client;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -209,9 +209,9 @@ where
 
 fn metrics_submit_lamport_balance(lamport_balance: u64) {
     println!("Token balance: {}", lamport_balance);
-    submit!(
+    datapoint!(
         "bench-tps-lamport_balance",
-        integer!("balance", lamport_balance)
+        field!("balance", lamport_balance, i64)
     );
 }
 
@@ -253,9 +253,9 @@ fn generate_txs(
         duration_as_ms(&duration),
         blockhash,
     );
-    submit!(
+    datapoint!(
         "bench-tps-generate_txs",
-        integer!("duration", duration_as_ms(&duration))
+        field!("duration", duration_as_ms(&duration), i64)
     );
 
     let sz = transactions.len() / threads;
@@ -308,10 +308,10 @@ fn do_tx_transfers<T: Client>(
                 duration_as_ms(&transfer_start.elapsed()),
                 tx_len as f32 / duration_as_s(&transfer_start.elapsed()),
             );
-            submit!(
+            datapoint!(
                 "bench-tps-do_tx_transfers",
-                integer!("duration", duration_as_ms(&transfer_start.elapsed())),
-                integer!("count", tx_len)
+                field!("duration", duration_as_ms(&transfer_start.elapsed()), i64),
+                field!("count", tx_len, i64)
             );
         }
         if exit_signal.load(Ordering::Relaxed) {

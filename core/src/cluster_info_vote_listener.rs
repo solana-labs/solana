@@ -4,7 +4,7 @@ use crate::result::Result;
 use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
 use crate::{packet, sigverify};
-use solana_metrics::counter::Counter;
+use solana_metrics::inc_new_counter_info;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, RwLock};

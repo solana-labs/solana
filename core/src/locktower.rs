@@ -1,7 +1,7 @@
 use crate::bank_forks::BankForks;
 use crate::staking_utils;
 use hashbrown::{HashMap, HashSet};
-use solana_metrics::*;
+use solana_metrics::{datapoint, field};
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
@@ -125,13 +125,14 @@ impl Locktower {
                     vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0) as i64
                 );
                 debug!("observed root {}", vote_state.root_slot.unwrap_or(0) as i64);
-                submit!(
+                datapoint!(
                     "locktower-observed",
-                    integer!(
+                    field!(
                         "slot",
-                        vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0)
+                        vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0),
+                        i64
                     ),
-                    integer!("root", vote_state.root_slot.unwrap_or(0))
+                    field!("root", vote_state.root_slot.unwrap_or(0), i64)
                 );
             }
             let start_root = vote_state.root_slot;
@@ -210,11 +211,11 @@ impl Locktower {
                 self.epoch_stakes.epoch
             );
             self.epoch_stakes = EpochStakes::new_from_bank(bank, &self.epoch_stakes.delegate_id);
-            submit!(
+            datapoint!(
                 "locktower-epoch",
-                integer!("epoch", self.epoch_stakes.epoch),
-                integer!("self_staked", self.epoch_stakes.self_staked),
-                integer!("total_staked", self.epoch_stakes.total_staked)
+                field!("epoch", self.epoch_stakes.epoch, i64),
+                field!("self_staked", self.epoch_stakes.self_staked, i64),
+                field!("total_staked", self.epoch_stakes.total_staked, i64)
             );
         }
     }
@@ -222,10 +223,10 @@ impl Locktower {
     pub fn record_vote(&mut self, slot: u64) -> Option<u64> {
         let root_slot = self.lockouts.root_slot;
         self.lockouts.process_vote(&Vote { slot });
-        submit!(
+        datapoint!(
             "locktower-vote",
-            integer!("latest", slot),
-            integer!("root", self.lockouts.root_slot.unwrap_or(0))
+            field!("latest", slot, i64),
+            field!("root", self.lockouts.root_slot.unwrap_or(0), i64)
         );
         if root_slot != self.lockouts.root_slot {
             Some(self.lockouts.root_slot.unwrap())

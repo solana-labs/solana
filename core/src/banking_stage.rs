@@ -15,7 +15,7 @@ use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use itertools::Itertools;
-use solana_metrics::counter::Counter;
+use solana_metrics::inc_new_counter_info;
 use solana_runtime::accounts_db::ErrorCounters;
 use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
