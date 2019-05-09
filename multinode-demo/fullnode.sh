@@ -135,24 +135,7 @@ ledger_not_setup() {
   exit 1
 }
 
-default_fullnode_arg() {
-  declare name=$1
-  declare value=$2
-
-  for arg in "${extra_fullnode_args[@]}"; do
-    if [[ $arg = "$name" ]]; then
-      return
-    fi
-  done
-
-  if [[ -n $value ]]; then
-    extra_fullnode_args+=("$name" "$value")
-  else
-    extra_fullnode_args+=("$name")
-  fi
-}
-
-extra_fullnode_args=()
+args=()
 bootstrap_leader=false
 stake=42 # number of lamports to assign as stake
 poll_for_new_genesis_block=0
@@ -172,31 +155,31 @@ while [[ -n $1 ]]; do
       shift
     elif [[ $1 = --blockstream ]]; then
       stake=0
-      extra_fullnode_args+=("$1" "$2")
+      args+=("$1" "$2")
       shift 2
     elif [[ $1 = --enable-rpc-exit ]]; then
-      extra_fullnode_args+=("$1")
+      args+=("$1")
       shift
     elif [[ $1 = --init-complete-file ]]; then
-      extra_fullnode_args+=("$1" "$2")
+      args+=("$1" "$2")
       shift 2
     elif [[ $1 = --stake ]]; then
       stake="$2"
       shift 2
     elif [[ $1 = --no-voting ]]; then
-      extra_fullnode_args+=("$1")
+      args+=("$1")
       shift
     elif [[ $1 = --no-sigverify ]]; then
-      extra_fullnode_args+=("$1")
+      args+=("$1")
       shift
     elif [[ $1 = --rpc-port ]]; then
-      extra_fullnode_args+=("$1" "$2")
+      args+=("$1" "$2")
       shift 2
     elif [[ $1 = --dynamic-port-range ]]; then
-      extra_fullnode_args+=("$1" "$2")
+      args+=("$1" "$2")
       shift 2
     elif [[ $1 = --gossip-port ]]; then
-      extra_fullnode_args+=("$1" "$2")
+      args+=("$1" "$2")
       shift 2
     elif [[ $1 = -h ]]; then
       fullnode_usage "$@"
@@ -225,9 +208,9 @@ if $bootstrap_leader; then
   ledger_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
   accounts_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts
 
-  default_fullnode_arg --rpc-port 8899
-  default_fullnode_arg --rpc-drone-address 127.0.0.1:9900
-  default_fullnode_arg --gossip-port 8001
+  default_arg --rpc-port 8899
+  default_arg --rpc-drone-address 127.0.0.1:9900
+  default_arg --gossip-port 8001
 else
 
   if [[ ${#positional_args[@]} -gt 2 ]]; then
@@ -246,8 +229,8 @@ else
   [[ -r "$fullnode_id_path" ]] || $solana_keygen -o "$fullnode_id_path"
   [[ -r "$fullnode_vote_id_path" ]] || $solana_keygen -o "$fullnode_vote_id_path"
 
-  default_fullnode_arg --entrypoint "$leader_address"
-  default_fullnode_arg --rpc-drone-address "${leader_address%:*}:9900"
+  default_arg --entrypoint "$leader_address"
+  default_arg --rpc-drone-address "${leader_address%:*}:9900"
 fi
 
 fullnode_id=$($solana_keygen pubkey "$fullnode_id_path")
@@ -267,11 +250,11 @@ if [[ -z $CI ]]; then # Skip in CI
   source "$here"/../scripts/tune-system.sh
 fi
 
-default_fullnode_arg --identity "$fullnode_id_path"
-default_fullnode_arg --voting-keypair "$fullnode_vote_id_path"
-default_fullnode_arg --vote-account "$fullnode_vote_id"
-default_fullnode_arg --ledger "$ledger_config_dir"
-default_fullnode_arg --accounts "$accounts_config_dir"
+default_arg --identity "$fullnode_id_path"
+default_arg --voting-keypair "$fullnode_vote_id_path"
+default_arg --vote-account "$fullnode_vote_id"
+default_arg --ledger "$ledger_config_dir"
+default_arg --accounts "$accounts_config_dir"
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_fullnode_cuda
@@ -302,8 +285,8 @@ while true; do
     setup_vote_account "${leader_address%:*}" "$fullnode_id_path" "$fullnode_vote_id_path" "$stake"
   fi
 
-  echo "$PS4$program ${extra_fullnode_args[*]}"
-  $program "${extra_fullnode_args[@]}" > >($fullnode_logger) 2>&1 &
+  echo "$PS4$program ${args[*]}"
+  $program "${args[@]}" > >($fullnode_logger) 2>&1 &
   pid=$!
   oom_score_adj "$pid" 1000
 
