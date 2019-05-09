@@ -316,7 +316,7 @@ impl Replicator {
         node_info: &ContactInfo,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) {
-        info!("window created, waiting for ledger download done");
+        info!("window created, waiting for ledger download");
         let mut _received_so_far = 0;
 
         let mut current_slot = start_slot;
