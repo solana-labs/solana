@@ -9,6 +9,7 @@ source "$here"/common.sh
 # shellcheck source=scripts/oom-score-adj.sh
 source "$here"/../scripts/oom-score-adj.sh
 
+
 # shellcheck source=multinode-demo/extra-fullnode-args.sh
 source "$here"/extra-fullnode-args.sh
 
@@ -41,8 +42,8 @@ else
   program=$solana_fullnode
 fi
 
-fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id$label.json
-fullnode_vote_id_path=$SOLANA_CONFIG_DIR/fullnode-vote-id$label.json
+: "${fullnode_id_path:=$SOLANA_CONFIG_DIR/fullnode-keypair$label.json}"
+fullnode_vote_id_path=$SOLANA_CONFIG_DIR/fullnode-vote-keypair$label.json
 ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger$label
 accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts$label
 
@@ -55,8 +56,8 @@ fullnode_vote_id=$($solana_keygen pubkey "$fullnode_vote_id_path")
 
 cat <<EOF
 ======================[ Fullnode configuration ]======================
-node id: $fullnode_id
-vote id: $fullnode_vote_id
+node pubkey: $fullnode_id
+vote pubkey: $fullnode_vote_id
 ledger: $ledger_config_dir
 accounts: $accounts_config_dir
 ======================================================================
