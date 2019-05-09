@@ -31,24 +31,24 @@ EOF
   exit 1
 }
 
-find_leader() {
-  declare leader leader_address
+find_entrypoint() {
+  declare entrypoint entrypoint_address
   declare shift=0
 
   if [[ -z $1 ]]; then
-    leader=$PWD                   # Default to local tree for rsync
-    leader_address=127.0.0.1:8001 # Default to local leader
+    entrypoint=$PWD                   # Default to local tree for rsync
+    entrypoint_address=127.0.0.1:8001 # Default to local entrypoint
   elif [[ -z $2 ]]; then
-    leader=$1
-    leader_address=$leader:8001
+    entrypoint=$1
+    entrypoint_address=$entrypoint:8001
     shift=1
   else
-    leader=$1
-    leader_address=$2
+    entrypoint=$1
+    entrypoint_address=$2
     shift=2
   fi
 
-  echo "$leader" "$leader_address" "$shift"
+  echo "$entrypoint" "$entrypoint_address" "$shift"
 }
 
 rsync_url() { # adds the 'rsync://` prefix to URLs that need it
@@ -137,7 +137,7 @@ ledger_not_setup() {
 
 args=()
 bootstrap_leader=false
-stake=42 # number of lamports to assign as stake
+stake=42 # number of lamports to assign as stake by default
 poll_for_new_genesis_block=0
 label=
 
@@ -212,12 +212,11 @@ if $bootstrap_leader; then
   default_arg --rpc-drone-address 127.0.0.1:9900
   default_arg --gossip-port 8001
 else
-
   if [[ ${#positional_args[@]} -gt 2 ]]; then
     fullnode_usage "$@"
   fi
 
-  read -r leader leader_address shift < <(find_leader "${positional_args[@]}")
+  read -r entrypoint entrypoint_address shift < <(find_entrypoint "${positional_args[@]}")
   shift "$shift"
 
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id$label.json
@@ -229,8 +228,8 @@ else
   [[ -r "$fullnode_id_path" ]] || $solana_keygen -o "$fullnode_id_path"
   [[ -r "$fullnode_vote_id_path" ]] || $solana_keygen -o "$fullnode_vote_id_path"
 
-  default_arg --entrypoint "$leader_address"
-  default_arg --rpc-drone-address "${leader_address%:*}:9900"
+  default_arg --entrypoint "$entrypoint_address"
+  default_arg --rpc-drone-address "${entrypoint_address%:*}:9900"
 fi
 
 fullnode_id=$($solana_keygen pubkey "$fullnode_id_path")
@@ -270,8 +269,8 @@ while true; do
     if $bootstrap_leader; then
       ledger_not_setup "$SOLANA_RSYNC_CONFIG_DIR/ledger does not exist"
     fi
-    rsync_leader_url=$(rsync_url "$leader")
-    $rsync -vPr "$rsync_leader_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
+    rsync_entrypoint_url=$(rsync_url "$entrypoint")
+    $rsync -vPr "$rsync_entrypoint_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
   fi
 
   if [[ ! -d "$ledger_config_dir" ]]; then
@@ -282,7 +281,7 @@ while true; do
   trap '[[ -n $pid ]] && kill "$pid" >/dev/null 2>&1 && wait "$pid"' INT TERM ERR
 
   if ! $bootstrap_leader && ((stake)); then
-    setup_vote_account "${leader_address%:*}" "$fullnode_id_path" "$fullnode_vote_id_path" "$stake"
+    setup_vote_account "${entrypoint_address%:*}" "$fullnode_id_path" "$fullnode_vote_id_path" "$stake"
   fi
 
   echo "$PS4$program ${args[*]}"
@@ -305,7 +304,7 @@ while true; do
       ((poll_for_new_genesis_block)) || continue
       ((secs_to_next_genesis_poll--)) && continue
 
-      $rsync -r "$rsync_leader_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR" || true
+      $rsync -r "$rsync_entrypoint_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR" || true
       diff -q "$SOLANA_RSYNC_CONFIG_DIR"/ledger/genesis.json "$ledger_config_dir"/genesis.json >/dev/null 2>&1 || break
       secs_to_next_genesis_poll=60
 
