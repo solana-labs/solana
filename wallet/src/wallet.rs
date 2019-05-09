@@ -37,33 +37,6 @@ use std::{error, fmt, mem};
 
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
-// TODO remove me when Keypair implements PartialEq
-//  https://github.com/dalek-cryptography/ed25519-dalek/pull/82
-// -- BEGIN
-use std::ops::Deref;
-#[derive(Debug)]
-pub struct KeypairEq(Keypair);
-impl PartialEq for KeypairEq {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.pubkey() == other.0.pubkey()
-    }
-}
-impl Deref for KeypairEq {
-    type Target = Keypair;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl From<Keypair> for KeypairEq {
-    fn from(keypair: Keypair) -> Self {
-        KeypairEq(keypair)
-    }
-}
-// TODO remove me when Keypair implements PartialEq
-//  https://github.com/dalek-cryptography/ed25519-dalek/pull/82
-//  --- END
-
 #[derive(Debug, PartialEq)]
 pub enum WalletCommand {
     Address,
@@ -75,7 +48,7 @@ pub enum WalletCommand {
     CreateVoteAccount(Pubkey, Pubkey, u32, u64),
     ShowVoteAccount(Pubkey),
     CreateStakeAccount(Pubkey, u64),
-    DelegateStake(KeypairEq, Pubkey),
+    DelegateStake(Keypair, Pubkey),
     ShowStakeAccount(Pubkey),
     Deploy(String),
     GetTransactionCount,
@@ -1103,7 +1076,7 @@ mod tests {
                     )
                     .arg(
                         Arg::with_name("lamports")
-                            .index(3)
+                            .index(2)
                             .value_name("NUM")
                             .takes_value(true)
                             .required(true)
@@ -1352,9 +1325,10 @@ mod tests {
 
             path
         }
-        let keypair = Keypair::new();
+
         let keypair_file = make_tmp_path("keypair_file");
-        gen_keypair_file(keypair_file).unwrap();
+        gen_keypair_file(&keypair_file).unwrap();
+        let keypair = read_keypair(&keypair_file).unwrap();
         // Test Delegate Stake Subcommand
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
