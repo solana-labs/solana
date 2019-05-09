@@ -72,3 +72,20 @@ SOLANA_RSYNC_CONFIG_DIR=$SOLANA_ROOT/config
 
 # Configuration that remains local
 SOLANA_CONFIG_DIR=$SOLANA_ROOT/config-local
+
+default_arg() {
+  declare name=$1
+  declare value=$2
+
+  for arg in "${args[@]}"; do
+    if [[ $arg = "$name" ]]; then
+      return
+    fi
+  done
+
+  if [[ -n $value ]]; then
+    args+=("$name" "$value")
+  else
+    args+=("$name")
+  fi
+}
