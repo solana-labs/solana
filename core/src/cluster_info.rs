@@ -29,8 +29,7 @@ use core::cmp;
 use hashbrown::HashMap;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana_metrics::inc_new_counter_info;
-use solana_metrics::{datapoint, field};
+use solana_metrics::{datapoint, field, inc_new_counter_info};
 use solana_netutil::{
     bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range, PortRange,
 };

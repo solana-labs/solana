@@ -24,7 +24,7 @@ macro_rules! field {
         )
     };
     ($name:expr, $value:expr, f64) => {
-        ($name, solana_metrics::influxdb::Value::Float($value as f32))
+        ($name, solana_metrics::influxdb::Value::Float($value as f64))
     };
     ($name:expr, $value:expr, bool) => {
         ($name, solana_metrics::influxdb::Value::Bool($value as bool))
