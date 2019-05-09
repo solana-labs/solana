@@ -1,6 +1,7 @@
 //! The `repair_service` module implements the tools necessary to generate a thread which
 //! regularly finds missing blobs in the ledger and sends repair requests for those blobs
 
+use crate::bank_forks::BankForks;
 use crate::blocktree::{Blocktree, SlotMeta};
 use crate::cluster_info::ClusterInfo;
 use crate::result::Result;
@@ -67,6 +68,7 @@ impl RepairService {
         exit: &Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
+        bank_forks: Option<Arc<RwLock<BankForks>>>,
         repair_slot_range: Option<RepairSlotRange>,
     ) -> Self {
         let exit = exit.clone();
@@ -78,6 +80,7 @@ impl RepairService {
                     exit,
                     &repair_socket,
                     &cluster_info,
+                    &bank_forks,
                     repair_slot_range,
                 )
             })
@@ -91,6 +94,7 @@ impl RepairService {
         exit: Arc<AtomicBool>,
         repair_socket: &Arc<UdpSocket>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+        bank_forks: &Option<Arc<RwLock<BankForks>>>,
         repair_slot_range: Option<RepairSlotRange>,
     ) {
         let mut repair_info = RepairInfo::new();
@@ -111,7 +115,10 @@ impl RepairService {
                         repair_slot_range,
                     )
                 } else {
-                    Self::update_fast_repair(id, &epoch_slots, &cluster_info);
+                    let bank_forks = bank_forks
+                        .as_ref()
+                        .expect("Non-replicator repair strategy missing BankForks");
+                    Self::update_fast_repair(id, &epoch_slots, &cluster_info, bank_forks);
                     Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH)
                 }
             };
@@ -271,8 +278,13 @@ impl RepairService {
         }
     }
 
-    fn update_fast_repair(id: Pubkey, slots: &HashSet<u64>, cluster_info: &RwLock<ClusterInfo>) {
-        let root = 0;
+    fn update_fast_repair(
+        id: Pubkey,
+        slots: &HashSet<u64>,
+        cluster_info: &RwLock<ClusterInfo>,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) {
+        let root = bank_forks.read().unwrap().root();
         cluster_info
             .write()
             .unwrap()
