@@ -18,10 +18,7 @@ macro_rules! field {
         ($name, $crate::influxdb::Value::String($string))
     };
     ($name:expr, $value:expr, i64) => {
-        (
-            $name,
-            $crate::influxdb::Value::Integer($value as i64),
-        )
+        ($name, $crate::influxdb::Value::Integer($value as i64))
     };
     ($name:expr, $value:expr, f64) => {
         ($name, $crate::influxdb::Value::Float($value as f64))
