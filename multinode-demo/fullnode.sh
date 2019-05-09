@@ -88,11 +88,10 @@ setup_vote_and_stake_accounts() {
   declare stake_id
   stake_id=$($solana_wallet --keypair "$stake_keypair_path" address)
 
-
   if [[ -f "$node_keypair_path".configured ]]; then
     echo "Vote and stake accounts have already been configured"
   else
-    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop "$stake" || return $?
+    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop $((stake*2+1)) || return $?
 
     # Fund the vote account from the node, with the node as the node_id
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
@@ -261,12 +260,14 @@ else
 
   : "${fullnode_keypair_path:=$SOLANA_CONFIG_DIR/fullnode-keypair$label.json}"
   fullnode_vote_keypair_path=$SOLANA_CONFIG_DIR/fullnode-vote-keypair$label.json
+  fullnode_stake_keypair_path=$SOLANA_CONFIG_DIR/fullnode-stake-keypair$label.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger$label
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts$label
 
   mkdir -p "$SOLANA_CONFIG_DIR"
   [[ -r "$fullnode_keypair_path" ]] || $solana_keygen -o "$fullnode_keypair_path"
   [[ -r "$fullnode_vote_keypair_path" ]] || $solana_keygen -o "$fullnode_vote_keypair_path"
+  [[ -r "$fullnode_stake_keypair_path" ]] || $solana_keygen -o "$fullnode_stake_keypair_path"
 
   default_arg --entrypoint "$entrypoint_address"
   default_arg --rpc-drone-address "${entrypoint_address%:*}:9900"
@@ -350,7 +351,7 @@ while true; do
   trap '[[ -n $pid ]] && kill "$pid" >/dev/null 2>&1 && wait "$pid"' INT TERM ERR
 
   if [[ $node_type = validator ]] && ((stake)); then
-    setup_vote_account "${entrypoint_address%:*}" "$fullnode_keypair_path" "$fullnode_vote_keypair_path" "$stake"
+    setup_vote_and_stake_accounts "${entrypoint_address%:*}" "$fullnode_keypair_path" "$fullnode_vote_keypair_path" "$fullnode_stake_keypair_path" "$stake"
   elif [[ $node_type = replicator ]] && ((stake)); then
     setup_replicator_account "${entrypoint_address%:*}" "$replicator_keypair_path" "$stake"
   fi

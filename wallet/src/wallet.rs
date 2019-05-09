@@ -1,6 +1,6 @@
 use bs58;
 use chrono::prelude::*;
-use clap::ArgMatches;
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json;
@@ -201,6 +201,10 @@ pub fn parse_command(
             let authorized_voter_id = pubkey_of(matches, "authorized_voter_id").unwrap();
             Ok(WalletCommand::AuthorizeVoter(authorized_voter_id))
         }
+        ("show-vote-account", Some(matches)) => {
+            let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
+            Ok(WalletCommand::ShowVoteAccount(voting_account_id))
+        }
         ("create-stake-account", Some(matches)) => {
             let staking_account_id = pubkey_of(matches, "staking_account_id").unwrap();
             let lamports = matches.value_of("lamports").unwrap().parse()?;
@@ -218,9 +222,9 @@ pub fn parse_command(
                 voting_account_id,
             ))
         }
-        ("show-vote-account", Some(matches)) => {
-            let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
-            Ok(WalletCommand::ShowVoteAccount(voting_account_id))
+        ("show-stake-account", Some(matches)) => {
+            let staking_account_id = pubkey_of(matches, "staking_account_id").unwrap();
+            Ok(WalletCommand::ShowStakeAccount(staking_account_id))
         }
         ("deploy", Some(deploy_matches)) => Ok(WalletCommand::Deploy(
             deploy_matches
@@ -933,10 +937,309 @@ where
     }
 }
 
+// Return an error if a pubkey cannot be parsed.
+fn is_pubkey(string: String) -> Result<(), String> {
+    match string.parse::<Pubkey>() {
+        Ok(_) => Ok(()),
+        Err(err) => Err(format!("{:?}", err)),
+    }
+}
+
+pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, 'v> {
+    App::new(name)
+        .about(about)
+        .version(version)
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .subcommand(SubCommand::with_name("address").about("Get your public key"))
+        .subcommand(
+            SubCommand::with_name("airdrop")
+                .about("Request a batch of lamports")
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(1)
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The number of lamports to request"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("balance")
+                .about("Get your balance")
+                .arg(
+                    Arg::with_name("pubkey")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .validator(is_pubkey)
+                        .help("The public key of the balance to check"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("cancel")
+                .about("Cancel a transfer")
+                .arg(
+                    Arg::with_name("process_id")
+                        .index(1)
+                        .value_name("PROCESS_ID")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The process id of the transfer to cancel"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("confirm")
+                .about("Confirm transaction by signature")
+                .arg(
+                    Arg::with_name("signature")
+                        .index(1)
+                        .value_name("SIGNATURE")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The transaction signature to confirm"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("authorize-voter")
+                .about("Authorize a different voter for this vote account")
+                .arg(
+                    Arg::with_name("authorized_voter_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Vote signer to authorize"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("create-vote-account")
+                .about("Create vote account for a node")
+                .arg(
+                    Arg::with_name("voting_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Vote account address to fund"),
+                )
+                .arg(
+                    Arg::with_name("node_id")
+                        .index(2)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Node that will vote in this account"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(3)
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The number of lamports to send to the vote account"),
+                )
+                .arg(
+                    Arg::with_name("commission")
+                        .long("commission")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .help("The commission taken on reward redemption, default: 0"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("show-vote-account")
+                .about("Show the contents of a vote account")
+                .arg(
+                    Arg::with_name("voting_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Vote account pubkey"),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("create-stake-account")
+                .about("Create staking account")
+                .arg(
+                    Arg::with_name("staking_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Staking account address to fund"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(2)
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The number of lamports to send to staking account"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("delegate-stake")
+                .about("Delegate the stake to some vote account")
+                .arg(
+                    Arg::with_name("staking_account_keypair_file")
+                        .index(1)
+                        .value_name("KEYPAIR_FILE")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Keypair file for the staking account, for signing the delegate transaction."),
+                )
+                .arg(
+                    Arg::with_name("voting_account_id")
+                        .index(2)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The voting account to which to delegate the stake."),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("show-stake-account")
+                .about("Show the contents of a stake account")
+                .arg(
+                    Arg::with_name("staking_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Stake account pubkey"),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("deploy")
+                .about("Deploy a program")
+                .arg(
+                    Arg::with_name("program_location")
+                        .index(1)
+                        .value_name("PATH")
+                        .takes_value(true)
+                        .required(true)
+                        .help("/path/to/program.o"),
+                ), // TODO: Add "loader" argument; current default is bpf_loader
+        )
+        .subcommand(
+            SubCommand::with_name("get-transaction-count")
+                .about("Get current transaction count"),
+        )
+        .subcommand(
+            SubCommand::with_name("pay")
+                .about("Send a payment")
+                .arg(
+                    Arg::with_name("to")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The pubkey of recipient"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(2)
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The number of lamports to send"),
+                )
+                .arg(
+                    Arg::with_name("timestamp")
+                        .long("after")
+                        .value_name("DATETIME")
+                        .takes_value(true)
+                        .help("A timestamp after which transaction will execute"),
+                )
+                .arg(
+                    Arg::with_name("timestamp_pubkey")
+                        .long("require-timestamp-from")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .requires("timestamp")
+                        .validator(is_pubkey)
+                        .help("Require timestamp from this third party"),
+                )
+                .arg(
+                    Arg::with_name("witness")
+                        .long("require-signature-from")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .multiple(true)
+                        .use_delimiter(true)
+                        .validator(is_pubkey)
+                        .help("Any third party signatures required to unlock the lamports"),
+                )
+                .arg(
+                    Arg::with_name("cancelable")
+                        .long("cancelable")
+                        .takes_value(false),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("send-signature")
+                .about("Send a signature to authorize a transfer")
+                .arg(
+                    Arg::with_name("to")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The pubkey of recipient"),
+                )
+                .arg(
+                    Arg::with_name("process_id")
+                        .index(2)
+                        .value_name("PROCESS_ID")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The process id of the transfer to authorize"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("send-timestamp")
+                .about("Send a timestamp to unlock a transfer")
+                .arg(
+                    Arg::with_name("to")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The pubkey of recipient"),
+                )
+                .arg(
+                    Arg::with_name("process_id")
+                        .index(2)
+                        .value_name("PROCESS_ID")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The process id of the transfer to unlock"),
+                )
+                .arg(
+                    Arg::with_name("datetime")
+                        .long("date")
+                        .value_name("DATETIME")
+                        .takes_value(true)
+                        .help("Optional arbitrary timestamp to apply"),
+                ),
+        )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::{App, Arg, SubCommand};
     use serde_json::Value;
     use solana_client::mock_rpc_client_request::SIGNATURE;
     use solana_sdk::signature::gen_keypair_file;
@@ -966,256 +1269,8 @@ mod tests {
 
     #[test]
     fn test_wallet_parse_command() {
-        let test_commands = App::new("test")
-            .subcommand(SubCommand::with_name("address").about("Get your public key"))
-            .subcommand(
-                SubCommand::with_name("airdrop")
-                    .about("Request a batch of lamports")
-                    .arg(
-                        Arg::with_name("lamports")
-                            .index(1)
-                            .value_name("NUM")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The number of lamports to request"),
-                    ),
-            )
-            .subcommand(SubCommand::with_name("balance").about("Get your balance"))
-            .subcommand(
-                SubCommand::with_name("cancel")
-                    .about("Cancel a transfer")
-                    .arg(
-                        Arg::with_name("process_id")
-                            .index(1)
-                            .value_name("PROCESS_ID")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The process id of the transfer to cancel"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("confirm")
-                    .about("Confirm transaction by signature")
-                    .arg(
-                        Arg::with_name("signature")
-                            .index(1)
-                            .value_name("SIGNATURE")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The transaction signature to confirm"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("authorize-voter")
-                    .about("Configure staking account for node")
-                    .arg(
-                        Arg::with_name("authorized_voter_id")
-                            .index(1)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("Address to delegate this vote account to"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("create-vote-account")
-                    .about("Create vote account for a node")
-                    .arg(
-                        Arg::with_name("voting_account_id")
-                            .index(1)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("Vote account address to fund"),
-                    )
-                    .arg(
-                        Arg::with_name("node_id")
-                            .index(2)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("Node that will vote in this account"),
-                    )
-                    .arg(
-                        Arg::with_name("lamports")
-                            .index(3)
-                            .value_name("NUM")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The number of lamports to send to the vote account"),
-                    )
-                    .arg(
-                        Arg::with_name("commission")
-                            .long("commission")
-                            .value_name("NUM")
-                            .takes_value(true)
-                            .help("The commission taken on reward redemption"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("authorize-voter")
-                    .about("Configure authorized voter for our account")
-                    .arg(
-                        Arg::with_name("authorized_voter_id")
-                            .index(1)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("Sets the authorized voter signer for the vote account."),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("create-stake-account")
-                    .about("Create staking account")
-                    .arg(
-                        Arg::with_name("staking_account_id")
-                            .index(1)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("Staking account address to fund"),
-                    )
-                    .arg(
-                        Arg::with_name("lamports")
-                            .index(2)
-                            .value_name("NUM")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The number of lamports to send to staking account"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("delegate-stake")
-                    .about("Delegate the stake to some vote account")
-                    .arg(
-                        Arg::with_name("staking_account_keypair_file")
-                            .index(1)
-                            .value_name("KEYPAIR_FILE")
-                            .takes_value(true)
-                            .required(true)
-                            .help("Keypair file for the staking account, for signing the delegate transaction."),
-                    )
-                    .arg(
-                        Arg::with_name("voting_account_id")
-                            .index(2)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The voting account to which to delegate the stake."),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("deploy")
-                    .about("Deploy a program")
-                    .arg(
-                        Arg::with_name("program_location")
-                            .index(1)
-                            .value_name("PATH")
-                            .takes_value(true)
-                            .required(true)
-                            .help("/path/to/program.o"),
-                    ), // TODO: Add "loader" argument; current default is bpf_loader
-            )
-            .subcommand(
-                SubCommand::with_name("get-transaction-count")
-                    .about("Get current transaction count"),
-            )
-            .subcommand(
-                SubCommand::with_name("pay")
-                    .about("Send a payment")
-                    .arg(
-                        Arg::with_name("to")
-                            .index(1)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The pubkey of recipient"),
-                    )
-                    .arg(
-                        Arg::with_name("lamports")
-                            .index(2)
-                            .value_name("NUM")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The number of lamports to send"),
-                    )
-                    .arg(
-                        Arg::with_name("timestamp")
-                            .long("after")
-                            .value_name("DATETIME")
-                            .takes_value(true)
-                            .help("A timestamp after which transaction will execute"),
-                    )
-                    .arg(
-                        Arg::with_name("timestamp_pubkey")
-                            .long("require-timestamp-from")
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .requires("timestamp")
-                            .help("Require timestamp from this third party"),
-                    )
-                    .arg(
-                        Arg::with_name("witness")
-                            .long("require-signature-from")
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .multiple(true)
-                            .use_delimiter(true)
-                            .help("Any third party signatures required to unlock the lamports"),
-                    )
-                    .arg(
-                        Arg::with_name("cancelable")
-                            .long("cancelable")
-                            .takes_value(false),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("send-signature")
-                    .about("Send a signature to authorize a transfer")
-                    .arg(
-                        Arg::with_name("to")
-                            .index(1)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The pubkey of recipient"),
-                    )
-                    .arg(
-                        Arg::with_name("process_id")
-                            .index(2)
-                            .value_name("PROCESS_ID")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The process id of the transfer to authorize"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("send-timestamp")
-                    .about("Send a timestamp to unlock a transfer")
-                    .arg(
-                        Arg::with_name("to")
-                            .index(1)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The pubkey of recipient"),
-                    )
-                    .arg(
-                        Arg::with_name("process_id")
-                            .index(2)
-                            .value_name("PROCESS_ID")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The process id of the transfer to unlock"),
-                    )
-                    .arg(
-                        Arg::with_name("datetime")
-                            .long("date")
-                            .value_name("DATETIME")
-                            .takes_value(true)
-                            .help("Optional arbitrary timestamp to apply"),
-                    ),
-            );
+        let test_commands = app("test", "desc", "version");
+
         let pubkey = Pubkey::new_rand();
         let pubkey_string = format!("{}", pubkey);
         let witness0 = Pubkey::new_rand();
