@@ -100,12 +100,12 @@ pub fn read_keypair(path: &str) -> Result<Keypair, Box<error::Error>> {
     Ok(keypair)
 }
 
-pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
+pub fn gen_keypair_file(outfile: &str) -> Result<String, Box<error::Error>> {
     let keypair_bytes = Keypair::new().to_bytes();
     let serialized = serde_json::to_string(&keypair_bytes.to_vec())?;
 
     if outfile != "-" {
-        if let Some(outdir) = Path::new(&outfile).parent() {
+        if let Some(outdir) = Path::new(outfile).parent() {
             fs::create_dir_all(outdir)?;
         }
         let mut f = File::create(outfile)?;
@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn test_gen_keypair_file() {
         let outfile = tmp_file_path("test_gen_keypair_file.json");
-        let serialized_keypair = gen_keypair_file(outfile.to_string()).unwrap();
+        let serialized_keypair = gen_keypair_file(&outfile).unwrap();
         let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
         assert!(Path::new(&outfile).exists());
         assert_eq!(
