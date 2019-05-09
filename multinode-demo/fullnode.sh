@@ -123,7 +123,6 @@ setup_replicator_account() {
 
 args=()
 node_type=validator
-replicator=false
 stake=42 # number of lamports to assign as stake
 poll_for_new_genesis_block=0
 label=
