@@ -87,7 +87,6 @@ impl EpochSchedule {
     pub fn get_stakers_epoch(&self, slot: u64) -> u64 {
         if slot < self.first_normal_slot {
             // until we get to normal slots, behave as if stakers_slot_offset == slots_per_epoch
-
             self.get_epoch_and_slot_index(slot).0 + 1
         } else {
             self.first_normal_epoch
@@ -116,6 +115,18 @@ impl EpochSchedule {
                 (slot - self.first_normal_slot) % self.slots_per_epoch,
             )
         }
+    }
+
+    pub fn get_first_slot_in_epoch(&self, epoch: u64) -> u64 {
+        if epoch <= self.first_normal_epoch {
+            (2u64.pow(epoch as u32) - 1) * MINIMUM_SLOT_LENGTH as u64
+        } else {
+            (epoch - self.first_normal_epoch) * self.slots_per_epoch + self.first_normal_slot
+        }
+    }
+
+    pub fn get_last_slot_in_epoch(&self, epoch: u64) -> u64 {
+        self.get_first_slot_in_epoch(epoch) + self.get_slots_in_epoch(epoch) - 1
     }
 }
 
@@ -1749,6 +1760,12 @@ mod tests {
         for slots_per_epoch in MINIMUM_SLOT_LENGTH as u64..=MINIMUM_SLOT_LENGTH as u64 * 16 {
             let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
 
+            assert_eq!(epoch_schedule.get_first_slot_in_epoch(0), 0);
+            assert_eq!(
+                epoch_schedule.get_last_slot_in_epoch(0),
+                MINIMUM_SLOT_LENGTH as u64 - 1
+            );
+
             let mut last_stakers = 0;
             let mut last_epoch = 0;
             let mut last_slots_in_epoch = MINIMUM_SLOT_LENGTH as u64;
@@ -1768,6 +1785,8 @@ mod tests {
                 if epoch != last_epoch {
                     assert_eq!(epoch, last_epoch + 1);
                     last_epoch = epoch;
+                    assert_eq!(epoch_schedule.get_first_slot_in_epoch(epoch), slot);
+                    assert_eq!(epoch_schedule.get_last_slot_in_epoch(epoch - 1), slot - 1);
 
                     // verify that slots in an epoch double continuously
                     //   until they reach slots_per_epoch
