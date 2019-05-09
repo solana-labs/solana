@@ -114,25 +114,31 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 # Press ^C to exit
 ```
 
-Then the following command will start a new validator node.
+Now configure a key pair for your validator by running:
+```bash
+$ solana-keygen -o fullnode-keypair.json
+```
+
+Then use one of the following commands, depending on your installation
+choice, to start the node:
 
 If this is a `solana-install`-installation:
 ```bash
 $ clear-fullnode-config.sh
-$ fullnode.sh --poll-for-new-genesis-block testnet.solana.com
+$ fullnode.sh --identity fullnode-keypair.json --poll-for-new-genesis-block testnet.solana.com
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
 $ clear-fullnode-config.sh
-$ solana-install run fullnode.sh -- --poll-for-new-genesis-block testnet.solana.com
+$ solana-install run fullnode.sh -- --identity fullnode-keypair.json --poll-for-new-genesis-block testnet.solana.com
 ```
 
 If you built from source:
 ```bash
 $ USE_INSTALL=1 ./multinode-demo/clear-fullnode-config.sh
-$ USE_INSTALL=1 ./multinode-demo/fullnode.sh --poll-for-new-genesis-block testnet.solana.com
+$ USE_INSTALL=1 ./multinode-demo/fullnode.sh --identity fullnode-keypair.json --poll-for-new-genesis-block testnet.solana.com
 ```
 
 #### Controlling local network port allocation
@@ -142,35 +148,40 @@ example, `fullnode.sh --dynamic-port-range 11000-11010 ...` will restrict the
 validator to ports 11000-11011.
 
 ### Validator Monitoring
-From another console, confirm the IP address of your validator is visible in the
-gossip network by running:
-```bash
-$ solana-gossip --entrypoint testnet.solana.com:8001 spy
-```
-
 When `fullnode.sh` starts, it will output a fullnode configuration that looks
 similar to:
 ```bash
 ======================[ Fullnode configuration ]======================
-node id: 4ceWXsL3UJvn7NYZiRkw7NsryMpviaKBDYr8GK7J61Dm
-vote id: 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
+node pubkey: 4ceWXsL3UJvn7NYZiRkw7NsryMpviaKBDYr8GK7J61Dm
+vote pubkey: 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 ledger: ...
 accounts: ...
 ======================================================================
 ```
 
-Provide the **vote id** pubkey to the `solana-wallet show-vote-account` command to view
+The **node pubkey** for your validator can also be found by running:
+```bash
+$ solana-keygen pubkey fullnode-keypair.json
+```
+
+From another console, confirm the IP address and **node pubkey** of your validator is visible in the
+gossip network by running:
+```bash
+$ solana-gossip --entrypoint testnet.solana.com:8001 spy
+```
+
+Provide the **vote pubkey** to the `solana-wallet show-vote-account` command to view
 the recent voting activity from your validator:
 ```bash
 $ solana-wallet -n testnet.solana.com show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 ```
 
-The vote id for the validator can also be found by running:
+The vote pubkey for the validator can also be found by running:
 ```bash
 # If this is a `solana-install`-installation run:
-$ solana-keygen pubkey ~/.local/share/solana/install/active_release/config-local/fullnode-vote-id.json
+$ solana-keygen pubkey ~/.local/share/solana/install/active_release/config-local/fullnode-vote-keypair.json
 # Otherwise run:
-$ solana-keygen pubkey ./config-local/fullnode-vote-id.json
+$ solana-keygen pubkey ./config-local/fullnode-vote-keypair.json
 ```
 
 ### Sharing Metrics From Your Validator
