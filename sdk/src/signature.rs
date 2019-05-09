@@ -15,7 +15,9 @@ use std::io::Write;
 use std::ops::Deref;
 use std::path::Path;
 
-// all this junk here 'cuz: https://github.com/dalek-cryptography/ed25519-dalek/pull/82
+// --BEGIN
+// the below can go away if this lands:
+//  https://github.com/dalek-cryptography/ed25519-dalek/pull/82
 pub struct Keypair(ed25519_dalek::Keypair);
 impl PartialEq for Keypair {
     fn eq(&self, other: &Self) -> bool {
@@ -44,7 +46,9 @@ impl Keypair {
         ed25519_dalek::Keypair::generate(rng).into()
     }
 }
-// END all this junk here 'cuz: https://github.com/dalek-cryptography/ed25519-dalek/pull/82
+// the above can go away if this lands:
+//  https://github.com/dalek-cryptography/ed25519-dalek/pull/82
+// --END
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Signature(GenericArray<u8, U64>);
@@ -127,7 +131,8 @@ impl KeypairUtil for Keypair {
 pub fn read_keypair(path: &str) -> Result<Keypair, Box<error::Error>> {
     let file = File::open(path.to_string())?;
     let bytes: Vec<u8> = serde_json::from_reader(file)?;
-    let keypair = Keypair::from_bytes(&bytes).unwrap(); // TODO: return an error here..
+    let keypair = Keypair::from_bytes(&bytes)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
     Ok(keypair)
 }
 
