@@ -15,9 +15,11 @@ fullnode_usage() {
     echo
   fi
   cat <<EOF
+
+Fullnode Usage:
 usage: $0 [--blockstream PATH] [--init-complete-file FILE] [--label LABEL] [--stake LAMPORTS] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [cluster entry point]
 
-Start a full node
+Start a full node or a replicator
 
   --blockstream PATH        - open blockstream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
@@ -106,9 +108,22 @@ ledger_not_setup() {
   exit 1
 }
 
+setup_replicator_account() {
+  declare entrypoint_ip=$1
+  declare node_keypair_path=$2
+  declare stake=$3
+
+  if [[ -f "$node_keypair_path".configured ]]; then
+    echo "Replicator account has already been configured"
+  else
+    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop "$stake" || return $?
+    touch "$node_keypair_path".configured
+  fi
+}
+
 args=()
-bootstrap_leader=false
-stake=42 # number of lamports to assign as stake by default
+node_type=validator
+stake=42 # number of lamports to assign as stake
 poll_for_new_genesis_block=0
 label=
 fullnode_keypair_path=
@@ -120,7 +135,10 @@ while [[ -n $1 ]]; do
       label="-$2"
       shift 2
     elif [[ $1 = --bootstrap-leader ]]; then
-      bootstrap_leader=true
+      node_type=bootstrap_leader
+      shift
+    elif [[ $1 = --replicator ]]; then
+      node_type=replicator
       shift
     elif [[ $1 = --poll-for-new-genesis-block ]]; then
       poll_for_new_genesis_block=1
@@ -169,7 +187,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-if $bootstrap_leader; then
+if [[ $node_type = bootstrap_leader ]]; then
   if [[ ${#positional_args[@]} -ne 0 ]]; then
     fullnode_usage "Unknown argument: ${positional_args[0]}"
   fi
@@ -187,6 +205,32 @@ if $bootstrap_leader; then
   default_arg --rpc-port 8899
   default_arg --rpc-drone-address 127.0.0.1:9900
   default_arg --gossip-port 8001
+
+elif [[ $node_type = replicator ]]; then
+
+  if [[ ${#positional_args[@]} -gt 2 ]]; then
+    fullnode_usage "Unknown arguments for replicator"
+  fi
+
+  read -r entrypoint entrypoint_address shift < <(find_entrypoint "${positional_args[@]}")
+  shift "$shift"
+
+  replicator_keypair_path=$SOLANA_CONFIG_DIR/replicator-id.json
+  replicator_storage_keypair_path="$SOLANA_CONFIG_DIR"/replicator-vote-id.json
+  ledger_config_dir=$SOLANA_CONFIG_DIR/replicator-ledger
+
+  mkdir -p "$SOLANA_CONFIG_DIR"
+  [[ -r "$replicator_keypair_path" ]] || $solana_keygen -o "$replicator_keypair_path"
+  [[ -r "$replicator_storage_keypair_path" ]] || $solana_keygen -o "$replicator_storage_keypair_path"
+
+  replicator_keypair=$($solana_keygen pubkey "$replicator_keypair_path")
+  replicator_storage_keypair=$($solana_keygen pubkey "$replicator_storage_keypair_path")
+
+  default_arg --entrypoint "$entrypoint_address"
+  default_arg --identity "$replicator_keypair_path"
+  default_arg --storage_id "$replicator_storage_keypair_path"
+  default_arg --ledger "$ledger_config_dir"
+
 else
   if [[ ${#positional_args[@]} -gt 2 ]]; then
     fullnode_usage "$@"
@@ -208,10 +252,24 @@ else
   default_arg --rpc-drone-address "${entrypoint_address%:*}:9900"
 fi
 
-fullnode_keypair=$($solana_keygen pubkey "$fullnode_keypair_path")
-fullnode_vote_keypair=$($solana_keygen pubkey "$fullnode_vote_keypair_path")
 
-cat <<EOF
+if [[ $node_type = replicator ]]; then
+  cat <<EOF
+======================[ Replicator configuration ]======================
+replicator pubkey: $replicator_keypair
+storage pubkey: $replicator_storage_keypair
+ledger: $ledger_config_dir
+======================================================================
+EOF
+
+  program=$solana_replicator
+
+else
+
+  fullnode_keypair=$($solana_keygen pubkey "$fullnode_keypair_path")
+  fullnode_vote_keypair=$($solana_keygen pubkey "$fullnode_vote_keypair_path")
+
+  cat <<EOF
 ======================[ Fullnode configuration ]======================
 node pubkey: $fullnode_keypair
 vote pubkey: $fullnode_vote_keypair
@@ -220,21 +278,25 @@ accounts: $accounts_config_dir
 ======================================================================
 EOF
 
+
+  default_arg --identity "$fullnode_keypair_path"
+  default_arg --voting-keypair "$fullnode_vote_keypair_path"
+  default_arg --vote-account "$fullnode_vote_keypair"
+  default_arg --ledger "$ledger_config_dir"
+  default_arg --accounts "$accounts_config_dir"
+
+
+  if [[ -n $SOLANA_CUDA ]]; then
+    program=$solana_fullnode_cuda
+  else
+    program=$solana_fullnode
+  fi
+
+fi
+
 if [[ -z $CI ]]; then # Skip in CI
   # shellcheck source=scripts/tune-system.sh
   source "$here"/../scripts/tune-system.sh
-fi
-
-default_arg --identity "$fullnode_keypair_path"
-default_arg --voting-keypair "$fullnode_vote_keypair_path"
-default_arg --vote-account "$fullnode_vote_keypair"
-default_arg --ledger "$ledger_config_dir"
-default_arg --accounts "$accounts_config_dir"
-
-if [[ -n $SOLANA_CUDA ]]; then
-  program=$solana_fullnode_cuda
-else
-  program=$solana_fullnode
 fi
 
 set -e
@@ -242,7 +304,7 @@ secs_to_next_genesis_poll=0
 PS4="$(basename "$0"): "
 while true; do
   if [[ ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
-    if $bootstrap_leader; then
+    if [[ $node_type = bootstrap_leader ]]; then
       ledger_not_setup "$SOLANA_RSYNC_CONFIG_DIR/ledger does not exist"
     fi
     rsync_entrypoint_url=$(rsync_url "$entrypoint")
@@ -256,8 +318,10 @@ while true; do
 
   trap '[[ -n $pid ]] && kill "$pid" >/dev/null 2>&1 && wait "$pid"' INT TERM ERR
 
-  if ! $bootstrap_leader && ((stake)); then
+  if [[ $node_type = validator ]] && ((stake)); then
     setup_vote_account "${entrypoint_address%:*}" "$fullnode_keypair_path" "$fullnode_vote_keypair_path" "$stake"
+  elif [[ $node_type = replicator ]] && ((stake)); then
+    setup_replicator_account "${entrypoint_address%:*}" "$replicator_keypair_path" "$stake"
   fi
 
   echo "$PS4$program ${args[*]}"
@@ -265,7 +329,7 @@ while true; do
   pid=$!
   oom_score_adj "$pid" 1000
 
-  if $bootstrap_leader; then
+  if [[ $node_type = bootstrap_leader ]]; then
     wait "$pid"
     sleep 1
   else
@@ -286,10 +350,10 @@ while true; do
 
     done
 
-    echo "############## New genesis detected, restarting fullnode ##############"
+    echo "############## New genesis detected, restarting $node_type ##############"
     kill "$pid" || true
     wait "$pid" || true
-    rm -rf "$ledger_config_dir" "$accounts_config_dir" "$fullnode_vote_keypair_path".configured
+    rm -rf "$ledger_config_dir" "$accounts_config_dir" "$fullnode_vote_keypair_path".configured "$replicator_storage_keypair_path".configured
     sleep 60 # give the network time to come back up
   fi
 

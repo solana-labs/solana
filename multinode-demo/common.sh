@@ -36,6 +36,9 @@ else
       program=${BASH_REMATCH[1]}
       features+="cuda,"
     fi
+    if [[ $program = replicator ]]; then
+      features+="chacha,"
+    fi
 
     if [[ -r "$SOLANA_ROOT/$program"/Cargo.toml ]]; then
       maybe_package="--package solana-$program"
@@ -60,6 +63,7 @@ solana_gossip=$(solana_program gossip)
 solana_keygen=$(solana_program keygen)
 solana_ledger_tool=$(solana_program ledger-tool)
 solana_wallet=$(solana_program wallet)
+solana_replicator=$(solana_program replicator)
 
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
