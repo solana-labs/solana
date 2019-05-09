@@ -1,9 +1,10 @@
 //! The `retransmit_stage` retransmits blobs between validators
 
 use crate::bank_forks::BankForks;
-use crate::blocktree::Blocktree;
+use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT};
 use crate::leader_schedule_cache::LeaderScheduleCache;
+use crate::repair_service::RepairStrategy;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
@@ -108,6 +109,7 @@ pub struct RetransmitStage {
 
 impl RetransmitStage {
     #[allow(clippy::new_ret_no_self)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         bank_forks: Arc<RwLock<BankForks>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -118,6 +120,7 @@ impl RetransmitStage {
         fetch_stage_receiver: BlobReceiver,
         exit: &Arc<AtomicBool>,
         genesis_blockhash: &Hash,
+        completed_slots_receiver: CompletedSlotsReceiver,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -128,8 +131,12 @@ impl RetransmitStage {
             cluster_info.clone(),
             retransmit_receiver,
         );
+
+        let repair_strategy = RepairStrategy::RepairAll {
+            bank_forks,
+            completed_slots_receiver,
+        };
         let window_service = WindowService::new(
-            Some(bank_forks),
             Some(leader_schedule_cache.clone()),
             blocktree,
             cluster_info.clone(),
@@ -137,7 +144,7 @@ impl RetransmitStage {
             retransmit_sender,
             repair_socket,
             exit,
-            None,
+            repair_strategy,
             genesis_blockhash,
         );
 

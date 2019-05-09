@@ -83,8 +83,14 @@ fn test_replay() {
 
     let tvu_addr = target1.info.tvu;
 
-    let (bank_forks, _bank_forks_info, blocktree, ledger_signal_receiver, leader_schedule_cache) =
-        fullnode::new_banks_from_blocktree(&blocktree_path, None);
+    let (
+        bank_forks,
+        _bank_forks_info,
+        blocktree,
+        ledger_signal_receiver,
+        completed_slots_receiver,
+        leader_schedule_cache,
+    ) = fullnode::new_banks_from_blocktree(&blocktree_path, None);
     let working_bank = bank_forks.working_bank();
     assert_eq!(
         working_bank.get_balance(&mint_keypair.pubkey()),
@@ -126,6 +132,7 @@ fn test_replay() {
             &leader_schedule_cache,
             &exit,
             &solana_sdk::hash::Hash::default(),
+            completed_slots_receiver,
         );
 
         let mut mint_ref_balance = mint_balance;

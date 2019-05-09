@@ -15,7 +15,7 @@
 use crate::bank_forks::BankForks;
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blockstream_service::BlockstreamService;
-use crate::blocktree::Blocktree;
+use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::cluster_info::ClusterInfo;
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::poh_recorder::PohRecorder;
@@ -71,6 +71,7 @@ impl Tvu {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
         genesis_blockhash: &Hash,
+        completed_slots_receiver: CompletedSlotsReceiver,
     ) -> Self
     where
         T: 'static + KeypairUtil + Sync + Send,
@@ -108,6 +109,7 @@ impl Tvu {
             blob_fetch_receiver,
             &exit,
             genesis_blockhash,
+            completed_slots_receiver,
         );
 
         let (replay_stage, slot_full_receiver, root_slot_receiver) = ReplayStage::new(
@@ -203,8 +205,9 @@ pub mod tests {
         let cref1 = Arc::new(RwLock::new(cluster_info1));
 
         let blocktree_path = get_tmp_ledger_path!();
-        let (blocktree, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
-            .expect("Expected to successfully open ledger");
+        let (blocktree, l_receiver, completed_slots_receiver) =
+            Blocktree::open_with_signal(&blocktree_path)
+                .expect("Expected to successfully open ledger");
         let blocktree = Arc::new(blocktree);
         let bank = bank_forks.working_bank();
         let (exit, poh_recorder, poh_service, _entry_receiver) =
@@ -233,6 +236,7 @@ pub mod tests {
             &leader_schedule_cache,
             &exit,
             &Hash::default(),
+            completed_slots_receiver,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

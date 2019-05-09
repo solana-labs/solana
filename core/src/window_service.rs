@@ -7,7 +7,7 @@ use crate::cluster_info::ClusterInfo;
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::leader_schedule_utils::slot_leader_at;
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
-use crate::repair_service::{RepairService, RepairSlotRange};
+use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{BlobReceiver, BlobSender};
@@ -175,7 +175,6 @@ pub struct WindowService {
 impl WindowService {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        bank_forks: Option<Arc<RwLock<BankForks>>>,
         leader_schedule_cache: Option<Arc<LeaderScheduleCache>>,
         blocktree: Arc<Blocktree>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -183,16 +182,21 @@ impl WindowService {
         retransmit: BlobSender,
         repair_socket: Arc<UdpSocket>,
         exit: &Arc<AtomicBool>,
-        repair_slot_range: Option<RepairSlotRange>,
+        repair_strategy: RepairStrategy,
         genesis_blockhash: &Hash,
     ) -> WindowService {
+        let bank_forks = match repair_strategy {
+            RepairStrategy::RepairRange(_) => None,
+
+            RepairStrategy::RepairAll { ref bank_forks, .. } => Some(bank_forks.clone()),
+        };
+
         let repair_service = RepairService::new(
             blocktree.clone(),
             exit,
             repair_socket,
             cluster_info.clone(),
-            bank_forks.clone(),
-            repair_slot_range,
+            repair_strategy,
         );
         let exit = exit.clone();
         let leader_schedule_cache = leader_schedule_cache.clone();
@@ -207,6 +211,7 @@ impl WindowService {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
+
                     if let Err(e) = recv_window(
                         bank_forks.as_ref(),
                         leader_schedule_cache.as_ref(),
@@ -351,15 +356,18 @@ mod test {
         let t_receiver = blob_receiver(Arc::new(leader_node.sockets.gossip), &exit, s_reader);
         let (s_retransmit, r_retransmit) = channel();
         let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Arc::new(
-            Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
-        );
+        let (blocktree, _, completed_slots_receiver) = Blocktree::open_with_signal(&blocktree_path)
+            .expect("Expected to be able to open database ledger");
+        let blocktree = Arc::new(blocktree);
 
         let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let bank_forks = Some(Arc::new(RwLock::new(BankForks::new(0, bank))));
-        let t_window = WindowService::new(
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let repair_strategy = RepairStrategy::RepairAll {
             bank_forks,
+            completed_slots_receiver,
+        };
+        let t_window = WindowService::new(
             Some(leader_schedule_cache),
             blocktree,
             subs,
@@ -367,7 +375,7 @@ mod test {
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
             &exit,
-            None,
+            repair_strategy,
             &Hash::default(),
         );
         let t_responder = {
@@ -430,14 +438,18 @@ mod test {
         let t_receiver = blob_receiver(Arc::new(leader_node.sockets.gossip), &exit, s_reader);
         let (s_retransmit, r_retransmit) = channel();
         let blocktree_path = get_tmp_ledger_path!();
-        let blocktree = Arc::new(
-            Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
-        );
+        let (blocktree, _, completed_slots_receiver) = Blocktree::open_with_signal(&blocktree_path)
+            .expect("Expected to be able to open database ledger");
+
+        let blocktree = Arc::new(blocktree);
         let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let bank_forks = Some(Arc::new(RwLock::new(BankForks::new(0, bank))));
-        let t_window = WindowService::new(
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let repair_strategy = RepairStrategy::RepairAll {
             bank_forks,
+            completed_slots_receiver,
+        };
+        let t_window = WindowService::new(
             Some(leader_schedule_cache),
             blocktree,
             subs.clone(),
@@ -445,7 +457,7 @@ mod test {
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
             &exit,
-            None,
+            repair_strategy,
             &Hash::default(),
         );
         let t_responder = {

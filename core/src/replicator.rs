@@ -6,7 +6,7 @@ use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::GossipService;
 use crate::packet::to_shared_blob;
-use crate::repair_service::RepairSlotRange;
+use crate::repair_service::{RepairSlotRange, RepairStrategy};
 use crate::result::Result;
 use crate::service::Service;
 use crate::storage_stage::SLOTS_PER_SEGMENT;
@@ -232,14 +232,13 @@ impl Replicator {
 
         let window_service = WindowService::new(
             None, //TODO: need a way to validate blobs... https://github.com/solana-labs/solana/issues/3924
-            None, //TODO: see above ^
             blocktree.clone(),
             cluster_info.clone(),
             blob_fetch_receiver,
             retransmit_sender,
             repair_socket,
             &exit,
-            Some(repair_slot_range),
+            RepairStrategy::RepairRange(repair_slot_range),
             &Hash::default(),
         );
 
