@@ -81,7 +81,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 path.to_str().unwrap()
             };
 
-            let serialized_keypair = gen_keypair_file(outfile.to_string())?;
+            let serialized_keypair = gen_keypair_file(outfile)?;
             if outfile == "-" {
                 println!("{}", serialized_keypair);
             }
