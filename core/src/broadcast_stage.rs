@@ -11,7 +11,7 @@ use crate::service::Service;
 use crate::staking_utils;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
-use solana_metrics::{influxdb, submit};
+use solana_metrics::*;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
@@ -141,14 +141,7 @@ impl Broadcast {
             num_entries, to_blobs_elapsed, broadcast_elapsed
         );
 
-        submit(
-            influxdb::Point::new("broadcast-service")
-                .add_field(
-                    "transmit-index",
-                    influxdb::Value::Integer(blob_index as i64),
-                )
-                .to_owned(),
-        );
+        submit!("broadcast-service", integer!("transmit-index", blob_index));
 
         Ok(())
     }

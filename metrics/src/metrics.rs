@@ -12,6 +12,46 @@ use std::thread;
 use std::time::{Duration, Instant};
 use sys_info::hostname;
 
+#[macro_export]
+macro_rules! integer {
+    ($name:expr, $value:expr) => {
+        ($name, influxdb::Value::Integer($value as i64))
+    };
+}
+
+#[macro_export]
+macro_rules! string {
+    ($name:expr, $string:expr) => {
+        ($name, solana_metrics::influxdb::Value::String($string))
+    };
+}
+
+#[macro_export]
+macro_rules! field {
+    ($var:ident, $field:expr) => {
+        $var.add_field(
+                    $field.0,
+                    $field.1,
+                );
+    };
+    ($var:ident, $field:expr, $($rest:expr),+) => {
+        $var.add_field(
+                    $field.0,
+                    $field.1,
+                );
+        field!($var, $($rest),+);
+    };
+}
+
+#[macro_export]
+macro_rules! submit {
+    ($name:expr, $($rest:expr),+) => {
+        let mut point = influxdb::Point::new(&$name);
+        field!(point, $($rest),+);
+        submit(point.to_owned());
+    };
+}
+
 lazy_static! {
     static ref HOST_INFO: String = {
         let v = env::var("SOLANA_METRICS_DISPLAY_HOSTNAME")

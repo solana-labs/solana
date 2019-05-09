@@ -1,7 +1,7 @@
 use crate::bank_forks::BankForks;
 use crate::staking_utils;
 use hashbrown::{HashMap, HashSet};
-use solana_metrics::influxdb;
+use solana_metrics::*;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
@@ -125,19 +125,13 @@ impl Locktower {
                     vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0) as i64
                 );
                 debug!("observed root {}", vote_state.root_slot.unwrap_or(0) as i64);
-                solana_metrics::submit(
-                    influxdb::Point::new("counter-locktower-observed")
-                        .add_field(
-                            "slot",
-                            influxdb::Value::Integer(
-                                vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0) as i64,
-                            ),
-                        )
-                        .add_field(
-                            "root",
-                            influxdb::Value::Integer(vote_state.root_slot.unwrap_or(0) as i64),
-                        )
-                        .to_owned(),
+                submit!(
+                    "locktower-observed",
+                    integer!(
+                        "slot",
+                        vote_state.nth_recent_vote(0).map(|v| v.slot).unwrap_or(0)
+                    ),
+                    integer!("root", vote_state.root_slot.unwrap_or(0))
                 );
             }
             let start_root = vote_state.root_slot;
@@ -216,21 +210,11 @@ impl Locktower {
                 self.epoch_stakes.epoch
             );
             self.epoch_stakes = EpochStakes::new_from_bank(bank, &self.epoch_stakes.delegate_id);
-            solana_metrics::submit(
-                influxdb::Point::new("counter-locktower-epoch")
-                    .add_field(
-                        "epoch",
-                        influxdb::Value::Integer(self.epoch_stakes.epoch as i64),
-                    )
-                    .add_field(
-                        "self_staked",
-                        influxdb::Value::Integer(self.epoch_stakes.self_staked as i64),
-                    )
-                    .add_field(
-                        "total_staked",
-                        influxdb::Value::Integer(self.epoch_stakes.total_staked as i64),
-                    )
-                    .to_owned(),
+            submit!(
+                "locktower-epoch",
+                integer!("epoch", self.epoch_stakes.epoch),
+                integer!("self_staked", self.epoch_stakes.self_staked),
+                integer!("total_staked", self.epoch_stakes.total_staked)
             );
         }
     }
@@ -238,14 +222,10 @@ impl Locktower {
     pub fn record_vote(&mut self, slot: u64) -> Option<u64> {
         let root_slot = self.lockouts.root_slot;
         self.lockouts.process_vote(&Vote { slot });
-        solana_metrics::submit(
-            influxdb::Point::new("counter-locktower-vote")
-                .add_field("latest", influxdb::Value::Integer(slot as i64))
-                .add_field(
-                    "root",
-                    influxdb::Value::Integer(self.lockouts.root_slot.unwrap_or(0) as i64),
-                )
-                .to_owned(),
+        submit!(
+            "locktower-vote",
+            integer!("latest", slot),
+            integer!("root", self.lockouts.root_slot.unwrap_or(0))
         );
         if root_slot != self.lockouts.root_slot {
             Some(self.lockouts.root_slot.unwrap())

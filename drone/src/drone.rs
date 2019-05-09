@@ -10,7 +10,7 @@ use bytes::{Bytes, BytesMut};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics;
-use solana_metrics::influxdb;
+use solana_metrics::*;
 use solana_sdk::hash::Hash;
 use solana_sdk::message::Message;
 use solana_sdk::packet::PACKET_DATA_SIZE;
@@ -114,17 +114,11 @@ impl Drone {
             } => {
                 if self.check_request_limit(lamports) {
                     self.request_current += lamports;
-                    solana_metrics::submit(
-                        influxdb::Point::new("drone")
-                            .add_tag("op", influxdb::Value::String("airdrop".to_string()))
-                            .add_field("request_amount", influxdb::Value::Integer(lamports as i64))
-                            .add_field(
-                                "request_current",
-                                influxdb::Value::Integer(self.request_current as i64),
-                            )
-                            .to_owned(),
+                    submit!(
+                        "drone-airdrop",
+                        integer!("request_amount", lamports),
+                        integer!("request_current", self.request_current)
                     );
-
                     info!("Requesting airdrop of {} to {:?}", lamports, to);
 
                     let create_instruction = system_instruction::create_user_account(

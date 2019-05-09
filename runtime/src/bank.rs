@@ -14,7 +14,7 @@ use bincode::serialize;
 use hashbrown::HashMap;
 use log::*;
 use solana_metrics::counter::Counter;
-use solana_metrics::influxdb;
+use solana_metrics::*;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -245,14 +245,11 @@ impl Bank {
 
         bank.slot = slot;
         bank.max_tick_height = (bank.slot + 1) * bank.ticks_per_slot - 1;
-        solana_metrics::submit(
-            influxdb::Point::new("bank-new_from_parent-heights")
-                .add_field("slot_height", influxdb::Value::Integer(slot as i64))
-                .add_field(
-                    "bank_height",
-                    influxdb::Value::Integer(bank.bank_height as i64),
-                )
-                .to_owned(),
+
+        submit!(
+            "bank-new_from_parent-heights",
+            integer!("slot_height", slot),
+            integer!("bank_height", bank.bank_height)
         );
 
         bank.parent = RwLock::new(Some(parent.clone()));
@@ -330,17 +327,10 @@ impl Bank {
             .for_each(|p| self.status_cache.write().unwrap().add_root(p.slot()));
         let squash_cache_ms = duration_as_ms(&squash_cache_start.elapsed());
 
-        solana_metrics::submit(
-            influxdb::Point::new("counter-locktower-observed")
-                .add_field(
-                    "squash_accounts_ms",
-                    influxdb::Value::Integer(squash_accounts_ms as i64),
-                )
-                .add_field(
-                    "squash_cache_ms",
-                    influxdb::Value::Integer(squash_cache_ms as i64),
-                )
-                .to_owned(),
+        submit!(
+            "locktower-observed",
+            integer!("squash_accounts_ms", squash_accounts_ms),
+            integer!("squash_cache_ms", squash_cache_ms)
         );
     }
 

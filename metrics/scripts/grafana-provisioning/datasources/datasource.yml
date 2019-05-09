@@ -6,7 +6,7 @@ datasources:
   type: influxdb
   isDefault: true
   access: proxy
-  database: local
+  database: testnet
   user: admin
   password: admin
   basicAuth: true

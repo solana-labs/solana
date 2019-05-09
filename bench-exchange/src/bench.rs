@@ -11,7 +11,7 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_exchange_api::exchange_instruction;
 use solana_exchange_api::exchange_state::*;
 use solana_exchange_api::id;
-use solana_metrics::influxdb;
+use solana_metrics::*;
 use solana_sdk::client::Client;
 use solana_sdk::client::SyncClient;
 use solana_sdk::pubkey::Pubkey;
@@ -262,15 +262,10 @@ fn do_tx_transfers<T>(
             let duration = now.elapsed();
 
             total_txs_sent_count.fetch_add(n, Ordering::Relaxed);
-            solana_metrics::submit(
-                influxdb::Point::new("bench-exchange")
-                    .add_tag("op", influxdb::Value::String("do_tx_transfers".to_string()))
-                    .add_field(
-                        "duration",
-                        influxdb::Value::Integer(duration_as_ms(&duration) as i64),
-                    )
-                    .add_field("count", influxdb::Value::Integer(n as i64))
-                    .to_owned(),
+            submit!(
+                "bench-exchange-do_tx_transfers",
+                integer!("duration", duration_as_ms(&duration)),
+                integer!("count", n)
             );
         }
         if exit_signal.load(Ordering::Relaxed) {
@@ -414,12 +409,7 @@ fn swapper<T>(
                 txs = 0;
             }
 
-            solana_metrics::submit(
-                influxdb::Point::new("bench-exchange")
-                    .add_tag("op", influxdb::Value::String("swaps".to_string()))
-                    .add_field("count", influxdb::Value::Integer(to_swap_txs.len() as i64))
-                    .to_owned(),
-            );
+            submit!("bench-exchange-swaps", integer!("count", to_swap_txs.len()));
 
             let chunks: Vec<_> = to_swap_txs.chunks(chunk_size).collect();
             {
@@ -551,12 +541,7 @@ fn trader<T>(
                     txs = 0;
                 }
 
-                solana_metrics::submit(
-                    influxdb::Point::new("bench-exchange")
-                        .add_tag("op", influxdb::Value::String("trades".to_string()))
-                        .add_field("count", influxdb::Value::Integer(trades_txs.len() as i64))
-                        .to_owned(),
-                );
+                submit!("bench-exchange-trades", integer!("count", trades_txs.len()));
 
                 {
                     let mut shared_txs_wl = shared_txs

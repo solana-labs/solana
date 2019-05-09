@@ -1,4 +1,5 @@
 use crate::erasure::{NUM_CODING, NUM_DATA};
+use solana_metrics::*;
 use std::borrow::Borrow;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
@@ -37,17 +38,16 @@ impl SlotMeta {
 
         // Should never happen
         if self.consumed > self.last_index + 1 {
-            solana_metrics::submit(
-                solana_metrics::influxdb::Point::new("blocktree_error")
-                    .add_field(
-                        "error",
-                        solana_metrics::influxdb::Value::String(format!(
-                            "Observed a slot meta with consumed: {} > meta.last_index + 1: {}",
-                            self.consumed,
-                            self.last_index + 1
-                        )),
+            submit!(
+                "blocktree_error",
+                string!(
+                    "error",
+                    format!(
+                        "Observed a slot meta with consumed: {} > meta.last_index + 1: {}",
+                        self.consumed,
+                        self.last_index + 1
                     )
-                    .to_owned(),
+                )
             );
         }
 

@@ -88,7 +88,7 @@ impl Counter {
     }
     pub fn init(&mut self) {
         self.point = Some(
-            influxdb::Point::new(&format!("counter-{}", self.name))
+            influxdb::Point::new(&self.name)
                 .add_field("count", influxdb::Value::Integer(0))
                 .to_owned(),
         );
@@ -188,9 +188,9 @@ mod tests {
         let _readlock = get_env_lock().read();
         //make sure that macros are syntactically correct
         //the variable is internal to the macro scope so there is no way to introspect it
-        inc_new_counter_info!("counter-1", 1);
-        inc_new_counter_info!("counter-2", 1, 3);
-        inc_new_counter_info!("counter-3", 1, 2, 1);
+        inc_new_counter_info!("1", 1);
+        inc_new_counter_info!("2", 1, 3);
+        inc_new_counter_info!("3", 1, 2, 1);
     }
     #[test]
     fn test_lograte() {
