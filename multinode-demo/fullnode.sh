@@ -72,32 +72,52 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   echo "rsync://$url"
 }
 
-setup_vote_account() {
+setup_vote_and_stake_accounts() {
   declare entrypoint_ip=$1
   declare node_keypair_path=$2
   declare vote_keypair_path=$3
-  declare stake=$4
+  declare stake_keypair_path=$4
+  declare stake=$5
 
-  declare node_keypair
-  node_keypair=$($solana_wallet --keypair "$node_keypair_path" address)
+  declare node_id
+  node_id=$($solana_wallet --keypair "$node_keypair_path" address)
 
-  declare vote_keypair
-  vote_keypair=$($solana_wallet --keypair "$vote_keypair_path" address)
+  declare vote_id
+  vote_id=$($solana_wallet --keypair "$vote_keypair_path" address)
 
-  if [[ -f "$vote_keypair_path".configured ]]; then
-    echo "Vote account has already been configured"
+  declare stake_id
+  stake_id=$($solana_wallet --keypair "$stake_keypair_path" address)
+
+
+  if [[ -f "$node_keypair_path".configured ]]; then
+    echo "Vote and stake accounts have already been configured"
   else
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop "$stake" || return $?
 
-    # Fund the vote account from the node, with the node as the node_keypair
+    # Fund the vote account from the node, with the node as the node_id
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-      create-vote-account "$vote_keypair" "$node_keypair" $((stake - 1)) || return $?
+          create-vote-account "$vote_id" "$node_id" "$stake" || return $?
 
-    touch "$vote_keypair_path".configured
+    # Fund the stake account from the node, with the node as the node_id
+    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
+           create-stake-account "$stake_id" "$stake" || return $?
+
+    # Delegate the stake.  The transaction fee is paid by the node but the
+    #  transaction must be signed by the stake_keypair
+    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
+           delegate-stake "$stake_keypair_path" "$vote_id" || return $?
+
+
+    touch "$node_keypair_path".configured
   fi
 
-  $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-    show-vote-account "$vote_keypair"
+  $solana_wallet --url "http://$entrypoint_ip:8899" \
+          show-vote-account "$vote_id"
+
+  $solana_wallet --url "http://$entrypoint_ip:8899" \
+          show-stake-account "$stake_id"
+
+
   return 0
 }
 

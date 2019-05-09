@@ -23,6 +23,7 @@ solana-drone = { path = "../drone", version = "0.15.0"  }
 solana-logger = { path = "../logger", version = "0.15.0"  }
 solana-netutil = { path = "../netutil", version = "0.15.0"  }
 solana-sdk = { path = "../sdk", version = "0.15.0"  }
+solana-stake-api = { path = "../programs/stake_api", version = "0.15.0"  }
 solana-vote-api = { path = "../programs/vote_api", version = "0.15.0"  }
 solana-vote-signer = { path = "../vote-signer", version = "0.15.0"  }
 url = "1.7.2"
