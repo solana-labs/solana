@@ -35,7 +35,7 @@ impl From<ed25519_dalek::Keypair> for Keypair {
 }
 impl Keypair {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
-        ed25519_dalek::Keypair::from_bytes(bytes).map(|x| x.into())
+        ed25519_dalek::Keypair::from_bytes(bytes).map(std::convert::Into::into)
     }
     pub fn generate<R>(rng: &mut R) -> Self
     where
