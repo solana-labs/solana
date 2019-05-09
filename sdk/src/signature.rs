@@ -18,6 +18,7 @@ use std::path::Path;
 // --BEGIN
 // the below can go away if this lands:
 //  https://github.com/dalek-cryptography/ed25519-dalek/pull/82
+#[derive(Debug)]
 pub struct Keypair(ed25519_dalek::Keypair);
 impl PartialEq for Keypair {
     fn eq(&self, other: &Self) -> bool {
