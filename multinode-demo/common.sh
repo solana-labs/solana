@@ -36,7 +36,7 @@ else
       program=${BASH_REMATCH[1]}
       features+="cuda,"
     fi
-    if [[ "$program" = "replicator" ]]; then
+    if [[ $program = replicator ]]; then
       features+="chacha,"
     fi
 

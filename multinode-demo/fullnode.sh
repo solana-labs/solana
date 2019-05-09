@@ -33,25 +33,6 @@ EOF
   exit 1
 }
 
-rsync_url() { # adds the 'rsync://` prefix to URLs that need it
-  declare url="$1"
-
-  if [[ $url =~ ^.*:.*$ ]]; then
-    # assume remote-shell transport when colon is present, use $url unmodified
-    echo "$url"
-    return 0
-  fi
-
-  if [[ -d $url ]]; then
-    # assume local directory if $url is a valid directory, use $url unmodified
-    echo "$url"
-    return 0
-  fi
-
-  # Default to rsync:// URL
-  echo "rsync://$url"
-}
-
 find_entrypoint() {
   declare entrypoint entrypoint_address
   declare shift=0
@@ -70,6 +51,25 @@ find_entrypoint() {
   fi
 
   echo "$entrypoint" "$entrypoint_address" "$shift"
+}
+
+rsync_url() { # adds the 'rsync://` prefix to URLs that need it
+  declare url="$1"
+
+  if [[ $url =~ ^.*:.*$ ]]; then
+    # assume remote-shell transport when colon is present, use $url unmodified
+    echo "$url"
+    return 0
+  fi
+
+  if [[ -d $url ]]; then
+    # assume local directory if $url is a valid directory, use $url unmodified
+    echo "$url"
+    return 0
+  fi
+
+  # Default to rsync:// URL
+  echo "rsync://$url"
 }
 
 setup_vote_account() {
@@ -254,7 +254,7 @@ fi
 
 
 if [[ $node_type = replicator ]]; then
-cat <<EOF
+  cat <<EOF
 ======================[ Replicator configuration ]======================
 replicator pubkey: $replicator_keypair
 storage pubkey: $replicator_storage_keypair
@@ -269,7 +269,7 @@ else
   fullnode_keypair=$($solana_keygen pubkey "$fullnode_keypair_path")
   fullnode_vote_keypair=$($solana_keygen pubkey "$fullnode_vote_keypair_path")
 
-cat <<EOF
+  cat <<EOF
 ======================[ Fullnode configuration ]======================
 node pubkey: $fullnode_keypair
 vote pubkey: $fullnode_vote_keypair
@@ -350,7 +350,7 @@ while true; do
 
     done
 
-    echo "############## New genesis detected, restarting... ##############"
+    echo "############## New genesis detected, restarting $node_type ##############"
     kill "$pid" || true
     wait "$pid" || true
     rm -rf "$ledger_config_dir" "$accounts_config_dir" "$fullnode_vote_keypair_path".configured "$replicator_storage_keypair_path".configured
