@@ -24,7 +24,7 @@ pub const MAX_ORPHANS: usize = 5;
 
 pub enum RepairStrategy {
     RepairRange(RepairSlotRange),
-    Repair {
+    RepairAll {
         bank_forks: Arc<RwLock<BankForks>>,
         completed_slots_receiver: CompletedSlotsReceiver,
     },
@@ -122,11 +122,11 @@ impl RepairService {
                         )
                     }
 
-                    RepairStrategy::Repair {
+                    RepairStrategy::RepairAll {
                         ref bank_forks,
                         ref completed_slots_receiver,
                     } => {
-                        Self::update_fast_repair(
+                        Self::update_epoch_slots(
                             id,
                             &epoch_slots,
                             &cluster_info,
@@ -293,7 +293,9 @@ impl RepairService {
         }
     }
 
-    fn update_fast_repair(
+    // Update the gossiped structure used for the "Repairmen" repair protocol. See book
+    // for details.
+    fn update_epoch_slots(
         id: Pubkey,
         slots: &HashSet<u64>,
         cluster_info: &RwLock<ClusterInfo>,

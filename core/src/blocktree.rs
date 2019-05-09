@@ -2241,6 +2241,7 @@ pub mod tests {
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
+
         // Create blobs for slot 0
         let (blobs, _) = make_slot_entries(0, 0, entries_per_slot);
 
@@ -2250,7 +2251,7 @@ pub mod tests {
             .unwrap();
         assert!(recvr.try_recv().is_err());
 
-        //Insert first blob, slot should now be considered complete
+        // Insert first blob, slot should now be considered complete
         ledger.insert_data_blobs(once(&blobs[0])).unwrap();
         assert_eq!(recvr.try_recv().unwrap(), vec![0]);
     }
@@ -2263,24 +2264,24 @@ pub mod tests {
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
-        let slot = 10;
-        let orphan_slot = 5;
-        let orphan_slot2 = 2;
-        // Create blobs for slot 10, chaining to slot 5
-        let (blobs, _) = make_slot_entries(slot, orphan_slot, entries_per_slot);
+        let slots = vec![2, 5, 10];
+        let all_blobs = make_chaining_slot_entries(&slots[..], entries_per_slot);
 
-        // Create blobs for slot 5 chaining to slot 2
-        let (orphan_blobs, _) = make_slot_entries(orphan_slot, orphan_slot2, entries_per_slot);
+        // Get the blobs for slot 5 chaining to slot 2
+        let (ref orphan_blobs, _) = all_blobs[1];
+
+        // Get the blobs for slot 10, chaining to slot 5
+        let (ref orphan_child, _) = all_blobs[2];
 
         // Insert all but the first blob in the slot, should not be considered complete
         ledger
-            .insert_data_blobs(&blobs[1..entries_per_slot as usize])
+            .insert_data_blobs(&orphan_child[1..entries_per_slot as usize])
             .unwrap();
         assert!(recvr.try_recv().is_err());
 
-        //Insert first blob, slot should now be considered complete
-        ledger.insert_data_blobs(once(&blobs[0])).unwrap();
-        assert_eq!(recvr.try_recv().unwrap(), vec![slot]);
+        // Insert first blob, slot should now be considered complete
+        ledger.insert_data_blobs(once(&orphan_child[0])).unwrap();
+        assert_eq!(recvr.try_recv().unwrap(), vec![slots[2]]);
 
         // Insert the blobs for the orphan_slot
         ledger
@@ -2288,9 +2289,9 @@ pub mod tests {
             .unwrap();
         assert!(recvr.try_recv().is_err());
 
-        //Insert first blob, slot should now be considered complete
+        // Insert first blob, slot should now be considered complete
         ledger.insert_data_blobs(once(&orphan_blobs[0])).unwrap();
-        assert_eq!(recvr.try_recv().unwrap(), vec![orphan_slot]);
+        assert_eq!(recvr.try_recv().unwrap(), vec![slots[1]]);
     }
 
     #[test]
@@ -2301,18 +2302,16 @@ pub mod tests {
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;
-        let slot = 10;
-        let slot2 = 5;
-        let slot3 = 2;
+        let mut slots = vec![2, 5, 10];
+        let all_blobs = make_chaining_slot_entries(&slots[..], entries_per_slot);
         let disconnected_slot = 4;
 
-        // Create blobs for slot 10, chaining to slot 5
-        let (blobs, _) = make_slot_entries(slot, slot2, entries_per_slot);
-        let (blobs2, _) = make_slot_entries(slot2, slot3, entries_per_slot);
-        let (blobs3, _) = make_slot_entries(slot3, 0, entries_per_slot);
-        let (blobs4, _) = make_slot_entries(disconnected_slot, 1, entries_per_slot);
+        let (ref blobs0, _) = all_blobs[0];
+        let (ref blobs1, _) = all_blobs[1];
+        let (ref blobs2, _) = all_blobs[2];
+        let (ref blobs3, _) = make_slot_entries(disconnected_slot, 1, entries_per_slot);
 
-        let mut all_blobs: Vec<_> = vec![blobs, blobs2, blobs3, blobs4]
+        let mut all_blobs: Vec<_> = vec![blobs0, blobs1, blobs2, blobs3]
             .into_iter()
             .flatten()
             .collect();
@@ -2321,7 +2320,9 @@ pub mod tests {
         ledger.insert_data_blobs(all_blobs).unwrap();
         let mut result = recvr.try_recv().unwrap();
         result.sort();
-        assert_eq!(result, vec![slot3, disconnected_slot, slot2, slot]);
+        slots.push(disconnected_slot);
+        slots.sort();
+        assert_eq!(result, slots);
     }
 
     #[test]
@@ -3510,5 +3511,29 @@ pub mod tests {
         }
 
         (blobs, entries)
+    }
+
+    // Create blobs for slots that have a parent-child relationship defined by the input `chain`
+    pub fn make_chaining_slot_entries(
+        chain: &[u64],
+        entries_per_slot: u64,
+    ) -> Vec<(Vec<Blob>, Vec<Entry>)> {
+        let mut slots_blobs_and_entries = vec![];
+        for (i, slot) in chain.iter().enumerate() {
+            let parent_slot = {
+                if *slot == 0 {
+                    0
+                } else if i == 0 {
+                    std::u64::MAX
+                } else {
+                    chain[i - 1]
+                }
+            };
+
+            let result = make_slot_entries(*slot, parent_slot, entries_per_slot);
+            slots_blobs_and_entries.push(result);
+        }
+
+        slots_blobs_and_entries
     }
 }

@@ -132,7 +132,7 @@ impl RetransmitStage {
             retransmit_receiver,
         );
 
-        let repair_strategy = RepairStrategy::Repair {
+        let repair_strategy = RepairStrategy::RepairAll {
             bank_forks,
             completed_slots_receiver,
         };

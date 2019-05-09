@@ -188,7 +188,7 @@ impl WindowService {
         let bank_forks = match repair_strategy {
             RepairStrategy::RepairRange(_) => None,
 
-            RepairStrategy::Repair { ref bank_forks, .. } => Some(bank_forks.clone()),
+            RepairStrategy::RepairAll { ref bank_forks, .. } => Some(bank_forks.clone()),
         };
 
         let repair_service = RepairService::new(
@@ -363,7 +363,7 @@ mod test {
         let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
-        let repair_strategy = RepairStrategy::Repair {
+        let repair_strategy = RepairStrategy::RepairAll {
             bank_forks,
             completed_slots_receiver,
         };
@@ -445,7 +445,7 @@ mod test {
         let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
-        let repair_strategy = RepairStrategy::Repair {
+        let repair_strategy = RepairStrategy::RepairAll {
             bank_forks,
             completed_slots_receiver,
         };
