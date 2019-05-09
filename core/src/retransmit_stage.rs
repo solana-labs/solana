@@ -11,6 +11,7 @@ use crate::staking_utils;
 use crate::streamer::BlobReceiver;
 use crate::window_service::WindowService;
 use solana_metrics::{datapoint, inc_new_counter_info};
+use solana_runtime::bank::EpochSchedule;
 use solana_sdk::hash::Hash;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
@@ -117,6 +118,7 @@ impl RetransmitStage {
         exit: &Arc<AtomicBool>,
         genesis_blockhash: &Hash,
         completed_slots_receiver: CompletedSlotsReceiver,
+        epoch_schedule: EpochSchedule,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -131,6 +133,7 @@ impl RetransmitStage {
         let repair_strategy = RepairStrategy::RepairAll {
             bank_forks,
             completed_slots_receiver,
+            epoch_schedule,
         };
         let window_service = WindowService::new(
             Some(leader_schedule_cache.clone()),
