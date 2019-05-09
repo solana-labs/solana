@@ -2233,7 +2233,6 @@ pub mod tests {
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
-
     #[test]
     pub fn test_completed_blobs_signal() {
         // Initialize ledger
@@ -2246,7 +2245,9 @@ pub mod tests {
         let (blobs, _) = make_slot_entries(0, 0, entries_per_slot);
 
         // Insert all but the first blob in the slot, should not be considered complete
-        ledger.insert_data_blobs(&blobs[1..entries_per_slot as usize]).unwrap();
+        ledger
+            .insert_data_blobs(&blobs[1..entries_per_slot as usize])
+            .unwrap();
         assert!(recvr.try_recv().is_err());
 
         //Insert first blob, slot should now be considered complete
@@ -2269,10 +2270,12 @@ pub mod tests {
         let (blobs, _) = make_slot_entries(slot, orphan_slot, entries_per_slot);
 
         // Create blobs for slot 5 chaining to slot 2
-        let (orphan_blobs, _) = make_slot_entries(orphan_slot,orphan_slot2 , entries_per_slot);
+        let (orphan_blobs, _) = make_slot_entries(orphan_slot, orphan_slot2, entries_per_slot);
 
         // Insert all but the first blob in the slot, should not be considered complete
-        ledger.insert_data_blobs(&blobs[1..entries_per_slot as usize]).unwrap();
+        ledger
+            .insert_data_blobs(&blobs[1..entries_per_slot as usize])
+            .unwrap();
         assert!(recvr.try_recv().is_err());
 
         //Insert first blob, slot should now be considered complete
@@ -2280,7 +2283,9 @@ pub mod tests {
         assert_eq!(recvr.try_recv().unwrap(), vec![slot]);
 
         // Insert the blobs for the orphan_slot
-        ledger.insert_data_blobs(&orphan_blobs[1..entries_per_slot as usize]).unwrap();
+        ledger
+            .insert_data_blobs(&orphan_blobs[1..entries_per_slot as usize])
+            .unwrap();
         assert!(recvr.try_recv().is_err());
 
         //Insert first blob, slot should now be considered complete
@@ -2307,11 +2312,14 @@ pub mod tests {
         let (blobs3, _) = make_slot_entries(slot3, 0, entries_per_slot);
         let (blobs4, _) = make_slot_entries(disconnected_slot, 1, entries_per_slot);
 
-        let mut all_blobs: Vec<_> = vec![blobs, blobs2, blobs3, blobs4].into_iter().flatten().collect();
+        let mut all_blobs: Vec<_> = vec![blobs, blobs2, blobs3, blobs4]
+            .into_iter()
+            .flatten()
+            .collect();
 
         all_blobs.shuffle(&mut thread_rng());
         ledger.insert_data_blobs(all_blobs).unwrap();
-        let mut result =  recvr.try_recv().unwrap();
+        let mut result = recvr.try_recv().unwrap();
         result.sort();
         assert_eq!(result, vec![slot3, disconnected_slot, slot2, slot]);
     }
@@ -2379,7 +2387,7 @@ pub mod tests {
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
-    
+
     #[test]
     pub fn test_handle_chaining_missing_slots() {
         let blocktree_path = get_tmp_ledger_path("test_handle_chaining_missing_slots");

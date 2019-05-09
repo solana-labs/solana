@@ -22,6 +22,14 @@ pub const MAX_REPAIR_TRIES: u64 = 128;
 pub const NUM_FORKS_TO_REPAIR: usize = 5;
 pub const MAX_ORPHANS: usize = 5;
 
+pub enum RepairStrategy {
+    RepairRange(RepairSlotRange),
+    Repair {
+        bank_forks: Arc<RwLock<BankForks>>,
+        completed_slots_receiver: CompletedSlotsReceiver,
+    },
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepairType {
     Orphan(u64),
@@ -68,9 +76,7 @@ impl RepairService {
         exit: &Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        bank_forks: Option<Arc<RwLock<BankForks>>>,
-        _new_slots_receiver: Option<CompletedSlotsReceiver>,
-        repair_slot_range: Option<RepairSlotRange>,
+        repair_strategy: RepairStrategy,
     ) -> Self {
         let exit = exit.clone();
         let t_repair = Builder::new()
@@ -81,8 +87,7 @@ impl RepairService {
                     exit,
                     &repair_socket,
                     &cluster_info,
-                    &bank_forks,
-                    repair_slot_range,
+                    repair_strategy,
                 )
             })
             .unwrap();
@@ -95,8 +100,7 @@ impl RepairService {
         exit: Arc<AtomicBool>,
         repair_socket: &Arc<UdpSocket>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        bank_forks: &Option<Arc<RwLock<BankForks>>>,
-        repair_slot_range: Option<RepairSlotRange>,
+        repair_strategy: RepairStrategy,
     ) {
         let mut repair_info = RepairInfo::new();
         let epoch_slots: HashSet<u64> = HashSet::new();
@@ -107,20 +111,30 @@ impl RepairService {
             }
 
             let repairs = {
-                if let Some(ref repair_slot_range) = repair_slot_range {
-                    // Strategy used by replicators
-                    Self::generate_repairs_in_range(
-                        blocktree,
-                        MAX_REPAIR_LENGTH,
-                        &mut repair_info,
-                        repair_slot_range,
-                    )
-                } else {
-                    let bank_forks = bank_forks
-                        .as_ref()
-                        .expect("Non-replicator repair strategy missing BankForks");
-                    Self::update_fast_repair(id, &epoch_slots, &cluster_info, bank_forks);
-                    Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH)
+                match repair_strategy {
+                    RepairStrategy::RepairRange(ref repair_slot_range) => {
+                        // Strategy used by replicators
+                        Self::generate_repairs_in_range(
+                            blocktree,
+                            MAX_REPAIR_LENGTH,
+                            &mut repair_info,
+                            repair_slot_range,
+                        )
+                    }
+
+                    RepairStrategy::Repair {
+                        ref bank_forks,
+                        ref completed_slots_receiver,
+                    } => {
+                        Self::update_fast_repair(
+                            id,
+                            &epoch_slots,
+                            &cluster_info,
+                            bank_forks,
+                            completed_slots_receiver,
+                        );
+                        Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH)
+                    }
                 }
             };
 
@@ -284,6 +298,7 @@ impl RepairService {
         slots: &HashSet<u64>,
         cluster_info: &RwLock<ClusterInfo>,
         bank_forks: &Arc<RwLock<BankForks>>,
+        _completed_slots_receiver: &CompletedSlotsReceiver,
     ) {
         let root = bank_forks.read().unwrap().root();
         cluster_info
