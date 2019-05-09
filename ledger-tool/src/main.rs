@@ -117,6 +117,7 @@ fn main() {
             }
             Err(err) => {
                 eprintln!("Ledger verification failed: {:?}", err);
+                exit(1);
             }
         },
         ("", _) => {
