@@ -42,7 +42,7 @@ else
   program=$solana_fullnode
 fi
 
-: "${fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-keypair$label.json}"
+: "${fullnode_id_path:=$SOLANA_CONFIG_DIR/fullnode-keypair$label.json}"
 fullnode_vote_id_path=$SOLANA_CONFIG_DIR/fullnode-vote-keypair$label.json
 ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger$label
 accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts$label
