@@ -173,7 +173,7 @@ const GetTransactionCountRpcResult = jsonRpcResult('number');
 /**
  * Expected JSON RPC response for the "getRecentBlockhash" message
  */
-const GetRecentBlockhash = jsonRpcResult('string');
+const GetRecentBlockhash = jsonRpcResult(['string', 'object']);
 
 /**
  * Expected JSON RPC response for the "requestAirdrop" message
@@ -435,7 +435,8 @@ export class Connection {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-    return res.result;
+    // TODO: deserialize and expose FeeCalculator in res.result[1]
+    return res.result[0];
   }
 
   /**
