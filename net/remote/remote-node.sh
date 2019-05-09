@@ -124,11 +124,11 @@ local|tar)
     fi
 
     if [[ $nodeType = blockstreamer ]]; then
-      # Sneak the mint-id.json from the bootstrap leader and run another drone
+      # Sneak the mint-keypair.json from the bootstrap leader and run another drone
       # with it on the blockstreamer node.  Typically the blockstreamer node has
       # a static IP/DNS name for hosting the blockexplorer web app, and is
       # a location that somebody would expect to be able to airdrop from
-      scp "$entrypointIp":~/solana/config-local/mint-id.json config-local/
+      scp "$entrypointIp":~/solana/config-local/mint-keypair.json config-local/
       ./multinode-demo/drone.sh > drone.log 2>&1 &
 
       export BLOCKEXPLORER_GEOIP_WHITELIST=$PWD/net/config/geoip.yml
