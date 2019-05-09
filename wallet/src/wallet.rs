@@ -38,6 +38,7 @@ use std::{error, fmt, mem};
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
 #[derive(Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum WalletCommand {
     Address,
     Airdrop(u64),
@@ -213,7 +214,7 @@ pub fn parse_command(
                 keypair_of(matches, "staking_account_keypair_file").unwrap();
             let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
             Ok(WalletCommand::DelegateStake(
-                staking_account_keypair.into(),
+                staking_account_keypair,
                 voting_account_id,
             ))
         }
@@ -1338,7 +1339,7 @@ mod tests {
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_delegate_stake).unwrap(),
-            WalletCommand::DelegateStake(keypair.into(), pubkey)
+            WalletCommand::DelegateStake(keypair, pubkey)
         );
 
         // Test Deploy Subcommand
