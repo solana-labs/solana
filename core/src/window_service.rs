@@ -188,10 +188,7 @@ impl WindowService {
         let bank_forks = match repair_strategy {
             RepairStrategy::RepairRange(_) => None,
 
-            RepairStrategy::Repair {
-                ref bank_forks,
-                completed_slots_receiver: _,
-            } => Some(bank_forks.clone()),
+            RepairStrategy::Repair { ref bank_forks, .. } => Some(bank_forks.clone()),
         };
 
         let repair_service = RepairService::new(

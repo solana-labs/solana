@@ -109,6 +109,7 @@ pub struct RetransmitStage {
 
 impl RetransmitStage {
     #[allow(clippy::new_ret_no_self)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         bank_forks: Arc<RwLock<BankForks>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,

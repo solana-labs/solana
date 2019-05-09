@@ -87,7 +87,7 @@ pub struct Blocktree {
     batch_processor: Arc<RwLock<BatchProcessor>>,
     session: Arc<erasure::Session>,
     pub new_blobs_signals: Vec<SyncSender<bool>>,
-    pub completed_slots: Vec<SyncSender<Vec<u64>>>,
+    pub completed_slots_senders: Vec<SyncSender<Vec<u64>>>,
 }
 
 // Column family for metadata about a leader slot
@@ -146,7 +146,7 @@ impl Blocktree {
             session,
             new_blobs_signals: vec![],
             batch_processor,
-            completed_slots: vec![],
+            completed_slots_senders: vec![],
         })
     }
 
@@ -158,7 +158,7 @@ impl Blocktree {
         let (completed_slots_sender, completed_slots_receiver) =
             sync_channel(MAX_COMPLETED_SLOTS_IN_CHANNEL);
         blocktree.new_blobs_signals = vec![signal_sender];
-        blocktree.completed_slots = vec![completed_slots_sender];
+        blocktree.completed_slots_senders = vec![completed_slots_sender];
 
         Ok((blocktree, signal_receiver, completed_slots_receiver))
     }
@@ -357,7 +357,9 @@ impl Blocktree {
         // metadata into the write batch
         for (slot, (meta, meta_backup)) in slot_meta_working_set.iter() {
             let meta: &SlotMeta = &RefCell::borrow(&*meta);
-            if self.completed_slots.len() > 0 && is_newly_completed_slot(meta, meta_backup) {
+            if !self.completed_slots_senders.is_empty()
+                && is_newly_completed_slot(meta, meta_backup)
+            {
                 newly_completed_slots.push(*slot);
             }
             // Check if the working copy of the metadata has changed
@@ -379,29 +381,27 @@ impl Blocktree {
             }
         }
 
-        if self.completed_slots.len() > 0 && !newly_completed_slots.is_empty() {
-            let mut slots: Vec<_> = (0..self.completed_slots.len() - 1)
+        if !self.completed_slots_senders.is_empty() && !newly_completed_slots.is_empty() {
+            let mut slots: Vec<_> = (0..self.completed_slots_senders.len() - 1)
                 .map(|_| newly_completed_slots.clone())
                 .collect();
 
             slots.push(newly_completed_slots);
 
-            for (signal, slots) in self.completed_slots.iter().zip(slots.into_iter()) {
+            for (signal, slots) in self.completed_slots_senders.iter().zip(slots.into_iter()) {
                 let res = signal.try_send(slots);
-                match res {
-                    Err(TrySendError::Full(_)) => {
-                        solana_metrics::submit(
-                            solana_metrics::influxdb::Point::new("blocktree_error")
-                                .add_field(
-                                    "error",
-                                    solana_metrics::influxdb::Value::String(
-                                        "Unable to send newly completed slot because channel is full".to_string(),
-                                    ),
-                                )
-                                .to_owned(),
-                        );
-                    }
-                    _ => (),
+                if let Err(TrySendError::Full(_)) = res {
+                    solana_metrics::submit(
+                        solana_metrics::influxdb::Point::new("blocktree_error")
+                            .add_field(
+                                "error",
+                                solana_metrics::influxdb::Value::String(
+                                    "Unable to send newly completed slot because channel is full"
+                                        .to_string(),
+                                ),
+                            )
+                            .to_owned(),
+                    );
                 }
             }
         }
