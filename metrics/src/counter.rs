@@ -22,7 +22,7 @@ pub struct Counter {
 #[macro_export]
 macro_rules! create_counter {
     ($name:expr, $lograte:expr, $metricsrate:expr) => {
-        solana_metrics::counter::Counter {
+        $crate::counter::Counter {
             name: $name,
             counts: std::sync::atomic::AtomicUsize::new(0),
             times: std::sync::atomic::AtomicUsize::new(0),
@@ -51,7 +51,7 @@ macro_rules! inc_counter_info {
 #[macro_export]
 macro_rules! inc_new_counter {
     ($name:expr, $count:expr, $level:expr, $lograte:expr, $metricsrate:expr) => {{
-        static mut INC_NEW_COUNTER: solana_metrics::counter::Counter =
+        static mut INC_NEW_COUNTER: $crate::counter::Counter =
             create_counter!($name, $lograte, $metricsrate);
         static INIT_HOOK: std::sync::Once = std::sync::ONCE_INIT;
         unsafe {
@@ -99,7 +99,7 @@ impl Counter {
         let times = self.times.fetch_add(1, Ordering::Relaxed);
         let mut lograte = self.lograte.load(Ordering::Relaxed);
         if lograte == 0 {
-            lograte = Counter::default_log_rate();
+            lograte = Self::default_log_rate();
             self.lograte.store(lograte, Ordering::Relaxed);
         }
         let mut metricsrate = self.metricsrate.load(Ordering::Relaxed);

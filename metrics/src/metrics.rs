@@ -15,19 +15,19 @@ use sys_info::hostname;
 #[macro_export]
 macro_rules! field {
     ($name:expr, $string:expr, String) => {
-        ($name, solana_metrics::influxdb::Value::String($string))
+        ($name, $crate::influxdb::Value::String($string))
     };
     ($name:expr, $value:expr, i64) => {
         (
             $name,
-            solana_metrics::influxdb::Value::Integer($value as i64),
+            $crate::influxdb::Value::Integer($value as i64),
         )
     };
     ($name:expr, $value:expr, f64) => {
-        ($name, solana_metrics::influxdb::Value::Float($value as f64))
+        ($name, $crate::influxdb::Value::Float($value as f64))
     };
     ($name:expr, $value:expr, bool) => {
-        ($name, solana_metrics::influxdb::Value::Bool($value as bool))
+        ($name, $crate::influxdb::Value::Bool($value as bool))
     };
 }
 
@@ -44,16 +44,16 @@ macro_rules! add_field {
                     $field.0,
                     $field.1,
                 );
-        solana_metrics::add_field!($var, $($rest),+);
+        $crate::add_field!($var, $($rest),+);
     };
 }
 
 #[macro_export]
 macro_rules! datapoint {
     ($name:expr, $($rest:expr),+) => {
-        let mut point = solana_metrics::influxdb::Point::new(&$name);
-        solana_metrics::add_field!(point, $($rest),+);
-        solana_metrics::submit(point.to_owned());
+        let mut point = $crate::influxdb::Point::new(&$name);
+        $crate::add_field!(point, $($rest),+);
+        $crate::submit(point.to_owned());
     };
 }
 
