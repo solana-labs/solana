@@ -182,16 +182,10 @@ impl Blocktree {
         self.orphans_cf.get(slot)
     }
 
-    pub fn get_next_slot(&self, slot: u64) -> Result<Option<u64>> {
+    pub fn slot_meta_iterator(&self, slot: u64) -> Result<Cursor<cf::SlotMeta>> {
         let mut db_iterator = self.db.cursor::<cf::SlotMeta>()?;
-
-        db_iterator.seek(slot + 1);
-        if !db_iterator.valid() {
-            Ok(None)
-        } else {
-            let next_slot = db_iterator.key().expect("Expected valid key");
-            Ok(Some(next_slot))
-        }
+        db_iterator.seek(slot);
+        Ok(db_iterator)
     }
 
     pub fn write_shared_blobs<I>(&self, shared_blobs: I) -> Result<()>
