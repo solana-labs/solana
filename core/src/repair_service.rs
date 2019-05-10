@@ -179,6 +179,7 @@ impl RepairService {
         }
     }
 
+    // Generate repairs for all slots `x` in the repair_range.start <= x <= repair_range.end
     fn generate_repairs_in_range(
         blocktree: &Blocktree,
         max_repairs: usize,
@@ -187,8 +188,11 @@ impl RepairService {
     ) -> Result<(Vec<RepairType>)> {
         // Slot height and blob indexes for blobs we want to repair
         let mut repairs: Vec<RepairType> = vec![];
-        let mut current_slot = Some(repair_range.start);
-        while repairs.len() < max_repairs && current_slot.is_some() {
+        let mut meta_iter = blocktree
+            .slot_meta_iterator(repair_range.start)
+            .expect("Couldn't get db iterator");
+        while repairs.len() < max_repairs && meta_iter.valid() {
+            let current_slot = meta_iter.key();
             if current_slot.unwrap() > repair_range.end {
                 break;
             }
@@ -198,7 +202,7 @@ impl RepairService {
                 repair_info.max_slot = current_slot.unwrap();
             }
 
-            if let Some(slot) = blocktree.meta(current_slot.unwrap())? {
+            if let Some(slot) = meta_iter.value() {
                 let new_repairs = Self::generate_repairs_for_slot(
                     blocktree,
                     current_slot.unwrap(),
@@ -207,7 +211,7 @@ impl RepairService {
                 );
                 repairs.extend(new_repairs);
             }
-            current_slot = blocktree.get_next_slot(current_slot.unwrap())?;
+            meta_iter.next();
         }
 
         // Only increment repair_tries if the ledger contains every blob for every slot
@@ -321,7 +325,9 @@ impl Service for RepairService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::tests::{make_many_slot_entries, make_slot_entries};
+    use crate::blocktree::tests::{
+        make_chaining_slot_entries, make_many_slot_entries, make_slot_entries,
+    };
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
 
     #[test]
@@ -446,12 +452,57 @@ mod test {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
+            let mut repair_info = RepairInfo::new();
+
+            let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
+            let num_entries_per_slot = 10;
+
+            let blobs = make_chaining_slot_entries(&slots, num_entries_per_slot);
+            for (slot_blobs, _) in blobs.iter() {
+                blocktree.write_blobs(&slot_blobs[1..]).unwrap();
+            }
+
+            // Iterate through all possible combinations of start..end (inclusive on both
+            // sides of the range)
+            for start in 0..slots.len() {
+                for end in start..slots.len() {
+                    let mut repair_slot_range = RepairSlotRange::default();
+                    repair_slot_range.start = slots[start];
+                    repair_slot_range.end = slots[end];
+                    let expected: Vec<RepairType> = slots[start..end + 1]
+                        .iter()
+                        .map(|slot_index| RepairType::Blob(*slot_index, 0))
+                        .collect();
+
+                    assert_eq!(
+                        RepairService::generate_repairs_in_range(
+                            &blocktree,
+                            std::usize::MAX,
+                            &mut repair_info,
+                            &repair_slot_range
+                        )
+                        .unwrap(),
+                        expected
+                    );
+                }
+            }
+        }
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    pub fn test_repair_range_highest() {
+        let blocktree_path = get_tmp_ledger_path!();
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+
             let num_entries_per_slot = 10;
 
             let mut repair_info = RepairInfo::new();
 
             let num_slots = 1;
             let start = 5;
+
             // Create some blobs in slots 0..num_slots
             for i in start..start + num_slots {
                 let parent = if i > 0 { i - 1 } else { 0 };
