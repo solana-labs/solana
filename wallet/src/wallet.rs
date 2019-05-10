@@ -1,6 +1,6 @@
 use bs58;
 use chrono::prelude::*;
-use clap::ArgMatches;
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
 use num_traits::FromPrimitive;
 use serde_json;
@@ -18,14 +18,15 @@ use solana_drone::drone_mock::request_airdrop_transaction;
 use solana_sdk::bpf_loader;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils::DecodeError;
+use solana_sdk::instruction_processor_utils::{DecodeError, State};
 use solana_sdk::loader_instruction;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil, Signature};
 use solana_sdk::system_instruction::SystemError;
 use solana_sdk::system_transaction;
 use solana_sdk::transaction::{Transaction, TransactionError};
+use solana_stake_api::stake_instruction;
 use solana_vote_api::vote_instruction;
 use std::fs::File;
 use std::io::Read;
@@ -37,16 +38,19 @@ use std::{error, fmt, mem};
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
 #[derive(Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum WalletCommand {
     Address,
     Airdrop(u64),
     Balance(Pubkey),
     Cancel(Pubkey),
     Confirm(Signature),
-    // ConfigureStakingAccount(delegate_id, authorized_voter_id)
     AuthorizeVoter(Pubkey),
     CreateVoteAccount(Pubkey, Pubkey, u32, u64),
     ShowVoteAccount(Pubkey),
+    CreateStakeAccount(Pubkey, u64),
+    DelegateStake(Keypair, Pubkey),
+    ShowStakeAccount(Pubkey),
     Deploy(String),
     GetTransactionCount,
     // Pay(lamports, to, timestamp, timestamp_pubkey, witness(es), cancelable)
@@ -141,6 +145,11 @@ fn pubkeys_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Pubkey>> {
         .map(|xs| xs.map(|x| x.parse::<Pubkey>().unwrap()).collect())
 }
 
+// Return the keypair for an argument with filename `name` or None if not present.
+fn keypair_of(matches: &ArgMatches<'_>, name: &str) -> Option<Keypair> {
+    matches.value_of(name).map(|x| read_keypair(x).unwrap())
+}
+
 pub fn parse_command(
     pubkey: &Pubkey,
     matches: &ArgMatches<'_>,
@@ -172,10 +181,6 @@ pub fn parse_command(
                 Err(WalletError::BadParameter("Invalid signature".to_string()))
             }
         }
-        ("authorize-voter", Some(matches)) => {
-            let authorized_voter_id = pubkey_of(matches, "authorized_voter_id").unwrap();
-            Ok(WalletCommand::AuthorizeVoter(authorized_voter_id))
-        }
         ("create-vote-account", Some(matches)) => {
             let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
             let node_id = pubkey_of(matches, "node_id").unwrap();
@@ -192,9 +197,34 @@ pub fn parse_command(
                 lamports,
             ))
         }
+        ("authorize-voter", Some(matches)) => {
+            let authorized_voter_id = pubkey_of(matches, "authorized_voter_id").unwrap();
+            Ok(WalletCommand::AuthorizeVoter(authorized_voter_id))
+        }
         ("show-vote-account", Some(matches)) => {
             let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
             Ok(WalletCommand::ShowVoteAccount(voting_account_id))
+        }
+        ("create-stake-account", Some(matches)) => {
+            let staking_account_id = pubkey_of(matches, "staking_account_id").unwrap();
+            let lamports = matches.value_of("lamports").unwrap().parse()?;
+            Ok(WalletCommand::CreateStakeAccount(
+                staking_account_id,
+                lamports,
+            ))
+        }
+        ("delegate-stake", Some(matches)) => {
+            let staking_account_keypair =
+                keypair_of(matches, "staking_account_keypair_file").unwrap();
+            let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
+            Ok(WalletCommand::DelegateStake(
+                staking_account_keypair,
+                voting_account_id,
+            ))
+        }
+        ("show-stake-account", Some(matches)) => {
+            let staking_account_id = pubkey_of(matches, "staking_account_id").unwrap();
+            Ok(WalletCommand::ShowStakeAccount(staking_account_id))
         }
         ("deploy", Some(deploy_matches)) => Ok(WalletCommand::Deploy(
             deploy_matches
@@ -324,7 +354,7 @@ fn process_balance(pubkey: &Pubkey, rpc_client: &RpcClient) -> ProcessResult {
     }
 }
 
-fn process_confirm(rpc_client: &RpcClient, signature: Signature) -> ProcessResult {
+fn process_confirm(rpc_client: &RpcClient, signature: &Signature) -> ProcessResult {
     match rpc_client.get_signature_status(&signature.to_string()) {
         Ok(status) => {
             if let Some(result) = status {
@@ -343,23 +373,7 @@ fn process_confirm(rpc_client: &RpcClient, signature: Signature) -> ProcessResul
     }
 }
 
-fn process_authorize_voter(
-    rpc_client: &RpcClient,
-    config: &WalletConfig,
-    authorized_voter_id: Pubkey,
-) -> ProcessResult {
-    let recent_blockhash = rpc_client.get_recent_blockhash()?;
-    let ixs = vec![vote_instruction::authorize_voter(
-        &config.keypair.pubkey(),
-        &authorized_voter_id,
-    )];
-
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
-    Ok(signature_str.to_string())
-}
-
-fn process_create_staking(
+fn process_create_vote_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
     voting_account_id: &Pubkey,
@@ -367,7 +381,6 @@ fn process_create_staking(
     commission: u32,
     lamports: u64,
 ) -> ProcessResult {
-    let recent_blockhash = rpc_client.get_recent_blockhash()?;
     let ixs = vote_instruction::create_account(
         &config.keypair.pubkey(),
         voting_account_id,
@@ -375,12 +388,29 @@ fn process_create_staking(
         commission,
         lamports,
     );
+    let recent_blockhash = rpc_client.get_recent_blockhash()?;
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
 
-fn process_show_staking(
+fn process_authorize_voter(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    authorized_voter_id: &Pubkey,
+) -> ProcessResult {
+    let recent_blockhash = rpc_client.get_recent_blockhash()?;
+    let ixs = vec![vote_instruction::authorize_voter(
+        &config.keypair.pubkey(),
+        authorized_voter_id,
+    )];
+
+    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    Ok(signature_str.to_string())
+}
+
+fn process_show_vote_account(
     rpc_client: &RpcClient,
     _config: &WalletConfig,
     voting_account_id: &Pubkey,
@@ -388,7 +418,11 @@ fn process_show_staking(
     use solana_vote_api::vote_state::VoteState;
     let vote_account_lamports = rpc_client.retry_get_balance(voting_account_id, 5)?;
     let vote_account_data = rpc_client.get_account_data(voting_account_id)?;
-    let vote_state = VoteState::deserialize(&vote_account_data).unwrap();
+    let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
+        WalletError::RpcRequestError(
+            "Account data could not be deserialized to vote state".to_string(),
+        )
+    })?;
 
     println!("account lamports: {}", vote_account_lamports.unwrap());
     println!("node id: {}", vote_state.node_id);
@@ -415,6 +449,68 @@ fn process_show_staking(
         }
     }
     Ok("".to_string())
+}
+
+fn process_create_stake_account(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    staking_account_id: &Pubkey,
+    lamports: u64,
+) -> ProcessResult {
+    let recent_blockhash = rpc_client.get_recent_blockhash()?;
+    let ixs = vec![stake_instruction::create_account(
+        &config.keypair.pubkey(),
+        staking_account_id,
+        lamports,
+    )];
+    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    Ok(signature_str.to_string())
+}
+
+fn process_delegate_stake(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    staking_account_keypair: &Keypair,
+    voting_account_id: &Pubkey,
+) -> ProcessResult {
+    let recent_blockhash = rpc_client.get_recent_blockhash()?;
+    let ixs = vec![stake_instruction::delegate_stake(
+        &config.keypair.pubkey(),
+        &staking_account_keypair.pubkey(),
+        voting_account_id,
+    )];
+    let mut tx = Transaction::new_signed_instructions(
+        &[&config.keypair, &staking_account_keypair],
+        ixs,
+        recent_blockhash,
+    );
+    let signature_str = rpc_client
+        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &staking_account_keypair])?;
+    Ok(signature_str.to_string())
+}
+
+fn process_show_stake_account(
+    rpc_client: &RpcClient,
+    _config: &WalletConfig,
+    staking_account_id: &Pubkey,
+) -> ProcessResult {
+    use solana_stake_api::stake_state::StakeState;
+    let stake_account = rpc_client.get_account(staking_account_id)?;
+    match stake_account.state() {
+        Ok(StakeState::Delegate {
+            voter_id,
+            credits_observed,
+        }) => {
+            println!("account lamports: {}", stake_account.lamports);
+            println!("voter id: {}", voter_id);
+            println!("credits observed: {}", credits_observed);
+            Ok("".to_string())
+        }
+        _ => Err(WalletError::RpcRequestError(
+            "Account data could not be deserialized to stake state".to_string(),
+        ))?,
+    }
 }
 
 fn process_deploy(
@@ -656,13 +752,13 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         config.rpc_client.as_ref().unwrap()
     };
 
-    match config.command {
+    match &config.command {
         // Get address of this client
         WalletCommand::Address => unreachable!(),
 
         // Request an airdrop from Solana Drone;
         WalletCommand::Airdrop(lamports) => {
-            process_airdrop(&rpc_client, config, drone_addr, lamports)
+            process_airdrop(&rpc_client, config, drone_addr, *lamports)
         }
 
         // Check client balance
@@ -674,25 +770,43 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
 
-        // Configure staking account already created
-        WalletCommand::AuthorizeVoter(authorized_voter_id) => {
-            process_authorize_voter(&rpc_client, config, authorized_voter_id)
-        }
-
-        // Create staking account
+        // Create vote account
         WalletCommand::CreateVoteAccount(voting_account_id, node_id, commission, lamports) => {
-            process_create_staking(
+            process_create_vote_account(
                 &rpc_client,
                 config,
                 &voting_account_id,
                 &node_id,
-                commission,
-                lamports,
+                *commission,
+                *lamports,
             )
         }
-
+        // Configure staking account already created
+        WalletCommand::AuthorizeVoter(authorized_voter_id) => {
+            process_authorize_voter(&rpc_client, config, &authorized_voter_id)
+        }
+        // Show a vote account
         WalletCommand::ShowVoteAccount(voting_account_id) => {
-            process_show_staking(&rpc_client, config, &voting_account_id)
+            process_show_vote_account(&rpc_client, config, &voting_account_id)
+        }
+
+        // Create stake account
+        WalletCommand::CreateStakeAccount(staking_account_id, lamports) => {
+            process_create_stake_account(&rpc_client, config, &staking_account_id, *lamports)
+        }
+
+        // Create stake account
+        WalletCommand::DelegateStake(staking_account_keypair, voting_account_id) => {
+            process_delegate_stake(
+                &rpc_client,
+                config,
+                &staking_account_keypair,
+                &voting_account_id,
+            )
+        }
+        // Show a vote account
+        WalletCommand::ShowStakeAccount(staking_account_id) => {
+            process_show_stake_account(&rpc_client, config, &staking_account_id)
         }
 
         // Deploy a custom program to the chain
@@ -713,17 +827,17 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         ) => process_pay(
             &rpc_client,
             config,
-            lamports,
+            *lamports,
             &to,
-            timestamp,
-            timestamp_pubkey,
+            *timestamp,
+            *timestamp_pubkey,
             witnesses,
-            cancelable,
+            *cancelable,
         ),
 
         // Apply time elapsed to contract
         WalletCommand::TimeElapsed(to, pubkey, dt) => {
-            process_time_elapsed(&rpc_client, config, drone_addr, &to, &pubkey, dt)
+            process_time_elapsed(&rpc_client, config, drone_addr, &to, &pubkey, *dt)
         }
 
         // Apply witness signature to contract
@@ -823,12 +937,312 @@ where
     }
 }
 
+// Return an error if a pubkey cannot be parsed.
+fn is_pubkey(string: String) -> Result<(), String> {
+    match string.parse::<Pubkey>() {
+        Ok(_) => Ok(()),
+        Err(err) => Err(format!("{:?}", err)),
+    }
+}
+
+pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, 'v> {
+    App::new(name)
+        .about(about)
+        .version(version)
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .subcommand(SubCommand::with_name("address").about("Get your public key"))
+        .subcommand(
+            SubCommand::with_name("airdrop")
+                .about("Request a batch of lamports")
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(1)
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The number of lamports to request"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("balance")
+                .about("Get your balance")
+                .arg(
+                    Arg::with_name("pubkey")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .validator(is_pubkey)
+                        .help("The public key of the balance to check"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("cancel")
+                .about("Cancel a transfer")
+                .arg(
+                    Arg::with_name("process_id")
+                        .index(1)
+                        .value_name("PROCESS_ID")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The process id of the transfer to cancel"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("confirm")
+                .about("Confirm transaction by signature")
+                .arg(
+                    Arg::with_name("signature")
+                        .index(1)
+                        .value_name("SIGNATURE")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The transaction signature to confirm"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("authorize-voter")
+                .about("Authorize a different voter for this vote account")
+                .arg(
+                    Arg::with_name("authorized_voter_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Vote signer to authorize"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("create-vote-account")
+                .about("Create vote account for a node")
+                .arg(
+                    Arg::with_name("voting_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Vote account address to fund"),
+                )
+                .arg(
+                    Arg::with_name("node_id")
+                        .index(2)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Node that will vote in this account"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(3)
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The number of lamports to send to the vote account"),
+                )
+                .arg(
+                    Arg::with_name("commission")
+                        .long("commission")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .help("The commission taken on reward redemption, default: 0"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("show-vote-account")
+                .about("Show the contents of a vote account")
+                .arg(
+                    Arg::with_name("voting_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Vote account pubkey"),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("create-stake-account")
+                .about("Create staking account")
+                .arg(
+                    Arg::with_name("staking_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Staking account address to fund"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(2)
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The number of lamports to send to staking account"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("delegate-stake")
+                .about("Delegate the stake to some vote account")
+                .arg(
+                    Arg::with_name("staking_account_keypair_file")
+                        .index(1)
+                        .value_name("KEYPAIR_FILE")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Keypair file for the staking account, for signing the delegate transaction."),
+                )
+                .arg(
+                    Arg::with_name("voting_account_id")
+                        .index(2)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The voting account to which to delegate the stake."),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("show-stake-account")
+                .about("Show the contents of a stake account")
+                .arg(
+                    Arg::with_name("staking_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Stake account pubkey"),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("deploy")
+                .about("Deploy a program")
+                .arg(
+                    Arg::with_name("program_location")
+                        .index(1)
+                        .value_name("PATH")
+                        .takes_value(true)
+                        .required(true)
+                        .help("/path/to/program.o"),
+                ), // TODO: Add "loader" argument; current default is bpf_loader
+        )
+        .subcommand(
+            SubCommand::with_name("get-transaction-count")
+                .about("Get current transaction count"),
+        )
+        .subcommand(
+            SubCommand::with_name("pay")
+                .about("Send a payment")
+                .arg(
+                    Arg::with_name("to")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The pubkey of recipient"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(2)
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The number of lamports to send"),
+                )
+                .arg(
+                    Arg::with_name("timestamp")
+                        .long("after")
+                        .value_name("DATETIME")
+                        .takes_value(true)
+                        .help("A timestamp after which transaction will execute"),
+                )
+                .arg(
+                    Arg::with_name("timestamp_pubkey")
+                        .long("require-timestamp-from")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .requires("timestamp")
+                        .validator(is_pubkey)
+                        .help("Require timestamp from this third party"),
+                )
+                .arg(
+                    Arg::with_name("witness")
+                        .long("require-signature-from")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .multiple(true)
+                        .use_delimiter(true)
+                        .validator(is_pubkey)
+                        .help("Any third party signatures required to unlock the lamports"),
+                )
+                .arg(
+                    Arg::with_name("cancelable")
+                        .long("cancelable")
+                        .takes_value(false),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("send-signature")
+                .about("Send a signature to authorize a transfer")
+                .arg(
+                    Arg::with_name("to")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The pubkey of recipient"),
+                )
+                .arg(
+                    Arg::with_name("process_id")
+                        .index(2)
+                        .value_name("PROCESS_ID")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The process id of the transfer to authorize"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("send-timestamp")
+                .about("Send a timestamp to unlock a transfer")
+                .arg(
+                    Arg::with_name("to")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The pubkey of recipient"),
+                )
+                .arg(
+                    Arg::with_name("process_id")
+                        .index(2)
+                        .value_name("PROCESS_ID")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The process id of the transfer to unlock"),
+                )
+                .arg(
+                    Arg::with_name("datetime")
+                        .long("date")
+                        .value_name("DATETIME")
+                        .takes_value(true)
+                        .help("Optional arbitrary timestamp to apply"),
+                ),
+        )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::{App, Arg, SubCommand};
     use serde_json::Value;
     use solana_client::mock_rpc_client_request::SIGNATURE;
+    use solana_sdk::signature::gen_keypair_file;
     use solana_sdk::transaction::TransactionError;
     use std::net::{Ipv4Addr, SocketAddr};
     use std::path::PathBuf;
@@ -855,204 +1269,8 @@ mod tests {
 
     #[test]
     fn test_wallet_parse_command() {
-        let test_commands = App::new("test")
-            .subcommand(SubCommand::with_name("address").about("Get your public key"))
-            .subcommand(
-                SubCommand::with_name("airdrop")
-                    .about("Request a batch of lamports")
-                    .arg(
-                        Arg::with_name("lamports")
-                            .index(1)
-                            .value_name("NUM")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The number of lamports to request"),
-                    ),
-            )
-            .subcommand(SubCommand::with_name("balance").about("Get your balance"))
-            .subcommand(
-                SubCommand::with_name("cancel")
-                    .about("Cancel a transfer")
-                    .arg(
-                        Arg::with_name("process_id")
-                            .index(1)
-                            .value_name("PROCESS_ID")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The process id of the transfer to cancel"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("confirm")
-                    .about("Confirm transaction by signature")
-                    .arg(
-                        Arg::with_name("signature")
-                            .index(1)
-                            .value_name("SIGNATURE")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The transaction signature to confirm"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("authorize-voter")
-                    .about("Configure staking account for node")
-                    .arg(
-                        Arg::with_name("authorized_voter_id")
-                            .index(1)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("Address to delegate this vote account to"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("create-vote-account")
-                    .about("Create staking account for node")
-                    .arg(
-                        Arg::with_name("voting_account_id")
-                            .index(1)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("Staking account address to fund"),
-                    )
-                    .arg(
-                        Arg::with_name("node_id")
-                            .index(2)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("Node that will vote in this account"),
-                    )
-                    .arg(
-                        Arg::with_name("lamports")
-                            .index(3)
-                            .value_name("NUM")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The number of lamports to send to staking account"),
-                    )
-                    .arg(
-                        Arg::with_name("commission")
-                            .long("commission")
-                            .value_name("NUM")
-                            .takes_value(true)
-                            .help("The commission taken on reward redemption"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("deploy")
-                    .about("Deploy a program")
-                    .arg(
-                        Arg::with_name("program_location")
-                            .index(1)
-                            .value_name("PATH")
-                            .takes_value(true)
-                            .required(true)
-                            .help("/path/to/program.o"),
-                    ), // TODO: Add "loader" argument; current default is bpf_loader
-            )
-            .subcommand(
-                SubCommand::with_name("get-transaction-count")
-                    .about("Get current transaction count"),
-            )
-            .subcommand(
-                SubCommand::with_name("pay")
-                    .about("Send a payment")
-                    .arg(
-                        Arg::with_name("to")
-                            .index(1)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The pubkey of recipient"),
-                    )
-                    .arg(
-                        Arg::with_name("lamports")
-                            .index(2)
-                            .value_name("NUM")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The number of lamports to send"),
-                    )
-                    .arg(
-                        Arg::with_name("timestamp")
-                            .long("after")
-                            .value_name("DATETIME")
-                            .takes_value(true)
-                            .help("A timestamp after which transaction will execute"),
-                    )
-                    .arg(
-                        Arg::with_name("timestamp_pubkey")
-                            .long("require-timestamp-from")
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .requires("timestamp")
-                            .help("Require timestamp from this third party"),
-                    )
-                    .arg(
-                        Arg::with_name("witness")
-                            .long("require-signature-from")
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .multiple(true)
-                            .use_delimiter(true)
-                            .help("Any third party signatures required to unlock the lamports"),
-                    )
-                    .arg(
-                        Arg::with_name("cancelable")
-                            .long("cancelable")
-                            .takes_value(false),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("send-signature")
-                    .about("Send a signature to authorize a transfer")
-                    .arg(
-                        Arg::with_name("to")
-                            .index(1)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The pubkey of recipient"),
-                    )
-                    .arg(
-                        Arg::with_name("process_id")
-                            .index(2)
-                            .value_name("PROCESS_ID")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The process id of the transfer to authorize"),
-                    ),
-            )
-            .subcommand(
-                SubCommand::with_name("send-timestamp")
-                    .about("Send a timestamp to unlock a transfer")
-                    .arg(
-                        Arg::with_name("to")
-                            .index(1)
-                            .value_name("PUBKEY")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The pubkey of recipient"),
-                    )
-                    .arg(
-                        Arg::with_name("process_id")
-                            .index(2)
-                            .value_name("PROCESS_ID")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The process id of the transfer to unlock"),
-                    )
-                    .arg(
-                        Arg::with_name("datetime")
-                            .long("date")
-                            .value_name("DATETIME")
-                            .takes_value(true)
-                            .help("Optional arbitrary timestamp to apply"),
-                    ),
-            );
+        let test_commands = app("test", "desc", "version");
+
         let pubkey = Pubkey::new_rand();
         let pubkey_string = format!("{}", pubkey);
         let witness0 = Pubkey::new_rand();
@@ -1136,6 +1354,47 @@ mod tests {
         assert_eq!(
             parse_command(&pubkey, &test_create_vote_account2).unwrap(),
             WalletCommand::CreateVoteAccount(pubkey, node_id, 0, 50)
+        );
+
+        // Test Create Stake Account
+        let test_create_stake_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "create-stake-account",
+            &pubkey_string,
+            "50",
+        ]);
+        assert_eq!(
+            parse_command(&pubkey, &test_create_stake_account).unwrap(),
+            WalletCommand::CreateStakeAccount(pubkey, 50)
+        );
+
+        fn make_tmp_path(name: &str) -> String {
+            let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+            let keypair = Keypair::new();
+
+            let path = format!("{}/tmp/{}-{}", out_dir, name, keypair.pubkey());
+
+            // whack any possible collision
+            let _ignored = std::fs::remove_dir_all(&path);
+            // whack any possible collision
+            let _ignored = std::fs::remove_file(&path);
+
+            path
+        }
+
+        let keypair_file = make_tmp_path("keypair_file");
+        gen_keypair_file(&keypair_file).unwrap();
+        let keypair = read_keypair(&keypair_file).unwrap();
+        // Test Delegate Stake Subcommand
+        let test_delegate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "delegate-stake",
+            &keypair_file,
+            &pubkey_string,
+        ]);
+        assert_eq!(
+            parse_command(&pubkey, &test_delegate_stake).unwrap(),
+            WalletCommand::DelegateStake(keypair, pubkey)
         );
 
         // Test Deploy Subcommand
@@ -1287,12 +1546,22 @@ mod tests {
         assert_eq!(process_command(&config).unwrap(), "Confirmed");
 
         let bob_pubkey = Pubkey::new_rand();
+        let node_id = Pubkey::new_rand();
+        config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_id, 0, 10);
+        let signature = process_command(&config);
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+
         config.command = WalletCommand::AuthorizeVoter(bob_pubkey);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
+        config.command = WalletCommand::CreateStakeAccount(bob_pubkey, 10);
+        let signature = process_command(&config);
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
+
+        let bob_keypair = Keypair::new();
         let node_id = Pubkey::new_rand();
-        config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_id, 0, 10);
+        config.command = WalletCommand::DelegateStake(bob_keypair.into(), node_id);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -1397,10 +1666,10 @@ mod tests {
         config.command = WalletCommand::Balance(config.keypair.pubkey());
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::AuthorizeVoter(bob_pubkey);
+        config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_id, 0, 10);
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_id, 0, 10);
+        config.command = WalletCommand::AuthorizeVoter(bob_pubkey);
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::GetTransactionCount;
