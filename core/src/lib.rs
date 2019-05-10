@@ -13,6 +13,7 @@ pub mod chacha;
 #[cfg(cuda)]
 pub mod chacha_cuda;
 pub mod cluster_info_vote_listener;
+pub mod recycler;
 #[macro_use]
 pub mod contact_info;
 pub mod crds;
@@ -31,6 +32,7 @@ pub mod cluster_info;
 pub mod cluster_info_repair_listener;
 pub mod cluster_tests;
 pub mod consensus;
+pub mod cuda_runtime;
 pub mod entry;
 pub mod erasure;
 pub mod fetch_stage;

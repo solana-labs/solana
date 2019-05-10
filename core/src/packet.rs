@@ -1,4 +1,5 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
+use crate::cuda_runtime::PinnedVec;
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use crate::result::{Error, Result};
 use bincode;
@@ -124,20 +125,20 @@ impl Meta {
 
 #[derive(Debug, Clone)]
 pub struct Packets {
-    pub packets: Vec<Packet>,
+    pub packets: PinnedVec<Packet>,
 }
 
 //auto derive doesn't support large arrays
 impl Default for Packets {
     fn default() -> Packets {
-        Packets {
-            packets: Vec::with_capacity(NUM_RCVMMSGS),
-        }
+        let packets = PinnedVec::with_capacity(NUM_RCVMMSGS);
+        Packets { packets }
     }
 }
 
 impl Packets {
     pub fn new(packets: Vec<Packet>) -> Self {
+        let packets = PinnedVec::from_vec(packets);
         Self { packets }
     }
 
@@ -652,7 +653,7 @@ mod tests {
         // test that the address is actually being updated
         let send_addr = socketaddr!([127, 0, 0, 1], 123);
         let packets = vec![Packet::default()];
-        let mut msgs = Packets { packets };
+        let mut msgs = Packets::new(packets);
         msgs.set_addr(&send_addr);
         assert_eq!(SocketAddr::from(msgs.packets[0].meta.addr()), send_addr);
     }
@@ -678,7 +679,7 @@ mod tests {
 
         assert_eq!(recvd, p.packets.len());
 
-        for m in p.packets {
+        for m in &p.packets {
             assert_eq!(m.meta.size, PACKET_DATA_SIZE);
             assert_eq!(m.meta.addr(), saddr);
         }

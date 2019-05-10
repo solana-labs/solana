@@ -4,7 +4,9 @@
 //! offloaded to the GPU.
 //!
 
+use crate::cuda_runtime::PinnedVec;
 use crate::packet::{Packet, Packets};
+use crate::recycler::Recycler;
 use crate::result::Result;
 use bincode::serialized_size;
 use rayon::ThreadPool;
@@ -28,7 +30,9 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
                     .build()
                     .unwrap()));
 
-type TxOffsets = (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<Vec<u32>>);
+pub type TxOffset = PinnedVec<u32>;
+
+type TxOffsets = (TxOffset, TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>);
 
 #[cfg(feature = "cuda")]
 #[repr(C)]
@@ -122,7 +126,11 @@ fn batch_size(batches: &[Packets]) -> usize {
 }
 
 #[cfg(not(feature = "cuda"))]
-pub fn ed25519_verify(batches: &[Packets]) -> Vec<Vec<u8>> {
+pub fn ed25519_verify(
+    batches: &[Packets],
+    _recycler: &Recycler<TxOffset>,
+    _recycler_out: &Recycler<PinnedVec<u8>>,
+) -> Vec<Vec<u8>> {
     ed25519_verify_cpu(batches)
 }
 
@@ -145,11 +153,12 @@ pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u3
     )
 }
 
-pub fn generate_offsets(batches: &[Packets]) -> Result<TxOffsets> {
-    let mut signature_offsets: Vec<_> = Vec::new();
-    let mut pubkey_offsets: Vec<_> = Vec::new();
-    let mut msg_start_offsets: Vec<_> = Vec::new();
-    let mut msg_sizes: Vec<_> = Vec::new();
+pub fn generate_offsets(batches: &[Packets], recycler: &Recycler<TxOffset>) -> Result<TxOffsets> {
+    debug!("allocating..");
+    let mut signature_offsets: PinnedVec<_> = recycler.allocate();
+    let mut pubkey_offsets: PinnedVec<_> = recycler.allocate();
+    let mut msg_start_offsets: PinnedVec<_> = recycler.allocate();
+    let mut msg_sizes: PinnedVec<_> = recycler.allocate();
     let mut current_packet = 0;
     let mut v_sig_lens = Vec::new();
     batches.iter().for_each(|p| {
@@ -229,7 +238,11 @@ pub fn init() {
 }
 
 #[cfg(feature = "cuda")]
-pub fn ed25519_verify(batches: &[Packets]) -> Vec<Vec<u8>> {
+pub fn ed25519_verify(
+    batches: &[Packets],
+    recycler: &Recycler<TxOffset>,
+    recycler_out: &Recycler<PinnedVec<u8>>,
+) -> Vec<Vec<u8>> {
     use crate::packet::PACKET_DATA_SIZE;
     let count = batch_size(batches);
 
@@ -243,10 +256,11 @@ pub fn ed25519_verify(batches: &[Packets]) -> Vec<Vec<u8>> {
     }
 
     let (signature_offsets, pubkey_offsets, msg_start_offsets, msg_sizes, sig_lens) =
-        generate_offsets(batches).unwrap();
+        generate_offsets(batches, recycler).unwrap();
 
     debug!("CUDA ECDSA for {}", batch_size(batches));
-    let mut out = Vec::new();
+    debug!("allocating out..");
+    let mut out = recycler_out.allocate();
     let mut elems = Vec::new();
     let mut rvs = Vec::new();
 
@@ -303,6 +317,11 @@ pub fn ed25519_verify(batches: &[Packets]) -> Vec<Vec<u8>> {
         }
     }
     inc_new_counter_debug!("ed25519_verify_gpu", count);
+    recycler_out.recycle(out);
+    recycler.recycle(signature_offsets);
+    recycler.recycle(pubkey_offsets);
+    recycler.recycle(msg_sizes);
+    recycler.recycle(msg_start_offsets);
     rvs
 }
 
@@ -320,6 +339,7 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
 #[cfg(test)]
 mod tests {
     use crate::packet::{Packet, Packets};
+    use crate::recycler::Recycler;
     use crate::sigverify;
     use crate::test_tx::{test_multisig_tx, test_tx};
     use bincode::{deserialize, serialize};
@@ -461,8 +481,10 @@ mod tests {
 
         let batches = generate_packet_vec(&packet, n, 2);
 
+        let recycler = Recycler::default();
+        let recycler_out = Recycler::default();
         // verify packets
-        let ans = sigverify::ed25519_verify(&batches);
+        let ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);
 
         // check result
         let ref_ans = if modify_data { 0u8 } else { 1u8 };
@@ -499,8 +521,10 @@ mod tests {
 
         batches[0].packets.push(packet);
 
+        let recycler = Recycler::default();
+        let recycler_out = Recycler::default();
         // verify packets
-        let ans = sigverify::ed25519_verify(&batches);
+        let ans = sigverify::ed25519_verify(&batches, &recycler, &recycler_out);
 
         // check result
         let ref_ans = 1u8;
