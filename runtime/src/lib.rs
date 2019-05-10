@@ -11,11 +11,9 @@ pub mod loader_utils;
 pub mod locked_accounts_results;
 pub mod message_processor;
 mod native_loader;
+mod serde_utils;
 mod status_cache;
 mod system_instruction_processor;
 
 #[macro_use]
 extern crate solana_metrics;
-
-#[macro_use]
-extern crate serde_derive;

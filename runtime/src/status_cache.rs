@@ -1,7 +1,8 @@
-use hashbrown::{HashMap, HashSet};
 use log::*;
+use serde::{Deserialize, Serialize};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
+use std::collections::{HashMap, HashSet};
 
 const MAX_CACHE_ENTRIES: usize = solana_sdk::timing::MAX_HASH_AGE_IN_SECONDS;
 
@@ -11,6 +12,7 @@ pub type ForkStatus<T> = Vec<(ForkId, T)>;
 type SignatureMap<T> = HashMap<Signature, ForkStatus<T>>;
 type StatusMap<T> = HashMap<Hash, (ForkId, SignatureMap<T>)>;
 
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct StatusCache<T: Clone> {
     /// all signatures seen during a hash period
     cache: StatusMap<T>,
@@ -82,7 +84,7 @@ impl<T: Clone> StatusCache<T> {
             .entry(*transaction_blockhash)
             .or_insert((fork, HashMap::new()));
         sig_map.0 = std::cmp::max(fork, sig_map.0);
-        let sig_forks = sig_map.1.entry(*sig).or_insert(vec![]);
+        let sig_forks = sig_map.1.entry(*sig).or_insert_with(|| vec![]);
         sig_forks.push((fork, res));
     }
 
@@ -97,7 +99,9 @@ impl<T: Clone> StatusCache<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bincode::{deserialize_from, serialize_into, serialized_size};
     use solana_sdk::hash::hash;
+    use std::io::Cursor;
 
     type BankStatusCache = StatusCache<()>;
 
@@ -241,5 +245,30 @@ mod tests {
         assert!(status_cache
             .get_signature_status(&sig, &blockhash, &ancestors)
             .is_some());
+    }
+
+    fn test_serialize(sc: &BankStatusCache) {
+        let mut buf = vec![0u8; serialized_size(sc).unwrap() as usize];
+        let mut writer = Cursor::new(&mut buf[..]);
+        serialize_into(&mut writer, sc).unwrap();
+
+        let mut reader = Cursor::new(&mut buf[..]);
+        let deser: BankStatusCache = deserialize_from(&mut reader).unwrap();
+        assert_eq!(*sc, deser);
+    }
+
+    #[test]
+    fn test_statuscache_serialize() {
+        let sig = Signature::default();
+        let mut status_cache = BankStatusCache::default();
+        let blockhash = hash(Hash::default().as_ref());
+        status_cache.add_root(0);
+        status_cache.clear_signatures();
+        status_cache.insert(&blockhash, &sig, 0, ());
+        test_serialize(&status_cache);
+
+        let new_blockhash = hash(Hash::default().as_ref());
+        status_cache.insert(&new_blockhash, &sig, 1, ());
+        test_serialize(&status_cache);
     }
 }

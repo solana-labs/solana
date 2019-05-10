@@ -1,13 +1,13 @@
 use crate::accounts_db::{
-    get_paths_vec, AccountInfo, AccountStorage, AccountsDB, ErrorCounters, InstructionAccounts,
-    InstructionLoaders,
+    get_paths_vec, AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters,
+    InstructionAccounts, InstructionLoaders,
 };
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::StoredAccount;
 use crate::message_processor::has_duplicates;
 use bincode::serialize;
-use hashbrown::{HashMap, HashSet};
 use log::*;
+use serde::{Deserialize, Serialize};
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
@@ -18,6 +18,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
 use std::borrow::Borrow;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::remove_dir_all;
 use std::iter::once;
@@ -50,15 +51,18 @@ type RecordLocks = (
 );
 
 /// This structure handles synchronization for db
-#[derive(Default)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Accounts {
     /// Single global AccountsDB
+    #[serde(skip)]
     pub accounts_db: Arc<AccountsDB>,
 
     /// set of accounts which are currently in the pipeline
+    #[serde(skip)]
     account_locks: AccountLocks,
 
     /// set of accounts which are about to record + commit
+    #[serde(skip)]
     record_locks: Mutex<RecordLocks>,
 
     /// List of persistent stores
@@ -71,16 +75,17 @@ pub struct Accounts {
 
 impl Drop for Accounts {
     fn drop(&mut self) {
-        let paths = get_paths_vec(&self.paths);
-        paths.iter().for_each(|p| {
-            let _ignored = remove_dir_all(p);
+        if self.own_paths && (Arc::strong_count(&self.accounts_db) == 1) {
+            let paths = get_paths_vec(&self.paths);
+            paths.iter().for_each(|p| {
+                debug!("drop called for {:?}", p);
+                let _ignored = remove_dir_all(p);
 
-            // it is safe to delete the parent
-            if self.own_paths {
+                // it is safe to delete the parent
                 let path = Path::new(p);
                 let _ignored = remove_dir_all(path.parent().unwrap());
-            }
-        });
+            });
+        }
     }
 }
 
@@ -324,7 +329,9 @@ impl Accounts {
     pub fn load_by_program(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
         let accumulator: Vec<Vec<(Pubkey, u64, Account)>> = self.accounts_db.scan_account_storage(
             fork,
-            |stored_account: &StoredAccount, accum: &mut Vec<(Pubkey, u64, Account)>| {
+            |stored_account: &StoredAccount,
+             _id: AppendVecId,
+             accum: &mut Vec<(Pubkey, u64, Account)>| {
                 if stored_account.balance.owner == *program_id {
                     let val = (
                         stored_account.meta.pubkey,
@@ -435,7 +442,9 @@ impl Accounts {
     pub fn hash_internal_state(&self, fork_id: Fork) -> Option<Hash> {
         let accumulator: Vec<Vec<(Pubkey, u64, Hash)>> = self.accounts_db.scan_account_storage(
             fork_id,
-            |stored_account: &StoredAccount, accum: &mut Vec<(Pubkey, u64, Hash)>| {
+            |stored_account: &StoredAccount,
+             _id: AppendVecId,
+             accum: &mut Vec<(Pubkey, u64, Hash)>| {
                 accum.push((
                     stored_account.meta.pubkey,
                     stored_account.meta.write_version,
@@ -571,11 +580,14 @@ mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
 
     use super::*;
+    use bincode::{deserialize_from, serialize_into, serialized_size};
+    use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::CompiledInstruction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
+    use std::io::Cursor;
     use std::thread::{sleep, Builder};
     use std::time::{Duration, Instant};
 
@@ -1109,5 +1121,52 @@ mod tests {
             let (_, ref mut parent_record_locks2) = *child2.record_locks.lock().unwrap();
             assert!(parent_record_locks2.is_empty());
         }
+    }
+
+    fn create_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize) {
+        for t in 0..num {
+            let pubkey = Pubkey::new_rand();
+            let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
+            accounts.store_slow(0, &pubkey, &account);
+            pubkeys.push(pubkey.clone());
+        }
+    }
+
+    fn check_accounts(accounts: &Accounts, pubkeys: &Vec<Pubkey>, num: usize) {
+        for _ in 1..num {
+            let idx = thread_rng().gen_range(0, num - 1);
+            let ancestors = vec![(0, 0)].into_iter().collect();
+            let account = accounts.load_slow(&ancestors, &pubkeys[idx]).unwrap();
+            let account1 = Account::new((idx + 1) as u64, 0, &Account::default().owner);
+            assert_eq!(account, (account1, 0));
+        }
+    }
+
+    #[test]
+    fn test_accounts_serialize() {
+        solana_logger::setup();
+        let accounts = Accounts::new(Some("serialize_accounts".to_string()));
+
+        let mut pubkeys: Vec<Pubkey> = vec![];
+        create_accounts(&accounts, &mut pubkeys, 100);
+        check_accounts(&accounts, &pubkeys, 100);
+        accounts.add_root(0);
+
+        let sz =
+            serialized_size(&accounts).unwrap() + serialized_size(&*accounts.accounts_db).unwrap();
+        let mut buf = vec![0u8; sz as usize];
+        let mut writer = Cursor::new(&mut buf[..]);
+        serialize_into(&mut writer, &accounts).unwrap();
+        serialize_into(&mut writer, &*accounts.accounts_db).unwrap();
+
+        let mut reader = Cursor::new(&mut buf[..]);
+        let mut daccounts: Accounts = deserialize_from(&mut reader).unwrap();
+        let accounts_db: AccountsDB = deserialize_from(&mut reader).unwrap();
+        daccounts.accounts_db = Arc::new(accounts_db);
+        check_accounts(&daccounts, &pubkeys, 100);
+        assert_eq!(
+            accounts.hash_internal_state(0),
+            daccounts.hash_internal_state(0)
+        );
     }
 }

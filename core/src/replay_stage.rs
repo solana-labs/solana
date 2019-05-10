@@ -13,7 +13,6 @@ use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
-use hashbrown::HashMap;
 use solana_metrics::counter::Counter;
 use solana_metrics::influxdb;
 use solana_runtime::bank::Bank;
@@ -23,6 +22,7 @@ use solana_sdk::signature::KeypairUtil;
 use solana_sdk::timing::{self, duration_as_ms};
 use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, RwLock};
@@ -501,7 +501,7 @@ impl ReplayStage {
         let bank_slot = bank.slot();
         let bank_progress = &mut progress
             .entry(bank_slot)
-            .or_insert(ForkProgress::new(bank.last_blockhash()));
+            .or_insert_with(|| ForkProgress::new(bank.last_blockhash()));
         blocktree.get_slot_entries_with_blob_count(bank_slot, bank_progress.num_blobs as u64, None)
     }
 
@@ -513,7 +513,7 @@ impl ReplayStage {
     ) -> Result<()> {
         let bank_progress = &mut progress
             .entry(bank.slot())
-            .or_insert(ForkProgress::new(bank.last_blockhash()));
+            .or_insert_with(|| ForkProgress::new(bank.last_blockhash()));
         let result = Self::verify_and_process_entries(&bank, &entries, &bank_progress.last_entry);
         bank_progress.num_blobs += num;
         if let Some(last_entry) = entries.last() {
