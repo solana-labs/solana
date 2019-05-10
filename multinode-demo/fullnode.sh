@@ -38,7 +38,7 @@ find_entrypoint() {
   declare shift=0
 
   if [[ -z $1 ]]; then
-    entrypoint=$PWD                   # Default to local tree for rsync
+    entrypoint="$SOLANA_ROOT"         # Default to local tree for rsync
     entrypoint_address=127.0.0.1:8001 # Default to local entrypoint
   elif [[ -z $2 ]]; then
     entrypoint=$1
@@ -239,8 +239,8 @@ else
   read -r entrypoint entrypoint_address shift < <(find_entrypoint "${positional_args[@]}")
   shift "$shift"
 
-  : "${fullnode_keypair_path:=$SOLANA_CONFIG_DIR/fullnode-id$label.json}"
-  fullnode_vote_keypair_path=$SOLANA_CONFIG_DIR/fullnode-vote-id$label.json
+  : "${fullnode_keypair_path:=$SOLANA_CONFIG_DIR/fullnode-keypair$label.json}"
+  fullnode_vote_keypair_path=$SOLANA_CONFIG_DIR/fullnode-vote-keypair$label.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger$label
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts$label
 
@@ -250,6 +250,8 @@ else
 
   default_arg --entrypoint "$entrypoint_address"
   default_arg --rpc-drone-address "${entrypoint_address%:*}:9900"
+
+  rsync_entrypoint_url=$(rsync_url "$entrypoint")
 fi
 
 
@@ -261,7 +263,6 @@ storage pubkey: $replicator_storage_keypair
 ledger: $ledger_config_dir
 ======================================================================
 EOF
-
   program=$solana_replicator
 
 else
@@ -278,13 +279,11 @@ accounts: $accounts_config_dir
 ======================================================================
 EOF
 
-
   default_arg --identity "$fullnode_keypair_path"
   default_arg --voting-keypair "$fullnode_vote_keypair_path"
   default_arg --vote-account "$fullnode_vote_keypair"
   default_arg --ledger "$ledger_config_dir"
   default_arg --accounts "$accounts_config_dir"
-
 
   if [[ -n $SOLANA_CUDA ]]; then
     program=$solana_fullnode_cuda
@@ -299,16 +298,28 @@ if [[ -z $CI ]]; then # Skip in CI
   source "$here"/../scripts/tune-system.sh
 fi
 
+new_gensis_block() {
+  ! diff -q "$SOLANA_RSYNC_CONFIG_DIR"/ledger/genesis.json "$ledger_config_dir"/genesis.json >/dev/null 2>&1
+}
+
 set -e
-secs_to_next_genesis_poll=0
 PS4="$(basename "$0"): "
 while true; do
   if [[ ! -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger ]]; then
     if [[ $node_type = bootstrap_leader ]]; then
       ledger_not_setup "$SOLANA_RSYNC_CONFIG_DIR/ledger does not exist"
     fi
-    rsync_entrypoint_url=$(rsync_url "$entrypoint")
-    $rsync -vPr "$rsync_entrypoint_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
+    $rsync -vPr "${rsync_entrypoint_url:?}"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
+  fi
+
+  if new_gensis_block; then
+    # If the genesis block has changed remove the now stale ledger and vote
+    # keypair for the node and start all over again
+    (
+      set -x
+      rm -rf "$ledger_config_dir" "$accounts_config_dir" \
+        "$fullnode_vote_keypair_path".configured "$replicator_storage_keypair_path".configured
+    )
   fi
 
   if [[ ! -d "$ledger_config_dir" ]]; then
@@ -333,6 +344,7 @@ while true; do
     wait "$pid"
     sleep 1
   else
+    secs_to_next_genesis_poll=1
     while true; do
       if ! kill -0 "$pid"; then
         wait "$pid"
@@ -343,18 +355,22 @@ while true; do
 
       ((poll_for_new_genesis_block)) || continue
       ((secs_to_next_genesis_poll--)) && continue
+      (
+        set -x
+        $rsync -r "${rsync_entrypoint_url:?}"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
+      ) || true
+      new_gensis_block && break
 
-      $rsync -r "$rsync_entrypoint_url"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR" || true
-      diff -q "$SOLANA_RSYNC_CONFIG_DIR"/ledger/genesis.json "$ledger_config_dir"/genesis.json >/dev/null 2>&1 || break
       secs_to_next_genesis_poll=60
-
     done
 
     echo "############## New genesis detected, restarting $node_type ##############"
     kill "$pid" || true
     wait "$pid" || true
-    rm -rf "$ledger_config_dir" "$accounts_config_dir" "$fullnode_vote_keypair_path".configured "$replicator_storage_keypair_path".configured
-    sleep 60 # give the network time to come back up
+    # give the cluster time to come back up
+    (
+      set -x
+      sleep 60
+    )
   fi
-
 done
