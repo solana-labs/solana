@@ -14,8 +14,7 @@ use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use hashbrown::HashMap;
-use solana_metrics::counter::Counter;
-use solana_metrics::influxdb;
+use solana_metrics::{datapoint, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -245,17 +244,10 @@ impl ReplayStage {
                     cluster_info.write().unwrap().set_leader(&next_leader);
                     if next_leader == *my_id && reached_leader_tick {
                         debug!("{} starting tpu for slot {}", my_id, poh_slot);
-                        solana_metrics::submit(
-                            influxdb::Point::new("counter-replay_stage-new_leader")
-                                .add_field(
-                                    "count",
-                                    influxdb::Value::Integer(poh_slot as i64),
-                                )
-                                .add_field(
-                                    "grace",
-                                    influxdb::Value::Integer(grace_ticks as i64),
-                                )
-                                .to_owned(),);
+                        datapoint!(
+                            "replay_stage-new_leader",
+                            ("count", poh_slot, i64),
+                            ("grace", grace_ticks, i64));
                         let tpu_bank = Bank::new_from_parent(&parent, my_id, poh_slot);
                         bank_forks.write().unwrap().insert(tpu_bank);
                         if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
@@ -475,11 +467,7 @@ impl ReplayStage {
                     .unwrap_or(true)
             {
                 info!("validator fork confirmed {} {}", *slot, duration);
-                solana_metrics::submit(
-                    influxdb::Point::new(&"validator-confirmation")
-                        .add_field("duration_ms", influxdb::Value::Integer(duration as i64))
-                        .to_owned(),
-                );
+                datapoint!("validator-confirmation", ("duration_ms", duration, i64));
                 false
             } else {
                 debug!(

@@ -8,7 +8,7 @@ use crate::message_processor::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
 use log::*;
-use solana_metrics::counter::Counter;
+use solana_metrics::inc_new_counter_info;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::{Hash, Hasher};

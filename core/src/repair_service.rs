@@ -6,7 +6,7 @@ use crate::blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta};
 use crate::cluster_info::ClusterInfo;
 use crate::result::Result;
 use crate::service::Service;
-use solana_metrics::{influxdb, submit};
+use solana_metrics::datapoint;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashSet;
 use std::net::UdpSocket;
@@ -153,22 +153,14 @@ impl RepairService {
 
                 for ((to, req), repair_request) in reqs {
                     if let Ok(local_addr) = repair_socket.local_addr() {
-                        submit(
-                            influxdb::Point::new("repair_service")
-                                .add_field(
-                                    "repair_request",
-                                    influxdb::Value::String(format!("{:?}", repair_request)),
-                                )
-                                .to_owned()
-                                .add_field("to", influxdb::Value::String(to.to_string()))
-                                .to_owned()
-                                .add_field("from", influxdb::Value::String(local_addr.to_string()))
-                                .to_owned()
-                                .add_field("id", influxdb::Value::String(id.to_string()))
-                                .to_owned(),
+                        datapoint!(
+                            "repair_service",
+                            ("repair_request", format!("{:?}", repair_request), String),
+                            ("to", to.to_string(), String),
+                            ("from", local_addr.to_string(), String),
+                            ("id", id.to_string(), String)
                         );
                     }
-
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                         info!("{} repair req send_to({}) error {:?}", id, to, e);
                         0

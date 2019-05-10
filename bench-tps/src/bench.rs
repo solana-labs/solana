@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use solana::gen_keys::GenKeys;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_drone::drone::request_airdrop_transaction;
-use solana_metrics::influxdb;
+use solana_metrics::datapoint;
 use solana_sdk::client::Client;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -209,11 +209,9 @@ where
 
 fn metrics_submit_lamport_balance(lamport_balance: u64) {
     println!("Token balance: {}", lamport_balance);
-    solana_metrics::submit(
-        influxdb::Point::new("bench-tps")
-            .add_tag("op", influxdb::Value::String("lamport_balance".to_string()))
-            .add_field("balance", influxdb::Value::Integer(lamport_balance as i64))
-            .to_owned(),
+    datapoint!(
+        "bench-tps-lamport_balance",
+        ("balance", lamport_balance, i64)
     );
 }
 
@@ -255,14 +253,9 @@ fn generate_txs(
         duration_as_ms(&duration),
         blockhash,
     );
-    solana_metrics::submit(
-        influxdb::Point::new("bench-tps")
-            .add_tag("op", influxdb::Value::String("generate_txs".to_string()))
-            .add_field(
-                "duration",
-                influxdb::Value::Integer(duration_as_ms(&duration) as i64),
-            )
-            .to_owned(),
+    datapoint!(
+        "bench-tps-generate_txs",
+        ("duration", duration_as_ms(&duration), i64)
     );
 
     let sz = transactions.len() / threads;
@@ -315,15 +308,10 @@ fn do_tx_transfers<T: Client>(
                 duration_as_ms(&transfer_start.elapsed()),
                 tx_len as f32 / duration_as_s(&transfer_start.elapsed()),
             );
-            solana_metrics::submit(
-                influxdb::Point::new("bench-tps")
-                    .add_tag("op", influxdb::Value::String("do_tx_transfers".to_string()))
-                    .add_field(
-                        "duration",
-                        influxdb::Value::Integer(duration_as_ms(&transfer_start.elapsed()) as i64),
-                    )
-                    .add_field("count", influxdb::Value::Integer(tx_len as i64))
-                    .to_owned(),
+            datapoint!(
+                "bench-tps-do_tx_transfers",
+                ("duration", duration_as_ms(&transfer_start.elapsed()), i64),
+                ("count", tx_len, i64)
             );
         }
         if exit_signal.load(Ordering::Relaxed) {

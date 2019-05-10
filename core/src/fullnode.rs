@@ -20,7 +20,7 @@ use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
-use solana_metrics::counter::Counter;
+use solana_metrics::inc_new_counter_info;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;

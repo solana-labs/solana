@@ -4,7 +4,7 @@ use crate::poh_recorder::PohRecorder;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{self, PacketReceiver, PacketSender};
-use solana_metrics::counter::Counter;
+use solana_metrics::inc_new_counter_info;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;

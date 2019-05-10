@@ -4,7 +4,7 @@ use crate::result::{Error, Result};
 use bincode;
 use byteorder::{ByteOrder, LittleEndian};
 use serde::Serialize;
-use solana_metrics::counter::Counter;
+use solana_metrics::inc_new_counter_info;
 use solana_sdk::hash::Hash;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;

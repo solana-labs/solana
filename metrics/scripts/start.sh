@@ -25,7 +25,7 @@ docker run \
   --user "$(id -u):$(id -g)" \
   --volume "$PWD"/influxdb.conf:/etc/influxdb/influxdb.conf:ro \
   --volume "$PWD"/lib/influxdb:/var/lib/influxdb \
-  --env INFLUXDB_DB=local \
+  --env INFLUXDB_DB=testnet \
   --env INFLUXDB_ADMIN_USER=admin \
   --env INFLUXDB_ADMIN_PASSWORD=admin \
   $INFLUXDB_IMAGE -config /etc/influxdb/influxdb.conf /init-influxdb.sh
