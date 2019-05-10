@@ -910,13 +910,13 @@ mod tests {
 
         let mut config = Config::default();
         config.identity = Keypair::new();
-        config.duration = Duration::from_secs(5000);
+        config.duration = Duration::from_secs(1);
         config.fund_amount = 100_000;
         config.threads = 1;
         config.transfer_delay = 20; // 15
-        config.batch_size = 1000; // 1000;
-        config.chunk_size = 100; // 200;
-        config.account_groups = 10; // 10;
+        config.batch_size = 100; // 1000;
+        config.chunk_size = 10; // 200;
+        config.account_groups = 1; // 10;
         let Config {
             fund_amount,
             batch_size,
