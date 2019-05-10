@@ -6,7 +6,7 @@ use crate::blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta};
 use crate::cluster_info::ClusterInfo;
 use crate::result::Result;
 use crate::service::Service;
-use solana_metrics::{datapoint, field};
+use solana_metrics::datapoint;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashSet;
 use std::net::UdpSocket;
@@ -155,10 +155,10 @@ impl RepairService {
                     if let Ok(local_addr) = repair_socket.local_addr() {
                         datapoint!(
                             "repair_service",
-                            field!("repair_request", format!("{:?}", repair_request), String),
-                            field!("to", to.to_string(), String),
-                            field!("from", local_addr.to_string(), String),
-                            field!("id", id.to_string(), String)
+                            ("repair_request", format!("{:?}", repair_request), String),
+                            ("to", to.to_string(), String),
+                            ("from", local_addr.to_string(), String),
+                            ("id", id.to_string(), String)
                         );
                     }
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {

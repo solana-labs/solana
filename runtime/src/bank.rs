@@ -13,7 +13,7 @@ use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
 use log::*;
-use solana_metrics::{datapoint, field, inc_new_counter_info};
+use solana_metrics::{datapoint, inc_new_counter_info};
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -247,8 +247,8 @@ impl Bank {
 
         datapoint!(
             "bank-new_from_parent-heights",
-            field!("slot_height", slot, i64),
-            field!("bank_height", bank.bank_height, i64)
+            ("slot_height", slot, i64),
+            ("bank_height", bank.bank_height, i64)
         );
 
         bank.parent = RwLock::new(Some(parent.clone()));
@@ -328,8 +328,8 @@ impl Bank {
 
         datapoint!(
             "locktower-observed",
-            field!("squash_accounts_ms", squash_accounts_ms, i64),
-            field!("squash_cache_ms", squash_cache_ms, i64)
+            ("squash_accounts_ms", squash_accounts_ms, i64),
+            ("squash_cache_ms", squash_cache_ms, i64)
         );
     }
 

@@ -77,7 +77,7 @@ beyond a certain *age*.
 If the transaction data size is smaller than the size of the returned signature
 (or descriptive error), a single client can flood the network.  Considering
 that a simple `Transfer` operation requires two public keys (each 32 bytes) and a
-`fee` field, and that the returned signature is 64 bytes (and a byte to
+`fee`  and that the returned signature is 64 bytes (and a byte to
 indicate `Ok`), consideration for this attack may not be required.
 
 In the current design, the drone accepts TCP connections. This allows clients

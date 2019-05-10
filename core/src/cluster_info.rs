@@ -29,7 +29,7 @@ use core::cmp;
 use hashbrown::HashMap;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana_metrics::{datapoint, field, inc_new_counter_info};
+use solana_metrics::{datapoint, inc_new_counter_info};
 use solana_netutil::{
     bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range, PortRange,
 };
@@ -819,24 +819,21 @@ impl ClusterInfo {
                 RepairType::Blob(slot, blob_index) => {
                     datapoint!(
                         "cluster_info-repair",
-                        field!("repair-slot", *slot, i64),
-                        field!("repair-ix", *blob_index, i64)
+                        ("repair-slot", *slot, i64),
+                        ("repair-ix", *blob_index, i64)
                     );
                     self.window_index_request_bytes(*slot, *blob_index)?
                 }
                 RepairType::HighestBlob(slot, blob_index) => {
                     datapoint!(
                         "cluster_info-repair_highest",
-                        field!("repair-highest-slot", *slot, i64),
-                        field!("repair-highest-ix", *blob_index, i64)
+                        ("repair-highest-slot", *slot, i64),
+                        ("repair-highest-ix", *blob_index, i64)
                     );
                     self.window_highest_index_request_bytes(*slot, *blob_index)?
                 }
                 RepairType::Orphan(slot) => {
-                    datapoint!(
-                        "cluster_info-repair_orphan",
-                        field!("repair-orphan", *slot, i64)
-                    );
+                    datapoint!("cluster_info-repair_orphan", ("repair-orphan", *slot, i64));
                     self.orphan_bytes(*slot)?
                 }
             }

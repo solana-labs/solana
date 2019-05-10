@@ -11,7 +11,7 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_exchange_api::exchange_instruction;
 use solana_exchange_api::exchange_state::*;
 use solana_exchange_api::id;
-use solana_metrics::{datapoint, field};
+use solana_metrics::datapoint;
 use solana_sdk::client::Client;
 use solana_sdk::client::SyncClient;
 use solana_sdk::pubkey::Pubkey;
@@ -264,8 +264,8 @@ fn do_tx_transfers<T>(
             total_txs_sent_count.fetch_add(n, Ordering::Relaxed);
             datapoint!(
                 "bench-exchange-do_tx_transfers",
-                field!("duration", duration_as_ms(&duration), i64),
-                field!("count", n, i64)
+                ("duration", duration_as_ms(&duration), i64),
+                ("count", n, i64)
             );
         }
         if exit_signal.load(Ordering::Relaxed) {
@@ -409,10 +409,7 @@ fn swapper<T>(
                 txs = 0;
             }
 
-            datapoint!(
-                "bench-exchange-swaps",
-                field!("count", to_swap_txs.len(), i64)
-            );
+            datapoint!("bench-exchange-swaps", ("count", to_swap_txs.len(), i64));
 
             let chunks: Vec<_> = to_swap_txs.chunks(chunk_size).collect();
             {
@@ -544,10 +541,7 @@ fn trader<T>(
                     txs = 0;
                 }
 
-                datapoint!(
-                    "bench-exchange-trades",
-                    field!("count", trades_txs.len(), i64)
-                );
+                datapoint!("bench-exchange-trades", ("count", trades_txs.len(), i64));
 
                 {
                     let mut shared_txs_wl = shared_txs
@@ -916,13 +910,13 @@ mod tests {
 
         let mut config = Config::default();
         config.identity = Keypair::new();
-        config.duration = Duration::from_secs(1);
+        config.duration = Duration::from_secs(5000);
         config.fund_amount = 100_000;
         config.threads = 1;
         config.transfer_delay = 20; // 15
-        config.batch_size = 100; // 1000;
-        config.chunk_size = 10; // 200;
-        config.account_groups = 1; // 10;
+        config.batch_size = 1000; // 1000;
+        config.chunk_size = 100; // 200;
+        config.account_groups = 10; // 10;
         let Config {
             fund_amount,
             batch_size,

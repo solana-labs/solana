@@ -16,7 +16,7 @@ use hashbrown::HashMap;
 #[cfg(not(feature = "kvstore"))]
 use rocksdb;
 
-use solana_metrics::{datapoint, field, inc_new_counter_info};
+use solana_metrics::{datapoint, inc_new_counter_info};
 
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
@@ -1008,7 +1008,7 @@ fn should_insert_blob(
     if blob_index >= last_index {
         datapoint!(
             "blocktree_error",
-            field!(
+            (
                 "error",
                 format!(
                     "Received last blob with index {} >= slot.last_index {}",
@@ -1025,7 +1025,7 @@ fn should_insert_blob(
     if blob.is_last_in_slot() && blob_index < slot.received {
         datapoint!(
             "blocktree_error",
-            field!(
+            (
                 "error",
                 format!(
                     "Received last blob with index {} < slot.received {}",
