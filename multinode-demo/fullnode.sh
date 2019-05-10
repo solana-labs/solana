@@ -279,8 +279,8 @@ fi
 if [[ $node_type = replicator ]]; then
   cat <<EOF
 ======================[ Replicator configuration ]======================
-replicator pubkey: $replicator_keypair
-storage pubkey: $replicator_storage_keypair
+replicator pubkey: $replicator_pubkey
+storage pubkey: $replicator_storage_pubkey
 ledger: $ledger_config_dir
 ======================================================================
 EOF
@@ -293,8 +293,8 @@ else
 
   cat <<EOF
 ======================[ Fullnode configuration ]======================
-node pubkey: $fullnode_keypair
-vote pubkey: $fullnode_vote_keypair
+node pubkey: $fullnode_pubkey
+vote pubkey: $fullnode_vote_pubkey
 ledger: $ledger_config_dir
 accounts: $accounts_config_dir
 ======================================================================
