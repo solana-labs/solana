@@ -88,7 +88,6 @@ pub fn process_instruction(
             vote_state::authorize_voter(vote_account, other_signers, &voter_id)
         }
         VoteInstruction::Vote(votes) => {
-            // TODO should this be a counter instead of a direct submit?
             datapoint!("vote-native", ("count", 1, i64));
             let (vote_account, other_signers) = keyed_accounts.split_at_mut(1);
             let vote_account = &mut vote_account[0];
