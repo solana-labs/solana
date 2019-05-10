@@ -2,12 +2,12 @@
 
 use crate::pubkey::Pubkey;
 use bs58;
-use ed25519_dalek;
 use generic_array::typenum::U64;
 use generic_array::GenericArray;
 use rand::rngs::OsRng;
 use rand::{CryptoRng, Rng};
 use serde_json;
+use solana_ed25519_dalek as ed25519_dalek;
 use std::error;
 use std::fmt;
 use std::fs::{self, File};
