@@ -5,7 +5,7 @@ validator node.
 Please note some of the information and instructions described here may change
 in future releases.
 
-### Beta Testnet Overview
+### Overview
 The testnet features a validator running at testnet.solana.com, which
 serves as the entrypoint to the cluster for your validator.
 
@@ -17,6 +17,9 @@ should the hourly automated cluster sanity test fail.
 
 There is a **#validator-support** Discord channel available to reach other
 testnet participants, https://discord.gg/pquxPsq.
+
+Also we'd love it if you choose to register your validator node with us at
+https://forms.gle/LfFscZqJELbuUP139.
 
 ### Machine Requirements
 Since the testnet is not intended for stress testing of max transaction
@@ -185,8 +188,9 @@ $ solana-keygen pubkey ./config-local/fullnode-vote-keypair.json
 ```
 
 ### Sharing Metrics From Your Validator
-If you'd like to share metrics perform the following steps before starting the
-validator node:
+If you have obtained a metrics username/password from the Solana maintainers to
+help us monitor the health of the testnet, please perform the following steps
+before starting the validator node to activate metrics reporting:
 ```bash
 export u="username obtained from the Solana maintainers"
 export p="password obtained from the Solana maintainers"
