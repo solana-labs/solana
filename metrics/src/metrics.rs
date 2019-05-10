@@ -54,6 +54,51 @@ macro_rules! datapoint {
     };
 }
 
+#[macro_export]
+macro_rules! datapoint2 {
+    (@field $point:ident $name:expr, $string:expr, String) => {
+            $point.add_field(
+                    $name,
+                    $crate::influxdb::Value::String($string));
+    };
+    (@field $point:ident $name:expr, $value:expr, i64) => {
+            $point.add_field(
+                    $name,
+                    $crate::influxdb::Value::Integer($value as i64));
+    };
+    (@field $point:ident $name:expr, $value:expr, f64) => {
+            $point.add_field(
+                    $name,
+                    $crate::influxdb::Value::Float($value as f64));
+    };
+    (@field $point:ident $name:expr, $value:expr, bool) => {
+            $point.add_field(
+                    $name,
+                    $crate::influxdb::Value::Boolean($value as bool));
+    };
+
+    (@fields $point:ident) => {};
+    (@fields $point:ident ($name:expr, $value:expr, $type:ident) , $($rest:tt)*) => {
+        $crate::datapoint2!(@field $point $name, $value, $type);
+        $crate::datapoint2!(@fields $point $($rest)*);
+    };
+    (@fields $point:ident ($name:expr, $value:expr, $type:ident)) => {
+        $crate::datapoint2!(@field $point $name, $value, $type);
+    };
+
+    (@point $name:expr, $($fields:tt)+) => {
+        {
+        let mut point = $crate::influxdb::Point::new(&$name);
+        $crate::datapoint2!(@fields point $($fields)+);
+        point
+        }
+    };
+
+    ($name:expr, $($fields:tt)+) => {
+        $crate::submit($crate::datapoint2!(@point $name, $($fields)+));
+    };
+}
+
 lazy_static! {
     static ref HOST_INFO: String = {
         let v = env::var("SOLANA_METRICS_DISPLAY_HOSTNAME")
@@ -419,6 +464,63 @@ mod test {
             )
             .to_owned();
         agent.submit(point);
+    }
+
+    #[test]
+    fn test_datapoint2() {
+        macro_rules! matches {
+            ($e:expr, $p:pat) => {
+                match $e {
+                    $p => true,
+                    _ => false,
+                }
+            };
+        }
+
+        datapoint2!("name", ("field name", "test".to_string(), String));
+        datapoint2!("name", ("field name", 12.34_f64, f64));
+        datapoint2!("name", ("field name", true, bool));
+        datapoint2!("name", ("field name", 1, i64));
+        datapoint2!("name", ("field name", 1, i64),);
+        datapoint2!("name", ("field1 name", 2, i64), ("field2 name", 2, i64));
+        datapoint2!("name", ("field1 name", 2, i64), ("field2 name", 2, i64),);
+        datapoint2!(
+            "name",
+            ("field1 name", 2, i64),
+            ("field2 name", 2, i64),
+            ("field3 name", 3, i64)
+        );
+        datapoint2!(
+            "name",
+            ("field1 name", 2, i64),
+            ("field2 name", 2, i64),
+            ("field3 name", 3, i64),
+        );
+
+        let point = datapoint2!(@point "name", ("i64", 1, i64), ("String", "string".to_string(), String), ("f64", 12.34_f64, f64), ("bool", true, bool));
+        assert_eq!(point.measurement, "name");
+        assert!(matches!(
+            point.fields.get("i64").unwrap(),
+            influxdb::Value::Integer(1)
+        ));
+        assert!(match point.fields.get("String").unwrap() {
+            influxdb::Value::String(ref s) => {
+                if s == "string" {
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        });
+        assert!(matches!(
+            point.fields.get("f64").unwrap(),
+            influxdb::Value::Float(12.34_f64)
+        ));
+        assert!(matches!(
+            point.fields.get("bool").unwrap(),
+            influxdb::Value::Boolean(true)
+        ));
     }
 
 }
