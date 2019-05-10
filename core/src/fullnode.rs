@@ -45,7 +45,6 @@ pub struct FullnodeConfig {
     pub tick_config: PohServiceConfig,
     pub account_paths: Option<String>,
     pub rpc_config: JsonRpcConfig,
-    pub use_snapshot: bool,
 }
 impl Default for FullnodeConfig {
     fn default() -> Self {
@@ -61,7 +60,6 @@ impl Default for FullnodeConfig {
             tick_config: PohServiceConfig::default(),
             account_paths: None,
             rpc_config: JsonRpcConfig::default(),
-            use_snapshot: false,
         }
     }
 }
@@ -104,11 +102,7 @@ impl Fullnode {
             ledger_signal_receiver,
             completed_slots_receiver,
             leader_schedule_cache,
-        ) = new_banks_from_blocktree(
-            ledger_path,
-            config.account_paths.clone(),
-            config.use_snapshot,
-        );
+        ) = new_banks_from_blocktree(ledger_path, config.account_paths.clone());
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let exit = Arc::new(AtomicBool::new(false));
@@ -123,7 +117,7 @@ impl Fullnode {
         );
         let blocktree = Arc::new(blocktree);
 
-        let (mut poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
+        let (poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
             bank.tick_height(),
             bank.last_blockhash(),
             bank.slot(),
@@ -134,10 +128,6 @@ impl Fullnode {
             blocktree.new_blobs_signals.first().cloned(),
             &leader_schedule_cache,
         );
-        if config.use_snapshot {
-            poh_recorder.set_bank(&bank);
-        }
-
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, &exit);
         assert_eq!(
@@ -299,40 +289,9 @@ impl Fullnode {
     }
 }
 
-fn get_bank_forks(
-    genesis_block: &GenesisBlock,
-    blocktree: &Blocktree,
-    account_paths: Option<String>,
-    use_snapshot: bool,
-) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
-    if use_snapshot {
-        let bank_forks = BankForks::load_from_snapshot();
-        match bank_forks {
-            Ok(v) => {
-                let bank = &v.working_bank();
-                let fork_info = BankForksInfo {
-                    bank_slot: bank.slot(),
-                    entry_height: bank.tick_height(),
-                };
-                return (v, vec![fork_info], LeaderScheduleCache::new_from_bank(bank));
-            }
-            Err(_) => warn!("Failed to load from snapshot, fallback to load from ledger"),
-        }
-    }
-    let (mut bank_forks, bank_forks_info, leader_schedule_cache) =
-        blocktree_processor::process_blocktree(&genesis_block, &blocktree, account_paths)
-            .expect("process_blocktree failed");
-    if use_snapshot {
-        bank_forks.set_snapshot_config(true);
-        let _ = bank_forks.add_snapshot(0, 0);
-    }
-    (bank_forks, bank_forks_info, leader_schedule_cache)
-}
-
 pub fn new_banks_from_blocktree(
     blocktree_path: &str,
     account_paths: Option<String>,
-    use_snapshot: bool,
 ) -> (
     BankForks,
     Vec<BankForksInfo>,
@@ -349,7 +308,8 @@ pub fn new_banks_from_blocktree(
             .expect("Expected to successfully open database ledger");
 
     let (bank_forks, bank_forks_info, leader_schedule_cache) =
-        get_bank_forks(&genesis_block, &blocktree, account_paths, use_snapshot);
+        blocktree_processor::process_blocktree(&genesis_block, &blocktree, account_paths)
+            .expect("process_blocktree failed");
 
     (
         bank_forks,

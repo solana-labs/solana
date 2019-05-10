@@ -16,8 +16,7 @@ pub trait BloomHashIndex {
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct Bloom<T: BloomHashIndex> {
     pub keys: Vec<u64>,
-    pub bits: BitVec<u64>,
-    num_bits_set: u64,
+    pub bits: BitVec<u8>,
     _phantom: PhantomData<T>,
 }
 
@@ -27,7 +26,6 @@ impl<T: BloomHashIndex> Bloom<T> {
         Bloom {
             keys,
             bits,
-            num_bits_set: 0,
             _phantom: PhantomData::default(),
         }
     }
@@ -49,15 +47,11 @@ impl<T: BloomHashIndex> Bloom<T> {
     }
     pub fn clear(&mut self) {
         self.bits = BitVec::new_fill(false, self.bits.len());
-        self.num_bits_set = 0;
     }
     pub fn add(&mut self, key: &T) {
         for k in &self.keys {
             let pos = self.pos(key, *k);
-            if !self.bits.get(pos) {
-                self.num_bits_set += 1;
-                self.bits.set(pos, true);
-            }
+            self.bits.set(pos, true);
         }
     }
     pub fn contains(&self, key: &T) -> bool {

@@ -90,7 +90,7 @@ fn test_replay() {
         ledger_signal_receiver,
         completed_slots_receiver,
         leader_schedule_cache,
-    ) = fullnode::new_banks_from_blocktree(&blocktree_path, None, false);
+    ) = fullnode::new_banks_from_blocktree(&blocktree_path, None);
     let working_bank = bank_forks.working_bank();
     assert_eq!(
         working_bank.get_balance(&mint_keypair.pubkey()),
