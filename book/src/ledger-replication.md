@@ -31,7 +31,7 @@ core. The total space required for verification is `1_ledger_segment +
 Validators for PoRep are the same validators that are verifying transactions.
 They have some stake that they have put up as collateral that ensures that
 their work is honest. If you can prove that a validator verified a fake PoRep,
-then the validators stake can be slashed.
+then the validator will not receive a reward for that storage epoch.
 
 Replicators are specialized *light clients*. They download a part of the ledger
 and store it, and provide PoReps of storing the ledger. For each verified PoRep
@@ -53,7 +53,7 @@ changes to determine what rate it can validate storage proofs.
 
 ### Constants
 
-1. NUM\_STORAGE\_ENTRIES: Number of entries in a segment of ledger data. The
+1. SLOTS\_PER\_SEGMENT: Number of slots in a segment of ledger data. The
 unit of storage for a replicator.
 2. NUM\_KEY\_ROTATION\_TICKS: Number of ticks to save a PoH value and cause a
 key generation for the section of ledger just generated and the rotation of
@@ -77,7 +77,7 @@ height.
 3. Validator generates a storage proof confirmation transaction.
 4. The storage proof confirmation transaction is integrated into the ledger.
 6. Validator responds to RPC interfaces for what the last storage epoch PoH
-value is and its entry\_height.
+value is and its slot.
 
 ### Replicator behavior
 
@@ -95,10 +95,10 @@ is:
     - (d) replicator can subscribe to an abbreviated transaction stream to
       generate the information itself
 2. A replicator obtains the PoH hash corresponding to the last key rotation
-along with its entry\_height.
+along with its slot.
 3. The replicator signs the PoH hash with its keypair. That signature is the
 seed used to pick the segment to replicate and also the encryption key. The
-replicator mods the signature with the entry\_height to get which segment to
+replicator mods the signature with the slot to get which segment to
 replicate.
 4. The replicator retrives the ledger by asking peer validators and
 replicators. See 6.5.
@@ -118,9 +118,9 @@ current leader and it is put onto the ledger.
 ### Finding who has a given block of ledger
 
 1. Validators monitor the transaction stream for storage mining proofs, and
-keep a mapping of ledger segments by entry\_height to public keys. When it sees
+keep a mapping of ledger segments by slot to public keys. When it sees
 a storage mining proof it updates this mapping and provides an RPC interface
-which takes an entry\_height and hands back a list of public keys.  The client
+which takes a slot and hands back a list of public keys.  The client
 then looks up in their cluster\_info table to see which network address that
 corresponds to and sends a repair request to retrieve the necessary blocks of
 ledger.
