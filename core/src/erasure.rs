@@ -226,8 +226,10 @@ impl CodingGenerator {
                 let index = data_blob.index();
                 let slot = data_blob.slot();
                 let id = data_blob.id();
+                let genesis_blockhash = data_blob.genesis_blockhash();
 
                 let mut coding_blob = Blob::default();
+                coding_blob.set_genesis_blockhash(&genesis_blockhash);
                 coding_blob.set_index(index);
                 coding_blob.set_slot(slot);
                 coding_blob.set_id(&id);
