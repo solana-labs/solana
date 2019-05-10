@@ -148,13 +148,7 @@ fn main() {
                 .validator(port_range_validator)
                 .help("Range to use for dynamically assigned ports"),
         )
-        .arg(
-            clap::Arg::with_name("use_snapshot")
-                .long("use-snapshot")
-                .takes_value(false)
-                .help("Load / Store bank snapshots"),
-        )
-         .get_matches();
+        .get_matches();
 
     let mut fullnode_config = FullnodeConfig::default();
     let keypair = if let Some(identity) = matches.value_of("identity") {
@@ -183,8 +177,6 @@ fn main() {
     let ledger_path = matches.value_of("ledger").unwrap();
 
     fullnode_config.sigverify_disabled = matches.is_present("no_sigverify");
-
-    fullnode_config.use_snapshot = matches.is_present("use_snapshot");
 
     fullnode_config.voting_disabled = matches.is_present("no_voting");
 

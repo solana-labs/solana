@@ -1,16 +1,15 @@
-use serde::{Deserialize, Serialize};
+use hashbrown::HashMap;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing::timestamp;
-use std::collections::HashMap;
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 struct HashAge {
     timestamp: u64,
     hash_height: u64,
 }
 
 /// Low memory overhead, so can be cloned for every checkpoint
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct BlockhashQueue {
     /// updated whenever an hash is registered
     hash_height: u64,

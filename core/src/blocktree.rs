@@ -11,7 +11,7 @@ use solana_kvstore as kvstore;
 
 use bincode::deserialize;
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 #[cfg(not(feature = "kvstore"))]
 use rocksdb;
