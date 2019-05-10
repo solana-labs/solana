@@ -54,7 +54,10 @@ $ npm install --save @solana/web3.js
 
 ### BPF program development
 clang-7.0 must be installed to build BPF programs, such as
-`examples/bpf-c-noop/`.  See `bpf-sdk/README.md` for installation details
+`examples/bpf-c-noop/`.  See `bpf-sdk/README.md` for installation details.
+
+Rust must be installed to build Rust BPF programs, see: https://www.rust-lang.org/install.html such as
+`examples/bpf-rust-noop/`.  See https://www.rust-lang.org/install.html for installation details.
 
 ## Usage
 

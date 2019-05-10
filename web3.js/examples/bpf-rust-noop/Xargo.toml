@@ -1,0 +1,4 @@
+
+
+[dependencies.compiler_builtins]
+path = "../../bpf-sdk/rust-bpf-sysroot/src/compiler-builtins"
