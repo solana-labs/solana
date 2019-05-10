@@ -14,10 +14,10 @@ import {newAccountWithLamports} from './new-account-with-lamports';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
-  jest.setTimeout(30000);
+  jest.setTimeout(120000);
 }
 
-test('load BPF program', async () => {
+test('load BPF C program', async () => {
   if (mockRpcEnabled) {
     console.log('non-live test skipped');
     return;
@@ -25,7 +25,24 @@ test('load BPF program', async () => {
 
   const connection = new Connection(url);
   const from = await newAccountWithLamports(connection, 1024);
-  const data = await fs.readFile('test/fixtures/noop/noop.so');
+  const data = await fs.readFile('test/fixtures/noop-c/noop.so');
+  const programId = await BpfLoader.load(connection, from, data);
+  const transaction = new Transaction().add({
+    keys: [{pubkey: from.publicKey, isSigner: true}],
+    programId,
+  });
+  await sendAndConfirmTransaction(connection, transaction, from);
+});
+
+test('load BPF Rust program', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url);
+  const from = await newAccountWithLamports(connection, 1024);
+  const data = await fs.readFile('test/fixtures/noop-rust/solana_bpf_rust_noop.so');
   const programId = await BpfLoader.load(connection, from, data);
   const transaction = new Transaction().add({
     keys: [{pubkey: from.publicKey, isSigner: true}],

@@ -21,7 +21,7 @@ before_install:
   - sudo apt-get update
   - sudo apt-get install -y clang-7 --allow-unauthenticated
   - clang-7 --version
-  - curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain none
+  - curl https://sh.rustup.rs -sSf | sh -s -- -y 
   - PATH=$HOME/.cargo/bin:$PATH
   - rustup --version
 
@@ -31,6 +31,7 @@ script:
   - npm run lint
   - npm run codecov
   - make -C examples/bpf-c-noop/
+  - ./examples/bpf-rust-noop/build.sh
   - npm run localnet:update
   - npm run localnet:up
   - npm run examples
