@@ -1,13 +1,17 @@
-use hashbrown::{HashMap, HashSet};
 use log::*;
+use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
+use std::collections::{HashMap, HashSet};
 
 pub type Fork = u64;
 
-#[derive(Default)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct AccountsIndex<T> {
-    account_maps: HashMap<Pubkey, Vec<(Fork, T)>>,
-    roots: HashSet<Fork>,
+    #[serde(skip)]
+    pub account_maps: HashMap<Pubkey, Vec<(Fork, T)>>,
+
+    pub roots: HashSet<Fork>,
+
     //This value that needs to be stored to recover the index from AppendVec
     pub last_root: Fork,
 }
@@ -35,7 +39,7 @@ impl<T: Clone> AccountsIndex<T> {
         let mut rv = vec![];
         let mut fork_vec: Vec<(Fork, T)> = vec![];
         {
-            let entry = self.account_maps.entry(*pubkey).or_insert(vec![]);
+            let entry = self.account_maps.entry(*pubkey).or_insert_with(|| vec![]);
             std::mem::swap(entry, &mut fork_vec);
         };
 
@@ -54,11 +58,17 @@ impl<T: Clone> AccountsIndex<T> {
         );
         fork_vec.retain(|(fork, _)| !self.is_purged(*fork));
         {
-            let entry = self.account_maps.entry(*pubkey).or_insert(vec![]);
+            let entry = self.account_maps.entry(*pubkey).or_insert_with(|| vec![]);
             std::mem::swap(entry, &mut fork_vec);
         };
         rv
     }
+
+    pub fn add_index(&mut self, fork: Fork, pubkey: &Pubkey, account_info: T) {
+        let entry = self.account_maps.entry(*pubkey).or_insert_with(|| vec![]);
+        entry.push((fork, account_info));
+    }
+
     pub fn is_purged(&self, fork: Fork) -> bool {
         fork < self.last_root
     }

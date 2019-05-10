@@ -1,11 +1,11 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
-use hashbrown::HashMap;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_stake_api::stake_state::StakeState;
+use std::collections::HashMap;
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct Stakes {
     /// vote accounts
     vote_accounts: HashMap<Pubkey, (u64, Account)>,

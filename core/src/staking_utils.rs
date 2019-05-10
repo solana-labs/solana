@@ -1,9 +1,9 @@
-use hashbrown::HashMap;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::VoteState;
 use std::borrow::Borrow;
+use std::collections::HashMap;
 
 /// Looks through vote accounts, and finds the latest slot that has achieved
 /// supermajority lockout
@@ -116,13 +116,13 @@ pub(crate) mod tests {
         create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
         BOOTSTRAP_LEADER_LAMPORTS,
     };
-    use hashbrown::HashSet;
     use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use solana_stake_api::stake_instruction;
     use solana_vote_api::vote_instruction;
+    use std::collections::HashSet;
     use std::iter::FromIterator;
     use std::sync::Arc;
 
