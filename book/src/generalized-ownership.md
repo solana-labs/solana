@@ -234,7 +234,7 @@ Another offer to trade:
 Trade {
     //address to the OwnerState::Escrow
     offer: OwnerState::Escrow {    
-        units: 101,
+        units: Some(101),
         item: Token2,
         escrow: Match, //address 1
     }
