@@ -1,6 +1,6 @@
 [package]
 name = "solana-noop-program"
-version = "0.14.2"
+version = "0.14.3"
 description = "Solana noop program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -9,12 +9,12 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-solana-sdk = { path = "../../sdk", version = "0.14.2"   }
-solana-logger = { path = "../../logger", version = "0.14.2"   }
+solana-sdk = { path = "../../sdk", version = "0.14.3"    }
+solana-logger = { path = "../../logger", version = "0.14.3"    }
 log = "0.4.2"
 
 [dev-dependencies]
-solana-runtime = { path = "../../runtime", version = "0.14.2"   }
+solana-runtime = { path = "../../runtime", version = "0.14.3"    }
 
 [lib]
 name = "solana_noop_program"
