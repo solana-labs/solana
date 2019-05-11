@@ -174,6 +174,7 @@ const GetTransactionCountRpcResult = jsonRpcResult('number');
  * Expected JSON RPC response for the "getRecentBlockhash" message
  */
 const GetRecentBlockhash = jsonRpcResult(['string', 'object']);
+const GetRecentBlockhash_014 = jsonRpcResult('string'); // Legacy v0.14 response.  TODO: Remove in July 2019
 
 /**
  * Expected JSON RPC response for the "requestAirdrop" message
@@ -430,6 +431,14 @@ export class Connection {
    */
   async getRecentBlockhash(): Promise<Blockhash> {
     const unsafeRes = await this._rpcRequest('getRecentBlockhash', []);
+
+    // Legacy v0.14 response.  TODO: Remove in July 2019
+    const res_014 = GetRecentBlockhash_014(unsafeRes);
+    if (!res_014.error) {
+      return res_014.result;
+    }
+    // End Legacy v0.14 response
+
     const res = GetRecentBlockhash(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
