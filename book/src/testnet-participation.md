@@ -16,10 +16,10 @@ The testnet is configured to reset the ledger daily, or sooner
 should the hourly automated cluster sanity test fail.
 
 There is a **#validator-support** Discord channel available to reach other
-testnet participants, https://discord.gg/pquxPsq.
+testnet participants, [https://discord.gg/pquxPsq](https://discord.gg/pquxPsq).
 
 Also we'd love it if you choose to register your validator node with us at
-https://forms.gle/LfFscZqJELbuUP139.
+[https://forms.gle/LfFscZqJELbuUP139](https://forms.gle/LfFscZqJELbuUP139).
 
 ### Machine Requirements
 Since the testnet is not intended for stress testing of max transaction
