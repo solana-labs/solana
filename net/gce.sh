@@ -631,8 +631,13 @@ EOF
 
   if [[ $additionalFullNodeCount -gt 0 ]]; then
     num_zones=${#zones[@]}
-    numNodesPerZone=$((additionalFullNodeCount / num_zones))
-    numLeftOverNodes=$((additionalFullNodeCount % num_zones))
+    if [[ $additionalFullNodeCount -gt $num_zones ]]; then
+      numNodesPerZone=$((additionalFullNodeCount / num_zones))
+      numLeftOverNodes=$((additionalFullNodeCount % num_zones))
+    else
+      numNodesPerZone=1
+      numLeftOverNodes=0
+    fi
 
     for ((i=((num_zones - 1)); i >= 0; i--)); do
       zone=${zones[i]}
