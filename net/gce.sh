@@ -342,17 +342,19 @@ EOF
 
       # Try to scp in a couple times, sshd may not yet be up even though the
       # machine can be pinged...
-      set -x -o pipefail
-      for i in $(seq 1 30); do
-        if cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa "$sshPrivateKey" "$nodeZone"; then
-          if cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa.pub "$sshPrivateKey.pub" "$nodeZone"; then
-            break
-          fi
-        fi
+      (
+        set -o pipefail
+        for i in $(seq 1 30); do
+          set -x
+          cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa "$sshPrivateKey" "$nodeZone" &&
+            cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa.pub "$sshPrivateKey.pub" "$nodeZone" &&
+              break
+          set +x
 
-        sleep 1
-        echo "Retry $i..."
-      done
+          sleep 1
+          echo "Retry $i..."
+        done
+      )
 
       chmod 400 "$sshPrivateKey"
       ls -l "$sshPrivateKey"
@@ -383,15 +385,17 @@ EOF
     (
       set +e
       fetchPrivateKey || exit 1
-      set -x
-      for i in $(seq 1 60); do
-        timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
+      for i in $(seq 1 30); do
+        (
+          set -x
+          timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
+        )
         ret=$?
         if [[ $ret -eq 0 ]]; then
           echo "$name has booted."
           exit 0
         fi
-        sleep 2
+        sleep 5
         echo "Retry $i..."
       done
       echo "$name failed to boot."
@@ -693,7 +697,7 @@ info)
     ipAddress=${clientIpList[$i]}
     ipAddressPrivate=${clientIpListPrivate[$i]}
     zone=${clientIpListZone[$i]}
-    printNode bench-tps "$ipAddress" "$ipAddressPrivate" "$zone"
+    printNode client "$ipAddress" "$ipAddressPrivate" "$zone"
   done
 
   for i in $(seq 0 $(( ${#blockstreamerIpList[@]} - 1)) ); do
