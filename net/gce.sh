@@ -327,6 +327,40 @@ EOF
 
   buildSshOptions
 
+  fetchPrivateKey() {
+    declare nodeName
+    declare nodeIp
+    declare nodeZone
+    IFS=: read -r nodeName nodeIp _ nodeZone < <(echo "${instances[0]}")
+
+    # Make sure the machine is alive or pingable
+    timeout_sec=90
+    cloud_WaitForInstanceReady "$nodeName" "$nodeIp" "$nodeZone" "$timeout_sec"
+
+    if [[ ! -r $sshPrivateKey ]]; then
+      echo "Fetching $sshPrivateKey from $nodeName"
+
+      # Try to scp in a couple times, sshd may not yet be up even though the
+      # machine can be pinged...
+      (
+        set -o pipefail
+        for i in $(seq 1 30); do
+          set -x
+          cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa "$sshPrivateKey" "$nodeZone" &&
+            cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa.pub "$sshPrivateKey.pub" "$nodeZone" &&
+              break
+          set +x
+
+          sleep 1
+          echo "Retry $i..."
+        done
+      )
+
+      chmod 400 "$sshPrivateKey"
+      ls -l "$sshPrivateKey"
+    fi
+  }
+
   recordInstanceIp() {
     declare name="$1"
     declare publicIp="$2"
@@ -349,15 +383,19 @@ EOF
     ok=true
     echo "Waiting for $name to finish booting..."
     (
-      set -x +e
-      for i in $(seq 1 60); do
-        timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
+      set +e
+      fetchPrivateKey || exit 1
+      for i in $(seq 1 30); do
+        (
+          set -x
+          timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
+        )
         ret=$?
         if [[ $ret -eq 0 ]]; then
           echo "$name has booted."
           exit 0
         fi
-        sleep 2
+        sleep 5
         echo "Retry $i..."
       done
       echo "$name failed to boot."
@@ -383,41 +421,6 @@ EOF
     fi
   }
 
-  fetchPrivateKey() {
-    (
-      declare nodeName
-      declare nodeIp
-      declare nodeZone
-      IFS=: read -r nodeName nodeIp _ nodeZone < <(echo "${instances[0]}")
-
-      # Make sure the machine is alive or pingable
-      timeout_sec=90
-      cloud_WaitForInstanceReady "$nodeName" "$nodeIp" "$nodeZone" "$timeout_sec"
-
-      if [[ ! -r $sshPrivateKey ]]; then
-        echo "Fetching $sshPrivateKey from $nodeName"
-
-        # Try to scp in a couple times, sshd may not yet be up even though the
-        # machine can be pinged...
-        set -x -o pipefail
-        for i in $(seq 1 30); do
-          if cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa "$sshPrivateKey" "$nodeZone"; then
-            if cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa.pub "$sshPrivateKey.pub" "$nodeZone"; then
-              break
-            fi
-          fi
-
-          sleep 1
-          echo "Retry $i..."
-        done
-
-        chmod 400 "$sshPrivateKey"
-        ls -l "$sshPrivateKey"
-      fi
-    )
-
-  }
-
   if $externalNodes; then
     echo "Bootstrap leader is already configured"
   else
@@ -427,8 +430,6 @@ EOF
       echo "Unable to find bootstrap leader"
       exit 1
     }
-
-    fetchPrivateKey
 
     echo "fullnodeIpList=()" >> "$configFile"
     echo "fullnodeIpListPrivate=()" >> "$configFile"
@@ -440,7 +441,6 @@ EOF
       echo "Looking for additional fullnode instances in $zone ..."
       cloud_FindInstances "$prefix-$zone-fullnode"
       if [[ ${#instances[@]} -gt 0 ]]; then
-        fetchPrivateKey
         cloud_ForEachInstance recordInstanceIp "$failOnValidatorBootupFailure" fullnodeIpList
       else
         echo "Unable to find additional fullnodes"
@@ -697,7 +697,7 @@ info)
     ipAddress=${clientIpList[$i]}
     ipAddressPrivate=${clientIpListPrivate[$i]}
     zone=${clientIpListZone[$i]}
-    printNode bench-tps "$ipAddress" "$ipAddressPrivate" "$zone"
+    printNode client "$ipAddress" "$ipAddressPrivate" "$zone"
   done
 
   for i in $(seq 0 $(( ${#blockstreamerIpList[@]} - 1)) ); do
