@@ -121,20 +121,15 @@ cloud_Initialize() {
   region=$(__cloud_GetRegion "$zone")
 
   __cloud_SshPrivateKeyCheck
-  (
-    set -x
-    aws ec2 delete-key-pair --region "$region" --key-name "$networkName"
-    aws ec2 import-key-pair --region "$region" --key-name "$networkName" \
-      --public-key-material file://"${sshPrivateKey}".pub
-  )
+  aws ec2 delete-key-pair --region "$region" --key-name "$networkName"
+  aws ec2 import-key-pair --region "$region" --key-name "$networkName" \
+    --public-key-material file://"${sshPrivateKey}".pub
 
-  (
-    set -x
-    aws ec2 delete-security-group --region "$region" --group-name "$networkName" || true
-    aws ec2 create-security-group --region "$region" --group-name "$networkName" --description "Created automatically by $0"
-    rules=$(cat "$(dirname "${BASH_SOURCE[0]}")"/ec2-security-group-config.json)
-    aws ec2 authorize-security-group-ingress --region "$region" --group-name "$networkName" --cli-input-json "$rules"
-  )
+  declare rules
+  rules=$(cat "$(dirname "${BASH_SOURCE[0]}")"/ec2-security-group-config.json)
+  aws ec2 delete-security-group --region "$region" --group-name "$networkName" || true
+  aws ec2 create-security-group --region "$region" --group-name "$networkName" --description "Created automatically by $0"
+  aws ec2 authorize-security-group-ingress --output table --region "$region" --group-name "$networkName" --cli-input-json "$rules"
 }
 
 #
@@ -273,7 +268,7 @@ cloud_CreateInstances() {
 
   (
     set -x
-    aws ec2 run-instances "${args[@]}"
+    aws ec2 run-instances --output table "${args[@]}"
   )
 
   if [[ -n $optionalAddress ]]; then
@@ -318,7 +313,7 @@ cloud_DeleteInstances() {
     region=$(__cloud_GetRegion "$zone")
     (
       set -x
-      aws ec2 terminate-instances --region "$region" --instance-ids "$name"
+      aws ec2 terminate-instances --output table --region "$region" --instance-ids "$name"
     )
   done
 
