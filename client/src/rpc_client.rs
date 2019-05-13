@@ -7,6 +7,7 @@ use bincode::serialize;
 use log::*;
 use serde_json::{json, Value};
 use solana_sdk::account::Account;
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{KeypairUtil, Signature};
@@ -186,7 +187,7 @@ impl RpcClient {
             send_retries -= 1;
 
             // Re-sign any failed transactions with a new blockhash and retry
-            let blockhash =
+            let (blockhash, _fee_calculator) =
                 self.get_new_blockhash(&transactions_signatures[0].0.message().recent_blockhash)?;
             transactions = transactions_signatures
                 .into_iter()
@@ -203,7 +204,8 @@ impl RpcClient {
         tx: &mut Transaction,
         signer_keys: &[&T],
     ) -> Result<(), ClientError> {
-        let blockhash = self.get_new_blockhash(&tx.message().recent_blockhash)?;
+        let (blockhash, _fee_calculator) =
+            self.get_new_blockhash(&tx.message().recent_blockhash)?;
         tx.sign(signer_keys, blockhash);
         Ok(())
     }
@@ -234,9 +236,11 @@ impl RpcClient {
                 trace!("Response account {:?} {:?}", pubkey, account);
                 Ok(account)
             })
-            .map_err(|error| {
-                debug!("Response account {}: None (error: {:?})", pubkey, error);
-                io::Error::new(io::ErrorKind::Other, "AccountNotFound")
+            .map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("AccountNotFound: pubkey={}: {}", pubkey, err),
+                )
             })
     }
 
@@ -264,13 +268,15 @@ impl RpcClient {
                 )
             })?;
 
-        serde_json::from_value(response).map_err(|error| {
-            debug!("ParseError: get_transaction_count: {}", error);
-            io::Error::new(io::ErrorKind::Other, "GetTransactionCount parse failure")
+        serde_json::from_value(response).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetTransactionCount parse failure: {}", err),
+            )
         })
     }
 
-    pub fn get_recent_blockhash(&self) -> io::Result<Hash> {
+    pub fn get_recent_blockhash(&self) -> io::Result<(Hash, FeeCalculator)> {
         let response = self
             .client
             .send(&RpcRequest::GetRecentBlockhash, None, 0)
@@ -281,21 +287,29 @@ impl RpcClient {
                 )
             })?;
 
-        response
-            .as_str()
-            .ok_or_else(|| {
-                io::Error::new(io::ErrorKind::Other, "GetRecentBlockhash parse failure")
-            })?
-            .parse()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "GetRecentBlockhash parse failure"))
+        let (blockhash, fee_calculator) =
+            serde_json::from_value::<(String, FeeCalculator)>(response).map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("GetRecentBlockhash parse failure: {:?}", err),
+                )
+            })?;
+
+        let blockhash = blockhash.parse().map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("GetRecentBlockhash parse failure: {:?}", err),
+            )
+        })?;
+        Ok((blockhash, fee_calculator))
     }
 
-    pub fn get_new_blockhash(&self, blockhash: &Hash) -> io::Result<Hash> {
+    pub fn get_new_blockhash(&self, blockhash: &Hash) -> io::Result<(Hash, FeeCalculator)> {
         let mut num_retries = 10;
         while num_retries > 0 {
-            if let Ok(new_blockhash) = self.get_recent_blockhash() {
+            if let Ok((new_blockhash, fee_calculator)) = self.get_recent_blockhash() {
                 if new_blockhash != *blockhash {
-                    return Ok(new_blockhash);
+                    return Ok((new_blockhash, fee_calculator));
                 }
             }
             debug!("Got same blockhash ({:?}), will retry...", blockhash);
@@ -454,24 +468,22 @@ impl RpcClient {
                 Some(params.clone()),
                 1,
             )
-            .map_err(|error| {
-                debug!(
-                    "Response get_num_blocks_since_signature_confirmation: {:?}",
-                    error
-                );
+            .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    "GetNumBlocksSinceSignatureConfirmation request failure",
+                    format!(
+                        "GetNumBlocksSinceSignatureConfirmation request failure: {}",
+                        err
+                    ),
                 )
             })?;
-        serde_json::from_value(response).map_err(|error| {
-            debug!(
-                "ParseError: get_num_blocks_since_signature_confirmation: {}",
-                error
-            );
+        serde_json::from_value(response).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                "GetNumBlocksSinceSignatureConfirmation parse failure",
+                format!(
+                    "GetNumBlocksSinceSignatureConfirmation parse failure: {}",
+                    err
+                ),
             )
         })
     }
@@ -578,7 +590,7 @@ mod tests {
         // Send erroneous parameter
         let blockhash = rpc_client.retry_make_rpc_request(
             &RpcRequest::GetRecentBlockhash,
-            Some(json!("paramter")),
+            Some(json!("parameter")),
             0,
         );
         assert_eq!(blockhash.is_err(), true);
@@ -646,13 +658,12 @@ mod tests {
         let vec = bs58::decode(PUBKEY).into_vec().unwrap();
         let expected_blockhash = Hash::new(&vec);
 
-        let blockhash = dbg!(rpc_client.get_recent_blockhash()).expect("blockhash ok");
+        let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash().expect("blockhash ok");
         assert_eq!(blockhash, expected_blockhash);
 
         let rpc_client = RpcClient::new_mock("fails".to_string());
 
-        let blockhash = dbg!(rpc_client.get_recent_blockhash());
-        assert!(blockhash.is_err());
+        assert!(rpc_client.get_recent_blockhash().is_err());
     }
 
     #[test]

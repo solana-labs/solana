@@ -35,7 +35,7 @@ fn test_rpc_send_tx() {
         .send()
         .unwrap();
     let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
-    let blockhash_vec = bs58::decode(json["result"].as_str().unwrap())
+    let blockhash_vec = bs58::decode(json["result"][0].as_str().unwrap())
         .into_vec()
         .unwrap();
     let blockhash = Hash::new(&blockhash_vec);

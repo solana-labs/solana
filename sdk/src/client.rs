@@ -7,6 +7,7 @@
 //! Asynchronous implementations are expected to create transactions, sign them, and send
 //! them but without waiting to see if the server accepted it.
 
+use crate::fee_calculator::FeeCalculator;
 use crate::hash::Hash;
 use crate::instruction::Instruction;
 use crate::message::Message;
@@ -46,7 +47,7 @@ pub trait SyncClient {
     ) -> Result<Option<transaction::Result<()>>>;
 
     /// Get recent blockhash
-    fn get_recent_blockhash(&self) -> Result<Hash>;
+    fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)>;
 
     /// Get transaction count
     fn get_transaction_count(&self) -> Result<u64>;
@@ -61,7 +62,7 @@ pub trait SyncClient {
     /// Poll to confirm a transaction.
     fn poll_for_signature(&self, signature: &Signature) -> Result<()>;
 
-    fn get_new_blockhash(&self, blockhash: &Hash) -> Result<Hash>;
+    fn get_new_blockhash(&self, blockhash: &Hash) -> Result<(Hash, FeeCalculator)>;
 }
 
 pub trait AsyncClient {

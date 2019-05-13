@@ -140,7 +140,7 @@ where
         // this seems to be faster than trying to determine the balance of individual
         // accounts
         let len = tx_count as usize;
-        if let Ok(new_blockhash) = client.get_new_blockhash(&blockhash) {
+        if let Ok((new_blockhash, _fee_calculator)) = client.get_new_blockhash(&blockhash) {
             blockhash = new_blockhash;
         } else {
             if blockhash_time.elapsed().as_secs() > 30 {
@@ -404,7 +404,7 @@ pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Keypair], lam
                     to_fund_txs.len(),
                 );
 
-                let blockhash = client.get_recent_blockhash().unwrap();
+                let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
 
                 // re-sign retained to_fund_txes with updated blockhash
                 to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
@@ -454,7 +454,7 @@ pub fn airdrop_lamports<T: Client>(
             id.pubkey(),
         );
 
-        let blockhash = client.get_recent_blockhash().unwrap();
+        let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
         match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, blockhash) {
             Ok(transaction) => {
                 let signature = client.async_send_transaction(transaction).unwrap();

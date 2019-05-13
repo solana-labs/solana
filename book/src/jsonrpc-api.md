@@ -167,13 +167,16 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 ---
 
 ### getRecentBlockhash
-Returns a recent block hash from the ledger
+Returns a recent block hash from the ledger, and a fee schedule that can be used
+to compute the cost of submitting a transaction using it.
 
 ##### Parameters:
 None
 
 ##### Results:
+An array consisting of
 * `string` - a Hash as base-58 encoded string
+* `FeeCalculator object` - the fee schedule for this block hash
 
 ##### Example:
 ```bash
@@ -181,7 +184,7 @@ None
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getRecentBlockhash"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":"GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC","id":1}
+{"jsonrpc":"2.0","result":["GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC",{"lamportsPerSignature": 0}],"id":1}
 ```
 
 ---

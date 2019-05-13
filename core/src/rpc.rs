@@ -12,6 +12,7 @@ use jsonrpc_derive::rpc;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction::{self, Transaction};
@@ -74,9 +75,12 @@ impl JsonRpcRequestProcessor {
         self.bank().get_balance(&pubkey)
     }
 
-    fn get_recent_blockhash(&self) -> String {
+    fn get_recent_blockhash(&self) -> (String, FeeCalculator) {
         let id = self.bank().confirmed_last_blockhash();
-        bs58::encode(id).into_string()
+        (
+            bs58::encode(id).into_string(),
+            self.bank().fee_calculator.clone(),
+        )
     }
 
     pub fn get_signature_status(&self, signature: Signature) -> Option<transaction::Result<()>> {
@@ -199,7 +203,7 @@ pub trait RpcSol {
     fn get_cluster_nodes(&self, _: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
 
     #[rpc(meta, name = "getRecentBlockhash")]
-    fn get_recent_blockhash(&self, _: Self::Metadata) -> Result<String>;
+    fn get_recent_blockhash(&self, _: Self::Metadata) -> Result<(String, FeeCalculator)>;
 
     #[rpc(meta, name = "getSignatureStatus")]
     fn get_signature_status(
@@ -303,7 +307,7 @@ impl RpcSol for RpcSolImpl {
             .collect())
     }
 
-    fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<String> {
+    fn get_recent_blockhash(&self, meta: Self::Metadata) -> Result<(String, FeeCalculator)> {
         debug!("get_recent_blockhash rpc request received");
         Ok(meta
             .request_processor
@@ -732,7 +736,10 @@ mod tests {
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"}}"#);
         let res = io.handle_request_sync(&req, meta);
-        let expected = format!(r#"{{"jsonrpc":"2.0","result":"{}","id":1}}"#, blockhash);
+        let expected = format!(
+            r#"{{"jsonrpc":"2.0","result":["{}", {{"lamportsPerSignature": 0}}],"id":1}}"#,
+            blockhash
+        );
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))

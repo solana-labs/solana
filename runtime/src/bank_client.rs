@@ -1,5 +1,6 @@
 use crate::bank::Bank;
 use solana_sdk::client::{AsyncClient, Client, SyncClient};
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::message::Message;
@@ -105,9 +106,10 @@ impl SyncClient for BankClient {
         Ok(self.bank.get_signature_status(signature))
     }
 
-    fn get_recent_blockhash(&self) -> Result<Hash> {
+    fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)> {
         let last_blockhash = self.bank.last_blockhash();
-        Ok(last_blockhash)
+        let fee_calculator = self.bank.fee_calculator.clone();
+        Ok((last_blockhash, fee_calculator))
     }
 
     fn get_transaction_count(&self) -> Result<u64> {
@@ -167,10 +169,10 @@ impl SyncClient for BankClient {
         Ok(())
     }
 
-    fn get_new_blockhash(&self, blockhash: &Hash) -> Result<Hash> {
-        let last_blockhash = self.bank.last_blockhash();
+    fn get_new_blockhash(&self, blockhash: &Hash) -> Result<(Hash, FeeCalculator)> {
+        let (last_blockhash, fee_calculator) = self.get_recent_blockhash()?;
         if last_blockhash != *blockhash {
-            Ok(last_blockhash)
+            Ok((last_blockhash, fee_calculator))
         } else {
             Err(TransportError::IoError(io::Error::new(
                 io::ErrorKind::Other,

@@ -419,7 +419,7 @@ impl Replicator {
         // check if the account exists
         let bal = client.poll_get_balance(&storage_keypair.pubkey());
         if bal.is_err() || bal.unwrap() == 0 {
-            let blockhash = client.get_recent_blockhash().expect("blockhash");
+            let (blockhash, _fee_calculator) = client.get_recent_blockhash().expect("blockhash");
             //TODO the account space needs to be well defined somewhere
             let tx = system_transaction::create_account(
                 keypair,

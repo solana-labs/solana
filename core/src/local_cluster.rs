@@ -338,7 +338,7 @@ impl LocalCluster {
         lamports: u64,
     ) -> u64 {
         trace!("getting leader blockhash");
-        let blockhash = client.get_recent_blockhash().unwrap();
+        let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
         let mut tx = system_transaction::create_user_account(
             &source_keypair,
             dest_pubkey,
@@ -378,10 +378,11 @@ impl LocalCluster {
                 0,
                 amount,
             );
+            let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
             let mut transaction = Transaction::new_signed_instructions(
                 &[from_account.as_ref()],
                 instructions,
-                client.get_recent_blockhash().unwrap(),
+                blockhash,
             );
 
             client
