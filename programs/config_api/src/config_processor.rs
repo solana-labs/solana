@@ -11,17 +11,17 @@ pub fn process_instruction(
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), InstructionError> {
-    if keyed_accounts[1].signer_key().is_none() {
-        error!("account[1] should sign the transaction");
+    if keyed_accounts[0].signer_key().is_none() {
+        error!("account[0].signer_key().is_none()");
         Err(InstructionError::MissingRequiredSignature)?;
     }
 
-    if keyed_accounts[1].account.data.len() < data.len() {
+    if keyed_accounts[0].account.data.len() < data.len() {
         error!("instruction data too large");
         Err(InstructionError::InvalidInstructionData)?;
     }
 
-    keyed_accounts[1].account.data[0..data.len()].copy_from_slice(data);
+    keyed_accounts[0].account.data[0..data.len()].copy_from_slice(data);
     Ok(())
 }
 
@@ -65,17 +65,11 @@ mod tests {
         (bank, mint_keypair)
     }
 
-    fn create_config_client(bank: Bank, mint_keypair: Keypair) -> (BankClient, Keypair, Keypair) {
-        let from_keypair = Keypair::new();
-        let from_pubkey = from_keypair.pubkey();
+    fn create_config_account(bank: Bank, mint_keypair: Keypair) -> (BankClient, Keypair) {
         let config_keypair = Keypair::new();
         let config_pubkey = config_keypair.pubkey();
 
         let bank_client = BankClient::new(bank);
-        bank_client
-            .transfer(42, &mint_keypair, &from_pubkey)
-            .unwrap();
-
         bank_client
             .send_instruction(
                 &mint_keypair,
@@ -87,14 +81,14 @@ mod tests {
             )
             .expect("new_account");
 
-        (bank_client, from_keypair, config_keypair)
+        (bank_client, config_keypair)
     }
 
     #[test]
     fn test_process_create_ok() {
         solana_logger::setup();
-        let (bank, from_keypair) = create_bank(10_000);
-        let (bank_client, _, config_keypair) = create_config_client(bank, from_keypair);
+        let (bank, mint_keypair) = create_bank(10_000);
+        let (bank_client, config_keypair) = create_config_account(bank, mint_keypair);
         let config_account_data = bank_client
             .get_account_data(&config_keypair.pubkey())
             .unwrap()
@@ -109,15 +103,15 @@ mod tests {
     fn test_process_store_ok() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
-        let (bank_client, from_keypair, config_keypair) = create_config_client(bank, mint_keypair);
+        let (bank_client, config_keypair) = create_config_account(bank, mint_keypair);
         let config_pubkey = config_keypair.pubkey();
 
         let my_config = MyConfig::new(42);
-        let instruction =
-            config_instruction::store(&from_keypair.pubkey(), &config_pubkey, &my_config);
+
+        let instruction = config_instruction::store(&config_pubkey, &my_config);
         let message = Message::new(vec![instruction]);
         bank_client
-            .send_message(&[&from_keypair, &config_keypair], message)
+            .send_message(&[&config_keypair], message)
             .unwrap();
 
         let config_account_data = bank_client
@@ -134,39 +128,36 @@ mod tests {
     fn test_process_store_fail_instruction_data_too_large() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
-        let (bank_client, from_keypair, config_keypair) = create_config_client(bank, mint_keypair);
+        let (bank_client, config_keypair) = create_config_account(bank, mint_keypair);
+        let config_pubkey = config_keypair.pubkey();
 
         let my_config = MyConfig::new(42);
 
-        // Replace instruction data with a vector that's too large
-        let mut instruction =
-            config_instruction::store(&from_keypair.pubkey(), &config_keypair.pubkey(), &my_config);
-        instruction.data = vec![0; 123];
-
+        let mut instruction = config_instruction::store(&config_pubkey, &my_config);
+        instruction.data = vec![0; 123]; // <-- Replace data with a vector that's too large
         let message = Message::new(vec![instruction]);
         bank_client
-            .send_message(&[&from_keypair, &config_keypair], message)
+            .send_message(&[&config_keypair], message)
             .unwrap_err();
     }
 
     #[test]
-    fn test_process_store_fail_account1_not_signer() {
+    fn test_process_store_fail_account0_not_signer() {
         solana_logger::setup();
         let (bank, mint_keypair) = create_bank(10_000);
         let system_keypair = Keypair::new();
         let system_pubkey = system_keypair.pubkey();
+
         bank.transfer(42, &mint_keypair, &system_pubkey).unwrap();
-        let (bank_client, from_keypair, config_keypair) = create_config_client(bank, mint_keypair);
+        let (bank_client, config_keypair) = create_config_account(bank, mint_keypair);
+        let config_pubkey = config_keypair.pubkey();
 
         let transfer_instruction =
             system_instruction::transfer(&system_pubkey, &Pubkey::default(), 42);
         let my_config = MyConfig::new(42);
-        let mut store_instruction =
-            config_instruction::store(&from_keypair.pubkey(), &config_keypair.pubkey(), &my_config);
-        store_instruction.accounts[0].is_signer = false;
-        store_instruction.accounts[1].is_signer = false;
+        let mut store_instruction = config_instruction::store(&config_pubkey, &my_config);
+        store_instruction.accounts[0].is_signer = false; // <----- not a signer
 
-        // Don't sign the transaction with `config_client`
         let message = Message::new(vec![transfer_instruction, store_instruction]);
         bank_client
             .send_message(&[&system_keypair], message)

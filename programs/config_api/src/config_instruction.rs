@@ -20,14 +20,7 @@ pub fn create_account<T: ConfigState>(
 }
 
 /// Store new data in a configuration account
-pub fn store<T: ConfigState>(
-    from_account_pubkey: &Pubkey,
-    config_account_pubkey: &Pubkey,
-    data: &T,
-) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new(*from_account_pubkey, true),
-        AccountMeta::new(*config_account_pubkey, true),
-    ];
+pub fn store<T: ConfigState>(config_account_pubkey: &Pubkey, data: &T) -> Instruction {
+    let account_metas = vec![AccountMeta::new(*config_account_pubkey, true)];
     Instruction::new(id(), data, account_metas)
 }
