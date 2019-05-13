@@ -84,6 +84,12 @@ pub struct Message {
     /// signatures must match the first `num_required_signatures` of `account_keys`.
     pub num_required_signatures: u8,
 
+    /// The number of credit-only accounts: [signed_keys, unsigned_keys]. The last
+    /// `num_credit_only_accounts` of the signed (first `num_required_signatures`) and unsigned
+    /// portions of `account_keys` will be cached during runtime to allow parallel processing
+    /// across transactions.
+    pub num_credit_only_accounts: [u8; 2],
+
     /// All the account keys used by this transaction
     #[serde(with = "short_vec")]
     pub account_keys: Vec<Pubkey>,
@@ -111,6 +117,7 @@ impl Message {
     ) -> Self {
         Self {
             num_required_signatures,
+            num_credit_only_accounts: [0, 0],
             account_keys,
             recent_blockhash,
             program_ids,
