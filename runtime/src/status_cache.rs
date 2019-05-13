@@ -120,12 +120,14 @@ impl<T: Serialize + Clone> StatusCache<T> {
         if let Some(sig_map) = self.cache[0].get(transaction_blockhash) {
             sig_index = sig_map.1;
         } else {
-            sig_index = thread_rng().gen_range(0, std::mem::size_of::<Hash>() - CACHED_SIGNATURE_SIZE);
+            sig_index =
+                thread_rng().gen_range(0, std::mem::size_of::<Hash>() - CACHED_SIGNATURE_SIZE);
         }
-        let sig_map =
-            self.cache[1]
-                .entry(*transaction_blockhash)
-                .or_insert((fork, sig_index, HashMap::new()));
+        let sig_map = self.cache[1].entry(*transaction_blockhash).or_insert((
+            fork,
+            sig_index,
+            HashMap::new(),
+        ));
         sig_map.0 = std::cmp::max(fork, sig_map.0);
         let index = sig_map.1;
         let mut sig_slice = [0u8; CACHED_SIGNATURE_SIZE];

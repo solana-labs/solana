@@ -47,7 +47,7 @@ pub fn vote_account_stakes_at_epoch(
 /// that have non-zero balance in any of their managed staking accounts
 pub fn staked_nodes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashMap<Pubkey, u64>> {
     bank.epoch_vote_accounts(epoch_height)
-        .map(|vote_accounts| to_staked_nodes(to_vote_states(vote_accounts.into_iter())))
+        .map(|vote_accounts| to_staked_nodes(to_vote_states(vote_accounts.iter())))
 }
 
 // input (vote_pubkey, (stake, vote_account)) => (stake, vote_state)
@@ -78,7 +78,7 @@ fn epoch_stakes_and_lockouts(bank: &Bank, epoch_height: u64) -> Vec<(u64, Option
     let node_staked_accounts = bank
         .epoch_vote_accounts(epoch_height)
         .expect("Bank state for epoch is missing")
-        .into_iter();
+        .iter();
 
     to_vote_states(node_staked_accounts)
         .map(|(stake, states)| (stake, states.root_slot))
