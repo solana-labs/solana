@@ -451,7 +451,7 @@ impl Drop for LocalCluster {
 mod test {
     use super::*;
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
-    use solana_runtime::bank::MINIMUM_SLOT_LENGTH;
+    use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
 
     #[test]
     fn test_local_cluster_start_and_exit() {

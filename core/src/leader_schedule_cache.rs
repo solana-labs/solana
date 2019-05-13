@@ -1,7 +1,8 @@
 use crate::blocktree::Blocktree;
 use crate::leader_schedule::LeaderSchedule;
 use crate::leader_schedule_utils;
-use solana_runtime::bank::{Bank, EpochSchedule};
+use solana_runtime::bank::Bank;
+use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
@@ -168,7 +169,8 @@ mod tests {
     use crate::genesis_utils::create_genesis_block;
     use crate::genesis_utils::{create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS};
     use crate::voting_keypair::tests::new_vote_account;
-    use solana_runtime::bank::{Bank, EpochSchedule, MINIMUM_SLOT_LENGTH};
+    use solana_runtime::bank::Bank;
+    use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOT_LENGTH};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::mpsc::channel;
     use std::sync::Arc;

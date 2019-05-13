@@ -17,7 +17,7 @@ use solana::storage_stage::StorageState;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer;
 use solana::tvu::{Sockets, Tvu};
-use solana_runtime::bank::MINIMUM_SLOT_LENGTH;
+use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction;
 use std::fs::remove_dir_all;

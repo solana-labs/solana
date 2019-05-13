@@ -7,7 +7,7 @@ use crate::cluster_info::ClusterInfo;
 use crate::result::Result;
 use crate::service::Service;
 use solana_metrics::datapoint;
-use solana_runtime::bank::EpochSchedule;
+use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashSet;
 use std::net::UdpSocket;

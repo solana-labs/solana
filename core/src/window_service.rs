@@ -261,7 +261,7 @@ mod test {
     use crate::packet::{index_blobs, Blob};
     use crate::service::Service;
     use crate::streamer::{blob_receiver, responder};
-    use solana_runtime::bank::{Bank, MINIMUM_SLOT_LENGTH};
+    use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
     use solana_sdk::hash::Hash;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;

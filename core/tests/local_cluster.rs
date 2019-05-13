@@ -6,7 +6,7 @@ use solana::fullnode::FullnodeConfig;
 use solana::gossip_service::discover_nodes;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::poh_service::PohServiceConfig;
-use solana_runtime::bank::MINIMUM_SLOT_LENGTH;
+use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
 use solana_sdk::timing;
 use std::time::Duration;
 
