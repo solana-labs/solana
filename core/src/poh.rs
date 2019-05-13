@@ -45,7 +45,7 @@ impl Poh {
     }
 
     // emissions of Ticks (i.e. PohEntries without a mixin) allows
-    //  valhashators to parallelize the work of catching up
+    // validators to parallelize the work of catching up
     pub fn tick(&mut self) -> PohEntry {
         self.hash();
 
