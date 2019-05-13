@@ -9,7 +9,7 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
 use crate::streamer::BlobReceiver;
-use crate::window_service::WindowService;
+use crate::window_service::{should_retransmit_and_persist, WindowService};
 use solana_metrics::{datapoint, inc_new_counter_info};
 use solana_sdk::hash::Hash;
 use std::net::UdpSocket;
@@ -132,8 +132,8 @@ impl RetransmitStage {
             bank_forks,
             completed_slots_receiver,
         };
+        let leader_schedule_cache = leader_schedule_cache.clone();
         let window_service = WindowService::new(
-            Some(leader_schedule_cache.clone()),
             blocktree,
             cluster_info.clone(),
             fetch_stage_receiver,
@@ -142,6 +142,9 @@ impl RetransmitStage {
             exit,
             repair_strategy,
             genesis_blockhash,
+            move |id, blob, working_bank| {
+                should_retransmit_and_persist(blob, working_bank, &leader_schedule_cache, id)
+            },
         );
 
         let thread_hdls = vec![t_retransmit];

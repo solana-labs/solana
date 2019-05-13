@@ -4,6 +4,7 @@ use crate::blocktree::Blocktree;
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
+use crate::fullnode::new_banks_from_blocktree;
 use crate::gossip_service::GossipService;
 use crate::packet::to_shared_blob;
 use crate::repair_service::{RepairSlotRange, RepairStrategy};
@@ -188,15 +189,15 @@ impl Replicator {
         cluster_info.set_entrypoint(cluster_entrypoint.clone());
         let cluster_info = Arc::new(RwLock::new(cluster_info));
 
-        // Create Blocktree, eventually will simply repurpose the input
-        // ledger path as the Blocktree path once we replace the ledger with
-        // Blocktree. Note for now, this ledger will not contain any of the existing entries
+        // Note for now, this ledger will not contain any of the existing entries
         // in the ledger located at ledger_path, and will only append on newly received
         // entries after being passed to window_service
-        let blocktree =
-            Blocktree::open(ledger_path).expect("Expected to be able to open database ledger");
-
+        let (bank_forks, bank_forks_info, blocktree, _, _, _) =
+            new_banks_from_blocktree(ledger_path, None);
         let blocktree = Arc::new(blocktree);
+        let bank_info = &bank_forks_info[0];
+        let bank = bank_forks[bank_info.bank_slot].clone();
+        let genesis_blockhash = bank.last_blockhash();
 
         let gossip_service = GossipService::new(
             &cluster_info,
@@ -231,7 +232,6 @@ impl Replicator {
         let (retransmit_sender, retransmit_receiver) = channel();
 
         let window_service = WindowService::new(
-            None, //TODO: need a way to validate blobs... https://github.com/solana-labs/solana/issues/3924
             blocktree.clone(),
             cluster_info.clone(),
             blob_fetch_receiver,
@@ -239,7 +239,8 @@ impl Replicator {
             repair_socket,
             &exit,
             RepairStrategy::RepairRange(repair_slot_range),
-            &Hash::default(),
+            &genesis_blockhash,
+            |_, _, _| true,
         );
 
         Self::setup_mining_account(&client, &keypair, &storage_keypair)?;
@@ -315,9 +316,10 @@ impl Replicator {
         node_info: &ContactInfo,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) {
-        info!("window created, waiting for ledger download");
-        let mut _received_so_far = 0;
-
+        info!(
+            "window created, waiting for ledger download for slot {:?}",
+            start_slot
+        );
         let mut current_slot = start_slot;
         'outer: loop {
             while let Ok(meta) = blocktree.meta(current_slot) {
