@@ -303,6 +303,7 @@ impl Replicator {
                 break;
             }
             self.submit_mining_proof();
+            // TODO: Replicators should be submitting proofs as fast as possible
             sleep(Duration::from_secs(2));
         }
     }
