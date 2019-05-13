@@ -115,11 +115,12 @@ impl Transaction {
             .map(|keypair| (*keypair).pubkey())
             .collect();
         account_keys.extend_from_slice(keys);
+        account_keys.extend(&program_ids);
         let message = Message::new_with_compiled_instructions(
             from_keypairs.len() as u8,
+            [0, program_ids.len() as u8],
             account_keys,
             Hash::default(),
-            program_ids,
             instructions,
         );
         Transaction::new(from_keypairs, message, recent_blockhash)
@@ -304,7 +305,7 @@ mod tests {
     #[test]
     fn test_refs_invalid_account() {
         let key = Keypair::new();
-        let instructions = vec![CompiledInstruction::new(0, &(), vec![1])];
+        let instructions = vec![CompiledInstruction::new(0, &(), vec![2])];
         let tx = Transaction::new_with_compiled_instructions(
             &[&key],
             &[],
@@ -390,10 +391,8 @@ mod tests {
             + (tx.message.account_keys.len() * size_of::<Pubkey>())
             + blockhash_size
             + len_size
-            + (tx.message.program_ids().len() * size_of::<Pubkey>())
-            + len_size
             + expected_instruction_size;
-        assert_eq!(expected_transaction_size, 216);
+        assert_eq!(expected_transaction_size, 215);
 
         assert_eq!(
             serialized_size(&tx).unwrap() as usize,
@@ -409,16 +408,16 @@ mod tests {
         assert_eq!(
             serialize(&create_sample_transaction()).unwrap(),
             vec![
-                1, 239, 187, 102, 246, 70, 171, 183, 240, 86, 63, 134, 8, 108, 122, 163, 219, 46,
-                234, 166, 4, 145, 176, 155, 252, 71, 245, 115, 61, 88, 221, 183, 187, 124, 191, 44,
-                202, 53, 188, 203, 204, 31, 94, 17, 91, 214, 145, 147, 81, 176, 106, 155, 57, 102,
-                58, 48, 243, 164, 175, 250, 202, 217, 175, 236, 6, 1, 0, 0, 2, 156, 227, 116, 193,
+                1, 71, 59, 9, 187, 190, 129, 150, 165, 21, 33, 158, 72, 87, 110, 144, 120, 79, 238,
+                132, 134, 105, 39, 102, 116, 209, 29, 229, 154, 36, 105, 44, 172, 118, 131, 22,
+                124, 131, 179, 142, 176, 27, 117, 160, 89, 102, 224, 204, 1, 252, 141, 2, 136, 0,
+                37, 218, 225, 129, 92, 154, 250, 59, 97, 178, 10, 1, 0, 1, 3, 156, 227, 116, 193,
                 215, 38, 142, 22, 8, 14, 229, 239, 119, 93, 5, 218, 161, 35, 3, 33, 0, 36, 100,
                 158, 252, 33, 161, 97, 185, 62, 89, 99, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9,
-                9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 4, 5,
-                6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 1,
-                0, 2, 0, 1, 3, 1, 2, 3
+                9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2,
+                2, 0, 1, 3, 1, 2, 3
             ]
         );
     }
@@ -500,7 +499,7 @@ mod tests {
         tx.sign(&[&keypair0], Hash::default());
         assert_eq!(
             tx.message.instructions[0],
-            CompiledInstruction::new(0, &0, vec![0])
+            CompiledInstruction::new(1, &0, vec![0])
         );
         assert!(tx.is_signed());
     }
