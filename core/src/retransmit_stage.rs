@@ -11,7 +11,7 @@ use crate::staking_utils;
 use crate::streamer::BlobReceiver;
 use crate::window_service::WindowService;
 use solana_metrics::{datapoint, inc_new_counter_info};
-use solana_runtime::bank::EpochSchedule;
+use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::hash::Hash;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
