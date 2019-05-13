@@ -2,7 +2,7 @@
 
 use bincode::{deserialize_from, serialize_into};
 use solana_metrics::inc_new_counter_info;
-use solana_runtime::bank::{Bank, BankRc};
+use solana_runtime::bank::{Bank, BankRc, StatusCacheRc};
 use solana_sdk::timing;
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -167,7 +167,7 @@ impl BankForks {
                 if **slot > root {
                     let _ = self.add_snapshot(**slot, root);
                 } else if **slot > 0 {
-                    self.remove_snapshot(**slot);
+                    BankForks::remove_snapshot(**slot);
                 }
             }
         }
@@ -201,14 +201,16 @@ impl BankForks {
         }
         serialize_into(&mut stream, &parent_slot)
             .map_err(|_| BankForks::get_io_error("serialize bank parent error"))?;
-        serialize_into(&mut stream, &bank.rc)
-            .map_err(|_| BankForks::get_io_error("serialize bank rc error"))?;
         serialize_into(&mut stream, &root)
             .map_err(|_| BankForks::get_io_error("serialize root error"))?;
+        serialize_into(&mut stream, &bank.src)
+            .map_err(|_| BankForks::get_io_error("serialize bank status cache error"))?;
+        serialize_into(&mut stream, &bank.rc)
+            .map_err(|_| BankForks::get_io_error("serialize bank accounts error"))?;
         Ok(())
     }
 
-    pub fn remove_snapshot(&self, slot: u64) {
+    pub fn remove_snapshot(slot: u64) {
         let path = BankForks::get_snapshot_path();
         let bank_file = format!("{}", slot);
         let bank_file_path = path.join(bank_file);
@@ -222,14 +224,15 @@ impl BankForks {
     fn setup_banks(
         bank_maps: &mut Vec<(u64, u64, Bank)>,
         bank_rc: &BankRc,
+        status_cache_rc: &StatusCacheRc,
     ) -> (HashMap<u64, Arc<Bank>>, HashSet<u64>, u64) {
         let mut banks = HashMap::new();
         let mut slots = HashSet::new();
         let (last_slot, last_parent_slot, mut last_bank) = bank_maps.remove(0);
-        last_bank.set_bank_rc(&bank_rc);
+        last_bank.set_bank_rc(&bank_rc, &status_cache_rc);
 
         while let Some((slot, parent_slot, mut bank)) = bank_maps.pop() {
-            bank.set_bank_rc(&bank_rc);
+            bank.set_bank_rc(&bank_rc, &status_cache_rc);
             if parent_slot != 0 {
                 if let Some(parent) = banks.get(&parent_slot) {
                     bank.set_parent(parent);
@@ -265,7 +268,8 @@ impl BankForks {
         names.sort();
         let mut bank_maps = vec![];
         let mut bank_rc: Option<BankRc> = None;
-        let mut root: u64 = 0;
+        let status_cache_rc = StatusCacheRc::default();
+        let mut bank_forks_root: u64 = 0;
         for bank_slot in names.iter().rev() {
             let bank_path = format!("{}", bank_slot);
             let bank_file_path = path.join(bank_path.clone());
@@ -277,33 +281,44 @@ impl BankForks {
             let slot: Result<u64, std::io::Error> = deserialize_from(&mut stream)
                 .map_err(|_| BankForks::get_io_error("deserialize bank parent error"));
             let parent_slot = if slot.is_ok() { slot.unwrap() } else { 0 };
+            let root: Result<u64, std::io::Error> = deserialize_from(&mut stream)
+                .map_err(|_| BankForks::get_io_error("deserialize root error"));
+            let status_cache: Result<StatusCacheRc, std::io::Error> = deserialize_from(&mut stream)
+                .map_err(|_| BankForks::get_io_error("deserialize bank status cache error"));
             if bank_rc.is_none() {
                 let rc: Result<BankRc, std::io::Error> = deserialize_from(&mut stream)
-                    .map_err(|_| BankForks::get_io_error("deserialize bank rc error"));
+                    .map_err(|_| BankForks::get_io_error("deserialize bank accounts error"));
                 if rc.is_ok() {
                     bank_rc = Some(rc.unwrap());
-                    let r: Result<u64, std::io::Error> = deserialize_from(&mut stream)
-                        .map_err(|_| BankForks::get_io_error("deserialize root error"));
-                    if r.is_ok() {
-                        root = r.unwrap();
-                    }
+                    bank_forks_root = root.unwrap();
                 }
             }
-            match bank {
-                Ok(v) => bank_maps.push((*bank_slot, parent_slot, v)),
-                Err(_) => warn!("Load snapshot failed for {}", bank_slot),
+            if bank_rc.is_some() {
+                match bank {
+                    Ok(v) => {
+                        if status_cache.is_ok() {
+                            status_cache_rc.append(&status_cache.unwrap());
+                        }
+                        bank_maps.push((*bank_slot, parent_slot, v));
+                    }
+                    Err(_) => warn!("Load snapshot failed for {}", bank_slot),
+                }
+            } else {
+                BankForks::remove_snapshot(*bank_slot);
+                warn!("Load snapshot rc failed for {}", bank_slot);
             }
         }
         if bank_maps.is_empty() || bank_rc.is_none() {
             return Err(Error::new(ErrorKind::Other, "no snapshots loaded"));
         }
 
-        let (banks, slots, last_slot) = BankForks::setup_banks(&mut bank_maps, &bank_rc.unwrap());
+        let (banks, slots, last_slot) =
+            BankForks::setup_banks(&mut bank_maps, &bank_rc.unwrap(), &status_cache_rc);
         let working_bank = banks[&last_slot].clone();
         Ok(BankForks {
             banks,
             working_bank,
-            root,
+            root: bank_forks_root,
             slots,
             use_snapshot: true,
         })
@@ -444,7 +459,7 @@ mod tests {
             bank.compare_bank(&new_bank);
         }
         for (slot, _) in new.banks.iter() {
-            new.remove_snapshot(*slot);
+            BankForks::remove_snapshot(*slot);
         }
     }
 
@@ -471,6 +486,8 @@ mod tests {
             bank.freeze();
             bank_forks.insert(bank);
             save_and_load_snapshot(&bank_forks);
+            let bank = bank_forks.get(index).unwrap();
+            bank.clear_signatures();
         }
         assert_eq!(bank_forks.working_bank().slot(), 10);
     }

@@ -48,9 +48,6 @@ pub struct BankRc {
     /// where all the Accounts are stored
     accounts: Arc<Accounts>,
 
-    /// A cache of signature statuses
-    status_cache: Arc<RwLock<BankStatusCache>>,
-
     /// Previous checkpoint of this bank
     parent: RwLock<Option<Arc<Bank>>>,
 }
@@ -62,13 +59,11 @@ impl Serialize for BankRc {
     {
         use serde::ser::Error;
         let len = serialized_size(&*self.accounts.accounts_db).unwrap()
-            + serialized_size(&*self.accounts).unwrap()
-            + serialized_size(&*self.status_cache).unwrap();
+            + serialized_size(&*self.accounts).unwrap();
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);
-        serialize_into(&mut wr, &*self.accounts.accounts_db).map_err(Error::custom)?;
         serialize_into(&mut wr, &*self.accounts).map_err(Error::custom)?;
-        serialize_into(&mut wr, &*self.status_cache).map_err(Error::custom)?;
+        serialize_into(&mut wr, &*self.accounts.accounts_db).map_err(Error::custom)?;
         let len = wr.position() as usize;
         serializer.serialize_bytes(&wr.into_inner()[..len])
     }
@@ -90,14 +85,12 @@ impl<'a> serde::de::Visitor<'a> for BankRcVisitor {
     {
         use serde::de::Error;
         let mut rd = Cursor::new(&data[..]);
-        let accounts_db: AccountsDB = deserialize_from(&mut rd).map_err(Error::custom)?;
         let mut accounts: Accounts = deserialize_from(&mut rd).map_err(Error::custom)?;
-        let status_cache: BankStatusCache = deserialize_from(&mut rd).map_err(Error::custom)?;
+        let accounts_db: AccountsDB = deserialize_from(&mut rd).map_err(Error::custom)?;
 
         accounts.accounts_db = Arc::new(accounts_db);
         Ok(BankRc {
             accounts: Arc::new(accounts),
-            status_cache: Arc::new(RwLock::new(status_cache)),
             parent: RwLock::new(None),
         })
     }
@@ -112,12 +105,80 @@ impl<'de> Deserialize<'de> for BankRc {
     }
 }
 
+#[derive(Default)]
+pub struct StatusCacheRc {
+    /// where all the Accounts are stored
+    /// A cache of signature statuses
+    status_cache: Arc<RwLock<BankStatusCache>>,
+}
+
+impl Serialize for StatusCacheRc {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        use serde::ser::Error;
+        let len = serialized_size(&*self.status_cache).unwrap();
+        let mut buf = vec![0u8; len as usize];
+        let mut wr = Cursor::new(&mut buf[..]);
+        {
+            let mut status_cache = self.status_cache.write().unwrap();
+            serialize_into(&mut wr, &*status_cache).map_err(Error::custom)?;
+            status_cache.merge_caches();
+        }
+        let len = wr.position() as usize;
+        serializer.serialize_bytes(&wr.into_inner()[..len])
+    }
+}
+
+struct StatusCacheRcVisitor;
+
+impl<'a> serde::de::Visitor<'a> for StatusCacheRcVisitor {
+    type Value = StatusCacheRc;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Expecting StatusCacheRc")
+    }
+
+    #[allow(clippy::mutex_atomic)]
+    fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        use serde::de::Error;
+        let mut rd = Cursor::new(&data[..]);
+        let status_cache: BankStatusCache = deserialize_from(&mut rd).map_err(Error::custom)?;
+        Ok(StatusCacheRc {
+            status_cache: Arc::new(RwLock::new(status_cache)),
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for StatusCacheRc {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_bytes(StatusCacheRcVisitor)
+    }
+}
+
+impl StatusCacheRc {
+    pub fn append(&self, status_cache_rc: &StatusCacheRc) {
+        let sc = status_cache_rc.status_cache.write().unwrap();
+        self.status_cache.write().unwrap().append(&sc);
+    }
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 #[derive(Default, Deserialize, Serialize)]
 pub struct Bank {
     /// References to accounts, parent and signature status
     #[serde(skip)]
     pub rc: BankRc,
+
+    #[serde(skip)]
+    pub src: StatusCacheRc,
 
     /// FIFO queue of `recent_blockhash` items
     blockhash_queue: RwLock<BlockhashQueue>,
@@ -213,7 +274,7 @@ impl Bank {
 
         let mut bank = Self::default();
         bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
-        bank.rc.status_cache = parent.rc.status_cache.clone();
+        bank.src.status_cache = parent.src.status_cache.clone();
         bank.bank_height = parent.bank_height + 1;
         bank.fee_calculator = parent.fee_calculator.clone();
 
@@ -344,7 +405,7 @@ impl Bank {
         let squash_cache_start = Instant::now();
         parents
             .iter()
-            .for_each(|p| self.rc.status_cache.write().unwrap().add_root(p.slot()));
+            .for_each(|p| self.src.status_cache.write().unwrap().add_root(p.slot()));
         let squash_cache_ms = duration_as_ms(&squash_cache_start.elapsed());
 
         datapoint_info!(
@@ -432,7 +493,7 @@ impl Bank {
 
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
-        self.rc.status_cache.write().unwrap().clear_signatures();
+        self.src.status_cache.write().unwrap().clear_signatures();
     }
 
     pub fn can_commit(result: &Result<()>) -> bool {
@@ -444,7 +505,7 @@ impl Bank {
     }
 
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
-        let mut status_cache = self.rc.status_cache.write().unwrap();
+        let mut status_cache = self.src.status_cache.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
             if Self::can_commit(&res[i]) && !tx.signatures.is_empty() {
                 status_cache.insert(
@@ -627,7 +688,7 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let rcache = self.rc.status_cache.read().unwrap();
+        let rcache = self.src.status_cache.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
@@ -949,9 +1010,9 @@ impl Bank {
         self.rc.accounts.clone()
     }
 
-    pub fn set_bank_rc(&mut self, bank_rc: &BankRc) {
+    pub fn set_bank_rc(&mut self, bank_rc: &BankRc, status_cache_rc: &StatusCacheRc) {
         self.rc.accounts = bank_rc.accounts.clone();
-        self.rc.status_cache = bank_rc.status_cache.clone()
+        self.src.status_cache = status_cache_rc.status_cache.clone()
     }
 
     pub fn set_parent(&mut self, parent: &Arc<Bank>) {
@@ -989,7 +1050,7 @@ impl Bank {
         &self,
         signature: &Signature,
     ) -> Option<(usize, Result<()>)> {
-        let rcache = self.rc.status_cache.read().unwrap();
+        let rcache = self.src.status_cache.read().unwrap();
         rcache.get_signature_status_slow(signature, &self.ancestors)
     }
 
@@ -1136,8 +1197,8 @@ impl Bank {
         let dbhq = dbank.blockhash_queue.read().unwrap();
         assert_eq!(*bhq, *dbhq);
 
-        let sc = self.rc.status_cache.read().unwrap();
-        let dsc = dbank.rc.status_cache.read().unwrap();
+        let sc = self.src.status_cache.read().unwrap();
+        let dsc = dbank.src.status_cache.read().unwrap();
         assert_eq!(*sc, *dsc);
         assert_eq!(
             self.rc.accounts.hash_internal_state(self.slot),
