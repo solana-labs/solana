@@ -2,7 +2,7 @@ use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blocktree::Blocktree;
 #[cfg(feature = "chacha")]
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
-use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
+use crate::cluster_info::{ClusterInfo, Node};
 use crate::contact_info::ContactInfo;
 use crate::fullnode::new_banks_from_blocktree;
 use crate::gossip_service::GossipService;
@@ -19,7 +19,7 @@ use rand::thread_rng;
 use rand::Rng;
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
-use solana_client::thin_client::{create_client, ThinClient};
+use solana_client::thin_client::ThinClient;
 use solana_ed25519_dalek as ed25519_dalek;
 use solana_sdk::client::{AsyncClient, SyncClient};
 use solana_sdk::hash::{Hash, Hasher};
@@ -65,7 +65,7 @@ pub struct Replicator {
     keypair: Arc<Keypair>,
     storage_keypair: Arc<Keypair>,
     signature: ed25519_dalek::Signature,
-    cluster_entrypoint: ContactInfo,
+    client: ThinClient,
     ledger_data_file_encrypted: PathBuf,
     sampling_offsets: Vec<u64>,
     hash: Hash,
@@ -262,11 +262,8 @@ impl Replicator {
         let t_replicate = {
             let exit = exit.clone();
             let blocktree = blocktree.clone();
-            spawn(move || loop {
-                Self::wait_for_ledger_download(slot, &blocktree, &exit, &node_info, &cluster_info);
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
+            spawn(move || {
+                Self::wait_for_ledger_download(slot, &blocktree, &exit, &node_info, &cluster_info)
             })
         };
         //always push this last
@@ -283,7 +280,7 @@ impl Replicator {
             keypair,
             storage_keypair,
             signature,
-            cluster_entrypoint,
+            client,
             ledger_data_file_encrypted: PathBuf::default(),
             sampling_offsets: vec![],
             hash: Hash::default(),
@@ -306,6 +303,7 @@ impl Replicator {
                 break;
             }
             self.submit_mining_proof();
+            sleep(Duration::from_secs(2));
         }
     }
 
@@ -324,9 +322,9 @@ impl Replicator {
         'outer: loop {
             while let Ok(meta) = blocktree.meta(current_slot) {
                 if let Some(meta) = meta {
-                    if meta.is_connected {
+                    if meta.is_full() {
                         current_slot += 1;
-                        warn!("current slot: {}", current_slot);
+                        info!("current slot: {}", current_slot);
                         if current_slot >= start_slot + SLOTS_PER_SEGMENT {
                             break 'outer;
                         }
@@ -446,20 +444,25 @@ impl Replicator {
     }
 
     fn submit_mining_proof(&self) {
-        let client = create_client(
-            self.cluster_entrypoint.client_facing_addr(),
-            FULLNODE_PORT_RANGE,
-        );
         // No point if we've got no storage account...
         assert!(
-            client
+            self.client
                 .poll_get_balance(&self.storage_keypair.pubkey())
                 .unwrap()
                 > 0
         );
         // ...or no lamports for fees
-        assert!(client.poll_get_balance(&self.keypair.pubkey()).unwrap() > 0);
+        assert!(
+            self.client
+                .poll_get_balance(&self.keypair.pubkey())
+                .unwrap()
+                > 0
+        );
 
+        let blockhash = self
+            .client
+            .get_recent_blockhash()
+            .expect("No recent blockhash");
         let instruction = storage_instruction::mining_proof(
             &self.storage_keypair.pubkey(),
             self.hash,
@@ -467,8 +470,12 @@ impl Replicator {
             Signature::new(&self.signature.to_bytes()),
         );
         let message = Message::new_with_payer(vec![instruction], Some(&self.keypair.pubkey()));
-        let mut transaction = Transaction::new_unsigned(message);
-        client
+        let mut transaction = Transaction::new(
+            &[self.keypair.as_ref(), self.storage_keypair.as_ref()],
+            message,
+            blockhash,
+        );
+        self.client
             .send_and_confirm_transaction(
                 &[&self.keypair, &self.storage_keypair],
                 &mut transaction,
