@@ -16,7 +16,7 @@ use hashbrown::HashMap;
 #[cfg(not(feature = "kvstore"))]
 use rocksdb;
 
-use solana_metrics::{datapoint, inc_new_counter_info};
+use solana_metrics::datapoint;
 
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
@@ -1293,6 +1293,20 @@ fn try_erasure_recover(
     use crate::erasure::ERASURE_SET_SIZE;
 
     let set_index = erasure_meta.set_index;
+    let start_index = erasure_meta.start_index();
+    let (data_end_index, _) = erasure_meta.end_indexes();
+
+    let submit_metrics = |attempted: bool, status: String| {
+        datapoint!(
+            "blocktree-erasure",
+            ("slot", slot as i64, i64),
+            ("start_index", start_index as i64, i64),
+            ("end_index", data_end_index as i64, i64),
+            ("recovery_attempted", attempted, bool),
+            ("recovery_status", status, String),
+        );
+    };
+
     let blobs = match erasure_meta.status() {
         ErasureMetaStatus::CanRecover => {
             let erasure_result = recover(
@@ -1307,25 +1321,30 @@ fn try_erasure_recover(
             match erasure_result {
                 Ok((data, coding)) => {
                     let recovered = data.len() + coding.len();
+
                     assert_eq!(
                         ERASURE_SET_SIZE,
                         recovered + (erasure_meta.num_coding() + erasure_meta.num_data()) as usize,
                         "Recovery should always complete a set"
                     );
 
+                    submit_metrics(true, "complete".into());
+
                     debug!(
                         "[try_erasure] slot: {}, set_index: {}, recovered {} blobs",
                         slot, set_index, recovered
                     );
-                    inc_new_counter_info!("blocktree-erasure-blobs_recovered", recovered);
+
                     Some((data, coding))
                 }
                 Err(Error::ErasureError(e)) => {
-                    inc_new_counter_info!("blocktree-erasure-recovery_failed", 1);
+                    submit_metrics(true, format!("error: {}", e));
+
                     error!(
                         "[try_erasure] slot: {}, set_index: {}, recovery failed: cause: {}",
                         slot, erasure_meta.set_index, e
                     );
+
                     None
                 }
 
@@ -1333,19 +1352,23 @@ fn try_erasure_recover(
             }
         }
         ErasureMetaStatus::StillNeed(needed) => {
+            submit_metrics(false, format!("still need: {}", needed));
+
             debug!(
                 "[try_erasure] slot: {}, set_index: {}, still need {} blobs",
                 slot, set_index, needed
             );
-            inc_new_counter_info!("blocktree-erasure-blobs_needed", needed, 0, 1000);
+
             None
         }
         ErasureMetaStatus::DataFull => {
+            submit_metrics(false, "complete".into());
+
             debug!(
                 "[try_erasure] slot: {}, set_index: {}, set full",
                 slot, set_index,
             );
-            inc_new_counter_info!("blocktree-erasure-complete", 1, 0, 1000);
+
             None
         }
     };
