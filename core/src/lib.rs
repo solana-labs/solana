@@ -13,6 +13,7 @@ pub mod broadcast_stage;
 pub mod chacha;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 pub mod chacha_cuda;
+pub mod cluster_info_repair_listener;
 pub mod cluster_info_vote_listener;
 #[macro_use]
 pub mod contact_info;

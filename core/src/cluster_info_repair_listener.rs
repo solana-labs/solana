@@ -1,0 +1,246 @@
+use crate::blocktree::Blocktree;
+use crate::cluster_info::ClusterInfo;
+use crate::crds_value::EpochSlots;
+use crate::result::Result;
+use crate::service::Service;
+use crate::sigverify_stage::VerifiedPackets;
+use solana_metrics::inc_new_counter_info;
+use solana_runtime::epoch_schedule::EpochSchedule;
+use solana_sdk::pubkey::Pubkey;
+use std::collections::HashMap;
+use std::net::UdpSocket;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, RwLock};
+use std::thread::{self, sleep, Builder, JoinHandle};
+use std::time::Duration;
+
+pub const REPAIRMEN_SLEEP_MILLIS: usize = 1000;
+pub const REPAIR_REDUNDANCY: usize = 3;
+pub const BLOB_SEND_SLEEP_MILLIS: usize = 2;
+pub const NUM_BUFFER_SLOTS: usize = 100;
+
+pub struct ClusterInfoRepairListener {
+    thread_hdls: Vec<JoinHandle<()>>,
+}
+
+impl ClusterInfoRepairListener {
+    pub fn new(
+        blocktree: &Arc<Blocktree>,
+        exit: &Arc<AtomicBool>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
+        sender: Sender<VerifiedPackets>,
+        epoch_schedule: EpochSchedule,
+    ) -> Self {
+        let exit = exit.clone();
+        let blocktree = blocktree.clone();
+        let thread = Builder::new()
+            .name("solana-cluster_info_repair_listener".to_string())
+            .spawn(move || {
+                // Maps a peer to the last timestamp and root they gossiped
+                let mut peer_roots: HashMap<Pubkey, (u64, u64)> = HashMap::new();
+                let _ = Self::recv_loop(
+                    &blocktree,
+                    &mut peer_roots,
+                    exit,
+                    &cluster_info,
+                    &sender,
+                    epoch_schedule,
+                );
+            })
+            .unwrap();
+        Self {
+            thread_hdls: vec![thread],
+        }
+    }
+
+    fn recv_loop(
+        blocktree: &Blocktree,
+        peer_roots: &mut HashMap<Pubkey, (u64, u64)>,
+        exit: Arc<AtomicBool>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        sender: &Sender<VerifiedPackets>,
+        epoch_schedule: EpochSchedule,
+    ) -> Result<()> {
+        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let my_id = cluster_info.read().unwrap().id();
+        loop {
+            if exit.load(Ordering::Relaxed) {
+                return Ok(());
+            }
+
+            let peers = cluster_info.read().unwrap().gossip_peers();
+            let mut peers_needing_repairs: HashMap<Pubkey, EpochSlots> = HashMap::new();
+
+            for peer in peers {
+                let last_update_ts = Self::get_last_ts(peer.id, peer_roots);
+
+                let my_root = Self::get_my_gossiped_root(cluster_info);
+                {
+                    let r_cluster_info = cluster_info.read().unwrap();
+
+                    // Update our local map with the updated peers' information
+                    if let Some((peer_epoch_slots, ts)) =
+                        r_cluster_info.get_epoch_state_for_node(&peer.id, last_update_ts)
+                    {
+                        // Following logic needs to be fast because it holds the lock
+                        // preventing updates on gossip
+                        peer_roots.insert(peer.id, (ts, peer_epoch_slots.root));
+                        if Self::should_repair_peer(my_root, peer_epoch_slots.root, epoch_schedule)
+                        {
+                            // Clone out EpochSlots structure to avoid holding lock on gossip
+                            peers_needing_repairs.insert(peer.id, peer_epoch_slots.clone());
+                        }
+                    }
+                }
+            }
+
+            // After updating all the peers, send out repairs to those that need it
+            let _ = Self::serve_repairs(
+                &my_id,
+                blocktree,
+                peer_roots,
+                &peers_needing_repairs,
+                &socket,
+                cluster_info,
+                &epoch_schedule,
+            );
+
+            sleep(Duration::from_millis(REPAIRMEN_SLEEP_MILLIS as u64));
+        }
+    }
+
+    fn serve_repairs(
+        my_id: &Pubkey,
+        blocktree: &Blocktree,
+        peer_roots: &HashMap<Pubkey, (u64, u64)>,
+        repairees: &HashMap<Pubkey, EpochSlots>,
+        socket: &UdpSocket,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        epoch_schedule: &EpochSchedule,
+    ) -> Result<()> {
+        for (repairee_id, repairee_epoch_slots) in repairees {
+            let repairee_root = repairee_epoch_slots.root;
+            let repairee_max_epoch = epoch_schedule.get_stakers_epoch(repairee_root);
+            let repairee_max_slot = epoch_schedule.get_last_slot_in_epoch(repairee_max_epoch);
+
+            let slot_iter = blocktree
+                .slot_meta_iterator(repairee_root + 1)
+                .expect("Couldn't get db iterator");
+
+            let repairee_tvu = {
+                let r_cluster_info = cluster_info.read().unwrap();
+                let contact_info = r_cluster_info.get_contact_info_for_node(repairee_id);
+                contact_info.map(|c| c.tvu)
+            };
+
+            if let Some(repairee_tvu) = repairee_tvu {
+                while slot_iter.valid() && slot_iter.key().unwrap() <= repairee_max_slot {
+                    let mut eligible_repairmen = Self::find_eligible_repairmen(
+                        repairee_epoch_slots.root,
+                        peer_roots,
+                        epoch_schedule,
+                    );
+                    eligible_repairmen.push(my_id);
+                    eligible_repairmen.sort();
+                    let num_repairmen = eligible_repairmen.len();
+                    let num_repairmen_indexes = num_repairmen / REPAIR_REDUNDANCY;
+                    let my_repairman_index = eligible_repairmen
+                        .iter()
+                        .position(|id| *id == my_id)
+                        .unwrap()
+                        % num_repairmen_indexes;
+                    let slot = slot_iter.key().unwrap();
+                    let highest_index = slot_iter.value().unwrap().received;
+                    if !repairee_epoch_slots.slots.contains(&slot) {
+                        // This peer is missing this slot, send them the blobs for this slot
+                        for i in (0..highest_index)
+                            .skip(my_repairman_index)
+                            .step_by(num_repairmen_indexes)
+                        {
+                            // Alternatively, we could use a database iterator to iterate over the
+                            // slots. This would be faster if the slots were sparsely populated with
+                            // blobs (big gaps between the blobs in the slot), but by the time we
+                            // are sending the blobs in this slot for repair, we expect these slots
+                            // to be full/near full.
+                            if let Some(blob_data) = blocktree
+                                .get_data_blob_bytes(slot, i)
+                                .expect("Failed to read from blocktree")
+                            {
+                                socket.send_to(&blob_data[..], repairee_tvu)?;
+                                sleep(Duration::from_millis(BLOB_SEND_SLEEP_MILLIS as u64));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn find_eligible_repairmen<'a>(
+        repairee_root: u64,
+        repairman_roots: &'a HashMap<Pubkey, (u64, u64)>,
+        epoch_schedule: &EpochSchedule,
+    ) -> Vec<&'a Pubkey> {
+        repairman_roots
+            .iter()
+            .filter_map(|(repairman_id, (_, repairman_root))| {
+                if Self::should_repair_peer(Some(*repairman_root), repairee_root, *epoch_schedule) {
+                    Some(repairman_id)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    fn get_my_gossiped_root(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Option<u64> {
+        let my_id = cluster_info.read().unwrap().id();
+
+        cluster_info
+            .read()
+            .unwrap()
+            .get_gossiped_root_for_node(&my_id, None)
+    }
+
+    // Decide if a repairman with root == `repairman_root` should send repairs to a
+    // potential repairee with root == `repairee_root`
+    fn should_repair_peer(
+        repairman_root: Option<u64>,
+        repairee_root: u64,
+        epoch_schedule: EpochSchedule,
+    ) -> bool {
+        if let Some(repairman_root) = repairman_root {
+            // Check if this node's gossiped root is greater than an epoch ahead of the
+            // peer's epoch_slots
+            let repairman_epoch = epoch_schedule.get_epoch_and_slot_index(repairman_root).0;
+            let repairee_epoch = epoch_schedule
+                .get_epoch_and_slot_index(repairee_root + NUM_BUFFER_SLOTS as u64)
+                .0;
+            repairman_epoch > repairee_epoch
+        } else {
+            false
+        }
+    }
+
+    fn get_root(pubkey: Pubkey, peer_roots: &mut HashMap<Pubkey, (u64, u64)>) -> Option<u64> {
+        peer_roots.get(&pubkey).map(|(_, last_root)| *last_root)
+    }
+
+    fn get_last_ts(pubkey: Pubkey, peer_roots: &mut HashMap<Pubkey, (u64, u64)>) -> Option<u64> {
+        peer_roots.get(&pubkey).map(|(last_ts, _)| *last_ts)
+    }
+}
+
+impl Service for ClusterInfoRepairListener {
+    type JoinReturnType = ();
+
+    fn join(self) -> thread::Result<()> {
+        for thread_hdl in self.thread_hdls {
+            thread_hdl.join()?;
+        }
+        Ok(())
+    }
+}

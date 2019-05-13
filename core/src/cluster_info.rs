@@ -344,6 +344,44 @@ impl ClusterInfo {
         (txs, max_ts)
     }
 
+    pub fn get_epoch_state_for_node(
+        &self,
+        pubkey: &Pubkey,
+        since: Option<u64>,
+    ) -> Option<(&EpochSlots, u64)> {
+        self.gossip
+            .crds
+            .table
+            .get(&CrdsValueLabel::EpochSlots(*pubkey))
+            .filter(|x| {
+                since
+                    .map(|since| x.insert_timestamp > since)
+                    .unwrap_or(true)
+            })
+            .map(|x| (x.value.epoch_slots().unwrap(), x.insert_timestamp))
+    }
+
+    pub fn get_gossiped_root_for_node(&self, pubkey: &Pubkey, since: Option<u64>) -> Option<u64> {
+        self.gossip
+            .crds
+            .table
+            .get(&CrdsValueLabel::EpochSlots(*pubkey))
+            .filter(|x| {
+                since
+                    .map(|since| x.insert_timestamp > since)
+                    .unwrap_or(true)
+            })
+            .map(|x| x.value.epoch_slots().unwrap().root)
+    }
+
+    pub fn get_contact_info_for_node(&self, pubkey: &Pubkey) -> Option<&ContactInfo> {
+        self.gossip
+            .crds
+            .table
+            .get(&CrdsValueLabel::ContactInfo(*pubkey))
+            .map(|x| x.value.contact_info().unwrap())
+    }
+
     pub fn purge(&mut self, now: u64) {
         self.gossip.purge(now);
     }

@@ -244,7 +244,7 @@ where
     pub fn iter<C>(
         &self,
         start_from: Option<C::Index>,
-    ) -> Result<impl Iterator<Item = (C::Index, Vec<u8>)>>
+    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)>>
     where
         C: Column<B>,
     {
@@ -258,7 +258,7 @@ where
             }
         };
 
-        Ok(iter.map(|(key, value)| (C::index(&key), value.into())))
+        Ok(iter.map(|(key, value)| (C::index(&key), value)))
     }
 
     #[inline]
@@ -387,7 +387,7 @@ where
     pub fn iter(
         &self,
         start_from: Option<C::Index>,
-    ) -> Result<impl Iterator<Item = (C::Index, Vec<u8>)>> {
+    ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)>> {
         let iter = {
             if let Some(index) = start_from {
                 let key = C::key(index);
@@ -398,7 +398,7 @@ where
             }
         };
 
-        Ok(iter.map(|(key, value)| (C::index(&key), value.into())))
+        Ok(iter.map(|(key, value)| (C::index(&key), value)))
     }
 
     #[inline]
