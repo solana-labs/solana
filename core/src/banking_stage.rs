@@ -147,7 +147,7 @@ impl BankingStage {
         let mut unprocessed_packets = vec![];
         let mut rebuffered_packets = 0;
         let mut new_tx_count = 0;
-        let mut buffered_packets_iter = buffered_packets.into_iter();
+        let mut buffered_packets_iter = buffered_packets.iter();
         while let Some((msgs, unprocessed_indexes)) = buffered_packets_iter.next() {
             let bank = poh_recorder.lock().unwrap().bank();
             if bank.is_none() {
