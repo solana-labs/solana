@@ -364,8 +364,14 @@ mod test {
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let repair_strategy = RepairStrategy::RepairAll {
-            bank_forks,
+            bank_forks: bank_forks.clone(),
             completed_slots_receiver,
+            epoch_schedule: bank_forks
+                .read()
+                .unwrap()
+                .working_bank()
+                .epoch_schedule()
+                .clone(),
         };
         let t_window = WindowService::new(
             Some(leader_schedule_cache),
@@ -445,9 +451,11 @@ mod test {
         let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
+        let epoch_schedule = *bank_forks.read().unwrap().working_bank().epoch_schedule();
         let repair_strategy = RepairStrategy::RepairAll {
             bank_forks,
             completed_slots_receiver,
+            epoch_schedule,
         };
         let t_window = WindowService::new(
             Some(leader_schedule_cache),

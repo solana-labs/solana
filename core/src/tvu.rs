@@ -110,6 +110,7 @@ impl Tvu {
             &exit,
             genesis_blockhash,
             completed_slots_receiver,
+            *bank_forks.read().unwrap().working_bank().epoch_schedule(),
         );
 
         let (replay_stage, slot_full_receiver, root_slot_receiver) = ReplayStage::new(
