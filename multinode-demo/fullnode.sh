@@ -143,7 +143,6 @@ setup_vote_account() {
 
 set -e
 rsync_leader_url=$(rsync_url "$leader")
-secs_to_next_genesis_poll=0
 PS4="$(basename "$0"): "
 while true; do
   set -x
@@ -175,6 +174,7 @@ while true; do
   pid=$!
   oom_score_adj "$pid" 1000
 
+  secs_to_next_genesis_poll=0
   while true; do
     if ! kill -0 "$pid"; then
       wait "$pid"
