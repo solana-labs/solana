@@ -577,7 +577,7 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use std::thread::{sleep, Builder};
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     fn load_accounts_with_fee(
         tx: Transaction,
@@ -1061,7 +1061,6 @@ mod tests {
             .unwrap();
 
         // Function will block until the parent_thread unlocks the parent's record lock
-        let now = Instant::now();
         assert_eq!(
             Accounts::lock_account(
                 (
@@ -1074,7 +1073,6 @@ mod tests {
             Ok(())
         );
         // Make sure that the function blocked
-        assert!(now.elapsed().as_secs() > 1);
         parent_thread.join().unwrap();
 
         {
