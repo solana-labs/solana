@@ -1,7 +1,7 @@
 [package]
 name = "solana-vote-program"
 version = "0.15.0"
-description = "Solana vote program"
+description = "Solana Vote program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -16,5 +16,4 @@ solana-vote-api = { path = "../vote_api", version = "0.15.0"  }
 
 [lib]
 name = "solana_vote_program"
-crate-type = ["cdylib"]
-
+crate-type = ["lib","cdylib"]
