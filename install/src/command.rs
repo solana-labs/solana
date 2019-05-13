@@ -6,6 +6,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use ring::digest::{Context, Digest, SHA256};
 use solana_client::rpc_client::RpcClient;
 use solana_config_api::config_instruction;
+use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil, Signable};
 use solana_sdk::transaction::Transaction;
@@ -220,13 +221,14 @@ fn store_update_manifest(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let recect_blockhash = rpc_client.get_recent_blockhash()?;
 
-    let new_store = config_instruction::store::<SignedUpdateManifest>(
-        &from_keypair.pubkey(),
+    let signers = [from_keypair, update_manifest_keypair];
+    let instruction = config_instruction::store::<SignedUpdateManifest>(
         &update_manifest_keypair.pubkey(),
         update_manifest,
     );
-    let mut transaction = Transaction::new_unsigned_instructions(vec![new_store]);
-    transaction.sign(&[from_keypair, update_manifest_keypair], recect_blockhash);
+
+    let message = Message::new_with_payer(vec![instruction], Some(&from_keypair.pubkey()));
+    let mut transaction = Transaction::new(&signers, message, recect_blockhash);
     rpc_client.send_and_confirm_transaction(&mut transaction, &[from_keypair])?;
     Ok(())
 }
