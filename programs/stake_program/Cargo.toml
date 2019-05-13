@@ -16,5 +16,4 @@ solana-stake-api = { path = "../stake_api", version = "0.15.0"  }
 
 [lib]
 name = "solana_stake_program"
-crate-type = ["cdylib"]
-
+crate-type = ["lib", "cdylib"]

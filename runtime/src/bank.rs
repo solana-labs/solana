@@ -2,7 +2,6 @@
 //! programs. It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-
 use crate::accounts::{AccountLockType, Accounts};
 use crate::accounts_db::{ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::accounts_index::Fork;
@@ -383,7 +382,10 @@ impl Bank {
             "solana_bpf_loader",
             &solana_sdk::bpf_loader::id(),
         );
-        self.register_native_instruction_processor("solana_vote_program", &solana_vote_api::id());
+        self.register_native_instruction_processor(
+            &solana_vote_program!().0,
+            &solana_vote_program!().1,
+        );
 
         // Add additional native programs specified in the genesis block
         for (name, program_id) in &genesis_block.native_instruction_processors {

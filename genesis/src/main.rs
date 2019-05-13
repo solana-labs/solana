@@ -1,4 +1,8 @@
 //! A command-line executable for generating the chain's genesis block.
+#[macro_use]
+extern crate solana_vote_program;
+#[macro_use]
+extern crate solana_stake_program;
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana::blocktree::create_new_ledger;
@@ -144,8 +148,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             ),
         ],
         &[
-            ("solana_vote_program".to_string(), solana_vote_api::id()),
-            ("solana_stake_program".to_string(), solana_stake_api::id()),
+            solana_vote_program!(),
+            solana_stake_program!(),
             ("solana_budget_program".to_string(), solana_budget_api::id()),
             (
                 "solana_storage_program".to_string(),
