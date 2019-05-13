@@ -357,6 +357,10 @@ impl BankingStage {
         debug!("processed: {} ", processed_transactions.len());
         // unlock all the accounts with errors which are filtered by the above `filter_map`
         if !processed_transactions.is_empty() {
+            inc_new_counter_info!(
+                "banking_stage-record_transactions",
+                processed_transactions.len()
+            );
             let hash = hash_transactions(&processed_transactions);
             // record and unlock will unlock all the successful transactions
             poh.lock()
