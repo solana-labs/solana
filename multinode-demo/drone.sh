@@ -14,12 +14,6 @@ source "$here"/common.sh
   exit 1
 }
 
-set -ex
-
-trap 'kill "$pid" && wait "$pid"' INT TERM ERR
-$solana_drone \
-  --keypair "$SOLANA_CONFIG_DIR"/mint-keypair.json \
-  "$@" \
-  > >($drone_logger) 2>&1 &
-pid=$!
-wait "$pid"
+set -x
+# shellcheck disable=SC2086 # Don't want to double quote $solana_drone
+exec $solana_drone --keypair "$SOLANA_CONFIG_DIR"/mint-keypair.json "$@"

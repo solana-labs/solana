@@ -87,8 +87,7 @@ local|tar)
       --gossip-port "$entrypointIp":8001
     )
 
-    ./multinode-demo/bootstrap-leader.sh "${args[@]}" > bootstrap-leader.log 2>&1 &
-    ln -sTf bootstrap-leader.log fullnode.log
+    ./multinode-demo/fullnode.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
     ;;
   fullnode|blockstreamer)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
