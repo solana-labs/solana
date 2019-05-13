@@ -169,13 +169,11 @@ startNodes() {
 
 killNode() {
   declare pid=$1
-  echo "kill $pid"
   set +e
   if kill "$pid"; then
+    echo "Waiting for $pid to exit..."
     wait "$pid"
-  else
-    echo "^^^ +++"
-    echo "Warning: unable to kill $pid"
+    echo "$pid exited with $?"
   fi
   set -e
 }
@@ -199,10 +197,11 @@ killNodes() {
   # Give the nodes a splash of time to cleanly exit before killing them
   sleep 2
 
-  echo "--- Killing nodes"
+  echo "--- Killing nodes: ${pids[*]}"
   for pid in "${pids[@]}"; do
     killNode "$pid"
   done
+  echo "done killing nodes"
   pids=()
 }
 
