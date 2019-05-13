@@ -362,7 +362,7 @@ while true; do
   fi
 
   echo "$PS4$program ${args[*]}"
-  $program "${args[@]}" > >($fullnode_logger) 2>&1 &
+  $program "${args[@]}" &
   pid=$!
   oom_score_adj "$pid" 1000
 

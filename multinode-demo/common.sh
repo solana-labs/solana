@@ -10,9 +10,6 @@
 SOLANA_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. || exit 1; pwd)"
 
 rsync=rsync
-bootstrap_leader_logger="tee bootstrap-leader.log"
-fullnode_logger="tee fullnode.log"
-drone_logger="tee drone.log"
 
 if [[ $(uname) != Linux ]]; then
   # Protect against unsupported configurations to prevent non-obvious errors
