@@ -26,7 +26,12 @@ pub const MAX_RECENT_BLOCKHASHES: usize = MAX_HASH_AGE_IN_SECONDS;
 
 /// This is maximum time consumed in forwarding a transaction from one node to next, before
 /// it can be processed in the target node
-pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 3;
+#[cfg(feature = "cuda")]
+pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 4;
+
+/// More delay is expected if CUDA is not enabled (as signature verification takes longer)
+#[cfg(not(feature = "cuda"))]
+pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 12;
 
 pub fn duration_as_ns(d: &Duration) -> u64 {
     d.as_secs() * 1_000_000_000 + u64::from(d.subsec_nanos())
