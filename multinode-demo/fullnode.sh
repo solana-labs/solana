@@ -110,10 +110,10 @@ setup_vote_and_stake_accounts() {
     touch "$node_keypair_path".configured
   fi
 
-  $solana_wallet --url "http://$entrypoint_ip:8899" \
+  $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
           show-vote-account "$vote_pubkey"
 
-  $solana_wallet --url "http://$entrypoint_ip:8899" \
+  $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
           show-stake-account "$stake_pubkey"
 
 
