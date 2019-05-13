@@ -5,51 +5,15 @@ use bs58;
 use generic_array::typenum::U64;
 use generic_array::GenericArray;
 use rand::rngs::OsRng;
-use rand::{CryptoRng, Rng};
 use serde_json;
 use solana_ed25519_dalek as ed25519_dalek;
 use std::error;
 use std::fmt;
 use std::fs::{self, File};
 use std::io::Write;
-use std::ops::Deref;
 use std::path::Path;
 
-// --BEGIN
-// the below can go away if this lands:
-//  https://github.com/dalek-cryptography/ed25519-dalek/pull/82
-#[derive(Debug)]
-pub struct Keypair(ed25519_dalek::Keypair);
-impl PartialEq for Keypair {
-    fn eq(&self, other: &Self) -> bool {
-        self.pubkey() == other.pubkey()
-    }
-}
-impl Deref for Keypair {
-    type Target = ed25519_dalek::Keypair;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl From<ed25519_dalek::Keypair> for Keypair {
-    fn from(keypair: ed25519_dalek::Keypair) -> Self {
-        Keypair(keypair)
-    }
-}
-impl Keypair {
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
-        ed25519_dalek::Keypair::from_bytes(bytes).map(std::convert::Into::into)
-    }
-    pub fn generate<R>(rng: &mut R) -> Self
-    where
-        R: CryptoRng + Rng,
-    {
-        ed25519_dalek::Keypair::generate(rng).into()
-    }
-}
-// the above can go away if this lands:
-//  https://github.com/dalek-cryptography/ed25519-dalek/pull/82
-// --END
+pub type Keypair = ed25519_dalek::Keypair;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Signature(GenericArray<u8, U64>);
