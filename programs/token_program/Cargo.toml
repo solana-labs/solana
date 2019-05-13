@@ -16,5 +16,4 @@ solana-token-api = { path = "../token_api", version = "0.15.0"  }
 
 [lib]
 name = "solana_token_program"
-crate-type = ["cdylib"]
-
+crate-type = ["lib","cdylib"]

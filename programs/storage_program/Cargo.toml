@@ -16,5 +16,4 @@ solana-storage-api = { path = "../storage_api", version = "0.15.0"  }
 
 [lib]
 name = "solana_storage_program"
-crate-type = ["cdylib"]
-
+crate-type = ["lib", "cdylib"]

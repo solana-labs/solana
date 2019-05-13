@@ -16,5 +16,4 @@ solana-sdk = { path = "../../sdk", version = "0.15.0"  }
 
 [lib]
 name = "solana_config_program"
-crate-type = ["cdylib"]
-
+crate-type = ["lib","cdylib"]

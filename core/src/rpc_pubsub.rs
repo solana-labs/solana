@@ -368,7 +368,7 @@ mod tests {
         // This test depends on the budget program
         genesis_block
             .native_instruction_processors
-            .push(("solana_budget_program".to_string(), solana_budget_api::id()));
+            .push(solana_budget_program!());
 
         let bob_pubkey = Pubkey::new_rand();
         let witness = Keypair::new();

@@ -53,7 +53,7 @@ pub fn create_genesis_block_with_leader(
                 ),
             ),
         ],
-        &[],
+        &[solana_vote_program!()],
     );
 
     (genesis_block, mint_keypair, voting_keypair)
