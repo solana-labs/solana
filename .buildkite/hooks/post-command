@@ -10,6 +10,8 @@
   set -x
   rsync -a --delete --link-dest="$PWD" target "$d"
   du -hs "$d"
+  read -r cacheSizeInGB _ < <(du -s --block-size=1800000000 "$d")
+  echo "--- ${cacheSizeInGB}GB: $d"
 )
 
 #

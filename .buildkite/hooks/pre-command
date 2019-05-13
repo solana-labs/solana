@@ -14,14 +14,18 @@ export PS4="++"
 (
   set -x
   d=$HOME/cargo-target-cache/"$BUILDKITE_LABEL"
+  MAX_CACHE_SIZE=18 # gigabytes
 
   if [[ -d $d ]]; then
     du -hs "$d"
     read -r cacheSizeInGB _ < <(du -s --block-size=1800000000 "$d")
-    if [[ $cacheSizeInGB -gt 18 ]]; then
-      echo "$d has gotten too large, removing it"
+    echo "--- ${cacheSizeInGB}GB: $d"
+    if [[ $cacheSizeInGB -gt $MAX_CACHE_SIZE ]]; then
+      echo "--- $d is too large, removing it"
       rm -rf "$d"
     fi
+  else
+    echo "--- $d not present"
   fi
 
   mkdir -p "$d"/target
