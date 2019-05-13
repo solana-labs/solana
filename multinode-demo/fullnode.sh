@@ -28,6 +28,7 @@ Start a full node or a replicator
   --stake LAMPORTS          - Number of lamports to stake
   --no-voting               - start node without vote signer
   --rpc-port port           - custom RPC port for this node
+  --no-restart              - do not restart the node if it exits
 
 EOF
   exit 1
@@ -146,6 +147,7 @@ stake=42 # number of lamports to assign as stake
 poll_for_new_genesis_block=0
 label=
 fullnode_keypair_path=
+no_restart=0
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -153,6 +155,9 @@ while [[ -n $1 ]]; do
     if [[ $1 = --label ]]; then
       label="-$2"
       shift 2
+    elif [[ $1 = --no-restart ]]; then
+      no_restart=1
+      shift
     elif [[ $1 = --bootstrap-leader ]]; then
       node_type=bootstrap_leader
       shift
@@ -360,6 +365,11 @@ while true; do
   $program "${args[@]}" > >($fullnode_logger) 2>&1 &
   pid=$!
   oom_score_adj "$pid" 1000
+
+  if ((no_restart)); then
+    wait "$pid"
+    exit $?
+  fi
 
   if [[ $node_type = bootstrap_leader ]]; then
     wait "$pid"

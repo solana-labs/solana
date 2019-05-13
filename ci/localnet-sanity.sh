@@ -79,10 +79,12 @@ nodes=(
   "multinode-demo/drone.sh"
   "multinode-demo/bootstrap-leader.sh \
     --enable-rpc-exit \
+    --no-restart \
     --init-complete-file init-complete-node1.log"
   "multinode-demo/fullnode.sh \
     $maybeNoLeaderRotation \
     --enable-rpc-exit \
+    --no-restart \
     --init-complete-file init-complete-node2.log \
     --rpc-port 18899"
 )
@@ -90,6 +92,7 @@ nodes=(
 for i in $(seq 1 $extraNodes); do
   nodes+=(
     "multinode-demo/fullnode.sh \
+      --no-restart \
       --label dyn$i \
       --init-complete-file init-complete-node$((2 + i)).log \
       $maybeNoLeaderRotation"
