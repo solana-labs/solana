@@ -1,6 +1,7 @@
 //! A command-line executable for generating the chain's genesis block.
 #[macro_use]
 extern crate solana_vote_program;
+#[macro_use]
 extern crate solana_stake_program;
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
