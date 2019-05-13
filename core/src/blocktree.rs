@@ -1296,6 +1296,17 @@ fn try_erasure_recover(
     let start_index = erasure_meta.start_index();
     let (data_end_index, _) = erasure_meta.end_indexes();
 
+    let submit_metrics = |attempted: bool, status: String| {
+        datapoint!(
+            "blocktree-erasure",
+            ("slot", slot as i64, i64),
+            ("start_index", start_index as i64, i64),
+            ("end_index", data_end_index as i64, i64),
+            ("recovery_attempted", attempted, bool),
+            ("recovery_status", status, String),
+        );
+    };
+
     let blobs = match erasure_meta.status() {
         ErasureMetaStatus::CanRecover => {
             let erasure_result = recover(
@@ -1317,14 +1328,7 @@ fn try_erasure_recover(
                         "Recovery should always complete a set"
                     );
 
-                    datapoint!(
-                        "blocktree-erasure",
-                        ("slot", slot as i64, i64),
-                        ("start_index", start_index as i64, i64),
-                        ("end_index", data_end_index as i64, i64),
-                        ("recovery_attempted", true, bool),
-                        ("recovery_status", "complete".to_string(), String),
-                    );
+                    submit_metrics(true, "complete".into());
 
                     debug!(
                         "[try_erasure] slot: {}, set_index: {}, recovered {} blobs",
@@ -1334,14 +1338,7 @@ fn try_erasure_recover(
                     Some((data, coding))
                 }
                 Err(Error::ErasureError(e)) => {
-                    datapoint!(
-                        "blocktree-erasure",
-                        ("slot", slot as i64, i64),
-                        ("start_index", start_index as i64, i64),
-                        ("end_index", data_end_index as i64, i64),
-                        ("recovery_attempted", true, bool),
-                        ("recovery_status", format!("error: {}", e), String),
-                    );
+                    submit_metrics(true, format!("error: {}", e));
 
                     error!(
                         "[try_erasure] slot: {}, set_index: {}, recovery failed: cause: {}",
@@ -1355,14 +1352,7 @@ fn try_erasure_recover(
             }
         }
         ErasureMetaStatus::StillNeed(needed) => {
-            datapoint!(
-                "blocktree-erasure",
-                ("slot", slot as i64, i64),
-                ("start_index", start_index as i64, i64),
-                ("end_index", data_end_index as i64, i64),
-                ("recovery_attempted", false, bool),
-                ("recovery_status", format!("still need: {}", needed), String),
-            );
+            submit_metrics(false, format!("still need: {}", needed));
 
             debug!(
                 "[try_erasure] slot: {}, set_index: {}, still need {} blobs",
@@ -1372,14 +1362,7 @@ fn try_erasure_recover(
             None
         }
         ErasureMetaStatus::DataFull => {
-            datapoint!(
-                "blocktree-erasure",
-                ("slot", slot as i64, i64),
-                ("start_index", start_index as i64, i64),
-                ("end_index", data_end_index as i64, i64),
-                ("recovery_attempted", false, bool),
-                ("recovery_status", "complete".to_string(), String),
-            );
+            submit_metrics(false, "complete".into());
 
             debug!(
                 "[try_erasure] slot: {}, set_index: {}, set full",
