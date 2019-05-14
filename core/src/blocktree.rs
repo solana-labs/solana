@@ -188,6 +188,14 @@ impl Blocktree {
         Ok(db_iterator)
     }
 
+    pub fn slot_data_iterator(
+        &self,
+        slot: u64,
+    ) -> Result<impl Iterator<Item = ((u64, u64), Vec<u8>)>> {
+        let slot_iterator = self.db.iter::<cf::Data>(Some((slot, 0)))?;
+        Ok(slot_iterator.take_while(move |((blob_slot, _), _)| *blob_slot == slot))
+    }
+
     pub fn write_shared_blobs<I>(&self, shared_blobs: I) -> Result<()>
     where
         I: IntoIterator,
@@ -673,7 +681,7 @@ impl Blocktree {
     }
 
     pub fn read_ledger_blobs(&self) -> impl Iterator<Item = Blob> + '_ {
-        let iter = self.db.iter::<cf::Data>().unwrap();
+        let iter = self.db.iter::<cf::Data>(None).unwrap();
         iter.map(|(_, blob_data)| Blob::new(&blob_data))
     }
 
@@ -3037,6 +3045,34 @@ pub mod tests {
         assert_eq!(slot_meta.received, 7);
         assert_eq!(slot_meta.last_index, 6);
         assert!(slot_meta.is_full());
+
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_slot_data_iterator() {
+        // Construct the blobs
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let blobs_per_slot = 10;
+        let slots = vec![2, 4, 8, 12];
+        let all_blobs = make_chaining_slot_entries(&slots, blobs_per_slot);
+        let slot_8_blobs = all_blobs[2].0.clone();
+        for (slot_blobs, _) in all_blobs {
+            blocktree.insert_data_blobs(&slot_blobs[..]).unwrap();
+        }
+
+        // Slot doesnt exist, iterator should be empty
+        let blob_iter = blocktree.slot_data_iterator(5).unwrap();
+        let result: Vec<_> = blob_iter.collect();
+        assert_eq!(result, vec![]);
+
+        // Test that the iterator for slot 8 contains what was inserted earlier
+        let blob_iter = blocktree.slot_data_iterator(8).unwrap();
+        let result: Vec<_> = blob_iter.map(|(_, bytes)| Blob::new(&bytes)).collect();
+        assert_eq!(result.len() as u64, blobs_per_slot);
+        assert_eq!(result, slot_8_blobs);
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");

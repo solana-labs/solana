@@ -60,7 +60,7 @@ pub trait Backend: Sized + Send + Sync {
 
     fn delete_cf(&self, cf: Self::ColumnFamily, key: &Self::Key) -> Result<()>;
 
-    fn iterator_cf(&self, cf: Self::ColumnFamily) -> Result<Self::Iter>;
+    fn iterator_cf(&self, cf: Self::ColumnFamily, from: Option<&Self::Key>) -> Result<Self::Iter>;
 
     fn raw_iterator_cf(&self, cf: Self::ColumnFamily) -> Result<Self::Cursor>;
 
@@ -241,16 +241,24 @@ where
         })
     }
 
-    pub fn iter<C>(&self) -> Result<impl Iterator<Item = (C::Index, Vec<u8>)>>
+    pub fn iter<C>(
+        &self,
+        start_from: Option<C::Index>,
+    ) -> Result<impl Iterator<Item = (C::Index, Vec<u8>)>>
     where
         C: Column<B>,
     {
-        let iter = self
-            .backend
-            .iterator_cf(self.cf_handle::<C>())?
-            .map(|(key, value)| (C::index(&key), value.into()));
+        let iter = {
+            if let Some(index) = start_from {
+                let key = C::key(index);
+                self.backend
+                    .iterator_cf(self.cf_handle::<C>(), Some(key.borrow()))?
+            } else {
+                self.backend.iterator_cf(self.cf_handle::<C>(), None)?
+            }
+        };
 
-        Ok(iter)
+        Ok(iter.map(|(key, value)| (C::index(&key), value.into())))
     }
 
     #[inline]
@@ -371,13 +379,21 @@ where
         })
     }
 
-    pub fn iter(&self) -> Result<impl Iterator<Item = (C::Index, Vec<u8>)>> {
-        let iter = self
-            .backend
-            .iterator_cf(self.handle())?
-            .map(|(key, value)| (C::index(&key), value.into()));
+    pub fn iter(
+        &self,
+        start_from: Option<C::Index>,
+    ) -> Result<impl Iterator<Item = (C::Index, Vec<u8>)>> {
+        let iter = {
+            if let Some(index) = start_from {
+                let key = C::key(index);
+                self.backend
+                    .iterator_cf(self.handle(), Some(key.borrow()))?
+            } else {
+                self.backend.iterator_cf(self.handle(), None)?
+            }
+        };
 
-        Ok(iter)
+        Ok(iter.map(|(key, value)| (C::index(&key), value.into())))
     }
 
     #[inline]
