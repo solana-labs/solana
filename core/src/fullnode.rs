@@ -18,6 +18,7 @@ use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
 use solana_metrics::inc_new_counter_info;
+use solana_runtime::bank::Bank;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -86,6 +87,10 @@ impl Fullnode {
 
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
+        let genesis_block =
+            GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
+        let bank = Bank::new_with_paths(&genesis_block, None);
+        let genesis_blockhash = bank.last_blockhash();
 
         let (
             bank_forks,
@@ -100,7 +105,6 @@ impl Fullnode {
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_slot].clone();
-        let genesis_blockhash = bank.last_blockhash();
 
         info!(
             "starting PoH... {} {}",
