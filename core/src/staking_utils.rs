@@ -17,10 +17,10 @@ pub fn get_supermajority_slot(bank: &Bank, epoch_height: u64) -> Option<u64> {
     find_supermajority_slot(supermajority_stake, stakes_and_lockouts.iter())
 }
 
-pub fn vote_account_balances(bank: &Bank) -> HashMap<Pubkey, u64> {
+pub fn vote_account_stakes(bank: &Bank) -> HashMap<Pubkey, u64> {
     let node_staked_accounts = node_staked_accounts(bank);
     node_staked_accounts
-        .map(|(id, stake, _)| (id, stake))
+        .map(|(id, (stake, _))| (id, stake))
         .collect()
 }
 
@@ -34,12 +34,13 @@ pub fn delegated_stakes(bank: &Bank) -> HashMap<Pubkey, u64> {
 
 /// At the specified epoch, collect the node account balance and vote states for nodes that
 /// have non-zero balance in their corresponding staking accounts
-pub fn vote_account_balances_at_epoch(
+pub fn vote_account_stakes_at_epoch(
     bank: &Bank,
     epoch_height: u64,
 ) -> Option<HashMap<Pubkey, u64>> {
     let node_staked_accounts = node_staked_accounts_at_epoch(bank, epoch_height);
-    node_staked_accounts.map(|epoch_state| epoch_state.map(|(id, stake, _)| (*id, stake)).collect())
+    node_staked_accounts
+        .map(|epoch_state| epoch_state.map(|(id, (stake, _))| (*id, *stake)).collect())
 }
 
 /// At the specified epoch, collect the delegate account balance and vote states for delegates
@@ -52,21 +53,18 @@ pub fn delegated_stakes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashM
 
 /// Collect the node account balance and vote states for nodes have non-zero balance in
 /// their corresponding staking accounts
-fn node_staked_accounts(bank: &Bank) -> impl Iterator<Item = (Pubkey, u64, Account)> {
-    bank.vote_accounts()
-        .into_iter()
-        .map(|(account_id, account)| (account_id, Bank::read_balance(&account), account))
+fn node_staked_accounts(bank: &Bank) -> impl Iterator<Item = (Pubkey, (u64, Account))> {
+    bank.vote_accounts().into_iter()
 }
 
 pub fn node_staked_accounts_at_epoch(
     bank: &Bank,
     epoch_height: u64,
-) -> Option<impl Iterator<Item = (&Pubkey, u64, &Account)>> {
+) -> Option<impl Iterator<Item = (&Pubkey, &(u64, Account))>> {
     bank.epoch_vote_accounts(epoch_height).map(|vote_accounts| {
         vote_accounts
             .into_iter()
-            .filter(|(account_id, account)| filter_no_delegate(account_id, account))
-            .map(|(account_id, account)| (account_id, Bank::read_balance(&account), account))
+            .filter(|(account_id, (_, account))| filter_no_delegate(account_id, account))
     })
 }
 
@@ -77,12 +75,12 @@ fn filter_no_delegate(account_id: &Pubkey, account: &Account) -> bool {
 }
 
 fn to_vote_state(
-    node_staked_accounts: impl Iterator<Item = (impl Borrow<Pubkey>, u64, impl Borrow<Account>)>,
+    node_staked_accounts: impl Iterator<Item = (impl Borrow<Pubkey>, impl Borrow<(u64, Account)>)>,
 ) -> impl Iterator<Item = (u64, VoteState)> {
-    node_staked_accounts.filter_map(|(_, stake, account)| {
-        VoteState::deserialize(&account.borrow().data)
+    node_staked_accounts.filter_map(|(_, stake_account)| {
+        VoteState::deserialize(&stake_account.borrow().1.data)
             .ok()
-            .map(|vote_state| (stake, vote_state))
+            .map(|vote_state| (stake_account.borrow().0, vote_state))
     })
 }
 
@@ -158,17 +156,17 @@ pub mod tests {
 
         // Epoch doesn't exist
         let mut expected = HashMap::new();
-        assert_eq!(vote_account_balances_at_epoch(&bank, 10), None);
+        assert_eq!(vote_account_stakes_at_epoch(&bank, 10), None);
 
         // First epoch has the bootstrap leader
         expected.insert(voting_keypair.pubkey(), BOOTSTRAP_LEADER_LAMPORTS);
         let expected = Some(expected);
-        assert_eq!(vote_account_balances_at_epoch(&bank, 0), expected);
+        assert_eq!(vote_account_stakes_at_epoch(&bank, 0), expected);
 
         // Second epoch carries same information
         let bank = new_from_parent(&Arc::new(bank), 1);
-        assert_eq!(vote_account_balances_at_epoch(&bank, 0), expected);
-        assert_eq!(vote_account_balances_at_epoch(&bank, 1), expected);
+        assert_eq!(vote_account_stakes_at_epoch(&bank, 0), expected);
+        assert_eq!(vote_account_stakes_at_epoch(&bank, 1), expected);
     }
 
     #[test]

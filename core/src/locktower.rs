@@ -54,13 +54,13 @@ impl EpochStakes {
             &Pubkey::default(),
         )
     }
-    pub fn new_from_stake_accounts(epoch: u64, accounts: &[(Pubkey, Account)]) -> Self {
-        let stakes = accounts.iter().map(|(k, v)| (*k, v.lamports)).collect();
+    pub fn new_from_stakes(epoch: u64, accounts: &[(Pubkey, (u64, Account))]) -> Self {
+        let stakes = accounts.iter().map(|(k, (v, _))| (*k, *v)).collect();
         Self::new(epoch, stakes, &accounts[0].0)
     }
     pub fn new_from_bank(bank: &Bank, my_id: &Pubkey) -> Self {
         let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
-        let stakes = staking_utils::vote_account_balances_at_epoch(bank, bank_epoch)
+        let stakes = staking_utils::vote_account_stakes_at_epoch(bank, bank_epoch)
             .expect("voting require a bank with stakes");
         Self::new(bank_epoch, stakes, my_id)
     }
@@ -105,10 +105,10 @@ impl Locktower {
         ancestors: &HashMap<u64, HashSet<u64>>,
     ) -> HashMap<u64, StakeLockout>
     where
-        F: Iterator<Item = (Pubkey, Account)>,
+        F: Iterator<Item = (Pubkey, (u64, Account))>,
     {
         let mut stake_lockouts = HashMap::new();
-        for (key, account) in vote_accounts {
+        for (key, (_, account)) in vote_accounts {
             let lamports: u64 = *self.epoch_stakes.stakes.get(&key).unwrap_or(&0);
             if lamports == 0 {
                 continue;
@@ -361,7 +361,7 @@ impl Locktower {
     fn initialize_lockouts_from_bank(bank: &Bank, current_epoch: u64) -> VoteState {
         let mut lockouts = VoteState::default();
         if let Some(iter) = staking_utils::node_staked_accounts_at_epoch(&bank, current_epoch) {
-            for (delegate_id, _, account) in iter {
+            for (delegate_id, (_, account)) in iter {
                 if *delegate_id == bank.collector_id() {
                     let state = VoteState::deserialize(&account.data).expect("votes");
                     if lockouts.votes.len() < state.votes.len() {
@@ -378,8 +378,8 @@ impl Locktower {
 mod test {
     use super::*;
 
-    fn gen_accounts(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, Account)> {
-        let mut accounts = vec![];
+    fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, Account))> {
+        let mut stakes = vec![];
         for (lamports, votes) in stake_votes {
             let mut account = Account::default();
             account.data = vec![0; 1024];
@@ -391,14 +391,14 @@ mod test {
             vote_state
                 .serialize(&mut account.data)
                 .expect("serialize state");
-            accounts.push((Pubkey::new_rand(), account));
+            stakes.push((Pubkey::new_rand(), (*lamports, account)));
         }
-        accounts
+        stakes
     }
 
     #[test]
     fn test_collect_vote_lockouts_no_epoch_stakes() {
-        let accounts = gen_accounts(&[(1, &[0])]);
+        let accounts = gen_stakes(&[(1, &[0])]);
         let epoch_stakes = EpochStakes::new_for_tests(2);
         let locktower = Locktower::new(epoch_stakes, 0, 0.67);
         let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
@@ -411,8 +411,8 @@ mod test {
     #[test]
     fn test_collect_vote_lockouts_sums() {
         //two accounts voting for slot 0 with 1 token staked
-        let accounts = gen_accounts(&[(1, &[0]), (1, &[0])]);
-        let epoch_stakes = EpochStakes::new_from_stake_accounts(0, &accounts);
+        let accounts = gen_stakes(&[(1, &[0]), (1, &[0])]);
+        let epoch_stakes = EpochStakes::new_from_stakes(0, &accounts);
         let locktower = Locktower::new(epoch_stakes, 0, 0.67);
         let ancestors = vec![(1, vec![0].into_iter().collect()), (0, HashSet::new())]
             .into_iter()
@@ -426,8 +426,8 @@ mod test {
     fn test_collect_vote_lockouts_root() {
         let votes: Vec<u64> = (0..MAX_LOCKOUT_HISTORY as u64).into_iter().collect();
         //two accounts voting for slot 0 with 1 token staked
-        let accounts = gen_accounts(&[(1, &votes), (1, &votes)]);
-        let epoch_stakes = EpochStakes::new_from_stake_accounts(0, &accounts);
+        let accounts = gen_stakes(&[(1, &votes), (1, &votes)]);
+        let epoch_stakes = EpochStakes::new_from_stakes(0, &accounts);
         let mut locktower = Locktower::new(epoch_stakes, 0, 0.67);
         let mut ancestors = HashMap::new();
         for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
@@ -754,13 +754,13 @@ mod test {
         let threshold_size = 0.67;
         let threshold_stake = (f64::ceil(total_stake as f64 * threshold_size)) as u64;
         let locktower_votes: Vec<u64> = (0..VOTE_THRESHOLD_DEPTH as u64).collect();
-        let accounts = gen_accounts(&[
+        let accounts = gen_stakes(&[
             (threshold_stake, &[(VOTE_THRESHOLD_DEPTH - 2) as u64]),
             (total_stake - threshold_stake, &locktower_votes[..]),
         ]);
 
         // Initialize locktower
-        let stakes: HashMap<_, _> = accounts.iter().map(|(pk, a)| (*pk, a.lamports)).collect();
+        let stakes: HashMap<_, _> = accounts.iter().map(|(pk, (s, _))| (*pk, *s)).collect();
         let epoch_stakes = EpochStakes::new(0, stakes, &Pubkey::default());
         let mut locktower = Locktower::new(epoch_stakes, VOTE_THRESHOLD_DEPTH, threshold_size);
 
