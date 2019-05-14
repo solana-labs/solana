@@ -1,15 +1,18 @@
 use hashbrown::{HashMap, HashSet};
 use log::*;
+use rand::{thread_rng, Rng};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
 
 const MAX_CACHE_ENTRIES: usize = solana_sdk::timing::MAX_HASH_AGE_IN_SECONDS;
+const CACHED_SIGNATURE_SIZE: usize = 20;
 
 // Store forks in a single chunk of memory to avoid another lookup.
 pub type ForkId = u64;
 pub type ForkStatus<T> = Vec<(ForkId, T)>;
-type SignatureMap<T> = HashMap<Signature, ForkStatus<T>>;
-type StatusMap<T> = HashMap<Hash, (ForkId, SignatureMap<T>)>;
+type SignatureSlice = [u8; CACHED_SIGNATURE_SIZE];
+type SignatureMap<T> = HashMap<SignatureSlice, ForkStatus<T>>;
+type StatusMap<T> = HashMap<Hash, (ForkId, usize, SignatureMap<T>)>;
 
 pub struct StatusCache<T: Clone> {
     /// all signatures seen during a hash period
@@ -34,8 +37,10 @@ impl<T: Clone> StatusCache<T> {
         transaction_blockhash: &Hash,
         ancestors: &HashMap<ForkId, usize>,
     ) -> Option<(ForkId, T)> {
-        let (_, sigmap) = self.cache.get(transaction_blockhash)?;
-        let stored_forks = sigmap.get(sig)?;
+        let (_, index, sigmap) = self.cache.get(transaction_blockhash)?;
+        let mut sig_slice = [0u8; CACHED_SIGNATURE_SIZE];
+        sig_slice.clone_from_slice(&sig.as_ref()[*index..*index + CACHED_SIGNATURE_SIZE]);
+        let stored_forks = sigmap.get(&sig_slice)?;
         stored_forks
             .iter()
             .filter(|(f, _)| ancestors.get(f).is_some() || self.roots.get(f).is_some())
@@ -70,26 +75,31 @@ impl<T: Clone> StatusCache<T> {
         if self.roots.len() > MAX_CACHE_ENTRIES {
             if let Some(min) = self.roots.iter().min().cloned() {
                 self.roots.remove(&min);
-                self.cache.retain(|_, (fork, _)| *fork > min);
+                self.cache.retain(|_, (fork, _, _)| *fork > min);
             }
         }
     }
 
     /// Insert a new signature for a specific fork.
     pub fn insert(&mut self, transaction_blockhash: &Hash, sig: &Signature, fork: ForkId, res: T) {
-        let sig_map = self
-            .cache
-            .entry(*transaction_blockhash)
-            .or_insert((fork, HashMap::new()));
+        let index: usize =
+            thread_rng().gen_range(0, std::mem::size_of::<Hash>() - CACHED_SIGNATURE_SIZE);
+        let sig_map =
+            self.cache
+                .entry(*transaction_blockhash)
+                .or_insert((fork, index, HashMap::new()));
         sig_map.0 = std::cmp::max(fork, sig_map.0);
-        let sig_forks = sig_map.1.entry(*sig).or_insert(vec![]);
+        let index = sig_map.1;
+        let mut sig_slice = [0u8; CACHED_SIGNATURE_SIZE];
+        sig_slice.clone_from_slice(&sig.as_ref()[index..index + CACHED_SIGNATURE_SIZE]);
+        let sig_forks = sig_map.2.entry(sig_slice).or_insert(vec![]);
         sig_forks.push((fork, res));
     }
 
     /// Clear for testing
     pub fn clear_signatures(&mut self) {
         for v in self.cache.values_mut() {
-            v.1 = HashMap::new();
+            v.2 = HashMap::new();
         }
     }
 }
@@ -241,5 +251,18 @@ mod tests {
         assert!(status_cache
             .get_signature_status(&sig, &blockhash, &ancestors)
             .is_some());
+    }
+
+    #[test]
+    fn test_signatures_slice() {
+        let sig = Signature::default();
+        let mut status_cache = BankStatusCache::default();
+        let blockhash = hash(Hash::default().as_ref());
+        status_cache.clear_signatures();
+        status_cache.insert(&blockhash, &sig, 0, ());
+        let (_, index, sig_map) = status_cache.cache.get(&blockhash).unwrap();
+        let mut sig_slice = [0u8; CACHED_SIGNATURE_SIZE];
+        sig_slice.clone_from_slice(&sig.as_ref()[*index..*index + CACHED_SIGNATURE_SIZE]);
+        assert!(sig_map.get(&sig_slice).is_some());
     }
 }
