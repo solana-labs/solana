@@ -63,7 +63,7 @@ impl PohService {
     }
 
     fn tick_producer(
-        poh: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
         config: &PohServiceConfig,
         poh_exit: &AtomicBool,
     ) {
@@ -71,14 +71,14 @@ impl PohService {
             match config {
                 PohServiceConfig::Tick(num) => {
                     for _ in 1..*num {
-                        poh.lock().unwrap().hash();
+                        poh_recorder.lock().unwrap().hash();
                     }
                 }
                 PohServiceConfig::Sleep(duration) => {
                     sleep(*duration);
                 }
             }
-            poh.lock().unwrap().tick();
+            poh_recorder.lock().unwrap().tick();
             if poh_exit.load(Ordering::Relaxed) {
                 return;
             }
