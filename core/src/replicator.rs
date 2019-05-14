@@ -4,7 +4,6 @@ use crate::blocktree::Blocktree;
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::cluster_info::{ClusterInfo, Node};
 use crate::contact_info::ContactInfo;
-use crate::fullnode::new_banks_from_blocktree;
 use crate::gossip_service::GossipService;
 use crate::packet::to_shared_blob;
 use crate::repair_service::{RepairSlotRange, RepairStrategy};
@@ -21,7 +20,9 @@ use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_client::thin_client::ThinClient;
 use solana_ed25519_dalek as ed25519_dalek;
+use solana_runtime::bank::Bank;
 use solana_sdk::client::{AsyncClient, SyncClient};
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::message::Message;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
@@ -192,12 +193,13 @@ impl Replicator {
         // Note for now, this ledger will not contain any of the existing entries
         // in the ledger located at ledger_path, and will only append on newly received
         // entries after being passed to window_service
-        let (bank_forks, bank_forks_info, blocktree, _, _, _) =
-            new_banks_from_blocktree(ledger_path, None);
-        let blocktree = Arc::new(blocktree);
-        let bank_info = &bank_forks_info[0];
-        let bank = bank_forks[bank_info.bank_slot].clone();
+        let genesis_block =
+            GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
+        let bank = Bank::new_with_paths(&genesis_block, None);
         let genesis_blockhash = bank.last_blockhash();
+        let blocktree = Arc::new(
+            Blocktree::open(ledger_path).expect("Expected to be able to open database ledger"),
+        );
 
         let gossip_service = GossipService::new(
             &cluster_info,
