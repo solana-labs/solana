@@ -38,13 +38,18 @@ fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> (Vec<Pubkey
         .iter()
         .flat_map(|ix| ix.accounts.iter())
         .collect();
-    keys_and_signed.sort_by(|x, y| y.is_signer.cmp(&x.is_signer));
+    keys_and_signed.sort_by(|x, y| {
+        y.is_signer
+            .cmp(&x.is_signer)
+            .then(x.is_credit_only.cmp(&y.is_credit_only))
+    });
 
     let payer_account_meta;
     if let Some(payer) = payer {
         payer_account_meta = AccountMeta {
             pubkey: *payer,
             is_signer: true,
+            is_credit_only: false,
         };
         keys_and_signed.insert(0, &payer_account_meta);
     }
@@ -314,6 +319,33 @@ mod tests {
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let message = Message::new(vec![ix]);
         assert_eq!(message.header.num_required_signatures, 1);
+    }
+
+    #[test]
+    fn test_message_credit_only_keys_last() {
+        let program_id = Pubkey::default();
+        let id0 = Pubkey::default();
+        let id1 = Pubkey::new_rand();
+        let id2 = Pubkey::new_rand();
+        let id3 = Pubkey::new_rand();
+        let keys = get_keys(
+            &[
+                Instruction::new(
+                    program_id,
+                    &0,
+                    vec![AccountMeta::new_credit_only(id0, false)],
+                ),
+                Instruction::new(
+                    program_id,
+                    &0,
+                    vec![AccountMeta::new_credit_only(id1, true)],
+                ),
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id2, false)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id3, true)]),
+            ],
+            None,
+        );
+        assert_eq!(keys, (vec![id3, id1], vec![id2, id0]));
     }
 
     #[test]
