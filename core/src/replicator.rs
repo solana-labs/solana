@@ -460,7 +460,7 @@ impl Replicator {
                 > 0
         );
 
-        let blockhash = self
+        let (blockhash, _) = self
             .client
             .get_recent_blockhash()
             .expect("No recent blockhash");
