@@ -2,6 +2,9 @@ pub mod bench;
 mod cli;
 pub mod order_book;
 
+#[macro_use]
+extern crate solana_exchange_program;
+
 use crate::bench::{airdrop_lamports, do_bench_exchange, Config};
 use log::*;
 use solana::gossip_service::{discover_nodes, get_clients};
@@ -42,6 +45,7 @@ fn main() {
     }
 
     info!("Funding keypair: {}", identity.pubkey());
+    debug!("Exchange program name: {}", solana_exchange_program!().0);
 
     let accounts_in_groups = batch_size * account_groups;
     const NUM_SIGNERS: u64 = 2;
