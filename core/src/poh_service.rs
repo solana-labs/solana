@@ -12,7 +12,7 @@ use std::time::Duration;
 pub enum PohServiceConfig {
     /// * `Tick` - Run full PoH thread.  Tick is a rough estimate of how many hashes to roll before
     ///            transmitting a new entry.
-    Tick(usize),
+    Tick(u64),
     /// * `Sleep`- Low power mode.  Sleep is a rough estimate of how long to sleep before rolling 1
     ///            PoH once and producing 1 tick.
     Sleep(Duration),
@@ -71,7 +71,9 @@ impl PohService {
             match config {
                 PohServiceConfig::Tick(num) => {
                     for _ in 1..*num {
-                        poh_recorder.lock().unwrap().hash();
+                        // TODO: amortize the cost of this lock by doing the loop in here for
+                        // some min amount of hashes
+                        poh_recorder.lock().unwrap().hash(1);
                     }
                 }
                 PohServiceConfig::Sleep(duration) => {
@@ -162,7 +164,7 @@ mod tests {
             const HASHES_PER_TICK: u64 = 2;
             let poh_service = PohService::new(
                 poh_recorder.clone(),
-                &PohServiceConfig::Tick(HASHES_PER_TICK as usize),
+                &PohServiceConfig::Tick(HASHES_PER_TICK),
                 &exit,
             );
             poh_recorder.lock().unwrap().set_working_bank(working_bank);

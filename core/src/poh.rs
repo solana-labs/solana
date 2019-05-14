@@ -25,9 +25,11 @@ impl Poh {
         }
     }
 
-    pub fn hash(&mut self) {
-        self.hash = hash(&self.hash.as_ref());
-        self.num_hashes += 1;
+    pub fn hash(&mut self, num_hashes: u64) {
+        for _ in 0..num_hashes {
+            self.hash = hash(&self.hash.as_ref());
+        }
+        self.num_hashes += num_hashes;
     }
 
     pub fn record(&mut self, mixin: Hash) -> PohEntry {
@@ -47,7 +49,7 @@ impl Poh {
     // emissions of Ticks (i.e. PohEntries without a mixin) allows
     // validators to parallelize the work of catching up
     pub fn tick(&mut self) -> PohEntry {
-        self.hash();
+        self.hash(1);
 
         let num_hashes = self.num_hashes;
         self.num_hashes = 0;

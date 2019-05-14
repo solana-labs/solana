@@ -99,10 +99,8 @@ impl PohRecorder {
         self.leader_schedule_cache.slot_leader_at(slot + 1, None)
     }
 
-    pub fn hash(&mut self) {
-        // TODO: amortize the cost of this lock by doing the loop in here for
-        // some min amount of hashes
-        self.poh.hash();
+    pub fn hash(&mut self, num_hashes: u64) {
+        self.poh.hash(num_hashes);
     }
 
     pub fn start_slot(&self) -> u64 {
