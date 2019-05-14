@@ -96,11 +96,25 @@ pub struct AccountMeta {
     pub pubkey: Pubkey,
     /// True if an Instruciton requires a Transaction signature matching `pubkey`.
     pub is_signer: bool,
+    /// True if the `pubkey` can be loaded as a credit-only account.
+    pub is_credit_only: bool,
 }
 
 impl AccountMeta {
     pub fn new(pubkey: Pubkey, is_signer: bool) -> Self {
-        Self { pubkey, is_signer }
+        Self {
+            pubkey,
+            is_signer,
+            is_credit_only: false,
+        }
+    }
+
+    pub fn new_credit_only(pubkey: Pubkey, is_signer: bool) -> Self {
+        Self {
+            pubkey,
+            is_signer,
+            is_credit_only: true,
+        }
     }
 }
 
