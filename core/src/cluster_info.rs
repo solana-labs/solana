@@ -424,11 +424,16 @@ impl ClusterInfo {
 
     fn sort_by_stake<S: std::hash::BuildHasher>(
         peers: &[ContactInfo],
-        stakes: &HashMap<Pubkey, u64, S>,
+        stakes: Option<&HashMap<Pubkey, u64, S>>,
     ) -> Vec<(u64, ContactInfo)> {
         let mut peers_with_stakes: Vec<_> = peers
             .iter()
-            .map(|c| (*stakes.get(&c.id).unwrap_or(&0), c.clone()))
+            .map(|c| {
+                (
+                    stakes.map_or(0, |stakes| *stakes.get(&c.id).unwrap_or(&0)),
+                    c.clone(),
+                )
+            })
             .collect();
         peers_with_stakes.sort_unstable_by(|(l_stake, l_info), (r_stake, r_info)| {
             if r_stake == l_stake {
@@ -444,7 +449,7 @@ impl ClusterInfo {
     /// Return sorted Retransmit peers and index of `Self.id()` as if it were in that list
     fn sorted_peers_and_index<S: std::hash::BuildHasher>(
         &self,
-        stakes: &HashMap<Pubkey, u64, S>,
+        stakes: Option<&HashMap<Pubkey, u64, S>>,
     ) -> (usize, Vec<ContactInfo>) {
         let mut peers = self.retransmit_peers();
         peers.push(self.lookup(&self.id()).unwrap().clone());
@@ -465,7 +470,7 @@ impl ClusterInfo {
         (index, peers)
     }
 
-    pub fn sorted_tvu_peers(&self, stakes: &HashMap<Pubkey, u64>) -> Vec<ContactInfo> {
+    pub fn sorted_tvu_peers(&self, stakes: Option<&HashMap<Pubkey, u64>>) -> Vec<ContactInfo> {
         let peers = self.tvu_peers();
         let peers_with_stakes: Vec<_> = ClusterInfo::sort_by_stake(&peers, stakes);
         peers_with_stakes
@@ -945,9 +950,9 @@ impl ClusterInfo {
                 loop {
                     let start = timestamp();
                     let stakes: HashMap<_, _> = match bank_forks {
-                        Some(ref bank_forks) => staking_utils::delegated_stakes(
-                            &bank_forks.read().unwrap().working_bank(),
-                        ),
+                        Some(ref bank_forks) => {
+                            staking_utils::staked_nodes(&bank_forks.read().unwrap().working_bank())
+                        }
                         None => HashMap::new(),
                     };
                     let _ = Self::run_gossip(&obj, &stakes, &blob_sender);
@@ -1421,7 +1426,7 @@ impl ClusterInfo {
 
 /// Returns Neighbor Nodes and Children Nodes `(neighbors, children)` for a given node based on its stake (Bank Balance)
 pub fn compute_retransmit_peers<S: std::hash::BuildHasher>(
-    stakes: &HashMap<Pubkey, u64, S>,
+    stakes: Option<&HashMap<Pubkey, u64, S>>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     fanout: usize,
 ) -> (Vec<ContactInfo>, Vec<ContactInfo>) {

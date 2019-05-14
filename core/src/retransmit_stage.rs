@@ -39,7 +39,7 @@ fn retransmit(
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());
     let (neighbors, children) = compute_retransmit_peers(
-        &staking_utils::delegated_stakes_at_epoch(&r_bank, bank_epoch).unwrap(),
+        staking_utils::staked_nodes_at_epoch(&r_bank, bank_epoch).as_ref(),
         cluster_info,
         DATA_PLANE_FANOUT,
     );

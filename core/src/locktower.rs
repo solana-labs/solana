@@ -360,7 +360,7 @@ impl Locktower {
 
     fn initialize_lockouts_from_bank(bank: &Bank, current_epoch: u64) -> VoteState {
         let mut lockouts = VoteState::default();
-        if let Some(iter) = staking_utils::node_staked_accounts_at_epoch(&bank, current_epoch) {
+        if let Some(iter) = bank.epoch_vote_accounts(current_epoch) {
             for (delegate_id, (_, account)) in iter {
                 if *delegate_id == bank.collector_id() {
                     let state = VoteState::deserialize(&account.data).expect("votes");
