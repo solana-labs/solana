@@ -72,7 +72,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
     let blobs: Vec<(_, _)> = (0..100).into_par_iter().map(|i| (i as i32, true)).collect();
 
     // pretend to broadcast from leader - cluster_info::create_broadcast_orders
-    let mut broadcast_table = cluster_info.sorted_tvu_peers(&staked_nodes);
+    let mut broadcast_table = cluster_info.sorted_tvu_peers(Some(&staked_nodes));
     broadcast_table.truncate(fanout);
     let orders = ClusterInfo::create_broadcast_orders(false, &blobs, &broadcast_table);
 
@@ -106,7 +106,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
                 cluster.gossip.set_self(&*id);
                 if !mapped_peers.contains_key(id) {
                     let (neighbors, children) = compute_retransmit_peers(
-                        &staked_nodes,
+                        Some(&staked_nodes),
                         &Arc::new(RwLock::new(cluster.clone())),
                         fanout,
                     );

@@ -18,18 +18,15 @@ pub fn get_supermajority_slot(bank: &Bank, epoch_height: u64) -> Option<u64> {
 }
 
 pub fn vote_account_stakes(bank: &Bank) -> HashMap<Pubkey, u64> {
-    let node_staked_accounts = node_staked_accounts(bank);
-    node_staked_accounts
+    bank.vote_accounts()
+        .into_iter()
         .map(|(id, (stake, _))| (id, stake))
         .collect()
 }
 
-/// Collect the delegate account balance and vote states for delegates have non-zero balance in
-/// any of their managed staking accounts
-pub fn delegated_stakes(bank: &Bank) -> HashMap<Pubkey, u64> {
-    let node_staked_accounts = node_staked_accounts(bank);
-    let node_staked_vote_states = to_vote_state(node_staked_accounts);
-    to_delegated_stakes(node_staked_vote_states)
+/// Collect the staked nodes, as named by staked vote accounts from the given bank
+pub fn staked_nodes(bank: &Bank) -> HashMap<Pubkey, u64> {
+    to_staked_nodes(to_vote_states(bank.vote_accounts().into_iter()))
 }
 
 /// At the specified epoch, collect the node account balance and vote states for nodes that
@@ -38,43 +35,23 @@ pub fn vote_account_stakes_at_epoch(
     bank: &Bank,
     epoch_height: u64,
 ) -> Option<HashMap<Pubkey, u64>> {
-    let node_staked_accounts = node_staked_accounts_at_epoch(bank, epoch_height);
-    node_staked_accounts
-        .map(|epoch_state| epoch_state.map(|(id, (stake, _))| (*id, *stake)).collect())
+    bank.epoch_vote_accounts(epoch_height).map(|accounts| {
+        accounts
+            .iter()
+            .map(|(id, (stake, _))| (*id, *stake))
+            .collect()
+    })
 }
 
 /// At the specified epoch, collect the delegate account balance and vote states for delegates
 /// that have non-zero balance in any of their managed staking accounts
-pub fn delegated_stakes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashMap<Pubkey, u64>> {
-    let node_staked_accounts = node_staked_accounts_at_epoch(bank, epoch_height);
-    let node_staked_vote_states = node_staked_accounts.map(to_vote_state);
-    node_staked_vote_states.map(to_delegated_stakes)
+pub fn staked_nodes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashMap<Pubkey, u64>> {
+    bank.epoch_vote_accounts(epoch_height)
+        .map(|vote_accounts| to_staked_nodes(to_vote_states(vote_accounts.into_iter())))
 }
 
-/// Collect the node account balance and vote states for nodes have non-zero balance in
-/// their corresponding staking accounts
-fn node_staked_accounts(bank: &Bank) -> impl Iterator<Item = (Pubkey, (u64, Account))> {
-    bank.vote_accounts().into_iter()
-}
-
-pub fn node_staked_accounts_at_epoch(
-    bank: &Bank,
-    epoch_height: u64,
-) -> Option<impl Iterator<Item = (&Pubkey, &(u64, Account))>> {
-    bank.epoch_vote_accounts(epoch_height).map(|vote_accounts| {
-        vote_accounts
-            .into_iter()
-            .filter(|(account_id, (_, account))| filter_no_delegate(account_id, account))
-    })
-}
-
-fn filter_no_delegate(account_id: &Pubkey, account: &Account) -> bool {
-    VoteState::deserialize(&account.data)
-        .map(|vote_state| vote_state.node_id != *account_id)
-        .unwrap_or(false)
-}
-
-fn to_vote_state(
+// input (vote_id, (stake, vote_account)) => (stake, vote_state)
+fn to_vote_states(
     node_staked_accounts: impl Iterator<Item = (impl Borrow<Pubkey>, impl Borrow<(u64, Account)>)>,
 ) -> impl Iterator<Item = (u64, VoteState)> {
     node_staked_accounts.filter_map(|(_, stake_account)| {
@@ -84,13 +61,13 @@ fn to_vote_state(
     })
 }
 
-fn to_delegated_stakes(
+// (stake, vote_state) => (node, stake)
+fn to_staked_nodes(
     node_staked_accounts: impl Iterator<Item = (u64, VoteState)>,
 ) -> HashMap<Pubkey, u64> {
     let mut map: HashMap<Pubkey, u64> = HashMap::new();
     node_staked_accounts.for_each(|(stake, state)| {
-        let delegate = &state.node_id;
-        map.entry(*delegate)
+        map.entry(state.node_id)
             .and_modify(|s| *s += stake)
             .or_insert(stake);
     });
@@ -98,10 +75,12 @@ fn to_delegated_stakes(
 }
 
 fn epoch_stakes_and_lockouts(bank: &Bank, epoch_height: u64) -> Vec<(u64, Option<u64>)> {
-    let node_staked_accounts =
-        node_staked_accounts_at_epoch(bank, epoch_height).expect("Bank state for epoch is missing");
-    let node_staked_vote_states = to_vote_state(node_staked_accounts);
-    node_staked_vote_states
+    let node_staked_accounts = bank
+        .epoch_vote_accounts(epoch_height)
+        .expect("Bank state for epoch is missing")
+        .into_iter();
+
+    to_vote_states(node_staked_accounts)
         .map(|(stake, states)| (stake, states.root_slot))
         .collect()
 }
@@ -148,7 +127,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_bank_staked_nodes_at_epoch() {
+    fn test_vote_account_stakes_at_epoch() {
         let (genesis_block, _mint_keypair, voting_keypair) =
             create_genesis_block_with_leader(1, &Pubkey::new_rand(), BOOTSTRAP_LEADER_LAMPORTS);
 
@@ -263,22 +242,22 @@ pub mod tests {
     }
 
     #[test]
-    fn test_to_delegated_stakes() {
+    fn test_to_staked_nodes() {
         let mut stakes = Vec::new();
-        let delegate1 = Pubkey::new_rand();
-        let delegate2 = Pubkey::new_rand();
+        let node1 = Pubkey::new_rand();
+        let node2 = Pubkey::new_rand();
 
-        // Delegate 1 has stake of 3
+        // Node 1 has stake of 3
         for i in 0..3 {
-            stakes.push((i, VoteState::new(&Pubkey::new_rand(), &delegate1, 0)));
+            stakes.push((i, VoteState::new(&Pubkey::new_rand(), &node1, 0)));
         }
 
-        // Delegate 1 has stake of 5
-        stakes.push((5, VoteState::new(&Pubkey::new_rand(), &delegate2, 0)));
+        // Node 1 has stake of 5
+        stakes.push((5, VoteState::new(&Pubkey::new_rand(), &node2, 0)));
 
-        let result = to_delegated_stakes(stakes.into_iter());
+        let result = to_staked_nodes(stakes.into_iter());
         assert_eq!(result.len(), 2);
-        assert_eq!(result[&delegate1], 3);
-        assert_eq!(result[&delegate2], 5);
+        assert_eq!(result[&node1], 3);
+        assert_eq!(result[&node2], 5);
     }
 }

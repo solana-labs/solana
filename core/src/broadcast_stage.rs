@@ -72,9 +72,11 @@ impl Broadcast {
         }
 
         let bank_epoch = bank.get_stakers_epoch(bank.slot());
-        let mut broadcast_table = cluster_info.read().unwrap().sorted_tvu_peers(
-            &staking_utils::delegated_stakes_at_epoch(&bank, bank_epoch).unwrap(),
-        );
+        let mut broadcast_table = cluster_info
+            .read()
+            .unwrap()
+            .sorted_tvu_peers(staking_utils::staked_nodes_at_epoch(&bank, bank_epoch).as_ref());
+
         inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
         // Layer 1, leader nodes are limited to the fanout size.
         broadcast_table.truncate(DATA_PLANE_FANOUT);

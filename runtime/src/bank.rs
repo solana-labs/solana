@@ -34,7 +34,7 @@ use std::time::Instant;
 #[derive(Default, Clone)]
 pub struct Stakes {
     /// vote accounts
-    pub vote_accounts: HashMap<Pubkey, (u64, Account)>,
+    vote_accounts: HashMap<Pubkey, (u64, Account)>,
 
     /// stake_accounts
     stake_accounts: HashMap<Pubkey, Account>,
@@ -45,7 +45,7 @@ impl Stakes {
         solana_vote_api::check_id(&account.owner) || solana_stake_api::check_id(&account.owner)
     }
 
-    pub fn update(&mut self, pubkey: &Pubkey, account: &Account) {
+    pub fn store(&mut self, pubkey: &Pubkey, account: &Account) {
         if solana_vote_api::check_id(&account.owner) {
             if account.lamports != 0 {
                 self.vote_accounts
@@ -805,7 +805,7 @@ impl Bank {
         self.accounts.store_slow(self.slot(), pubkey, account);
 
         if Stakes::is_stake(account) {
-            self.stakes.write().unwrap().update(pubkey, account);
+            self.stakes.write().unwrap().store(pubkey, account);
         }
     }
 
@@ -937,17 +937,19 @@ impl Bank {
                 .zip(acc.0.iter())
                 .filter(|(_, account)| Stakes::is_stake(account))
             {
-                self.stakes.write().unwrap().update(pubkey, account);
+                self.stakes.write().unwrap().store(pubkey, account);
             }
         }
     }
 
-    /// current vote accounts for this bank
+    /// current vote accounts for this bank along with the stake
+    ///   attributed to each account
     pub fn vote_accounts(&self) -> HashMap<Pubkey, (u64, Account)> {
         self.stakes.read().unwrap().vote_accounts.clone()
     }
 
-    /// vote accounts for the specific epoch
+    /// vote accounts for the specific epoch along with the stake
+    ///   attributed to each account
     pub fn epoch_vote_accounts(&self, epoch: u64) -> Option<&HashMap<Pubkey, (u64, Account)>> {
         self.epoch_stakes
             .get(&epoch)

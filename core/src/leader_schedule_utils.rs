@@ -6,7 +6,7 @@ use solana_sdk::timing::NUM_CONSECUTIVE_LEADER_SLOTS;
 
 /// Return the leader schedule for the given epoch.
 pub fn leader_schedule(epoch_height: u64, bank: &Bank) -> Option<LeaderSchedule> {
-    staking_utils::delegated_stakes_at_epoch(bank, epoch_height).map(|stakes| {
+    staking_utils::staked_nodes_at_epoch(bank, epoch_height).map(|stakes| {
         let mut seed = [0u8; 32];
         seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
         let mut stakes: Vec<_> = stakes.into_iter().collect();
@@ -68,7 +68,7 @@ mod tests {
             create_genesis_block_with_leader(0, &pubkey, BOOTSTRAP_LEADER_LAMPORTS).0;
         let bank = Bank::new(&genesis_block);
 
-        let ids_and_stakes: Vec<_> = staking_utils::delegated_stakes(&bank).into_iter().collect();
+        let ids_and_stakes: Vec<_> = staking_utils::staked_nodes(&bank).into_iter().collect();
         let seed = [0u8; 32];
         let leader_schedule = LeaderSchedule::new(
             &ids_and_stakes,
