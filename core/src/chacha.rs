@@ -50,7 +50,7 @@ pub fn chacha_cbc_encrypt_ledger(
     let mut entry = slice;
 
     loop {
-        match blocktree.read_blobs_bytes(entry, SLOTS_PER_SEGMENT - total_entries, &mut buffer, 0) {
+        match blocktree.read_blobs_bytes(0, SLOTS_PER_SEGMENT - total_entries, &mut buffer, entry) {
             Ok((num_entries, entry_len)) => {
                 debug!(
                     "chacha: encrypting slice: {} num_entries: {} entry_len: {}",
