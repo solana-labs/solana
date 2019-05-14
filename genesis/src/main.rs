@@ -3,6 +3,16 @@
 extern crate solana_vote_program;
 #[macro_use]
 extern crate solana_stake_program;
+#[macro_use]
+extern crate solana_budget_program;
+#[macro_use]
+extern crate solana_storage_program;
+#[macro_use]
+extern crate solana_token_program;
+#[macro_use]
+extern crate solana_config_program;
+#[macro_use]
+extern crate solana_exchange_program;
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana::blocktree::create_new_ledger;
@@ -150,17 +160,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         &[
             solana_vote_program!(),
             solana_stake_program!(),
-            ("solana_budget_program".to_string(), solana_budget_api::id()),
-            (
-                "solana_storage_program".to_string(),
-                solana_storage_api::id(),
-            ),
-            ("solana_token_program".to_string(), solana_token_api::id()),
-            ("solana_config_program".to_string(), solana_config_api::id()),
-            (
-                "solana_exchange_program".to_string(),
-                solana_exchange_api::id(),
-            ),
+            solana_budget_program!(),
+            solana_storage_program!(),
+            solana_token_program!(),
+            solana_config_program!(),
+            solana_exchange_program!(),
         ],
     );
     genesis_block.fee_calculator.lamports_per_signature =

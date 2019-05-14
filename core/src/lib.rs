@@ -70,6 +70,9 @@ pub mod tvu;
 pub mod voting_keypair;
 pub mod window_service;
 
+#[macro_use]
+extern crate solana_budget_program;
+
 #[cfg(test)]
 #[cfg(any(feature = "chacha", feature = "cuda"))]
 #[macro_use]

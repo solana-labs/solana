@@ -409,7 +409,7 @@ pub fn new_fullnode_for_tests() -> (Fullnode, ContactInfo, Keypair, String) {
         create_genesis_block_with_leader(10_000, &contact_info.id, 42);
     genesis_block
         .native_instruction_processors
-        .push(("solana_budget_program".to_string(), solana_budget_api::id()));
+        .push(solana_budget_program!());
 
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 

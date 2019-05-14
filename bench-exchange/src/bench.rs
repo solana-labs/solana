@@ -930,7 +930,7 @@ mod tests {
             node_stakes: vec![100_000; NUM_NODES],
             cluster_lamports: 100_000_000_000_000,
             fullnode_config,
-            native_instruction_processors: [("solana_exchange_program".to_string(), id())].to_vec(),
+            native_instruction_processors: [solana_exchange_program!()].to_vec(),
             ..ClusterConfig::default()
         });
 
