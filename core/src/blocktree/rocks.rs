@@ -6,8 +6,8 @@ use crate::result::{Error, Result};
 use byteorder::{BigEndian, ByteOrder};
 
 use rocksdb::{
-    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, IteratorMode, Options,
-    WriteBatch as RWriteBatch, DB,
+    self, ColumnFamily, ColumnFamilyDescriptor, DBIterator, DBRawIterator, Direction, IteratorMode,
+    Options, WriteBatch as RWriteBatch, DB,
 };
 
 use std::fs;
@@ -101,10 +101,17 @@ impl Backend for Rocks {
         Ok(())
     }
 
-    fn iterator_cf(&self, cf: ColumnFamily) -> Result<DBIterator> {
-        let raw_iter = self.0.iterator_cf(cf, IteratorMode::Start)?;
+    fn iterator_cf(&self, cf: ColumnFamily, start_from: Option<&[u8]>) -> Result<DBIterator> {
+        let iter = {
+            if let Some(start_from) = start_from {
+                self.0
+                    .iterator_cf(cf, IteratorMode::From(start_from, Direction::Forward))?
+            } else {
+                self.0.iterator_cf(cf, IteratorMode::Start)?
+            }
+        };
 
-        Ok(raw_iter)
+        Ok(iter)
     }
 
     fn raw_iterator_cf(&self, cf: ColumnFamily) -> Result<DBRawIterator> {
