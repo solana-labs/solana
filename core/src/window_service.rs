@@ -1,11 +1,9 @@
 //! `window_service` handles the data plane incoming blobs, storing them in
 //!   blocktree and retransmitting where required
 //!
-use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
 use crate::leader_schedule_cache::LeaderScheduleCache;
-use crate::leader_schedule_utils::slot_leader_at;
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
@@ -77,19 +75,16 @@ fn process_blobs(blobs: &[SharedBlob], blocktree: &Arc<Blocktree>) -> Result<()>
 }
 
 /// drop blobs that are from myself or not from the correct leader for the
-///  blob's slot
-fn should_retransmit_and_persist(
+/// blob's slot
+pub fn should_retransmit_and_persist(
     blob: &Blob,
-    bank: Option<&Arc<Bank>>,
-    leader_schedule_cache: Option<&Arc<LeaderScheduleCache>>,
+    bank: Option<Arc<Bank>>,
+    leader_schedule_cache: &Arc<LeaderScheduleCache>,
     my_id: &Pubkey,
 ) -> bool {
     let slot_leader_id = match bank {
-        None => leader_schedule_cache.and_then(|cache| cache.slot_leader_at(blob.slot(), None)),
-        Some(bank) => match leader_schedule_cache {
-            None => slot_leader_at(blob.slot(), &bank),
-            Some(cache) => cache.slot_leader_at(blob.slot(), Some(bank)),
-        },
+        None => leader_schedule_cache.slot_leader_at(blob.slot(), None),
+        Some(bank) => leader_schedule_cache.slot_leader_at(blob.slot(), Some(&bank)),
     };
 
     if blob.id() == *my_id {
@@ -106,15 +101,17 @@ fn should_retransmit_and_persist(
     }
 }
 
-fn recv_window(
-    bank_forks: Option<&Arc<RwLock<BankForks>>>,
-    leader_schedule_cache: Option<&Arc<LeaderScheduleCache>>,
+fn recv_window<F>(
     blocktree: &Arc<Blocktree>,
     my_id: &Pubkey,
     r: &BlobReceiver,
     retransmit: &BlobSender,
     genesis_blockhash: &Hash,
-) -> Result<()> {
+    blob_filter: F,
+) -> Result<()>
+where
+    F: Fn(&Blob) -> bool,
+{
     let timer = Duration::from_millis(200);
     let mut blobs = r.recv_timeout(timer)?;
 
@@ -125,14 +122,8 @@ fn recv_window(
     inc_new_counter_info!("streamer-recv_window-recv", blobs.len(), 0, 1000);
 
     blobs.retain(|blob| {
-        should_retransmit_and_persist(
-            &blob.read().unwrap(),
-            bank_forks
-                .map(|bank_forks| bank_forks.read().unwrap().working_bank())
-                .as_ref(),
-            leader_schedule_cache,
-            my_id,
-        ) && blob.read().unwrap().genesis_blockhash() == *genesis_blockhash
+        blob_filter(&blob.read().unwrap())
+            && blob.read().unwrap().genesis_blockhash() == *genesis_blockhash
     });
 
     retransmit_blobs(&blobs, retransmit, my_id)?;
@@ -174,8 +165,7 @@ pub struct WindowService {
 
 impl WindowService {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        leader_schedule_cache: Option<Arc<LeaderScheduleCache>>,
+    pub fn new<F>(
         blocktree: Arc<Blocktree>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         r: BlobReceiver,
@@ -184,7 +174,14 @@ impl WindowService {
         exit: &Arc<AtomicBool>,
         repair_strategy: RepairStrategy,
         genesis_blockhash: &Hash,
-    ) -> WindowService {
+        blob_filter: F,
+    ) -> WindowService
+    where
+        F: 'static
+            + Fn(&Pubkey, &Blob, Option<Arc<Bank>>) -> bool
+            + std::marker::Send
+            + std::marker::Sync,
+    {
         let bank_forks = match repair_strategy {
             RepairStrategy::RepairRange(_) => None,
 
@@ -199,8 +196,9 @@ impl WindowService {
             repair_strategy,
         );
         let exit = exit.clone();
-        let leader_schedule_cache = leader_schedule_cache.clone();
         let hash = *genesis_blockhash;
+        let blob_filter = Arc::new(blob_filter);
+        let bank_forks = bank_forks.clone();
         let t_window = Builder::new()
             .name("solana-window".to_string())
             .spawn(move || {
@@ -212,15 +210,15 @@ impl WindowService {
                         break;
                     }
 
-                    if let Err(e) = recv_window(
-                        bank_forks.as_ref(),
-                        leader_schedule_cache.as_ref(),
-                        &blocktree,
-                        &id,
-                        &r,
-                        &retransmit,
-                        &hash,
-                    ) {
+                    if let Err(e) = recv_window(&blocktree, &id, &r, &retransmit, &hash, |blob| {
+                        blob_filter(
+                            &id,
+                            blob,
+                            bank_forks
+                                .as_ref()
+                                .map(|bank_forks| bank_forks.read().unwrap().working_bank()),
+                        )
+                    }) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                             Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -307,20 +305,20 @@ mod test {
 
         // without a Bank and blobs not from me, blob continues
         assert_eq!(
-            should_retransmit_and_persist(&blob, None, None, &me_id),
+            should_retransmit_and_persist(&blob, None, &cache, &me_id),
             true
         );
 
         // with a Bank for slot 0, blob continues
         assert_eq!(
-            should_retransmit_and_persist(&blob, Some(&bank), Some(&cache), &me_id),
+            should_retransmit_and_persist(&blob, Some(bank.clone()), &cache, &me_id),
             true
         );
 
         // set the blob to have come from the wrong leader
         blob.set_id(&Pubkey::new_rand());
         assert_eq!(
-            should_retransmit_and_persist(&blob, Some(&bank), Some(&cache), &me_id),
+            should_retransmit_and_persist(&blob, Some(bank.clone()), &cache, &me_id),
             false
         );
 
@@ -328,14 +326,14 @@ mod test {
         // TODO: persist in blocktree that we didn't know who the leader was at the time?
         blob.set_slot(MINIMUM_SLOT_LENGTH as u64 * 3);
         assert_eq!(
-            should_retransmit_and_persist(&blob, Some(&bank), Some(&cache), &me_id),
+            should_retransmit_and_persist(&blob, Some(bank), &cache, &me_id),
             true
         );
 
         // if the blob came back from me, it doesn't continue, whether or not I have a bank
         blob.set_id(&me_id);
         assert_eq!(
-            should_retransmit_and_persist(&blob, None, None, &me_id),
+            should_retransmit_and_persist(&blob, None, &cache, &me_id),
             false
         );
     }
@@ -361,7 +359,6 @@ mod test {
         let blocktree = Arc::new(blocktree);
 
         let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
-        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let repair_strategy = RepairStrategy::RepairAll {
             bank_forks: bank_forks.clone(),
@@ -374,7 +371,6 @@ mod test {
                 .clone(),
         };
         let t_window = WindowService::new(
-            Some(leader_schedule_cache),
             blocktree,
             subs,
             r_reader,
@@ -383,6 +379,7 @@ mod test {
             &exit,
             repair_strategy,
             &Hash::default(),
+            |_, _, _| true,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -449,7 +446,6 @@ mod test {
 
         let blocktree = Arc::new(blocktree);
         let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
-        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let epoch_schedule = *bank_forks.read().unwrap().working_bank().epoch_schedule();
         let repair_strategy = RepairStrategy::RepairAll {
@@ -458,7 +454,6 @@ mod test {
             epoch_schedule,
         };
         let t_window = WindowService::new(
-            Some(leader_schedule_cache),
             blocktree,
             subs.clone(),
             r_reader,
@@ -467,6 +462,7 @@ mod test {
             &exit,
             repair_strategy,
             &Hash::default(),
+            |_, _, _| true,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();

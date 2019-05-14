@@ -2,8 +2,9 @@ use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blocktree::Blocktree;
 #[cfg(feature = "chacha")]
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
-use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
+use crate::cluster_info::{ClusterInfo, Node};
 use crate::contact_info::ContactInfo;
+use crate::fullnode::new_banks_from_blocktree;
 use crate::gossip_service::GossipService;
 use crate::packet::to_shared_blob;
 use crate::repair_service::{RepairSlotRange, RepairStrategy};
@@ -18,7 +19,7 @@ use rand::thread_rng;
 use rand::Rng;
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
-use solana_client::thin_client::{create_client, ThinClient};
+use solana_client::thin_client::ThinClient;
 use solana_ed25519_dalek as ed25519_dalek;
 use solana_sdk::client::{AsyncClient, SyncClient};
 use solana_sdk::hash::{Hash, Hasher};
@@ -64,7 +65,7 @@ pub struct Replicator {
     keypair: Arc<Keypair>,
     storage_keypair: Arc<Keypair>,
     signature: ed25519_dalek::Signature,
-    cluster_entrypoint: ContactInfo,
+    client: ThinClient,
     ledger_data_file_encrypted: PathBuf,
     sampling_offsets: Vec<u64>,
     hash: Hash,
@@ -188,15 +189,15 @@ impl Replicator {
         cluster_info.set_entrypoint(cluster_entrypoint.clone());
         let cluster_info = Arc::new(RwLock::new(cluster_info));
 
-        // Create Blocktree, eventually will simply repurpose the input
-        // ledger path as the Blocktree path once we replace the ledger with
-        // Blocktree. Note for now, this ledger will not contain any of the existing entries
+        // Note for now, this ledger will not contain any of the existing entries
         // in the ledger located at ledger_path, and will only append on newly received
         // entries after being passed to window_service
-        let blocktree =
-            Blocktree::open(ledger_path).expect("Expected to be able to open database ledger");
-
+        let (bank_forks, bank_forks_info, blocktree, _, _, _) =
+            new_banks_from_blocktree(ledger_path, None);
         let blocktree = Arc::new(blocktree);
+        let bank_info = &bank_forks_info[0];
+        let bank = bank_forks[bank_info.bank_slot].clone();
+        let genesis_blockhash = bank.last_blockhash();
 
         let gossip_service = GossipService::new(
             &cluster_info,
@@ -231,7 +232,6 @@ impl Replicator {
         let (retransmit_sender, retransmit_receiver) = channel();
 
         let window_service = WindowService::new(
-            None, //TODO: need a way to validate blobs... https://github.com/solana-labs/solana/issues/3924
             blocktree.clone(),
             cluster_info.clone(),
             blob_fetch_receiver,
@@ -239,7 +239,8 @@ impl Replicator {
             repair_socket,
             &exit,
             RepairStrategy::RepairRange(repair_slot_range),
-            &Hash::default(),
+            &genesis_blockhash,
+            |_, _, _| true,
         );
 
         Self::setup_mining_account(&client, &keypair, &storage_keypair)?;
@@ -261,11 +262,8 @@ impl Replicator {
         let t_replicate = {
             let exit = exit.clone();
             let blocktree = blocktree.clone();
-            spawn(move || loop {
-                Self::wait_for_ledger_download(slot, &blocktree, &exit, &node_info, &cluster_info);
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
+            spawn(move || {
+                Self::wait_for_ledger_download(slot, &blocktree, &exit, &node_info, &cluster_info)
             })
         };
         //always push this last
@@ -282,7 +280,7 @@ impl Replicator {
             keypair,
             storage_keypair,
             signature,
-            cluster_entrypoint,
+            client,
             ledger_data_file_encrypted: PathBuf::default(),
             sampling_offsets: vec![],
             hash: Hash::default(),
@@ -305,6 +303,8 @@ impl Replicator {
                 break;
             }
             self.submit_mining_proof();
+            // TODO: Replicators should be submitting proofs as fast as possible
+            sleep(Duration::from_secs(2));
         }
     }
 
@@ -315,16 +315,17 @@ impl Replicator {
         node_info: &ContactInfo,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) {
-        info!("window created, waiting for ledger download");
-        let mut _received_so_far = 0;
-
+        info!(
+            "window created, waiting for ledger download starting at slot {:?}",
+            start_slot
+        );
         let mut current_slot = start_slot;
         'outer: loop {
             while let Ok(meta) = blocktree.meta(current_slot) {
                 if let Some(meta) = meta {
-                    if meta.is_connected {
+                    if meta.is_full() {
                         current_slot += 1;
-                        warn!("current slot: {}", current_slot);
+                        info!("current slot: {}", current_slot);
                         if current_slot >= start_slot + SLOTS_PER_SEGMENT {
                             break 'outer;
                         }
@@ -444,20 +445,25 @@ impl Replicator {
     }
 
     fn submit_mining_proof(&self) {
-        let client = create_client(
-            self.cluster_entrypoint.client_facing_addr(),
-            FULLNODE_PORT_RANGE,
-        );
         // No point if we've got no storage account...
         assert!(
-            client
+            self.client
                 .poll_get_balance(&self.storage_keypair.pubkey())
                 .unwrap()
                 > 0
         );
         // ...or no lamports for fees
-        assert!(client.poll_get_balance(&self.keypair.pubkey()).unwrap() > 0);
+        assert!(
+            self.client
+                .poll_get_balance(&self.keypair.pubkey())
+                .unwrap()
+                > 0
+        );
 
+        let blockhash = self
+            .client
+            .get_recent_blockhash()
+            .expect("No recent blockhash");
         let instruction = storage_instruction::mining_proof(
             &self.storage_keypair.pubkey(),
             self.hash,
@@ -465,8 +471,12 @@ impl Replicator {
             Signature::new(&self.signature.to_bytes()),
         );
         let message = Message::new_with_payer(vec![instruction], Some(&self.keypair.pubkey()));
-        let mut transaction = Transaction::new_unsigned(message);
-        client
+        let mut transaction = Transaction::new(
+            &[self.keypair.as_ref(), self.storage_keypair.as_ref()],
+            message,
+            blockhash,
+        );
+        self.client
             .send_and_confirm_transaction(
                 &[&self.keypair, &self.storage_keypair],
                 &mut transaction,
