@@ -2,37 +2,11 @@
 //! "ticks", a measure of time in the PoH stream
 use crate::poh_recorder::PohRecorder;
 use crate::service::Service;
-use solana_sdk::timing::{self, NUM_TICKS_PER_SECOND};
+use solana_sdk::poh_config::PohConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
-use std::time::Duration;
-
-#[derive(Clone, Debug)]
-pub enum PohServiceConfig {
-    /// * `Tick` - Run full PoH thread.  Tick is a rough estimate of how many hashes to roll before
-    ///            transmitting a new entry.
-    Tick(u64),
-    /// * `Sleep`- Low power mode.  Sleep is a rough estimate of how long to sleep before rolling 1
-    ///            PoH once and producing 1 tick.
-    Sleep(Duration),
-}
-
-impl Default for PohServiceConfig {
-    fn default() -> PohServiceConfig {
-        // TODO: Change this to Tick to enable PoH
-        PohServiceConfig::Sleep(Duration::from_millis(1000 / NUM_TICKS_PER_SECOND))
-    }
-}
-
-impl PohServiceConfig {
-    pub fn ticks_to_ms(&self, num_ticks: u64) -> u64 {
-        match self {
-            PohServiceConfig::Sleep(d) => timing::duration_as_ms(d) * num_ticks,
-            _ => panic!("Unsupported tick config"),
-        }
-    }
-}
+use std::time::Instant;
 
 pub struct PohService {
     tick_producer: JoinHandle<()>,
@@ -41,7 +15,7 @@ pub struct PohService {
 impl PohService {
     pub fn new(
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        config: &PohServiceConfig,
+        config: &PohConfig,
         poh_exit: &Arc<AtomicBool>,
     ) -> Self {
         // PohService is a headless producer, so when it exits it should notify the banking stage.
@@ -64,26 +38,36 @@ impl PohService {
 
     fn tick_producer(
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        config: &PohServiceConfig,
+        config: &PohConfig,
         poh_exit: &AtomicBool,
     ) {
-        loop {
-            match config {
-                PohServiceConfig::Tick(num) => {
-                    for _ in 1..*num {
-                        // TODO: amortize the cost of this lock by doing the loop in here for
-                        // some min amount of hashes
-                        poh_recorder.lock().unwrap().hash(1);
-                    }
+        while !poh_exit.load(Ordering::Relaxed) {
+            let tick_start = Instant::now();
+
+            if config.hashes_per_tick == 0 {
+                let hashing_duration = Instant::now().duration_since(tick_start);
+                if hashing_duration < config.target_tick_duration {
+                    sleep(config.target_tick_duration - hashing_duration);
                 }
-                PohServiceConfig::Sleep(duration) => {
-                    sleep(*duration);
+            } else {
+                for _ in 1..config.hashes_per_tick {
+                    // TODO: amortize the cost of this lock by doing the loop in here for
+                    // some min amount of hashes
+                    // TODO: account for any extra hashes added by `poh_recorder.record()
+                    poh_recorder.lock().unwrap().hash(1);
                 }
             }
+
             poh_recorder.lock().unwrap().tick();
-            if poh_exit.load(Ordering::Relaxed) {
-                return;
-            }
+
+            let tick_duration = Instant::now().duration_since(tick_start);
+            // TODO: add datapoint!() for tick info
+            info!(
+                "tick: {} hashes in {}ms (drift {}ms)",
+                config.hashes_per_tick + 1,
+                tick_duration.as_millis(),
+                config.target_tick_duration.as_millis() as i64 - tick_duration.as_millis() as i64
+            );
         }
     }
 }
@@ -108,6 +92,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::hash;
     use solana_sdk::pubkey::Pubkey;
+    use std::time::Duration;
 
     #[test]
     fn test_poh_service() {
@@ -161,12 +146,11 @@ mod tests {
                     .unwrap()
             };
 
-            const HASHES_PER_TICK: u64 = 2;
-            let poh_service = PohService::new(
-                poh_recorder.clone(),
-                &PohServiceConfig::Tick(HASHES_PER_TICK),
-                &exit,
-            );
+            let config = PohConfig {
+                hashes_per_tick: 2,
+                target_tick_duration: Duration::from_millis(1),
+            };
+            let poh_service = PohService::new(poh_recorder.clone(), &config, &exit);
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
             // get some events
@@ -179,9 +163,12 @@ mod tests {
                 for entry in entry_receiver.recv().unwrap().1 {
                     let entry = &entry.0;
                     if entry.is_tick() {
-                        assert!(entry.num_hashes <= HASHES_PER_TICK);
+                        assert!(
+                            entry.num_hashes <= config.hashes_per_tick,
+                            format!("{} <= {}", entry.num_hashes, config.hashes_per_tick)
+                        );
 
-                        if entry.num_hashes == HASHES_PER_TICK {
+                        if entry.num_hashes == config.hashes_per_tick {
                             need_tick = false;
                         } else {
                             need_partial = false;
@@ -189,7 +176,7 @@ mod tests {
 
                         hashes += entry.num_hashes;
 
-                        assert_eq!(hashes, HASHES_PER_TICK);
+                        assert_eq!(hashes, config.hashes_per_tick);
 
                         hashes = 0;
                     } else {

@@ -5,8 +5,8 @@ use solana::cluster_tests;
 use solana::fullnode::FullnodeConfig;
 use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
-use solana::poh_service::PohServiceConfig;
 use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
+use solana_sdk::poh_config::PohConfig;
 use solana_sdk::timing;
 use std::time::Duration;
 
@@ -105,9 +105,7 @@ fn test_leader_failure_4() {
         &local.entry_point_info,
         &local.funding_keypair,
         num_nodes,
-        fullnode_config
-            .tick_config
-            .ticks_to_ms(config.ticks_per_slot as u64),
+        config.ticks_per_slot * config.poh_config.target_tick_duration.as_millis() as u64,
     );
 }
 #[test]
@@ -115,10 +113,9 @@ fn test_two_unbalanced_stakes() {
     solana_logger::setup();
     let mut fullnode_config = FullnodeConfig::default();
     let num_ticks_per_second = 100;
-    let num_ticks_per_slot = 40;
+    let num_ticks_per_slot = 10;
     let num_slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
-    fullnode_config.tick_config =
-        PohServiceConfig::Sleep(Duration::from_millis(1000 / num_ticks_per_second));
+
     fullnode_config.rpc_config.enable_fullnode_exit = true;
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![999_990, 3],
@@ -126,12 +123,13 @@ fn test_two_unbalanced_stakes() {
         fullnode_config: fullnode_config.clone(),
         ticks_per_slot: num_ticks_per_slot,
         slots_per_epoch: num_slots_per_epoch,
+        poh_config: PohConfig::new_sleep(Duration::from_millis(1000 / num_ticks_per_second)),
         ..ClusterConfig::default()
     });
 
     cluster_tests::sleep_n_epochs(
         10.0,
-        &fullnode_config.tick_config,
+        &cluster.genesis_block.poh_config,
         num_ticks_per_slot,
         num_slots_per_epoch,
     );
@@ -180,14 +178,14 @@ fn test_restart_node() {
     let nodes = cluster.get_node_ids();
     cluster_tests::sleep_n_epochs(
         1.0,
-        &fullnode_config.tick_config,
+        &cluster.genesis_block.poh_config,
         timing::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );
     cluster.restart_node(nodes[0]);
     cluster_tests::sleep_n_epochs(
         0.5,
-        &fullnode_config.tick_config,
+        &cluster.genesis_block.poh_config,
         timing::DEFAULT_TICKS_PER_SLOT,
         slots_per_epoch,
     );

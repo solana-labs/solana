@@ -8,21 +8,22 @@ use crate::contact_info::ContactInfo;
 use crate::entry::{Entry, EntrySlice};
 use crate::gossip_service::discover_cluster;
 use crate::locktower::VOTE_THRESHOLD_DEPTH;
-use crate::poh_service::PohServiceConfig;
 use solana_client::thin_client::create_client;
 use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
 use solana_sdk::client::SyncClient;
 use solana_sdk::hash::Hash;
+use solana_sdk::poh_config::PohConfig;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{
-    duration_as_ms, DEFAULT_TICKS_PER_SLOT, NUM_CONSECUTIVE_LEADER_SLOTS, NUM_TICKS_PER_SECOND,
+    duration_as_ms, DEFAULT_NUM_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT,
+    NUM_CONSECUTIVE_LEADER_SLOTS,
 };
 use solana_sdk::transport::TransportError;
 use std::thread::sleep;
 use std::time::Duration;
 
-const SLOT_MILLIS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / NUM_TICKS_PER_SECOND;
+const DEFAULT_SLOT_MILLIS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_NUM_TICKS_PER_SECOND;
 
 /// Spend and verify from every node in the network
 pub fn spend_and_verify_all_nodes(
@@ -87,7 +88,7 @@ pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {
         let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
         assert!(client.fullnode_exit().unwrap());
     }
-    sleep(Duration::from_millis(SLOT_MILLIS));
+    sleep(Duration::from_millis(DEFAULT_SLOT_MILLIS));
     for node in &cluster_nodes {
         let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
         assert!(client.fullnode_exit().is_err());
@@ -129,21 +130,15 @@ pub fn verify_ledger_ticks(ledger_path: &str, ticks_per_slot: usize) {
 
 pub fn sleep_n_epochs(
     num_epochs: f64,
-    config: &PohServiceConfig,
+    config: &PohConfig,
     ticks_per_slot: u64,
     slots_per_epoch: u64,
 ) {
-    let num_ticks_per_second = {
-        match config {
-            PohServiceConfig::Sleep(d) => (1000 / duration_as_ms(d)) as f64,
-            _ => panic!("Unsuppported tick config for testing"),
-        }
-    };
-
+    let num_ticks_per_second = (1000 / duration_as_ms(&config.target_tick_duration)) as f64;
     let num_ticks_to_sleep = num_epochs * ticks_per_slot as f64 * slots_per_epoch as f64;
-    sleep(Duration::from_secs(
-        ((num_ticks_to_sleep + num_ticks_per_second - 1.0) / num_ticks_per_second) as u64,
-    ));
+    let secs = ((num_ticks_to_sleep + num_ticks_per_second - 1.0) / num_ticks_per_second) as u64;
+    warn!("sleep_n_epochs: {} seconds", secs);
+    sleep(Duration::from_secs(secs));
 }
 
 pub fn kill_entry_and_spend_and_verify_rest(

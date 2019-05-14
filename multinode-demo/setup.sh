@@ -21,6 +21,7 @@ default_arg --bootstrap-stake-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-stak
 default_arg --ledger "$SOLANA_RSYNC_CONFIG_DIR"/ledger
 default_arg --mint "$SOLANA_CONFIG_DIR"/mint-keypair.json
 default_arg --lamports 100000000000000
+default_arg --hashes-per-tick sleep
 
 $solana_genesis "${args[@]}"
 
