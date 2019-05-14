@@ -5,10 +5,10 @@
 //! within the specified WorkingBank range.
 //!
 //! For Ticks:
-//! * tick must be > WorkingBank::min_tick_height && tick must be <= WorkingBank::man_tick_height
+//! * tick must be > WorkingBank::min_tick_height && tick must be <= WorkingBank::max_tick_height
 //!
 //! For Entries:
-//! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::man_tick_height
+//! * recorded entry must be >= WorkingBank::min_tick_height && entry must be < WorkingBank::max_tick_height
 //!
 use crate::blocktree::Blocktree;
 use crate::entry::Entry;
