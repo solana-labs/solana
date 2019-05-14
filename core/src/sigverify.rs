@@ -18,6 +18,8 @@ type TxOffsets = (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<Vec<u32>>);
 
 // The serialized size of Message::num_required_signatures.
 const NUM_REQUIRED_SIGNATURES_SIZE: usize = 1;
+// The serialized size of Message::num_credit_only_accounts.
+const NUM_CREDIT_ONLY_ACCOUNTS_SIZE: usize = 2;
 
 #[cfg(feature = "cuda")]
 #[repr(C)]
@@ -116,7 +118,8 @@ pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u3
 
     let sig_start = current_offset as usize + sig_size;
     let msg_start = current_offset as usize + msg_start_offset;
-    let pubkey_start = msg_start + NUM_REQUIRED_SIGNATURES_SIZE + pubkey_size;
+    let pubkey_start =
+        msg_start + NUM_REQUIRED_SIGNATURES_SIZE + NUM_CREDIT_ONLY_ACCOUNTS_SIZE + pubkey_size;
 
     (
         sig_len as u32,
@@ -389,19 +392,19 @@ mod tests {
 
     #[test]
     fn test_get_packet_offsets() {
-        assert_eq!(get_packet_offsets_from_tx(test_tx(), 0), (1, 1, 64, 2));
-        assert_eq!(get_packet_offsets_from_tx(test_tx(), 100), (1, 1, 64, 2));
+        assert_eq!(get_packet_offsets_from_tx(test_tx(), 0), (1, 1, 64, 4));
+        assert_eq!(get_packet_offsets_from_tx(test_tx(), 100), (1, 1, 64, 4));
 
         // Ensure we're not indexing packet by the `current_offset` parameter.
         assert_eq!(
             get_packet_offsets_from_tx(test_tx(), 1_000_000),
-            (1, 1, 64, 2)
+            (1, 1, 64, 4)
         );
 
         // Ensure we're returning sig_len, not sig_size.
         assert_eq!(
             get_packet_offsets_from_tx(test_multisig_tx(), 0),
-            (2, 1, 128, 2)
+            (2, 1, 128, 4)
         );
     }
 

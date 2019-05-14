@@ -219,7 +219,7 @@ impl Transaction {
     pub fn verify_refs(&self) -> bool {
         let message = self.message();
         for instruction in &message.instructions {
-            if (instruction.program_ids_index as usize) >= message.program_ids().len() {
+            if (instruction.program_ids_index as usize) >= message.account_keys.len() {
                 return false;
             }
             for account_index in &instruction.accounts {

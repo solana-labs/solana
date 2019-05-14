@@ -136,6 +136,10 @@ impl Message {
     pub fn program_ids(&self) -> &[Pubkey] {
         &self.account_keys[self.account_keys.len() - self.num_credit_only_accounts[1] as usize..]
     }
+
+    pub fn program_index_in_program_ids(&self, index: u8) -> u8 {
+        index - (self.account_keys.len() as u8 - self.num_credit_only_accounts[1])
+    }
 }
 
 #[cfg(test)]

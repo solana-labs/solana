@@ -382,7 +382,10 @@ mod tests {
         let message = tx.message();
 
         assert_eq!(tx.signatures.len(), 1);
-        assert_eq!(message.account_keys, vec![mint_pubkey, to]);
+        assert_eq!(
+            message.account_keys,
+            vec![mint_pubkey, to, Pubkey::default()]
+        );
         assert_eq!(message.recent_blockhash, blockhash);
 
         assert_eq!(message.instructions.len(), 1);
