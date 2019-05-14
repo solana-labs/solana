@@ -531,41 +531,40 @@ impl Blocktree {
 
         writebatch.put_bytes::<cf::Coding>((slot, index), bytes)?;
 
-        if let Some((data, coding)) = try_erasure_recover(
-            &self.db,
-            &self.session,
-            &erasure_meta,
-            slot,
-            &HashMap::new(),
-            Some((index, bytes)),
-        )? {
-            let mut erasure_meta_working_set = HashMap::new();
-            erasure_meta_working_set.insert((slot, set_index), erasure_meta);
-
-            insert_data_blob_batch(
-                &data[..],
+        let recovered_data = {
+            if let Some((data, coding)) = try_erasure_recover(
                 &self.db,
-                &mut HashMap::new(),
-                &mut erasure_meta_working_set,
-                &mut HashMap::new(),
-                &mut writebatch,
-            )?;
+                &self.session,
+                &erasure_meta,
+                slot,
+                &HashMap::new(),
+                Some((index, bytes)),
+            )? {
+                let mut erasure_meta_working_set = HashMap::new();
+                erasure_meta_working_set.insert((slot, set_index), erasure_meta);
+                erasure_meta = *erasure_meta_working_set.values().next().unwrap();
 
-            erasure_meta = *erasure_meta_working_set.values().next().unwrap();
+                for coding_blob in coding {
+                    erasure_meta.set_coding_present(coding_blob.index(), true);
 
-            for coding_blob in coding {
-                erasure_meta.set_coding_present(coding_blob.index(), true);
-
-                writebatch.put_bytes::<cf::Coding>(
-                    (coding_blob.slot(), coding_blob.index()),
-                    &coding_blob.data[..BLOB_HEADER_SIZE + coding_blob.size()],
-                )?;
+                    writebatch.put_bytes::<cf::Coding>(
+                        (coding_blob.slot(), coding_blob.index()),
+                        &coding_blob.data[..BLOB_HEADER_SIZE + coding_blob.size()],
+                    )?;
+                }
+                Some(data)
+            } else {
+                None
             }
-        }
+        };
 
         writebatch.put::<cf::ErasureMeta>((slot, set_index), &erasure_meta)?;
-
         batch_processor.write(writebatch)?;
+        if let Some(data) = recovered_data {
+            if data.len() > 0 {
+                self.insert_data_blobs(&data)?;
+            }
+        }
 
         Ok(())
     }
