@@ -5,9 +5,6 @@ use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::blocktree_processor::{self, BankForksInfo};
 use crate::cluster_info::{ClusterInfo, Node};
 use crate::contact_info::ContactInfo;
-use crate::entry::create_ticks;
-use crate::entry::next_entry_mut;
-use crate::entry::Entry;
 use crate::gossip_service::{discover_nodes, GossipService};
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::poh_recorder::PohRecorder;
@@ -22,14 +19,9 @@ use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_transaction;
 use solana_sdk::timing::timestamp;
-use solana_sdk::transaction::Transaction;
-use solana_vote_api::vote_instruction;
-use solana_vote_api::vote_state::Vote;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
@@ -341,60 +333,6 @@ impl Service for Fullnode {
 
         Ok(())
     }
-}
-
-// Create entries such the node identified by active_keypair will be added to the active set for
-// leader selection, and append `num_ending_ticks` empty tick entries.
-pub fn make_active_set_entries(
-    active_keypair: &Arc<Keypair>,
-    lamport_source: &Keypair,
-    stake: u64,
-    slot_to_vote_on: u64,
-    blockhash: &Hash,
-    num_ending_ticks: u64,
-) -> (Vec<Entry>, Keypair) {
-    // 1) Assume the active_keypair node has no lamports staked
-    let transfer_tx = system_transaction::create_user_account(
-        &lamport_source,
-        &active_keypair.pubkey(),
-        stake,
-        *blockhash,
-        0,
-    );
-    let mut last_entry_hash = *blockhash;
-    let transfer_entry = next_entry_mut(&mut last_entry_hash, 1, vec![transfer_tx]);
-
-    // 2) Create and register a vote account for active_keypair
-    let voting_keypair = Keypair::new();
-    let vote_account_id = voting_keypair.pubkey();
-
-    let new_vote_account_ixs = vote_instruction::create_account(
-        &active_keypair.pubkey(),
-        &vote_account_id,
-        &active_keypair.pubkey(),
-        0,
-        stake.saturating_sub(2),
-    );
-    let new_vote_account_tx = Transaction::new_signed_instructions(
-        &[active_keypair.as_ref()],
-        new_vote_account_ixs,
-        *blockhash,
-    );
-    let new_vote_account_entry = next_entry_mut(&mut last_entry_hash, 1, vec![new_vote_account_tx]);
-
-    // 3) Create vote entry
-    let vote_ix =
-        vote_instruction::vote(&voting_keypair.pubkey(), vec![Vote::new(slot_to_vote_on)]);
-    let vote_tx =
-        Transaction::new_signed_instructions(&[&voting_keypair], vec![vote_ix], *blockhash);
-    let vote_entry = next_entry_mut(&mut last_entry_hash, 1, vec![vote_tx]);
-
-    // 4) Create `num_ending_ticks` empty ticks
-    let mut entries = vec![transfer_entry, new_vote_account_entry, vote_entry];
-    let empty_ticks = create_ticks(num_ending_ticks, last_entry_hash);
-    entries.extend(empty_ticks);
-
-    (entries, voting_keypair)
 }
 
 pub fn new_fullnode_for_tests() -> (Fullnode, ContactInfo, Keypair, String) {
