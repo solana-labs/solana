@@ -33,11 +33,34 @@ use std::time::Instant;
 /// cache of staking information
 #[derive(Default, Clone)]
 pub struct Stakes {
-    /// stakes
-    vote_accounts: HashMap<Pubkey, Account>,
+    /// vote accounts
+    pub vote_accounts: HashMap<Pubkey, (u64, Account)>,
 
     /// stake_accounts
     stake_accounts: HashMap<Pubkey, Account>,
+}
+
+impl Stakes {
+    pub fn is_stake(account: &Account) -> bool {
+        solana_vote_api::check_id(&account.owner) || solana_stake_api::check_id(&account.owner)
+    }
+
+    pub fn update(&mut self, pubkey: &Pubkey, account: &Account) {
+        if solana_vote_api::check_id(&account.owner) {
+            if account.lamports != 0 {
+                self.vote_accounts
+                    .insert(*pubkey, (account.lamports, account.clone()));
+            } else {
+                self.vote_accounts.remove(pubkey);
+            }
+        } else if solana_stake_api::check_id(&account.owner) {
+            if account.lamports != 0 {
+                self.stake_accounts.insert(*pubkey, account.clone());
+            } else {
+                self.stake_accounts.remove(pubkey);
+            }
+        }
+    }
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
@@ -126,9 +149,11 @@ impl Bank {
         bank.process_genesis_block(genesis_block);
         // genesis needs stakes for all epochs up to the epoch implied by
         //  slot = 0 and genesis configuration
-        let stakes = bank.stakes();
-        for i in 0..=bank.get_stakers_epoch(bank.slot) {
-            bank.epoch_stakes.insert(i, stakes.clone());
+        {
+            let stakes = bank.stakes.read().unwrap();
+            for i in 0..=bank.get_stakers_epoch(bank.slot) {
+                bank.epoch_stakes.insert(i, stakes.clone());
+            }
         }
         bank
     }
@@ -146,7 +171,7 @@ impl Bank {
 
         bank.transaction_count
             .store(parent.transaction_count() as usize, Ordering::Relaxed);
-        bank.stakes = RwLock::new(parent.stakes());
+        bank.stakes = RwLock::new(parent.stakes.read().unwrap().clone());
 
         bank.tick_height
             .store(parent.tick_height.load(Ordering::SeqCst), Ordering::SeqCst);
@@ -175,7 +200,7 @@ impl Bank {
             //  if my parent didn't populate for this epoch, we've
             //  crossed a boundary
             if epoch_stakes.get(&epoch).is_none() {
-                epoch_stakes.insert(epoch, bank.stakes());
+                epoch_stakes.insert(epoch, bank.stakes.read().unwrap().clone());
             }
             epoch_stakes
         };
@@ -283,6 +308,10 @@ impl Bank {
         self.register_native_instruction_processor(
             "solana_bpf_loader",
             &solana_sdk::bpf_loader::id(),
+        );
+        self.register_native_instruction_processor(
+            &solana_vote_program!().0,
+            &solana_vote_program!().1,
         );
 
         // Add additional native programs specified in the genesis block
@@ -772,33 +801,11 @@ impl Bank {
         parents
     }
 
-    fn update_stakes_accounts(
-        accounts: &mut HashMap<Pubkey, Account>,
-        pubkey: &Pubkey,
-        account: &Account,
-    ) {
-        if account.lamports != 0 {
-            accounts.insert(*pubkey, account.clone());
-        } else {
-            accounts.remove(pubkey);
-        }
-    }
-
     fn store(&self, pubkey: &Pubkey, account: &Account) {
         self.accounts.store_slow(self.slot(), pubkey, account);
 
-        if solana_vote_api::check_id(&account.owner) {
-            Self::update_stakes_accounts(
-                &mut self.stakes.write().unwrap().vote_accounts,
-                pubkey,
-                account,
-            );
-        } else if solana_stake_api::check_id(&account.owner) {
-            Self::update_stakes_accounts(
-                &mut self.stakes.write().unwrap().stake_accounts,
-                pubkey,
-                account,
-            );
+        if Stakes::is_stake(account) {
+            self.stakes.write().unwrap().update(pubkey, account);
         }
     }
 
@@ -916,8 +923,6 @@ impl Bank {
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
     ) {
-        let mut stakes = self.stakes.write().unwrap();
-
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {
                 continue;
@@ -926,33 +931,24 @@ impl Bank {
             let message = &txs[i].message();
             let acc = raccs.as_ref().unwrap();
 
-            for (pubkey, account) in message.account_keys.iter().zip(acc.0.iter()) {
-                if solana_vote_api::check_id(&account.owner) {
-                    Self::update_stakes_accounts(&mut stakes.vote_accounts, pubkey, account);
-                } else if solana_stake_api::check_id(&account.owner) {
-                    Self::update_stakes_accounts(&mut stakes.stake_accounts, pubkey, account);
-                }
+            for (pubkey, account) in message
+                .account_keys
+                .iter()
+                .zip(acc.0.iter())
+                .filter(|(_, account)| Stakes::is_stake(account))
+            {
+                self.stakes.write().unwrap().update(pubkey, account);
             }
         }
     }
 
-    /// current stakes for this bank
-    pub fn stakes(&self) -> Stakes {
-        self.stakes.read().unwrap().clone()
-    }
-
     /// current vote accounts for this bank
-    pub fn vote_accounts(&self) -> HashMap<Pubkey, Account> {
+    pub fn vote_accounts(&self) -> HashMap<Pubkey, (u64, Account)> {
         self.stakes.read().unwrap().vote_accounts.clone()
     }
 
-    ///  stakes for the specific epoch
-    pub fn epoch_stakes(&self, epoch: u64) -> Option<&Stakes> {
-        self.epoch_stakes.get(&epoch)
-    }
-
-    ///  vote accounts for the specific epoch
-    pub fn epoch_vote_accounts(&self, epoch: u64) -> Option<&HashMap<Pubkey, Account>> {
+    /// vote accounts for the specific epoch
+    pub fn epoch_vote_accounts(&self, epoch: u64) -> Option<&HashMap<Pubkey, (u64, Account)>> {
         self.epoch_stakes
             .get(&epoch)
             .map(|stakes| &stakes.vote_accounts)
@@ -1583,13 +1579,13 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_epoch_stakes() {
+    fn test_bank_epoch_vote_accounts() {
         let leader_id = Pubkey::new_rand();
         let leader_lamports = 3;
         let mut genesis_block = create_genesis_block_with_leader(5, &leader_id, leader_lamports).0;
 
         // set this up weird, forces future generation, odd mod(), etc.
-        //  this says: "stakes for epoch X should be generated at slot index 3 in epoch X-2...
+        //  this says: "vote_accounts for epoch X should be generated at slot index 3 in epoch X-2...
         const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOT_LENGTH as u64;
         const STAKERS_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
         genesis_block.slots_per_epoch = SLOTS_PER_EPOCH;
@@ -1598,10 +1594,10 @@ mod tests {
 
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let stakes0: Option<HashMap<_, _>> = parent.epoch_vote_accounts(0).map(|accounts| {
+        let vote_accounts0: Option<HashMap<_, _>> = parent.epoch_vote_accounts(0).map(|accounts| {
             accounts
                 .iter()
-                .filter_map(|(pubkey, account)| {
+                .filter_map(|(pubkey, (_, account))| {
                     if let Ok(vote_state) = VoteState::deserialize(&account.data) {
                         if vote_state.node_id == leader_id {
                             Some((*pubkey, true))
@@ -1614,15 +1610,15 @@ mod tests {
                 })
                 .collect()
         });
-        assert!(stakes0.is_some());
-        assert!(stakes0.iter().len() != 0);
+        assert!(vote_accounts0.is_some());
+        assert!(vote_accounts0.iter().len() != 0);
 
         let mut i = 1;
         loop {
             if i > STAKERS_SLOT_OFFSET / SLOTS_PER_EPOCH {
                 break;
             }
-            assert!(parent.epoch_stakes(i).is_some());
+            assert!(parent.epoch_vote_accounts(i).is_some());
             i += 1;
         }
 
@@ -1633,7 +1629,7 @@ mod tests {
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH),
         );
 
-        assert!(child.epoch_stakes(i).is_some());
+        assert!(child.epoch_vote_accounts(i).is_some());
 
         // child crosses epoch boundary but isn't the first slot in the epoch
         let child = Bank::new_from_parent(
@@ -1641,7 +1637,7 @@ mod tests {
             &leader_id,
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH) + 1,
         );
-        assert!(child.epoch_stakes(i).is_some());
+        assert!(child.epoch_vote_accounts(i).is_some());
     }
 
     #[test]
