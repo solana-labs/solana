@@ -4,7 +4,6 @@ use crate::poh_recorder::PohRecorder;
 use crate::service::Service;
 use solana_sdk::timing::{self, NUM_TICKS_PER_SECOND};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
@@ -17,8 +16,6 @@ pub enum PohServiceConfig {
     /// * `Sleep`- Low power mode.  Sleep is a rough estimate of how long to sleep before rolling 1
     ///            PoH once and producing 1 tick.
     Sleep(Duration),
-    /// each node in simulation will be blocked until the receiver reads their step
-    Step(SyncSender<()>),
 }
 
 impl Default for PohServiceConfig {
@@ -32,7 +29,7 @@ impl PohServiceConfig {
     pub fn ticks_to_ms(&self, num_ticks: u64) -> u64 {
         match self {
             PohServiceConfig::Sleep(d) => timing::duration_as_ms(d) * num_ticks,
-            _ => panic!("Unsuppported tick config"),
+            _ => panic!("Unsupported tick config"),
         }
     }
 }
@@ -79,12 +76,6 @@ impl PohService {
                 }
                 PohServiceConfig::Sleep(duration) => {
                     sleep(*duration);
-                }
-                PohServiceConfig::Step(sender) => {
-                    let r = sender.send(());
-                    if r.is_err() {
-                        break;
-                    }
                 }
             }
             poh.lock().unwrap().tick();
