@@ -22,4 +22,7 @@ extern crate solana_metrics;
 extern crate solana_vote_program;
 
 #[macro_use]
+extern crate solana_stake_program;
+
+#[macro_use]
 extern crate serde_derive;

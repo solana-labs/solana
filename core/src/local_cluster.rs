@@ -390,7 +390,7 @@ impl LocalCluster {
 
             client
                 .retry_transfer(&from_account, &mut transaction, 5)
-                .expect("client transfer");
+                .expect("fund vote");
             client
                 .wait_for_balance(&vote_account_pubkey, Some(vote_amount))
                 .expect("get balance");
@@ -410,7 +410,7 @@ impl LocalCluster {
 
             client
                 .retry_transfer(&from_account, &mut transaction, 5)
-                .expect("client transfer");
+                .expect("fund stake");
             client
                 .wait_for_balance(&stake_account_pubkey, Some(stake_amount))
                 .expect("get balance");
