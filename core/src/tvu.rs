@@ -57,7 +57,8 @@ impl Tvu {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new<T>(
         vote_account: &Pubkey,
-        voting_keypair: Option<Arc<T>>,
+        voting_keypair: Option<&Arc<T>>,
+        storage_keypair: &Arc<Keypair>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
@@ -139,13 +140,12 @@ impl Tvu {
             None
         };
 
-        let storage_keypair = Arc::new(Keypair::new());
         let storage_stage = StorageStage::new(
             storage_state,
             root_slot_receiver,
             Some(blocktree),
             &keypair,
-            &storage_keypair,
+            storage_keypair,
             &exit,
             &bank_forks,
             storage_rotate_count,
@@ -214,10 +214,12 @@ pub mod tests {
         let (exit, poh_recorder, poh_service, _entry_receiver) =
             create_test_recorder(&bank, &blocktree);
         let voting_keypair = Keypair::new();
+        let storage_keypair = Arc::new(Keypair::new());
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
-            Some(Arc::new(voting_keypair)),
+            Some(&Arc::new(voting_keypair)),
+            &storage_keypair,
             &Arc::new(RwLock::new(bank_forks)),
             &cref1,
             {

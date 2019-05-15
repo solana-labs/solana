@@ -76,7 +76,8 @@ impl Fullnode {
         keypair: &Arc<Keypair>,
         ledger_path: &str,
         vote_account: &Pubkey,
-        voting_keypair: T,
+        voting_keypair: &Arc<T>,
+        storage_keypair: &Arc<Keypair>,
         entrypoint_info_option: Option<&ContactInfo>,
         config: &FullnodeConfig,
     ) -> Self
@@ -219,12 +220,13 @@ impl Fullnode {
         let voting_keypair = if config.voting_disabled {
             None
         } else {
-            Some(Arc::new(voting_keypair))
+            Some(voting_keypair)
         };
 
         let tvu = Tvu::new(
             vote_account,
             voting_keypair,
+            storage_keypair,
             &bank_forks,
             &cluster_info,
             sockets,
@@ -355,13 +357,15 @@ pub fn new_fullnode_for_tests() -> (Fullnode, ContactInfo, Keypair, String) {
 
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
-    let voting_keypair = Keypair::new();
+    let voting_keypair = Arc::new(Keypair::new());
+    let storage_keypair = Arc::new(Keypair::new());
     let node = Fullnode::new(
         node,
         &node_keypair,
         &ledger_path,
         &voting_keypair.pubkey(),
-        voting_keypair,
+        &voting_keypair,
+        &storage_keypair,
         None,
         &FullnodeConfig::default(),
     );
@@ -387,13 +391,15 @@ mod tests {
             create_genesis_block_with_leader(10_000, &leader_keypair.pubkey(), 1000).0;
         let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
-        let voting_keypair = Keypair::new();
+        let voting_keypair = Arc::new(Keypair::new());
+        let storage_keypair = Arc::new(Keypair::new());
         let validator = Fullnode::new(
             validator_node,
             &Arc::new(validator_keypair),
             &validator_ledger_path,
             &voting_keypair.pubkey(),
-            voting_keypair,
+            &voting_keypair,
+            &storage_keypair,
             Some(&leader_node.info),
             &FullnodeConfig::default(),
         );
@@ -415,13 +421,15 @@ mod tests {
                     create_genesis_block_with_leader(10_000, &leader_keypair.pubkey(), 1000);
                 let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
                 ledger_paths.push(validator_ledger_path.clone());
-                let voting_keypair = Keypair::new();
+                let voting_keypair = Arc::new(Keypair::new());
+                let storage_keypair = Arc::new(Keypair::new());
                 Fullnode::new(
                     validator_node,
                     &Arc::new(validator_keypair),
                     &validator_ledger_path,
                     &voting_keypair.pubkey(),
-                    voting_keypair,
+                    &voting_keypair,
+                    &storage_keypair,
                     Some(&leader_node.info),
                     &FullnodeConfig::default(),
                 )
