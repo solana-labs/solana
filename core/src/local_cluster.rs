@@ -27,16 +27,9 @@ use std::sync::Arc;
 
 pub struct FullnodeInfo {
     pub keypair: Arc<Keypair>,
+    pub voting_keypair: Arc<Keypair>,
+    pub storage_keypair: Arc<Keypair>,
     pub ledger_path: String,
-}
-
-impl FullnodeInfo {
-    fn new(keypair: Arc<Keypair>, ledger_path: String) -> Self {
-        Self {
-            keypair,
-            ledger_path,
-        }
-    }
 }
 
 pub struct ReplicatorInfo {
@@ -134,13 +127,15 @@ impl LocalCluster {
         let (genesis_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
         let leader_contact_info = leader_node.info.clone();
-
+        let leader_storage_keypair = Arc::new(Keypair::new());
+        let leader_voting_keypair = Arc::new(voting_keypair);
         let leader_server = Fullnode::new(
             leader_node,
             &leader_keypair,
             &leader_ledger_path,
-            &voting_keypair.pubkey(),
-            voting_keypair,
+            &leader_voting_keypair.pubkey(),
+            &leader_voting_keypair,
+            &leader_storage_keypair,
             None,
             &config.fullnode_config,
         );
@@ -150,7 +145,12 @@ impl LocalCluster {
         fullnodes.insert(leader_pubkey, leader_server);
         fullnode_infos.insert(
             leader_pubkey,
-            FullnodeInfo::new(leader_keypair.clone(), leader_ledger_path),
+            FullnodeInfo {
+                keypair: leader_keypair,
+                voting_keypair: leader_voting_keypair,
+                storage_keypair: leader_storage_keypair,
+                ledger_path: leader_ledger_path,
+            },
         );
 
         let mut cluster = Self {
@@ -221,6 +221,7 @@ impl LocalCluster {
         // Must have enough tokens to fund vote account and set delegate
         let validator_keypair = Arc::new(Keypair::new());
         let voting_keypair = Keypair::new();
+        let storage_keypair = Arc::new(Keypair::new());
         let validator_pubkey = validator_keypair.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let ledger_path = tmp_copy_blocktree!(&self.genesis_ledger_path);
@@ -250,12 +251,14 @@ impl LocalCluster {
             .unwrap();
         }
 
+        let voting_keypair = Arc::new(voting_keypair);
         let validator_server = Fullnode::new(
             validator_node,
             &validator_keypair,
             &ledger_path,
             &voting_keypair.pubkey(),
-            voting_keypair,
+            &voting_keypair,
+            &storage_keypair,
             Some(&self.entry_point_info),
             &fullnode_config,
         );
@@ -265,12 +268,22 @@ impl LocalCluster {
         if fullnode_config.voting_disabled {
             self.listener_infos.insert(
                 validator_keypair.pubkey(),
-                FullnodeInfo::new(validator_keypair.clone(), ledger_path),
+                FullnodeInfo {
+                    keypair: validator_keypair,
+                    voting_keypair,
+                    storage_keypair,
+                    ledger_path,
+                },
             );
         } else {
             self.fullnode_infos.insert(
                 validator_keypair.pubkey(),
-                FullnodeInfo::new(validator_keypair.clone(), ledger_path),
+                FullnodeInfo {
+                    keypair: validator_keypair,
+                    voting_keypair,
+                    storage_keypair,
+                    ledger_path,
+                },
             );
         }
     }
@@ -467,13 +480,13 @@ impl Cluster for LocalCluster {
         if pubkey == self.entry_point_info.id {
             self.entry_point_info = node.info.clone();
         }
-        let new_voting_keypair = Keypair::new();
         let restarted_node = Fullnode::new(
             node,
             &fullnode_info.keypair,
             &fullnode_info.ledger_path,
-            &new_voting_keypair.pubkey(),
-            new_voting_keypair,
+            &fullnode_info.voting_keypair.pubkey(),
+            &fullnode_info.voting_keypair,
+            &fullnode_info.storage_keypair,
             None,
             &self.fullnode_config,
         );

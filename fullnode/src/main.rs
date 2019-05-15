@@ -60,6 +60,14 @@ fn main() {
                 .help("File containing the authorized voting keypair"),
         )
         .arg(
+            Arg::with_name("storage_keypair")
+                .long("storage-keypair")
+                .value_name("PATH")
+                .takes_value(true)
+                .required(true)
+                .help("File containing the storage account keypair"),
+        )
+        .arg(
             Arg::with_name("init_complete_file")
                 .long("init-complete-file")
                 .value_name("FILE")
@@ -167,6 +175,14 @@ fn main() {
     } else {
         Keypair::new()
     };
+    let storage_keypair = if let Some(storage_keypair) = matches.value_of("storage_keypair") {
+        read_keypair(storage_keypair).unwrap_or_else(|err| {
+            eprintln!("{}: Unable to open keypair file: {}", err, storage_keypair);
+            exit(1);
+        })
+    } else {
+        Keypair::new()
+    };
 
     let staking_account = matches
         .value_of("staking_account")
@@ -241,7 +257,8 @@ fn main() {
         &keypair,
         ledger_path,
         &staking_account,
-        voting_keypair,
+        &Arc::new(voting_keypair),
+        &Arc::new(storage_keypair),
         cluster_entrypoint.as_ref(),
         &fullnode_config,
     );

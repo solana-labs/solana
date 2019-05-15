@@ -106,13 +106,15 @@ fn test_replay() {
     let dr_1 = new_gossip(cref1.clone(), target1.sockets.gossip, &exit);
 
     let voting_keypair = Keypair::new();
+    let storage_keypair = Arc::new(Keypair::new());
     let blocktree = Arc::new(blocktree);
     {
         let (poh_service_exit, poh_recorder, poh_service, _entry_receiver) =
             create_test_recorder(&working_bank, &blocktree);
         let tvu = Tvu::new(
             &voting_keypair.pubkey(),
-            Some(Arc::new(voting_keypair)),
+            Some(&Arc::new(voting_keypair)),
+            &storage_keypair,
             &bank_forks,
             &cref1,
             {

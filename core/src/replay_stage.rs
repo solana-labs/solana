@@ -74,7 +74,7 @@ impl ReplayStage {
     pub fn new<T>(
         my_id: &Pubkey,
         vote_account: &Pubkey,
-        voting_keypair: Option<Arc<T>>,
+        voting_keypair: Option<&Arc<T>>,
         blocktree: Arc<Blocktree>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -105,6 +105,7 @@ impl ReplayStage {
         }
         // Start the replay stage loop
         let leader_schedule_cache = leader_schedule_cache.clone();
+        let voting_keypair = voting_keypair.cloned();
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {

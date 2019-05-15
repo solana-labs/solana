@@ -225,6 +225,8 @@ if [[ $node_type = bootstrap_leader ]]; then
   fullnode_vote_keypair_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-keypair.json
   ledger_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
   accounts_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts
+  fullnode_storage_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-storage-keypair.json
+
 
   default_arg --rpc-port 8899
   default_arg --rpc-drone-address 127.0.0.1:9900
@@ -240,7 +242,7 @@ elif [[ $node_type = replicator ]]; then
   shift "$shift"
 
   replicator_keypair_path=$SOLANA_CONFIG_DIR/replicator-id.json
-  replicator_storage_keypair_path="$SOLANA_CONFIG_DIR"/replicator-vote-id.json
+  replicator_storage_keypair_path="$SOLANA_CONFIG_DIR"/replicator-storage-id.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/replicator-ledger
 
   mkdir -p "$SOLANA_CONFIG_DIR"
@@ -252,7 +254,7 @@ elif [[ $node_type = replicator ]]; then
 
   default_arg --entrypoint "$entrypoint_address"
   default_arg --identity "$replicator_keypair_path"
-  default_arg --storage_id "$replicator_storage_keypair_path"
+  default_arg --storage-keypair "$replicator_storage_keypair_path"
   default_arg --ledger "$ledger_config_dir"
 
 else
@@ -266,6 +268,7 @@ else
   : "${fullnode_keypair_path:=$SOLANA_CONFIG_DIR/fullnode-keypair$label.json}"
   fullnode_vote_keypair_path=$SOLANA_CONFIG_DIR/fullnode-vote-keypair$label.json
   fullnode_stake_keypair_path=$SOLANA_CONFIG_DIR/fullnode-stake-keypair$label.json
+  fullnode_storage_keypair_path=$SOLANA_CONFIG_DIR/fullnode-storage-keypair$label.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger$label
   accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts$label
 
@@ -273,6 +276,7 @@ else
   [[ -r "$fullnode_keypair_path" ]] || $solana_keygen -o "$fullnode_keypair_path"
   [[ -r "$fullnode_vote_keypair_path" ]] || $solana_keygen -o "$fullnode_vote_keypair_path"
   [[ -r "$fullnode_stake_keypair_path" ]] || $solana_keygen -o "$fullnode_stake_keypair_path"
+  [[ -r "$fullnode_storage_keypair_path" ]] || $solana_keygen -o "$fullnode_storage_keypair_path"
 
   default_arg --entrypoint "$entrypoint_address"
   default_arg --rpc-drone-address "${entrypoint_address%:*}:9900"
@@ -308,6 +312,7 @@ EOF
   default_arg --identity "$fullnode_keypair_path"
   default_arg --voting-keypair "$fullnode_vote_keypair_path"
   default_arg --vote-account "$fullnode_vote_pubkey"
+  default_arg --storage-keypair "$fullnode_storage_keypair_path"
   default_arg --ledger "$ledger_config_dir"
   default_arg --accounts "$accounts_config_dir"
 
