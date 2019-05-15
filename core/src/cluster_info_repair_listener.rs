@@ -7,7 +7,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use solana_metrics::inc_new_counter_info;
+use solana_metrics::datapoint;
 use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp::min;
@@ -140,7 +140,11 @@ impl ClusterInfoRepairListener {
                 contact_info.map(|c| c.tvu)
             };
 
+            let mut total_data_blobs_sent = 0;
+            let mut total_coding_blobs_sent = 0;
+
             if let Some(repairee_tvu) = repairee_tvu {
+                // For every repairee, get the set of repairmen who are responsible for
                 let mut eligible_repairmen =
                     Self::find_eligible_repairmen(my_id, repairee_root, peer_roots, epoch_schedule);
 
@@ -173,16 +177,17 @@ impl ClusterInfoRepairListener {
                                 .step_by(repairman_step)
                             {
                                 let mut should_sleep = false;
-                                // Alternatively, we could use a database iterator to iterate over the
-                                // slots. This would be faster if the slots were sparsely populated with
-                                // blobs (big gaps between the blobs in the slot), but by the time we
-                                // are sending the blobs in this slot for repair, we expect these slots
-                                // to be full/near full.
+                                // Loop over the blob indexes and query the database for these blob that
+                                // this node is reponsible for repairing. This should be faster than using
+                                // a database iterator over the slots because by the time this node is
+                                // sending the blobs in this slot for repair, we expect these slots
+                                // to be full.
                                 if let Some(blob_data) = blocktree
                                     .get_data_blob_bytes(slot, i)
                                     .expect("Failed to read data blob from blocktree")
                                 {
                                     socket.send_to(&blob_data[..], repairee_tvu)?;
+                                    total_data_blobs_sent += 1;
                                     should_sleep = true;
                                 }
 
@@ -191,6 +196,7 @@ impl ClusterInfoRepairListener {
                                     .expect("Failed to read coding blob from blocktree")
                                 {
                                     socket.send_to(&coding_bytes[..], repairee_tvu)?;
+                                    total_coding_blobs_sent += 1;
                                     should_sleep = true;
                                 }
 
@@ -202,9 +208,19 @@ impl ClusterInfoRepairListener {
                     }
                 }
             }
+
+            Self::report_repair_metrics(total_data_blobs_sent, total_coding_blobs_sent);
         }
 
         Ok(())
+    }
+
+    fn report_repair_metrics(total_data_blobs_sent: u64, total_coding_blobs_sent: u64) {
+        datapoint!(
+            "repairman_activity",
+            ("data_sent", total_data_blobs_sent, i64),
+            ("coding_sent", total_coding_blobs_sent, i64)
+        );
     }
 
     fn shuffle_repairmen(
