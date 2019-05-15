@@ -11,6 +11,7 @@ numNodes="$4"
 RUST_LOG="$5"
 skipSetup="$6"
 failOnValidatorBootupFailure="$7"
+genesisOptions="$8"
 set +x
 export RUST_LOG
 
@@ -39,6 +40,7 @@ deployMethod="$deployMethod"
 entrypointIp="$entrypointIp"
 numNodes="$numNodes"
 failOnValidatorBootupFailure=$failOnValidatorBootupFailure
+genesisOptions="$genesisOptions"
 EOF
 
 source net/common.sh
@@ -75,7 +77,10 @@ local|tar)
     fi
     set -x
     if [[ $skipSetup != true ]]; then
-      ./multinode-demo/setup.sh --bootstrap-leader-lamports $stake
+      args=(--bootstrap-leader-lamports "$stake")
+      # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
+      args+=($genesisOptions)
+      ./multinode-demo/setup.sh "${args[@]}"
     fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
 
