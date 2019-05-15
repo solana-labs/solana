@@ -116,8 +116,8 @@ Just like *pull message*, nodes are selected into the active set based on weight
 
 ## Notable differences from PlumTree
 
-The active push protocol described here is based on (Plum
-Tree)[https://haslab.uminho.pt/jop/files/lpr07a.pdf].  The main differences are:
+The active push protocol described here is based on [Plum
+Tree](https://haslab.uminho.pt/jop/files/lpr07a.pdf).  The main differences are:
 
 * Push messages have a wallclock that is signed by the originator.  Once the
 wallclock expires the message is dropped.  A hop limit is difficult to implement
