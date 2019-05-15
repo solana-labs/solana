@@ -275,7 +275,7 @@ pub mod test_utils {
 
     pub fn get_append_vec_path(path: &str) -> TempFile {
         let out_dir =
-            std::env::var("OUT_DIR").unwrap_or_else(|_| "/tmp/append_vec_tests".to_string());
+            std::env::var("OUT_DIR").unwrap_or_else(|_| "target/append_vec_tests".to_string());
         let mut buf = PathBuf::new();
         let rand_string: String = thread_rng().sample_iter(&Alphanumeric).take(30).collect();
         buf.push(&format!("{}/{}{}", out_dir, path, rand_string));
