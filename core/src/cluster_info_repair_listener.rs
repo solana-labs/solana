@@ -13,6 +13,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::mem;
+use std::net::SocketAddr;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -128,20 +129,12 @@ impl ClusterInfoRepairListener {
     ) -> Result<()> {
         for (repairee_id, repairee_epoch_slots) in repairees {
             let repairee_root = repairee_epoch_slots.root;
-            let my_root = Self::update_my_gossiped_root(my_id, cluster_info, my_gossiped_root);
-
-            let slot_iter = blocktree
-                .slot_meta_iterator(repairee_root + 1)
-                .expect("Couldn't get db iterator");
 
             let repairee_tvu = {
                 let r_cluster_info = cluster_info.read().unwrap();
                 let contact_info = r_cluster_info.get_contact_info_for_node(repairee_id);
                 contact_info.map(|c| c.tvu)
             };
-
-            let mut total_data_blobs_sent = 0;
-            let mut total_coding_blobs_sent = 0;
 
             if let Some(repairee_tvu) = repairee_tvu {
                 // For every repairee, get the set of repairmen who are responsible for
@@ -154,73 +147,104 @@ impl ClusterInfoRepairListener {
                     repairee_epoch_slots.root,
                 );
 
-                while slot_iter.valid() && slot_iter.key().unwrap() <= my_root {
-                    let slot = slot_iter.key().unwrap();
-                    let highest_index = slot_iter.value().unwrap().received;
-                    if !repairee_epoch_slots.slots.contains(&slot) {
-                        // Calculate the blob indexes this node is repsonsible for repairing. Note that because we
-                        // are only repairing slots that are before our root, the slot.received should be equal to
-                        // the actual total number of blobs in the slot. Optimistically this means that most repairmen should
-                        // observe the same "total" number of blobs for a particular slot, and thus the calculation in
-                        // calculate_my_repairman_index_for_slot() will divide responsibility evenly across the cluster
-                        let num_blobs_in_slot = slot_iter.value().unwrap().received as usize;
-                        if let Some((my_repairman_index, repairman_step)) =
-                            Self::calculate_my_repairman_index_for_slot(
-                                my_id,
-                                &eligible_repairmen,
-                                num_blobs_in_slot,
-                            )
-                        {
-                            // This peer is missing this slot, send them the blobs for this slot
-                            for i in (0..highest_index)
-                                .skip(my_repairman_index)
-                                .step_by(repairman_step)
-                            {
-                                let mut should_sleep = false;
-                                // Loop over the blob indexes and query the database for these blob that
-                                // this node is reponsible for repairing. This should be faster than using
-                                // a database iterator over the slots because by the time this node is
-                                // sending the blobs in this slot for repair, we expect these slots
-                                // to be full.
-                                if let Some(blob_data) = blocktree
-                                    .get_data_blob_bytes(slot, i)
-                                    .expect("Failed to read data blob from blocktree")
-                                {
-                                    socket.send_to(&blob_data[..], repairee_tvu)?;
-                                    total_data_blobs_sent += 1;
-                                    should_sleep = true;
-                                }
+                let my_root = Self::update_my_gossiped_root(my_id, cluster_info, my_gossiped_root);
 
-                                if let Some(coding_bytes) = blocktree
-                                    .get_coding_blob_bytes(slot, i)
-                                    .expect("Failed to read coding blob from blocktree")
-                                {
-                                    socket.send_to(&coding_bytes[..], repairee_tvu)?;
-                                    total_coding_blobs_sent += 1;
-                                    should_sleep = true;
-                                }
-
-                                if should_sleep {
-                                    sleep(Duration::from_millis(BLOB_SEND_SLEEP_MILLIS as u64));
-                                }
-                            }
-                        }
-                    }
-                }
+                let _ = Self::serve_repairs_to_repairee(
+                    my_id,
+                    my_root,
+                    blocktree,
+                    &repairee_epoch_slots,
+                    &eligible_repairmen,
+                    socket,
+                    &repairee_tvu,
+                );
             }
-
-            Self::report_repair_metrics(total_data_blobs_sent, total_coding_blobs_sent);
         }
 
         Ok(())
     }
 
+    fn serve_repairs_to_repairee(
+        my_id: &Pubkey,
+        my_root: u64,
+        blocktree: &Blocktree,
+        repairee_epoch_slots: &EpochSlots,
+        eligible_repairmen: &Vec<&Pubkey>,
+        socket: &UdpSocket,
+        repairee_tvu: &SocketAddr,
+    ) -> Result<()> {
+        let slot_iter = blocktree
+            .slot_meta_iterator(repairee_epoch_slots.root + 1)
+            .expect("Couldn't get db iterator");
+        let mut total_data_blobs_sent = 0;
+        let mut total_coding_blobs_sent = 0;
+
+        while slot_iter.valid() && slot_iter.key().unwrap() <= my_root {
+            let slot = slot_iter.key().unwrap();
+            let highest_index = slot_iter.value().unwrap().received;
+            if !repairee_epoch_slots.slots.contains(&slot) {
+                // Calculate the blob indexes this node is responsible for repairing. Note that because we
+                // are only repairing slots that are before our root, the slot.received should be equal to
+                // the actual total number of blobs in the slot. Optimistically this means that most repairmen should
+                // observe the same "total" number of blobs for a particular slot, and thus the calculation in
+                // calculate_my_repairman_index_for_slot() will divide responsibility evenly across the cluster
+                let num_blobs_in_slot = slot_iter.value().unwrap().received as usize;
+                if let Some((my_repairman_index, repairman_step)) =
+                    Self::calculate_my_repairman_index_for_slot(
+                        my_id,
+                        &eligible_repairmen,
+                        num_blobs_in_slot,
+                    )
+                {
+                    // Repairee is missing this slot, send them the blobs for this slot
+                    for i in (0..highest_index)
+                        .skip(my_repairman_index)
+                        .step_by(repairman_step)
+                    {
+                        let mut should_sleep = false;
+                        // Loop over the blob indexes and query the database for these blob that
+                        // this node is reponsible for repairing. This should be faster than using
+                        // a database iterator over the slots because by the time this node is
+                        // sending the blobs in this slot for repair, we expect these slots
+                        // to be full.
+                        if let Some(blob_data) = blocktree
+                            .get_data_blob_bytes(slot, i)
+                            .expect("Failed to read data blob from blocktree")
+                        {
+                            socket.send_to(&blob_data[..], repairee_tvu)?;
+                            total_data_blobs_sent += 1;
+                            should_sleep = true;
+                        }
+
+                        if let Some(coding_bytes) = blocktree
+                            .get_coding_blob_bytes(slot, i)
+                            .expect("Failed to read coding blob from blocktree")
+                        {
+                            socket.send_to(&coding_bytes[..], repairee_tvu)?;
+                            total_coding_blobs_sent += 1;
+                            should_sleep = true;
+                        }
+
+                        if should_sleep {
+                            sleep(Duration::from_millis(BLOB_SEND_SLEEP_MILLIS as u64));
+                        }
+                    }
+                }
+            }
+        }
+
+        Self::report_repair_metrics(total_data_blobs_sent, total_coding_blobs_sent);
+        Ok(())
+    }
+
     fn report_repair_metrics(total_data_blobs_sent: u64, total_coding_blobs_sent: u64) {
-        datapoint!(
-            "repairman_activity",
-            ("data_sent", total_data_blobs_sent, i64),
-            ("coding_sent", total_coding_blobs_sent, i64)
-        );
+        if total_data_blobs_sent > 0 || total_coding_blobs_sent > 0 {
+            datapoint!(
+                "repairman_activity",
+                ("data_sent", total_data_blobs_sent, i64),
+                ("coding_sent", total_coding_blobs_sent, i64)
+            );
+        }
     }
 
     fn shuffle_repairmen(
@@ -339,4 +363,27 @@ impl Service for ClusterInfoRepairListener {
         }
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_serve_repairs() {}
+
+    #[test]
+    fn test_shuffle_repairmen() {}
+
+    #[test]
+    fn calculate_my_repairman_index_for_slot() {}
+
+    #[test]
+    fn test_find_eligible_repairmen() {}
+
+    #[test]
+    fn test_update_my_gossiped_root() {}
+
+    #[test]
+    fn test_should_repair_peer() {}
 }
