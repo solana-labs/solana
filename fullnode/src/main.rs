@@ -62,7 +62,7 @@ fn main() {
         .arg(
             Arg::with_name("storage_keypair")
                 .long("storage-keypair")
-                .value_name("DIR")
+                .value_name("PATH")
                 .takes_value(true)
                 .required(true)
                 .help("File containing the storage account keypair"),
