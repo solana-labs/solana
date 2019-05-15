@@ -1,11 +1,10 @@
 use crate::blocktree::Blocktree;
+use solana_storage_api::SLOTS_PER_SEGMENT;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::sync::Arc;
-
-use crate::storage_stage::SLOTS_PER_SEGMENT;
 
 pub const CHACHA_BLOCK_SIZE: usize = 64;
 pub const CHACHA_KEY_SIZE: usize = 32;

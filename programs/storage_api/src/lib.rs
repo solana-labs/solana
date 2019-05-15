@@ -2,7 +2,7 @@ pub mod storage_contract;
 pub mod storage_instruction;
 pub mod storage_processor;
 
-pub const SLOTS_PER_SEGMENT: u64 = 2;
+pub const SLOTS_PER_SEGMENT: u64 = 16;
 
 pub fn get_segment_from_slot(slot: u64) -> usize {
     (slot / SLOTS_PER_SEGMENT) as usize

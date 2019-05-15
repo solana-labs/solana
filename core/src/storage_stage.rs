@@ -60,7 +60,6 @@ pub const STORAGE_ROTATE_TEST_COUNT: u64 = 2;
 // TODO: some way to dynamically size NUM_IDENTITIES
 const NUM_IDENTITIES: usize = 1024;
 pub const NUM_STORAGE_SAMPLES: usize = 4;
-pub const SLOTS_PER_SEGMENT: u64 = 16;
 const KEY_SIZE: usize = 64;
 
 type InstructionSender = Sender<Instruction>;
