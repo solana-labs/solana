@@ -88,24 +88,16 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
 fi
 
 # Install Rust-BPF Sysroot sources
-version=c3580fad71d76c451e22db84395c127c8a773afd
+version=v0.1
 if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
   (
     filename=solana-rust-bpf-sysroot.tar.bz2
 
     set -ex
     rm -rf rust-bpf-sysroot*
-    mkdir -p rust-bpf-sysroot
-    cd rust-bpf-sysroot
+    git clone --recursive --single-branch --branch $version git@github.com:solana-labs/rust-bpf-sysroot.git
 
-    git init
-    git remote add origin https://github.com/solana-labs/rust-bpf-sysroot.git
-    git pull origin master
-    git checkout "$version"
-    git submodule init
-    git submodule update
-
-    echo "https://github.com/solana-labs/rust-bpf-sysroot/releases/tag/$version" > ../rust-bpf-sysroot-$version.md
+    echo "git clone --recursive --single-branch --branch $version git@github.com:solana-labs/rust-bpf-sysroot.git" > rust-bpf-sysroot-$version.md
   )
   exitcode=$?
   if [[ $exitcode -ne 0 ]]; then
