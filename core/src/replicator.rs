@@ -529,7 +529,7 @@ impl Replicator {
             if get_segment_from_slot(storage_slot) != 0 {
                 return Ok((storage_blockhash, storage_slot));
             }
-            sleep(Duration::from_secs(3));
+            sleep(Duration::from_secs(5));
         }
         Err(Error::new(
             ErrorKind::Other,
