@@ -229,13 +229,12 @@ impl LocalCluster {
             // setup as a listener
             info!("listener {} ", validator_pubkey,);
         } else {
-            assert!((stake - 1) >= 2);
             // Send each validator some lamports to vote
             let validator_balance = Self::transfer_with_client(
                 &client,
                 &self.funding_keypair,
                 &validator_pubkey,
-                stake,
+                stake * 2 + 1,
             );
             info!(
                 "validator {} balance {}",
@@ -246,7 +245,7 @@ impl LocalCluster {
                 &client,
                 &voting_keypair,
                 &validator_keypair,
-                stake - 1,
+                stake,
             )
             .unwrap();
         }
@@ -369,8 +368,6 @@ impl LocalCluster {
     ) -> Result<()> {
         let vote_account_pubkey = vote_account.pubkey();
         let node_id = from_account.pubkey();
-        let vote_amount = amount / 2;
-        let stake_amount = amount - vote_amount;
 
         // Create the vote account if necessary
         if client.poll_get_balance(&vote_account_pubkey).unwrap_or(0) == 0 {
@@ -383,27 +380,27 @@ impl LocalCluster {
                     &vote_account_pubkey,
                     &node_id,
                     0,
-                    vote_amount,
+                    amount,
                 ),
                 client.get_recent_blockhash().unwrap().0,
             );
-
+            dbg!(vote_account_pubkey);
             client
                 .retry_transfer(&from_account, &mut transaction, 5)
                 .expect("fund vote");
             client
-                .wait_for_balance(&vote_account_pubkey, Some(vote_amount))
+                .wait_for_balance(&vote_account_pubkey, Some(amount))
                 .expect("get balance");
 
             let stake_account_keypair = Keypair::new();
             let stake_account_pubkey = stake_account_keypair.pubkey();
-
+            dbg!(stake_account_pubkey);
             let mut transaction = Transaction::new_signed_instructions(
                 &[from_account.as_ref()],
                 vec![stake_instruction::create_account(
                     &from_account.pubkey(),
                     &stake_account_pubkey,
-                    stake_amount,
+                    amount,
                 )],
                 client.get_recent_blockhash().unwrap().0,
             );
@@ -412,8 +409,9 @@ impl LocalCluster {
                 .retry_transfer(&from_account, &mut transaction, 5)
                 .expect("fund stake");
             client
-                .wait_for_balance(&stake_account_pubkey, Some(stake_amount))
+                .wait_for_balance(&stake_account_pubkey, Some(amount))
                 .expect("get balance");
+            dbg!(amount);
 
             let mut transaction = Transaction::new_signed_instructions(
                 &[from_account.as_ref(), &stake_account_keypair],
@@ -432,12 +430,14 @@ impl LocalCluster {
                     0,
                 )
                 .expect("delegate stake");
+            dbg!("delegated");
         }
         info!("Checking for vote account registration");
         let vote_account_user_data = client.get_account_data(&vote_account_pubkey);
         if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
             if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
                 if vote_state.node_id == node_id {
+                    info!("vote account registered");
                     return Ok(());
                 }
             }
