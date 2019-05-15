@@ -919,9 +919,7 @@ impl Bank {
     /// vote accounts for the specific epoch along with the stake
     ///   attributed to each account
     pub fn epoch_vote_accounts(&self, epoch: u64) -> Option<&HashMap<Pubkey, (u64, Account)>> {
-        self.epoch_stakes
-            .get(&epoch)
-            .map(|stakes| stakes.vote_accounts())
+        self.epoch_stakes.get(&epoch).map(Stakes::vote_accounts)
     }
 
     /// given a slot, return the epoch and offset into the epoch this slot falls
@@ -1876,7 +1874,5 @@ mod tests {
 
         assert!(bank.is_delta.load(Ordering::Relaxed));
     }
-    #[test]
-    fn test_stakes_basic() {}
 
 }
