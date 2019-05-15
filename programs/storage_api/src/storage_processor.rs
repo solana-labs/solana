@@ -109,6 +109,24 @@ mod tests {
     }
 
     #[test]
+    fn test_proof_bounds() {
+        let pubkey = Pubkey::new_rand();
+        let account = Account {
+            data: vec![0; 16 * 1024],
+            ..Account::default()
+        };
+
+        let ix = storage_instruction::mining_proof(
+            &pubkey,
+            Hash::default(),
+            SLOTS_PER_SEGMENT,
+            Signature::default(),
+        );
+
+        assert_eq!(test_instruction(&ix, &mut [account]), Ok(()));
+    }
+
+    #[test]
     fn test_storage_tx() {
         let pubkey = Pubkey::new_rand();
         let mut accounts = [(pubkey, Account::default())];
