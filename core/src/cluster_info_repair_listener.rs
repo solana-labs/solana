@@ -65,6 +65,8 @@ impl ClusterInfoRepairListener {
     ) -> Result<()> {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let my_id = cluster_info.read().unwrap().id();
+        let mut my_gossiped_root = 0;
+
         loop {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
@@ -73,10 +75,12 @@ impl ClusterInfoRepairListener {
             let peers = cluster_info.read().unwrap().gossip_peers();
             let mut peers_needing_repairs: HashMap<Pubkey, EpochSlots> = HashMap::new();
 
+            // Iterate through all the known nodes in the network, looking for ones that
+            // need repairs
             for peer in peers {
                 let last_update_ts = Self::get_last_ts(peer.id, peer_roots);
-
-                let my_root = Self::get_my_gossiped_root(cluster_info);
+                let my_root =
+                    Self::update_my_gossiped_root(&my_id, cluster_info, &mut my_gossiped_root);
                 {
                     let r_cluster_info = cluster_info.read().unwrap();
 
@@ -105,6 +109,7 @@ impl ClusterInfoRepairListener {
                 &socket,
                 cluster_info,
                 &epoch_schedule,
+                &mut my_gossiped_root,
             );
 
             sleep(Duration::from_millis(REPAIRMEN_SLEEP_MILLIS as u64));
@@ -119,10 +124,11 @@ impl ClusterInfoRepairListener {
         socket: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         epoch_schedule: &EpochSchedule,
+        my_gossiped_root: &mut u64,
     ) -> Result<()> {
         for (repairee_id, repairee_epoch_slots) in repairees {
             let repairee_root = repairee_epoch_slots.root;
-            let my_root = Self::get_my_gossiped_root(cluster_info);
+            let my_root = Self::update_my_gossiped_root(my_id, cluster_info, my_gossiped_root);
 
             let slot_iter = blocktree
                 .slot_meta_iterator(repairee_root + 1)
@@ -254,7 +260,7 @@ impl ClusterInfoRepairListener {
         let mut repairmen: Vec<_> = repairman_roots
             .iter()
             .filter_map(|(repairman_id, (_, repairman_root))| {
-                if Self::should_repair_peer(Some(*repairman_root), repairee_root, *epoch_schedule) {
+                if Self::should_repair_peer(*repairman_root, repairee_root, *epoch_schedule) {
                     Some(repairman_id)
                 } else {
                     None
@@ -266,32 +272,37 @@ impl ClusterInfoRepairListener {
         repairmen
     }
 
-    fn get_my_gossiped_root(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Option<u64> {
-        let my_id = cluster_info.read().unwrap().id();
-
-        cluster_info
+    fn update_my_gossiped_root(
+        my_id: &Pubkey,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        old_root: &mut u64,
+    ) -> u64 {
+        let new_root = cluster_info
             .read()
             .unwrap()
-            .get_gossiped_root_for_node(&my_id, None)
+            .get_gossiped_root_for_node(&my_id, None);
+
+        if let Some(new_root) = new_root {
+            *old_root = new_root;
+            new_root
+        } else {
+            *old_root
+        }
     }
 
     // Decide if a repairman with root == `repairman_root` should send repairs to a
     // potential repairee with root == `repairee_root`
     fn should_repair_peer(
-        repairman_root: Option<u64>,
+        repairman_root: u64,
         repairee_root: u64,
         epoch_schedule: EpochSchedule,
     ) -> bool {
-        if let Some(repairman_root) = repairman_root {
-            // Check if this potential repairman's confirmed leader schedule is greater
-            // than an epoch ahead of the repairee's known schedule
-            let repairman_epoch = epoch_schedule.get_stakers_epoch(repairman_root);
-            let repairee_epoch =
-                epoch_schedule.get_stakers_epoch(repairee_root + NUM_BUFFER_SLOTS as u64);
-            repairman_epoch > repairee_epoch
-        } else {
-            false
-        }
+        // Check if this potential repairman's confirmed leader schedule is greater
+        // than an epoch ahead of the repairee's known schedule
+        let repairman_epoch = epoch_schedule.get_stakers_epoch(repairman_root);
+        let repairee_epoch =
+            epoch_schedule.get_stakers_epoch(repairee_root + NUM_BUFFER_SLOTS as u64);
+        repairman_epoch > repairee_epoch
     }
 
     fn get_root(pubkey: Pubkey, peer_roots: &mut HashMap<Pubkey, (u64, u64)>) -> Option<u64> {
