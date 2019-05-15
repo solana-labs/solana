@@ -60,7 +60,6 @@ failOnValidatorBootupFailure=true
 publicNetwork=false
 enableGpu=false
 customAddress=
-leaderRotation=true
 zones=()
 
 containsZone() {
@@ -113,7 +112,6 @@ Manage testnet instances
                       * For EC2, [address] is the "allocation ID" of the desired
                         Elastic IP.
    -d [disk-type]   - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
-   -b               - Disable leader rotation
 
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
@@ -135,7 +133,7 @@ shift
 [[ $command = create || $command = config || $command = info || $command = delete ]] ||
   usage "Invalid command: $command"
 
-while getopts "h?p:Pn:c:z:gG:a:d:buxf" opt; do
+while getopts "h?p:Pn:c:z:gG:a:d:uxf" opt; do
   case $opt in
   h | \?)
     usage
@@ -155,9 +153,6 @@ while getopts "h?p:Pn:c:z:gG:a:d:buxf" opt; do
     ;;
   z)
     containsZone "$OPTARG" "${zones[@]}" || zones+=("$OPTARG")
-    ;;
-  b)
-    leaderRotation=false
     ;;
   g)
     enableGpu=true
@@ -320,7 +315,6 @@ prepareInstancesAndWriteConfigFile() {
 netBasename=$prefix
 publicNetwork=$publicNetwork
 sshPrivateKey=$sshPrivateKey
-leaderRotation=$leaderRotation
 EOF
   fi
   touch "$geoipConfigFile"
@@ -482,27 +476,17 @@ EOF
 delete() {
   $metricsWriteDatapoint "testnet-deploy net-delete-begin=1"
 
-  # Delete the bootstrap leader first to prevent unusual metrics on the dashboard
-  # during shutdown (only applicable when leader rotation is disabled).
-  # TODO: It would be better to fully cut-off metrics reporting before any
-  # instances are deleted.
-  filters=("$prefix-bootstrap-leader")
-  for zone in "${zones[@]}"; do
-    filters+=("$prefix-$zone")
-  done
-  # Filter for all other nodes (client, blockstreamer)
-  filters+=("$prefix-")
+  # Filter for all nodes
+  filter="$prefix-"
 
-  for filter in  "${filters[@]}"; do
-    echo "Searching for instances: $filter"
-    cloud_FindInstances "$filter"
+  echo "Searching for instances: $filter"
+  cloud_FindInstances "$filter"
 
-    if [[ ${#instances[@]} -eq 0 ]]; then
-      echo "No instances found matching '$filter'"
-    else
-      cloud_DeleteInstances true &
-    fi
-  done
+  if [[ ${#instances[@]} -eq 0 ]]; then
+    echo "No instances found matching '$filter'"
+  else
+    cloud_DeleteInstances true &
+  fi
 
   wait
 
@@ -513,7 +497,6 @@ delete() {
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-delete-complete=1"
-
 }
 
 case $command in
@@ -542,8 +525,6 @@ Network composition:
   Additional fullnodes = $additionalFullNodeCount x $fullNodeMachineType
   Client(s) = $clientNodeCount x $clientMachineType
   Blockstreamer = $blockstreamer
-
-Leader rotation: $leaderRotation
 
 ========================================================================================
 

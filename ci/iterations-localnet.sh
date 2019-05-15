@@ -51,11 +51,11 @@ runTest() {
 
 build
 
-runTest "Leader rotation on" \
+runTest "basic" \
   "ci/localnet-sanity.sh -i 128"
 
-runTest "Leader rotation on, restart" \
+runTest "restart" \
   "ci/localnet-sanity.sh -i 128 -k 16"
 
-runTest "Leader rotation on, incremental restart, extra node" \
+runTest "incremental restart, extra node" \
   "ci/localnet-sanity.sh -i 128 -k 16 -R -x"

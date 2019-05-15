@@ -294,7 +294,6 @@ startBootstrapLeader() {
          $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
-         $leaderRotation \
          $failOnValidatorBootupFailure \
       "
   ) >> "$logFile" 2>&1 || {
@@ -322,7 +321,6 @@ startNode() {
          $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
-         $leaderRotation \
          $failOnValidatorBootupFailure \
       "
   ) >> "$logFile" 2>&1 &
@@ -615,10 +613,6 @@ start)
   start
   ;;
 update)
-  $leaderRotation || {
-    echo Warning: unable to update because leader rotation is disabled
-    exit 1
-  }
   skipSetup=true
   updateNodes=true
   start
