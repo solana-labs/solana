@@ -254,7 +254,7 @@ elif [[ $node_type = replicator ]]; then
 
   default_arg --entrypoint "$entrypoint_address"
   default_arg --identity "$replicator_keypair_path"
-  default_arg --storage_id "$replicator_storage_keypair_path"
+  default_arg --storage-keypair "$replicator_storage_keypair_path"
   default_arg --ledger "$ledger_config_dir"
 
 else

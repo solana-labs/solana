@@ -61,7 +61,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("storage_keypair")
-                .long("storage_id")
+                .long("storage-keypair")
                 .value_name("DIR")
                 .takes_value(true)
                 .required(true)
