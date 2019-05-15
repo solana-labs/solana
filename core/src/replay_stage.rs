@@ -105,7 +105,7 @@ impl ReplayStage {
         }
         // Start the replay stage loop
         let leader_schedule_cache = leader_schedule_cache.clone();
-        let voting_keypair = voting_keypair.map(|kp| kp.clone());
+        let voting_keypair = voting_keypair.cloned();
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
