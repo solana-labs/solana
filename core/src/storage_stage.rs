@@ -546,7 +546,7 @@ mod tests {
         let mut result = storage_state.get_mining_result(&signature);
         assert_eq!(result, Hash::default());
 
-        for i in slot..slot + 3 {
+        for i in slot..slot + 64 {
             blocktree
                 .write_entries(i, 0, 0, ticks_per_slot, &entries)
                 .unwrap();
