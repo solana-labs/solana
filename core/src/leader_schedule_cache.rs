@@ -168,7 +168,7 @@ mod tests {
     use crate::blocktree::tests::make_slot_entries;
     use crate::genesis_utils::create_genesis_block;
     use crate::genesis_utils::{create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS};
-    //    use crate::staking_utils::tests::setup_vote_and_stake_accounts;
+    use crate::staking_utils::tests::setup_vote_and_stake_accounts;
     use solana_runtime::bank::Bank;
     use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOT_LENGTH};
     use std::sync::mpsc::channel;
@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn test_next_leader_slot_next_epoch() {
-        let (mut genesis_block, _mint_keypair) = create_genesis_block(10_000);
+        let (mut genesis_block, mint_keypair) = create_genesis_block(10_000);
         genesis_block.epoch_warmup = false;
 
         let bank = Bank::new(&genesis_block);

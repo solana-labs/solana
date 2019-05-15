@@ -204,6 +204,26 @@ mod tests {
             assert_eq!(vote_accounts.get(&vote_id2).unwrap().0, 10);
         }
     }
+    #[test]
+    fn test_stakes_multiple_stakers() {
+        let mut stakes = Stakes::default();
+
+        let ((vote_id, vote_account), (stake_id, stake_account)) = create_staked_node_accounts(10);
+
+        let (stake_id2, stake_account2) = create_stake_account(10, &vote_id);
+
+        stakes.store(&vote_id, &vote_account);
+
+        // delegates to vote_id
+        stakes.store(&stake_id, &stake_account);
+        stakes.store(&stake_id2, &stake_account2);
+
+        {
+            let vote_accounts = stakes.vote_accounts();
+            assert!(vote_accounts.get(&vote_id).is_some());
+            assert_eq!(vote_accounts.get(&vote_id).unwrap().0, 20);
+        }
+    }
 
     #[test]
     fn test_stakes_not_delegate() {
