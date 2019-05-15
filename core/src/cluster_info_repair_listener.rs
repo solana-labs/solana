@@ -3,7 +3,6 @@ use crate::cluster_info::ClusterInfo;
 use crate::crds_value::EpochSlots;
 use crate::result::Result;
 use crate::service::Service;
-use crate::sigverify_stage::VerifiedPackets;
 use byteorder::{ByteOrder, LittleEndian};
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -11,11 +10,11 @@ use rand_chacha::ChaChaRng;
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::mem;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
@@ -48,7 +47,6 @@ impl ClusterInfoRepairListener {
                     &mut peer_roots,
                     exit,
                     &cluster_info,
-                    &sender,
                     epoch_schedule,
                 );
             })
@@ -124,8 +122,7 @@ impl ClusterInfoRepairListener {
     ) -> Result<()> {
         for (repairee_id, repairee_epoch_slots) in repairees {
             let repairee_root = repairee_epoch_slots.root;
-            let repairee_max_epoch = epoch_schedule.get_stakers_epoch(repairee_root);
-            let repairee_max_slot = epoch_schedule.get_last_slot_in_epoch(repairee_max_epoch);
+            let my_root = Self::get_my_gossiped_root(cluster_info);
 
             let slot_iter = blocktree
                 .slot_meta_iterator(repairee_root + 1)
@@ -138,46 +135,62 @@ impl ClusterInfoRepairListener {
             };
 
             if let Some(repairee_tvu) = repairee_tvu {
-                let (my_repairman_index, repairman_step) = Self::calculate_my_repairman_index(
-                    my_id,
+                let mut eligible_repairmen =
+                    Self::find_eligible_repairmen(my_id, repairee_root, peer_roots, epoch_schedule);
+
+                Self::shuffle_repairmen(
+                    &mut eligible_repairmen,
                     repairee_id,
                     repairee_epoch_slots.root,
-                    peer_roots,
-                    epoch_schedule,
                 );
-                while slot_iter.valid() && slot_iter.key().unwrap() <= repairee_max_slot {
+
+                while slot_iter.valid() && slot_iter.key().unwrap() <= my_root {
                     let slot = slot_iter.key().unwrap();
                     let highest_index = slot_iter.value().unwrap().received;
                     if !repairee_epoch_slots.slots.contains(&slot) {
-                        // This peer is missing this slot, send them the blobs for this slot
-                        for i in (0..highest_index)
-                            .skip(my_repairman_index)
-                            .step_by(repairman_step)
+                        // Calculate the blob indexes this node is repsonsible for repairing. Note that because we
+                        // are only repairing slots that are before our root, the slot.received should be equal to
+                        // the actual total number of blobs in the slot. Optimistically this means that most repairmen should
+                        // observe the same "total" number of blobs for a particular slot, and thus the calculation in
+                        // calculate_my_repairman_index_for_slot() will divide responsibility evenly across the cluster
+                        let num_blobs_in_slot = slot_iter.value().unwrap().received as usize;
+                        if let Some((my_repairman_index, repairman_step)) =
+                            Self::calculate_my_repairman_index_for_slot(
+                                my_id,
+                                &eligible_repairmen,
+                                num_blobs_in_slot,
+                            )
                         {
-                            let mut should_sleep = false;
-                            // Alternatively, we could use a database iterator to iterate over the
-                            // slots. This would be faster if the slots were sparsely populated with
-                            // blobs (big gaps between the blobs in the slot), but by the time we
-                            // are sending the blobs in this slot for repair, we expect these slots
-                            // to be full/near full.
-                            if let Some(blob_data) = blocktree
-                                .get_data_blob_bytes(slot, i)
-                                .expect("Failed to read data blob from blocktree")
+                            // This peer is missing this slot, send them the blobs for this slot
+                            for i in (0..highest_index)
+                                .skip(my_repairman_index)
+                                .step_by(repairman_step)
                             {
-                                socket.send_to(&blob_data[..], repairee_tvu)?;
-                                should_sleep = true;
-                            }
+                                let mut should_sleep = false;
+                                // Alternatively, we could use a database iterator to iterate over the
+                                // slots. This would be faster if the slots were sparsely populated with
+                                // blobs (big gaps between the blobs in the slot), but by the time we
+                                // are sending the blobs in this slot for repair, we expect these slots
+                                // to be full/near full.
+                                if let Some(blob_data) = blocktree
+                                    .get_data_blob_bytes(slot, i)
+                                    .expect("Failed to read data blob from blocktree")
+                                {
+                                    socket.send_to(&blob_data[..], repairee_tvu)?;
+                                    should_sleep = true;
+                                }
 
-                            if let Some(coding_bytes) = blocktree
-                                .get_coding_blob_bytes(slot, i)
-                                .expect("Failed to read coding blob from blocktree")
-                            {
-                                socket.send_to(&coding_bytes[..], repairee_tvu)?;
-                                should_sleep = true;
-                            }
+                                if let Some(coding_bytes) = blocktree
+                                    .get_coding_blob_bytes(slot, i)
+                                    .expect("Failed to read coding blob from blocktree")
+                                {
+                                    socket.send_to(&coding_bytes[..], repairee_tvu)?;
+                                    should_sleep = true;
+                                }
 
-                            if should_sleep {
-                                sleep(Duration::from_millis(BLOB_SEND_SLEEP_MILLIS as u64));
+                                if should_sleep {
+                                    sleep(Duration::from_millis(BLOB_SEND_SLEEP_MILLIS as u64));
+                                }
                             }
                         }
                     }
@@ -188,17 +201,11 @@ impl ClusterInfoRepairListener {
         Ok(())
     }
 
-    fn calculate_my_repairman_index(
-        my_id: &Pubkey,
+    fn shuffle_repairmen(
+        eligible_repairmen: &mut Vec<&Pubkey>,
         repairee_id: &Pubkey,
         repairee_root: u64,
-        repairman_roots: &HashMap<Pubkey, (u64, u64)>,
-        epoch_schedule: &EpochSchedule,
-    ) -> (usize, usize) {
-        let mut eligible_repairmen =
-            Self::find_eligible_repairmen(repairee_root, repairman_roots, epoch_schedule);
-        eligible_repairmen.push(my_id);
-
+    ) {
         // Make a seed from pubkey + repairee root
         let mut seed = [0u8; mem::size_of::<Pubkey>()];
         let repairee_id_bytes = repairee_id.as_ref();
@@ -208,23 +215,43 @@ impl ClusterInfoRepairListener {
         // Deterministically shuffle the eligible repairmen based on the seed
         let mut rng = ChaChaRng::from_seed(seed);
         eligible_repairmen.shuffle(&mut rng);
-        let num_repairmen = eligible_repairmen.len();
-        let num_repairmen_indexes = num_repairmen / REPAIR_REDUNDANCY;
-        let my_repairman_index = eligible_repairmen
-            .iter()
-            .position(|id| *id == my_id)
-            .unwrap()
-            % num_repairmen_indexes;
+    }
 
-        (my_repairman_index, num_repairmen_indexes)
+    fn calculate_my_repairman_index_for_slot(
+        my_id: &Pubkey,
+        eligible_repairmen: &Vec<&Pubkey>,
+        num_blobs_in_slot: usize,
+    ) -> Option<(usize, usize)> {
+        let total_blobs = num_blobs_in_slot * REPAIR_REDUNDANCY;
+        let total_repairmen = min(total_blobs, eligible_repairmen.len());
+        let repairmen = &eligible_repairmen[..total_repairmen];
+
+        // The total number of blobs sent by each repairman
+        let blobs_per_repairman = total_blobs / total_repairmen;
+
+        // Partitions the repairmen into `num_repairman_buckets` different groups.
+        // Each repairman within the same group will be responsible for repairing,
+        // for some `n`, all the blobs with index equal to `n % num_repairman_buckets`
+        // All repairmen within the same group will be sending the same blobs.
+        let num_repairman_buckets = total_blobs / blobs_per_repairman;
+
+        // Calculate the indexes this node is responsible for
+        if let Some(my_position) = repairmen.iter().position(|id| *id == my_id) {
+            Some((my_position % num_repairman_buckets, num_repairman_buckets))
+        } else {
+            // If there are more repairmen than `total_blobs`, then some repairmen
+            // will not have any responsibility to repair this slot
+            None
+        }
     }
 
     fn find_eligible_repairmen<'a>(
+        my_id: &'a Pubkey,
         repairee_root: u64,
         repairman_roots: &'a HashMap<Pubkey, (u64, u64)>,
         epoch_schedule: &EpochSchedule,
     ) -> Vec<&'a Pubkey> {
-        repairman_roots
+        let mut repairmen: Vec<_> = repairman_roots
             .iter()
             .filter_map(|(repairman_id, (_, repairman_root))| {
                 if Self::should_repair_peer(Some(*repairman_root), repairee_root, *epoch_schedule) {
@@ -233,7 +260,10 @@ impl ClusterInfoRepairListener {
                     None
                 }
             })
-            .collect()
+            .collect();
+
+        repairmen.push(my_id);
+        repairmen
     }
 
     fn get_my_gossiped_root(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Option<u64> {
