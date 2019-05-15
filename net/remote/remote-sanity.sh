@@ -26,7 +26,6 @@ missing() {
 [[ -n $deployMethod ]]   || missing deployMethod
 [[ -n $entrypointIp ]]   || missing entrypointIp
 [[ -n $numNodes ]]       || missing numNodes
-[[ -n $leaderRotation ]] || missing leaderRotation
 [[ -n $failOnValidatorBootupFailure ]] || missing failOnValidatorBootupFailure
 
 ledgerVerify=true

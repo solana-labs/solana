@@ -338,7 +338,6 @@ deploy() {
       RUST_LOG=solana=warn \
         ci/testnet-deploy.sh -p edge-perf-testnet-solana-com -C ec2 -z us-west-2b \
           -g -t "$CHANNEL_OR_TAG" -c 2 \
-          -b \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
@@ -351,7 +350,6 @@ deploy() {
       NO_VALIDATOR_SANITY=1 \
         ci/testnet-deploy.sh -p beta-testnet-solana-com -C ec2 -z us-west-1a \
           -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
-          -b \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
@@ -366,7 +364,6 @@ deploy() {
       RUST_LOG=solana=warn \
         ci/testnet-deploy.sh -p beta-perf-testnet-solana-com -C ec2 -z us-west-2b \
           -g -t "$CHANNEL_OR_TAG" -c 2 \
-          -b \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
@@ -410,7 +407,6 @@ deploy() {
         ci/testnet-deploy.sh -p perf-testnet-solana-com -C gce -z us-west1-b \
           -G "--machine-type n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
           -t "$CHANNEL_OR_TAG" -c 2 \
-          -b \
           -d pd-ssd \
           ${skipCreate:+-e} \
           ${skipStart:+-s} \

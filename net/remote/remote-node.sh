@@ -10,8 +10,7 @@ entrypointIp="$3"
 numNodes="$4"
 RUST_LOG="$5"
 skipSetup="$6"
-leaderRotation="$7"
-failOnValidatorBootupFailure="$8"
+failOnValidatorBootupFailure="$7"
 set +x
 export RUST_LOG
 
@@ -33,14 +32,12 @@ missing() {
 [[ -n $entrypointIp ]]  || missing entrypointIp
 [[ -n $numNodes ]]      || missing numNodes
 [[ -n $skipSetup ]]     || missing skipSetup
-[[ -n $leaderRotation ]] || missing leaderRotation
 [[ -n $failOnValidatorBootupFailure ]] || missing failOnValidatorBootupFailure
 
 cat > deployConfig <<EOF
 deployMethod="$deployMethod"
 entrypointIp="$entrypointIp"
 numNodes="$numNodes"
-leaderRotation=$leaderRotation
 failOnValidatorBootupFailure=$failOnValidatorBootupFailure
 EOF
 
@@ -109,11 +106,7 @@ local|tar)
         --stake 0
       )
     else
-      if $leaderRotation; then
-        args+=("--stake" "$stake")
-      else
-        args+=("--stake" 0)
-      fi
+      args+=(--stake "$stake")
       args+=(--enable-rpc-exit)
     fi
 

@@ -20,7 +20,6 @@ tarChannelOrTag=edge
 delete=false
 enableGpu=false
 bootDiskType=""
-leaderRotation=true
 blockstreamer=false
 deployUpdateManifest=true
 fetchLogs=true
@@ -52,7 +51,6 @@ Deploys a CD testnet
    -P                   - Use public network IP addresses (default: $publicNetwork)
    -G                   - Enable GPU, and set count/type of GPUs to use (e.g n1-standard-16 --accelerator count=4,type=nvidia-tesla-k80)
    -g                   - Enable GPU (default: $enableGpu)
-   -b                   - Disable leader rotation
    -a [address]         - Set the bootstrap fullnode's external IP address to this GCE address
    -d [disk-type]       - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
    -D                   - Delete the network
@@ -74,7 +72,7 @@ EOF
 
 zone=()
 
-while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:Sfew" opt; do
+while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt; do
   case $opt in
   h | \?)
     usage
@@ -106,9 +104,6 @@ while getopts "h?p:Pn:c:t:gG:a:Dbd:rusxz:p:C:Sfew" opt; do
       usage "Invalid release channel: $OPTARG"
       ;;
     esac
-    ;;
-  b)
-    leaderRotation=false
     ;;
   g)
     enableGpu=true
@@ -228,10 +223,6 @@ if ! $skipCreate; then
     else
       create_args+=(-G "$bootstrapFullNodeMachineType")
     fi
-  fi
-
-  if ! $leaderRotation; then
-    create_args+=(-b)
   fi
 
   if $publicNetwork; then
