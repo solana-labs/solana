@@ -628,57 +628,71 @@ impl Bank {
                 tx_count += 1;
             } else {
                 if err_count == 0 {
-                    info!("tx error: {:?} {:?}", r, tx);
+                    debug!("tx error: {:?} {:?}", r, tx);
                 }
                 err_count += 1;
             }
         }
         if err_count > 0 {
-            info!("{} errors of {} txs", err_count, err_count + tx_count);
+            debug!("{} errors of {} txs", err_count, err_count + tx_count);
             inc_new_counter_info!(
                 "bank-process_transactions-account_not_found",
-                error_counters.account_not_found
+                error_counters.account_not_found,
+                0,
+                1000
             );
-            inc_new_counter_info!("bank-process_transactions-error_count", err_count);
+            inc_new_counter_info!("bank-process_transactions-error_count", err_count, 0, 1000);
         }
 
         self.increment_transaction_count(tx_count);
 
-        inc_new_counter_info!("bank-process_transactions-txs", tx_count);
+        inc_new_counter_info!("bank-process_transactions-txs", tx_count, 0, 1000);
         if 0 != error_counters.blockhash_not_found {
             inc_new_counter_info!(
                 "bank-process_transactions-error-blockhash_not_found",
-                error_counters.blockhash_not_found
+                error_counters.blockhash_not_found,
+                0,
+                1000
             );
         }
         if 0 != error_counters.invalid_account_index {
             inc_new_counter_info!(
                 "bank-process_transactions-error-invalid_account_index",
-                error_counters.invalid_account_index
+                error_counters.invalid_account_index,
+                0,
+                1000
             );
         }
         if 0 != error_counters.reserve_blockhash {
             inc_new_counter_info!(
                 "bank-process_transactions-error-reserve_blockhash",
-                error_counters.reserve_blockhash
+                error_counters.reserve_blockhash,
+                0,
+                1000
             );
         }
         if 0 != error_counters.duplicate_signature {
             inc_new_counter_info!(
                 "bank-process_transactions-error-duplicate_signature",
-                error_counters.duplicate_signature
+                error_counters.duplicate_signature,
+                0,
+                1000
             );
         }
         if 0 != error_counters.insufficient_funds {
             inc_new_counter_info!(
                 "bank-process_transactions-error-insufficient_funds",
-                error_counters.insufficient_funds
+                error_counters.insufficient_funds,
+                0,
+                1000
             );
         }
         if 0 != error_counters.account_loaded_twice {
             inc_new_counter_info!(
                 "bank-process_transactions-account_loaded_twice",
-                error_counters.account_loaded_twice
+                error_counters.account_loaded_twice,
+                0,
+                1000
             );
         }
         (loaded_accounts, executed)
