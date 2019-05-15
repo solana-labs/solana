@@ -39,21 +39,6 @@ pub enum RepairType {
     Blob(u64, u64),
 }
 
-#[derive(Default)]
-struct RepairInfo {
-    max_slot: u64,
-    repair_tries: u64,
-}
-
-impl RepairInfo {
-    fn new() -> Self {
-        RepairInfo {
-            max_slot: 0,
-            repair_tries: 0,
-        }
-    }
-}
-
 pub struct RepairSlotRange {
     pub start: u64,
     pub end: u64,
@@ -104,7 +89,6 @@ impl RepairService {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         repair_strategy: RepairStrategy,
     ) {
-        let mut repair_info = RepairInfo::new();
         let mut epoch_slots: HashSet<u64> = HashSet::new();
         let id = cluster_info.read().unwrap().id();
         if let RepairStrategy::RepairAll {
@@ -135,7 +119,6 @@ impl RepairService {
                         Self::generate_repairs_in_range(
                             blocktree,
                             MAX_REPAIR_LENGTH,
-                            &mut repair_info,
                             repair_slot_range,
                         )
                     }
@@ -195,46 +178,30 @@ impl RepairService {
     fn generate_repairs_in_range(
         blocktree: &Blocktree,
         max_repairs: usize,
-        repair_info: &mut RepairInfo,
         repair_range: &RepairSlotRange,
     ) -> Result<(Vec<RepairType>)> {
         // Slot height and blob indexes for blobs we want to repair
         let mut repairs: Vec<RepairType> = vec![];
-        let mut meta_iter = blocktree
-            .slot_meta_iterator(repair_range.start)
-            .expect("Couldn't get db iterator");
-        while repairs.len() < max_repairs && meta_iter.valid() {
-            let current_slot = meta_iter.key();
-            if current_slot.unwrap() > repair_range.end {
+        for slot in repair_range.start..=repair_range.end {
+            if repairs.len() >= max_repairs {
                 break;
             }
 
-            if current_slot.unwrap() > repair_info.max_slot {
-                repair_info.repair_tries = 0;
-                repair_info.max_slot = current_slot.unwrap();
-            }
+            let meta = blocktree
+                .meta(slot)
+                .expect("Unable to lookup slot meta")
+                .unwrap_or(SlotMeta {
+                    slot,
+                    ..SlotMeta::default()
+                });
 
-            if let Some(slot) = meta_iter.value() {
-                let new_repairs = Self::generate_repairs_for_slot(
-                    blocktree,
-                    current_slot.unwrap(),
-                    &slot,
-                    max_repairs - repairs.len(),
-                );
-                repairs.extend(new_repairs);
-            }
-            meta_iter.next();
-        }
-
-        // Only increment repair_tries if the ledger contains every blob for every slot
-        if repairs.is_empty() {
-            repair_info.repair_tries += 1;
-        }
-
-        // Optimistically try the next slot if we haven't gotten any repairs
-        // for a while
-        if repair_info.repair_tries >= MAX_REPAIR_TRIES {
-            repairs.push(RepairType::HighestBlob(repair_info.max_slot + 1, 0))
+            let new_repairs = Self::generate_repairs_for_slot(
+                blocktree,
+                slot,
+                &meta,
+                max_repairs - repairs.len(),
+            );
+            repairs.extend(new_repairs);
         }
 
         Ok(repairs)
@@ -525,8 +492,6 @@ mod test {
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            let mut repair_info = RepairInfo::new();
-
             let slots: Vec<u64> = vec![1, 3, 5, 7, 8];
             let num_entries_per_slot = 10;
 
@@ -542,16 +507,21 @@ mod test {
                     let mut repair_slot_range = RepairSlotRange::default();
                     repair_slot_range.start = slots[start];
                     repair_slot_range.end = slots[end];
-                    let expected: Vec<RepairType> = slots[start..end + 1]
-                        .iter()
-                        .map(|slot_index| RepairType::Blob(*slot_index, 0))
+                    let expected: Vec<RepairType> = (repair_slot_range.start
+                        ..=repair_slot_range.end)
+                        .map(|slot_index| {
+                            if slots.contains(&(slot_index as u64)) {
+                                RepairType::Blob(slot_index as u64, 0)
+                            } else {
+                                RepairType::HighestBlob(slot_index as u64, 0)
+                            }
+                        })
                         .collect();
 
                     assert_eq!(
                         RepairService::generate_repairs_in_range(
                             &blocktree,
                             std::usize::MAX,
-                            &mut repair_info,
                             &repair_slot_range
                         )
                         .unwrap(),
@@ -571,8 +541,6 @@ mod test {
 
             let num_entries_per_slot = 10;
 
-            let mut repair_info = RepairInfo::new();
-
             let num_slots = 1;
             let start = 5;
 
@@ -585,7 +553,11 @@ mod test {
             }
 
             let end = 4;
-            let expected: Vec<RepairType> = vec![RepairType::HighestBlob(end, 0)];
+            let expected: Vec<RepairType> = vec![
+                RepairType::HighestBlob(end - 2, 0),
+                RepairType::HighestBlob(end - 1, 0),
+                RepairType::HighestBlob(end, 0),
+            ];
 
             let mut repair_slot_range = RepairSlotRange::default();
             repair_slot_range.start = 2;
@@ -595,7 +567,6 @@ mod test {
                 RepairService::generate_repairs_in_range(
                     &blocktree,
                     std::usize::MAX,
-                    &mut repair_info,
                     &repair_slot_range
                 )
                 .unwrap(),
