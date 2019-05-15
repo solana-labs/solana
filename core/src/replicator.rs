@@ -26,6 +26,7 @@ use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::message::Message;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction;
+use solana_sdk::timing::timestamp;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::transport::TransportError;
 use solana_storage_api::{get_segment_from_slot, storage_instruction, SLOTS_PER_SEGMENT};
@@ -348,6 +349,7 @@ impl Replicator {
         // Remove replicator from the data plane
         let mut contact_info = node_info.clone();
         contact_info.tvu = "0.0.0.0:0".parse().unwrap();
+        contact_info.wallclock = timestamp();
         {
             let mut cluster_info_w = cluster_info.write().unwrap();
             cluster_info_w.insert_self(contact_info);
