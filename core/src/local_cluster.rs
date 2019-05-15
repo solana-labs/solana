@@ -17,6 +17,7 @@ use solana_sdk::system_transaction;
 use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use solana_sdk::transaction::Transaction;
+use solana_stake_api::stake_instruction;
 use solana_vote_api::vote_instruction;
 use solana_vote_api::vote_state::VoteState;
 use std::collections::HashMap;
@@ -228,24 +229,23 @@ impl LocalCluster {
             // setup as a listener
             info!("listener {} ", validator_pubkey,);
         } else {
-            assert!(stake > 2);
             // Send each validator some lamports to vote
             let validator_balance = Self::transfer_with_client(
                 &client,
                 &self.funding_keypair,
                 &validator_pubkey,
-                stake,
+                stake * 2 + 1,
             );
             info!(
                 "validator {} balance {}",
                 validator_pubkey, validator_balance
             );
 
-            Self::create_and_fund_vote_account(
+            Self::setup_vote_and_stake_accounts(
                 &client,
                 &voting_keypair,
                 &validator_keypair,
-                stake - 1,
+                stake,
             )
             .unwrap();
         }
@@ -360,7 +360,7 @@ impl LocalCluster {
             .expect("get balance")
     }
 
-    fn create_and_fund_vote_account(
+    fn setup_vote_and_stake_accounts(
         client: &ThinClient,
         vote_account: &Keypair,
         from_account: &Arc<Keypair>,
@@ -368,35 +368,76 @@ impl LocalCluster {
     ) -> Result<()> {
         let vote_account_pubkey = vote_account.pubkey();
         let node_id = from_account.pubkey();
+
         // Create the vote account if necessary
         if client.poll_get_balance(&vote_account_pubkey).unwrap_or(0) == 0 {
             // 1) Create vote account
-            let instructions = vote_instruction::create_account(
-                &from_account.pubkey(),
-                &vote_account_pubkey,
-                &node_id,
-                0,
-                amount,
-            );
-            let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
+
             let mut transaction = Transaction::new_signed_instructions(
                 &[from_account.as_ref()],
-                instructions,
-                blockhash,
+                vote_instruction::create_account(
+                    &from_account.pubkey(),
+                    &vote_account_pubkey,
+                    &node_id,
+                    0,
+                    amount,
+                ),
+                client.get_recent_blockhash().unwrap().0,
+            );
+            dbg!(vote_account_pubkey);
+            client
+                .retry_transfer(&from_account, &mut transaction, 5)
+                .expect("fund vote");
+            client
+                .wait_for_balance(&vote_account_pubkey, Some(amount))
+                .expect("get balance");
+
+            let stake_account_keypair = Keypair::new();
+            let stake_account_pubkey = stake_account_keypair.pubkey();
+            dbg!(stake_account_pubkey);
+            let mut transaction = Transaction::new_signed_instructions(
+                &[from_account.as_ref()],
+                vec![stake_instruction::create_account(
+                    &from_account.pubkey(),
+                    &stake_account_pubkey,
+                    amount,
+                )],
+                client.get_recent_blockhash().unwrap().0,
             );
 
             client
                 .retry_transfer(&from_account, &mut transaction, 5)
-                .expect("client transfer");
+                .expect("fund stake");
             client
-                .wait_for_balance(&vote_account_pubkey, Some(amount))
+                .wait_for_balance(&stake_account_pubkey, Some(amount))
                 .expect("get balance");
+            dbg!(amount);
+
+            let mut transaction = Transaction::new_signed_instructions(
+                &[from_account.as_ref(), &stake_account_keypair],
+                vec![stake_instruction::delegate_stake(
+                    &from_account.pubkey(),
+                    &stake_account_pubkey,
+                    &vote_account_pubkey,
+                )],
+                client.get_recent_blockhash().unwrap().0,
+            );
+            client
+                .send_and_confirm_transaction(
+                    &[from_account.as_ref(), &stake_account_keypair],
+                    &mut transaction,
+                    5,
+                    0,
+                )
+                .expect("delegate stake");
+            dbg!("delegated");
         }
         info!("Checking for vote account registration");
         let vote_account_user_data = client.get_account_data(&vote_account_pubkey);
         if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
             if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
                 if vote_state.node_id == node_id {
+                    info!("vote account registered");
                     return Ok(());
                 }
             }
