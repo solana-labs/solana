@@ -9,7 +9,6 @@ use crate::packet::to_shared_blob;
 use crate::repair_service::{RepairSlotRange, RepairStrategy};
 use crate::result::Result;
 use crate::service::Service;
-use crate::storage_stage::SLOTS_PER_SEGMENT;
 use crate::streamer::receiver;
 use crate::streamer::responder;
 use crate::window_service::WindowService;
@@ -29,7 +28,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::transport::TransportError;
-use solana_storage_api::{get_segment_from_slot, storage_instruction};
+use solana_storage_api::{get_segment_from_slot, storage_instruction, SLOTS_PER_SEGMENT};
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
@@ -530,7 +529,7 @@ impl Replicator {
             if get_segment_from_slot(storage_slot) != 0 {
                 return Ok((storage_blockhash, storage_slot));
             }
-            sleep(Duration::from_secs(3));
+            sleep(Duration::from_secs(5));
         }
         Err(Error::new(
             ErrorKind::Other,

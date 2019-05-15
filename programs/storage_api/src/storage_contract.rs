@@ -81,11 +81,11 @@ impl<'a> StorageAccount<'a> {
 
         if let StorageContract::ReplicatorStorage { proofs, .. } = &mut storage_contract {
             let segment_index = get_segment_from_slot(slot);
-            if segment_index > proofs.len() || proofs.is_empty() {
-                proofs.resize(cmp::max(1, segment_index), Proof::default());
+            if segment_index >= proofs.len() || proofs.is_empty() {
+                proofs.resize(cmp::max(1, segment_index + 1), Proof::default());
             }
 
-            if segment_index > proofs.len() {
+            if segment_index >= proofs.len() {
                 // only possible if usize max < u64 max
                 return Err(InstructionError::InvalidArgument);
             }

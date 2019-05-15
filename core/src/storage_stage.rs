@@ -60,7 +60,6 @@ pub const STORAGE_ROTATE_TEST_COUNT: u64 = 2;
 // TODO: some way to dynamically size NUM_IDENTITIES
 const NUM_IDENTITIES: usize = 1024;
 pub const NUM_STORAGE_SAMPLES: usize = 4;
-pub const SLOTS_PER_SEGMENT: u64 = 16;
 const KEY_SIZE: usize = 64;
 
 type InstructionSender = Sender<Instruction>;
@@ -463,6 +462,7 @@ mod tests {
     use solana_sdk::hash::{Hash, Hasher};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_storage_api::SLOTS_PER_SEGMENT;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -547,7 +547,7 @@ mod tests {
         let mut result = storage_state.get_mining_result(&signature);
         assert_eq!(result, Hash::default());
 
-        for i in slot..slot + 3 {
+        for i in slot..slot + SLOTS_PER_SEGMENT + 1 {
             blocktree
                 .write_entries(i, 0, 0, ticks_per_slot, &entries)
                 .unwrap();

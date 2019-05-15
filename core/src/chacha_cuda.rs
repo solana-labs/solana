@@ -7,11 +7,10 @@ use crate::sigverify::{
     chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_init_sha_state,
 };
 use solana_sdk::hash::Hash;
+use solana_storage_api::SLOTS_PER_SEGMENT;
 use std::io;
 use std::mem::size_of;
 use std::sync::Arc;
-
-use crate::storage_stage::SLOTS_PER_SEGMENT;
 
 // Encrypt a file with multiple starting IV states, determined by ivecs.len()
 //
