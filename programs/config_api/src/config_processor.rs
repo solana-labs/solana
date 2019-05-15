@@ -153,7 +153,7 @@ mod tests {
         let config_pubkey = config_keypair.pubkey();
 
         let transfer_instruction =
-            system_instruction::transfer(&system_pubkey, &Pubkey::default(), 42);
+            system_instruction::transfer(&system_pubkey, &Pubkey::new_rand(), 42);
         let my_config = MyConfig::new(42);
         let mut store_instruction = config_instruction::store(&config_pubkey, &my_config);
         store_instruction.accounts[0].is_signer = false; // <----- not a signer

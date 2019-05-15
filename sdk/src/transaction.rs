@@ -246,7 +246,7 @@ mod tests {
     fn get_program_id(tx: &Transaction, instruction_index: usize) -> &Pubkey {
         let message = tx.message();
         let instruction = &message.instructions[instruction_index];
-        instruction.program_id(message.program_ids())
+        instruction.program_id(&message.account_keys)
     }
 
     #[test]
@@ -257,8 +257,8 @@ mod tests {
         let prog1 = Pubkey::new_rand();
         let prog2 = Pubkey::new_rand();
         let instructions = vec![
-            CompiledInstruction::new(0, &(), vec![0, 1]),
-            CompiledInstruction::new(1, &(), vec![0, 2]),
+            CompiledInstruction::new(3, &(), vec![0, 1]),
+            CompiledInstruction::new(4, &(), vec![0, 2]),
         ];
         let tx = Transaction::new_with_compiled_instructions(
             &[&key],
@@ -306,7 +306,7 @@ mod tests {
     #[test]
     fn test_refs_invalid_account() {
         let key = Keypair::new();
-        let instructions = vec![CompiledInstruction::new(0, &(), vec![2])];
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![2])];
         let tx = Transaction::new_with_compiled_instructions(
             &[&key],
             &[],
