@@ -23,6 +23,7 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
+use solana_storage_api::SLOTS_PER_SEGMENT;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
@@ -44,7 +45,7 @@ impl Default for FullnodeConfig {
         // TODO: remove this, temporary parameter to configure
         // storage amount differently for test configurations
         // so tests don't take forever to run.
-        const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 128;
+        const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = SLOTS_PER_SEGMENT;
         Self {
             sigverify_disabled: false,
             voting_disabled: false,

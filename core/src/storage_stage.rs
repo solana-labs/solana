@@ -400,8 +400,7 @@ impl StorageStage {
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let slot: u64 = slot_receiver.recv_timeout(timeout)?;
-        storage_state.write().unwrap().slot = slot;
-        *slot_count += 1;
+        *slot_count = slot;
         if let Ok(entries) = blocktree.get_slot_entries(slot, 0, None) {
             for entry in entries {
                 // Go through the transactions, find proofs, and use them to update
@@ -419,20 +418,20 @@ impl StorageStage {
                         }
                     }
                 }
-                if *slot_count % storage_rotate_count == 0 {
-                    debug!(
-                        "crosses sending at slot: {}! hashes: {}",
-                        slot, entry.num_hashes
-                    );
-                    Self::process_entry_crossing(
-                        &storage_keypair,
-                        &storage_state,
-                        &blocktree,
-                        entry.hash,
-                        slot,
-                        instruction_sender,
-                    )?;
-                }
+            }
+            if *slot_count % storage_rotate_count == 0 {
+                debug!(
+                    "crosses sending at slot: {}! hashes: {}",
+                    slot, entry.num_hashes
+                );
+                Self::process_entry_crossing(
+                    &storage_keypair,
+                    &storage_state,
+                    &blocktree,
+                    entry.hash,
+                    slot,
+                    instruction_sender,
+                )?;
             }
         }
         Ok(())
