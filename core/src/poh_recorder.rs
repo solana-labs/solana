@@ -45,6 +45,7 @@ pub struct WorkingBank {
 
 pub struct PohRecorder {
     pub poh: Poh,
+    tick_height: u64,
     clear_bank_signal: Option<SyncSender<bool>>,
     start_slot: u64,
     start_tick: u64,
@@ -111,7 +112,7 @@ impl PohRecorder {
     }
 
     pub fn tick_height(&self) -> u64 {
-        self.poh.tick_height
+        self.tick_height
     }
 
     // returns if leader tick has reached, and how many grace ticks were afforded
@@ -175,12 +176,13 @@ impl PohRecorder {
         let mut cache = vec![];
         info!(
             "reset poh from: {},{} to: {},{}",
-            self.poh.hash, self.poh.tick_height, blockhash, tick_height,
+            self.poh.hash, self.tick_height, blockhash, tick_height,
         );
         std::mem::swap(&mut cache, &mut self.tick_cache);
         self.start_slot = start_slot;
         self.start_tick = tick_height + 1;
-        self.poh = Poh::new(blockhash, tick_height, self.poh_config.hashes_per_tick);
+        self.poh = Poh::new(blockhash, self.poh_config.hashes_per_tick);
+        self.tick_height = tick_height;
         self.max_last_leader_grace_ticks = ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR;
         let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
             &my_next_leader_slot,
@@ -218,12 +220,12 @@ impl PohRecorder {
             .working_bank
             .as_ref()
             .ok_or(Error::PohRecorderError(PohRecorderError::MaxHeightReached))?;
-        if self.poh.tick_height < working_bank.min_tick_height {
+        if self.tick_height < working_bank.min_tick_height {
             return Err(Error::PohRecorderError(
                 PohRecorderError::MinHeightNotReached,
             ));
         }
-        if tick && self.poh.tick_height == working_bank.min_tick_height {
+        if tick && self.tick_height == working_bank.min_tick_height {
             return Err(Error::PohRecorderError(
                 PohRecorderError::MinHeightNotReached,
             ));
@@ -251,7 +253,7 @@ impl PohRecorder {
         } else {
             Ok(())
         };
-        if self.poh.tick_height >= working_bank.max_tick_height {
+        if self.tick_height >= working_bank.max_tick_height {
             info!(
                 "poh_record: max_tick_height reached, setting working bank {} to None",
                 working_bank.bank.slot()
@@ -273,10 +275,11 @@ impl PohRecorder {
     }
 
     pub fn record_tick(&mut self, poh_entry: PohEntry, tick_start: Instant) {
+        self.tick_height += 1;
         let tick_duration = Instant::now().duration_since(tick_start);
         trace!(
             "tick {} in {}ms",
-            poh_entry.tick_height,
+            self.tick_height,
             tick_duration.as_millis()
         );
 
@@ -290,7 +293,7 @@ impl PohRecorder {
             return;
         }
 
-        self.tick_cache.push((entry, poh_entry.tick_height));
+        self.tick_cache.push((entry, self.tick_height));
         let _ = self.flush_cache(true);
     }
 
@@ -326,7 +329,7 @@ impl PohRecorder {
         trace!("sending entry {}", recorded_entry.is_tick());
         self.sender.send((
             working_bank.bank.clone(),
-            vec![(recorded_entry, poh_entry.tick_height)],
+            vec![(recorded_entry, self.tick_height)],
         ))?;
         Ok(())
     }
@@ -344,7 +347,7 @@ impl PohRecorder {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         poh_config: &Arc<PohConfig>,
     ) -> (Self, Receiver<WorkingBankEntries>) {
-        let poh = Poh::new(last_entry_hash, tick_height, poh_config.hashes_per_tick);
+        let poh = Poh::new(last_entry_hash, poh_config.hashes_per_tick);
         let (sender, receiver) = channel();
         let max_last_leader_grace_ticks = ticks_per_slot / MAX_LAST_LEADER_GRACE_TICKS_FACTOR;
         let (start_leader_at_tick, last_leader_tick) = Self::compute_leader_slot_ticks(
@@ -355,6 +358,7 @@ impl PohRecorder {
         (
             Self {
                 poh,
+                tick_height,
                 tick_cache: vec![],
                 working_bank: None,
                 sender,
@@ -435,7 +439,7 @@ mod tests {
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 1);
             assert_eq!(poh_recorder.tick_cache[0].1, 1);
-            assert_eq!(poh_recorder.poh.tick_height, 1);
+            assert_eq!(poh_recorder.tick_height, 1);
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }
@@ -463,7 +467,7 @@ mod tests {
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 2);
             assert_eq!(poh_recorder.tick_cache[1].1, 2);
-            assert_eq!(poh_recorder.poh.tick_height, 2);
+            assert_eq!(poh_recorder.tick_height, 2);
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }
@@ -563,7 +567,7 @@ mod tests {
 
             // all ticks are sent after height > min
             poh_recorder.tick();
-            assert_eq!(poh_recorder.poh.tick_height, 3);
+            assert_eq!(poh_recorder.tick_height, 3);
             assert_eq!(poh_recorder.tick_cache.len(), 0);
             let (bank_, e) = entry_receiver.recv().expect("recv 1");
             assert_eq!(e.len(), 3);
@@ -599,7 +603,7 @@ mod tests {
             poh_recorder.tick();
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.last().unwrap().1, 4);
-            assert_eq!(poh_recorder.poh.tick_height, 4);
+            assert_eq!(poh_recorder.tick_height, 4);
 
             let working_bank = WorkingBank {
                 bank,
@@ -609,7 +613,7 @@ mod tests {
             poh_recorder.set_working_bank(working_bank);
             poh_recorder.tick();
 
-            assert_eq!(poh_recorder.poh.tick_height, 5);
+            assert_eq!(poh_recorder.tick_height, 5);
             assert!(poh_recorder.working_bank.is_none());
             let (_, e) = entry_receiver.recv().expect("recv 1");
             assert_eq!(e.len(), 3);
@@ -684,7 +688,7 @@ mod tests {
             poh_recorder.set_working_bank(working_bank);
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 1);
-            assert_eq!(poh_recorder.poh.tick_height, 1);
+            assert_eq!(poh_recorder.tick_height, 1);
             let tx = test_tx();
             let h1 = hash(b"hello world!");
             assert_matches!(
@@ -724,7 +728,7 @@ mod tests {
             poh_recorder.set_working_bank(working_bank);
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 1);
-            assert_eq!(poh_recorder.poh.tick_height, 1);
+            assert_eq!(poh_recorder.tick_height, 1);
             let tx = test_tx();
             let h1 = hash(b"hello world!");
             assert!(poh_recorder
@@ -771,7 +775,7 @@ mod tests {
             poh_recorder.set_working_bank(working_bank);
             poh_recorder.tick();
             poh_recorder.tick();
-            assert_eq!(poh_recorder.poh.tick_height, 2);
+            assert_eq!(poh_recorder.tick_height, 2);
             let tx = test_tx();
             let h1 = hash(b"hello world!");
             assert!(poh_recorder
@@ -815,7 +819,7 @@ mod tests {
             poh_recorder.set_working_bank(working_bank);
             poh_recorder.tick();
             poh_recorder.tick();
-            assert_eq!(poh_recorder.poh.tick_height, 2);
+            assert_eq!(poh_recorder.tick_height, 2);
             drop(entry_receiver);
             poh_recorder.tick();
             assert!(poh_recorder.working_bank.is_none());
@@ -845,7 +849,7 @@ mod tests {
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 2);
             poh_recorder.reset(
-                poh_recorder.poh.tick_height,
+                poh_recorder.tick_height,
                 poh_recorder.poh.hash,
                 0,
                 Some(4),
@@ -909,11 +913,11 @@ mod tests {
             poh_recorder.tick();
             poh_recorder.tick();
             assert_eq!(poh_recorder.tick_cache.len(), 3);
-            assert_eq!(poh_recorder.poh.tick_height, 3);
+            assert_eq!(poh_recorder.tick_height, 3);
             poh_recorder.reset(1, hash(b"hello"), 0, Some(4), DEFAULT_TICKS_PER_SLOT);
             assert_eq!(poh_recorder.tick_cache.len(), 0);
             poh_recorder.tick();
-            assert_eq!(poh_recorder.poh.tick_height, 2);
+            assert_eq!(poh_recorder.tick_height, 2);
         }
         Blocktree::destroy(&ledger_path).unwrap();
     }

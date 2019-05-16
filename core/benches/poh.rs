@@ -15,7 +15,7 @@ const NUM_HASHES: u64 = 30_000; // Should require ~10ms on a 2017 MacBook Pro
 // No locking.
 // Fastest.
 fn bench_poh_hash(bencher: &mut Bencher) {
-    let mut poh = Poh::new(Hash::default(), 0, None);
+    let mut poh = Poh::new(Hash::default(), None);
     bencher.iter(|| {
         poh.hash(NUM_HASHES);
     })
@@ -25,7 +25,7 @@ fn bench_poh_hash(bencher: &mut Bencher) {
 // Acquire lock on each iteration.
 // Slowest.
 fn bench_arc_mutex_poh_hash(bencher: &mut Bencher) {
-    let poh = Arc::new(Mutex::new(Poh::new(Hash::default(), 0, None)));
+    let poh = Arc::new(Mutex::new(Poh::new(Hash::default(), None)));
     bencher.iter(|| {
         for _ in 0..NUM_HASHES {
             poh.lock().unwrap().hash(1);
@@ -37,7 +37,7 @@ fn bench_arc_mutex_poh_hash(bencher: &mut Bencher) {
 // Acquire lock every NUM_HASHES_PER_BATCH iterations.
 // Speed will be close to bench_poh_hash() if NUM_HASHES_PER_BATCH is set well.
 fn bench_arc_mutex_poh_batched_hash(bencher: &mut Bencher) {
-    let poh = Arc::new(Mutex::new(Poh::new(Hash::default(), 0, None)));
+    let poh = Arc::new(Mutex::new(Poh::new(Hash::default(), None)));
     bencher.iter(|| {
         // NOTE: This block should resemble `PohService::tick_producer()` or
         //       the `NUM_HASHES_PER_BATCH` magic number may no longer be optimal
@@ -53,7 +53,7 @@ fn bench_arc_mutex_poh_batched_hash(bencher: &mut Bencher) {
 #[bench]
 // Worst case transaction recording delay due to batch hashing
 fn bench_poh_lock_time_per_batch(bencher: &mut Bencher) {
-    let mut poh = Poh::new(Hash::default(), 0, None);
+    let mut poh = Poh::new(Hash::default(), None);
     bencher.iter(|| {
         poh.hash(NUM_HASHES_PER_BATCH);
     })

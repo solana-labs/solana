@@ -4,27 +4,24 @@ use solana_sdk::hash::{hash, hashv, Hash};
 pub struct Poh {
     pub hash: Hash,
     num_hashes: u64,
-    pub tick_height: u64,
     hashes_per_tick: u64,
     pub remaining_hashes: u64,
 }
 
 #[derive(Debug)]
 pub struct PohEntry {
-    pub tick_height: u64,
     pub num_hashes: u64,
     pub hash: Hash,
 }
 
 impl Poh {
-    pub fn new(hash: Hash, tick_height: u64, hashes_per_tick: Option<u64>) -> Self {
+    pub fn new(hash: Hash, hashes_per_tick: Option<u64>) -> Self {
         let hashes_per_tick = hashes_per_tick.unwrap_or(std::u64::MAX);
         Poh {
             num_hashes: 0,
             remaining_hashes: hashes_per_tick,
             hashes_per_tick,
             hash,
-            tick_height,
         }
     }
 
@@ -46,7 +43,6 @@ impl Poh {
         self.num_hashes = 0;
 
         Some(PohEntry {
-            tick_height: self.tick_height,
             num_hashes,
             hash: self.hash,
         })
@@ -63,10 +59,8 @@ impl Poh {
         }
         self.remaining_hashes = self.hashes_per_tick;
         self.num_hashes = 0;
-        self.tick_height += 1;
 
         PohEntry {
-            tick_height: self.tick_height,
             num_hashes,
             hash: self.hash,
         }
@@ -106,7 +100,7 @@ mod tests {
         let two = hash(&one.as_ref());
         let one_with_zero = hashv(&[&zero.as_ref(), &zero.as_ref()]);
 
-        let mut poh = Poh::new(zero, 0, None);
+        let mut poh = Poh::new(zero, None);
         assert_eq!(
             verify(
                 zero,
@@ -125,7 +119,6 @@ mod tests {
                 zero,
                 &[(
                     PohEntry {
-                        tick_height: 0,
                         num_hashes: 1,
                         hash: one,
                     },
@@ -139,7 +132,6 @@ mod tests {
                 zero,
                 &[(
                     PohEntry {
-                        tick_height: 0,
                         num_hashes: 2,
                         hash: two,
                     },
@@ -154,7 +146,6 @@ mod tests {
                 zero,
                 &[(
                     PohEntry {
-                        tick_height: 0,
                         num_hashes: 1,
                         hash: one_with_zero,
                     },
@@ -168,7 +159,6 @@ mod tests {
                 zero,
                 &[(
                     PohEntry {
-                        tick_height: 0,
                         num_hashes: 1,
                         hash: zero,
                     },
@@ -184,7 +174,6 @@ mod tests {
                 &[
                     (
                         PohEntry {
-                            tick_height: 0,
                             num_hashes: 1,
                             hash: one_with_zero,
                         },
@@ -192,7 +181,6 @@ mod tests {
                     ),
                     (
                         PohEntry {
-                            tick_height: 0,
                             num_hashes: 1,
                             hash: hash(&one_with_zero.as_ref()),
                         },
@@ -211,7 +199,6 @@ mod tests {
             Hash::default(),
             &[(
                 PohEntry {
-                    tick_height: 0,
                     num_hashes: 0,
                     hash: Hash::default(),
                 },
@@ -223,7 +210,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_poh_too_many_hashes() {
-        let mut poh = Poh::new(Hash::default(), 0, Some(1));
+        let mut poh = Poh::new(Hash::default(), Some(1));
         poh.hash(1);
         assert_eq!(poh.remaining_hashes, 0);
         poh.tick(); // <-- This adds a second hash, exceeding hashes_per_tick.  Panic
@@ -232,14 +219,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_poh_too_few_hashes() {
-        let mut poh = Poh::new(Hash::default(), 0, Some(2));
+        let mut poh = Poh::new(Hash::default(), Some(2));
         assert_eq!(poh.remaining_hashes, 2);
         poh.tick(); // <-- 2 hashes_per_tick are required, but there's only one.  Panic
     }
 
     #[test]
     fn test_poh_record_not_permitted() {
-        let mut poh = Poh::new(Hash::default(), 0, Some(10));
+        let mut poh = Poh::new(Hash::default(), Some(10));
         poh.hash(9);
         assert_eq!(poh.remaining_hashes, 1);
         assert!(poh.record(Hash::default()).is_none()); // <-- record() rejected to avoid exceeding hashes_per_tick
