@@ -50,6 +50,11 @@ impl PohService {
 
             if poh_config.hashes_per_tick.is_none() {
                 sleep(poh_config.target_tick_duration);
+                {
+                    let mut poh_recorder = poh_recorder.lock().unwrap();
+                    let poh_entry = poh_recorder.poh.tick();
+                    poh_recorder.record_tick(poh_entry, tick_start);
+                }
             } else {
                 // NOTE: This block should resemble `bench_arc_mutex_poh_batched_hash()` or
                 //       the `NUM_HASHES_PER_BATCH` magic number may no longer be optimal
