@@ -248,7 +248,7 @@ impl MetricsAgent {
             points_map.retain(|_level, (last_time, points)| {
                 if Self::write(
                     points,
-                    last_time.clone(),
+                    *last_time,
                     max_points,
                     writer,
                     write_frequency_secs,
