@@ -103,7 +103,7 @@ use std::str::FromStr;
 fn param<T: FromStr>(param_str: &str, thing: &str) -> Result<T> {
     param_str.parse::<T>().map_err(|_e| Error {
         code: ErrorCode::InvalidParams,
-        message: format!("Invalid Request: Invalid {} provided", thing).into(),
+        message: format!("Invalid Request: Invalid {} provided", thing),
         data: None,
     })
 }
