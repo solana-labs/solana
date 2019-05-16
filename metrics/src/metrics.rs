@@ -7,11 +7,11 @@ use log::*;
 use solana_sdk::hash::hash;
 use solana_sdk::timing;
 use std::collections::HashMap;
-use std::env;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Barrier, Mutex, Once, ONCE_INIT};
 use std::thread;
 use std::time::{Duration, Instant};
+use std::{cmp, env};
 use sys_info::hostname;
 
 #[macro_export]
@@ -165,18 +165,15 @@ impl MetricsAgent {
         let now = Instant::now();
         if now.duration_since(last_write_time) >= write_frequency_secs && !points.is_empty() {
             let num_points = points.len();
-            let points_written;
-            debug!("run: attempting to write {} points", points.len());
-            if points.len() > max_points {
+            debug!("run: attempting to write {} points", num_points);
+            if num_points > max_points {
                 warn!(
                     "max submission rate of {} datapoints per second exceeded.  only the
                     first {} of {} points will be submitted",
-                    max_points_per_sec,
-                    max_points,
-                    points.len()
+                    max_points_per_sec, max_points, num_points
                 );
             }
-            points_written = points.len();
+            let points_written = cmp::min(num_points, max_points - 1);
 
             let extra = influxdb::Point::new("metrics")
                 .add_timestamp(timing::timestamp() as i64)
@@ -196,7 +193,7 @@ impl MetricsAgent {
                 )
                 .to_owned();
 
-            writer.write(points[0..max_points].to_vec());
+            writer.write(points[0..points_written].to_vec());
             writer.write([extra].to_vec());
 
             return true;
