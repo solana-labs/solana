@@ -36,16 +36,16 @@ fn par_execute_entries(
                 MAX_RECENT_BLOCKHASHES,
             );
             let mut first_err = None;
-            for r in results {
+            for (tx, r) in results.zip(e.transactions) {
                 if let Err(ref e) = r {
                     if first_err.is_none() {
                         first_err = Some(r.clone());
                     }
                     if !Bank::can_commit(&r) {
-                        warn!("Unexpected validator error: {:?}", e);
+                        warn!("Unexpected validator error: {:?}, tx: {:?}", e, tx);
                         datapoint!(
                             "validator_process_entry_error",
-                            ("error", format!("{:?}", e), String)
+                            ("error", format!("error: {:?}, tx: {:?}", e, tx), String)
                         );
                     }
                 }
