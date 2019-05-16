@@ -22,7 +22,6 @@ use std::time::Duration;
 
 pub const REPAIRMEN_SLEEP_MILLIS: usize = 1000;
 pub const REPAIR_REDUNDANCY: usize = 3;
-pub const BLOB_SEND_SLEEP_MILLIS: usize = 2;
 pub const NUM_BUFFER_SLOTS: usize = 100;
 
 // Represents the blobs that a repairman is responsible for repairing in specific slot. More
@@ -126,7 +125,7 @@ impl ClusterInfoRepairListener {
             for peer in peers {
                 let last_update_ts = Self::get_last_ts(peer.id, peer_roots);
                 let my_root =
-                    Self::update_my_gossiped_root(&my_id, cluster_info, &mut my_gossiped_root);
+                    Self::read_my_gossiped_root(&my_id, cluster_info, &mut my_gossiped_root);
                 {
                     let r_cluster_info = cluster_info.read().unwrap();
 
@@ -188,13 +187,12 @@ impl ClusterInfoRepairListener {
             if let Some(repairee_tvu) = repairee_tvu {
                 // For every repairee, get the set of repairmen who are responsible for
                 let mut eligible_repairmen = Self::find_eligible_repairmen(
+                    my_id,
                     repairee_root,
                     peer_roots,
                     epoch_schedule,
                     NUM_BUFFER_SLOTS,
                 );
-
-                eligible_repairmen.push(my_id);
 
                 Self::shuffle_repairmen(
                     &mut eligible_repairmen,
@@ -202,7 +200,7 @@ impl ClusterInfoRepairListener {
                     repairee_epoch_slots.root,
                 );
 
-                let my_root = Self::update_my_gossiped_root(my_id, cluster_info, my_gossiped_root);
+                let my_root = Self::read_my_gossiped_root(my_id, cluster_info, my_gossiped_root);
 
                 let _ = Self::serve_repairs_to_repairee(
                     my_id,
@@ -255,7 +253,6 @@ impl ClusterInfoRepairListener {
                 ) {
                     // Repairee is missing this slot, send them the blobs for this slot
                     for blob_index in my_repair_indexes {
-                        let mut should_sleep = false;
                         // Loop over the blob indexes and query the database for these blob that
                         // this node is reponsible for repairing. This should be faster than using
                         // a database iterator over the slots because by the time this node is
@@ -267,7 +264,6 @@ impl ClusterInfoRepairListener {
                         {
                             socket.send_to(&blob_data[..], repairee_tvu)?;
                             total_data_blobs_sent += 1;
-                            should_sleep = true;
                         }
 
                         if let Some(coding_bytes) = blocktree
@@ -276,11 +272,6 @@ impl ClusterInfoRepairListener {
                         {
                             socket.send_to(&coding_bytes[..], repairee_tvu)?;
                             total_coding_blobs_sent += 1;
-                            should_sleep = true;
-                        }
-
-                        if should_sleep {
-                            sleep(Duration::from_millis(BLOB_SEND_SLEEP_MILLIS as u64));
                         }
                     }
                 }
@@ -354,12 +345,13 @@ impl ClusterInfoRepairListener {
     }
 
     fn find_eligible_repairmen<'a>(
+        my_id: &'a Pubkey,
         repairee_root: u64,
         repairman_roots: &'a HashMap<Pubkey, (u64, u64)>,
         epoch_schedule: &EpochSchedule,
         num_buffer_slots: usize,
     ) -> Vec<&'a Pubkey> {
-        let repairmen: Vec<_> = repairman_roots
+        let mut repairmen: Vec<_> = repairman_roots
             .iter()
             .filter_map(|(repairman_id, (_, repairman_root))| {
                 if Self::should_repair_peer(
@@ -375,11 +367,12 @@ impl ClusterInfoRepairListener {
             })
             .collect();
 
+        repairmen.push(my_id);
         repairmen
     }
 
-    fn update_my_gossiped_root(
-        my_id: &Pubkey,
+    fn read_my_gossiped_root(
+        my_id: &Psubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         old_root: &mut u64,
     ) -> u64 {
