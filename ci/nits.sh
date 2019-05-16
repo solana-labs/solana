@@ -13,6 +13,7 @@ declare prints=(
   'println!'
   'eprint!'
   'eprintln!'
+  'dbg!'
 )
 
 # Parts of the tree that are expected to be print free
@@ -23,9 +24,13 @@ declare print_free_tree=(
   'netutil/src'
   'runtime/src'
   'sdk/src'
+  'programs/vote_api/src'
+  'programs/vote_program/src'
+  'programs/stake_api/src'
+  'programs/stake_program/src'
 )
 
-if _ git grep --max-depth=0 "${prints[@]/#/-e }" -- "${print_free_tree[@]}"; then
+if _ git grep -n --max-depth=0 "${prints[@]/#/-e }" -- "${print_free_tree[@]}"; then
     exit 1
 fi
 
@@ -34,7 +39,7 @@ fi
 # Default::default()
 #
 # Ref: https://github.com/solana-labs/solana/issues/2630
-if _ git grep 'Default::default()' -- '*.rs'; then
+if _ git grep -n 'Default::default()' -- '*.rs'; then
     exit 1
 fi
 

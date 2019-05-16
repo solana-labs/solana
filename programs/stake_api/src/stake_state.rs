@@ -42,6 +42,23 @@ const STAKE_REWARD_TARGET_RATE: f64 = 0.20;
 const STAKE_GETS_PAID_EVERY_VOTE: u64 = 200_000_000; // if numbers above (TICKS_YEAR) move, fix this
 
 impl StakeState {
+    // utility function, used by Stakes, tests
+    pub fn from(account: &Account) -> Option<StakeState> {
+        account.state().ok()
+    }
+
+    // utility function, used by Stakes, tests
+    pub fn voter_id_from(account: &Account) -> Option<Pubkey> {
+        Self::from(account).and_then(|state: Self| state.voter_id())
+    }
+
+    pub fn voter_id(&self) -> Option<Pubkey> {
+        match self {
+            StakeState::Delegate { voter_id, .. } => Some(*voter_id),
+            _ => None,
+        }
+    }
+
     pub fn calculate_rewards(
         credits_observed: u64,
         stake: u64,
@@ -176,8 +193,6 @@ mod tests {
 
     #[test]
     fn test_stake_delegate_stake() {
-        dbg!(std::env::var("CARGO_FOO").unwrap_or("not set".to_string()));
-
         let vote_keypair = Keypair::new();
         let mut vote_state = VoteState::default();
         for i in 0..1000 {

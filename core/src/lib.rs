@@ -67,7 +67,6 @@ pub mod streamer;
 pub mod test_tx;
 pub mod tpu;
 pub mod tvu;
-pub mod voting_keypair;
 pub mod window_service;
 
 #[macro_use]
@@ -83,6 +82,8 @@ extern crate log;
 
 #[macro_use]
 extern crate serde_derive;
+
+#[cfg(test)]
 #[macro_use]
 extern crate serde_json;
 

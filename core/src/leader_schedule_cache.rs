@@ -168,10 +168,9 @@ mod tests {
     use crate::blocktree::tests::make_slot_entries;
     use crate::genesis_utils::create_genesis_block;
     use crate::genesis_utils::{create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS};
-    use crate::voting_keypair::tests::new_vote_account;
+    use crate::staking_utils::tests::setup_vote_and_stake_accounts;
     use solana_runtime::bank::Bank;
     use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOT_LENGTH};
-    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::thread::Builder;
@@ -373,25 +372,20 @@ mod tests {
 
     #[test]
     fn test_next_leader_slot_next_epoch() {
-        let pubkey = Pubkey::new_rand();
-        let (mut genesis_block, mint_keypair, _voting_keypair) = create_genesis_block_with_leader(
-            2 * BOOTSTRAP_LEADER_LAMPORTS,
-            &pubkey,
-            BOOTSTRAP_LEADER_LAMPORTS,
-        );
+        let (mut genesis_block, mint_keypair) = create_genesis_block(10_000);
         genesis_block.epoch_warmup = false;
 
         let bank = Bank::new(&genesis_block);
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let delegate_id = Pubkey::new_rand();
 
         // Create new vote account
-        let new_voting_keypair = Keypair::new();
-        new_vote_account(
-            &mint_keypair,
-            &new_voting_keypair,
-            &delegate_id,
+        let node_id = Pubkey::new_rand();
+        let vote_id = Pubkey::new_rand();
+        setup_vote_and_stake_accounts(
             &bank,
+            &mint_keypair,
+            &vote_id,
+            &node_id,
             BOOTSTRAP_LEADER_LAMPORTS,
         );
 
@@ -412,14 +406,14 @@ mod tests {
 
         let schedule = cache.compute_epoch_schedule(epoch, &bank).unwrap();
         let mut index = 0;
-        while schedule[index] != delegate_id {
-            index += 1
+        while schedule[index] != node_id {
+            index += 1;
+            assert_ne!(index, genesis_block.slots_per_epoch);
         }
-
         expected_slot += index;
 
         assert_eq!(
-            cache.next_leader_slot(&delegate_id, 0, &bank, None),
+            cache.next_leader_slot(&node_id, 0, &bank, None),
             Some(expected_slot),
         );
     }

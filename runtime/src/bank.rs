@@ -9,6 +9,7 @@ use crate::blockhash_queue::BlockhashQueue;
 use crate::epoch_schedule::EpochSchedule;
 use crate::locked_accounts_results::LockedAccountsResults;
 use crate::message_processor::{MessageProcessor, ProcessInstruction};
+use crate::stakes::Stakes;
 use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
@@ -29,39 +30,6 @@ use std::cmp;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-
-/// cache of staking information
-#[derive(Default, Clone)]
-pub struct Stakes {
-    /// vote accounts
-    vote_accounts: HashMap<Pubkey, (u64, Account)>,
-
-    /// stake_accounts
-    stake_accounts: HashMap<Pubkey, Account>,
-}
-
-impl Stakes {
-    pub fn is_stake(account: &Account) -> bool {
-        solana_vote_api::check_id(&account.owner) || solana_stake_api::check_id(&account.owner)
-    }
-
-    pub fn store(&mut self, pubkey: &Pubkey, account: &Account) {
-        if solana_vote_api::check_id(&account.owner) {
-            if account.lamports != 0 {
-                self.vote_accounts
-                    .insert(*pubkey, (account.lamports, account.clone()));
-            } else {
-                self.vote_accounts.remove(pubkey);
-            }
-        } else if solana_stake_api::check_id(&account.owner) {
-            if account.lamports != 0 {
-                self.stake_accounts.insert(*pubkey, account.clone());
-            } else {
-                self.stake_accounts.remove(pubkey);
-            }
-        }
-    }
-}
 
 type BankStatusCache = StatusCache<Result<()>>;
 
@@ -959,15 +927,13 @@ impl Bank {
     /// current vote accounts for this bank along with the stake
     ///   attributed to each account
     pub fn vote_accounts(&self) -> HashMap<Pubkey, (u64, Account)> {
-        self.stakes.read().unwrap().vote_accounts.clone()
+        self.stakes.read().unwrap().vote_accounts().clone()
     }
 
     /// vote accounts for the specific epoch along with the stake
     ///   attributed to each account
     pub fn epoch_vote_accounts(&self, epoch: u64) -> Option<&HashMap<Pubkey, (u64, Account)>> {
-        self.epoch_stakes
-            .get(&epoch)
-            .map(|stakes| &stakes.vote_accounts)
+        self.epoch_stakes.get(&epoch).map(Stakes::vote_accounts)
     }
 
     /// given a slot, return the epoch and offset into the epoch this slot falls
@@ -1922,4 +1888,5 @@ mod tests {
 
         assert!(bank.is_delta.load(Ordering::Relaxed));
     }
+
 }

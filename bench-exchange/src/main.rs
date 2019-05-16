@@ -2,6 +2,7 @@ pub mod bench;
 mod cli;
 pub mod order_book;
 
+#[cfg(test)]
 #[macro_use]
 extern crate solana_exchange_program;
 
@@ -46,7 +47,6 @@ fn main() {
     }
 
     info!("Funding keypair: {}", identity.pubkey());
-    debug!("Exchange program name: {}", solana_exchange_program!().0);
 
     let accounts_in_groups = batch_size * account_groups;
     const NUM_SIGNERS: u64 = 2;

@@ -110,15 +110,18 @@ where
 }
 
 #[cfg(test)]
-pub mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::genesis_utils::{
         create_genesis_block, create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS,
     };
-    use crate::voting_keypair::tests as voting_keypair_tests;
     use hashbrown::HashSet;
+    use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::transaction::Transaction;
+    use solana_stake_api::stake_instruction;
+    use solana_vote_api::vote_instruction;
     use std::iter::FromIterator;
     use std::sync::Arc;
 
@@ -148,14 +151,65 @@ pub mod tests {
         assert_eq!(vote_account_stakes_at_epoch(&bank, 1), expected);
     }
 
+    pub(crate) fn setup_vote_and_stake_accounts(
+        bank: &Bank,
+        from_account: &Keypair,
+        vote_id: &Pubkey,
+        node_id: &Pubkey,
+        amount: u64,
+    ) {
+        fn process_instructions<T: KeypairUtil>(
+            bank: &Bank,
+            keypairs: &[&T],
+            ixs: Vec<Instruction>,
+        ) {
+            bank.process_transaction(&Transaction::new_signed_instructions(
+                keypairs,
+                ixs,
+                bank.last_blockhash(),
+            ))
+            .unwrap();
+        }
+
+        process_instructions(
+            bank,
+            &[from_account],
+            vote_instruction::create_account(&from_account.pubkey(), vote_id, node_id, 0, amount),
+        );
+
+        let stake_account_keypair = Keypair::new();
+        let stake_account_pubkey = stake_account_keypair.pubkey();
+
+        process_instructions(
+            bank,
+            &[from_account],
+            vec![stake_instruction::create_account(
+                &from_account.pubkey(),
+                &stake_account_pubkey,
+                amount,
+            )],
+        );
+
+        process_instructions(
+            bank,
+            &[from_account, &stake_account_keypair],
+            vec![stake_instruction::delegate_stake(
+                &from_account.pubkey(),
+                &stake_account_pubkey,
+                vote_id,
+            )],
+        );
+    }
+
     #[test]
     fn test_epoch_stakes_and_lockouts() {
+        let stake = 42;
         let validator = Keypair::new();
 
-        let (genesis_block, mint_keypair) = create_genesis_block(500);
+        let (genesis_block, mint_keypair) = create_genesis_block(10_000);
 
         let bank = Bank::new(&genesis_block);
-        let bank_voter = Keypair::new();
+        let vote_id = Pubkey::new_rand();
 
         // Give the validator some stake but don't setup a staking account
         // Validator has no lamports staked, so they get filtered out. Only the bootstrap leader
@@ -165,12 +219,12 @@ pub mod tests {
 
         // Make a mint vote account. Because the mint has nonzero stake, this
         // should show up in the active set
-        voting_keypair_tests::new_vote_account(
-            &mint_keypair,
-            &bank_voter,
-            &mint_keypair.pubkey(),
+        setup_vote_and_stake_accounts(
             &bank,
-            499,
+            &mint_keypair,
+            &vote_id,
+            &mint_keypair.pubkey(),
+            stake,
         );
 
         // soonest slot that could be a new epoch is 1
@@ -190,7 +244,7 @@ pub mod tests {
 
         let result: HashSet<_> = HashSet::from_iter(epoch_stakes_and_lockouts(&bank, epoch));
         let expected: HashSet<_> =
-            HashSet::from_iter(vec![(BOOTSTRAP_LEADER_LAMPORTS, None), (499, None)]);
+            HashSet::from_iter(vec![(BOOTSTRAP_LEADER_LAMPORTS, None), (stake, None)]);
         assert_eq!(result, expected);
     }
 
