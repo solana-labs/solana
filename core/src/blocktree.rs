@@ -1,7 +1,6 @@
 //! The `block_tree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
-
 use crate::entry::Entry;
 use crate::erasure::{self, Session};
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
@@ -47,7 +46,7 @@ macro_rules! db_imports {
         pub use db::columns;
 
         pub type Database = db::Database<$db>;
-        pub type Cursor<C>  = db::Cursor<$db, C>;
+        pub type Cursor<C> = db::Cursor<$db, C>;
         pub type LedgerColumn<C> = db::LedgerColumn<$db, C>;
         pub type WriteBatch = db::WriteBatch<$db>;
         type BatchProcessor = db::BatchProcessor<$db>;
@@ -183,10 +182,15 @@ impl Blocktree {
         self.orphans_cf.get(slot)
     }
 
-    pub fn slot_meta_iterator(&self, slot: u64) -> Result<Cursor<cf::SlotMeta>> {
-        let mut db_iterator = self.db.cursor::<cf::SlotMeta>()?;
-        db_iterator.seek(slot);
-        Ok(db_iterator)
+    pub fn slot_meta_iterator(&self, slot: u64) -> Result<impl Iterator<Item = (u64, SlotMeta)>> {
+        let meta_iter = self.db.iter::<cf::SlotMeta>(Some(slot))?;
+        Ok(meta_iter.map(|(slot, slot_meta_bytes)| {
+            (
+                slot,
+                deserialize(&slot_meta_bytes)
+                    .unwrap_or_else(|_| panic!("Could not deserialize SlotMeta for slot {}", slot)),
+            )
+        }))
     }
 
     pub fn slot_data_iterator(

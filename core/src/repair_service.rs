@@ -285,17 +285,17 @@ impl RepairService {
         let last_confirmed_epoch = epoch_schedule.get_stakers_epoch(root);
         let last_epoch_slot = epoch_schedule.get_last_slot_in_epoch(last_confirmed_epoch);
 
-        let mut meta_iter = blocktree
+        let meta_iter = blocktree
             .slot_meta_iterator(root + 1)
             .expect("Couldn't get db iterator");
 
-        while meta_iter.valid() && meta_iter.key().unwrap() <= last_epoch_slot {
-            let current_slot = meta_iter.key().unwrap();
-            let meta = meta_iter.value().unwrap();
+        for (current_slot, meta) in meta_iter {
+            if current_slot > last_epoch_slot {
+                break;
+            }
             if meta.is_full() {
                 slots_in_gossip.insert(current_slot);
             }
-            meta_iter.next();
         }
     }
 
