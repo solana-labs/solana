@@ -230,20 +230,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             let end = Instant::now();
             let elapsed = end.duration_since(start).as_millis();
 
-            genesis_block.poh_config.hashes_per_tick =
-                (genesis_block.poh_config.target_tick_duration.as_millis() * 1_000_000 / elapsed)
-                    as u64;
-            println!(
-                "Hashes per tick: {}",
-                genesis_block.poh_config.hashes_per_tick
-            );
+            let hashes_per_tick = (genesis_block.poh_config.target_tick_duration.as_millis()
+                * 1_000_000
+                / elapsed) as u64;
+            println!("Hashes per tick: {}", hashes_per_tick);
+            genesis_block.poh_config.hashes_per_tick = Some(hashes_per_tick);
         }
         "sleep" => {
-            genesis_block.poh_config.hashes_per_tick = 0;
+            genesis_block.poh_config.hashes_per_tick = None;
         }
         _ => {
             genesis_block.poh_config.hashes_per_tick =
-                value_t_or_exit!(matches, "hashes_per_tick", u64);
+                Some(value_t_or_exit!(matches, "hashes_per_tick", u64));
         }
     }
 

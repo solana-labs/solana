@@ -1,11 +1,12 @@
-//! The `Poh` module provhashes an object for generating a Proof of History.
-//! It records Hashes items on behalf of its users.
+//! The `Poh` module provides an object for generating a Proof of History.
 use solana_sdk::hash::{hash, hashv, Hash};
 
 pub struct Poh {
     pub hash: Hash,
     num_hashes: u64,
     pub tick_height: u64,
+    hashes_per_tick: u64,
+    pub remaining_hashes: u64,
 }
 
 #[derive(Debug)]
@@ -17,9 +18,12 @@ pub struct PohEntry {
 }
 
 impl Poh {
-    pub fn new(hash: Hash, tick_height: u64) -> Self {
+    pub fn new(hash: Hash, tick_height: u64, hashes_per_tick: Option<u64>) -> Self {
+        let hashes_per_tick = hashes_per_tick.unwrap_or(std::u64::MAX);
         Poh {
             num_hashes: 0,
+            remaining_hashes: hashes_per_tick,
+            hashes_per_tick,
             hash,
             tick_height,
         }
@@ -30,20 +34,24 @@ impl Poh {
             self.hash = hash(&self.hash.as_ref());
         }
         self.num_hashes += num_hashes;
+        self.remaining_hashes -= num_hashes;
     }
 
-    pub fn record(&mut self, mixin: Hash) -> PohEntry {
-        self.hash = hashv(&[&self.hash.as_ref(), &mixin.as_ref()]);
-
+    pub fn record(&mut self, mixin: Hash) -> Option<PohEntry> {
         let num_hashes = self.num_hashes + 1;
+        if self.remaining_hashes <= 1 {
+            return None;
+        }
+        self.remaining_hashes -= 1;
+        self.hash = hashv(&[&self.hash.as_ref(), &mixin.as_ref()]);
         self.num_hashes = 0;
 
-        PohEntry {
+        Some(PohEntry {
             tick_height: self.tick_height,
             num_hashes,
             hash: self.hash,
             mixin: Some(mixin),
-        }
+        })
     }
 
     // emissions of Ticks (i.e. PohEntries without a mixin) allows
@@ -52,6 +60,10 @@ impl Poh {
         self.hash(1);
 
         let num_hashes = self.num_hashes;
+        if self.hashes_per_tick < std::u64::MAX {
+            assert_eq!(self.remaining_hashes, 0);
+        }
+        self.remaining_hashes = self.hashes_per_tick;
         self.num_hashes = 0;
         self.tick_height += 1;
 
@@ -73,7 +85,7 @@ mod tests {
         let mut current_hash = initial_hash;
 
         for entry in entries {
-            assert!(entry.num_hashes != 0);
+            assert_ne!(entry.num_hashes, 0);
 
             for _ in 1..entry.num_hashes {
                 current_hash = hash(&current_hash.as_ref());
@@ -97,11 +109,16 @@ mod tests {
         let two = hash(&one.as_ref());
         let one_with_zero = hashv(&[&zero.as_ref(), &zero.as_ref()]);
 
-        let mut poh = Poh::new(zero, 0);
+        let mut poh = Poh::new(zero, 0, None);
         assert_eq!(
             verify(
                 zero,
-                &[poh.tick(), poh.record(zero), poh.record(zero), poh.tick(),],
+                &[
+                    poh.tick(),
+                    poh.record(zero).unwrap(),
+                    poh.record(zero).unwrap(),
+                    poh.tick(),
+                ],
             ),
             true
         );
@@ -192,4 +209,29 @@ mod tests {
         );
     }
 
+    #[test]
+    #[should_panic]
+    fn test_poh_too_many_hashes() {
+        let mut poh = Poh::new(Hash::default(), 0, Some(1));
+        poh.hash(1);
+        assert_eq!(poh.remaining_hashes, 0);
+        poh.tick(); // <-- This adds a second hash, exceeding hashes_per_tick.  Panic
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_poh_too_few_hashes() {
+        let mut poh = Poh::new(Hash::default(), 0, Some(2));
+        assert_eq!(poh.remaining_hashes, 2);
+        poh.tick(); // <-- 2 hashes_per_tick are required, but there's only one.  Panic
+    }
+
+    #[test]
+    fn test_poh_record_not_permitted() {
+        let mut poh = Poh::new(Hash::default(), 0, Some(10));
+        poh.hash(9);
+        assert_eq!(poh.remaining_hashes, 1);
+        assert!(poh.record(Hash::default()).is_none()); // <-- record() rejected to avoid exceeding hashes_per_tick
+        poh.tick();
+    }
 }

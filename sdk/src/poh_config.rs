@@ -7,16 +7,17 @@ pub struct PohConfig {
     pub target_tick_duration: Duration,
 
     /// How many hashes to roll before emitting the next tick entry.
-    /// A value of 0 enables "Low power mode", which causes a sleep for `target_tick_duration`
-    /// instead of hashing.
-    pub hashes_per_tick: u64,
+    /// None enables "Low power mode", which implies:
+    /// * sleep for `target_tick_duration` instead of hashing
+    /// * the number of hashes per tick will be variable
+    pub hashes_per_tick: Option<u64>,
 }
 
 impl PohConfig {
     pub fn new_sleep(target_tick_duration: Duration) -> Self {
         Self {
             target_tick_duration,
-            hashes_per_tick: 0,
+            hashes_per_tick: None,
         }
     }
 }

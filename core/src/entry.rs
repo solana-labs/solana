@@ -171,12 +171,12 @@ fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -
         return *start_hash;
     }
 
-    let mut poh = Poh::new(*start_hash, 0);
+    let mut poh = Poh::new(*start_hash, 0, None);
     poh.hash(num_hashes.saturating_sub(1));
     if transactions.is_empty() {
         poh.tick().hash
     } else {
-        poh.record(hash_transactions(transactions)).hash
+        poh.record(hash_transactions(transactions)).unwrap().hash
     }
 }
 

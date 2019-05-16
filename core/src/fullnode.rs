@@ -114,6 +114,7 @@ impl Fullnode {
         );
         let blocktree = Arc::new(blocktree);
 
+        let poh_config = Arc::new(poh_config);
         let (poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
             bank.tick_height(),
             bank.last_blockhash(),
@@ -124,6 +125,7 @@ impl Fullnode {
             &blocktree,
             blocktree.new_blobs_signals.first().cloned(),
             &leader_schedule_cache,
+            &poh_config,
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
         let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);

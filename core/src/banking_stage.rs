@@ -756,6 +756,7 @@ pub fn create_test_recorder(
     Receiver<WorkingBankEntries>,
 ) {
     let exit = Arc::new(AtomicBool::new(false));
+    let poh_config = Arc::new(PohConfig::default());
     let (mut poh_recorder, entry_receiver) = PohRecorder::new(
         bank.tick_height(),
         bank.last_blockhash(),
@@ -765,11 +766,12 @@ pub fn create_test_recorder(
         &Pubkey::default(),
         blocktree,
         &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+        &poh_config,
     );
     poh_recorder.set_bank(&bank);
 
     let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-    let poh_service = PohService::new(poh_recorder.clone(), &PohConfig::default(), &exit);
+    let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
 
     (exit, poh_recorder, poh_service, entry_receiver)
 }
@@ -1083,6 +1085,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
@@ -1368,6 +1371,7 @@ mod tests {
                 &pubkey,
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
@@ -1376,7 +1380,7 @@ mod tests {
             BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder, 0)
                 .0
                 .unwrap();
-            poh_recorder.lock().unwrap().tick(Instant::now());
+            poh_recorder.lock().unwrap().tick();
 
             let mut done = false;
             // read entries until I find mine, might be ticks...
@@ -1452,6 +1456,7 @@ mod tests {
                 &pubkey,
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 

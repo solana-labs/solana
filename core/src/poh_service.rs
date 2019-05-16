@@ -23,16 +23,16 @@ pub const NUM_HASHES_PER_BATCH: u64 = 128;
 impl PohService {
     pub fn new(
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        config: &PohConfig,
+        poh_config: &Arc<PohConfig>,
         poh_exit: &Arc<AtomicBool>,
     ) -> Self {
         let poh_exit_ = poh_exit.clone();
-        let config = config.clone();
+        let poh_config = poh_config.clone();
         let tick_producer = Builder::new()
             .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
                 let poh_recorder = poh_recorder;
-                Self::tick_producer(&poh_recorder, &config, &poh_exit_);
+                Self::tick_producer(&poh_recorder, &poh_config, &poh_exit_);
                 poh_exit_.store(true, Ordering::Relaxed);
             })
             .unwrap();
@@ -42,28 +42,34 @@ impl PohService {
 
     fn tick_producer(
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        config: &PohConfig,
+        poh_config: &PohConfig,
         poh_exit: &AtomicBool,
     ) {
         while !poh_exit.load(Ordering::Relaxed) {
             let tick_start = Instant::now();
 
-            if config.hashes_per_tick == 0 {
-                sleep(config.target_tick_duration);
+            if poh_config.hashes_per_tick.is_none() {
+                sleep(poh_config.target_tick_duration);
             } else {
-                // NOTE: This block should resemble `bench_arc_mutex_poh_hash_inner_outer()` or
+                // NOTE: This block should resemble `bench_arc_mutex_poh_batched_hash()` or
                 //       the `NUM_HASHES_PER_BATCH` magic number may no longer be optimal
-                let mut num_hashes = config.hashes_per_tick - 1;
-                while num_hashes != 0 {
-                    let num_hashes_batch = std::cmp::min(num_hashes, NUM_HASHES_PER_BATCH);
-                    poh_recorder.lock().unwrap().hash(num_hashes_batch);
-                    num_hashes -= num_hashes_batch;
+                loop {
+                    {
+                        let mut poh_recorder = poh_recorder.lock().unwrap();
+                        let remaining_hashes = poh_recorder.poh.remaining_hashes;
+
+                        let num_hashes_batch =
+                            std::cmp::min(remaining_hashes - 1, NUM_HASHES_PER_BATCH);
+                        if num_hashes_batch == 0 {
+                            let poh_entry = poh_recorder.poh.tick();
+                            poh_recorder.record_tick(poh_entry, tick_start);
+                            break;
+                        }
+                        poh_recorder.poh.hash(num_hashes_batch);
+                    }
                 }
                 // END NOTE
             }
-
-            // TODO: account for any extra hashes added by `poh_recorder.record()
-            poh_recorder.lock().unwrap().tick(tick_start);
         }
     }
 }
@@ -99,6 +105,10 @@ mod tests {
         {
             let blocktree =
                 Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
+            let poh_config = Arc::new(PohConfig {
+                hashes_per_tick: Some(2),
+                target_tick_duration: Duration::from_millis(42),
+            });
             let (poh_recorder, entry_receiver) = PohRecorder::new(
                 bank.tick_height(),
                 prev_hash,
@@ -108,6 +118,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &poh_config,
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
             let exit = Arc::new(AtomicBool::new(false));
@@ -128,11 +139,10 @@ mod tests {
                             // send some data
                             let h1 = hash(b"hello world!");
                             let tx = test_tx();
-                            poh_recorder
+                            let _ = poh_recorder
                                 .lock()
                                 .unwrap()
-                                .record(bank.slot(), h1, vec![tx])
-                                .unwrap();
+                                .record(bank.slot(), h1, vec![tx]);
 
                             if exit.load(Ordering::Relaxed) {
                                 break Ok(());
@@ -142,11 +152,7 @@ mod tests {
                     .unwrap()
             };
 
-            let config = PohConfig {
-                hashes_per_tick: 2,
-                target_tick_duration: Duration::from_millis(1),
-            };
-            let poh_service = PohService::new(poh_recorder.clone(), &config, &exit);
+            let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
             poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
             // get some events
@@ -160,11 +166,15 @@ mod tests {
                     let entry = &entry.0;
                     if entry.is_tick() {
                         assert!(
-                            entry.num_hashes <= config.hashes_per_tick,
-                            format!("{} <= {}", entry.num_hashes, config.hashes_per_tick)
+                            entry.num_hashes <= poh_config.hashes_per_tick.unwrap(),
+                            format!(
+                                "{} <= {}",
+                                entry.num_hashes,
+                                poh_config.hashes_per_tick.unwrap()
+                            )
                         );
 
-                        if entry.num_hashes == config.hashes_per_tick {
+                        if entry.num_hashes == poh_config.hashes_per_tick.unwrap() {
                             need_tick = false;
                         } else {
                             need_partial = false;
@@ -172,13 +182,13 @@ mod tests {
 
                         hashes += entry.num_hashes;
 
-                        assert_eq!(hashes, config.hashes_per_tick);
+                        assert_eq!(hashes, poh_config.hashes_per_tick.unwrap());
 
                         hashes = 0;
                     } else {
                         assert!(entry.num_hashes >= 1);
                         need_entry = false;
-                        hashes += entry.num_hashes - 1;
+                        hashes += entry.num_hashes;
                     }
                 }
             }
