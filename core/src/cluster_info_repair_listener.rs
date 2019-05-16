@@ -193,7 +193,6 @@ impl ClusterInfoRepairListener {
             if slot > my_root {
                 break;
             }
-            let highest_index = slot_meta.received;
             if !repairee_epoch_slots.slots.contains(&slot) {
                 // Calculate the blob indexes this node is responsible for repairing. Note that because we
                 // are only repairing slots that are before our root, the slot.received should be equal to
@@ -201,27 +200,23 @@ impl ClusterInfoRepairListener {
                 // observe the same "total" number of blobs for a particular slot, and thus the calculation in
                 // calculate_my_repairman_index_for_slot() will divide responsibility evenly across the cluster
                 let num_blobs_in_slot = slot_meta.received as usize;
-                if let Some((my_repairman_index, repairman_step)) =
-                    Self::calculate_my_repairman_index_for_slot(
-                        my_id,
-                        &eligible_repairmen,
-                        num_blobs_in_slot,
-                        REPAIR_REDUNDANCY,
-                    )
-                {
+                if let Some((start_index, range_size)) = Self::calculate_my_repairman_index_for_slot(
+                    my_id,
+                    &eligible_repairmen,
+                    num_blobs_in_slot,
+                    REPAIR_REDUNDANCY,
+                ) {
                     // Repairee is missing this slot, send them the blobs for this slot
-                    for i in (0..highest_index)
-                        .skip(my_repairman_index)
-                        .step_by(repairman_step)
-                    {
+                    for i in 0..range_size {
                         let mut should_sleep = false;
                         // Loop over the blob indexes and query the database for these blob that
                         // this node is reponsible for repairing. This should be faster than using
                         // a database iterator over the slots because by the time this node is
                         // sending the blobs in this slot for repair, we expect these slots
                         // to be full.
+                        let blob_index = (start_index + i) % num_blobs_in_slot;
                         if let Some(blob_data) = blocktree
-                            .get_data_blob_bytes(slot, i)
+                            .get_data_blob_bytes(slot, blob_index as u64)
                             .expect("Failed to read data blob from blocktree")
                         {
                             socket.send_to(&blob_data[..], repairee_tvu)?;
@@ -230,7 +225,7 @@ impl ClusterInfoRepairListener {
                         }
 
                         if let Some(coding_bytes) = blocktree
-                            .get_coding_blob_bytes(slot, i)
+                            .get_coding_blob_bytes(slot, blob_index as u64)
                             .expect("Failed to read coding blob from blocktree")
                         {
                             socket.send_to(&coding_bytes[..], repairee_tvu)?;
@@ -276,6 +271,11 @@ impl ClusterInfoRepairListener {
         eligible_repairmen.shuffle(&mut rng);
     }
 
+    // Returns (begin_index, num_blobs), signaling that the repairman is reponsible
+    // for blob indexes in the range [begin_index, begin_index + num_blobs] for this
+    // slot. The calculation should partition the blobs in the slot across the
+    // repairmen in the cluster such that each blob in the slot is the responsibility of
+    // `repair_redundancy` or `repair_redundancy + 1` number of repairmen in the cluster.
     fn calculate_my_repairman_index_for_slot(
         my_id: &Pubkey,
         eligible_repairmen: &[&Pubkey],
@@ -285,18 +285,18 @@ impl ClusterInfoRepairListener {
         let total_blobs = num_blobs_in_slot * repair_redundancy;
         let total_repairmen = min(total_blobs, eligible_repairmen.len());
 
-        // Partitions the repairmen into `num_repairman_buckets` different groups.
-        // Each repairman within the same group will be responsible for repairing,
-        // for some `n`, all the blobs with index equal to `n % num_repairman_buckets`
-        // All repairmen within the same group will be sending the same blobs.
-        let num_repairman_buckets = total_repairmen / repair_redundancy;
+        let blobs_per_repairman = min(
+            (total_blobs + total_repairmen - 1) / total_repairmen,
+            num_blobs_in_slot,
+        );
 
         // Calculate the indexes this node is responsible for
         if let Some(my_position) = eligible_repairmen[..total_repairmen]
             .iter()
             .position(|id| *id == my_id)
         {
-            Some((my_position % num_repairman_buckets, num_repairman_buckets))
+            let begin = (my_position * blobs_per_repairman) % num_blobs_in_slot;
+            Some((begin, blobs_per_repairman))
         } else {
             // If there are more repairmen than `total_blobs`, then some repairmen
             // will not have any responsibility to repair this slot
@@ -362,10 +362,6 @@ impl ClusterInfoRepairListener {
             epoch_schedule.get_stakers_epoch(repairee_root + num_buffer_slots as u64);
 
         repairman_epoch > repairee_epoch
-    }
-
-    fn get_root(pubkey: Pubkey, peer_roots: &mut HashMap<Pubkey, (u64, u64)>) -> Option<u64> {
-        peer_roots.get(&pubkey).map(|(_, last_root)| *last_root)
     }
 
     fn get_last_ts(pubkey: Pubkey, peer_roots: &mut HashMap<Pubkey, (u64, u64)>) -> Option<u64> {
@@ -452,8 +448,8 @@ mod tests {
         let mut received_blobs = vec![];
 
         // This repairee was missing exactly `num_slots / 2` slots, so we expect to get
-        // `(num_slots / 2) * blobs_per_slot` blobs.
-        let num_expected_blobs = (num_slots / 2) * blobs_per_slot;
+        // `(num_slots / 2) * blobs_per_slot * REPAIR_REDUNDANCY` blobs.
+        let num_expected_blobs = (num_slots / 2) * blobs_per_slot * REPAIR_REDUNDANCY as u64;
         while (received_blobs.len() as u64) < num_expected_blobs {
             received_blobs.extend(repairee_receiver.recv());
         }
@@ -498,6 +494,52 @@ mod tests {
         let num_repairmen = 10;
         let num_blobs_in_slot = 42;
         let repair_redundancy = 3;
+
+        run_calculate_my_repairman_index_for_slot(
+            num_repairmen,
+            num_blobs_in_slot,
+            repair_redundancy,
+        );
+
+        // Test when num_blobs_in_slot is a multiple of num_repairmen
+        let num_repairmen = 12;
+        let num_blobs_in_slot = 48;
+        let repair_redundancy = 3;
+
+        run_calculate_my_repairman_index_for_slot(
+            num_repairmen,
+            num_blobs_in_slot,
+            repair_redundancy,
+        );
+
+        // Test when num_repairmen and num_blobs_in_slot are relatively prime
+        let num_repairmen = 12;
+        let num_blobs_in_slot = 47;
+        let repair_redundancy = 12;
+
+        run_calculate_my_repairman_index_for_slot(
+            num_repairmen,
+            num_blobs_in_slot,
+            repair_redundancy,
+        );
+
+        // Test 1 repairman
+        let num_repairmen = 1;
+        let num_blobs_in_slot = 30;
+        let repair_redundancy = 3;
+
+        run_calculate_my_repairman_index_for_slot(
+            num_repairmen,
+            num_blobs_in_slot,
+            repair_redundancy,
+        );
+
+        // Test when repair_redundancy is 1, and num_blobs_in_slot does not evenly
+        // divide num_repairmen
+        let num_repairmen = 12;
+        let num_blobs_in_slot = 47;
+        let repair_redundancy = 1;
+
         run_calculate_my_repairman_index_for_slot(
             num_repairmen,
             num_blobs_in_slot,
@@ -514,7 +556,7 @@ mod tests {
             repair_redundancy,
         );
 
-        // Test when there are more validators than repair_redundancy * num_blobs_in_slot
+        // Test when there are more repairmen than repair_redundancy * num_blobs_in_slot
         let num_repairmen = 42;
         let num_blobs_in_slot = 10;
         let repair_redundancy = 3;
@@ -591,9 +633,8 @@ mod tests {
         let eligible_repairmen_ref: Vec<_> = eligible_repairmen.iter().collect();
         let mut results = HashMap::new();
         let mut none_results = 0;
-        let mut step = None;
         for pk in &eligible_repairmen {
-            if let Some((repairman_index, repairman_step)) =
+            if let Some((start, num_blobs)) =
                 ClusterInfoRepairListener::calculate_my_repairman_index_for_slot(
                     pk,
                     &eligible_repairmen_ref[..],
@@ -601,16 +642,13 @@ mod tests {
                     repair_redundancy,
                 )
             {
-                if let Some(step) = step {
-                    assert_eq!(step, repairman_step);
-                } else {
-                    step = Some(repairman_step);
+                for i in 0..num_blobs {
+                    let blob_index = (start + i) % num_blobs_in_slot;
+                    results
+                        .entry(blob_index)
+                        .and_modify(|e| *e += 1)
+                        .or_insert(1);
                 }
-
-                results
-                    .entry(repairman_index)
-                    .and_modify(|e| *e += 1)
-                    .or_insert(1);
             } else {
                 // This repairman isn't responsible for repairing this slot
                 none_results += 1;
@@ -619,16 +657,19 @@ mod tests {
 
         // Analyze the results:
 
-        // 1) Each bucket should have at least min(repair_redundancy, num_repairmen)
-        // peers responsible for that bucket
+        // 1) If there are a sufficient number of repairmen, then each blob should be sent
+        // `repair_redundancy` OR `repair_redundancy + 1` times.
+        let num_expected_redundancy = min(num_repairmen, repair_redundancy);
         for b in results.keys() {
-            assert!(results[b] >= min(num_repairmen, repair_redundancy));
+            assert!(
+                results[b] == num_expected_redundancy || results[b] == num_expected_redundancy + 1
+            );
         }
 
-        // 2) Buckets should be as evenly divided as possible among the repairmen
-        let min_repairmen = results.values().min_by(|x, y| x.cmp(y)).unwrap();
-        let max_repairmen = results.values().max_by(|x, y| x.cmp(y)).unwrap();
-        assert!(*max_repairmen <= *min_repairmen + 1);
+        // 2) The number of times each blob is sent should be evenly distributed
+        let max_times_blob_sent = results.values().min_by(|x, y| x.cmp(y)).unwrap();
+        let min_times_blob_sent = results.values().max_by(|x, y| x.cmp(y)).unwrap();
+        assert!(*max_times_blob_sent <= *min_times_blob_sent + 1);
 
         // 3) There should only be repairmen who are not responsible for repairing this slot
         // if we have more repairman than `num_blobs_in_slot * repair_redundancy`. In this case the
