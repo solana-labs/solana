@@ -12,17 +12,21 @@ pub struct PohService {
     tick_producer: JoinHandle<()>,
 }
 
+// Number of hashes to batch together.
+// * If this number is too small, PoH hash rate will suffer.
+// * The larger this number is from 1, the speed of recording transactions will suffer due to lock
+//   contention with the PoH hashing within `tick_producer()`.
+//
+// See benches/poh.rs for some benchmarks that attempt to justify this magic number.
+pub const NUM_HASHES_PER_BATCH: u64 = 128;
+
 impl PohService {
     pub fn new(
         poh_recorder: Arc<Mutex<PohRecorder>>,
         config: &PohConfig,
         poh_exit: &Arc<AtomicBool>,
     ) -> Self {
-        // PohService is a headless producer, so when it exits it should notify the banking stage.
-        // Since channel are not used to talk between these threads an AtomicBool is used as a
-        // signal.
         let poh_exit_ = poh_exit.clone();
-        // Single thread to generate ticks
         let config = config.clone();
         let tick_producer = Builder::new()
             .name("solana-poh-service-tick_producer".to_string())
@@ -45,29 +49,21 @@ impl PohService {
             let tick_start = Instant::now();
 
             if config.hashes_per_tick == 0 {
-                let hashing_duration = Instant::now().duration_since(tick_start);
-                if hashing_duration < config.target_tick_duration {
-                    sleep(config.target_tick_duration - hashing_duration);
-                }
+                sleep(config.target_tick_duration);
             } else {
-                for _ in 1..config.hashes_per_tick {
-                    // TODO: amortize the cost of this lock by doing the loop in here for
-                    // some min amount of hashes
-                    // TODO: account for any extra hashes added by `poh_recorder.record()
-                    poh_recorder.lock().unwrap().hash(1);
+                // NOTE: This block should resemble `bench_arc_mutex_poh_hash_inner_outer()` or
+                //       the `NUM_HASHES_PER_BATCH` magic number may no longer be optimal
+                let mut num_hashes = config.hashes_per_tick - 1;
+                while num_hashes != 0 {
+                    let num_hashes_batch = std::cmp::min(num_hashes, NUM_HASHES_PER_BATCH);
+                    poh_recorder.lock().unwrap().hash(num_hashes_batch);
+                    num_hashes -= num_hashes_batch;
                 }
+                // END NOTE
             }
 
-            poh_recorder.lock().unwrap().tick();
-
-            let tick_duration = Instant::now().duration_since(tick_start);
-            // TODO: add datapoint!() for tick info
-            info!(
-                "tick: {} hashes in {}ms (drift {}ms)",
-                config.hashes_per_tick + 1,
-                tick_duration.as_millis(),
-                config.target_tick_duration.as_millis() as i64 - tick_duration.as_millis() as i64
-            );
+            // TODO: account for any extra hashes added by `poh_recorder.record()
+            poh_recorder.lock().unwrap().tick(tick_start);
         }
     }
 }

@@ -65,31 +65,30 @@ impl Poh {
 }
 
 #[cfg(test)]
-pub fn verify(initial_hash: Hash, entries: &[PohEntry]) -> bool {
-    let mut current_hash = initial_hash;
-
-    for entry in entries {
-        assert!(entry.num_hashes != 0);
-
-        for _ in 1..entry.num_hashes {
-            current_hash = hash(&current_hash.as_ref());
-        }
-        current_hash = match entry.mixin {
-            Some(mixin) => hashv(&[&current_hash.as_ref(), &mixin.as_ref()]),
-            None => hash(&current_hash.as_ref()),
-        };
-        if current_hash != entry.hash {
-            return false;
-        }
-    }
-
-    true
-}
-
-#[cfg(test)]
 mod tests {
-    use crate::poh::{verify, Poh, PohEntry};
+    use crate::poh::{Poh, PohEntry};
     use solana_sdk::hash::{hash, hashv, Hash};
+
+    fn verify(initial_hash: Hash, entries: &[PohEntry]) -> bool {
+        let mut current_hash = initial_hash;
+
+        for entry in entries {
+            assert!(entry.num_hashes != 0);
+
+            for _ in 1..entry.num_hashes {
+                current_hash = hash(&current_hash.as_ref());
+            }
+            current_hash = match entry.mixin {
+                Some(mixin) => hashv(&[&current_hash.as_ref(), &mixin.as_ref()]),
+                None => hash(&current_hash.as_ref()),
+            };
+            if current_hash != entry.hash {
+                return false;
+            }
+        }
+
+        true
+    }
 
     #[test]
     fn test_poh_verify() {

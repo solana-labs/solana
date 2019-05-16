@@ -22,6 +22,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::Arc;
+use std::time::Instant;
 
 const MAX_LAST_LEADER_GRACE_TICKS_FACTOR: u64 = 2;
 
@@ -273,10 +274,17 @@ impl PohRecorder {
         Ok(())
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self, tick_start: Instant) {
+        // Warning: while this function executes PoH hashing has stopped so keep it small and
+        // fast!
         let poh_entry = self.poh.tick();
-        assert_ne!(poh_entry.tick_height, 0);
-        trace!("tick {}", poh_entry.tick_height);
+
+        let tick_duration = Instant::now().duration_since(tick_start);
+        trace!(
+            "tick {} in {}ms",
+            poh_entry.tick_height,
+            tick_duration.as_millis()
+        );
 
         let entry = Entry {
             num_hashes: poh_entry.num_hashes,
@@ -416,7 +424,7 @@ mod tests {
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::default()),
             );
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.tick_cache.len(), 1);
             assert_eq!(poh_recorder.tick_cache[0].1, 1);
             assert_eq!(poh_recorder.poh.tick_height, 1);
@@ -442,8 +450,8 @@ mod tests {
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::default()),
             );
-            poh_recorder.tick();
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.tick_cache.len(), 2);
             assert_eq!(poh_recorder.tick_cache[1].1, 2);
             assert_eq!(poh_recorder.poh.tick_height, 2);
@@ -467,7 +475,7 @@ mod tests {
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::default()),
             );
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.tick_cache.len(), 1);
             poh_recorder.reset(0, Hash::default(), 0, Some(4), DEFAULT_TICKS_PER_SLOT);
             assert_eq!(poh_recorder.tick_cache.len(), 0);
@@ -534,15 +542,15 @@ mod tests {
                 max_tick_height: 3,
             };
             poh_recorder.set_working_bank(working_bank);
-            poh_recorder.tick();
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
+            poh_recorder.tick(Instant::now());
             //tick height equal to min_tick_height
             //no tick has been sent
             assert_eq!(poh_recorder.tick_cache.last().unwrap().1, 2);
             assert!(entry_receiver.try_recv().is_err());
 
             // all ticks are sent after height > min
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.poh.tick_height, 3);
             assert_eq!(poh_recorder.tick_cache.len(), 0);
             let (bank_, e) = entry_receiver.recv().expect("recv 1");
@@ -573,10 +581,10 @@ mod tests {
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
             );
 
-            poh_recorder.tick();
-            poh_recorder.tick();
-            poh_recorder.tick();
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
+            poh_recorder.tick(Instant::now());
+            poh_recorder.tick(Instant::now());
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.tick_cache.last().unwrap().1, 4);
             assert_eq!(poh_recorder.poh.tick_height, 4);
 
@@ -586,7 +594,7 @@ mod tests {
                 max_tick_height: 3,
             };
             poh_recorder.set_working_bank(working_bank);
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
 
             assert_eq!(poh_recorder.poh.tick_height, 5);
             assert!(poh_recorder.working_bank.is_none());
@@ -622,7 +630,7 @@ mod tests {
                 max_tick_height: 3,
             };
             poh_recorder.set_working_bank(working_bank);
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
             let tx = test_tx();
             let h1 = hash(b"hello world!");
             assert!(poh_recorder
@@ -659,7 +667,7 @@ mod tests {
                 max_tick_height: 2,
             };
             poh_recorder.set_working_bank(working_bank);
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.tick_cache.len(), 1);
             assert_eq!(poh_recorder.poh.tick_height, 1);
             let tx = test_tx();
@@ -698,7 +706,7 @@ mod tests {
                 max_tick_height: 2,
             };
             poh_recorder.set_working_bank(working_bank);
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.tick_cache.len(), 1);
             assert_eq!(poh_recorder.poh.tick_height, 1);
             let tx = test_tx();
@@ -744,8 +752,8 @@ mod tests {
                 max_tick_height: 2,
             };
             poh_recorder.set_working_bank(working_bank);
-            poh_recorder.tick();
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.poh.tick_height, 2);
             let tx = test_tx();
             let h1 = hash(b"hello world!");
@@ -787,11 +795,11 @@ mod tests {
                 max_tick_height: 3,
             };
             poh_recorder.set_working_bank(working_bank);
-            poh_recorder.tick();
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.poh.tick_height, 2);
             drop(entry_receiver);
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
             assert!(poh_recorder.working_bank.is_none());
             assert_eq!(poh_recorder.tick_cache.len(), 3);
         }
@@ -814,8 +822,8 @@ mod tests {
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::default()),
             );
-            poh_recorder.tick();
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.tick_cache.len(), 2);
             poh_recorder.reset(
                 poh_recorder.poh.tick_height,
@@ -845,8 +853,8 @@ mod tests {
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::default()),
             );
-            poh_recorder.tick();
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.tick_cache.len(), 2);
             poh_recorder.reset(
                 poh_recorder.tick_cache[0].1,
@@ -876,14 +884,14 @@ mod tests {
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::default()),
             );
-            poh_recorder.tick();
-            poh_recorder.tick();
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
+            poh_recorder.tick(Instant::now());
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.tick_cache.len(), 3);
             assert_eq!(poh_recorder.poh.tick_height, 3);
             poh_recorder.reset(1, hash(b"hello"), 0, Some(4), DEFAULT_TICKS_PER_SLOT);
             assert_eq!(poh_recorder.tick_cache.len(), 0);
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
             assert_eq!(poh_recorder.poh.tick_height, 2);
         }
         Blocktree::destroy(&ledger_path).unwrap();
@@ -980,7 +988,7 @@ mod tests {
 
             poh_recorder.set_working_bank(working_bank);
             for _ in 0..max_tick_height {
-                poh_recorder.tick();
+                poh_recorder.tick(Instant::now());
             }
 
             let tx = test_tx();
@@ -1042,7 +1050,7 @@ mod tests {
 
             // Send one slot worth of ticks
             for _ in 0..bank.ticks_per_slot() {
-                poh_recorder.tick();
+                poh_recorder.tick(Instant::now());
             }
 
             // Tick should be recorded
@@ -1078,7 +1086,7 @@ mod tests {
 
             // Send one slot worth of ticks
             for _ in 0..bank.ticks_per_slot() {
-                poh_recorder.tick();
+                poh_recorder.tick(Instant::now());
             }
 
             // We are not the leader yet, as expected
@@ -1086,13 +1094,13 @@ mod tests {
 
             // Send 1 less tick than the grace ticks
             for _ in 0..bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR - 1 {
-                poh_recorder.tick();
+                poh_recorder.tick(Instant::now());
             }
             // We are still not the leader
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
 
             // Send one more tick
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
 
             // We should be the leader now
             assert_eq!(poh_recorder.reached_leader_tick().0, true);
@@ -1115,11 +1123,11 @@ mod tests {
             for _ in
                 bank.ticks_per_slot() / MAX_LAST_LEADER_GRACE_TICKS_FACTOR..bank.ticks_per_slot()
             {
-                poh_recorder.tick();
+                poh_recorder.tick(Instant::now());
             }
 
             // Send one extra tick before resetting (so that there's one grace tick)
-            poh_recorder.tick();
+            poh_recorder.tick(Instant::now());
 
             // We are not the leader yet, as expected
             assert_eq!(poh_recorder.reached_leader_tick().0, false);
@@ -1147,7 +1155,7 @@ mod tests {
 
             // Send remaining ticks for the slot (remember we sent extra ticks in the previous part of the test)
             for _ in 0..4 * bank.ticks_per_slot() {
-                poh_recorder.tick();
+                poh_recorder.tick(Instant::now());
             }
 
             // We are not the leader, as expected
