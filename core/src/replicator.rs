@@ -65,7 +65,7 @@ pub struct Replicator {
     keypair: Arc<Keypair>,
     storage_keypair: Arc<Keypair>,
     signature: ed25519_dalek::Signature,
-    client: ThinClient,
+    cluster_info: Arc<RwLock<ClusterInfo>>,
     ledger_data_file_encrypted: PathBuf,
     sampling_offsets: Vec<u64>,
     hash: Hash,
@@ -263,8 +263,9 @@ impl Replicator {
         let t_replicate = {
             let exit = exit.clone();
             let blocktree = blocktree.clone();
+            let cluster_info = cluster_info.clone();
             spawn(move || {
-                Self::wait_for_ledger_download(slot, &blocktree, &exit, &node_info, &cluster_info)
+                Self::wait_for_ledger_download(slot, &blocktree, &exit, &node_info, cluster_info)
             })
         };
         //always push this last
@@ -281,7 +282,7 @@ impl Replicator {
             keypair,
             storage_keypair,
             signature,
-            client,
+            cluster_info,
             ledger_data_file_encrypted: PathBuf::default(),
             sampling_offsets: vec![],
             hash: Hash::default(),
@@ -314,7 +315,7 @@ impl Replicator {
         blocktree: &Arc<Blocktree>,
         exit: &Arc<AtomicBool>,
         node_info: &ContactInfo,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
     ) {
         info!(
             "window created, waiting for ledger download starting at slot {:?}",
@@ -447,24 +448,18 @@ impl Replicator {
 
     fn submit_mining_proof(&self) {
         // No point if we've got no storage account...
+        let nodes = self.cluster_info.read().unwrap().tvu_peers();
+        let client = crate::gossip_service::get_client(&nodes);
         assert!(
-            self.client
+            client
                 .poll_get_balance(&self.storage_keypair.pubkey())
                 .unwrap()
                 > 0
         );
         // ...or no lamports for fees
-        assert!(
-            self.client
-                .poll_get_balance(&self.keypair.pubkey())
-                .unwrap()
-                > 0
-        );
+        assert!(client.poll_get_balance(&self.keypair.pubkey()).unwrap() > 0);
 
-        let (blockhash, _) = self
-            .client
-            .get_recent_blockhash()
-            .expect("No recent blockhash");
+        let (blockhash, _) = client.get_recent_blockhash().expect("No recent blockhash");
         let instruction = storage_instruction::mining_proof(
             &self.storage_keypair.pubkey(),
             self.hash,
@@ -477,7 +472,7 @@ impl Replicator {
             message,
             blockhash,
         );
-        self.client
+        client
             .send_and_confirm_transaction(
                 &[&self.keypair, &self.storage_keypair],
                 &mut transaction,
