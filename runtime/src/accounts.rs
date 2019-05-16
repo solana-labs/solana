@@ -227,7 +227,7 @@ impl Accounts {
                 Some(program) => program,
                 None => {
                     error_counters.account_not_found += 1;
-                    return Err(TransactionError::AccountNotFound);
+                    return Err(TransactionError::ProgramAccountNotFound);
                 }
             };
             if !program.executable || program.owner == Pubkey::default() {
@@ -1019,7 +1019,7 @@ mod tests {
                 &Pubkey::new_rand(),
                 &mut error_counters
             ),
-            Err(TransactionError::AccountNotFound)
+            Err(TransactionError::ProgramAccountNotFound)
         );
         assert_eq!(error_counters.account_not_found, 1);
     }

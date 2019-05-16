@@ -22,6 +22,9 @@ pub enum TransactionError {
     /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
     AccountNotFound,
 
+    /// Attempt to load program from `Pubkey`, but it doesn't exist.
+    ProgramAccountNotFound,
+
     /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
     InsufficientFundsForFee,
 
