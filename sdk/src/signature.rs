@@ -11,7 +11,9 @@ use std::error;
 use std::fmt;
 use std::fs::{self, File};
 use std::io::Write;
+use std::mem;
 use std::path::Path;
+use std::str::FromStr;
 
 pub type Keypair = ed25519_dalek::Keypair;
 
@@ -67,6 +69,27 @@ impl fmt::Debug for Signature {
 impl fmt::Display for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", bs58::encode(self.0).into_string())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParseSignatureError {
+    WrongSize,
+    Invalid,
+}
+
+impl FromStr for Signature {
+    type Err = ParseSignatureError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = bs58::decode(s)
+            .into_vec()
+            .map_err(|_| ParseSignatureError::Invalid)?;
+        if bytes.len() != mem::size_of::<Signature>() {
+            Err(ParseSignatureError::WrongSize)
+        } else {
+            Ok(Signature::new(&bytes))
+        }
     }
 }
 
@@ -145,4 +168,39 @@ mod tests {
         fs::remove_file(&outfile).unwrap();
         assert!(!Path::new(&outfile).exists());
     }
+
+    #[test]
+    fn test_signature_fromstr() {
+        let signature = Keypair::new().sign_message(&[0u8]);
+
+        let mut signature_base58_str = bs58::encode(signature).into_string();
+
+        assert_eq!(signature_base58_str.parse::<Signature>(), Ok(signature));
+
+        signature_base58_str.push_str(&bs58::encode(signature.0).into_string());
+        assert_eq!(
+            signature_base58_str.parse::<Signature>(),
+            Err(ParseSignatureError::WrongSize)
+        );
+
+        signature_base58_str.truncate(signature_base58_str.len() / 2);
+        assert_eq!(signature_base58_str.parse::<Signature>(), Ok(signature));
+
+        signature_base58_str.truncate(signature_base58_str.len() / 2);
+        assert_eq!(
+            signature_base58_str.parse::<Signature>(),
+            Err(ParseSignatureError::WrongSize)
+        );
+
+        let mut signature_base58_str = bs58::encode(signature.0).into_string();
+        assert_eq!(signature_base58_str.parse::<Signature>(), Ok(signature));
+
+        // throw some non-base58 stuff in there
+        signature_base58_str.replace_range(..1, "I");
+        assert_eq!(
+            signature_base58_str.parse::<Signature>(),
+            Err(ParseSignatureError::Invalid)
+        );
+    }
+
 }
