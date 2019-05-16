@@ -195,6 +195,27 @@ impl Message {
             .find(|(_, &&pubkey)| pubkey == self.account_keys[index])
             .map(|(i, _)| i)
     }
+
+    fn is_credit_debit(&self, i: usize) -> bool {
+        i < (self.header.num_required_signatures - self.header.num_credit_only_signed_accounts)
+            as usize
+            || (i >= self.header.num_required_signatures as usize
+                && i < self.account_keys.len()
+                    - self.header.num_credit_only_unsigned_accounts as usize)
+    }
+
+    pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
+        let mut credit_debit_keys = vec![];
+        let mut credit_only_keys = vec![];
+        for (i, key) in self.account_keys.iter().enumerate() {
+            if self.is_credit_debit(i) {
+                credit_debit_keys.push(key);
+            } else {
+                credit_only_keys.push(key);
+            }
+        }
+        (credit_debit_keys, credit_only_keys)
+    }
 }
 
 #[cfg(test)]
@@ -466,5 +487,59 @@ mod tests {
         assert_eq!(message.program_index_in_program_ids(0), None);
         assert_eq!(message.program_index_in_program_ids(1), Some(0));
         assert_eq!(message.program_index_in_program_ids(2), Some(1));
+    }
+
+    #[test]
+    fn test_is_credit_debit() {
+        let key0 = Pubkey::new_rand();
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
+        let key3 = Pubkey::new_rand();
+        let key4 = Pubkey::new_rand();
+        let key5 = Pubkey::new_rand();
+
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 3,
+                num_credit_only_signed_accounts: 2,
+                num_credit_only_unsigned_accounts: 1,
+            },
+            account_keys: vec![key0, key1, key2, key3, key4, key5],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+        assert_eq!(message.is_credit_debit(0), true);
+        assert_eq!(message.is_credit_debit(1), false);
+        assert_eq!(message.is_credit_debit(2), false);
+        assert_eq!(message.is_credit_debit(3), true);
+        assert_eq!(message.is_credit_debit(4), true);
+        assert_eq!(message.is_credit_debit(5), false);
+    }
+
+    #[test]
+    fn test_get_account_keys_by_lock_type() {
+        let program_id = Pubkey::default();
+        let id0 = Pubkey::new_rand();
+        let id1 = Pubkey::new_rand();
+        let id2 = Pubkey::new_rand();
+        let id3 = Pubkey::new_rand();
+        let message = Message::new(vec![
+            Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta::new(id1, true)]),
+            Instruction::new(
+                program_id,
+                &0,
+                vec![AccountMeta::new_credit_only(id2, false)],
+            ),
+            Instruction::new(
+                program_id,
+                &0,
+                vec![AccountMeta::new_credit_only(id3, true)],
+            ),
+        ]);
+        assert_eq!(
+            message.get_account_keys_by_lock_type(),
+            (vec![&id1, &id0], vec![&id3, &id2, &program_id])
+        );
     }
 }
