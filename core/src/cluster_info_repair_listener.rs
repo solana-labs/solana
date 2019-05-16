@@ -25,6 +25,51 @@ pub const REPAIR_REDUNDANCY: usize = 3;
 pub const BLOB_SEND_SLEEP_MILLIS: usize = 2;
 pub const NUM_BUFFER_SLOTS: usize = 100;
 
+// Represents the blobs that a repairman is responsible for repairing in specific slot. More
+// specifically, a repairman is responsible for every blob in this slot with index
+// `(start_index + step_size * i) % num_blobs_in_slot`, for all `0 <= i <= num_blobs_to_send - 1`
+// in this slot.
+struct BlobIndexesToRepairIterator {
+    start_index: usize,
+    num_blobs_to_send: usize,
+    step_size: usize,
+    num_blobs_in_slot: usize,
+    blobs_sent: usize,
+}
+
+impl BlobIndexesToRepairIterator {
+    fn new(
+        start_index: usize,
+        num_blobs_to_send: usize,
+        step_size: usize,
+        num_blobs_in_slot: usize,
+    ) -> Self {
+        Self {
+            start_index,
+            num_blobs_to_send,
+            step_size,
+            num_blobs_in_slot,
+            blobs_sent: 0,
+        }
+    }
+}
+
+impl Iterator for BlobIndexesToRepairIterator {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.blobs_sent == self.num_blobs_to_send {
+            None
+        } else {
+            let blob_index = Some(
+                (self.start_index + self.step_size * self.blobs_sent) % self.num_blobs_in_slot,
+            );
+            self.blobs_sent += 1;
+            blob_index
+        }
+    }
+}
+
 pub struct ClusterInfoRepairListener {
     thread_hdls: Vec<JoinHandle<()>>,
 }
@@ -194,27 +239,28 @@ impl ClusterInfoRepairListener {
                 break;
             }
             if !repairee_epoch_slots.slots.contains(&slot) {
-                // Calculate the blob indexes this node is responsible for repairing. Note that because we
-                // are only repairing slots that are before our root, the slot.received should be equal to
-                // the actual total number of blobs in the slot. Optimistically this means that most repairmen should
-                // observe the same "total" number of blobs for a particular slot, and thus the calculation in
-                // calculate_my_repairman_index_for_slot() will divide responsibility evenly across the cluster
+                // Calculate the blob indexes this node is responsible for repairing. Note that
+                // because we are only repairing slots that are before our root, the slot.received
+                // should be equal to the actual total number of blobs in the slot. Optimistically
+                // this means that most repairmen should observe the same "total" number of blobs
+                // for a particular slot, and thus the calculation in
+                // calculate_my_repairman_index_for_slot() will divide responsibility evenly across
+                // the cluster
                 let num_blobs_in_slot = slot_meta.received as usize;
-                if let Some((start_index, range_size)) = Self::calculate_my_repairman_index_for_slot(
+                if let Some(my_repair_indexes) = Self::calculate_my_repairman_index_for_slot(
                     my_id,
                     &eligible_repairmen,
                     num_blobs_in_slot,
                     REPAIR_REDUNDANCY,
                 ) {
                     // Repairee is missing this slot, send them the blobs for this slot
-                    for i in 0..range_size {
+                    for blob_index in my_repair_indexes {
                         let mut should_sleep = false;
                         // Loop over the blob indexes and query the database for these blob that
                         // this node is reponsible for repairing. This should be faster than using
                         // a database iterator over the slots because by the time this node is
                         // sending the blobs in this slot for repair, we expect these slots
                         // to be full.
-                        let blob_index = (start_index + i) % num_blobs_in_slot;
                         if let Some(blob_data) = blocktree
                             .get_data_blob_bytes(slot, blob_index as u64)
                             .expect("Failed to read data blob from blocktree")
@@ -271,32 +317,35 @@ impl ClusterInfoRepairListener {
         eligible_repairmen.shuffle(&mut rng);
     }
 
-    // Returns (begin_index, num_blobs), signaling that the repairman is reponsible
-    // for blob indexes in the range [begin_index, begin_index + num_blobs] for this
-    // slot. The calculation should partition the blobs in the slot across the
-    // repairmen in the cluster such that each blob in the slot is the responsibility of
-    // `repair_redundancy` or `repair_redundancy + 1` number of repairmen in the cluster.
+    // The calculation should partition the blobs in the slot across the repairmen in the cluster
+    // such that each blob in the slot is the responsibility of `repair_redundancy` or
+    // `repair_redundancy + 1` number of repairmen in the cluster.
     fn calculate_my_repairman_index_for_slot(
         my_id: &Pubkey,
         eligible_repairmen: &[&Pubkey],
         num_blobs_in_slot: usize,
         repair_redundancy: usize,
-    ) -> Option<(usize, usize)> {
+    ) -> Option<BlobIndexesToRepairIterator> {
         let total_blobs = num_blobs_in_slot * repair_redundancy;
-        let total_repairmen = min(total_blobs, eligible_repairmen.len());
+        let total_repairmen_for_slot = min(total_blobs, eligible_repairmen.len());
 
         let blobs_per_repairman = min(
-            (total_blobs + total_repairmen - 1) / total_repairmen,
+            (total_blobs + total_repairmen_for_slot - 1) / total_repairmen_for_slot,
             num_blobs_in_slot,
         );
 
         // Calculate the indexes this node is responsible for
-        if let Some(my_position) = eligible_repairmen[..total_repairmen]
+        if let Some(my_position) = eligible_repairmen[..total_repairmen_for_slot]
             .iter()
             .position(|id| *id == my_id)
         {
-            let begin = (my_position * blobs_per_repairman) % num_blobs_in_slot;
-            Some((begin, blobs_per_repairman))
+            let start_index = my_position % num_blobs_in_slot;
+            Some(BlobIndexesToRepairIterator::new(
+                start_index,
+                blobs_per_repairman,
+                total_repairmen_for_slot,
+                num_blobs_in_slot,
+            ))
         } else {
             // If there are more repairmen than `total_blobs`, then some repairmen
             // will not have any responsibility to repair this slot
@@ -634,7 +683,7 @@ mod tests {
         let mut results = HashMap::new();
         let mut none_results = 0;
         for pk in &eligible_repairmen {
-            if let Some((start, num_blobs)) =
+            if let Some(my_repair_indexes) =
                 ClusterInfoRepairListener::calculate_my_repairman_index_for_slot(
                     pk,
                     &eligible_repairmen_ref[..],
@@ -642,8 +691,7 @@ mod tests {
                     repair_redundancy,
                 )
             {
-                for i in 0..num_blobs {
-                    let blob_index = (start + i) % num_blobs_in_slot;
+                for blob_index in my_repair_indexes {
                     results
                         .entry(blob_index)
                         .and_modify(|e| *e += 1)
