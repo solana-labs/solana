@@ -2734,6 +2734,7 @@ dependencies = [
 name = "solana-upload-perf"
 version = "0.15.0"
 dependencies = [
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.39 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-metrics 0.15.0",
 ]

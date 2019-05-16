@@ -134,7 +134,7 @@ impl Counter {
                         .or_insert(influxdb::Value::Integer(0));
                 }
                 if let Some(ref mut point) = self.point {
-                    submit(point.to_owned());
+                    submit(point.to_owned(), level);
                 }
             }
         }
