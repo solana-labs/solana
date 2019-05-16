@@ -3,7 +3,7 @@ extern crate solana;
 use solana::cluster::Cluster;
 use solana::cluster_tests;
 use solana::fullnode::FullnodeConfig;
-use solana::gossip_service::discover_nodes;
+use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::poh_service::PohServiceConfig;
 use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
@@ -153,7 +153,7 @@ fn test_forwarding() {
     };
     let cluster = LocalCluster::new(&config);
 
-    let cluster_nodes = discover_nodes(&cluster.entry_point_info.gossip, 2).unwrap();
+    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 2).unwrap();
     assert!(cluster_nodes.len() >= 2);
 
     let leader_id = cluster.entry_point_info.id;
@@ -203,6 +203,6 @@ fn test_listener_startup() {
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&config);
-    let cluster_nodes = discover_nodes(&cluster.entry_point_info.gossip, 4).unwrap();
+    let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 4).unwrap();
     assert_eq!(cluster_nodes.len(), 4);
 }

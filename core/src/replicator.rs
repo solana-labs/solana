@@ -26,6 +26,7 @@ use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::message::Message;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction;
+use solana_sdk::timing::timestamp;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::transport::TransportError;
 use solana_storage_api::{get_segment_from_slot, storage_instruction, SLOTS_PER_SEGMENT};
@@ -209,7 +210,7 @@ impl Replicator {
         );
 
         info!("Connecting to the cluster via {:?}", cluster_entrypoint);
-        let nodes = crate::gossip_service::discover_nodes(&cluster_entrypoint.gossip, 1)?;
+        let (nodes, _) = crate::gossip_service::discover_cluster(&cluster_entrypoint.gossip, 1)?;
         let client = crate::gossip_service::get_client(&nodes);
 
         let (storage_blockhash, storage_slot) = Self::poll_for_blockhash_and_slot(&cluster_info)?;
@@ -349,6 +350,7 @@ impl Replicator {
         // Remove replicator from the data plane
         let mut contact_info = node_info.clone();
         contact_info.tvu = "0.0.0.0:0".parse().unwrap();
+        contact_info.wallclock = timestamp();
         {
             let mut cluster_info_w = cluster_info.write().unwrap();
             cluster_info_w.insert_self(contact_info);

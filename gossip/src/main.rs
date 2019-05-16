@@ -133,7 +133,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 Some(addr)
             };
 
-            let nodes = discover(
+            let (nodes, _replicators) = discover(
                 &entrypoint_addr,
                 num_nodes,
                 timeout,
@@ -174,7 +174,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .unwrap()
                 .parse::<Pubkey>()
                 .unwrap();
-            let nodes = discover(&entrypoint_addr, None, None, Some(pubkey), None)?;
+            let (nodes, _replicators) = discover(&entrypoint_addr, None, None, Some(pubkey), None)?;
             let node = nodes.iter().find(|x| x.id == pubkey).unwrap();
 
             if !ContactInfo::is_valid_address(&node.rpc) {

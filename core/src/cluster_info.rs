@@ -242,6 +242,7 @@ impl ClusterInfo {
     pub fn contact_info_trace(&self) -> String {
         let now = timestamp();
         let mut spy_nodes = 0;
+        let mut replicators = 0;
         let my_id = self.my_data().id;
         let nodes: Vec<_> = self
             .all_peers()
@@ -249,6 +250,8 @@ impl ClusterInfo {
             .map(|(node, last_updated)| {
                 if Self::is_spy_node(&node) {
                     spy_nodes += 1;
+                } else if Self::is_replicator(&node) {
+                    replicators += 1;
                 }
                 fn addr_to_string(addr: &SocketAddr) -> String {
                     if ContactInfo::is_valid_address(addr) {
@@ -276,9 +279,14 @@ impl ClusterInfo {
             " Node contact info             | Age     | Node identifier                   \n\
              -------------------------------+---------+-----------------------------------\n\
              {}\
-             Nodes: {}{}",
+             Nodes: {}{}{}",
             nodes.join(""),
-            nodes.len() - spy_nodes,
+            nodes.len() - spy_nodes - replicators,
+            if replicators > 0 {
+                format!("\nReplicators: {}", replicators)
+            } else {
+                "".to_string()
+            },
             if spy_nodes > 0 {
                 format!("\nSpies: {}", spy_nodes)
             } else {
@@ -378,7 +386,7 @@ impl ClusterInfo {
             .collect()
     }
 
-    /// compute broadcast table
+    /// all peers that have a valid tvu port.
     pub fn tvu_peers(&self) -> Vec<ContactInfo> {
         let me = self.my_data().id;
         self.gossip
@@ -387,6 +395,20 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| ContactInfo::is_valid_address(&x.tvu))
+            .filter(|x| x.id != me)
+            .cloned()
+            .collect()
+    }
+
+    /// all peers that have a valid storage addr
+    pub fn storage_peers(&self) -> Vec<ContactInfo> {
+        let me = self.my_data().id;
+        self.gossip
+            .crds
+            .table
+            .values()
+            .filter_map(|x| x.value.contact_info())
+            .filter(|x| ContactInfo::is_valid_address(&x.storage_addr))
             .filter(|x| x.id != me)
             .cloned()
             .collect()
@@ -417,9 +439,15 @@ impl ClusterInfo {
     }
 
     fn is_spy_node(contact_info: &ContactInfo) -> bool {
-        !ContactInfo::is_valid_address(&contact_info.tpu)
+        (!ContactInfo::is_valid_address(&contact_info.tpu)
             || !ContactInfo::is_valid_address(&contact_info.gossip)
-            || !ContactInfo::is_valid_address(&contact_info.tvu)
+            || !ContactInfo::is_valid_address(&contact_info.tvu))
+            && !ContactInfo::is_valid_address(&contact_info.storage_addr)
+    }
+
+    pub fn is_replicator(contact_info: &ContactInfo) -> bool {
+        ContactInfo::is_valid_address(&contact_info.storage_addr)
+            && !ContactInfo::is_valid_address(&contact_info.tpu)
     }
 
     fn sort_by_stake<S: std::hash::BuildHasher>(

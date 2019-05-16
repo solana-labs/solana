@@ -5,7 +5,7 @@ use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::blocktree_processor::{self, BankForksInfo};
 use crate::cluster_info::{ClusterInfo, Node};
 use crate::contact_info::ContactInfo;
-use crate::gossip_service::{discover_nodes, GossipService};
+use crate::gossip_service::{discover_cluster, GossipService};
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::poh_recorder::PohRecorder;
 use crate::poh_service::{PohService, PohServiceConfig};
@@ -369,7 +369,7 @@ pub fn new_fullnode_for_tests() -> (Fullnode, ContactInfo, Keypair, String) {
         None,
         &FullnodeConfig::default(),
     );
-    discover_nodes(&contact_info.gossip, 1).expect("Node startup failed");
+    discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
     (node, contact_info, mint_keypair, ledger_path)
 }
 
