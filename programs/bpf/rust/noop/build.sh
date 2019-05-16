@@ -6,8 +6,10 @@ cargo install xargo
 
 set -e
 
+bpf_sdk=../../../../sdk/bpf
+
 # Ensure the sdk is installed
-../../../../sdk/bpf/scripts/install.sh
+"$bpf_sdk"/scripts/install.sh
 
 export RUSTUP_TOOLCHAIN=bpf
 export RUSTFLAGS="$RUSTFLAGS \
@@ -18,9 +20,9 @@ export RUSTFLAGS="$RUSTFLAGS \
     -C link-arg=--Bdynamic \
     -C link-arg=-shared \
     -C link-arg=--entry=entrypoint \
-    -C linker=../../../../sdk/bpf/llvm-native/bin/ld.lld"
+    -C linker=$bpf_sdk/llvm-native/bin/ld.lld"
 export XARGO_HOME="$PWD/target/xargo"
-export XARGO_RUST_SRC="../../../../sdk/bpf/rust-bpf-sysroot/src"
+export XARGO_RUST_SRC="$bpf_sdk/rust-bpf-sysroot/src"
 xargo build --target bpfel-unknown-unknown --release -v
 
 { { set +x; } 2>/dev/null; echo Success; }
