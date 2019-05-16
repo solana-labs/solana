@@ -36,7 +36,7 @@ fn par_execute_entries(
                 MAX_RECENT_BLOCKHASHES,
             );
             let mut first_err = None;
-            for (tx, r) in results.zip(e.transactions) {
+            for (r, tx) in results.iter().zip(e.transactions.iter()) {
                 if let Err(ref e) = r {
                     if first_err.is_none() {
                         first_err = Some(r.clone());
