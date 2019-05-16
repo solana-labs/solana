@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+#[derive(Debug)]
 pub struct Recycler<T> {
     gc: Arc<Mutex<Vec<T>>>,
 }

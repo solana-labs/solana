@@ -26,18 +26,18 @@ const CUDA_SUCCESS: CudaError = 0;
 pub fn pin<T>(_mem: &mut Vec<T>) {
     #[cfg(feature = "cuda")]
     unsafe {
-        trace!(
-            "pinning: {:?} bytes: {}",
-            _mem.as_ptr(),
-            _mem.capacity() * size_of::<T>()
-        );
         let err = cudaHostRegister(
             _mem.as_mut_ptr() as *mut c_void,
             _mem.capacity() * size_of::<T>(),
             0,
         );
         if err != CUDA_SUCCESS {
-            error!("cudaHostRegister error: {}", err);
+            error!(
+                "cudaHostRegister error: {} ptr: {:?} bytes: {}",
+                err,
+                _mem.as_ptr(),
+                _mem.len() * size_of::<T>()
+            );
         }
     }
 }
@@ -47,7 +47,7 @@ pub fn unpin<T>(_mem: *mut T) {
     unsafe {
         let err = cudaHostUnregister(_mem as *mut c_void);
         if err != CUDA_SUCCESS {
-            error!("cudaHostUnregister returned: {}", err);
+            error!("cudaHostUnregister returned: {} ptr: {:?}", err, _mem);
         }
     }
 }
@@ -56,6 +56,7 @@ pub fn unpin<T>(_mem: *mut T) {
 pub struct PinnedVec<T> {
     x: Vec<T>,
     pinned: bool,
+    pinnable: bool,
 }
 
 impl Reset for PinnedVec<u8> {
@@ -75,6 +76,7 @@ impl<T: Clone> Default for PinnedVec<T> {
         Self {
             x: Vec::new(),
             pinned: false,
+            pinnable: false,
         }
     }
 }
@@ -113,6 +115,15 @@ impl<'a, T> Iterator for PinnedIterMut<'a, T> {
     }
 }
 
+impl<'a, T> IntoIterator for &'a mut PinnedVec<T> {
+    type Item = &'a T;
+    type IntoIter = PinnedIter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        PinnedIter(self.iter())
+    }
+}
+
 impl<'a, T> IntoIterator for &'a PinnedVec<T> {
     type Item = &'a T;
     type IntoIter = PinnedIter<'a, T>;
@@ -123,18 +134,25 @@ impl<'a, T> IntoIterator for &'a PinnedVec<T> {
 }
 
 impl<T: Clone> PinnedVec<T> {
-    pub fn from_vec(mut source: Vec<T>) -> Self {
-        pin(&mut source);
+    pub fn set_pinnable(&mut self) {
+        self.pinnable = true;
+    }
 
+    pub fn from_vec(source: Vec<T>) -> Self {
         Self {
             x: source,
-            pinned: true,
+            pinned: false,
+            pinnable: false,
         }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         let x = Vec::with_capacity(capacity);
-        Self::from_vec(x)
+        Self {
+            x,
+            pinned: false,
+            pinnable: false,
+        }
     }
 
     pub fn iter(&self) -> PinnedIter<T> {
@@ -180,7 +198,8 @@ impl<T: Clone> PinnedVec<T> {
     fn check_ptr(&mut self, _old_ptr: *mut T, _old_capacity: usize) {
         #[cfg(feature = "cuda")]
         {
-            if self.x.as_ptr() != _old_ptr || self.x.capacity() != _old_capacity {
+            if self.pinnable && (self.x.as_ptr() != _old_ptr || self.x.capacity() != _old_capacity)
+            {
                 if self.pinned {
                     unpin(_old_ptr);
                 }
@@ -195,8 +214,17 @@ impl<T: Clone> PinnedVec<T> {
 impl<T: Clone> Clone for PinnedVec<T> {
     fn clone(&self) -> Self {
         let mut x = self.x.clone();
-        pin(&mut x);
-        Self { x, pinned: true }
+        let pinned = if self.pinned {
+            pin(&mut x);
+            true
+        } else {
+            false
+        };
+        Self {
+            x,
+            pinned,
+            pinnable: self.pinnable,
+        }
     }
 }
 

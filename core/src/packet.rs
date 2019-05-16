@@ -1,6 +1,7 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
 use crate::cuda_runtime::PinnedVec;
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
+use crate::recycler::{Recycler, Reset};
 use crate::result::{Error, Result};
 use bincode;
 use byteorder::{ByteOrder, LittleEndian};
@@ -17,6 +18,7 @@ use std::fmt;
 use std::io;
 use std::io::Cursor;
 use std::io::Write;
+use std::mem;
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::ops::{Deref, DerefMut};
@@ -126,20 +128,60 @@ impl Meta {
 #[derive(Debug, Clone)]
 pub struct Packets {
     pub packets: PinnedVec<Packet>,
+
+    recycler: Option<PacketsRecycler>,
+}
+
+impl Drop for Packets {
+    fn drop(&mut self) {
+        if let Some(ref recycler) = self.recycler {
+            let old = mem::replace(&mut self.packets, PinnedVec::default());
+            recycler.recycle(old)
+        }
+    }
+}
+
+impl Reset for Packets {
+    fn reset(&mut self) {
+        self.packets.resize(0, Packet::default());
+    }
+}
+
+impl Reset for PinnedVec<Packet> {
+    fn reset(&mut self) {
+        self.resize(0, Packet::default());
+    }
 }
 
 //auto derive doesn't support large arrays
 impl Default for Packets {
     fn default() -> Packets {
         let packets = PinnedVec::with_capacity(NUM_RCVMMSGS);
-        Packets { packets }
+        Packets {
+            packets,
+            recycler: None,
+        }
     }
 }
+
+pub type PacketsRecycler = Recycler<PinnedVec<Packet>>;
 
 impl Packets {
     pub fn new(packets: Vec<Packet>) -> Self {
         let packets = PinnedVec::from_vec(packets);
-        Self { packets }
+        Self {
+            packets,
+            recycler: None,
+        }
+    }
+
+    pub fn new_with_recycler(recycler: PacketsRecycler) -> Self {
+        let mut packets = recycler.allocate();
+        packets.set_pinnable();
+        Packets {
+            packets,
+            recycler: Some(recycler),
+        }
     }
 
     pub fn set_addr(&mut self, addr: &SocketAddr) {
