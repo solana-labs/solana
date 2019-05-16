@@ -95,6 +95,10 @@ impl Counter {
         );
     }
     pub fn inc(&mut self, level: log::Level, events: usize) {
+        if !log_enabled!(level) {
+            return;
+        }
+
         let counts = self.counts.fetch_add(events, Ordering::Relaxed);
         let times = self.times.fetch_add(1, Ordering::Relaxed);
         let mut lograte = self.lograte.load(Ordering::Relaxed);

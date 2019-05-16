@@ -161,7 +161,7 @@ impl MetricsAgent {
         writer: &Arc<MetricsWriter + Send + Sync>,
         write_frequency_secs: Duration,
         max_points_per_sec: usize,
-    ) -> bool {
+    ) -> usize {
         let now = Instant::now();
         if now.duration_since(last_write_time) >= write_frequency_secs && !points.is_empty() {
             let num_points = points.len();
@@ -196,10 +196,10 @@ impl MetricsAgent {
             writer.write(points[0..points_written].to_vec());
             writer.write([extra].to_vec());
 
-            return true;
+            return points_written;
         }
 
-        false
+        0
     }
 
     fn run(
@@ -242,15 +242,21 @@ impl MetricsAgent {
                 }
             }
 
+            let mut num_max_writes = max_points;
+
             points_map.retain(|_level, (last_time, points)| {
-                if Self::write(
+                let num_written = Self::write(
                     points,
                     *last_time,
-                    max_points,
+                    num_max_writes,
                     writer,
                     write_frequency_secs,
                     max_points_per_sec,
-                ) {
+                );
+
+                num_max_writes -= num_written;
+
+                if num_written > 0 || num_max_writes <= 0 {
                     last_write_time = Instant::now();
                     false
                 } else {
