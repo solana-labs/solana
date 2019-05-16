@@ -5,14 +5,24 @@ use std::path::Path;
 use std::process::Command;
 use walkdir::WalkDir;
 
-fn rerun_if_changed(files: &[&str], directories: &[&str]) {
+fn rerun_if_changed(files: &[&str], directories: &[&str], excludes: &[&str]) {
     let mut all_files: Vec<_> = files.iter().map(|f| f.to_string()).collect();
 
     for directory in directories {
         let files_in_directory: Vec<_> = WalkDir::new(directory)
             .into_iter()
             .map(|entry| entry.unwrap())
-            .filter(|entry| entry.file_type().is_file())
+            .filter(|entry| {
+                if !entry.file_type().is_file() {
+                    return false;
+                }
+                for exclude in excludes.iter() {
+                    if entry.path().to_str().unwrap().contains(exclude) {
+                        return false;
+                    }
+                }
+                true
+            })
             .map(|f| f.path().to_str().unwrap().to_owned())
             .collect();
         all_files.extend_from_slice(&files_in_directory[..]);
@@ -42,7 +52,7 @@ fn main() {
             .expect("Failed to build C-based BPF programs")
             .success());
 
-        rerun_if_changed(&["c/makefile"], &["c/src", "../../sdk"]);
+        rerun_if_changed(&["c/makefile"], &["c/src", "../../sdk"], &["/target/"]);
     }
 
     let bpf_rust = !env::var("CARGO_FEATURE_BPF_RUST").is_err();
@@ -65,7 +75,6 @@ fn main() {
             );
             assert!(Command::new("./build.sh")
                 .current_dir(format!("rust/{}", program))
-                .env("RUSTUP_TOOLCHAIN", "bpf")
                 .status()
                 .expect(&format!(
                     "Failed to call solana-bpf-rust-{}'s build.sh",
@@ -84,6 +93,6 @@ fn main() {
                 .success());
         }
 
-        rerun_if_changed(&[], &["rust", "../../sdk"]);
+        rerun_if_changed(&[], &["rust", "../../sdk", &install_dir], &["/target/"]);
     }
 }
