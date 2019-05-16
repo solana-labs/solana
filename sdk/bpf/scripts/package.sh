@@ -12,6 +12,6 @@ cp LICENSE bpf-sdk/
   git rev-parse HEAD
 ) > bpf-sdk/version.txt
 
-cp -ra sdk/bpf/* bpf-sdk/
+cp -a sdk/bpf/* bpf-sdk/
 
 tar jvcf bpf-sdk.tar.bz2 bpf-sdk/
