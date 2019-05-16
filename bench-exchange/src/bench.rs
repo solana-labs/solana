@@ -893,7 +893,7 @@ pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, 
 mod tests {
     use super::*;
     use solana::fullnode::FullnodeConfig;
-    use solana::gossip_service::{discover_nodes, get_clients};
+    use solana::gossip_service::{discover_cluster, get_clients};
     use solana::local_cluster::{ClusterConfig, LocalCluster};
     use solana_drone::drone::run_local_drone;
     use solana_exchange_api::exchange_processor::process_instruction;
@@ -947,7 +947,7 @@ mod tests {
 
         info!("Connecting to the cluster");
         let nodes =
-            discover_nodes(&cluster.entry_point_info.gossip, NUM_NODES).unwrap_or_else(|err| {
+            discover_cluster(&cluster.entry_point_info.gossip, NUM_NODES).unwrap_or_else(|err| {
                 error!("Failed to discover {} nodes: {:?}", NUM_NODES, err);
                 exit(1);
             });

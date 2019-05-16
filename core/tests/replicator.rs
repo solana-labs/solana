@@ -9,7 +9,7 @@ use solana::blocktree::{create_new_tmp_ledger, Blocktree};
 use solana::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
 use solana::fullnode::FullnodeConfig;
-use solana::gossip_service::discover_nodes;
+use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::replicator::Replicator;
 use solana::replicator::ReplicatorRequest;
@@ -114,15 +114,18 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     };
     let cluster = LocalCluster::new(&config);
 
-    let cluster_nodes = discover_nodes(
+    let (cluster_nodes, cluster_replicators) = discover_cluster(
         &cluster.entry_point_info.gossip,
         num_nodes + num_replicators,
     )
     .unwrap();
-    assert_eq!(cluster_nodes.len(), num_nodes + num_replicators);
+    assert_eq!(
+        cluster_nodes.len() + cluster_replicators.len(),
+        num_nodes + num_replicators
+    );
     let mut replicator_count = 0;
     let mut replicator_info = ContactInfo::default();
-    for node in &cluster_nodes {
+    for node in &cluster_replicators {
         info!("storage: {:?} rpc: {:?}", node.storage_addr, node.rpc);
         if ContactInfo::is_valid_address(&node.storage_addr) {
             replicator_count += 1;
@@ -225,7 +228,7 @@ fn test_account_setup() {
     };
     let cluster = LocalCluster::new(&config);
 
-    let _ = discover_nodes(
+    let _ = discover_cluster(
         &cluster.entry_point_info.gossip,
         num_nodes + num_replicators as usize,
     )

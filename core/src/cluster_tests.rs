@@ -6,7 +6,7 @@ use crate::blocktree::Blocktree;
 use crate::cluster_info::FULLNODE_PORT_RANGE;
 use crate::contact_info::ContactInfo;
 use crate::entry::{Entry, EntrySlice};
-use crate::gossip_service::discover_nodes;
+use crate::gossip_service::discover_cluster;
 use crate::locktower::VOTE_THRESHOLD_DEPTH;
 use crate::poh_service::PohServiceConfig;
 use solana_client::thin_client::create_client;
@@ -30,7 +30,7 @@ pub fn spend_and_verify_all_nodes(
     funding_keypair: &Keypair,
     nodes: usize,
 ) {
-    let cluster_nodes = discover_nodes(&entry_point_info.gossip, nodes).unwrap();
+    let (cluster_nodes, _) = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     for ingress_node in &cluster_nodes {
         let random_keypair = Keypair::new();
@@ -81,7 +81,7 @@ pub fn send_many_transactions(node: &ContactInfo, funding_keypair: &Keypair, num
 }
 
 pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {
-    let cluster_nodes = discover_nodes(&entry_point_info.gossip, nodes).unwrap();
+    let (cluster_nodes, _) = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     for node in &cluster_nodes {
         let client = create_client(node.client_facing_addr(), FULLNODE_PORT_RANGE);
@@ -153,7 +153,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     slot_millis: u64,
 ) {
     solana_logger::setup();
-    let cluster_nodes = discover_nodes(&entry_point_info.gossip, nodes).unwrap();
+    let (cluster_nodes, _) = discover_cluster(&entry_point_info.gossip, nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let client = create_client(entry_point_info.client_facing_addr(), FULLNODE_PORT_RANGE);
     let first_two_epoch_slots = MINIMUM_SLOT_LENGTH * 3;

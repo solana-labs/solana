@@ -2,7 +2,7 @@ mod bench;
 mod cli;
 
 use crate::bench::{do_bench_tps, generate_and_fund_keypairs, Config, NUM_LAMPORTS_PER_ACCOUNT};
-use solana::gossip_service::{discover_nodes, get_clients};
+use solana::gossip_service::{discover_cluster, get_clients};
 use std::process::exit;
 
 fn main() {
@@ -25,10 +25,11 @@ fn main() {
     } = cli_config;
 
     println!("Connecting to the cluster");
-    let nodes = discover_nodes(&entrypoint_addr, num_nodes).unwrap_or_else(|err| {
-        eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
-        exit(1);
-    });
+    let (nodes, _replicators) =
+        discover_cluster(&entrypoint_addr, num_nodes).unwrap_or_else(|err| {
+            eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
+            exit(1);
+        });
     if nodes.len() < num_nodes {
         eprintln!(
             "Error: Insufficient nodes discovered.  Expecting {} or more",

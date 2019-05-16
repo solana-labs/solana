@@ -210,7 +210,7 @@ impl Replicator {
         );
 
         info!("Connecting to the cluster via {:?}", cluster_entrypoint);
-        let nodes = crate::gossip_service::discover_nodes(&cluster_entrypoint.gossip, 1)?;
+        let (nodes, _) = crate::gossip_service::discover_cluster(&cluster_entrypoint.gossip, 1)?;
         let client = crate::gossip_service::get_client(&nodes);
 
         let (storage_blockhash, storage_slot) = Self::poll_for_blockhash_and_slot(&cluster_info)?;
