@@ -154,13 +154,11 @@ mod tests {
         let mut hasher = Hasher::default();
         hasher.hash(&buf[..size]);
 
-        use bs58;
         //  golden needs to be updated if blob stuff changes....
-        let golden = Hash::new(
-            &bs58::decode("5Pz5KQyNht2nqkJhVd8F9zTFxzoDvbQSzaxQbtCPiyCo")
-                .into_vec()
-                .unwrap(),
-        );
+        let golden: Hash = "5Pz5KQyNht2nqkJhVd8F9zTFxzoDvbQSzaxQbtCPiyCo"
+            .parse()
+            .unwrap();
+
         assert_eq!(hasher.result(), golden);
         remove_file(out_path).unwrap();
     }
