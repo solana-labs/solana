@@ -14,7 +14,6 @@ pub struct PohEntry {
     pub tick_height: u64,
     pub num_hashes: u64,
     pub hash: Hash,
-    pub mixin: Option<Hash>,
 }
 
 impl Poh {
@@ -50,7 +49,6 @@ impl Poh {
             tick_height: self.tick_height,
             num_hashes,
             hash: self.hash,
-            mixin: Some(mixin),
         })
     }
 
@@ -71,7 +69,6 @@ impl Poh {
             tick_height: self.tick_height,
             num_hashes,
             hash: self.hash,
-            mixin: None,
         }
     }
 }
@@ -81,16 +78,16 @@ mod tests {
     use crate::poh::{Poh, PohEntry};
     use solana_sdk::hash::{hash, hashv, Hash};
 
-    fn verify(initial_hash: Hash, entries: &[PohEntry]) -> bool {
+    fn verify(initial_hash: Hash, entries: &[(PohEntry, Option<Hash>)]) -> bool {
         let mut current_hash = initial_hash;
 
-        for entry in entries {
+        for (entry, mixin) in entries {
             assert_ne!(entry.num_hashes, 0);
 
             for _ in 1..entry.num_hashes {
                 current_hash = hash(&current_hash.as_ref());
             }
-            current_hash = match entry.mixin {
+            current_hash = match mixin {
                 Some(mixin) => hashv(&[&current_hash.as_ref(), &mixin.as_ref()]),
                 None => hash(&current_hash.as_ref()),
             };
@@ -114,10 +111,10 @@ mod tests {
             verify(
                 zero,
                 &[
-                    poh.tick(),
-                    poh.record(zero).unwrap(),
-                    poh.record(zero).unwrap(),
-                    poh.tick(),
+                    (poh.tick(), None),
+                    (poh.record(zero).unwrap(), Some(zero)),
+                    (poh.record(zero).unwrap(), Some(zero)),
+                    (poh.tick(), None),
                 ],
             ),
             true
@@ -126,24 +123,28 @@ mod tests {
         assert_eq!(
             verify(
                 zero,
-                &[PohEntry {
-                    tick_height: 0,
-                    num_hashes: 1,
-                    hash: one,
-                    mixin: None,
-                }],
+                &[(
+                    PohEntry {
+                        tick_height: 0,
+                        num_hashes: 1,
+                        hash: one,
+                    },
+                    None
+                )],
             ),
             true
         );
         assert_eq!(
             verify(
                 zero,
-                &[PohEntry {
-                    tick_height: 0,
-                    num_hashes: 2,
-                    hash: two,
-                    mixin: None,
-                }]
+                &[(
+                    PohEntry {
+                        tick_height: 0,
+                        num_hashes: 2,
+                        hash: two,
+                    },
+                    None
+                )]
             ),
             true
         );
@@ -151,24 +152,28 @@ mod tests {
         assert_eq!(
             verify(
                 zero,
-                &[PohEntry {
-                    tick_height: 0,
-                    num_hashes: 1,
-                    hash: one_with_zero,
-                    mixin: Some(zero),
-                }]
+                &[(
+                    PohEntry {
+                        tick_height: 0,
+                        num_hashes: 1,
+                        hash: one_with_zero,
+                    },
+                    Some(zero)
+                )]
             ),
             true
         );
         assert_eq!(
             verify(
                 zero,
-                &[PohEntry {
-                    tick_height: 0,
-                    num_hashes: 1,
-                    hash: zero,
-                    mixin: None
-                }]
+                &[(
+                    PohEntry {
+                        tick_height: 0,
+                        num_hashes: 1,
+                        hash: zero,
+                    },
+                    None
+                )]
             ),
             false
         );
@@ -177,18 +182,22 @@ mod tests {
             verify(
                 zero,
                 &[
-                    PohEntry {
-                        tick_height: 0,
-                        num_hashes: 1,
-                        hash: one_with_zero,
-                        mixin: Some(zero),
-                    },
-                    PohEntry {
-                        tick_height: 0,
-                        num_hashes: 1,
-                        hash: hash(&one_with_zero.as_ref()),
-                        mixin: None
-                    },
+                    (
+                        PohEntry {
+                            tick_height: 0,
+                            num_hashes: 1,
+                            hash: one_with_zero,
+                        },
+                        Some(zero)
+                    ),
+                    (
+                        PohEntry {
+                            tick_height: 0,
+                            num_hashes: 1,
+                            hash: hash(&one_with_zero.as_ref()),
+                        },
+                        None
+                    )
                 ]
             ),
             true
@@ -200,12 +209,14 @@ mod tests {
     fn test_poh_verify_assert() {
         verify(
             Hash::default(),
-            &[PohEntry {
-                tick_height: 0,
-                num_hashes: 0,
-                hash: Hash::default(),
-                mixin: None,
-            }],
+            &[(
+                PohEntry {
+                    tick_height: 0,
+                    num_hashes: 0,
+                    hash: Hash::default(),
+                },
+                None,
+            )],
         );
     }
 
