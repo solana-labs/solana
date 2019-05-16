@@ -1,7 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
 use crate::bank_forks::BankForks;
-use bs58;
 use core::hash::Hash;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::typed::Sink;
@@ -144,7 +143,7 @@ where
 
 fn notify_program(accounts: Vec<(Pubkey, Account)>, sink: &Sink<(String, Account)>, _root: u64) {
     for (pubkey, account) in accounts.iter() {
-        sink.notify(Ok((bs58::encode(pubkey).into_string(), account.clone())))
+        sink.notify(Ok((pubkey.to_string(), account.clone())))
             .wait()
             .unwrap();
     }
