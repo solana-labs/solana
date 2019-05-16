@@ -946,8 +946,8 @@ mod tests {
         let drone_addr = addr_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
 
         info!("Connecting to the cluster");
-        let nodes =
-            discover_cluster(&cluster.entry_point_info.gossip, NUM_NODES).unwrap_or_else(|err| {
+        let (nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, NUM_NODES)
+            .unwrap_or_else(|err| {
                 error!("Failed to discover {} nodes: {:?}", NUM_NODES, err);
                 exit(1);
             });

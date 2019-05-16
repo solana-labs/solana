@@ -250,8 +250,7 @@ impl ClusterInfo {
             .map(|(node, last_updated)| {
                 if Self::is_spy_node(&node) {
                     spy_nodes += 1;
-                }
-                if Self::is_replicator(&node) {
+                } else if Self::is_replicator(&node) {
                     replicators += 1;
                 }
                 fn addr_to_string(addr: &SocketAddr) -> String {
@@ -280,12 +279,15 @@ impl ClusterInfo {
             " Node contact info             | Age     | Node identifier                   \n\
              -------------------------------+---------+-----------------------------------\n\
              {}\
-             Nodes: {}{}",
+             Nodes: {}{}{}",
             nodes.join(""),
-            nodes.len() - spy_nodes,
+            nodes.len() - spy_nodes - replicators,
             if replicators > 0 {
                 format!("\nReplicators: {}", replicators)
-            } else if spy_nodes > 0 {
+            } else {
+                "".to_string()
+            },
+            if spy_nodes > 0 {
                 format!("\nSpies: {}", spy_nodes)
             } else {
                 "".to_string()
@@ -437,10 +439,10 @@ impl ClusterInfo {
     }
 
     fn is_spy_node(contact_info: &ContactInfo) -> bool {
-        !ContactInfo::is_valid_address(&contact_info.tpu)
+        (!ContactInfo::is_valid_address(&contact_info.tpu)
             || !ContactInfo::is_valid_address(&contact_info.gossip)
-            || !ContactInfo::is_valid_address(&contact_info.tvu)
-            || !ContactInfo::is_valid_address(&contact_info.storage_addr)
+            || !ContactInfo::is_valid_address(&contact_info.tvu))
+            && !ContactInfo::is_valid_address(&contact_info.storage_addr)
     }
 
     pub fn is_replicator(contact_info: &ContactInfo) -> bool {
