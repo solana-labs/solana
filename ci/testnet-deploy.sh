@@ -49,7 +49,7 @@ Deploys a CD testnet
    -c [number]          - Number of client bencher nodes (default: $clientNodeCount)
    -u                   - Include a Blockstreamer (default: $blockstreamer)
    -P                   - Use public network IP addresses (default: $publicNetwork)
-   -G                   - Enable GPU, and set count/type of GPUs to use (e.g n1-standard-16 --accelerator count=4,type=nvidia-tesla-k80)
+   -G                   - Enable GPU, and set count/type of GPUs to use (e.g n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100)
    -g                   - Enable GPU (default: $enableGpu)
    -a [address]         - Set the bootstrap fullnode's external IP address to this GCE address
    -d [disk-type]       - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
