@@ -258,9 +258,9 @@ impl<'a> StorageAccount<'a> {
         {
             let state_segment = get_segment_from_slot(*state_slot);
             let claim_segment = get_segment_from_slot(slot);
-            if state_segment <= claim_segment || claim_segment >= reward_validations.len() {
+            if state_segment <= claim_segment || reward_validations.get(&claim_segment).is_none() {
                 debug!(
-                    "current {:?}, claim {:?}, rewards {:?}",
+                    "current {:?}, claim {:?}, have rewards for {:?} segments",
                     state_segment,
                     claim_segment,
                     reward_validations.len()
@@ -284,9 +284,9 @@ impl<'a> StorageAccount<'a> {
             let claim_index = get_segment_from_slot(current_slot);
             let claim_segment = get_segment_from_slot(slot);
             // Todo this might might always be true
-            if claim_index <= claim_segment || claim_segment >= reward_validations.len() {
+            if claim_index <= claim_segment || reward_validations.get(&claim_segment).is_none() {
                 debug!(
-                    "current {:?}, claim {:?}, rewards {:?}",
+                    "current {:?}, claim {:?}, have rewards for {:?} segments",
                     claim_index,
                     claim_segment,
                     reward_validations.len()
@@ -329,23 +329,19 @@ fn store_validation_result(
             reward_validations,
             ..
         } => {
-            if segment >= proofs.len() {
+            if proofs.get(&segment).is_none() {
                 return Err(InstructionError::InvalidAccountData);
             }
 
-            if let Some(proof) = proofs
+            if proofs
                 .get(&segment)
-                .and_then(|proofs| proofs.get(&checked_proof.proof.sha_state))
+                .unwrap()
+                .contains_key(&checked_proof.proof.sha_state)
             {
-                let checked_proof = CheckedProof {
-                    proof: proof.clone(),
-                    status: checked_proof.status,
-                };
-
                 reward_validations
                     .entry(segment)
                     .or_default()
-                    .entry(proof.sha_state)
+                    .entry(checked_proof.proof.sha_state)
                     .or_default()
                     .push(checked_proof);
             } else {
