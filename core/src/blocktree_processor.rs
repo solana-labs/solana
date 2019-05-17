@@ -576,13 +576,13 @@ mod tests {
         assert_eq!(
             bank_forks_info[0],
             BankForksInfo {
-                bank_slot: last_slot, // Head is last_slot
-                entry_height: ticks_per_slot * (last_slot + 1),
+                bank_slot: last_slot + 1, // Head is last_slot + 1
+                entry_height: ticks_per_slot * (last_slot + 2),
             }
         );
 
         // The latest root should have purged all its parents
-        assert!(&bank_forks[last_slot]
+        assert!(&bank_forks[last_slot + 1]
             .parents()
             .iter()
             .map(|bank| bank.slot())
