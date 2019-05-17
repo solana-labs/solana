@@ -401,8 +401,6 @@ impl StorageStage {
         let timeout = Duration::new(1, 0);
         let slot: u64 = slot_receiver.recv_timeout(timeout)?;
         *slot_count = slot;
-        // root slots have to be full
-        assert!(blocktree.meta(slot).unwrap().unwrap().is_full());
         if let Ok(entries) = blocktree.get_slot_entries(slot, 0, None) {
             for entry in &entries {
                 // Go through the transactions, find proofs, and use them to update
@@ -422,7 +420,11 @@ impl StorageStage {
                 }
             }
             if *slot_count % storage_rotate_count == 0 {
-                debug!("crosses sending at root slot: {}!", slot_count);
+                let entry_hash = entries.last().unwrap().hash;
+                debug!(
+                    "crosses sending at root slot: {}! with last entry's hash {}",
+                    slot_count, entry_hash
+                );
                 Self::process_entry_crossing(
                     &storage_keypair,
                     &storage_state,
