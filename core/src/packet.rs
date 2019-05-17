@@ -4,7 +4,7 @@ use crate::result::{Error, Result};
 use bincode;
 use byteorder::{ByteOrder, LittleEndian};
 use serde::Serialize;
-use solana_metrics::inc_new_counter_info;
+use solana_metrics::inc_new_counter_debug;
 use solana_sdk::hash::Hash;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
@@ -245,7 +245,7 @@ impl Packets {
             }
         }
         self.packets.truncate(i);
-        inc_new_counter_info!("packets-recv_count", i);
+        inc_new_counter_debug!("packets-recv_count", i);
         Ok(i)
     }
 

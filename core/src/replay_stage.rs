@@ -14,7 +14,7 @@ use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use hashbrown::HashMap;
-use solana_metrics::{datapoint, inc_new_counter_info};
+use solana_metrics::{datapoint, inc_new_counter_error, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -286,7 +286,7 @@ impl ReplayStage {
         } else {
             info!("debug to verify entries {}", len);
             //TODO: mark this fork as failed
-            inc_new_counter_info!("replicate-stage_failed_process_entries", len);
+            inc_new_counter_error!("replicate-stage_failed_process_entries", len);
         }
         Ok(())
     }

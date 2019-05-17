@@ -4,7 +4,7 @@ use crate::result::Result;
 use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
 use crate::{packet, sigverify};
-use solana_metrics::inc_new_counter_info;
+use solana_metrics::inc_new_counter_debug;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, RwLock};
@@ -56,7 +56,7 @@ impl ClusterInfoVoteListener {
             let (votes, new_ts) = cluster_info.read().unwrap().get_votes(last_ts);
             if poh_recorder.lock().unwrap().bank().is_some() {
                 last_ts = new_ts;
-                inc_new_counter_info!("cluster_info_vote_listener-recv_count", votes.len());
+                inc_new_counter_debug!("cluster_info_vote_listener-recv_count", votes.len());
                 let msgs = packet::to_packets(&votes);
                 if !msgs.is_empty() {
                     let r = if sigverify_disabled {

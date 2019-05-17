@@ -14,7 +14,9 @@ use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
 use log::*;
-use solana_metrics::{datapoint, inc_new_counter_info};
+use solana_metrics::{
+    datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
+};
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -385,7 +387,7 @@ impl Bank {
             self.tick_height.fetch_add(1, Ordering::SeqCst);
             self.tick_height.load(Ordering::SeqCst) as u64
         };
-        inc_new_counter_info!("bank-register_tick-registered", 1);
+        inc_new_counter_debug!("bank-register_tick-registered", 1);
 
         // Register a new block hash if at the last tick in the slot
         if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
@@ -603,20 +605,20 @@ impl Bank {
         }
         if err_count > 0 {
             debug!("{} errors of {} txs", err_count, err_count + tx_count);
-            inc_new_counter_info!(
+            inc_new_counter_error!(
                 "bank-process_transactions-account_not_found",
                 error_counters.account_not_found,
                 0,
                 1000
             );
-            inc_new_counter_info!("bank-process_transactions-error_count", err_count, 0, 1000);
+            inc_new_counter_error!("bank-process_transactions-error_count", err_count, 0, 1000);
         }
 
         self.increment_transaction_count(tx_count);
 
         inc_new_counter_info!("bank-process_transactions-txs", tx_count, 0, 1000);
         if 0 != error_counters.blockhash_not_found {
-            inc_new_counter_info!(
+            inc_new_counter_error!(
                 "bank-process_transactions-error-blockhash_not_found",
                 error_counters.blockhash_not_found,
                 0,
@@ -624,7 +626,7 @@ impl Bank {
             );
         }
         if 0 != error_counters.invalid_account_index {
-            inc_new_counter_info!(
+            inc_new_counter_error!(
                 "bank-process_transactions-error-invalid_account_index",
                 error_counters.invalid_account_index,
                 0,
@@ -632,7 +634,7 @@ impl Bank {
             );
         }
         if 0 != error_counters.reserve_blockhash {
-            inc_new_counter_info!(
+            inc_new_counter_error!(
                 "bank-process_transactions-error-reserve_blockhash",
                 error_counters.reserve_blockhash,
                 0,
@@ -640,7 +642,7 @@ impl Bank {
             );
         }
         if 0 != error_counters.duplicate_signature {
-            inc_new_counter_info!(
+            inc_new_counter_error!(
                 "bank-process_transactions-error-duplicate_signature",
                 error_counters.duplicate_signature,
                 0,
@@ -648,7 +650,7 @@ impl Bank {
             );
         }
         if 0 != error_counters.insufficient_funds {
-            inc_new_counter_info!(
+            inc_new_counter_error!(
                 "bank-process_transactions-error-insufficient_funds",
                 error_counters.insufficient_funds,
                 0,
@@ -656,7 +658,7 @@ impl Bank {
             );
         }
         if 0 != error_counters.account_loaded_twice {
-            inc_new_counter_info!(
+            inc_new_counter_error!(
                 "bank-process_transactions-account_loaded_twice",
                 error_counters.account_loaded_twice,
                 0,

@@ -3,7 +3,7 @@ use crate::blocktree::Blocktree;
 use crate::entry::{Entry, EntrySlice};
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use rayon::prelude::*;
-use solana_metrics::{datapoint, inc_new_counter_info};
+use solana_metrics::{datapoint, inc_new_counter_debug};
 use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -26,7 +26,7 @@ fn par_execute_entries(
     bank: &Bank,
     entries: &[(&Entry, LockedAccountsResults<Transaction>)],
 ) -> Result<()> {
-    inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
+    inc_new_counter_debug!("bank-par_execute_entries-count", entries.len());
     let results: Vec<Result<()>> = entries
         .into_par_iter()
         .map(|(e, locked_accounts)| {

@@ -10,7 +10,7 @@ use crate::service::Service;
 use crate::staking_utils;
 use crate::streamer::BlobReceiver;
 use crate::window_service::{should_retransmit_and_persist, WindowService};
-use solana_metrics::{datapoint, inc_new_counter_info};
+use solana_metrics::{datapoint, inc_new_counter_error};
 use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::hash::Hash;
 use std::net::UdpSocket;
@@ -89,7 +89,7 @@ fn retransmitter(
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                         _ => {
-                            inc_new_counter_info!("streamer-retransmit-error", 1, 1);
+                            inc_new_counter_error!("streamer-retransmit-error", 1, 1);
                         }
                     }
                 }
