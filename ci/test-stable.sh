@@ -47,7 +47,6 @@ test-stable-perf)
 
   # BPF program tests
   _ make -C programs/bpf/c tests
-  _ programs/bpf/rust/noop/build.sh # Must be built out of band
   _ cargo +"$rust_stable" test \
     --manifest-path programs/bpf/Cargo.toml \
     --no-default-features --features=bpf_c,bpf_rust

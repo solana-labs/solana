@@ -5,14 +5,24 @@ use std::path::Path;
 use std::process::Command;
 use walkdir::WalkDir;
 
-fn rerun_if_changed(files: &[&str], directories: &[&str]) {
+fn rerun_if_changed(files: &[&str], directories: &[&str], excludes: &[&str]) {
     let mut all_files: Vec<_> = files.iter().map(|f| f.to_string()).collect();
 
     for directory in directories {
         let files_in_directory: Vec<_> = WalkDir::new(directory)
             .into_iter()
             .map(|entry| entry.unwrap())
-            .filter(|entry| entry.file_type().is_file())
+            .filter(|entry| {
+                if !entry.file_type().is_file() {
+                    return false;
+                }
+                for exclude in excludes.iter() {
+                    if entry.path().to_str().unwrap().contains(exclude) {
+                        return false;
+                    }
+                }
+                true
+            })
             .map(|f| f.path().to_str().unwrap().to_owned())
             .collect();
         all_files.extend_from_slice(&files_in_directory[..]);
@@ -27,73 +37,62 @@ fn rerun_if_changed(files: &[&str], directories: &[&str]) {
 }
 
 fn main() {
-    println!("cargo:rerun-if-changed=build.rs");
-
     let bpf_c = !env::var("CARGO_FEATURE_BPF_C").is_err();
     if bpf_c {
-        let out_dir = "OUT_DIR=../../../target/".to_string()
+        let install_dir = "OUT_DIR=../../../target/".to_string()
             + &env::var("PROFILE").unwrap()
             + &"/bpf".to_string();
 
-        rerun_if_changed(
-            &["../../sdk/bpf/bpf.ld", "../../sdk/bpf/bpf.mk", "c/makefile"],
-            &["../../sdk/bpf/inc", "../../sdk/bpf/scripts", "c/src"],
-        );
-
-        println!("cargo:warning=(not a warning) Compiling C-based BPF programs");
-        let status = Command::new("make")
+        println!("cargo:warning=(not a warning) Building C-based BPF programs");
+        assert!(Command::new("make")
             .current_dir("c")
             .arg("programs")
-            .arg(&out_dir)
+            .arg(&install_dir)
             .status()
-            .expect("Failed to build C-based BPF programs");
-        assert!(status.success());
+            .expect("Failed to build C-based BPF programs")
+            .success());
+
+        rerun_if_changed(&["c/makefile"], &["c/src", "../../sdk"], &["/target/"]);
     }
 
     let bpf_rust = !env::var("CARGO_FEATURE_BPF_RUST").is_err();
     if bpf_rust {
         let install_dir =
-            "../../../../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
+            "../../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
 
-        if !Path::new("rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so")
-            .is_file()
-        {
-            // Cannot build Rust BPF programs as part of main build because
-            // to build it requires calling Cargo with different parameters which
-            // would deadlock due to recursive cargo calls
-            panic!(
-                "solana_bpf_rust_noop.so not found, you must manually run \
-                 `programs/bpf/rust/noop/build.sh` to build it"
-            );
-        }
-
-        rerun_if_changed(
-            &[
-                "rust/noop/bpf.ld",
-                "rust/noop/build.sh",
-                "rust/noop/Cargo.toml",
-                "rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
-            ],
-            &["rust/noop/src"],
-        );
-
-        println!(
-            "cargo:warning=(not a warning) Installing Rust-based BPF program: solana_bpf_rust_noop"
-        );
-        let status = Command::new("mkdir")
-            .current_dir("rust/noop")
+        assert!(Command::new("mkdir")
             .arg("-p")
             .arg(&install_dir)
             .status()
-            .expect("Unable to create BPF install directory");
-        assert!(status.success());
+            .expect("Unable to create BPF install directory")
+            .success());
 
-        let status = Command::new("cp")
-            .current_dir("rust/noop")
-            .arg("target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so")
-            .arg(&install_dir)
-            .status()
-            .expect("Failed to copy solana_rust_bpf_noop.so to install directory");
-        assert!(status.success());
+        let rust_programs = ["noop"];
+        for program in rust_programs.iter() {
+            println!(
+                "cargo:warning=(not a warning) Building Rust-based BPF program: solana_bpf_rust_{}",
+                program
+            );
+            assert!(Command::new("./build.sh")
+                .current_dir(format!("rust/{}", program))
+                .status()
+                .expect(&format!(
+                    "Failed to call solana-bpf-rust-{}'s build.sh",
+                    program
+                ))
+                .success());
+            let src = format!(
+                "rust/{}/target/bpfel-unknown-unknown/release/solana_bpf_rust_{}.so",
+                program, program,
+            );
+            assert!(Command::new("cp")
+                .arg(&src)
+                .arg(&install_dir)
+                .status()
+                .expect(&format!("Failed to cp {} to {}", src, install_dir))
+                .success());
+        }
+
+        rerun_if_changed(&[], &["rust", "../../sdk", &install_dir], &["/target/"]);
     }
 }
