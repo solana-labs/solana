@@ -33,7 +33,7 @@ jsonrpc-derive = "11.0.0"
 jsonrpc-http-server = "11.0.0"
 jsonrpc-pubsub = "11.0.0"
 jsonrpc-ws-server = "11.0.0"
-libc = "0.2.50"
+libc = "0.2.55"
 log = "0.4.2"
 memmap = { version = "0.7.0", optional = true }
 nix = "0.13.0"
