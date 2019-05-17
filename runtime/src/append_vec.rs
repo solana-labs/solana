@@ -72,6 +72,12 @@ pub struct AppendVec {
     file_size: u64,
 }
 
+impl Drop for AppendVec {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path.parent().unwrap());
+    }
+}
+
 impl AppendVec {
     #[allow(clippy::mutex_atomic)]
     pub fn new(file: &Path, create: bool, size: usize) -> Self {
@@ -340,10 +346,14 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
             .read(true)
             .write(true)
             .create(false)
-            .open(path.as_path())
-            .map_err(Error::custom)?;
+            .open(path.as_path());
 
-        let map = unsafe { MmapMut::map_mut(&data).expect("failed to map the data file") };
+        if data.is_err() {
+            std::fs::create_dir_all(&path.parent().unwrap()).expect("Create directory failed");
+            return Ok(AppendVec::new(&path, true, file_size as usize));
+        }
+
+        let map = unsafe { MmapMut::map_mut(&data.unwrap()).expect("failed to map the data file") };
         Ok(AppendVec {
             path,
             map,

@@ -175,6 +175,7 @@ impl BankForks {
     }
 
     fn get_io_error(error: &str) -> Error {
+        warn!("BankForks error: {:?}", error);
         Error::new(ErrorKind::Other, error)
     }
 
@@ -221,60 +222,24 @@ impl BankForks {
         self.use_snapshot = use_snapshot;
     }
 
-    fn setup_banks(
+    fn load_snapshots(
+        names: &[u64],
         bank_maps: &mut Vec<(u64, u64, Bank)>,
-        bank_rc: &BankRc,
         status_cache_rc: &StatusCacheRc,
-    ) -> (HashMap<u64, Arc<Bank>>, HashSet<u64>, u64) {
-        let mut banks = HashMap::new();
-        let mut slots = HashSet::new();
-        let (last_slot, last_parent_slot, mut last_bank) = bank_maps.remove(0);
-        last_bank.set_bank_rc(&bank_rc, &status_cache_rc);
-
-        while let Some((slot, parent_slot, mut bank)) = bank_maps.pop() {
-            bank.set_bank_rc(&bank_rc, &status_cache_rc);
-            if parent_slot != 0 {
-                if let Some(parent) = banks.get(&parent_slot) {
-                    bank.set_parent(parent);
-                }
-            }
-            banks.insert(slot, Arc::new(bank));
-            slots.insert(slot);
-        }
-        if last_parent_slot != 0 {
-            if let Some(parent) = banks.get(&last_parent_slot) {
-                last_bank.set_parent(parent);
-            }
-        }
-        banks.insert(last_slot, Arc::new(last_bank));
-        slots.insert(last_slot);
-
-        (banks, slots, last_slot)
-    }
-
-    pub fn load_from_snapshot() -> Result<Self, Error> {
+    ) -> Option<(BankRc, u64)> {
         let path = BankForks::get_snapshot_path();
-        let paths = fs::read_dir(path.clone())?;
-        let mut names = paths
-            .filter_map(|entry| {
-                entry.ok().and_then(|e| {
-                    e.path()
-                        .file_name()
-                        .and_then(|n| n.to_str().map(|s| s.parse::<u64>().unwrap()))
-                })
-            })
-            .collect::<Vec<u64>>();
+        let mut bank_rc: Option<(BankRc, u64)> = None;
 
-        names.sort();
-        let mut bank_maps = vec![];
-        let mut bank_rc: Option<BankRc> = None;
-        let status_cache_rc = StatusCacheRc::default();
-        let mut bank_forks_root: u64 = 0;
         for bank_slot in names.iter().rev() {
             let bank_path = format!("{}", bank_slot);
             let bank_file_path = path.join(bank_path.clone());
             info!("Load from {:?}", bank_file_path);
-            let file = File::open(bank_file_path)?;
+            let file = File::open(bank_file_path);
+            if file.is_err() {
+                warn!("Snapshot file open failed for {}", bank_slot);
+                continue;
+            }
+            let file = file.unwrap();
             let mut stream = BufReader::new(file);
             let bank: Result<Bank, std::io::Error> = deserialize_from(&mut stream)
                 .map_err(|_| BankForks::get_io_error("deserialize bank error"));
@@ -289,8 +254,7 @@ impl BankForks {
                 let rc: Result<BankRc, std::io::Error> = deserialize_from(&mut stream)
                     .map_err(|_| BankForks::get_io_error("deserialize bank accounts error"));
                 if rc.is_ok() {
-                    bank_rc = Some(rc.unwrap());
-                    bank_forks_root = root.unwrap();
+                    bank_rc = Some((rc.unwrap(), root.unwrap()));
                 }
             }
             if bank_rc.is_some() {
@@ -308,17 +272,72 @@ impl BankForks {
                 warn!("Load snapshot rc failed for {}", bank_slot);
             }
         }
-        if bank_maps.is_empty() || bank_rc.is_none() {
+        bank_rc
+    }
+
+    fn setup_banks(
+        bank_maps: &mut Vec<(u64, u64, Bank)>,
+        bank_rc: &BankRc,
+        status_cache_rc: &StatusCacheRc,
+    ) -> (HashMap<u64, Arc<Bank>>, HashSet<u64>, u64) {
+        let mut banks = HashMap::new();
+        let mut slots = HashSet::new();
+        let (last_slot, last_parent_slot, mut last_bank) = bank_maps.remove(0);
+        last_bank.set_bank_rc(&bank_rc, &status_cache_rc);
+
+        while let Some((slot, parent_slot, mut bank)) = bank_maps.pop() {
+            bank.set_bank_rc(&bank_rc, &status_cache_rc);
+            if parent_slot != 0 {
+                if let Some(parent) = banks.get(&parent_slot) {
+                    bank.set_parent(parent);
+                }
+            }
+            if slot > 0 {
+                banks.insert(slot, Arc::new(bank));
+                slots.insert(slot);
+            }
+        }
+        if last_parent_slot != 0 {
+            if let Some(parent) = banks.get(&last_parent_slot) {
+                last_bank.set_parent(parent);
+            }
+        }
+        banks.insert(last_slot, Arc::new(last_bank));
+        slots.insert(last_slot);
+
+        (banks, slots, last_slot)
+    }
+
+    pub fn load_from_snapshot() -> Result<Self, Error> {
+        let path = BankForks::get_snapshot_path();
+        let paths = fs::read_dir(path)?;
+        let mut names = paths
+            .filter_map(|entry| {
+                entry.ok().and_then(|e| {
+                    e.path()
+                        .file_name()
+                        .and_then(|n| n.to_str().map(|s| s.parse::<u64>().unwrap()))
+                })
+            })
+            .collect::<Vec<u64>>();
+
+        names.sort();
+        let mut bank_maps = vec![];
+        let status_cache_rc = StatusCacheRc::default();
+        let rc = BankForks::load_snapshots(&names, &mut bank_maps, &status_cache_rc);
+        if bank_maps.is_empty() || rc.is_none() {
+            BankForks::remove_snapshot(0);
             return Err(Error::new(ErrorKind::Other, "no snapshots loaded"));
         }
 
+        let (bank_rc, root) = rc.unwrap();
         let (banks, slots, last_slot) =
-            BankForks::setup_banks(&mut bank_maps, &bank_rc.unwrap(), &status_cache_rc);
+            BankForks::setup_banks(&mut bank_maps, &bank_rc, &status_cache_rc);
         let working_bank = banks[&last_slot].clone();
         Ok(BankForks {
             banks,
             working_bank,
-            root: bank_forks_root,
+            root,
             slots,
             use_snapshot: true,
         })
@@ -447,17 +466,14 @@ mod tests {
         }
     }
 
-    fn save_and_load_snapshot(bank_forks: &BankForks) {
-        for (slot, _) in bank_forks.banks.iter() {
-            bank_forks.add_snapshot(*slot, 0).unwrap();
-        }
-
+    fn restore_from_snapshot(bank_forks: BankForks, last_slot: u64) {
         let new = BankForks::load_from_snapshot().unwrap();
-        for (slot, _) in bank_forks.banks.iter() {
+        for (slot, _) in new.banks.iter() {
             let bank = bank_forks.banks.get(slot).unwrap().clone();
             let new_bank = new.banks.get(slot).unwrap();
             bank.compare_bank(&new_bank);
         }
+        assert_eq!(new.working_bank().slot(), last_slot);
         for (slot, _) in new.banks.iter() {
             BankForks::remove_snapshot(*slot);
         }
@@ -468,27 +484,30 @@ mod tests {
         solana_logger::setup();
         let path = get_tmp_bank_accounts_path!();
         let (genesis_block, mint_keypair) = create_genesis_block(10_000);
-        let bank0 = Bank::new_with_paths(&genesis_block, Some(path.paths.clone()));
-        bank0.freeze();
-        let mut bank_forks = BankForks::new(0, bank0);
-        bank_forks.set_snapshot_config(true);
         for index in 0..10 {
-            let bank = Bank::new_from_parent(&bank_forks[index], &Pubkey::default(), index + 1);
-            let key1 = Keypair::new().pubkey();
-            let tx = system_transaction::create_user_account(
-                &mint_keypair,
-                &key1,
-                1,
-                genesis_block.hash(),
-                0,
-            );
-            assert_eq!(bank.process_transaction(&tx), Ok(()));
-            bank.freeze();
-            bank_forks.insert(bank);
-            save_and_load_snapshot(&bank_forks);
-            let bank = bank_forks.get(index).unwrap();
-            bank.clear_signatures();
+            let bank0 = Bank::new_with_paths(&genesis_block, Some(path.paths.clone()));
+            bank0.freeze();
+            let slot = bank0.slot();
+            let mut bank_forks = BankForks::new(0, bank0);
+            bank_forks.set_snapshot_config(true);
+            bank_forks.add_snapshot(slot, 0).unwrap();
+            for forks in 0..index {
+                let bank = Bank::new_from_parent(&bank_forks[forks], &Pubkey::default(), forks + 1);
+                let key1 = Keypair::new().pubkey();
+                let tx = system_transaction::create_user_account(
+                    &mint_keypair,
+                    &key1,
+                    1,
+                    genesis_block.hash(),
+                    0,
+                );
+                assert_eq!(bank.process_transaction(&tx), Ok(()));
+                bank.freeze();
+                let slot = bank.slot();
+                bank_forks.insert(bank);
+                bank_forks.add_snapshot(slot, 0).unwrap();
+            }
+            restore_from_snapshot(bank_forks, index);
         }
-        assert_eq!(bank_forks.working_bank().slot(), 10);
     }
 }

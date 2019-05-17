@@ -9,17 +9,17 @@ use crate::blockhash_queue::BlockhashQueue;
 use crate::epoch_schedule::EpochSchedule;
 use crate::locked_accounts_results::LockedAccountsResults;
 use crate::message_processor::{MessageProcessor, ProcessInstruction};
-use crate::stakes::Stakes;
 use crate::serde_utils::{
     deserialize_atomicbool, deserialize_atomicusize, serialize_atomicbool, serialize_atomicusize,
 };
+use crate::stakes::Stakes;
 use crate::status_cache::StatusCache;
 use bincode::{deserialize_from, serialize, serialize_into, serialized_size};
 use log::*;
+use serde::{Deserialize, Serialize};
 use solana_metrics::{
     datapoint_info, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
-use serde::{Deserialize, Serialize};
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
