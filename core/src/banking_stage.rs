@@ -15,7 +15,7 @@ use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use itertools::Itertools;
-use solana_metrics::inc_new_counter_info;
+use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counter_warn};
 use solana_runtime::accounts_db::ErrorCounters;
 use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
@@ -187,7 +187,7 @@ impl BankingStage {
 
         inc_new_counter_info!("banking_stage-rebuffered_packets", rebuffered_packets);
         inc_new_counter_info!("banking_stage-consumed_buffered_packets", new_tx_count);
-        inc_new_counter_info!("banking_stage-process_transactions", new_tx_count);
+        inc_new_counter_debug!("banking_stage-process_transactions", new_tx_count);
 
         Ok(unprocessed_packets)
     }
@@ -359,7 +359,7 @@ impl BankingStage {
         debug!("processed: {} ", processed_transactions.len());
         // unlock all the accounts with errors which are filtered by the above `filter_map`
         if !processed_transactions.is_empty() {
-            inc_new_counter_info!(
+            inc_new_counter_warn!(
                 "banking_stage-record_transactions",
                 processed_transactions.len()
             );
@@ -664,7 +664,7 @@ impl BankingStage {
             timing::duration_as_ms(&recv_start.elapsed()),
             count,
         );
-        inc_new_counter_info!("banking_stage-transactions_received", count);
+        inc_new_counter_debug!("banking_stage-transactions_received", count);
         let proc_start = Instant::now();
         let mut new_tx_count = 0;
         let mut mms_iter = mms.into_iter();
@@ -711,7 +711,7 @@ impl BankingStage {
             }
         }
 
-        inc_new_counter_info!(
+        inc_new_counter_debug!(
             "banking_stage-time_ms",
             timing::duration_as_ms(&proc_start.elapsed()) as usize
         );
@@ -725,8 +725,8 @@ impl BankingStage {
             new_tx_count,
             (new_tx_count as f32) / (total_time_s)
         );
-        inc_new_counter_info!("banking_stage-process_packets", count);
-        inc_new_counter_info!("banking_stage-process_transactions", new_tx_count);
+        inc_new_counter_debug!("banking_stage-process_packets", count);
+        inc_new_counter_debug!("banking_stage-process_transactions", new_tx_count);
 
         *recv_start = Instant::now();
 

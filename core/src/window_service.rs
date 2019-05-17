@@ -9,7 +9,7 @@ use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{BlobReceiver, BlobSender};
-use solana_metrics::inc_new_counter_info;
+use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -34,7 +34,7 @@ fn retransmit_blobs(blobs: &[SharedBlob], retransmit: &BlobSender, id: &Pubkey) 
     }
 
     if !retransmit_queue.is_empty() {
-        inc_new_counter_info!(
+        inc_new_counter_debug!(
             "streamer-recv_window-retransmit",
             retransmit_queue.len(),
             0,
@@ -88,13 +88,13 @@ pub fn should_retransmit_and_persist(
     };
 
     if blob.id() == *my_id {
-        inc_new_counter_info!("streamer-recv_window-circular_transmission", 1);
+        inc_new_counter_debug!("streamer-recv_window-circular_transmission", 1);
         false
     } else if slot_leader_id == None {
-        inc_new_counter_info!("streamer-recv_window-unknown_leader", 1);
+        inc_new_counter_debug!("streamer-recv_window-unknown_leader", 1);
         true
     } else if slot_leader_id != Some(blob.id()) {
-        inc_new_counter_info!("streamer-recv_window-wrong_leader", 1);
+        inc_new_counter_debug!("streamer-recv_window-wrong_leader", 1);
         false
     } else {
         true
@@ -119,7 +119,7 @@ where
         blobs.append(&mut blob)
     }
     let now = Instant::now();
-    inc_new_counter_info!("streamer-recv_window-recv", blobs.len(), 0, 1000);
+    inc_new_counter_debug!("streamer-recv_window-recv", blobs.len(), 0, 1000);
 
     blobs.retain(|blob| {
         blob_filter(&blob.read().unwrap())
@@ -223,7 +223,7 @@ impl WindowService {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                             Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                             _ => {
-                                inc_new_counter_info!("streamer-window-error", 1, 1);
+                                inc_new_counter_error!("streamer-window-error", 1, 1);
                                 error!("window error: {:?}", e);
                             }
                         }

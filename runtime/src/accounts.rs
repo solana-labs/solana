@@ -8,7 +8,7 @@ use crate::message_processor::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
 use log::*;
-use solana_metrics::inc_new_counter_info;
+use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::{Hash, Hasher};
@@ -477,9 +477,11 @@ impl Accounts {
             })
             .collect();
         if error_counters.account_in_use != 0 {
-            inc_new_counter_info!(
+            inc_new_counter_error!(
                 "bank-process_transactions-account_in_use",
-                error_counters.account_in_use
+                error_counters.account_in_use,
+                0,
+                100
             );
         }
         rv

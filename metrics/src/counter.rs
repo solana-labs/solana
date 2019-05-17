@@ -64,6 +64,32 @@ macro_rules! inc_new_counter {
 }
 
 #[macro_export]
+macro_rules! inc_new_counter_error {
+    ($name:expr, $count:expr) => {{
+        inc_new_counter!($name, $count, log::Level::Error, 0, 0);
+    }};
+    ($name:expr, $count:expr, $lograte:expr) => {{
+        inc_new_counter!($name, $count, log::Level::Error, $lograte, 0);
+    }};
+    ($name:expr, $count:expr, $lograte:expr, $metricsrate:expr) => {{
+        inc_new_counter!($name, $count, log::Level::Error, $lograte, $metricsrate);
+    }};
+}
+
+#[macro_export]
+macro_rules! inc_new_counter_warn {
+    ($name:expr, $count:expr) => {{
+        inc_new_counter!($name, $count, log::Level::Warn, 0, 0);
+    }};
+    ($name:expr, $count:expr, $lograte:expr) => {{
+        inc_new_counter!($name, $count, log::Level::Warn, $lograte, 0);
+    }};
+    ($name:expr, $count:expr, $lograte:expr, $metricsrate:expr) => {{
+        inc_new_counter!($name, $count, log::Level::Warn, $lograte, $metricsrate);
+    }};
+}
+
+#[macro_export]
 macro_rules! inc_new_counter_info {
     ($name:expr, $count:expr) => {{
         inc_new_counter!($name, $count, log::Level::Info, 0, 0);
@@ -73,6 +99,19 @@ macro_rules! inc_new_counter_info {
     }};
     ($name:expr, $count:expr, $lograte:expr, $metricsrate:expr) => {{
         inc_new_counter!($name, $count, log::Level::Info, $lograte, $metricsrate);
+    }};
+}
+
+#[macro_export]
+macro_rules! inc_new_counter_debug {
+    ($name:expr, $count:expr) => {{
+        inc_new_counter!($name, $count, log::Level::Debug, 0, 0);
+    }};
+    ($name:expr, $count:expr, $lograte:expr) => {{
+        inc_new_counter!($name, $count, log::Level::Debug, $lograte, 0);
+    }};
+    ($name:expr, $count:expr, $lograte:expr, $metricsrate:expr) => {{
+        inc_new_counter!($name, $count, log::Level::Debug, $lograte, $metricsrate);
     }};
 }
 

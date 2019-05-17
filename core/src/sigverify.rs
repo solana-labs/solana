@@ -6,7 +6,7 @@
 
 use crate::packet::{Packet, Packets};
 use crate::result::Result;
-use solana_metrics::inc_new_counter_info;
+use solana_metrics::inc_new_counter_debug;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::short_vec::decode_len;
 use solana_sdk::signature::Signature;
@@ -178,7 +178,7 @@ pub fn ed25519_verify_cpu(batches: &[Packets]) -> Vec<Vec<u8>> {
         .into_par_iter()
         .map(|p| p.packets.par_iter().map(verify_packet).collect())
         .collect();
-    inc_new_counter_info!("ed25519_verify_cpu", count);
+    inc_new_counter_debug!("ed25519_verify_cpu", count);
     rv
 }
 
@@ -190,7 +190,7 @@ pub fn ed25519_verify_disabled(batches: &[Packets]) -> Vec<Vec<u8>> {
         .into_par_iter()
         .map(|p| vec![1u8; p.packets.len()])
         .collect();
-    inc_new_counter_info!("ed25519_verify_disabled", count);
+    inc_new_counter_debug!("ed25519_verify_disabled", count);
     rv
 }
 
@@ -279,7 +279,7 @@ pub fn ed25519_verify(batches: &[Packets]) -> Vec<Vec<u8>> {
             }
         }
     }
-    inc_new_counter_info!("ed25519_verify_gpu", count);
+    inc_new_counter_debug!("ed25519_verify_gpu", count);
     rvs
 }
 

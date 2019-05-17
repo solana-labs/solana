@@ -29,7 +29,7 @@ use core::cmp;
 use hashbrown::HashMap;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana_metrics::{datapoint, inc_new_counter_info};
+use solana_metrics::{datapoint, inc_new_counter_debug, inc_new_counter_error};
 use solana_netutil::{
     bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range, PortRange,
 };
@@ -661,7 +661,7 @@ impl ClusterInfo {
     ) -> Result<()> {
         if broadcast_table.is_empty() {
             debug!("{}:not enough peers in cluster_info table", id);
-            inc_new_counter_info!("cluster_info-broadcast-not_enough_peers_error", 1);
+            inc_new_counter_error!("cluster_info-broadcast-not_enough_peers_error", 1);
             Err(ClusterInfoError::NoPeers)?;
         }
 
@@ -678,7 +678,7 @@ impl ClusterInfo {
             e?;
         }
 
-        inc_new_counter_info!("cluster_info-broadcast-max_idx", blobs.len());
+        inc_new_counter_debug!("cluster_info-broadcast-max_idx", blobs.len());
 
         Ok(())
     }
@@ -724,7 +724,7 @@ impl ClusterInfo {
         wblob.set_forwarded(was_forwarded);
         for e in errs {
             if let Err(e) = &e {
-                inc_new_counter_info!("cluster_info-retransmit-send_to_error", 1, 1);
+                inc_new_counter_error!("cluster_info-retransmit-send_to_error", 1, 1);
                 error!("retransmit result {:?}", e);
             }
             e?;
@@ -1017,14 +1017,14 @@ impl ClusterInfo {
             let blob = blocktree.get_data_blob(slot, blob_index);
 
             if let Ok(Some(mut blob)) = blob {
-                inc_new_counter_info!("cluster_info-window-request-ledger", 1);
+                inc_new_counter_debug!("cluster_info-window-request-ledger", 1);
                 blob.meta.set_addr(from_addr);
 
                 return vec![Arc::new(RwLock::new(blob))];
             }
         }
 
-        inc_new_counter_info!("cluster_info-window-request-fail", 1);
+        inc_new_counter_debug!("cluster_info-window-request-fail", 1);
         trace!(
             "{}: failed RequestWindowIndex {} {} {}",
             me.id,
@@ -1112,7 +1112,7 @@ impl ClusterInfo {
         from_addr: &SocketAddr,
     ) -> Vec<SharedBlob> {
         let self_id = me.read().unwrap().gossip.id;
-        inc_new_counter_info!("cluster_info-pull_request", 1);
+        inc_new_counter_debug!("cluster_info-pull_request", 1);
         if caller.contact_info().is_none() {
             return vec![];
         }
@@ -1122,7 +1122,7 @@ impl ClusterInfo {
                 "PullRequest ignored, I'm talking to myself: me={} remoteme={}",
                 self_id, from.id
             );
-            inc_new_counter_info!("cluster_info-window-request-loopback", 1);
+            inc_new_counter_debug!("cluster_info-window-request-loopback", 1);
             return vec![];
         }
         let now = timestamp();
@@ -1138,10 +1138,10 @@ impl ClusterInfo {
         // This may or may not be correct for everybody, but it's better than leaving the remote with
         // an unspecified address in our table
         if from.gossip.ip().is_unspecified() {
-            inc_new_counter_info!("cluster_info-window-request-updates-unspec-gossip", 1);
+            inc_new_counter_debug!("cluster_info-window-request-updates-unspec-gossip", 1);
             from.gossip = *from_addr;
         }
-        inc_new_counter_info!("cluster_info-pull_request-rsp", len);
+        inc_new_counter_debug!("cluster_info-pull_request-rsp", len);
         to_shared_blob(rsp, from.gossip).ok().into_iter().collect()
     }
     fn handle_pull_response(me: &Arc<RwLock<Self>>, from: &Pubkey, data: Vec<CrdsValue>) {
@@ -1153,8 +1153,8 @@ impl ClusterInfo {
             .unwrap()
             .gossip
             .process_pull_response(from, data, timestamp());
-        inc_new_counter_info!("cluster_info-pull_request_response", 1);
-        inc_new_counter_info!("cluster_info-pull_request_response-size", len);
+        inc_new_counter_debug!("cluster_info-pull_request_response", 1);
+        inc_new_counter_debug!("cluster_info-pull_request_response-size", len);
 
         report_time_spent("ReceiveUpdates", &now.elapsed(), &format!(" len: {}", len));
     }
@@ -1164,17 +1164,17 @@ impl ClusterInfo {
         data: Vec<CrdsValue>,
     ) -> Vec<SharedBlob> {
         let self_id = me.read().unwrap().gossip.id;
-        inc_new_counter_info!("cluster_info-push_message", 1, 0, 1000);
+        inc_new_counter_debug!("cluster_info-push_message", 1, 0, 1000);
         let prunes: Vec<_> = me
             .write()
             .unwrap()
             .gossip
             .process_push_message(data, timestamp());
         if !prunes.is_empty() {
-            inc_new_counter_info!("cluster_info-push_message-prunes", prunes.len());
+            inc_new_counter_debug!("cluster_info-push_message-prunes", prunes.len());
             let ci = me.read().unwrap().lookup(from).cloned();
             let pushes: Vec<_> = me.write().unwrap().new_push_requests();
-            inc_new_counter_info!("cluster_info-push_message-pushes", pushes.len());
+            inc_new_counter_debug!("cluster_info-push_message-pushes", pushes.len());
             let mut rsp: Vec<_> = ci
                 .and_then(|ci| {
                     let mut prune_msg = PruneData {
@@ -1231,7 +1231,7 @@ impl ClusterInfo {
                 "{}: Ignored received repair request from ME {}",
                 self_id, from.id,
             );
-            inc_new_counter_info!("cluster_info-handle-repair--eq", 1);
+            inc_new_counter_debug!("cluster_info-handle-repair--eq", 1);
             return vec![];
         }
 
@@ -1245,7 +1245,7 @@ impl ClusterInfo {
         let (res, label) = {
             match &request {
                 Protocol::RequestWindowIndex(from, slot, blob_index) => {
-                    inc_new_counter_info!("cluster_info-request-window-index", 1);
+                    inc_new_counter_debug!("cluster_info-request-window-index", 1);
                     (
                         Self::run_window_request(
                             from,
@@ -1260,7 +1260,7 @@ impl ClusterInfo {
                 }
 
                 Protocol::RequestHighestWindowIndex(_, slot, highest_index) => {
-                    inc_new_counter_info!("cluster_info-request-highest-window-index", 1);
+                    inc_new_counter_debug!("cluster_info-request-highest-window-index", 1);
                     (
                         Self::run_highest_window_request(
                             &from_addr,
@@ -1272,7 +1272,7 @@ impl ClusterInfo {
                     )
                 }
                 Protocol::RequestOrphan(_, slot) => {
-                    inc_new_counter_info!("cluster_info-request-orphan", 1);
+                    inc_new_counter_debug!("cluster_info-request-orphan", 1);
                     (
                         Self::run_orphan(&from_addr, blocktree, *slot, MAX_ORPHAN_REPAIR_RESPONSES),
                         "RequestOrphan",
@@ -1297,7 +1297,7 @@ impl ClusterInfo {
             // TODO verify messages faster
             Protocol::PullRequest(filter, caller) => {
                 if !caller.verify() {
-                    inc_new_counter_info!("cluster_info-gossip_pull_request_verify_fail", 1);
+                    inc_new_counter_error!("cluster_info-gossip_pull_request_verify_fail", 1);
                     vec![]
                 } else {
                     Self::handle_pull_request(me, filter, caller, from_addr)
@@ -1307,7 +1307,7 @@ impl ClusterInfo {
                 data.retain(|v| {
                     let ret = v.verify();
                     if !ret {
-                        inc_new_counter_info!("cluster_info-gossip_pull_response_verify_fail", 1);
+                        inc_new_counter_error!("cluster_info-gossip_pull_response_verify_fail", 1);
                     }
                     ret
                 });
@@ -1318,7 +1318,7 @@ impl ClusterInfo {
                 data.retain(|v| {
                     let ret = v.verify();
                     if !ret {
-                        inc_new_counter_info!("cluster_info-gossip_push_msg_verify_fail", 1);
+                        inc_new_counter_error!("cluster_info-gossip_push_msg_verify_fail", 1);
                     }
                     ret
                 });
@@ -1326,8 +1326,8 @@ impl ClusterInfo {
             }
             Protocol::PruneMessage(from, data) => {
                 if data.verify() {
-                    inc_new_counter_info!("cluster_info-prune_message", 1);
-                    inc_new_counter_info!("cluster_info-prune_message-size", data.prunes.len());
+                    inc_new_counter_debug!("cluster_info-prune_message", 1);
+                    inc_new_counter_debug!("cluster_info-prune_message-size", data.prunes.len());
                     match me.write().unwrap().gossip.process_prune_msg(
                         &from,
                         &data.destination,
@@ -1336,16 +1336,16 @@ impl ClusterInfo {
                         timestamp(),
                     ) {
                         Err(CrdsGossipError::PruneMessageTimeout) => {
-                            inc_new_counter_info!("cluster_info-prune_message_timeout", 1)
+                            inc_new_counter_debug!("cluster_info-prune_message_timeout", 1)
                         }
                         Err(CrdsGossipError::BadPruneDestination) => {
-                            inc_new_counter_info!("cluster_info-bad_prune_destination", 1)
+                            inc_new_counter_debug!("cluster_info-bad_prune_destination", 1)
                         }
                         Err(_) => (),
                         Ok(_) => (),
                     }
                 } else {
-                    inc_new_counter_info!("cluster_info-gossip_prune_msg_verify_fail", 1);
+                    inc_new_counter_debug!("cluster_info-gossip_prune_msg_verify_fail", 1);
                 }
                 vec![]
             }

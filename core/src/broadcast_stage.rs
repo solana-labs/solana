@@ -10,7 +10,10 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
 use rayon::prelude::*;
-use solana_metrics::{datapoint, inc_new_counter_info};
+use solana_metrics::{
+    datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
+    inc_new_counter_warn,
+};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
@@ -77,7 +80,7 @@ impl Broadcast {
             .unwrap()
             .sorted_tvu_peers(staking_utils::staked_nodes_at_epoch(&bank, bank_epoch).as_ref());
 
-        inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
+        inc_new_counter_warn!("broadcast_service-num_peers", broadcast_table.len() + 1);
         // Layer 1, leader nodes are limited to the fanout size.
         broadcast_table.truncate(DATA_PLANE_FANOUT);
 
@@ -126,7 +129,7 @@ impl Broadcast {
         // Send out data
         ClusterInfo::broadcast(&self.id, contains_last_tick, &broadcast_table, sock, &blobs)?;
 
-        inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
+        inc_new_counter_debug!("streamer-broadcast-sent", blobs.len());
 
         // send out erasures
         ClusterInfo::broadcast(&self.id, false, &broadcast_table, sock, &coding)?;
@@ -198,7 +201,7 @@ impl BroadcastStage {
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                     Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                     _ => {
-                        inc_new_counter_info!("streamer-broadcaster-error", 1, 1);
+                        inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
                         error!("broadcaster error: {:?}", e);
                     }
                 }
