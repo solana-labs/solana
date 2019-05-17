@@ -43,6 +43,7 @@ solana-keygen -o "$dataDir"/config/leader-keypair.json
 solana-keygen -o "$dataDir"/config/leader-vote-account-keypair.json
 solana-keygen -o "$dataDir"/config/leader-stake-account-keypair.json
 solana-keygen -o "$dataDir"/config/drone-keypair.json
+solana-keygen -o "$dataDir"/config/storage-keypair.json
 
 leaderVoteAccountPubkey=$(\
   solana-wallet \
@@ -65,6 +66,7 @@ drone=$!
 
 args=(
   --identity "$dataDir"/config/leader-keypair.json
+  --storage-keypair "$dataDir"/config/storage-keypair.json
   --voting-keypair "$dataDir"/config/leader-vote-account-keypair.json
   --vote-account "$leaderVoteAccountPubkey"
   --ledger "$dataDir"/ledger/
