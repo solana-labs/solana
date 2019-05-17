@@ -8,6 +8,7 @@ use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -43,7 +44,13 @@ pub fn process_instruction(
             if num_keyed_accounts != 1 {
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.submit_mining_proof(storage_account_pubkey, sha_state, slot, signature)
+            storage_account.submit_mining_proof(
+                storage_account_pubkey,
+                sha_state,
+                slot,
+                signature,
+                tick_height / DEFAULT_TICKS_PER_SLOT,
+            )
         }
         StorageInstruction::AdvertiseStorageRecentBlockhash { hash, slot } => {
             if num_keyed_accounts != 1 {
@@ -51,7 +58,11 @@ pub fn process_instruction(
                 // to access its data
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.advertise_storage_recent_blockhash(hash, slot)
+            storage_account.advertise_storage_recent_blockhash(
+                hash,
+                slot,
+                tick_height / DEFAULT_TICKS_PER_SLOT,
+            )
         }
         StorageInstruction::ClaimStorageReward { slot } => {
             if num_keyed_accounts != 1 {
@@ -59,7 +70,7 @@ pub fn process_instruction(
                 // to access its data
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.claim_storage_reward(slot, tick_height)
+            storage_account.claim_storage_reward(slot, tick_height / DEFAULT_TICKS_PER_SLOT)
         }
         StorageInstruction::ProofValidation { slot, proofs } => {
             if num_keyed_accounts == 1 {
@@ -89,10 +100,14 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
     use solana_sdk::system_instruction;
+    use std::sync::Arc;
+
+    const TICKS_IN_SEGMENT: u64 = SLOTS_PER_SEGMENT * DEFAULT_TICKS_PER_SLOT;
 
     fn test_instruction(
         ix: &Instruction,
         program_accounts: &mut [Account],
+        tick_height: u64,
     ) -> Result<(), InstructionError> {
         let mut keyed_accounts: Vec<_> = ix
             .accounts
@@ -103,7 +118,7 @@ mod tests {
             })
             .collect();
 
-        let ret = process_instruction(&id(), &mut keyed_accounts, &ix.data, 42);
+        let ret = process_instruction(&id(), &mut keyed_accounts, &ix.data, tick_height);
         info!("ret: {:?}", ret);
         ret
     }
@@ -122,8 +137,13 @@ mod tests {
             SLOTS_PER_SEGMENT,
             Signature::default(),
         );
+        // the proof is for slot 16, which is in segment 0, need to move the tick height into segment 2
+        let ticks_till_next_segment = TICKS_IN_SEGMENT * 2;
 
-        assert_eq!(test_instruction(&ix, &mut [account]), Ok(()));
+        assert_eq!(
+            test_instruction(&ix, &mut [account], ticks_till_next_segment),
+            Ok(())
+        );
     }
 
     #[test]
@@ -160,11 +180,14 @@ mod tests {
 
         let ix =
             storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
-        assert!(test_instruction(&ix, &mut accounts).is_err());
+        // move tick height into segment 1
+        let ticks_till_next_segment = TICKS_IN_SEGMENT + 1;
+
+        assert!(test_instruction(&ix, &mut accounts, ticks_till_next_segment).is_err());
 
         let mut accounts = [Account::default(), Account::default(), Account::default()];
 
-        assert!(test_instruction(&ix, &mut accounts).is_err());
+        assert!(test_instruction(&ix, &mut accounts, ticks_till_next_segment).is_err());
     }
 
     #[test]
@@ -172,13 +195,14 @@ mod tests {
         solana_logger::setup();
         let pubkey = Pubkey::new_rand();
         let mut accounts = [Account::default(), Account::default()];
+        accounts[0].data.resize(16 * 1024, 0);
         accounts[1].data.resize(16 * 1024, 0);
 
         let ix =
             storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
 
-        // Haven't seen a transaction to roll over the epoch, so this should fail
-        assert!(test_instruction(&ix, &mut accounts).is_err());
+        // submitting a proof for a slot in the past, so this should fail
+        assert!(test_instruction(&ix, &mut accounts, 0).is_err());
     }
 
     #[test]
@@ -190,12 +214,13 @@ mod tests {
 
         let ix =
             storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
+        // move tick height into segment 1
+        let ticks_till_next_segment = TICKS_IN_SEGMENT + 1;
 
-        test_instruction(&ix, &mut accounts).unwrap();
+        test_instruction(&ix, &mut accounts, ticks_till_next_segment).unwrap();
     }
 
     #[test]
-    #[ignore]
     fn test_validate_mining() {
         solana_logger::setup();
         let (genesis_block, mint_keypair) = create_genesis_block(1000);
@@ -207,8 +232,9 @@ mod tests {
 
         let mut bank = Bank::new(&genesis_block);
         bank.add_instruction_processor(id(), process_instruction);
+        let bank = Arc::new(bank);
         let slot = 0;
-        let bank_client = BankClient::new(bank);
+        let bank_client = BankClient::new_shared(&bank);
 
         let ix = system_instruction::create_account(&mint_pubkey, &validator, 10, 4 * 1042, &id());
         bank_client.send_instruction(&mint_keypair, ix).unwrap();
@@ -216,6 +242,13 @@ mod tests {
         let ix = system_instruction::create_account(&mint_pubkey, &replicator, 10, 4 * 1042, &id());
         bank_client.send_instruction(&mint_keypair, ix).unwrap();
 
+        // tick the bank up until it's moved into storage segment 2 because the next advertise is for segment 1
+        let next_storage_segment_tick_height = TICKS_IN_SEGMENT * 2;
+        for _ in 0..next_storage_segment_tick_height {
+            bank.register_tick(&bank.last_blockhash());
+        }
+
+        // advertise for storage segment 1
         let ix = storage_instruction::advertise_recent_blockhash(
             &validator,
             Hash::default(),
@@ -241,6 +274,12 @@ mod tests {
             Hash::default(),
             SLOTS_PER_SEGMENT * 2,
         );
+
+        let next_storage_segment_tick_height = TICKS_IN_SEGMENT;
+        for _ in 0..next_storage_segment_tick_height {
+            bank.register_tick(&bank.last_blockhash());
+        }
+
         bank_client
             .send_instruction(&validator_keypair, ix)
             .unwrap();
@@ -266,6 +305,12 @@ mod tests {
             Hash::default(),
             SLOTS_PER_SEGMENT * 3,
         );
+
+        let next_storage_segment_tick_height = TICKS_IN_SEGMENT;
+        for _ in 0..next_storage_segment_tick_height {
+            bank.register_tick(&bank.last_blockhash());
+        }
+
         bank_client
             .send_instruction(&validator_keypair, ix)
             .unwrap();
@@ -278,11 +323,10 @@ mod tests {
         // TODO enable when rewards are working
         // assert_eq!(bank_client.get_balance(&validator).unwrap(), TOTAL_VALIDATOR_REWARDS);
 
-        // TODO extend BankClient with a method to force a block boundary
         // tick the bank into the next storage epoch so that rewards can be claimed
-        //for _ in 0..=ENTRIES_PER_SEGMENT {
-        //    bank.register_tick(&bank.last_blockhash());
-        //}
+        for _ in 0..=TICKS_IN_SEGMENT {
+            bank.register_tick(&bank.last_blockhash());
+        }
 
         let ix = storage_instruction::reward_claim(&replicator, slot);
         bank_client
@@ -339,6 +383,11 @@ mod tests {
 
         let mut bank = Bank::new(&genesis_block);
         bank.add_instruction_processor(id(), process_instruction);
+        // tick the bank up until it's moved into storage segment 2
+        let next_storage_segment_tick_height = TICKS_IN_SEGMENT * 2;
+        for _ in 0..next_storage_segment_tick_height {
+            bank.register_tick(&bank.last_blockhash());
+        }
         let bank_client = BankClient::new(bank);
 
         let x = 42;
