@@ -6,7 +6,6 @@ use solana_sdk::poh_config::PohConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, sleep, Builder, JoinHandle};
-use std::time::Instant;
 
 pub struct PohService {
     tick_producer: JoinHandle<()>,
@@ -31,8 +30,11 @@ impl PohService {
         let tick_producer = Builder::new()
             .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
-                let poh_recorder = poh_recorder;
-                Self::tick_producer(&poh_recorder, &poh_config, &poh_exit_);
+                if poh_config.hashes_per_tick.is_none() {
+                    Self::sleepy_tick_producer(poh_recorder, &poh_config, &poh_exit_);
+                } else {
+                    Self::tick_producer(poh_recorder, &poh_exit_);
+                }
                 poh_exit_.store(true, Ordering::Relaxed);
             })
             .unwrap();
@@ -40,40 +42,26 @@ impl PohService {
         Self { tick_producer }
     }
 
-    fn tick_producer(
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+    fn sleepy_tick_producer(
+        poh_recorder: Arc<Mutex<PohRecorder>>,
         poh_config: &PohConfig,
         poh_exit: &AtomicBool,
     ) {
         while !poh_exit.load(Ordering::Relaxed) {
-            let tick_start = Instant::now();
+            sleep(poh_config.target_tick_duration);
+            poh_recorder.lock().unwrap().tick();
+        }
+    }
 
-            if poh_config.hashes_per_tick.is_none() {
-                sleep(poh_config.target_tick_duration);
-                {
-                    let mut poh_recorder = poh_recorder.lock().unwrap();
-                    let poh_entry = poh_recorder.poh.tick();
-                    poh_recorder.record_tick(poh_entry, tick_start);
+    fn tick_producer(poh_recorder: Arc<Mutex<PohRecorder>>, poh_exit: &AtomicBool) {
+        let poh = poh_recorder.lock().unwrap().poh.clone();
+        loop {
+            if poh.lock().unwrap().hash(NUM_HASHES_PER_BATCH) {
+                // Lock PohRecorder only for the final hash...
+                poh_recorder.lock().unwrap().tick();
+                if poh_exit.load(Ordering::Relaxed) {
+                    break;
                 }
-            } else {
-                // NOTE: This block should resemble `bench_arc_mutex_poh_batched_hash()` or
-                //       the `NUM_HASHES_PER_BATCH` magic number may no longer be optimal
-                loop {
-                    {
-                        let mut poh_recorder = poh_recorder.lock().unwrap();
-                        let remaining_hashes = poh_recorder.poh.remaining_hashes;
-
-                        let num_hashes_batch =
-                            std::cmp::min(remaining_hashes - 1, NUM_HASHES_PER_BATCH);
-                        if num_hashes_batch == 0 {
-                            let poh_entry = poh_recorder.poh.tick();
-                            poh_recorder.record_tick(poh_entry, tick_start);
-                            break;
-                        }
-                        poh_recorder.poh.hash(num_hashes_batch);
-                    }
-                }
-                // END NOTE
             }
         }
     }
