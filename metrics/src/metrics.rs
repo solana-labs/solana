@@ -159,47 +159,46 @@ impl MetricsAgent {
         last_write_time: Instant,
         max_points: usize,
         writer: &Arc<MetricsWriter + Send + Sync>,
-        write_frequency_secs: Duration,
         max_points_per_sec: usize,
     ) -> usize {
-        let now = Instant::now();
-        if now.duration_since(last_write_time) >= write_frequency_secs && !points.is_empty() {
-            let num_points = points.len();
-            debug!("run: attempting to write {} points", num_points);
-            if num_points > max_points {
-                warn!(
-                    "max submission rate of {} datapoints per second exceeded.  only the
-                    first {} of {} points will be submitted",
-                    max_points_per_sec, max_points, num_points
-                );
-            }
-            let points_written = cmp::min(num_points, max_points - 1);
-
-            let extra = influxdb::Point::new("metrics")
-                .add_timestamp(timing::timestamp() as i64)
-                .add_field("host_id", influxdb::Value::String(HOST_INFO.to_string()))
-                .add_field(
-                    "points_written",
-                    influxdb::Value::Integer(points_written as i64),
-                )
-                .add_field("num_points", influxdb::Value::Integer(num_points as i64))
-                .add_field(
-                    "secs_since_last_write",
-                    influxdb::Value::Integer(now.duration_since(last_write_time).as_secs() as i64),
-                )
-                .add_field(
-                    "points_rate_exceeded",
-                    influxdb::Value::Boolean(num_points > max_points),
-                )
-                .to_owned();
-
-            writer.write(points[0..points_written].to_vec());
-            writer.write([extra].to_vec());
-
-            return points_written;
+        if points.is_empty() {
+            return 0;
         }
 
-        0
+        let now = Instant::now();
+        let num_points = points.len();
+        debug!("run: attempting to write {} points", num_points);
+        if num_points > max_points {
+            warn!(
+                "max submission rate of {} datapoints per second exceeded.  only the
+                    first {} of {} points will be submitted",
+                max_points_per_sec, max_points, num_points
+            );
+        }
+        let points_written = cmp::min(num_points, max_points - 1);
+
+        let extra = influxdb::Point::new("metrics")
+            .add_timestamp(timing::timestamp() as i64)
+            .add_field("host_id", influxdb::Value::String(HOST_INFO.to_string()))
+            .add_field(
+                "points_written",
+                influxdb::Value::Integer(points_written as i64),
+            )
+            .add_field("num_points", influxdb::Value::Integer(num_points as i64))
+            .add_field(
+                "secs_since_last_write",
+                influxdb::Value::Integer(now.duration_since(last_write_time).as_secs() as i64),
+            )
+            .add_field(
+                "points_rate_exceeded",
+                influxdb::Value::Boolean(num_points > max_points),
+            )
+            .to_owned();
+
+        writer.write(points[0..points_written].to_vec());
+        writer.write([extra].to_vec());
+
+        return points_written;
     }
 
     fn run(
@@ -209,9 +208,9 @@ impl MetricsAgent {
         max_points_per_sec: usize,
     ) {
         trace!("run: enter");
+        let mut last_write_time = Instant::now();
         let mut points_map = HashMap::<log::Level, (Instant, Vec<Point>)>::new();
         let max_points = write_frequency_secs.as_secs() as usize * max_points_per_sec;
-        let mut last_write_time = Instant::now();
 
         loop {
             match receiver.recv_timeout(write_frequency_secs / 2) {
@@ -244,25 +243,34 @@ impl MetricsAgent {
 
             let mut num_max_writes = max_points;
 
-            points_map.retain(|_level, (last_time, points)| {
-                let num_written = Self::write(
-                    points,
-                    *last_time,
-                    num_max_writes,
-                    writer,
-                    write_frequency_secs,
-                    max_points_per_sec,
-                );
+            let now = Instant::now();
+            if now.duration_since(last_write_time) >= write_frequency_secs {
+                vec![
+                    Level::Error,
+                    Level::Warn,
+                    Level::Info,
+                    Level::Debug,
+                    Level::Trace,
+                ]
+                .iter()
+                .for_each(|x| {
+                    points_map.remove(x).map(|(last_time, points)| {
+                        let num_written = Self::write(
+                            &points,
+                            last_time,
+                            num_max_writes,
+                            writer,
+                            max_points_per_sec,
+                        );
 
-                num_max_writes -= num_written;
+                        if num_written > 0 {
+                            last_write_time = Instant::now();
+                        }
 
-                if num_written > 0 || num_max_writes <= 0 {
-                    last_write_time = Instant::now();
-                    false
-                } else {
-                    true
-                }
-            });
+                        num_max_writes = num_max_writes.saturating_sub(num_written);
+                    });
+                });
+            }
         }
         trace!("run: exit");
     }
