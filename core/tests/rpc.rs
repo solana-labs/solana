@@ -35,10 +35,7 @@ fn test_rpc_send_tx() {
         .send()
         .unwrap();
     let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
-    let blockhash_vec = bs58::decode(json["result"][0].as_str().unwrap())
-        .into_vec()
-        .unwrap();
-    let blockhash = Hash::new(&blockhash_vec);
+    let blockhash: Hash = json["result"][0].as_str().unwrap().parse().unwrap();
 
     info!("blockhash: {:?}", blockhash);
     let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash, 0);

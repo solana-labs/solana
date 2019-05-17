@@ -655,8 +655,7 @@ mod tests {
     fn test_get_recent_blockhash() {
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
 
-        let vec = bs58::decode(PUBKEY).into_vec().unwrap();
-        let expected_blockhash = Hash::new(&vec);
+        let expected_blockhash: Hash = PUBKEY.parse().unwrap();
 
         let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash().expect("blockhash ok");
         assert_eq!(blockhash, expected_blockhash);
@@ -711,10 +710,9 @@ mod tests {
 
         let key = Keypair::new();
         let to = Pubkey::new_rand();
-        let vec = bs58::decode("HUu3LwEzGRsUkuJS121jzkPJW39Kq62pXCTmTa1F9jDL")
-            .into_vec()
+        let blockhash: Hash = "HUu3LwEzGRsUkuJS121jzkPJW39Kq62pXCTmTa1F9jDL"
+            .parse()
             .unwrap();
-        let blockhash = Hash::new(&vec);
         let prev_tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
         let mut tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
 

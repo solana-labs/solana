@@ -1,4 +1,3 @@
-use bs58;
 use chrono::prelude::*;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use log::*;
@@ -33,7 +32,7 @@ use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::thread::sleep;
 use std::time::Duration;
-use std::{error, fmt, mem};
+use std::{error, fmt};
 
 const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA_SIZE
 
@@ -169,16 +168,12 @@ pub fn parse_command(
             Ok(WalletCommand::Cancel(process_id))
         }
         ("confirm", Some(confirm_matches)) => {
-            let signatures = bs58::decode(confirm_matches.value_of("signature").unwrap())
-                .into_vec()
-                .expect("base58-encoded signature");
-
-            if signatures.len() == mem::size_of::<Signature>() {
-                let signature = Signature::new(&signatures);
-                Ok(WalletCommand::Confirm(signature))
-            } else {
-                eprintln!("{}", confirm_matches.usage());
-                Err(WalletError::BadParameter("Invalid signature".to_string()))
+            match confirm_matches.value_of("signature").unwrap().parse() {
+                Ok(signature) => Ok(WalletCommand::Confirm(signature)),
+                _ => {
+                    eprintln!("{}", confirm_matches.usage());
+                    Err(WalletError::BadParameter("Invalid signature".to_string()))
+                }
             }
         }
         ("create-vote-account", Some(matches)) => {
@@ -1725,8 +1720,8 @@ mod tests {
             .unwrap()
             .as_str()
             .unwrap();
-        let program_id_vec = bs58::decode(program_id).into_vec().unwrap();
-        assert_eq!(program_id_vec.len(), mem::size_of::<Pubkey>());
+
+        assert!(program_id.parse::<Pubkey>().is_ok());
 
         // Failure cases
         config.rpc_client = Some(RpcClient::new_mock("airdrop".to_string()));
