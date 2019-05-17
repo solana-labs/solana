@@ -14,7 +14,7 @@ use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use hashbrown::HashMap;
-use solana_metrics::{datapoint, inc_new_counter_error, inc_new_counter_info};
+use solana_metrics::{datapoint_warn, inc_new_counter_error, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -245,7 +245,7 @@ impl ReplayStage {
                     cluster_info.write().unwrap().set_leader(&next_leader);
                     if next_leader == *my_id && reached_leader_tick {
                         debug!("{} starting tpu for slot {}", my_id, poh_slot);
-                        datapoint!(
+                        datapoint_warn!(
                             "replay_stage-new_leader",
                             ("count", poh_slot, i64),
                             ("grace", grace_ticks, i64));
@@ -468,7 +468,7 @@ impl ReplayStage {
                     .unwrap_or(true)
             {
                 info!("validator fork confirmed {} {}", *slot, duration);
-                datapoint!("validator-confirmation", ("duration_ms", duration, i64));
+                datapoint_warn!("validator-confirmation", ("duration_ms", duration, i64));
                 false
             } else {
                 debug!(

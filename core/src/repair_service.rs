@@ -6,7 +6,7 @@ use crate::blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta};
 use crate::cluster_info::ClusterInfo;
 use crate::result::Result;
 use crate::service::Service;
-use solana_metrics::datapoint;
+use solana_metrics::datapoint_info;
 use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashSet;
@@ -156,7 +156,7 @@ impl RepairService {
 
                 for ((to, req), repair_request) in reqs {
                     if let Ok(local_addr) = repair_socket.local_addr() {
-                        datapoint!(
+                        datapoint_info!(
                             "repair_service",
                             ("repair_request", format!("{:?}", repair_request), String),
                             ("to", to.to_string(), String),

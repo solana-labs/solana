@@ -9,7 +9,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use bytes::{Bytes, BytesMut};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_metrics::datapoint;
+use solana_metrics::datapoint_info;
 use solana_sdk::hash::Hash;
 use solana_sdk::message::Message;
 use solana_sdk::packet::PACKET_DATA_SIZE;
@@ -113,7 +113,7 @@ impl Drone {
             } => {
                 if self.check_request_limit(lamports) {
                     self.request_current += lamports;
-                    datapoint!(
+                    datapoint_info!(
                         "drone-airdrop",
                         ("request_amount", lamports, i64),
                         ("request_current", self.request_current, i64)

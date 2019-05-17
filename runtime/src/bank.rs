@@ -15,7 +15,7 @@ use bincode::serialize;
 use hashbrown::HashMap;
 use log::*;
 use solana_metrics::{
-    datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
+    datapoint_info, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
@@ -151,7 +151,7 @@ impl Bank {
         bank.slot = slot;
         bank.max_tick_height = (bank.slot + 1) * bank.ticks_per_slot - 1;
 
-        datapoint!(
+        datapoint_info!(
             "bank-new_from_parent-heights",
             ("slot_height", slot, i64),
             ("bank_height", bank.bank_height, i64)
@@ -232,7 +232,7 @@ impl Bank {
             .for_each(|p| self.status_cache.write().unwrap().add_root(p.slot()));
         let squash_cache_ms = duration_as_ms(&squash_cache_start.elapsed());
 
-        datapoint!(
+        datapoint_info!(
             "locktower-observed",
             ("squash_accounts_ms", squash_accounts_ms, i64),
             ("squash_cache_ms", squash_cache_ms, i64)
