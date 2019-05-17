@@ -547,6 +547,57 @@ impl Bank {
         self.check_signatures(txs, age_results, &mut error_counters)
     }
 
+    fn update_error_counters(error_counters: &ErrorCounters) {
+        if 0 != error_counters.blockhash_not_found {
+            inc_new_counter_error!(
+                "bank-process_transactions-error-blockhash_not_found",
+                error_counters.blockhash_not_found,
+                0,
+                1000
+            );
+        }
+        if 0 != error_counters.invalid_account_index {
+            inc_new_counter_error!(
+                "bank-process_transactions-error-invalid_account_index",
+                error_counters.invalid_account_index,
+                0,
+                1000
+            );
+        }
+        if 0 != error_counters.reserve_blockhash {
+            inc_new_counter_error!(
+                "bank-process_transactions-error-reserve_blockhash",
+                error_counters.reserve_blockhash,
+                0,
+                1000
+            );
+        }
+        if 0 != error_counters.duplicate_signature {
+            inc_new_counter_error!(
+                "bank-process_transactions-error-duplicate_signature",
+                error_counters.duplicate_signature,
+                0,
+                1000
+            );
+        }
+        if 0 != error_counters.insufficient_funds {
+            inc_new_counter_error!(
+                "bank-process_transactions-error-insufficient_funds",
+                error_counters.insufficient_funds,
+                0,
+                1000
+            );
+        }
+        if 0 != error_counters.account_loaded_twice {
+            inc_new_counter_error!(
+                "bank-process_transactions-account_loaded_twice",
+                error_counters.account_loaded_twice,
+                0,
+                1000
+            );
+        }
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -617,54 +668,7 @@ impl Bank {
         self.increment_transaction_count(tx_count);
 
         inc_new_counter_info!("bank-process_transactions-txs", tx_count, 0, 1000);
-        if 0 != error_counters.blockhash_not_found {
-            inc_new_counter_error!(
-                "bank-process_transactions-error-blockhash_not_found",
-                error_counters.blockhash_not_found,
-                0,
-                1000
-            );
-        }
-        if 0 != error_counters.invalid_account_index {
-            inc_new_counter_error!(
-                "bank-process_transactions-error-invalid_account_index",
-                error_counters.invalid_account_index,
-                0,
-                1000
-            );
-        }
-        if 0 != error_counters.reserve_blockhash {
-            inc_new_counter_error!(
-                "bank-process_transactions-error-reserve_blockhash",
-                error_counters.reserve_blockhash,
-                0,
-                1000
-            );
-        }
-        if 0 != error_counters.duplicate_signature {
-            inc_new_counter_error!(
-                "bank-process_transactions-error-duplicate_signature",
-                error_counters.duplicate_signature,
-                0,
-                1000
-            );
-        }
-        if 0 != error_counters.insufficient_funds {
-            inc_new_counter_error!(
-                "bank-process_transactions-error-insufficient_funds",
-                error_counters.insufficient_funds,
-                0,
-                1000
-            );
-        }
-        if 0 != error_counters.account_loaded_twice {
-            inc_new_counter_error!(
-                "bank-process_transactions-account_loaded_twice",
-                error_counters.account_loaded_twice,
-                0,
-                1000
-            );
-        }
+        Self::update_error_counters(&error_counters);
         (loaded_accounts, executed)
     }
 
