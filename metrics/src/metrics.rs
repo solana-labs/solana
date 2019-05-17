@@ -198,7 +198,7 @@ impl MetricsAgent {
         writer.write(points[0..points_written].to_vec());
         writer.write([extra].to_vec());
 
-        return points_written;
+        points_written
     }
 
     fn run(
@@ -254,7 +254,7 @@ impl MetricsAgent {
                 ]
                 .iter()
                 .for_each(|x| {
-                    points_map.remove(x).map(|(last_time, points)| {
+                    if let Some((last_time, points)) = points_map.remove(x) {
                         let num_written = Self::write(
                             &points,
                             last_time,
@@ -268,7 +268,7 @@ impl MetricsAgent {
                         }
 
                         num_max_writes = num_max_writes.saturating_sub(num_written);
-                    });
+                    }
                 });
             }
         }
