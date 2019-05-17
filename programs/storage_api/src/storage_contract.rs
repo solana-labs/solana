@@ -195,10 +195,7 @@ impl<'a> StorageAccount<'a> {
                         .map(move |contract| match contract {
                             StorageContract::ReplicatorStorage { proofs, .. } => Some((
                                 account,
-                                proofs
-                                    .get(&segment_index)
-                                    .map(|proofs| proofs.clone())
-                                    .unwrap_or_default(),
+                                proofs.get(&segment_index).cloned().unwrap_or_default(),
                             )),
                             _ => None,
                         })
@@ -258,7 +255,7 @@ impl<'a> StorageAccount<'a> {
         {
             let state_segment = get_segment_from_slot(*state_slot);
             let claim_segment = get_segment_from_slot(slot);
-            if state_segment <= claim_segment || reward_validations.get(&claim_segment).is_none() {
+            if state_segment <= claim_segment || !reward_validations.contains_key(&claim_segment) {
                 debug!(
                     "current {:?}, claim {:?}, have rewards for {:?} segments",
                     state_segment,
@@ -277,14 +274,18 @@ impl<'a> StorageAccount<'a> {
             // self.account.lamports += TOTAL_VALIDATOR_REWARDS * num_validations;
             self.account.set_state(storage_contract)
         } else if let StorageContract::ReplicatorStorage {
-            reward_validations, ..
+            proofs,
+            reward_validations,
         } = &mut storage_contract
         {
             // if current tick height is a full segment away, allow reward collection
             let claim_index = get_segment_from_slot(current_slot);
             let claim_segment = get_segment_from_slot(slot);
             // Todo this might might always be true
-            if claim_index <= claim_segment || reward_validations.get(&claim_segment).is_none() {
+            if claim_index <= claim_segment
+                || !reward_validations.contains_key(&claim_segment)
+                || !proofs.contains_key(&claim_segment)
+            {
                 debug!(
                     "current {:?}, claim {:?}, have rewards for {:?} segments",
                     claim_index,
@@ -293,18 +294,27 @@ impl<'a> StorageAccount<'a> {
                 );
                 return Err(InstructionError::InvalidArgument);
             }
-            let _num_validations = count_valid_proofs(
-                &reward_validations
-                    .remove(&claim_segment)
-                    .map(|mut proofs| {
-                        proofs
-                            .drain()
-                            .map(|(_, proof)| proof.into_iter().collect::<Vec<_>>())
-                            .flatten()
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default(),
-            );
+            // remove proofs for which rewards have already been collected
+            let segment_proofs = proofs.get_mut(&claim_segment).unwrap();
+            let checked_proofs = reward_validations
+                .remove(&claim_segment)
+                .map(|mut proofs| {
+                    proofs
+                        .drain()
+                        .map(|(_, proof)| {
+                            proof
+                                .into_iter()
+                                .map(|proof| {
+                                    segment_proofs.remove(&proof.proof.sha_state);
+                                    proof
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .flatten()
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let _num_validations = count_valid_proofs(&checked_proofs);
             // TODO can't just create lamports out of thin air
             // self.account.lamports += num_validations
             //     * TOTAL_REPLICATOR_REWARDS
@@ -329,7 +339,7 @@ fn store_validation_result(
             reward_validations,
             ..
         } => {
-            if proofs.get(&segment).is_none() {
+            if !proofs.contains_key(&segment) {
                 return Err(InstructionError::InvalidAccountData);
             }
 
