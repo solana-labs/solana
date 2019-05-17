@@ -92,5 +92,8 @@ name = "gen_keys"
 name = "sigverify"
 
 [[bench]]
+name = "sigverify_stage"
+
+[[bench]]
 required-features = ["chacha"]
 name = "chacha"
