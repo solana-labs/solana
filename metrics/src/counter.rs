@@ -148,6 +148,7 @@ impl Counter {
 mod tests {
     use crate::counter::{Counter, DEFAULT_LOG_RATE};
     use log::Level;
+    use solana_logger;
     use std::env;
     use std::sync::atomic::Ordering;
     use std::sync::{Once, RwLock, ONCE_INIT};
@@ -166,6 +167,8 @@ mod tests {
 
     #[test]
     fn test_counter() {
+        env::set_var("RUST_LOG", "info");
+        solana_logger::setup();
         let _readlock = get_env_lock().read();
         static mut COUNTER: Counter = create_counter!("test", 1000, 1);
         let count = 1;
@@ -199,6 +202,8 @@ mod tests {
     }
     #[test]
     fn test_lograte() {
+        env::set_var("RUST_LOG", "info");
+        solana_logger::setup();
         let _readlock = get_env_lock().read();
         assert_eq!(
             Counter::default_log_rate(),
@@ -216,6 +221,8 @@ mod tests {
 
     #[test]
     fn test_lograte_env() {
+        env::set_var("RUST_LOG", "info");
+        solana_logger::setup();
         assert_ne!(DEFAULT_LOG_RATE, 0);
         let _writelock = get_env_lock().write();
         static mut COUNTER: Counter = create_counter!("test_lograte_env", 0, 1);
