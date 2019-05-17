@@ -2,9 +2,9 @@
 
 #![no_std]
 
-extern crate solana_sdk_rust_utils;
+extern crate solana_sdk_bpf_utils;
 
-use solana_sdk_rust_utils::*;
+use solana_sdk_bpf_utils::*;
 
 struct SStruct {
     x: u64,
@@ -19,10 +19,10 @@ fn return_sstruct() -> SStruct {
 
 solana_entrypoint!(process_instruction);
 fn process_instruction(
-ka: &mut [Option<SolKeyedAccount>; MAX_ACCOUNTS],
+    ka: &mut [Option<SolKeyedAccount>; MAX_ACCOUNTS],
     info: &SolClusterInfo,
     data: &[u8],
-    ) -> bool {
+) -> bool {
     sol_log("Tick height:");
     sol_log_64(info.tick_height, 0, 0, 0, 0);
     sol_log("Program identifier:");

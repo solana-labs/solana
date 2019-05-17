@@ -1,6 +1,6 @@
 
 [package]
-name = "solana-sdk-rust-utils"
+name = "solana-sdk-bpf-utils"
 version = "0.15.0"
 description = "Solana BPF SDK Rust Utils"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
@@ -11,6 +11,3 @@ edition = "2018"
 
 [workspace]
 members = []
-
-
-

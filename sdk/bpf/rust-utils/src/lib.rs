@@ -1,8 +1,5 @@
 //! @brief Solana Rust-based BPF program utility functions and types
 
-// Rust support is preliminary, for more information:
-// https://github.com/solana-labs/solana/issues/2268
-
 #![no_std]
 
 use core::mem::size_of;
@@ -311,10 +308,10 @@ mod tests {
     extern crate std;
 
     use self::std::ffi::CStr;
-    use core::mem;
     use self::std::println;
     use self::std::string::String;
     use super::*;
+    use core::mem;
 
     static mut _LOG_SCENARIO: u64 = 4;
     fn get_log_scenario() -> u64 {
