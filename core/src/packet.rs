@@ -119,7 +119,7 @@ impl Meta {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Packets {
     pub packets: Vec<Packet>,
 }
