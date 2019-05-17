@@ -400,7 +400,10 @@ impl StorageStage {
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let slot: u64 = slot_receiver.recv_timeout(timeout)?;
-        *slot_count = slot;
+        *slot_count += 1;
+        // Todo check if any rooted slots were missed leading up to this one and bump slot count and process proofs for each missed root
+        // Update the advertised blockhash to the latest root directly.
+
         if let Ok(entries) = blocktree.get_slot_entries(slot, 0, None) {
             for entry in &entries {
                 // Go through the transactions, find proofs, and use them to update
@@ -420,6 +423,7 @@ impl StorageStage {
                 }
             }
             if *slot_count % storage_rotate_count == 0 {
+                // assume the last entry in the slot is the blockhash for that slot
                 let entry_hash = entries.last().unwrap().hash;
                 debug!(
                     "crosses sending at root slot: {}! with last entry's hash {}",
