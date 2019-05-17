@@ -113,7 +113,7 @@ impl Blocktree {
         // Open the database
         let db = Database::open(&ledger_path)?;
 
-        let batch_processor = Arc::new(RwLock::new(db.batch_processor()));
+        let batch_processor = unsafe { Arc::new(RwLock::new(db.batch_processor())) };
 
         // Create the metadata column family
         let meta_cf = db.column();
@@ -804,22 +804,26 @@ impl Blocktree {
     }
 
     pub fn is_root(&self, slot: u64) -> bool {
-        if let Ok(Some(root_slot)) = self.db.get::<cf::Root>(()) {
-            root_slot == slot
+        if let Ok(Some(true)) = self.db.get::<cf::Root>(slot) {
+            true
         } else {
             false
         }
     }
 
-    pub fn set_root(&self, slot: u64) -> Result<()> {
-        self.db.put::<cf::Root>((), &slot)?;
+    pub fn set_root(&self, new_root: u64, prev_root: u64) -> Result<()> {
+        let mut current_slot = new_root;
+        unsafe {
+            let mut batch_processor = self.db.batch_processor();
+            let mut write_batch = batch_processor.batch()?;
+            while current_slot != prev_root {
+                write_batch.put::<cf::Root>(current_slot, &true)?;
+                current_slot = self.meta(current_slot).unwrap().unwrap().parent_slot;
+            }
+
+            batch_processor.write(write_batch)?;
+        }
         Ok(())
-    }
-
-    pub fn get_root(&self) -> Result<u64> {
-        let root_opt = self.db.get::<cf::Root>(())?;
-
-        Ok(root_opt.unwrap_or(0))
     }
 
     pub fn get_orphans(&self, max: Option<usize>) -> Vec<u64> {

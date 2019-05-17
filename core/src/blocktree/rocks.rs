@@ -182,17 +182,21 @@ impl TypedColumn<Rocks> for cf::Orphans {
 
 impl Column<Rocks> for cf::Root {
     const NAME: &'static str = super::ROOT_CF;
-    type Index = ();
+    type Index = u64;
 
-    fn key(_: ()) -> Vec<u8> {
-        vec![0; 8]
+    fn key(slot: u64) -> Vec<u8> {
+        let mut key = vec![0; 8];
+        BigEndian::write_u64(&mut key[..], slot);
+        key
     }
 
-    fn index(_: &[u8]) {}
+    fn index(key: &[u8]) -> u64 {
+        BigEndian::read_u64(&key[..8])
+    }
 }
 
 impl TypedColumn<Rocks> for cf::Root {
-    type Type = u64;
+    type Type = bool;
 }
 
 impl Column<Rocks> for cf::SlotMeta {

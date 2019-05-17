@@ -121,17 +121,21 @@ impl TypedColumn<Kvs> for cf::Orphans {
 
 impl Column<Kvs> for cf::Root {
     const NAME: &'static str = super::ROOT_CF;
-    type Index = ();
+    type Index = u64;
 
-    fn key(_: ()) -> Key {
-        Key::default()
+    fn key(slot: u64) -> Key {
+        let mut key = Key::default();
+        BigEndian::write_u64(&mut key.0[8..16], slot);
+        key
     }
 
-    fn index(_: &Key) {}
+    fn index(key: &Key) -> u64 {
+        BigEndian::read_u64(&key.0[8..16])
+    }
 }
 
 impl TypedColumn<Kvs> for cf::Root {
-    type Type = u64;
+    type Type = bool;
 }
 
 impl Column<Kvs> for cf::SlotMeta {

@@ -97,11 +97,6 @@ impl ReplayStage {
         let my_id = *my_id;
         let mut ticks_per_slot = 0;
         let mut locktower = Locktower::new_from_forks(&bank_forks.read().unwrap(), &my_id);
-        if let Some(root) = locktower.root() {
-            blocktree
-                .set_root(root)
-                .expect("blocktree.set_root() failed at replay_stage startup");
-        }
         // Start the replay stage loop
         let leader_schedule_cache = leader_schedule_cache.clone();
         let vote_account = *vote_account;
@@ -321,9 +316,10 @@ impl ReplayStage {
                 .map(|bank| bank.slot())
                 .collect::<Vec<_>>();
             rooted_slots.push(root_bank.slot());
+            let old_root = bank_forks.read().unwrap().root();
             bank_forks.write().unwrap().set_root(new_root);
             leader_schedule_cache.set_root(new_root);
-            blocktree.set_root(new_root)?;
+            blocktree.set_root(new_root, old_root)?;
             Self::handle_new_root(&bank_forks, progress);
             root_slot_sender.send(rooted_slots)?;
         }

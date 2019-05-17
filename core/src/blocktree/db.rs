@@ -279,7 +279,9 @@ where
         }
     }
 
-    pub fn batch_processor(&self) -> BatchProcessor<B> {
+    // Note this should only be called to touch specific column families, otherwise
+    // could cause races with writes to BatchProcessor
+    pub unsafe fn batch_processor(&self) -> BatchProcessor<B> {
         BatchProcessor {
             backend: Arc::clone(&self.backend),
         }
