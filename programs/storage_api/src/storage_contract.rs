@@ -277,7 +277,7 @@ impl<'a> StorageAccount<'a> {
                 &reward_validations
                     .get_mut(&claim_segment)
                     .map(|proofs| proofs.drain().map(|(_, proof)| proof).collect::<Vec<_>>())
-                    .unwrap_or(vec![]),
+                    .unwrap_or_default(),
             );
             // TODO can't just create lamports out of thin air
             // self.account.lamports += TOTAL_VALIDATOR_REWARDS * num_validations;
