@@ -1,8 +1,12 @@
+// Module for cuda-related helper functions and wrappers.
+//
+// cudaHostRegister/cudaHostUnregister -
+//    apis for page-pinning memory. Cuda driver/hardware cannot overlap
+//    copies from host memory to GPU memory unless the memory is page-pinned and
+//    cannot be paged to disk. The cuda driver provides these interfaces to pin and unpin memory.
+
 use crate::recycler::Reset;
-//use std::vec::IntoIter;
 use std::ops::{Deref, DerefMut};
-//use std::iter::IntoIterator;
-//use std::iter::Iterator;
 
 #[cfg(feature = "cuda")]
 use std::mem::size_of;
@@ -52,6 +56,9 @@ pub fn unpin<T>(_mem: *mut T) {
     }
 }
 
+// A vector wrapper where the underlying memory can be
+// page-pinned. Controlled by flags in case user only wants
+// to pin in certain circumstances.
 #[derive(Debug)]
 pub struct PinnedVec<T> {
     x: Vec<T>,
@@ -233,5 +240,26 @@ impl<T> Drop for PinnedVec<T> {
         if self.pinned {
             unpin(self.x.as_mut_ptr());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pinned_vec() {
+        let mut mem = PinnedVec::with_capacity(10);
+        mem.set_pinnable();
+        mem.push(50);
+        mem.resize(2, 10);
+        assert_eq!(mem[0], 50);
+        assert_eq!(mem[1], 10);
+        assert_eq!(mem.len(), 2);
+        assert_eq!(mem.is_empty(), false);
+        let mut iter = mem.iter();
+        assert_eq!(*iter.next().unwrap(), 50);
+        assert_eq!(*iter.next().unwrap(), 10);
+        assert_eq!(iter.next(), None);
     }
 }

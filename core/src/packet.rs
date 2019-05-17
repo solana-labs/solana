@@ -905,4 +905,13 @@ mod tests {
         b.sign(&k);
         assert!(b.verify());
     }
+
+    #[test]
+    fn test_packets_reset() {
+        let mut packets = Packets::default();
+        packets.packets.resize(10, Packet::default());
+        assert_eq!(packets.packets.len(), 10);
+        packets.reset();
+        assert_eq!(packets.packets.len(), 0);
+    }
 }
