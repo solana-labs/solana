@@ -209,10 +209,9 @@ impl Transaction {
     }
 
     pub fn is_signed(&self) -> bool {
-        self.signatures.iter().all(|signature| {
-            dbg!(signature);
-            *signature != Signature::default()
-        })
+        self.signatures
+            .iter()
+            .all(|signature| *signature != Signature::default())
     }
 
     /// Verify that references in the instructions are valid
