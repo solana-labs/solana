@@ -9,6 +9,7 @@ edition = "2018"
 homepage = "https://solana.com/"
 
 [dependencies]
+log = "0.4.2"
 serde_json = "1.0.39"
 solana-metrics = { path = "../metrics", version = "0.15.0"  }
 

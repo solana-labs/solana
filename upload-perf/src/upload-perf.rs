@@ -77,6 +77,7 @@ fn main() {
                                 influxdb::Value::String(git_commit_hash.trim().to_string()),
                             )
                             .to_owned(),
+                        log::Level::Info,
                     );
                 }
                 let last_median = get_last_metrics(&"median".to_string(), &db, &name, &branch)

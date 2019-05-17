@@ -2568,6 +2568,7 @@ dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest 0.9.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-logger 0.15.0",
  "solana-sdk 0.15.0",
  "sys-info 0.5.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -2734,6 +2735,7 @@ dependencies = [
 name = "solana-upload-perf"
 version = "0.15.0"
 dependencies = [
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.39 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-metrics 0.15.0",
 ]

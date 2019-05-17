@@ -408,6 +408,7 @@ impl Blocktree {
                                 ),
                             )
                             .to_owned(),
+                        log::Level::Error,
                     );
                 }
             }

@@ -95,6 +95,10 @@ impl Counter {
         );
     }
     pub fn inc(&mut self, level: log::Level, events: usize) {
+        if !log_enabled!(level) {
+            return;
+        }
+
         let counts = self.counts.fetch_add(events, Ordering::Relaxed);
         let times = self.times.fetch_add(1, Ordering::Relaxed);
         let mut lograte = self.lograte.load(Ordering::Relaxed);
@@ -134,7 +138,7 @@ impl Counter {
                         .or_insert(influxdb::Value::Integer(0));
                 }
                 if let Some(ref mut point) = self.point {
-                    submit(point.to_owned());
+                    submit(point.to_owned(), level);
                 }
             }
         }
@@ -144,6 +148,7 @@ impl Counter {
 mod tests {
     use crate::counter::{Counter, DEFAULT_LOG_RATE};
     use log::Level;
+    use solana_logger;
     use std::env;
     use std::sync::atomic::Ordering;
     use std::sync::{Once, RwLock, ONCE_INIT};
@@ -162,6 +167,8 @@ mod tests {
 
     #[test]
     fn test_counter() {
+        env::set_var("RUST_LOG", "info");
+        solana_logger::setup();
         let _readlock = get_env_lock().read();
         static mut COUNTER: Counter = create_counter!("test", 1000, 1);
         let count = 1;
@@ -195,6 +202,8 @@ mod tests {
     }
     #[test]
     fn test_lograte() {
+        env::set_var("RUST_LOG", "info");
+        solana_logger::setup();
         let _readlock = get_env_lock().read();
         assert_eq!(
             Counter::default_log_rate(),
@@ -212,6 +221,8 @@ mod tests {
 
     #[test]
     fn test_lograte_env() {
+        env::set_var("RUST_LOG", "info");
+        solana_logger::setup();
         assert_ne!(DEFAULT_LOG_RATE, 0);
         let _writelock = get_env_lock().write();
         static mut COUNTER: Counter = create_counter!("test_lograte_env", 0, 1);
