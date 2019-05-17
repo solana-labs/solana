@@ -7,7 +7,6 @@ use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils::State;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
-use std::cmp;
 use std::collections::HashMap;
 
 pub const TOTAL_VALIDATOR_REWARDS: u64 = 1;
@@ -51,11 +50,11 @@ pub enum StorageContract {
         reward_validations: HashMap<usize, HashMap<Hash, CheckedProof>>,
     },
     ReplicatorStorage {
-        /// Proofs per segment, in a HashMap based on the sha_state
-        proofs: Vec<HashMap<Hash, Proof>>,
-        /// Rewards per segment, in a HashMap based on the sha_state
+        /// Map of Proofs per segment, in a HashMap based on the sha_state
+        proofs: HashMap<usize, HashMap<Hash, Proof>>,
+        /// Map of Rewards per segment, in a HashMap based on the sha_state
         /// Multiple validators can validate the same set of proofs so it needs a Vec
-        reward_validations: Vec<HashMap<Hash, Vec<CheckedProof>>>,
+        reward_validations: HashMap<usize, HashMap<Hash, Vec<CheckedProof>>>,
     },
 }
 
@@ -79,8 +78,8 @@ impl<'a> StorageAccount<'a> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::Default = storage_contract {
             *storage_contract = StorageContract::ReplicatorStorage {
-                proofs: vec![],
-                reward_validations: vec![],
+                proofs: HashMap::new(),
+                reward_validations: HashMap::new(),
             };
         };
 
@@ -93,21 +92,12 @@ impl<'a> StorageAccount<'a> {
                 return Err(InstructionError::InvalidArgument);
             }
 
-            if segment_index >= proofs.len() || proofs.is_empty() {
-                proofs.resize(cmp::max(1, segment_index + 1), HashMap::new());
-            }
-
-            if segment_index >= proofs.len() {
-                // only possible if usize max < u64 max
-                return Err(InstructionError::InvalidArgument);
-            }
-
             debug!(
                 "Mining proof submitted with contract {:?} slot: {}",
                 sha_state, slot
             );
 
-            proofs[segment_index].insert(
+            proofs.entry(segment_index).or_default().insert(
                 sha_state,
                 Proof {
                     id,
@@ -203,9 +193,13 @@ impl<'a> StorageAccount<'a> {
                         .state()
                         .ok()
                         .map(move |contract| match contract {
-                            StorageContract::ReplicatorStorage { proofs, .. } => {
-                                Some((account, proofs[segment_index].clone()))
-                            }
+                            StorageContract::ReplicatorStorage { proofs, .. } => Some((
+                                account,
+                                proofs
+                                    .get(&segment_index)
+                                    .map(|proofs| proofs.clone())
+                                    .unwrap_or_default(),
+                            )),
                             _ => None,
                         })
                 })
@@ -275,8 +269,8 @@ impl<'a> StorageAccount<'a> {
             }
             let _num_validations = count_valid_proofs(
                 &reward_validations
-                    .get_mut(&claim_segment)
-                    .map(|proofs| proofs.drain().map(|(_, proof)| proof).collect::<Vec<_>>())
+                    .remove(&claim_segment)
+                    .map(|mut proofs| proofs.drain().map(|(_, proof)| proof).collect::<Vec<_>>())
                     .unwrap_or_default(),
             );
             // TODO can't just create lamports out of thin air
@@ -287,29 +281,34 @@ impl<'a> StorageAccount<'a> {
         } = &mut storage_contract
         {
             // if current tick height is a full segment away, allow reward collection
-            let current_index = get_segment_from_slot(current_slot);
-            let claims_index = get_segment_from_slot(slot);
+            let claim_index = get_segment_from_slot(current_slot);
+            let claim_segment = get_segment_from_slot(slot);
             // Todo this might might always be true
-            if current_index <= claims_index || claims_index >= reward_validations.len() {
+            if claim_index <= claim_segment || claim_segment >= reward_validations.len() {
                 debug!(
                     "current {:?}, claim {:?}, rewards {:?}",
-                    current_index,
-                    claims_index,
+                    claim_index,
+                    claim_segment,
                     reward_validations.len()
                 );
                 return Err(InstructionError::InvalidArgument);
             }
             let _num_validations = count_valid_proofs(
-                &reward_validations[claims_index]
-                    .drain()
-                    .map(|(_, proof)| proof.into_iter().collect::<Vec<_>>())
-                    .flatten()
-                    .collect::<Vec<_>>(),
+                &reward_validations
+                    .remove(&claim_segment)
+                    .map(|mut proofs| {
+                        proofs
+                            .drain()
+                            .map(|(_, proof)| proof.into_iter().collect::<Vec<_>>())
+                            .flatten()
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default(),
             );
             // TODO can't just create lamports out of thin air
             // self.account.lamports += num_validations
             //     * TOTAL_REPLICATOR_REWARDS
-            //     * (num_validations / reward_validations[claims_index].len() as u64);
+            //     * (num_validations / reward_validations[claim_segment].len() as u64);
             self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
@@ -320,7 +319,7 @@ impl<'a> StorageAccount<'a> {
 /// Store the result of a proof validation into the replicator account
 fn store_validation_result(
     storage_account: &mut StorageAccount,
-    segment_index: usize,
+    segment: usize,
     checked_proof: CheckedProof,
 ) -> Result<(), InstructionError> {
     let mut storage_contract = storage_account.account.state()?;
@@ -330,21 +329,22 @@ fn store_validation_result(
             reward_validations,
             ..
         } => {
-            if segment_index >= proofs.len() {
+            if segment >= proofs.len() {
                 return Err(InstructionError::InvalidAccountData);
             }
 
-            if let Some(proof) = proofs[segment_index].get(&checked_proof.proof.sha_state) {
-                if segment_index > reward_validations.len() || reward_validations.is_empty() {
-                    reward_validations.resize(cmp::max(1, segment_index), HashMap::new());
-                }
-
+            if let Some(proof) = proofs
+                .get(&segment)
+                .and_then(|proofs| proofs.get(&checked_proof.proof.sha_state))
+            {
                 let checked_proof = CheckedProof {
                     proof: proof.clone(),
                     status: checked_proof.status,
                 };
 
-                reward_validations[segment_index]
+                reward_validations
+                    .entry(segment)
+                    .or_default()
                     .entry(proof.sha_state)
                     .or_default()
                     .push(checked_proof);
@@ -413,8 +413,8 @@ mod tests {
             panic!("Wrong contract type");
         }
         contract = StorageContract::ReplicatorStorage {
-            proofs: vec![],
-            reward_validations: vec![],
+            proofs: HashMap::new(),
+            reward_validations: HashMap::new(),
         };
         storage_account.account.set_state(&contract).unwrap();
         if let StorageContract::ValidatorStorage { .. } = contract {
@@ -451,9 +451,11 @@ mod tests {
         if let StorageContract::Default = storage_contract {
             let mut proof_map = HashMap::new();
             proof_map.insert(proof.sha_state, proof.clone());
+            let mut proofs = HashMap::new();
+            proofs.insert(0, proof_map);
             *storage_contract = StorageContract::ReplicatorStorage {
-                proofs: vec![proof_map],
-                reward_validations: vec![],
+                proofs,
+                reward_validations: HashMap::new(),
             };
         };
         account.account.set_state(storage_contract).unwrap();
