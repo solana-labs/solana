@@ -282,7 +282,7 @@ fn do_tx_transfers<T: Client>(
         }
         let txs;
         {
-            let mut shared_txs_wl = shared_txs.write().unwrap();
+            let mut shared_txs_wl = shared_txs.write().expect("write lock in do_tx_transfers");
             txs = shared_txs_wl.pop_front();
         }
         if let Some(txs0) = txs {
@@ -299,7 +299,9 @@ fn do_tx_transfers<T: Client>(
                 if now > tx.1 && now - tx.1 > 1000 * 30 {
                     continue;
                 }
-                client.async_send_transaction(tx.0).unwrap();
+                client
+                    .async_send_transaction(tx.0)
+                    .expect("async_send_transaction in do_tx_transfers");
             }
             shared_tx_thread_count.fetch_add(-1, Ordering::Relaxed);
             total_tx_sent_count.fetch_add(tx_len, Ordering::Relaxed);
