@@ -18,7 +18,7 @@ use solana_metrics::{datapoint_warn, inc_new_counter_error, inc_new_counter_info
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::KeypairUtil;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::{self, duration_as_ms};
 use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction;
@@ -71,10 +71,10 @@ impl ForkProgress {
 
 impl ReplayStage {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
-    pub fn new<T>(
+    pub fn new(
         my_id: &Pubkey,
         vote_account: &Pubkey,
-        voting_keypair: Option<&Arc<T>>,
+        voting_keypair: Option<&Arc<Keypair>>,
         blocktree: Arc<Blocktree>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -83,10 +83,7 @@ impl ReplayStage {
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-    ) -> (Self, Receiver<(u64, Pubkey)>, Receiver<Vec<u64>>)
-    where
-        T: 'static + KeypairUtil + Send + Sync,
-    {
+    ) -> (Self, Receiver<(u64, Pubkey)>, Receiver<Vec<u64>>) {
         let (root_slot_sender, root_slot_receiver) = channel();
         let (slot_full_sender, slot_full_receiver) = channel();
         trace!("replay stage");
@@ -95,7 +92,6 @@ impl ReplayStage {
         let bank_forks = bank_forks.clone();
         let poh_recorder = poh_recorder.clone();
         let my_id = *my_id;
-        let vote_account = *vote_account;
         let mut ticks_per_slot = 0;
         let mut locktower = Locktower::new_from_forks(&bank_forks.read().unwrap(), &my_id);
         if let Some(root) = locktower.root() {
@@ -105,6 +101,7 @@ impl ReplayStage {
         }
         // Start the replay stage loop
         let leader_schedule_cache = leader_schedule_cache.clone();
+        let vote_account = *vote_account;
         let voting_keypair = voting_keypair.cloned();
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -152,8 +149,8 @@ impl ReplayStage {
                             &bank_forks,
                             &mut locktower,
                             &mut progress,
-                            &voting_keypair,
                             &vote_account,
+                            &voting_keypair,
                             &cluster_info,
                             &blocktree,
                             &leader_schedule_cache,
@@ -292,21 +289,18 @@ impl ReplayStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn handle_votable_bank<T>(
+    fn handle_votable_bank(
         bank: &Arc<Bank>,
         bank_forks: &Arc<RwLock<BankForks>>,
         locktower: &mut Locktower,
         progress: &mut HashMap<u64, ForkProgress>,
-        voting_keypair: &Option<Arc<T>>,
-        vote_account_pubkey: &Pubkey,
+        vote_account: &Pubkey,
+        voting_keypair: &Option<Arc<Keypair>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: &Arc<Blocktree>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         root_slot_sender: &Sender<Vec<u64>>,
-    ) -> Result<()>
-    where
-        T: 'static + KeypairUtil + Send + Sync,
-    {
+    ) -> Result<()> {
         if let Some(new_root) = locktower.record_vote(bank.slot()) {
             let mut rooted_slots = bank
                 .parents()
@@ -322,10 +316,18 @@ impl ReplayStage {
         }
         locktower.update_epoch(&bank);
         if let Some(ref voting_keypair) = voting_keypair {
+            let node_keypair = cluster_info.read().unwrap().keypair.clone();
+
             // Send our last few votes along with the new one
-            let vote_ix = vote_instruction::vote(vote_account_pubkey, locktower.recent_votes());
+            let vote_ix = vote_instruction::vote(
+                &node_keypair.pubkey(),
+                &vote_account,
+                &vote_account,
+                locktower.recent_votes(),
+            );
+
             let vote_tx = Transaction::new_signed_instructions(
-                &[voting_keypair.as_ref()],
+                &[node_keypair.as_ref(), voting_keypair.as_ref()],
                 vec![vote_ix],
                 bank.last_blockhash(),
             );

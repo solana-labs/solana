@@ -71,19 +71,16 @@ pub struct Fullnode {
 }
 
 impl Fullnode {
-    pub fn new<T>(
+    pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
         ledger_path: &str,
         vote_account: &Pubkey,
-        voting_keypair: &Arc<T>,
+        voting_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         entrypoint_info_option: Option<&ContactInfo>,
         config: &FullnodeConfig,
-    ) -> Self
-    where
-        T: 'static + KeypairUtil + Sync + Send,
-    {
+    ) -> Self {
         info!("creating bank...");
 
         let id = keypair.pubkey();

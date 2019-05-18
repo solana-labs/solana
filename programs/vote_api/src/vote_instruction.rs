@@ -25,8 +25,16 @@ pub enum VoteInstruction {
     Vote(Vec<Vote>),
 }
 
-fn initialize_account(vote_id: &Pubkey, node_id: &Pubkey, commission: u32) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*vote_id, false)];
+fn initialize_account(
+    from_id: &Pubkey,
+    vote_id: &Pubkey,
+    node_id: &Pubkey,
+    commission: u32,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*from_id, true),
+        AccountMeta::new(*vote_id, false),
+    ];
     Instruction::new(
         id(),
         &VoteInstruction::InitializeAccount(*node_id, commission),
@@ -42,22 +50,51 @@ pub fn create_account(
     lamports: u64,
 ) -> Vec<Instruction> {
     let space = VoteState::size_of() as u64;
-    let create_ix = system_instruction::create_account(&from_id, vote_id, lamports, space, &id());
-    let init_ix = initialize_account(vote_id, node_id, commission);
+    let create_ix = system_instruction::create_account(from_id, vote_id, lamports, space, &id());
+    let init_ix = initialize_account(from_id, vote_id, node_id, commission);
     vec![create_ix, init_ix]
 }
 
-pub fn authorize_voter(vote_id: &Pubkey, authorized_voter_id: &Pubkey) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*vote_id, true)];
+fn metas_for_authorized_signer(
+    from_id: &Pubkey,
+    vote_id: &Pubkey,
+    authorized_voter_id: &Pubkey, // currently authorized
+) -> Vec<AccountMeta> {
+    let mut account_metas = vec![AccountMeta::new(*from_id, true)]; // sender
+
+    let is_own_signer = authorized_voter_id == vote_id;
+
+    account_metas.push(AccountMeta::new(*vote_id, is_own_signer)); // vote account
+
+    if !is_own_signer {
+        account_metas.push(AccountMeta::new(*authorized_voter_id, true)) // signer
+    }
+    account_metas
+}
+
+pub fn authorize_voter(
+    from_id: &Pubkey,
+    vote_id: &Pubkey,
+    authorized_voter_id: &Pubkey, // currently authorized
+    new_authorized_voter_id: &Pubkey,
+) -> Instruction {
+    let account_metas = metas_for_authorized_signer(from_id, vote_id, authorized_voter_id);
+
     Instruction::new(
         id(),
-        &VoteInstruction::AuthorizeVoter(*authorized_voter_id),
+        &VoteInstruction::AuthorizeVoter(*new_authorized_voter_id),
         account_metas,
     )
 }
 
-pub fn vote(vote_id: &Pubkey, recent_votes: Vec<Vote>) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*vote_id, true)];
+pub fn vote(
+    from_id: &Pubkey,
+    vote_id: &Pubkey,
+    authorized_voter_id: &Pubkey,
+    recent_votes: Vec<Vote>,
+) -> Instruction {
+    let account_metas = metas_for_authorized_signer(from_id, vote_id, authorized_voter_id);
+
     Instruction::new(id(), &VoteInstruction::Vote(recent_votes), account_metas)
 }
 
@@ -72,27 +109,25 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    if keyed_accounts.is_empty() {
+    if keyed_accounts.len() < 2 {
         Err(InstructionError::InvalidInstructionData)?;
     }
 
+    // 0th index is the guy who paid for the transaction
+    let (me, other_signers) = &mut keyed_accounts.split_at_mut(2);
+    let me = &mut me[1];
+
+    // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         VoteInstruction::InitializeAccount(node_id, commission) => {
-            let vote_account = &mut keyed_accounts[0];
-            vote_state::initialize_account(vote_account, &node_id, commission)
+            vote_state::initialize_account(me, &node_id, commission)
         }
         VoteInstruction::AuthorizeVoter(voter_id) => {
-            let (vote_account, other_signers) = keyed_accounts.split_at_mut(1);
-            let vote_account = &mut vote_account[0];
-
-            vote_state::authorize_voter(vote_account, other_signers, &voter_id)
+            vote_state::authorize_voter(me, other_signers, &voter_id)
         }
         VoteInstruction::Vote(votes) => {
             datapoint_warn!("vote-native", ("count", 1, i64));
-            let (vote_account, other_signers) = keyed_accounts.split_at_mut(1);
-            let vote_account = &mut vote_account[0];
-
-            vote_state::process_votes(vote_account, other_signers, &votes)
+            vote_state::process_votes(me, other_signers, &votes)
         }
     }
 }
@@ -102,7 +137,7 @@ mod tests {
     use super::*;
     use solana_sdk::account::Account;
 
-    // these are for 100% coverage
+    // these are for 100% coverage in this file
     #[test]
     fn test_vote_process_instruction_decode_bail() {
         assert_eq!(
@@ -146,11 +181,21 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&vote(&Pubkey::default(), vec![Vote::default()])),
+            process_instruction(&vote(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                &Pubkey::default(),
+                vec![Vote::default()]
+            )),
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&authorize_voter(&Pubkey::default(), &Pubkey::default())),
+            process_instruction(&authorize_voter(
+                &Pubkey::default(),
+                &Pubkey::default(),
+                &Pubkey::default(),
+                &Pubkey::default(),
+            )),
             Err(InstructionError::InvalidAccountData),
         );
     }
