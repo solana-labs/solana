@@ -23,6 +23,7 @@ use std::time::Duration;
 pub const REPAIRMEN_SLEEP_MILLIS: usize = 1000;
 pub const REPAIR_REDUNDANCY: usize = 3;
 pub const NUM_BUFFER_SLOTS: usize = 100;
+pub const NUM_SLOTS_PER_UPDATE: usize = 2;
 
 // Represents the blobs that a repairman is responsible for repairing in specific slot. More
 // specifically, a repairman is responsible for every blob in this slot with index
@@ -226,14 +227,20 @@ impl ClusterInfoRepairListener {
         socket: &UdpSocket,
         repairee_tvu: &SocketAddr,
     ) -> Result<()> {
-        let slot_iter = blocktree
-            .slot_meta_iterator(repairee_epoch_slots.root + 1)
-            .expect("Couldn't get db iterator");
+        let slot_iter = blocktree.rooted_slot_iterator(repairee_epoch_slots.root + 1);
+
+        if slot_iter.is_err() {
+            warn!("Root for repairee is on different fork OR replay_stage hasn't marked this slot as root yet");
+            return Ok(());
+        }
+
+        let slot_iter = slot_iter?;
+
         let mut total_data_blobs_sent = 0;
         let mut total_coding_blobs_sent = 0;
-
+        let mut num_slots_repaired = 0;
         for (slot, slot_meta) in slot_iter {
-            if slot > my_root {
+            if slot > my_root || num_slots_repaired >= NUM_SLOTS_PER_UPDATE {
                 break;
             }
             if !repairee_epoch_slots.slots.contains(&slot) {
@@ -253,7 +260,7 @@ impl ClusterInfoRepairListener {
                 ) {
                     // Repairee is missing this slot, send them the blobs for this slot
                     for blob_index in my_repair_indexes {
-                        // Loop over the blob indexes and query the database for these blob that
+                        // Loop over the sblob indexes and query the database for these blob that
                         // this node is reponsible for repairing. This should be faster than using
                         // a database iterator over the slots because by the time this node is
                         // sending the blobs in this slot for repair, we expect these slots
@@ -274,6 +281,8 @@ impl ClusterInfoRepairListener {
                             total_coding_blobs_sent += 1;
                         }
                     }
+
+                    num_slots_repaired += 1;
                 }
             }
         }
@@ -372,7 +381,7 @@ impl ClusterInfoRepairListener {
     }
 
     fn read_my_gossiped_root(
-        my_id: &Psubkey,
+        my_id: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         old_root: &mut u64,
     ) -> u64 {
