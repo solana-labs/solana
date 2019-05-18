@@ -132,7 +132,7 @@ impl StorageStage {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         storage_state: &StorageState,
-        slot_receiver: Receiver<u64>,
+        slot_receiver: Receiver<Vec<u64>>,
         blocktree: Option<Arc<Blocktree>>,
         keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
@@ -152,6 +152,7 @@ impl StorageStage {
                 .spawn(move || {
                     let mut current_key = 0;
                     let mut slot_count = 0;
+                    let mut last_root = 0;
                     loop {
                         if let Some(ref some_blocktree) = blocktree {
                             if let Err(e) = Self::process_entries(
@@ -160,6 +161,7 @@ impl StorageStage {
                                 &slot_receiver,
                                 &some_blocktree,
                                 &mut slot_count,
+                                &mut last_root,
                                 &mut current_key,
                                 storage_rotate_count,
                                 &instruction_sender,
@@ -391,52 +393,57 @@ impl StorageStage {
     fn process_entries(
         storage_keypair: &Arc<Keypair>,
         storage_state: &Arc<RwLock<StorageStateInner>>,
-        slot_receiver: &Receiver<u64>,
+        slot_receiver: &Receiver<Vec<u64>>,
         blocktree: &Arc<Blocktree>,
         slot_count: &mut u64,
+        last_root: &mut u64,
         current_key_idx: &mut usize,
         storage_rotate_count: u64,
         instruction_sender: &InstructionSender,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
-        let slot: u64 = slot_receiver.recv_timeout(timeout)?;
-        *slot_count += 1;
-        // Todo check if any rooted slots were missed leading up to this one and bump slot count and process proofs for each missed root
-        // Update the advertised blockhash to the latest root directly.
+        let slots: Vec<u64> = slot_receiver.recv_timeout(timeout)?;
+        // check if any rooted slots were missed leading up to this one and bump slot count and process proofs for each missed root
+        for slot in slots.into_iter().rev() {
+            if slot > *last_root {
+                *slot_count += 1;
+                *last_root = slot;
 
-        if let Ok(entries) = blocktree.get_slot_entries(slot, 0, None) {
-            for entry in &entries {
-                // Go through the transactions, find proofs, and use them to update
-                // the storage_keys with their signatures
-                for tx in &entry.transactions {
-                    for (i, program_id) in tx.message.program_ids().iter().enumerate() {
-                        if solana_storage_api::check_id(&program_id) {
-                            Self::process_storage_transaction(
-                                &tx.message().instructions[i].data,
-                                slot,
-                                storage_state,
-                                current_key_idx,
-                                tx.message.account_keys[0],
-                            );
+                if let Ok(entries) = blocktree.get_slot_entries(slot, 0, None) {
+                    for entry in &entries {
+                        // Go through the transactions, find proofs, and use them to update
+                        // the storage_keys with their signatures
+                        for tx in &entry.transactions {
+                            for (i, program_id) in tx.message.program_ids().iter().enumerate() {
+                                if solana_storage_api::check_id(&program_id) {
+                                    Self::process_storage_transaction(
+                                        &tx.message().instructions[i].data,
+                                        slot,
+                                        storage_state,
+                                        current_key_idx,
+                                        tx.message.account_keys[0],
+                                    );
+                                }
+                            }
                         }
                     }
+                    if *slot_count % storage_rotate_count == 0 {
+                        // assume the last entry in the slot is the blockhash for that slot
+                        let entry_hash = entries.last().unwrap().hash;
+                        debug!(
+                            "crosses sending at root slot: {}! with last entry's hash {}",
+                            slot_count, entry_hash
+                        );
+                        Self::process_entry_crossing(
+                            &storage_keypair,
+                            &storage_state,
+                            &blocktree,
+                            entries.last().unwrap().hash,
+                            slot,
+                            instruction_sender,
+                        )?;
+                    }
                 }
-            }
-            if *slot_count % storage_rotate_count == 0 {
-                // assume the last entry in the slot is the blockhash for that slot
-                let entry_hash = entries.last().unwrap().hash;
-                debug!(
-                    "crosses sending at root slot: {}! with last entry's hash {}",
-                    slot_count, entry_hash
-                );
-                Self::process_entry_crossing(
-                    &storage_keypair,
-                    &storage_state,
-                    &blocktree,
-                    entries.last().unwrap().hash,
-                    slot,
-                    instruction_sender,
-                )?;
             }
         }
         Ok(())
@@ -543,7 +550,7 @@ mod tests {
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
-        slot_sender.send(slot).unwrap();
+        slot_sender.send(vec![slot]).unwrap();
 
         let keypair = Keypair::new();
         let hash = Hash::default();
@@ -551,13 +558,15 @@ mod tests {
         let mut result = storage_state.get_mining_result(&signature);
         assert_eq!(result, Hash::default());
 
-        for i in slot..slot + SLOTS_PER_SEGMENT + 1 {
-            blocktree
-                .write_entries(i, 0, 0, ticks_per_slot, &entries)
-                .unwrap();
-
-            slot_sender.send(i).unwrap();
-        }
+        let rooted_slots = (slot..slot + SLOTS_PER_SEGMENT + 1)
+            .map(|i| {
+                blocktree
+                    .write_entries(i, 0, 0, ticks_per_slot, &entries)
+                    .unwrap();
+                i
+            })
+            .collect::<Vec<_>>();
+        slot_sender.send(rooted_slots).unwrap();
         for _ in 0..5 {
             result = storage_state.get_mining_result(&signature);
             if result != Hash::default() {
@@ -614,7 +623,7 @@ mod tests {
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
-        slot_sender.send(1).unwrap();
+        slot_sender.send(vec![1]).unwrap();
 
         let mut reference_keys;
         {
@@ -637,7 +646,7 @@ mod tests {
         blocktree
             .write_entries(2, 0, 0, ticks_per_slot, &proof_entries)
             .unwrap();
-        slot_sender.send(2).unwrap();
+        slot_sender.send(vec![2]).unwrap();
 
         for _ in 0..5 {
             {
