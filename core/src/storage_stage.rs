@@ -550,7 +550,7 @@ mod tests {
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
-        slot_sender.send(slot).unwrap();
+        slot_sender.send(vec![slot]).unwrap();
 
         let keypair = Keypair::new();
         let hash = Hash::default();
@@ -563,7 +563,7 @@ mod tests {
                 .write_entries(i, 0, 0, ticks_per_slot, &entries)
                 .unwrap();
 
-            slot_sender.send(i).unwrap();
+            slot_sender.send(vec![i]).unwrap();
         }
         for _ in 0..5 {
             result = storage_state.get_mining_result(&signature);
@@ -621,7 +621,7 @@ mod tests {
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
-        slot_sender.send(1).unwrap();
+        slot_sender.send(vec![1]).unwrap();
 
         let mut reference_keys;
         {
@@ -644,7 +644,7 @@ mod tests {
         blocktree
             .write_entries(2, 0, 0, ticks_per_slot, &proof_entries)
             .unwrap();
-        slot_sender.send(2).unwrap();
+        slot_sender.send(vec![2]).unwrap();
 
         for _ in 0..5 {
             {
