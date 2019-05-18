@@ -67,7 +67,7 @@ pub struct Transaction {
 impl Transaction {
     pub fn new_unsigned(message: Message) -> Self {
         Self {
-            signatures: Vec::with_capacity(message.num_required_signatures as usize),
+            signatures: vec![Signature::default(); message.num_required_signatures as usize],
             message,
         }
     }
@@ -180,8 +180,38 @@ impl Transaction {
             assert_eq!(keypair.pubkey(), signed_keys[i], "keypair-pubkey mismatch");
         }
         assert_eq!(keypairs.len(), signed_keys.len(), "not enough keypairs");
-
         self.sign_unchecked(keypairs, recent_blockhash);
+    }
+
+    /// Sign using some subset of required keys
+    ///  if recent_blockhash is not the same as currently in the transaction,
+    ///  clear any prior signatures and update recent_blockhash
+    pub fn partial_sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
+        let signed_keys =
+            &self.message.account_keys[0..self.message.num_required_signatures as usize];
+
+        // if you change the blockhash, you're re-signing...
+        if recent_blockhash != self.message.recent_blockhash {
+            self.message.recent_blockhash = recent_blockhash;
+            self.signatures
+                .iter_mut()
+                .for_each(|signature| *signature = Signature::default());
+        }
+
+        for keypair in keypairs {
+            let i = signed_keys
+                .iter()
+                .position(|pubkey| pubkey == &keypair.pubkey())
+                .expect("keypair-pubkey mismatch");
+
+            self.signatures[i] = keypair.sign_message(&self.message_data())
+        }
+    }
+
+    pub fn is_signed(&self) -> bool {
+        self.signatures
+            .iter()
+            .all(|signature| *signature != Signature::default())
     }
 
     /// Verify that references in the instructions are valid
@@ -204,6 +234,7 @@ impl Transaction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hash::hash;
     use crate::instruction::AccountMeta;
     use crate::signature::Keypair;
     use crate::system_instruction;
@@ -399,6 +430,45 @@ mod tests {
 
     #[test]
     #[should_panic]
+    fn test_partial_sign_mismatched_key() {
+        let keypair = Keypair::new();
+        Transaction::new_unsigned_instructions(vec![Instruction::new(
+            Pubkey::default(),
+            &0,
+            vec![AccountMeta::new(Pubkey::new_rand(), true)],
+        )])
+        .partial_sign(&[&keypair], Hash::default());
+    }
+
+    #[test]
+    fn test_partial_sign() {
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let mut tx = Transaction::new_unsigned_instructions(vec![Instruction::new(
+            Pubkey::default(),
+            &0,
+            vec![
+                AccountMeta::new(keypair0.pubkey(), true),
+                AccountMeta::new(keypair1.pubkey(), true),
+                AccountMeta::new(keypair2.pubkey(), true),
+            ],
+        )]);
+
+        tx.partial_sign(&[&keypair0, &keypair2], Hash::default());
+        assert!(!tx.is_signed());
+        tx.partial_sign(&[&keypair1], Hash::default());
+        assert!(tx.is_signed());
+
+        let hash = hash(&[1]);
+        tx.partial_sign(&[&keypair1], hash);
+        assert!(!tx.is_signed());
+        tx.partial_sign(&[&keypair0, &keypair2], hash);
+        assert!(tx.is_signed());
+    }
+
+    #[test]
+    #[should_panic]
     fn test_transaction_missing_keypair() {
         let program_id = Pubkey::default();
         let keypair0 = Keypair::new();
@@ -430,5 +500,6 @@ mod tests {
             tx.message.instructions[0],
             CompiledInstruction::new(0, &0, vec![0])
         );
+        assert!(tx.is_signed());
     }
 }
