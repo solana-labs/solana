@@ -178,9 +178,12 @@ mod test {
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) -> Result<()> {
         for _ in 0..10 {
-            let m = r.recv_timeout(Duration::new(1, 0))?;
+            let m = r.recv_timeout(Duration::new(1, 0));
+            if m.is_err() {
+                continue;
+            }
 
-            *num -= m.packets.len();
+            *num -= m.unwrap().packets.len();
 
             if *num == 0 {
                 break;

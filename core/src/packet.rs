@@ -18,6 +18,7 @@ use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
 
 pub type SharedBlob = Arc<RwLock<Blob>>;
 pub type SharedBlobs = Vec<SharedBlob>;
@@ -222,23 +223,30 @@ impl Packets {
         //  * set it back to blocking before returning
         socket.set_nonblocking(false)?;
         trace!("receiving on {}", socket.local_addr().unwrap());
+        let start = Instant::now();
+        let mut total_size = 0;
         loop {
             self.packets.resize(i + NUM_RCVMMSGS, Packet::default());
             match recv_mmsg(socket, &mut self.packets[i..]) {
                 Err(_) if i > 0 => {
-                    break;
+                    if start.elapsed().as_millis() > 1 {
+                        break;
+                    }
                 }
                 Err(e) => {
                     trace!("recv_from err {:?}", e);
                     return Err(Error::IO(e));
                 }
-                Ok(npkts) => {
+                Ok((size, npkts)) => {
                     if i == 0 {
                         socket.set_nonblocking(true)?;
                     }
                     trace!("got {} packets", npkts);
                     i += npkts;
-                    if npkts != NUM_RCVMMSGS || i >= 1024 {
+                    total_size += size;
+                    // Try to batch into blob-sized buffers
+                    // will cause less re-shuffling later on.
+                    if start.elapsed().as_millis() > 1 || total_size >= (BLOB_DATA_SIZE - 4096) {
                         break;
                     }
                 }
