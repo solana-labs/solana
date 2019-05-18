@@ -163,7 +163,11 @@ cloud_CreateInstances() {
   args+=(--image $imageName)
 
   # shellcheck disable=SC2206 # Do not want to quote $machineType as it may contain extra args
-  args+=($machineType)
+  for word in $machineType; do
+    # Special handling for the "--min-cpu-platform" argument which may contain a
+    # space (escaped as '%20')...
+    args+=("${word//%20/ }")
+  done
   if [[ -n $optionalBootDiskSize ]]; then
     args+=(
       --boot-disk-size "${optionalBootDiskSize}GB"

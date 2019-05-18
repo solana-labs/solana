@@ -12,8 +12,8 @@ gce)
   # shellcheck source=net/scripts/gce-provider.sh
   source "$here"/scripts/gce-provider.sh
 
-  cpuBootstrapLeaderMachineType="--machine-type n1-standard-16"
-  gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80"
+  cpuBootstrapLeaderMachineType="--machine-type n1-standard-16 --min-cpu-platform Intel%20Skylake"
+  gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=1,type=nvidia-tesla-p100"
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType="--custom-cpu 16 --custom-memory 20GB"
@@ -23,12 +23,16 @@ ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
   source "$here"/scripts/ec2-provider.sh
 
-  cpuBootstrapLeaderMachineType=m4.2xlarge
+  cpuBootstrapLeaderMachineType=c5.2xlarge
+
+  # NOTE: At this time only the p3dn.24xlarge EC2 instance type has GPU and
+  #       AVX-512 support.  The default, p2.xlarge, does not support
+  #       AVX-512
   gpuBootstrapLeaderMachineType=p2.xlarge
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
-  clientMachineType=m4.2xlarge
-  blockstreamerMachineType=m4.2xlarge
+  clientMachineType=c5.2xlarge
+  blockstreamerMachineType=c5.2xlarge
   ;;
 azure)
   # shellcheck source=net/scripts/azure-provider.sh
@@ -338,7 +342,7 @@ EOF
       # machine can be pinged...
       (
         set -o pipefail
-        for i in $(seq 1 30); do
+        for i in $(seq 1 60); do
           set -x
           cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa "$sshPrivateKey" "$nodeZone" &&
             cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa.pub "$sshPrivateKey.pub" "$nodeZone" &&
@@ -379,7 +383,7 @@ EOF
     (
       set +e
       fetchPrivateKey || exit 1
-      for i in $(seq 1 30); do
+      for i in $(seq 1 60); do
         (
           set -x
           timeout --preserve-status --foreground 20s ssh "${sshOptions[@]}" "$publicIp" "ls -l /.instance-startup-complete"
