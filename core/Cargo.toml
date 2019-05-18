@@ -95,5 +95,8 @@ name = "sigverify"
 name = "sigverify_stage"
 
 [[bench]]
+name = "poh"
+
+[[bench]]
 required-features = ["chacha"]
 name = "chacha"

@@ -8,7 +8,7 @@ use crate::contact_info::ContactInfo;
 use crate::gossip_service::{discover_cluster, GossipService};
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::poh_recorder::PohRecorder;
-use crate::poh_service::{PohService, PohServiceConfig};
+use crate::poh_service::PohService;
 use crate::rpc::JsonRpcConfig;
 use crate::rpc_pubsub_service::PubSubService;
 use crate::rpc_service::JsonRpcService;
@@ -20,6 +20,7 @@ use crate::tvu::{Sockets, Tvu};
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
@@ -36,7 +37,6 @@ pub struct FullnodeConfig {
     pub voting_disabled: bool,
     pub blockstream: Option<String>,
     pub storage_rotate_count: u64,
-    pub tick_config: PohServiceConfig,
     pub account_paths: Option<String>,
     pub rpc_config: JsonRpcConfig,
 }
@@ -51,7 +51,6 @@ impl Default for FullnodeConfig {
             voting_disabled: false,
             blockstream: None,
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
-            tick_config: PohServiceConfig::default(),
             account_paths: None,
             rpc_config: JsonRpcConfig::default(),
         }
@@ -101,6 +100,7 @@ impl Fullnode {
             ledger_signal_receiver,
             completed_slots_receiver,
             leader_schedule_cache,
+            poh_config,
         ) = new_banks_from_blocktree(ledger_path, config.account_paths.clone());
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
@@ -115,6 +115,7 @@ impl Fullnode {
         );
         let blocktree = Arc::new(blocktree);
 
+        let poh_config = Arc::new(poh_config);
         let (poh_recorder, entry_receiver) = PohRecorder::new_with_clear_signal(
             bank.tick_height(),
             bank.last_blockhash(),
@@ -125,9 +126,10 @@ impl Fullnode {
             &blocktree,
             blocktree.new_blobs_signals.first().cloned(),
             &leader_schedule_cache,
+            &poh_config,
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-        let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, &exit);
+        let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
         assert_eq!(
             blocktree.new_blobs_signals.len(),
             1,
@@ -298,6 +300,7 @@ pub fn new_banks_from_blocktree(
     Receiver<bool>,
     CompletedSlotsReceiver,
     LeaderScheduleCache,
+    PohConfig,
 ) {
     let genesis_block =
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
@@ -317,6 +320,7 @@ pub fn new_banks_from_blocktree(
         ledger_signal_receiver,
         completed_slots_receiver,
         leader_schedule_cache,
+        genesis_block.poh_config,
     )
 }
 

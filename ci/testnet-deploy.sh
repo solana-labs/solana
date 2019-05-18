@@ -23,6 +23,7 @@ bootDiskType=""
 blockstreamer=false
 deployUpdateManifest=true
 fetchLogs=true
+maybeHashesPerTick=
 
 usage() {
   exitcode=0
@@ -64,6 +65,9 @@ Deploys a CD testnet
    -w                   - Skip time-consuming "bells and whistles" that are
                           unnecessary for a high-node count demo testnet
 
+   --hashes-per-tick NUM_HASHES|sleep|auto
+                        - Override the default --hashes-per-tick for the cluster
+
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
 EOF
@@ -72,7 +76,22 @@ EOF
 
 zone=()
 
-while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt; do
+shortArgs=()
+while [[ -n $1 ]]; do
+  if [[ ${1:0:2} = -- ]]; then
+    if [[ $1 = --hashes-per-tick ]]; then
+      maybeHashesPerTick="$1 $2"
+      shift 2
+    else
+      usage "Unknown long option: $1"
+    fi
+  else
+    shortArgs+=("$1")
+    shift
+  fi
+done
+
+while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt "${shortArgs[*]}"; do
   case $opt in
   h | \?)
     usage
@@ -147,7 +166,7 @@ while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt; do
     deployUpdateManifest=false
     ;;
   *)
-    usage "Error: unhandled option: $opt"
+    usage "Unknown option: $opt"
     ;;
   esac
 done
@@ -291,6 +310,10 @@ if ! $skipStart; then
     fi
     if [[ -n $NO_LEDGER_VERIFY ]]; then
       args+=(-o noLedgerVerify)
+    fi
+    if [[ -n $maybeHashesPerTick ]]; then
+      # shellcheck disable=SC2206 # Do not want to quote $maybeHashesPerTick
+      args+=($maybeHashesPerTick)
     fi
 
     if $reuseLedger; then

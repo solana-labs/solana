@@ -11,6 +11,7 @@ use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
 use solana_sdk::client::SyncClient;
 use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction;
@@ -62,6 +63,7 @@ pub struct ClusterConfig {
     pub ticks_per_slot: u64,
     pub slots_per_epoch: u64,
     pub native_instruction_processors: Vec<(String, Pubkey)>,
+    pub poh_config: PohConfig,
 }
 
 impl Default for ClusterConfig {
@@ -75,6 +77,7 @@ impl Default for ClusterConfig {
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
             slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
             native_instruction_processors: vec![],
+            poh_config: PohConfig::default(),
         }
     }
 }
@@ -120,6 +123,7 @@ impl LocalCluster {
         );
         genesis_block.ticks_per_slot = config.ticks_per_slot;
         genesis_block.slots_per_epoch = config.slots_per_epoch;
+        genesis_block.poh_config = config.poh_config.clone();
         genesis_block
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);

@@ -50,6 +50,9 @@ Operate a configured testnet
                                         This will start 2 bench-tps clients, and supply "--tx_count 25000"
                                         to the bench-tps client.
 
+   --hashes-per-tick NUM_HASHES|sleep|auto
+                                      - Override the default --hashes-per-tick for the cluster
+
  sanity/start/update-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noLedgerVerify    - Skip ledger verification
@@ -82,12 +85,28 @@ numBenchExchangeClients=0
 benchTpsExtraArgs=
 benchExchangeExtraArgs=
 failOnValidatorBootupFailure=true
+genesisOptions=
 
 command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?T:t:o:f:rD:i:c:F" opt; do
+shortArgs=()
+while [[ -n $1 ]]; do
+  if [[ ${1:0:2} = -- ]]; then
+    if [[ $1 = --hashes-per-tick ]]; then
+      genesisOptions="$genesisOptions $1 $2"
+      shift 2
+    else
+      usage "Unknown long option: $1"
+    fi
+  else
+    shortArgs+=("$1")
+    shift
+  fi
+done
+
+while getopts "h?T:t:o:f:rD:i:c:F" opt "${shortArgs[*]}"; do
   case $opt in
   h | \?)
     usage
@@ -130,8 +149,7 @@ while getopts "h?T:t:o:f:rD:i:c:F" opt; do
       sanityExtraArgs="$sanityExtraArgs -o $OPTARG"
       ;;
     *)
-      echo "Error: unknown option: $OPTARG"
-      exit 1
+      usage "Unknown option: $OPTARG"
       ;;
     esac
     ;;
@@ -295,6 +313,7 @@ startBootstrapLeader() {
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
+         \"$genesisOptions\" \
       "
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
@@ -322,6 +341,7 @@ startNode() {
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
+         \"$genesisOptions\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!

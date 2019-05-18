@@ -8,10 +8,11 @@
 set -e
 
 # Prefer possible `cargo build --all` binaries over PATH binaries
+cd "$(dirname "$0")/"
 PATH=$PWD/target/debug:$PATH
 
 ok=true
-for program in solana-{genesis,keygen,fullnode}; do
+for program in solana-{drone,genesis,keygen,fullnode}; do
   $program -V || ok=false
 done
 $ok || {
@@ -55,6 +56,7 @@ solana-genesis \
   --lamports 1000000000 \
   --bootstrap-leader-lamports 10000000 \
   --lamports-per-signature 1 \
+  --hashes-per-tick sleep \
   --mint "$dataDir"/config/drone-keypair.json \
   --bootstrap-leader-keypair "$dataDir"/config/leader-keypair.json \
   --bootstrap-vote-keypair "$dataDir"/config/leader-vote-account-keypair.json \

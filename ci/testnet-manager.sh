@@ -327,7 +327,8 @@ deploy() {
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
-        ${maybeDelete:+-D}
+        ${maybeDelete:+-D} \
+        --hashes-per-tick auto
     )
     ;;
   testnet-edge-perf)

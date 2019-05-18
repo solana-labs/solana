@@ -9,7 +9,7 @@ use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::packet;
 use crate::packet::{Packet, Packets};
 use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBankEntries};
-use crate::poh_service::{PohService, PohServiceConfig};
+use crate::poh_service::PohService;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
@@ -19,6 +19,7 @@ use solana_metrics::{inc_new_counter_debug, inc_new_counter_info, inc_new_counte
 use solana_runtime::accounts_db::ErrorCounters;
 use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
+use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{
     self, duration_as_us, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES,
@@ -755,6 +756,7 @@ pub fn create_test_recorder(
     Receiver<WorkingBankEntries>,
 ) {
     let exit = Arc::new(AtomicBool::new(false));
+    let poh_config = Arc::new(PohConfig::default());
     let (mut poh_recorder, entry_receiver) = PohRecorder::new(
         bank.tick_height(),
         bank.last_blockhash(),
@@ -764,11 +766,12 @@ pub fn create_test_recorder(
         &Pubkey::default(),
         blocktree,
         &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+        &poh_config,
     );
     poh_recorder.set_bank(&bank);
 
     let poh_recorder = Arc::new(Mutex::new(poh_recorder));
-    let poh_service = PohService::new(poh_recorder.clone(), &PohServiceConfig::default(), &exit);
+    let poh_service = PohService::new(poh_recorder.clone(), &poh_config, &exit);
 
     (exit, poh_recorder, poh_service, entry_receiver)
 }
@@ -1082,6 +1085,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
@@ -1367,6 +1371,7 @@ mod tests {
                 &pubkey,
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
@@ -1451,6 +1456,7 @@ mod tests {
                 &pubkey,
                 &Arc::new(blocktree),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
             );
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
