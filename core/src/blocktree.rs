@@ -32,9 +32,11 @@ use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, RwLock};
 
 pub use self::meta::*;
+pub use self::rooted_slot_iterator::*;
 
 mod db;
 mod meta;
+mod rooted_slot_iterator;
 
 macro_rules! db_imports {
     { $mod:ident, $db:ident, $db_path:expr } => {
@@ -74,6 +76,7 @@ pub enum BlocktreeError {
     RocksDb(rocksdb::Error),
     #[cfg(feature = "kvstore")]
     KvsDb(kvstore::Error),
+    SlotNotRooted,
 }
 
 // ledger window
@@ -180,6 +183,10 @@ impl Blocktree {
 
     pub fn orphan(&self, slot: u64) -> Result<Option<bool>> {
         self.orphans_cf.get(slot)
+    }
+
+    pub fn rooted_slot_iterator<'a>(&'a self, slot: u64) -> Result<RootedSlotIterator<'a>> {
+        RootedSlotIterator::new(slot, self)
     }
 
     pub fn slot_meta_iterator(&self, slot: u64) -> Result<impl Iterator<Item = (u64, SlotMeta)>> {
