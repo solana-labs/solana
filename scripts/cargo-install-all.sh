@@ -25,7 +25,8 @@ SECONDS=0
 
 (
   set -x
-  cargo build --all --release --features="$cargoFeatures"
+  # shellcheck disable=SC2086 # Don't want to double quote $rust_version
+  cargo $rust_version build --all --release --features="$cargoFeatures"
 )
 
 BIN_CRATES=(
