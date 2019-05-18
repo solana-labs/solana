@@ -83,7 +83,7 @@ impl ReplayStage {
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-    ) -> (Self, Receiver<(u64, Pubkey)>, Receiver<u64>)
+    ) -> (Self, Receiver<(u64, Pubkey)>, Receiver<Vec<u64>>)
     where
         T: 'static + KeypairUtil + Send + Sync,
     {
@@ -302,17 +302,23 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: &Arc<Blocktree>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        root_slot_sender: &Sender<u64>,
+        root_slot_sender: &Sender<Vec<u64>>,
     ) -> Result<()>
     where
         T: 'static + KeypairUtil + Send + Sync,
     {
         if let Some(new_root) = locktower.record_vote(bank.slot()) {
+            let mut rooted_slots = bank
+                .parents()
+                .into_iter()
+                .map(|bank| bank.slot())
+                .collect::<Vec<_>>();
+            rooted_slots.push(bank.slot());
             bank_forks.write().unwrap().set_root(new_root);
             leader_schedule_cache.set_root(new_root);
             blocktree.set_root(new_root)?;
             Self::handle_new_root(&bank_forks, progress);
-            root_slot_sender.send(new_root)?;
+            root_slot_sender.send(rooted_slots)?;
         }
         locktower.update_epoch(&bank);
         if let Some(ref voting_keypair) = voting_keypair {
