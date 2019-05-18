@@ -558,13 +558,15 @@ mod tests {
         let mut result = storage_state.get_mining_result(&signature);
         assert_eq!(result, Hash::default());
 
-        for i in slot..slot + SLOTS_PER_SEGMENT + 1 {
-            blocktree
-                .write_entries(i, 0, 0, ticks_per_slot, &entries)
-                .unwrap();
-
-            slot_sender.send(vec![i]).unwrap();
-        }
+        let rooted_slots = (slot..slot + SLOTS_PER_SEGMENT + 1)
+            .map(|i| {
+                blocktree
+                    .write_entries(i, 0, 0, ticks_per_slot, &entries)
+                    .unwrap();
+                i
+            })
+            .collect::<Vec<_>>();
+        slot_sender.send(rooted_slots).unwrap();
         for _ in 0..5 {
             result = storage_state.get_mining_result(&signature);
             if result != Hash::default() {
