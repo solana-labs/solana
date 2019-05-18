@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use solana::gen_keys::GenKeys;
 use solana_client::perf_utils::{sample_txs, SampleStats};
 use solana_drone::drone::request_airdrop_transaction;
-use solana_metrics::datapoint;
+use solana_metrics::datapoint_info;
 use solana_sdk::client::Client;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -209,7 +209,7 @@ where
 
 fn metrics_submit_lamport_balance(lamport_balance: u64) {
     println!("Token balance: {}", lamport_balance);
-    datapoint!(
+    datapoint_info!(
         "bench-tps-lamport_balance",
         ("balance", lamport_balance, i64)
     );
@@ -253,7 +253,7 @@ fn generate_txs(
         duration_as_ms(&duration),
         blockhash,
     );
-    datapoint!(
+    datapoint_info!(
         "bench-tps-generate_txs",
         ("duration", duration_as_ms(&duration), i64)
     );
@@ -310,7 +310,7 @@ fn do_tx_transfers<T: Client>(
                 duration_as_ms(&transfer_start.elapsed()),
                 tx_len as f32 / duration_as_s(&transfer_start.elapsed()),
             );
-            datapoint!(
+            datapoint_info!(
                 "bench-tps-do_tx_transfers",
                 ("duration", duration_as_ms(&transfer_start.elapsed()), i64),
                 ("count", tx_len, i64)

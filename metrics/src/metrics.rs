@@ -53,9 +53,46 @@ macro_rules! datapoint {
         point
         }
     };
-
     ($name:expr, $($fields:tt)+) => {
-        $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Info);
+        if log_enabled!(log::Level::Debug) {
+            $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Debug);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! datapoint_error {
+    ($name:expr, $($fields:tt)+) => {
+        if log_enabled!(log::Level::Error) {
+            $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Error);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! datapoint_warn {
+    ($name:expr, $($fields:tt)+) => {
+        if log_enabled!(log::Level::Warn) {
+            $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Warn);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! datapoint_info {
+    ($name:expr, $($fields:tt)+) => {
+        if log_enabled!(log::Level::Info) {
+            $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Info);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! datapoint_debug {
+    ($name:expr, $($fields:tt)+) => {
+        if log_enabled!(log::Level::Debug) {
+            $crate::submit($crate::datapoint!(@point $name, $($fields)+), log::Level::Debug);
+        }
     };
 }
 

@@ -37,29 +37,39 @@ macro_rules! create_counter {
 #[macro_export]
 macro_rules! inc_counter {
     ($name:expr, $level:expr, $count:expr) => {
-        unsafe { $name.inc($level, $count) };
+        unsafe {
+            if log_enabled!($level) {
+                $name.inc($level, $count)
+            }
+        };
     };
 }
 
 #[macro_export]
 macro_rules! inc_counter_info {
     ($name:expr, $count:expr) => {
-        unsafe { $name.inc(log::Level::Info, $count) };
+        unsafe {
+            if log_enabled!(log::Level::Info) {
+                $name.inc(log::Level::Info, $count)
+            }
+        };
     };
 }
 
 #[macro_export]
 macro_rules! inc_new_counter {
     ($name:expr, $count:expr, $level:expr, $lograte:expr, $metricsrate:expr) => {{
-        static mut INC_NEW_COUNTER: $crate::counter::Counter =
-            create_counter!($name, $lograte, $metricsrate);
-        static INIT_HOOK: std::sync::Once = std::sync::ONCE_INIT;
-        unsafe {
-            INIT_HOOK.call_once(|| {
-                INC_NEW_COUNTER.init();
-            });
+        if log_enabled!($level) {
+            static mut INC_NEW_COUNTER: $crate::counter::Counter =
+                create_counter!($name, $lograte, $metricsrate);
+            static INIT_HOOK: std::sync::Once = std::sync::ONCE_INIT;
+            unsafe {
+                INIT_HOOK.call_once(|| {
+                    INC_NEW_COUNTER.init();
+                });
+            }
+            inc_counter!(INC_NEW_COUNTER, $level, $count);
         }
-        inc_counter!(INC_NEW_COUNTER, $level, $count);
     }};
 }
 
@@ -134,10 +144,6 @@ impl Counter {
         );
     }
     pub fn inc(&mut self, level: log::Level, events: usize) {
-        if !log_enabled!(level) {
-            return;
-        }
-
         let counts = self.counts.fetch_add(events, Ordering::Relaxed);
         let times = self.times.fetch_add(1, Ordering::Relaxed);
         let mut lograte = self.lograte.load(Ordering::Relaxed);
@@ -187,7 +193,7 @@ impl Counter {
 mod tests {
     use crate::counter::{Counter, DEFAULT_LOG_RATE};
     use log::Level;
-    use solana_logger;
+    use log::*;
     use std::env;
     use std::sync::atomic::Ordering;
     use std::sync::{Once, RwLock, ONCE_INIT};
@@ -206,8 +212,8 @@ mod tests {
 
     #[test]
     fn test_counter() {
-        env::set_var("RUST_LOG", "info");
-        solana_logger::setup();
+        env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("solana=info"))
+            .init();
         let _readlock = get_env_lock().read();
         static mut COUNTER: Counter = create_counter!("test", 1000, 1);
         let count = 1;
@@ -241,8 +247,6 @@ mod tests {
     }
     #[test]
     fn test_lograte() {
-        env::set_var("RUST_LOG", "info");
-        solana_logger::setup();
         let _readlock = get_env_lock().read();
         assert_eq!(
             Counter::default_log_rate(),
@@ -252,7 +256,7 @@ mod tests {
             DEFAULT_LOG_RATE,
         );
         static mut COUNTER: Counter = create_counter!("test_lograte", 0, 1);
-        inc_counter!(COUNTER, Level::Info, 2);
+        inc_counter!(COUNTER, Level::Error, 2);
         unsafe {
             assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), DEFAULT_LOG_RATE);
         }
@@ -260,20 +264,18 @@ mod tests {
 
     #[test]
     fn test_lograte_env() {
-        env::set_var("RUST_LOG", "info");
-        solana_logger::setup();
         assert_ne!(DEFAULT_LOG_RATE, 0);
         let _writelock = get_env_lock().write();
         static mut COUNTER: Counter = create_counter!("test_lograte_env", 0, 1);
         env::set_var("SOLANA_DEFAULT_LOG_RATE", "50");
-        inc_counter!(COUNTER, Level::Info, 2);
+        inc_counter!(COUNTER, Level::Error, 2);
         unsafe {
             assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), 50);
         }
 
         static mut COUNTER2: Counter = create_counter!("test_lograte_env", 0, 1);
         env::set_var("SOLANA_DEFAULT_LOG_RATE", "0");
-        inc_counter!(COUNTER2, Level::Info, 2);
+        inc_counter!(COUNTER2, Level::Error, 2);
         unsafe {
             assert_eq!(COUNTER2.lograte.load(Ordering::Relaxed), DEFAULT_LOG_RATE);
         }

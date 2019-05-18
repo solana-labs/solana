@@ -10,7 +10,7 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify;
 use crate::streamer::{self, PacketReceiver};
-use solana_metrics::{datapoint, inc_new_counter_info};
+use solana_metrics::{datapoint_info, inc_new_counter_info};
 use solana_sdk::timing;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
@@ -95,7 +95,7 @@ impl SigVerifyStage {
             (len as f32 / total_time_s)
         );
 
-        datapoint!(
+        datapoint_info!(
             "sigverify_stage-total_verify_time",
             ("batch_len", batch_len, i64),
             ("len", len, i64),

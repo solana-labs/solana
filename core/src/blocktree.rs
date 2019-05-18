@@ -16,7 +16,7 @@ use hashbrown::HashMap;
 #[cfg(not(feature = "kvstore"))]
 use rocksdb;
 
-use solana_metrics::datapoint;
+use solana_metrics::{datapoint_error, datapoint_info};
 
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
@@ -398,17 +398,14 @@ impl Blocktree {
             for (signal, slots) in self.completed_slots_senders.iter().zip(slots.into_iter()) {
                 let res = signal.try_send(slots);
                 if let Err(TrySendError::Full(_)) = res {
-                    solana_metrics::submit(
-                        solana_metrics::influxdb::Point::new("blocktree_error")
-                            .add_field(
-                                "error",
-                                solana_metrics::influxdb::Value::String(
-                                    "Unable to send newly completed slot because channel is full"
-                                        .to_string(),
-                                ),
-                            )
-                            .to_owned(),
-                        log::Level::Error,
+                    datapoint_error!(
+                        "blocktree_error",
+                        (
+                            "error",
+                            "Unable to send newly completed slot because channel is full"
+                                .to_string(),
+                            String
+                        ),
                     );
                 }
             }
@@ -1031,7 +1028,7 @@ fn should_insert_blob(
     // for the slot
     let last_index = slot.last_index;
     if blob_index >= last_index {
-        datapoint!(
+        datapoint_error!(
             "blocktree_error",
             (
                 "error",
@@ -1048,7 +1045,7 @@ fn should_insert_blob(
     // Check that we do not receive a blob with "last_index" true, but index
     // less than our current received
     if blob.is_last_in_slot() && blob_index < slot.received {
-        datapoint!(
+        datapoint_error!(
             "blocktree_error",
             (
                 "error",
@@ -1322,7 +1319,7 @@ fn try_erasure_recover(
     let (data_end_index, _) = erasure_meta.end_indexes();
 
     let submit_metrics = |attempted: bool, status: String| {
-        datapoint!(
+        datapoint_info!(
             "blocktree-erasure",
             ("slot", slot as i64, i64),
             ("start_index", start_index as i64, i64),

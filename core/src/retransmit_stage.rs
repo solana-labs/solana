@@ -10,7 +10,7 @@ use crate::service::Service;
 use crate::staking_utils;
 use crate::streamer::BlobReceiver;
 use crate::window_service::{should_retransmit_and_persist, WindowService};
-use solana_metrics::{datapoint, inc_new_counter_error};
+use solana_metrics::{datapoint_info, inc_new_counter_error};
 use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::hash::Hash;
 use std::net::UdpSocket;
@@ -34,7 +34,7 @@ fn retransmit(
         blobs.append(&mut nq);
     }
 
-    datapoint!("retransmit-stage", ("count", blobs.len(), i64));
+    datapoint_info!("retransmit-stage", ("count", blobs.len(), i64));
 
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());

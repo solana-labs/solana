@@ -6,7 +6,7 @@ use crate::vote_state::{self, Vote, VoteState};
 use bincode::deserialize;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_metrics::datapoint;
+use solana_metrics::datapoint_warn;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
 use solana_sdk::pubkey::Pubkey;
@@ -88,7 +88,7 @@ pub fn process_instruction(
             vote_state::authorize_voter(vote_account, other_signers, &voter_id)
         }
         VoteInstruction::Vote(votes) => {
-            datapoint!("vote-native", ("count", 1, i64));
+            datapoint_warn!("vote-native", ("count", 1, i64));
             let (vote_account, other_signers) = keyed_accounts.split_at_mut(1);
             let vote_account = &mut vote_account[0];
 
