@@ -211,6 +211,7 @@ impl ClusterInfoRepairListener {
                     &eligible_repairmen,
                     socket,
                     &repairee_tvu,
+                    NUM_SLOTS_PER_UPDATE,
                 );
             }
         }
@@ -226,6 +227,7 @@ impl ClusterInfoRepairListener {
         eligible_repairmen: &[&Pubkey],
         socket: &UdpSocket,
         repairee_tvu: &SocketAddr,
+        num_slots_to_repair: usize,
     ) -> Result<()> {
         let slot_iter = blocktree.rooted_slot_iterator(repairee_epoch_slots.root + 1);
 
@@ -240,7 +242,7 @@ impl ClusterInfoRepairListener {
         let mut total_coding_blobs_sent = 0;
         let mut num_slots_repaired = 0;
         for (slot, slot_meta) in slot_iter {
-            if slot > my_root || num_slots_repaired >= NUM_SLOTS_PER_UPDATE {
+            if slot > my_root || num_slots_repaired >= num_slots_to_repair {
                 break;
             }
             if !repairee_epoch_slots.slots.contains(&slot) {
@@ -436,6 +438,7 @@ mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::tests::make_many_slot_entries;
+    use crate::packet::Blob;
     use crate::streamer;
     use std::collections::HashSet;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -455,6 +458,10 @@ mod tests {
 
         // Write slots in the range [0, num_slots] to blocktree
         blocktree.insert_data_blobs(&blobs).unwrap();
+
+        // Write roots so that these slots will qualify to be sent by the repairman
+        blocktree.set_root(0, 0).unwrap();
+        blocktree.set_root(num_slots - 1, 0).unwrap();
 
         // Set up my information
         let my_id = Pubkey::new_rand();
@@ -483,6 +490,7 @@ mod tests {
             streamer::blob_receiver(repairee_socket, &repairee_exit, repairee_sender);
 
         // Have all the repairman send the repairs
+        let num_missing_slots = num_slots / 2;
         for repairman_id in &eligible_repairmen {
             ClusterInfoRepairListener::serve_repairs_to_repairee(
                 &repairman_id,
@@ -492,17 +500,18 @@ mod tests {
                 &eligible_repairmen_refs,
                 &my_socket,
                 &repairee_tvu,
+                num_missing_slots as usize,
             )
             .unwrap();
         }
 
-        let mut received_blobs = vec![];
+        let mut received_blobs: Vec<Arc<RwLock<Blob>>> = vec![];
 
         // This repairee was missing exactly `num_slots / 2` slots, so we expect to get
         // `(num_slots / 2) * blobs_per_slot * REPAIR_REDUNDANCY` blobs.
         let num_expected_blobs = (num_slots / 2) * blobs_per_slot * REPAIR_REDUNDANCY as u64;
         while (received_blobs.len() as u64) < num_expected_blobs {
-            received_blobs.extend(repairee_receiver.recv());
+            received_blobs.extend(repairee_receiver.recv().unwrap());
         }
 
         // Make sure no extra blobs get sent
