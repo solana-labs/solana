@@ -70,7 +70,7 @@ impl BankingStage {
             poh_recorder,
             verified_receiver,
             verified_vote_receiver,
-            cmp::min(2, Self::num_threads()),
+            cmp::max(2, Self::num_threads()),
         )
     }
 
@@ -112,6 +112,7 @@ impl BankingStage {
                             &cluster_info,
                             &mut recv_start,
                             enable_forwarding,
+                            i,
                         );
                         exit.store(true, Ordering::Relaxed);
                     })
@@ -151,7 +152,10 @@ impl BankingStage {
         let mut unprocessed_packets = vec![];
         let mut rebuffered_packets = 0;
         let mut new_tx_count = 0;
+        let buffered_len = buffered_packets.len();
         let mut buffered_packets_iter = buffered_packets.iter();
+
+        let proc_start = Instant::now();
         while let Some((msgs, unprocessed_indexes)) = buffered_packets_iter.next() {
             let bank = poh_recorder.lock().unwrap().bank();
             if bank.is_none() {
@@ -196,6 +200,18 @@ impl BankingStage {
                 }
             }
         }
+
+        let total_time_s = timing::duration_as_s(&proc_start.elapsed());
+        let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
+
+        debug!(
+            "@{:?} done processing buffered batches: {} time: {:?}ms tx count: {} tx/s: {}",
+            timing::timestamp(),
+            buffered_len,
+            total_time_ms,
+            new_tx_count,
+            (new_tx_count as f32) / (total_time_s)
+        );
 
         inc_new_counter_info!("banking_stage-rebuffered_packets", rebuffered_packets);
         inc_new_counter_info!("banking_stage-consumed_buffered_packets", new_tx_count);
@@ -288,6 +304,7 @@ impl BankingStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         recv_start: &mut Instant,
         enable_forwarding: bool,
+        id: u32,
     ) {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = vec![];
@@ -314,8 +331,13 @@ impl BankingStage {
                 Duration::from_millis(100)
             };
 
-            match Self::process_packets(&verified_receiver, &poh_recorder, recv_start, recv_timeout)
-            {
+            match Self::process_packets(
+                &verified_receiver,
+                &poh_recorder,
+                recv_start,
+                recv_timeout,
+                id,
+            ) {
                 Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                 Ok(unprocessed_packets) => {
                     if unprocessed_packets.is_empty() {
@@ -669,6 +691,7 @@ impl BankingStage {
         poh: &Arc<Mutex<PohRecorder>>,
         recv_start: &mut Instant,
         recv_timeout: Duration,
+        id: u32,
     ) -> Result<UnprocessedPackets> {
         let mms = verified_receiver
             .lock()
@@ -676,12 +699,13 @@ impl BankingStage {
             .recv_timeout(recv_timeout)?;
 
         let mms_len = mms.len();
-        let count = mms.iter().map(|x| x.1.len()).sum();
+        let count: usize = mms.iter().map(|x| x.1.len()).sum();
         debug!(
-            "@{:?} process start stalled for: {:?}ms txs: {}",
+            "@{:?} process start stalled for: {:?}ms txs: {} id: {}",
             timing::timestamp(),
             timing::duration_as_ms(&recv_start.elapsed()),
             count,
+            id,
         );
         inc_new_counter_debug!("banking_stage-transactions_received", count);
         let proc_start = Instant::now();
@@ -729,12 +753,14 @@ impl BankingStage {
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
         debug!(
-            "@{:?} done processing transaction batches: {} time: {:?}ms tx count: {} tx/s: {}",
+            "@{:?} done processing transaction batches: {} time: {:?}ms tx count: {} tx/s: {} total count: {} id: {}",
             timing::timestamp(),
             mms_len,
             total_time_ms,
             new_tx_count,
-            (new_tx_count as f32) / (total_time_s)
+            (new_tx_count as f32) / (total_time_s),
+            count,
+            id,
         );
         inc_new_counter_debug!("banking_stage-process_packets", count);
         inc_new_counter_debug!("banking_stage-process_transactions", new_tx_count);
