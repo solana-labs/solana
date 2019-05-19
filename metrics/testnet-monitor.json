@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 510,
-  "iteration": 1556573792567,
+  "id": 577,
+  "iteration": 1558301251946,
   "links": [
     {
       "asDropdown": true,
@@ -69,7 +69,7 @@
         "x": 0,
         "y": 0
       },
-      "id": 13,
+      "id": 1,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -182,7 +182,7 @@
         "x": 12,
         "y": 0
       },
-      "id": 11,
+      "id": 2,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -283,7 +283,7 @@
         "x": 14,
         "y": 0
       },
-      "id": 5,
+      "id": 3,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -448,7 +448,7 @@
         "x": 0,
         "y": 2
       },
-      "id": 1,
+      "id": 4,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -560,7 +560,7 @@
         "x": 4,
         "y": 2
       },
-      "id": 2,
+      "id": 5,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -672,7 +672,7 @@
         "x": 8,
         "y": 2
       },
-      "id": 3,
+      "id": 6,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -784,7 +784,7 @@
         "x": 11,
         "y": 2
       },
-      "id": 4,
+      "id": 7,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -896,7 +896,7 @@
         "x": 0,
         "y": 4
       },
-      "id": 6,
+      "id": 8,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -1007,7 +1007,7 @@
         "x": 3,
         "y": 4
       },
-      "id": 7,
+      "id": 9,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -1118,7 +1118,7 @@
         "x": 6,
         "y": 4
       },
-      "id": 8,
+      "id": 10,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -1229,7 +1229,7 @@
         "x": 9,
         "y": 4
       },
-      "id": 9,
+      "id": 11,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -1340,7 +1340,7 @@
         "x": 11,
         "y": 4
       },
-      "id": 10,
+      "id": 12,
       "interval": null,
       "links": [],
       "mappingType": 1,
@@ -1440,7 +1440,7 @@
         "x": 0,
         "y": 6
       },
-      "id": 14,
+      "id": 13,
       "legend": {
         "avg": false,
         "current": false,
@@ -1630,7 +1630,7 @@
         "x": 14,
         "y": 7
       },
-      "id": 15,
+      "id": 14,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -1817,7 +1817,7 @@
         "x": 0,
         "y": 14
       },
-      "id": 61,
+      "id": 15,
       "title": "Summary",
       "type": "row"
     },
@@ -1834,7 +1834,7 @@
         "x": 0,
         "y": 15
       },
-      "id": 17,
+      "id": 16,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -1916,13 +1916,13 @@
       },
       "yaxes": [
         {
+          "decimals": 1,
           "format": "ms",
           "label": "",
           "logBase": 1,
           "max": null,
           "min": null,
-          "show": true,
-          "decimals": 1
+          "show": true
         },
         {
           "format": "short",
@@ -1951,7 +1951,7 @@
         "x": 14,
         "y": 15
       },
-      "id": 18,
+      "id": 17,
       "legend": {
         "avg": false,
         "current": false,
@@ -2066,7 +2066,7 @@
         "x": 14,
         "y": 19
       },
-      "id": 19,
+      "id": 18,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -2178,7 +2178,7 @@
         "x": 0,
         "y": 23
       },
-      "id": 59,
+      "id": 19,
       "panels": [],
       "title": "Stability",
       "type": "row"
@@ -2202,12 +2202,12 @@
         "thresholdMarkers": true
       },
       "gridPos": {
-        "h": 6,
-        "w": 3,
+        "h": 2,
+        "w": 5,
         "x": 0,
         "y": 24
       },
-      "id": 21,
+      "id": 20,
       "interval": null,
       "links": [
         {
@@ -2292,8 +2292,452 @@
         }
       ],
       "thresholds": "",
-      "title": "Network Version",
+      "title": "Software Version",
       "transparent": false,
+      "type": "singlestat",
+      "valueFontSize": "80%",
+      "valueMaps": [
+        {
+          "op": "=",
+          "text": "None",
+          "value": "null"
+        }
+      ],
+      "valueName": "avg"
+    },
+    {
+      "cacheTimeout": null,
+      "colorBackground": false,
+      "colorValue": false,
+      "colors": [
+        "#299c46",
+        "rgba(237, 129, 40, 0.89)",
+        "#d44a3a"
+      ],
+      "datasource": "$datasource",
+      "format": "none",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 4,
+        "x": 5,
+        "y": 24
+      },
+      "id": 22,
+      "interval": null,
+      "links": [],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "",
+      "prefixFontSize": "50%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false
+      },
+      "tableColumn": "sum",
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT SUM(\"points_written\") FROM \"$testnet\".\"autogen\".\"metrics\" WHERE $timeFilter\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": "",
+      "title": "Total Datapoints",
+      "type": "singlestat",
+      "valueFontSize": "80%",
+      "valueMaps": [
+        {
+          "op": "=",
+          "text": "None",
+          "value": "null"
+        }
+      ],
+      "valueName": "avg"
+    },
+    {
+      "cacheTimeout": null,
+      "colorBackground": false,
+      "colorValue": false,
+      "colors": [
+        "#299c46",
+        "rgba(237, 129, 40, 0.89)",
+        "#d44a3a"
+      ],
+      "datasource": "$datasource",
+      "format": "none",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 3,
+        "x": 9,
+        "y": 24
+      },
+      "id": 58,
+      "interval": null,
+      "links": [],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "",
+      "prefixFontSize": "50%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false
+      },
+      "tableColumn": "sum",
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT SUM(\"points_lost\") FROM \"$testnet\".\"autogen\".\"metrics\" WHERE $timeFilter\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": "",
+      "title": "Lost Datapoints",
+      "type": "singlestat",
+      "valueFontSize": "80%",
+      "valueMaps": [
+        {
+          "op": "=",
+          "text": "None",
+          "value": "null"
+        }
+      ],
+      "valueName": "avg"
+    },
+    {
+      "cacheTimeout": null,
+      "colorBackground": false,
+      "colorValue": false,
+      "colors": [
+        "#299c46",
+        "rgba(237, 129, 40, 0.89)",
+        "#d44a3a"
+      ],
+      "datasource": "$datasource",
+      "format": "none",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 3,
+        "x": 12,
+        "y": 24
+      },
+      "id": 24,
+      "interval": null,
+      "links": [],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "",
+      "prefixFontSize": "50%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false
+      },
+      "tableColumn": "sum",
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT sum(\"one\") FROM \"$testnet\".\"autogen\".\"panic\" WHERE $timeFilter",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": "",
+      "title": "Total Panics",
+      "type": "singlestat",
+      "valueFontSize": "80%",
+      "valueMaps": [
+        {
+          "op": "=",
+          "text": "None",
+          "value": "null"
+        }
+      ],
+      "valueName": "avg"
+    },
+    {
+      "cacheTimeout": null,
+      "colorBackground": false,
+      "colorValue": false,
+      "colors": [
+        "#299c46",
+        "rgba(237, 129, 40, 0.89)",
+        "#d44a3a"
+      ],
+      "datasource": "$datasource",
+      "format": "none",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 3,
+        "x": 15,
+        "y": 24
+      },
+      "id": 57,
+      "interval": null,
+      "links": [],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "",
+      "prefixFontSize": "50%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false
+      },
+      "tableColumn": "sum",
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT sum(\"killed\") FROM \"$testnet\".\"autogen\".\"oom-killer\" WHERE $timeFilter",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": "",
+      "title": "Total OOMs",
       "type": "singlestat",
       "valueFontSize": "80%",
       "valueMaps": [
@@ -2313,12 +2757,286 @@
       "datasource": "$datasource",
       "fill": 1,
       "gridPos": {
-        "h": 6,
-        "w": 11,
-        "x": 3,
+        "h": 4,
+        "w": 6,
+        "x": 18,
         "y": 24
       },
-      "id": 22,
+      "id": 23,
+      "legend": {
+        "alignAsTable": true,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "measurement": "cluster_info-vote-count",
+          "orderByTime": "ASC",
+          "policy": "autogen",
+          "query": "SELECT sum(\"one\") as \".\" FROM \"$testnet\".\"autogen\".\"panic\" WHERE $timeFilter   GROUP BY time($__interval), \"program\" fill(null)\n\n\n\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "count"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "sum"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Panics",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "decimals": 0,
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 26
+      },
+      "id": 21,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "connected",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT MEAN(\"points_written\") as \"Mean points written\" FROM \"$testnet\".\"autogen\".\"metrics\" WHERE $timeFilter GROUP BY time(5s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT MAX(\"points_written\") as \"Max points written\" FROM \"$testnet\".\"autogen\".\"metrics\" WHERE $timeFilter GROUP BY time(5s) fill(null)\n",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Metric Datapoints per node",
+      "tooltip": {
+        "shared": true,
+        "sort": 1,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "decimals": 0,
+          "format": "short",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": "0.2",
+          "show": true
+        },
+        {
+          "decimals": null,
+          "format": "short",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "$datasource",
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 10,
+        "x": 8,
+        "y": 26
+      },
+      "id": 59,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -2463,117 +3181,6 @@
       }
     },
     {
-      "cacheTimeout": null,
-      "colorBackground": false,
-      "colorValue": false,
-      "colors": [
-        "#299c46",
-        "rgba(237, 129, 40, 0.89)",
-        "#d44a3a"
-      ],
-      "datasource": "$datasource",
-      "format": "none",
-      "gauge": {
-        "maxValue": 100,
-        "minValue": 0,
-        "show": false,
-        "thresholdLabels": false,
-        "thresholdMarkers": true
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 14,
-        "y": 24
-      },
-      "id": 23,
-      "interval": null,
-      "links": [],
-      "mappingType": 1,
-      "mappingTypes": [
-        {
-          "name": "value to text",
-          "value": 1
-        },
-        {
-          "name": "range to text",
-          "value": 2
-        }
-      ],
-      "maxDataPoints": 100,
-      "nullPointMode": "connected",
-      "nullText": null,
-      "postfix": "",
-      "postfixFontSize": "50%",
-      "prefix": "",
-      "prefixFontSize": "50%",
-      "rangeMaps": [
-        {
-          "from": "null",
-          "text": "N/A",
-          "to": "null"
-        }
-      ],
-      "sparkline": {
-        "fillColor": "rgba(31, 118, 189, 0.18)",
-        "full": false,
-        "lineColor": "rgb(31, 120, 193)",
-        "show": false
-      },
-      "tableColumn": "sum",
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT sum(\"one\") FROM \"$testnet\".\"autogen\".\"panic\" WHERE $timeFilter \n",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "table",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": "",
-      "title": "Total Panics",
-      "type": "singlestat",
-      "valueFontSize": "80%",
-      "valueMaps": [
-        {
-          "op": "=",
-          "text": "None",
-          "value": "null"
-        }
-      ],
-      "valueName": "avg"
-    },
-    {
       "aliasColors": {},
       "bars": true,
       "dashLength": 10,
@@ -2581,326 +3188,12 @@
       "datasource": "$datasource",
       "fill": 1,
       "gridPos": {
-        "h": 6,
-        "w": 7,
-        "x": 17,
-        "y": 24
-      },
-      "id": 24,
-      "legend": {
-        "alignAsTable": true,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "rightSide": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": false,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 5,
-      "points": true,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "measurement": "cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT sum(\"one\") as \".\" FROM \"$testnet\".\"autogen\".\"panic\" WHERE $timeFilter   GROUP BY time($__interval), \"program\" fill(null)\n\n\n\n",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Panics",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "decimals": 0,
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "cacheTimeout": null,
-      "colorBackground": false,
-      "colorValue": false,
-      "colors": [
-        "#299c46",
-        "rgba(237, 129, 40, 0.89)",
-        "#d44a3a"
-      ],
-      "datasource": "$datasource",
-      "format": "none",
-      "gauge": {
-        "maxValue": 100,
-        "minValue": 0,
-        "show": false,
-        "thresholdLabels": false,
-        "thresholdMarkers": true
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 14,
-        "y": 27
-      },
-      "id": 25,
-      "interval": null,
-      "links": [],
-      "mappingType": 1,
-      "mappingTypes": [
-        {
-          "name": "value to text",
-          "value": 1
-        },
-        {
-          "name": "range to text",
-          "value": 2
-        }
-      ],
-      "maxDataPoints": 100,
-      "nullPointMode": "connected",
-      "nullText": null,
-      "postfix": "",
-      "postfixFontSize": "50%",
-      "prefix": "",
-      "prefixFontSize": "50%",
-      "rangeMaps": [
-        {
-          "from": "null",
-          "text": "N/A",
-          "to": "null"
-        }
-      ],
-      "sparkline": {
-        "fillColor": "rgba(31, 118, 189, 0.18)",
-        "full": false,
-        "lineColor": "rgb(31, 120, 193)",
-        "show": false
-      },
-      "tableColumn": "sum",
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT sum(\"killed\") FROM \"$testnet\".\"autogen\".\"oom-killer\" WHERE $timeFilter",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "table",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": "",
-      "title": "Total OOMs",
-      "type": "singlestat",
-      "valueFontSize": "80%",
-      "valueMaps": [
-        {
-          "op": "=",
-          "text": "None",
-          "value": "null"
-        }
-      ],
-      "valueName": "avg"
-    },
-    {
-      "columns": [],
-      "datasource": "$datasource",
-      "fontSize": "100%",
-      "gridPos": {
-        "h": 6,
-        "w": 17,
-        "x": 0,
-        "y": 30
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 28
       },
       "id": 26,
-      "links": [],
-      "pageSize": null,
-      "scroll": true,
-      "showHeader": true,
-      "sort": {
-        "col": null,
-        "desc": false
-      },
-      "styles": [
-        {
-          "alias": "Time",
-          "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "pattern": "Time",
-          "type": "date"
-        },
-        {
-          "alias": "",
-          "colorMode": null,
-          "colors": [
-            "rgba(245, 54, 54, 0.9)",
-            "rgba(237, 129, 40, 0.89)",
-            "rgba(50, 172, 45, 0.97)"
-          ],
-          "decimals": 2,
-          "pattern": "/.*/",
-          "thresholds": [],
-          "type": "number",
-          "unit": "short"
-        }
-      ],
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT time, host_id,program,thread, message FROM \"$testnet\".\"autogen\".\"panic\"  WHERE $timeFilter ORDER BY time DESC ",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "table",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "title": "Panic Details",
-      "transform": "table",
-      "type": "table"
-    },
-    {
-      "aliasColors": {},
-      "bars": true,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "$datasource",
-      "fill": 1,
-      "gridPos": {
-        "h": 6,
-        "w": 7,
-        "x": 17,
-        "y": 30
-      },
-      "id": 27,
       "legend": {
         "alignAsTable": true,
         "avg": false,
@@ -3011,11 +3304,96 @@
       "fontSize": "100%",
       "gridPos": {
         "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 25,
+      "links": [],
+      "pageSize": null,
+      "scroll": true,
+      "showHeader": true,
+      "sort": {
+        "col": null,
+        "desc": false
+      },
+      "styles": [
+        {
+          "alias": "Time",
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "pattern": "Time",
+          "type": "date"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "decimals": 2,
+          "pattern": "/.*/",
+          "thresholds": [],
+          "type": "number",
+          "unit": "short"
+        }
+      ],
+      "targets": [
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT time, host_id,program,thread, message FROM \"$testnet\".\"autogen\".\"panic\"  WHERE $timeFilter ORDER BY time DESC ",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        }
+      ],
+      "title": "Panic Details",
+      "transform": "table",
+      "type": "table"
+    },
+    {
+      "columns": [],
+      "datasource": "$datasource",
+      "fontSize": "100%",
+      "gridPos": {
+        "h": 6,
         "w": 8,
         "x": 0,
-        "y": 36
+        "y": 38
       },
-      "id": 28,
+      "id": 27,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -3098,9 +3476,9 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 36
+        "y": 38
       },
-      "id": 29,
+      "id": 28,
       "links": [],
       "pageSize": null,
       "scroll": true,
@@ -3186,9 +3564,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 36
+        "y": 38
       },
-      "id": 30,
+      "id": 29,
       "legend": {
         "avg": false,
         "current": false,
@@ -3554,9 +3932,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 42
+        "y": 44
       },
-      "id": 16,
+      "id": 30,
       "panels": [],
       "title": "Bench TPS",
       "type": "row"
@@ -3572,9 +3950,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 43
+        "y": 45
       },
-      "id": 32,
+      "id": 31,
       "legend": {
         "avg": false,
         "current": false,
@@ -3687,9 +4065,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 43
+        "y": 45
       },
-      "id": 33,
+      "id": 32,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -3873,9 +4251,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 50
       },
-      "id": 20,
+      "id": 33,
       "panels": [],
       "title": "Bench Exchange",
       "type": "row"
@@ -3891,9 +4269,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 49
+        "y": 51
       },
-      "id": 36,
+      "id": 34,
       "legend": {
         "avg": false,
         "current": false,
@@ -4042,9 +4420,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 49
+        "y": 51
       },
-      "id": 37,
+      "id": 35,
       "legend": {
         "avg": false,
         "current": false,
@@ -4225,9 +4603,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 56
       },
-      "id": 31,
+      "id": 36,
       "panels": [],
       "title": "Fullnode Streamer",
       "type": "row"
@@ -4243,9 +4621,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 55
+        "y": 57
       },
-      "id": 40,
+      "id": 37,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4396,9 +4774,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 55
+        "y": 57
       },
-      "id": 41,
+      "id": 38,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4590,9 +4968,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 60
+        "y": 62
       },
-      "id": 42,
+      "id": 39,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4746,9 +5124,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 60
+        "y": 62
       },
-      "id": 43,
+      "id": 40,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -4861,9 +5239,9 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 65
+        "y": 67
       },
-      "id": 44,
+      "id": 41,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5238,9 +5616,9 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 65
+        "y": 67
       },
-      "id": 45,
+      "id": 42,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5469,9 +5847,9 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 71
+        "y": 73
       },
-      "id": 46,
+      "id": 43,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5815,9 +6193,9 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 71
+        "y": 73
       },
-      "id": 47,
+      "id": 44,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6010,9 +6388,9 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 77
+        "y": 79
       },
-      "id": 48,
+      "id": 45,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6169,9 +6547,9 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 77
+        "y": 79
       },
-      "id": 49,
+      "id": 46,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6312,13 +6690,13 @@
     },
     {
       "aliasColors": {
-        "cluster-info.repair": "#ba43a9",
         "banking_stage-buffered_packets.sum": "#3f6833",
         "banking_stage-consumed_buffered_packets.last": "#65c5db",
         "banking_stage-consumed_buffered_packets.sum": "#614d93",
         "banking_stage-forwarded_packets.last": "#f9ba8f",
         "banking_stage-forwarded_packets.sum": "#b7dbab",
         "banking_stage-rebuffered_packets.last": "#e5a8e2",
+        "cluster-info.repair": "#ba43a9",
         "fetch_stage-discard_forwards.sum": "#00ffbb",
         "fetch_stage-honor_forwards.sum": "#bf1b00",
         "locktower-vote.last": "#00ffbb",
@@ -6335,9 +6713,9 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 77
+        "y": 79
       },
-      "id": 55,
+      "id": 47,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6632,9 +7010,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 83
+        "y": 85
       },
-      "id": 35,
+      "id": 48,
       "panels": [],
       "title": "Locktower Consensus",
       "type": "row"
@@ -6655,9 +7033,9 @@
         "h": 5,
         "w": 8,
         "x": 0,
-        "y": 84
+        "y": 86
       },
-      "id": 50,
+      "id": 49,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6815,9 +7193,9 @@
         "h": 5,
         "w": 8,
         "x": 8,
-        "y": 84
+        "y": 86
       },
-      "id": 51,
+      "id": 50,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -6960,8 +7338,8 @@
     },
     {
       "aliasColors": {
-        "cluster-info.repair": "#ba43a9",
         "bank-process_transactions-txs.transactions": "#e5a8e2",
+        "cluster-info.repair": "#ba43a9",
         "replay_stage-new_leader.last": "#00ffbb",
         "window-service.receive": "#b7dbab",
         "window-stage.consumed": "#5195ce"
@@ -6975,9 +7353,9 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 84
+        "y": 86
       },
-      "id": 54,
+      "id": 51,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7086,9 +7464,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 89
+        "y": 91
       },
-      "id": 39,
+      "id": 52,
       "panels": [],
       "repeat": null,
       "title": "IP Network",
@@ -7105,9 +7483,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 90
+        "y": 92
       },
-      "id": 52,
+      "id": 53,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7338,9 +7716,9 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 90
+        "y": 92
       },
-      "id": 53,
+      "id": 54,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -7491,9 +7869,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 95
+        "y": 97
       },
-      "id": 56,
+      "id": 55,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -7509,9 +7887,9 @@
         "h": 5,
         "w": 12,
         "x": 0,
-        "y": 96
+        "y": 98
       },
-      "id": 57,
+      "id": 56,
       "legend": {
         "avg": false,
         "current": false,
@@ -7666,7 +8044,7 @@
         "multi": false,
         "name": "hostid",
         "options": [],
-        "query": "SELECT DISTINCT(\"host_id\") FROM \"$testnet\".\"autogen\".\"fullnode-new\" ",
+        "query": "SELECT DISTINCT(\"host_id\") FROM \"$testnet\".\"autogen\".\"counter-fullnode-new\" ",
         "refresh": 2,
         "regex": "",
         "sort": 1,
@@ -7710,5 +8088,5 @@
   "timezone": "",
   "title": "Testnet Monitor (edge)",
   "uid": "testnet-edge",
-  "version": 4
+  "version": 2
 }
