@@ -233,12 +233,12 @@ impl MetricsAgent {
             )
             .add_field("num_points", influxdb::Value::Integer(num_points as i64))
             .add_field(
-                "secs_since_last_write",
-                influxdb::Value::Integer(now.duration_since(last_write_time).as_secs() as i64),
+                "points_lost",
+                influxdb::Value::Integer((num_points - points_written) as i64),
             )
             .add_field(
-                "points_rate_exceeded",
-                influxdb::Value::Boolean(num_points > max_points),
+                "secs_since_last_write",
+                influxdb::Value::Integer(now.duration_since(last_write_time).as_secs() as i64),
             )
             .to_owned();
 
