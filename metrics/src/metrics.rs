@@ -99,8 +99,12 @@ macro_rules! datapoint_debug {
 lazy_static! {
     static ref HOST_INFO: String = {
         let v = env::var("SOLANA_METRICS_DISPLAY_HOSTNAME")
-            .map(|x| x.parse().unwrap_or(0))
+            .map(|x| {
+                x.parse()
+                    .expect("Failed to parse SOLANA_METRICS_DISPLAY_HOSTNAME")
+            })
             .unwrap_or(0);
+
         let name: String = hostname().unwrap_or_else(|_| "".to_string());
         if v == 0 {
             hash(name.as_bytes()).to_string()
@@ -169,11 +173,17 @@ impl MetricsWriter for InfluxDbMetricsWriter {
 
 impl Default for MetricsAgent {
     fn default() -> Self {
+        let max_points_per_sec = env::var("SOLANA_METRICS_MAX_POINTS_PER_SECOND")
+            .map(|x| {
+                x.parse()
+                    .expect("Failed to parse SOLANA_METRICS_MAX_POINTS_PER_SECOND")
+            })
+            .unwrap_or(4000);
+
         Self::new(
             Arc::new(InfluxDbMetricsWriter::new()),
             Duration::from_secs(10),
-            //max per-second datapoint submission limit
-            4000,
+            max_points_per_sec,
         )
     }
 }
