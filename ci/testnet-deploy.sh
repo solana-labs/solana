@@ -91,7 +91,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt "${shortArgs[*]}"; do
+while getopts "h?p:Pn:c:t:gG:a:Dd:rusxz:p:C:Sfew" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
