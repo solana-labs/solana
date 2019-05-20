@@ -41,13 +41,8 @@ pub fn spend_and_verify_all_nodes(
             .expect("balance in source");
         assert!(bal > 0);
         let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
-        let mut transaction = system_transaction::transfer(
-            &funding_keypair,
-            &random_keypair.pubkey(),
-            1,
-            blockhash,
-            0,
-        );
+        let mut transaction =
+            system_transaction::transfer(&funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         let confs = VOTE_THRESHOLD_DEPTH + 1;
         let sig = client
             .retry_transfer_until_confirmed(&funding_keypair, &mut transaction, 5, confs)
@@ -68,13 +63,8 @@ pub fn send_many_transactions(node: &ContactInfo, funding_keypair: &Keypair, num
             .expect("balance in source");
         assert!(bal > 0);
         let (blockhash, _fee_calculator) = client.get_recent_blockhash().unwrap();
-        let mut transaction = system_transaction::transfer(
-            &funding_keypair,
-            &random_keypair.pubkey(),
-            1,
-            blockhash,
-            0,
-        );
+        let mut transaction =
+            system_transaction::transfer(&funding_keypair, &random_keypair.pubkey(), 1, blockhash);
         client
             .retry_transfer(&funding_keypair, &mut transaction, 5)
             .unwrap();
@@ -190,7 +180,6 @@ pub fn kill_entry_and_spend_and_verify_rest(
                 &random_keypair.pubkey(),
                 1,
                 blockhash,
-                0,
             );
 
             let confs = VOTE_THRESHOLD_DEPTH + 1;

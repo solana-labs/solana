@@ -361,7 +361,6 @@ impl LocalCluster {
             dest_pubkey,
             lamports,
             blockhash,
-            0,
         );
         info!(
             "executing transfer of {} from {} to {}",

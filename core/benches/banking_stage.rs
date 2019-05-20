@@ -101,7 +101,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let (vote_sender, vote_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
     let to_pubkey = Pubkey::new_rand();
-    let dummy = system_transaction::transfer(&mint_keypair, &to_pubkey, 1, genesis_block.hash(), 0);
+    let dummy = system_transaction::transfer(&mint_keypair, &to_pubkey, 1, genesis_block.hash());
     trace!("txs: {}", txes);
     let transactions: Vec<_> = (0..txes)
         .into_par_iter()
@@ -123,7 +123,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             &tx.message.account_keys[0],
             mint_total / txes as u64,
             genesis_block.hash(),
-            0,
         );
         let x = bank.process_transaction(&fund);
         x.unwrap();
@@ -209,7 +208,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let (vote_sender, vote_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
     let to_pubkey = Pubkey::new_rand();
-    let dummy = system_transaction::transfer(&mint_keypair, &to_pubkey, 1, genesis_block.hash(), 0);
+    let dummy = system_transaction::transfer(&mint_keypair, &to_pubkey, 1, genesis_block.hash());
     let transactions: Vec<_> = (0..txes)
         .into_par_iter()
         .map(|_| {
@@ -246,7 +245,6 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             &tx.message.account_keys[0],
             mint_total / txes as u64,
             genesis_block.hash(),
-            0,
         );
         bank.process_transaction(&fund).unwrap();
     });

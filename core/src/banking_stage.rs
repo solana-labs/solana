@@ -947,23 +947,21 @@ mod tests {
                 &keypair.pubkey(),
                 2,
                 start_hash,
-                0,
             );
             bank.process_transaction(&fund_tx).unwrap();
 
             // good tx
             let to = Pubkey::new_rand();
-            let tx = system_transaction::create_user_account(&mint_keypair, &to, 1, start_hash, 0);
+            let tx = system_transaction::create_user_account(&mint_keypair, &to, 1, start_hash);
 
             // good tx, but no verify
             let to2 = Pubkey::new_rand();
-            let tx_no_ver =
-                system_transaction::create_user_account(&keypair, &to2, 2, start_hash, 0);
+            let tx_no_ver = system_transaction::create_user_account(&keypair, &to2, 2, start_hash);
 
             // bad tx, AccountNotFound
             let keypair = Keypair::new();
             let to3 = Pubkey::new_rand();
-            let tx_anf = system_transaction::create_user_account(&keypair, &to3, 1, start_hash, 0);
+            let tx_anf = system_transaction::create_user_account(&keypair, &to3, 1, start_hash);
 
             // send 'em over
             let packets = to_packets(&[tx_no_ver, tx_anf, tx]);
@@ -1038,7 +1036,6 @@ mod tests {
             &alice.pubkey(),
             2,
             genesis_block.hash(),
-            0,
         );
 
         let packets = to_packets(&[tx]);
@@ -1054,7 +1051,6 @@ mod tests {
             &mint_keypair.pubkey(),
             1,
             genesis_block.hash(),
-            0,
         );
         let packets = to_packets(&[tx]);
         let packets = packets
@@ -1151,8 +1147,8 @@ mod tests {
             let pubkey2 = Pubkey::new_rand();
 
             let transactions = vec![
-                system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-                system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_block.hash(), 0),
+                system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+                system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_block.hash()),
             ];
 
             let mut results = vec![Ok(()), Ok(())];
@@ -1211,21 +1207,18 @@ mod tests {
                 &pubkey,
                 1,
                 genesis_block.hash(),
-                0,
             )),
             Some(system_transaction::transfer(
                 &mint_keypair,
                 &pubkey,
                 1,
                 genesis_block.hash(),
-                0,
             )),
             Some(system_transaction::transfer(
                 &mint_keypair,
                 &pubkey,
                 1,
                 genesis_block.hash(),
-                0,
             )),
             None,
             None,
@@ -1234,7 +1227,6 @@ mod tests {
                 &pubkey,
                 1,
                 genesis_block.hash(),
-                0,
             )),
             None,
             Some(system_transaction::transfer(
@@ -1242,7 +1234,6 @@ mod tests {
                 &pubkey,
                 1,
                 genesis_block.hash(),
-                0,
             )),
             None,
             Some(system_transaction::transfer(
@@ -1250,19 +1241,18 @@ mod tests {
                 &pubkey,
                 1,
                 genesis_block.hash(),
-                0,
             )),
             None,
             None,
         ];
 
         let filtered_transactions = vec![
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
         ];
 
         assert_eq!(
@@ -1288,12 +1278,12 @@ mod tests {
         let pubkey = Pubkey::new_rand();
 
         let transactions = vec![
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
         ];
 
         assert_eq!(
@@ -1406,7 +1396,6 @@ mod tests {
             &pubkey,
             1,
             genesis_block.hash(),
-            0,
         )];
 
         let working_bank = WorkingBank {
@@ -1462,7 +1451,6 @@ mod tests {
                 &pubkey,
                 2,
                 genesis_block.hash(),
-                0,
             )];
 
             assert_matches!(
@@ -1490,8 +1478,8 @@ mod tests {
         let pubkey1 = Pubkey::new_rand();
 
         let transactions = vec![
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_block.hash(), 0),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&mint_keypair, &pubkey1, 1, genesis_block.hash()),
         ];
 
         let working_bank = WorkingBank {

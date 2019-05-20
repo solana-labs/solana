@@ -183,10 +183,8 @@ mod test {
 
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
-        let tx0 =
-            system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default(), 0);
-        let tx1 =
-            system_transaction::transfer(&keypair1, &keypair0.pubkey(), 2, Hash::default(), 0);
+        let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
+        let tx1 = system_transaction::transfer(&keypair1, &keypair0.pubkey(), 2, Hash::default());
         let serialized_tx0 = serialize(&tx0).unwrap();
         let serialized_tx1 = serialize(&tx1).unwrap();
         let entry = Entry::new(&Hash::default(), 1, vec![tx0, tx1]);

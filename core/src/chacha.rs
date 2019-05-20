@@ -122,7 +122,6 @@ mod tests {
                         &keypair.pubkey(),
                         1,
                         one,
-                        0,
                     )],
                 )
             })

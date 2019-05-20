@@ -154,7 +154,6 @@ fn test_replay() {
                 &bob_keypair.pubkey(),
                 transfer_amount,
                 blockhash,
-                0,
             );
             let entry_tick1 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
             let entry1 = next_entry_mut(&mut cur_hash, i + num_transfers, vec![tx0]);

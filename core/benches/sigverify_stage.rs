@@ -44,7 +44,6 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
                     &to_keypair.pubkey(),
                     amount,
                     Hash::default(),
-                    0,
                 );
                 tx
             })

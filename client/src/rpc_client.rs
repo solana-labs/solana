@@ -641,7 +641,7 @@ mod tests {
         let key = Keypair::new();
         let to = Pubkey::new_rand();
         let blockhash = Hash::default();
-        let tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
+        let tx = system_transaction::create_user_account(&key, &to, 50, blockhash);
 
         let signature = rpc_client.send_transaction(&tx);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -690,7 +690,7 @@ mod tests {
         let key = Keypair::new();
         let to = Pubkey::new_rand();
         let blockhash = Hash::default();
-        let mut tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
+        let mut tx = system_transaction::create_user_account(&key, &to, 50, blockhash);
 
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&key]);
         result.unwrap();
@@ -713,8 +713,8 @@ mod tests {
         let blockhash: Hash = "HUu3LwEzGRsUkuJS121jzkPJW39Kq62pXCTmTa1F9jDL"
             .parse()
             .unwrap();
-        let prev_tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
-        let mut tx = system_transaction::create_user_account(&key, &to, 50, blockhash, 0);
+        let prev_tx = system_transaction::create_user_account(&key, &to, 50, blockhash);
+        let mut tx = system_transaction::create_user_account(&key, &to, 50, blockhash);
 
         rpc_client.resign_transaction(&mut tx, &[&key]).unwrap();
 

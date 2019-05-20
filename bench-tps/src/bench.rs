@@ -236,7 +236,7 @@ fn generate_txs(
         .par_iter()
         .map(|(id, keypair)| {
             (
-                system_transaction::create_user_account(id, &keypair.pubkey(), 1, *blockhash, 0),
+                system_transaction::create_user_account(id, &keypair.pubkey(), 1, *blockhash),
                 timestamp(),
             )
         })

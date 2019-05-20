@@ -676,7 +676,7 @@ mod tests {
     fn test_to_packets() {
         let keypair = Keypair::new();
         let hash = Hash::new(&[1; 32]);
-        let tx = system_transaction::create_user_account(&keypair, &keypair.pubkey(), 1, hash, 0);
+        let tx = system_transaction::create_user_account(&keypair, &keypair.pubkey(), 1, hash);
         let rv = to_packets(&vec![tx.clone(); 1]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].packets.len(), 1);

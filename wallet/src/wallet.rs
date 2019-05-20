@@ -543,7 +543,6 @@ fn process_deploy(
         1,
         program_data.len() as u64,
         &bpf_loader::id(),
-        0,
     );
     trace!("Creating program account");
     let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
@@ -598,7 +597,7 @@ fn process_pay(
     let (blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     if timestamp == None && *witnesses == None {
-        let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash, 0);
+        let mut tx = system_transaction::transfer(&config.keypair, to, lamports, blockhash);
         let result = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair]);
         let signature_str = log_instruction_custom_error::<SystemError>(result)?;
         Ok(signature_str.to_string())

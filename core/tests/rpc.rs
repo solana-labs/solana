@@ -38,7 +38,7 @@ fn test_rpc_send_tx() {
     let blockhash: Hash = json["result"][0].as_str().unwrap().parse().unwrap();
 
     info!("blockhash: {:?}", blockhash);
-    let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash, 0);
+    let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
     let serial_tx = serialize(&tx).unwrap();
 
     let client = reqwest::Client::new();

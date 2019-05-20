@@ -422,7 +422,6 @@ impl Replicator {
                 1,
                 1024 * 4, // TODO the account space needs to be well defined somewhere
                 &solana_storage_api::id(),
-                0,
             );
             let signature = client.async_send_transaction(tx)?;
             client
