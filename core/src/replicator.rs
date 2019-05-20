@@ -137,7 +137,7 @@ fn create_request_processor(
     let t_responder = responder("replicator-responder", storage_socket.clone(), r_responder);
     thread_handles.push(t_responder);
 
-    let exit4 = exit.clone();
+    let exit = exit.clone();
     let t_processor = spawn(move || loop {
         let packets = r_reader.recv_timeout(Duration::from_secs(1));
         if let Ok(packets) = packets {
@@ -156,12 +156,11 @@ fn create_request_processor(
                 }
             }
         }
-        if exit4.load(Ordering::Relaxed) {
+        if exit.load(Ordering::Relaxed) {
             break;
         }
     });
     thread_handles.push(t_processor);
-
     thread_handles
 }
 
