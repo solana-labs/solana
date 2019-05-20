@@ -18,7 +18,7 @@ use solana_metrics::{datapoint_warn, inc_new_counter_error, inc_new_counter_info
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::KeypairUtil;
 use solana_sdk::timing::{self, duration_as_ms};
 use solana_sdk::transaction::Transaction;
 use solana_vote_api::vote_instruction;
@@ -71,10 +71,10 @@ impl ForkProgress {
 
 impl ReplayStage {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
-    pub fn new(
+    pub fn new<T>(
         my_id: &Pubkey,
         vote_account: &Pubkey,
-        voting_keypair: Option<&Arc<Keypair>>,
+        voting_keypair: Option<&Arc<T>>,
         blocktree: Arc<Blocktree>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -83,7 +83,10 @@ impl ReplayStage {
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-    ) -> (Self, Receiver<(u64, Pubkey)>, Receiver<Vec<u64>>) {
+    ) -> (Self, Receiver<(u64, Pubkey)>, Receiver<Vec<u64>>)
+    where
+        T: 'static + KeypairUtil + Send + Sync,
+    {
         let (root_slot_sender, root_slot_receiver) = channel();
         let (slot_full_sender, slot_full_receiver) = channel();
         trace!("replay stage");
@@ -289,18 +292,21 @@ impl ReplayStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn handle_votable_bank(
+    fn handle_votable_bank<T>(
         bank: &Arc<Bank>,
         bank_forks: &Arc<RwLock<BankForks>>,
         locktower: &mut Locktower,
         progress: &mut HashMap<u64, ForkProgress>,
         vote_account: &Pubkey,
-        voting_keypair: &Option<Arc<Keypair>>,
+        voting_keypair: &Option<Arc<T>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: &Arc<Blocktree>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         root_slot_sender: &Sender<Vec<u64>>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        T: 'static + KeypairUtil + Send + Sync,
+    {
         if let Some(new_root) = locktower.record_vote(bank.slot()) {
             let mut rooted_slots = bank
                 .parents()
@@ -322,15 +328,14 @@ impl ReplayStage {
             let vote_ix = vote_instruction::vote(
                 &node_keypair.pubkey(),
                 &vote_account,
-                &vote_account,
+                &voting_keypair.pubkey(),
                 locktower.recent_votes(),
             );
 
-            let vote_tx = Transaction::new_signed_instructions(
-                &[node_keypair.as_ref(), voting_keypair.as_ref()],
-                vec![vote_ix],
-                bank.last_blockhash(),
-            );
+            let mut vote_tx = Transaction::new_unsigned_instructions(vec![vote_ix]);
+            let blockhash = bank.last_blockhash();
+            vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
+            vote_tx.partial_sign(&[voting_keypair.as_ref()], blockhash);
             cluster_info.write().unwrap().push_vote(vote_tx);
         }
         Ok(())

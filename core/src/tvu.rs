@@ -55,9 +55,9 @@ impl Tvu {
     /// * `sockets` - fetch, repair, and retransmit sockets
     /// * `blocktree` - the ledger itself
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
-    pub fn new(
+    pub fn new<T>(
         vote_account: &Pubkey,
-        voting_keypair: Option<&Arc<Keypair>>,
+        voting_keypair: Option<&Arc<T>>,
         storage_keypair: &Arc<Keypair>,
         bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -73,7 +73,10 @@ impl Tvu {
         exit: &Arc<AtomicBool>,
         genesis_blockhash: &Hash,
         completed_slots_receiver: CompletedSlotsReceiver,
-    ) -> Self {
+    ) -> Self
+    where
+        T: 'static + KeypairUtil + Sync + Send,
+    {
         let keypair: Arc<Keypair> = cluster_info
             .read()
             .expect("Unable to read from cluster_info during Tvu creation")
