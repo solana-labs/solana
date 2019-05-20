@@ -15,6 +15,7 @@ use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction::{self, Transaction};
+use solana_vote_api::vote_state::VoteState;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -101,13 +102,13 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank().transaction_count() as u64)
     }
 
-    fn get_epoch_vote_accounts(&self) -> Result<Vec<(Pubkey, (u64, Account))>> {
+    fn get_epoch_vote_accounts(&self) -> Result<Vec<(Pubkey, u64, VoteState)>> {
         let bank = self.bank();
         Ok(bank
             .epoch_vote_accounts(bank.get_stakers_epoch(bank.slot()))
             .ok_or_else(Error::invalid_request)?
             .iter()
-            .map(|(k, (s, a))| (*k, (*s, a.clone()))) // cloned()...
+            .map(|(k, (s, a))| (*k, *s, VoteState::from(a).unwrap_or_default()))
             .collect::<Vec<_>>())
     }
 
@@ -206,7 +207,7 @@ pub trait RpcSol {
     fn get_slot_leader(&self, _: Self::Metadata) -> Result<String>;
 
     #[rpc(meta, name = "getEpochVoteAccounts")]
-    fn get_epoch_vote_accounts(&self, _: Self::Metadata) -> Result<Vec<(Pubkey, (u64, Account))>>;
+    fn get_epoch_vote_accounts(&self, _: Self::Metadata) -> Result<Vec<(Pubkey, u64, VoteState)>>;
 
     #[rpc(meta, name = "getStorageBlockhash")]
     fn get_storage_blockhash(&self, _: Self::Metadata) -> Result<String>;
@@ -442,7 +443,7 @@ impl RpcSol for RpcSolImpl {
     fn get_epoch_vote_accounts(
         &self,
         meta: Self::Metadata,
-    ) -> Result<Vec<(Pubkey, (u64, Account))>> {
+    ) -> Result<Vec<(Pubkey, u64, VoteState)>> {
         meta.request_processor
             .read()
             .unwrap()

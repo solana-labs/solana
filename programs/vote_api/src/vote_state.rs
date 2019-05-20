@@ -91,6 +91,11 @@ impl VoteState {
         serialized_size(&vote_state).unwrap() as usize
     }
 
+    // utility function, used by Stakes, tests
+    pub fn from(account: &Account) -> Option<VoteState> {
+        account.state().ok()
+    }
+
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
         deserialize(input).map_err(|_| InstructionError::InvalidAccountData)
     }
