@@ -61,7 +61,7 @@ echo --- Creating tarball
   source ./target/perf-libs/env.sh
   (
     cd fullnode
-    cargo install +"$rust_stable" --path . --features=cuda --root ../solana-release-cuda
+    cargo +"$rust_stable" install --path . --features=cuda --root ../solana-release-cuda
   )
   cp solana-release-cuda/bin/solana-fullnode solana-release/bin/solana-fullnode-cuda
   cp -a scripts multinode-demo solana-release/
