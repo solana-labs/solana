@@ -412,7 +412,11 @@ fn process_authorize_voter(
         new_authorized_voter_id,            // new vote signer
     )];
 
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let mut tx = Transaction::new_signed_instructions(
+        &[&config.keypair, &authorized_voter_keypair],
+        ixs,
+        recent_blockhash,
+    );
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
