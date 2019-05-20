@@ -308,12 +308,19 @@ impl ReplayStage {
         T: 'static + KeypairUtil + Send + Sync,
     {
         if let Some(new_root) = locktower.record_vote(bank.slot()) {
-            let mut rooted_slots = bank
+            // get the root bank before squash
+            let root_bank = bank_forks
+                .read()
+                .unwrap()
+                .get(new_root)
+                .expect("Root bank doesn't exist")
+                .clone();
+            let mut rooted_slots = root_bank
                 .parents()
                 .into_iter()
                 .map(|bank| bank.slot())
                 .collect::<Vec<_>>();
-            rooted_slots.push(bank.slot());
+            rooted_slots.push(root_bank.slot());
             bank_forks.write().unwrap().set_root(new_root);
             leader_schedule_cache.set_root(new_root);
             blocktree.set_root(new_root)?;
