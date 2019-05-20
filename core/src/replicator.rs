@@ -424,13 +424,12 @@ impl Replicator {
         let bal = client.poll_get_balance(&storage_keypair.pubkey());
         if bal.is_err() || bal.unwrap() == 0 {
             let (blockhash, _fee_calculator) = client.get_recent_blockhash().expect("blockhash");
-            //TODO the account space needs to be well defined somewhere
             let tx = system_transaction::create_account(
                 keypair,
                 &storage_keypair.pubkey(),
                 blockhash,
                 1,
-                1024 * 4,
+                1024 * 4, // TODO the account space needs to be well defined somewhere
                 &solana_storage_api::id(),
                 0,
             );
