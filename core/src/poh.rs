@@ -226,7 +226,7 @@ mod tests {
         assert_eq!(poh.remaining_hashes, 2);
         assert!(poh.tick().is_none());
         assert_eq!(poh.remaining_hashes, 1);
-        assert!(poh.tick().is_some());
+        assert_matches!(poh.tick(), Some(PohEntry { num_hashes: 2, .. }));
         assert_eq!(poh.remaining_hashes, 2); // Ready for the next tick
     }
 
@@ -255,7 +255,11 @@ mod tests {
         assert!(poh.hash(9));
         assert_eq!(poh.remaining_hashes, 1);
         assert!(poh.record(Hash::default()).is_none()); // <-- record() rejected to avoid exceeding hashes_per_tick
-        poh.tick();
-        assert!(poh.record(Hash::default()).is_some()); // <-- record() ok
+        assert_matches!(poh.tick(), Some(PohEntry { num_hashes: 10, .. }));
+        assert_matches!(
+            poh.record(Hash::default()),
+            Some(PohEntry { num_hashes: 1, .. }) // <-- record() ok
+        );
+        assert_eq!(poh.remaining_hashes, 9);
     }
 }
