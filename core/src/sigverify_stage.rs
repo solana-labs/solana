@@ -75,12 +75,8 @@ impl SigVerifyStage {
         let verified_batch = Self::verify_batch(batch, sigverify_disabled);
         inc_new_counter_info!("sigverify_stage-verified_packets_send", len);
 
-        // Batch may be very large. Break it up so banking_stage can have maximum
-        // parallelism.
-        for item in verified_batch {
-            if sendr.send(vec![item]).is_err() {
-                return Err(Error::SendError);
-            }
+        if sendr.send(verified_batch).is_err() {
+            return Err(Error::SendError);
         }
 
         let total_time_ms = timing::duration_as_ms(&now.elapsed());

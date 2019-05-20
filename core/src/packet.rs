@@ -18,7 +18,6 @@ use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
 
 pub type SharedBlob = Arc<RwLock<Blob>>;
 pub type SharedBlobs = Vec<SharedBlob>;
@@ -214,9 +213,6 @@ pub enum BlobError {
 
 impl Packets {
     pub fn recv_from(&mut self, socket: &UdpSocket) -> Result<usize> {
-        const MAX_PACKETS_PER_VEC: usize = 1024;
-        const MAX_MILLIS_PER_BATCH: u128 = 2;
-
         let mut i = 0;
         //DOCUMENTED SIDE-EFFECT
         //Performance out of the IO without poll
@@ -226,16 +222,11 @@ impl Packets {
         //  * set it back to blocking before returning
         socket.set_nonblocking(false)?;
         trace!("receiving on {}", socket.local_addr().unwrap());
-        let start = Instant::now();
         loop {
             self.packets.resize(i + NUM_RCVMMSGS, Packet::default());
             match recv_mmsg(socket, &mut self.packets[i..]) {
                 Err(_) if i > 0 => {
-                    if i >= MAX_PACKETS_PER_VEC
-                        || start.elapsed().as_millis() > MAX_MILLIS_PER_BATCH
-                    {
-                        break;
-                    }
+                    break;
                 }
                 Err(e) => {
                     trace!("recv_from err {:?}", e);
@@ -247,9 +238,7 @@ impl Packets {
                     }
                     trace!("got {} packets", npkts);
                     i += npkts;
-                    if i >= MAX_PACKETS_PER_VEC
-                        || start.elapsed().as_millis() > MAX_MILLIS_PER_BATCH
-                    {
+                    if npkts != NUM_RCVMMSGS || i >= 1024 {
                         break;
                     }
                 }
