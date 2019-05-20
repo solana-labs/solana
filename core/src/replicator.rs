@@ -9,8 +9,7 @@ use crate::packet::to_shared_blob;
 use crate::repair_service::{RepairSlotRange, RepairStrategy};
 use crate::result::Result;
 use crate::service::Service;
-use crate::streamer::receiver;
-use crate::streamer::responder;
+use crate::streamer::{receiver, responder};
 use crate::window_service::WindowService;
 use bincode::deserialize;
 use rand::thread_rng;
@@ -31,23 +30,15 @@ use solana_sdk::transaction::Transaction;
 use solana_sdk::transport::TransportError;
 use solana_storage_api::{get_segment_from_slot, storage_instruction, SLOTS_PER_SEGMENT};
 use std::fs::File;
-use std::io;
-use std::io::BufReader;
-use std::io::Read;
-use std::io::Seek;
-use std::io::SeekFrom;
-use std::io::{Error, ErrorKind};
+use std::io::{self, BufReader, Error, ErrorKind, Read, Seek, SeekFrom};
 use std::mem::size_of;
 use std::net::{SocketAddr, UdpSocket};
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::thread::spawn;
-use std::thread::JoinHandle;
+use std::thread::{sleep, spawn, JoinHandle};
 use std::time::Duration;
 
 #[derive(Serialize, Deserialize)]
@@ -76,7 +67,7 @@ pub struct Replicator {
     blocktree: Arc<Blocktree>,
 }
 
-pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
+pub(crate) fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
     let in_file = File::open(in_path)?;
     let metadata = in_file.metadata()?;
     let mut buffer_file = BufReader::new(in_file);
@@ -214,7 +205,6 @@ impl Replicator {
 
         let (storage_blockhash, storage_slot) = Self::poll_for_blockhash_and_slot(&cluster_info)?;
 
-        let node_info = node.info.clone();
         let signature = storage_keypair.sign(storage_blockhash.as_ref());
         let slot = get_slot_from_blockhash(&signature, storage_slot);
         info!("replicating slot: {}", slot);
@@ -264,6 +254,7 @@ impl Replicator {
             let exit = exit.clone();
             let blocktree = blocktree.clone();
             let cluster_info = cluster_info.clone();
+            let node_info = node.info.clone();
             spawn(move || {
                 Self::wait_for_ledger_download(slot, &blocktree, &exit, &node_info, cluster_info)
             })
@@ -496,10 +487,6 @@ impl Replicator {
         }
     }
 
-    pub fn slot(&self) -> u64 {
-        self.slot
-    }
-
     fn poll_for_blockhash_and_slot(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Result<(String, u64)> {
@@ -535,14 +522,9 @@ impl Replicator {
 
 #[cfg(test)]
 mod tests {
-    use crate::replicator::sample_file;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
-    use std::fs::File;
+    use super::*;
     use std::fs::{create_dir_all, remove_file};
     use std::io::Write;
-    use std::mem::size_of;
-    use std::path::PathBuf;
 
     fn tmp_file_path(name: &str) -> PathBuf {
         use std::env;
