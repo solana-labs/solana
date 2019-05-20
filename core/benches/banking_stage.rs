@@ -69,7 +69,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let mut packets = vec![];
         for batch in batches {
             let batch_len = batch.packets.len();
-            packets.push((Rc::new(batch), vec![0usize; batch_len]));
+            packets.push((batch, vec![0usize; batch_len]));
         }
         // This tests the performance of buffering packets.
         // If the packet buffers are copied, performance will be poor.
