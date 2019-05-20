@@ -41,7 +41,7 @@ Install rustc, cargo and rustfmt:
 ```bash
 $ curl https://sh.rustup.rs -sSf | sh
 $ source $HOME/.cargo/env
-$ rustup component add rustfmt-preview
+$ rustup component add rustfmt
 ```
 
 If your rustc version is lower than 1.34.0, please update it:
@@ -66,7 +66,7 @@ $ cd solana
 Build
 
 ```bash
-$ cargo build --all
+$ cargo build
 ```
 
 Then to run a minimal local cluster
@@ -80,7 +80,7 @@ Testing
 Run the test suite:
 
 ```bash
-$ cargo test --all
+$ cargo test
 ```
 
 Local Testnet
