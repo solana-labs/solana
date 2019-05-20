@@ -26,7 +26,6 @@ use solana_sdk::timing::{
     MAX_TRANSACTION_FORWARDING_DELAY,
 };
 use solana_sdk::transaction::{self, Transaction, TransactionError};
-use std::cmp;
 use std::net::UdpSocket;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -70,7 +69,8 @@ impl BankingStage {
             poh_recorder,
             verified_receiver,
             verified_vote_receiver,
-            cmp::max(2, Self::num_threads()),
+            2, // 1 for voting, 1 for banking.
+               // More than 2 threads is slower in testnet testing.
         )
     }
 
