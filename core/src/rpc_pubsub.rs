@@ -298,7 +298,7 @@ mod tests {
         let rpc = RpcSolPubSubImpl::default();
 
         // Test signature subscriptions
-        let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash, 0);
+        let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
 
         let session = create_session();
         let (subscriber, _id_receiver, mut receiver) =
@@ -333,7 +333,7 @@ mod tests {
         let rpc = RpcSolPubSubImpl::default();
         io.extend_with(rpc.to_delegate());
 
-        let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash, 0);
+        let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
             tx.signatures[0].to_string()
@@ -395,7 +395,6 @@ mod tests {
             &contract_funds.pubkey(),
             51,
             blockhash,
-            0,
         );
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
 
@@ -439,8 +438,7 @@ mod tests {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
 
-        let tx =
-            system_transaction::create_user_account(&alice, &witness.pubkey(), 1, blockhash, 0);
+        let tx = system_transaction::create_user_account(&alice, &witness.pubkey(), 1, blockhash);
         process_transaction_and_notify(&bank_forks, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
         let ix = budget_instruction::apply_signature(
@@ -514,7 +512,7 @@ mod tests {
         let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
         rpc.account_subscribe(session, subscriber, bob.pubkey().to_string(), Some(2));
 
-        let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash, 0);
+        let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
         bank_forks
             .write()
             .unwrap()
@@ -539,7 +537,7 @@ mod tests {
         let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
         rpc.account_subscribe(session, subscriber, bob.pubkey().to_string(), Some(2));
 
-        let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash, 0);
+        let tx = system_transaction::transfer(&alice, &bob.pubkey(), 100, blockhash);
         bank_forks
             .write()
             .unwrap()

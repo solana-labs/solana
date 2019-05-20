@@ -117,8 +117,8 @@ mod tests {
         let pubkey2 = Pubkey::new_rand();
 
         let txs = vec![
-            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash(), 0),
-            system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_block.hash(), 0),
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_block.hash()),
+            system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_block.hash()),
         ];
 
         (bank, txs)

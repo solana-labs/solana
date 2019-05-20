@@ -576,7 +576,6 @@ mod tests {
             &keypair.pubkey(),
             1,
             slot_entries.last().unwrap().hash,
-            0,
         );
 
         // First, ensure the TX is rejected because of the unregistered last ID
@@ -611,7 +610,6 @@ mod tests {
                 &keypair.pubkey(),
                 1,
                 blockhash,
-                0,
             );
             let entry = Entry::new(&last_entry_hash, 1, vec![tx]);
             last_entry_hash = entry.hash;
@@ -625,7 +623,6 @@ mod tests {
                 &keypair2.pubkey(),
                 42,
                 blockhash,
-                0,
             );
             let entry = Entry::new(&last_entry_hash, 1, vec![tx]);
             last_entry_hash = entry.hash;
@@ -712,7 +709,6 @@ mod tests {
             &keypair1.pubkey(),
             2,
             bank.last_blockhash(),
-            0,
         );
         let entry_1 = next_entry(&blockhash, 1, vec![tx]);
         let tx = system_transaction::create_user_account(
@@ -720,7 +716,6 @@ mod tests {
             &keypair2.pubkey(),
             2,
             bank.last_blockhash(),
-            0,
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(process_entries(&bank, &[entry_1, entry_2]), Ok(()));
@@ -750,7 +745,6 @@ mod tests {
                 &mint_keypair.pubkey(),
                 1,
                 bank.last_blockhash(),
-                0,
             )],
         );
 
@@ -763,14 +757,12 @@ mod tests {
                     &keypair3.pubkey(),
                     2,
                     bank.last_blockhash(),
-                    0,
                 ), // should be fine
                 system_transaction::create_user_account(
                     &keypair1,
                     &mint_keypair.pubkey(),
                     2,
                     bank.last_blockhash(),
-                    0,
                 ), // will collide
             ],
         );
@@ -809,14 +801,12 @@ mod tests {
                     &mint_keypair.pubkey(),
                     1,
                     bank.last_blockhash(),
-                    0,
                 ),
                 system_transaction::transfer(
                     &keypair4,
                     &keypair4.pubkey(),
                     1,
                     Hash::default(), // Should cause a transaction failure with BlockhashNotFound
-                    0,
                 ),
             ],
         );
@@ -830,14 +820,12 @@ mod tests {
                     &keypair3.pubkey(),
                     2,
                     bank.last_blockhash(),
-                    0,
                 ), // should be fine
                 system_transaction::create_user_account(
                     &keypair1,
                     &mint_keypair.pubkey(),
                     2,
                     bank.last_blockhash(),
-                    0,
                 ), // will collide
             ],
         );
@@ -882,7 +870,6 @@ mod tests {
             &keypair1.pubkey(),
             1,
             bank.last_blockhash(),
-            0,
         );
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         let tx = system_transaction::create_user_account(
@@ -890,7 +877,6 @@ mod tests {
             &keypair2.pubkey(),
             1,
             bank.last_blockhash(),
-            0,
         );
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
@@ -901,7 +887,6 @@ mod tests {
             &keypair3.pubkey(),
             1,
             bank.last_blockhash(),
-            0,
         );
         let entry_1 = next_entry(&blockhash, 1, vec![tx]);
         let tx = system_transaction::create_user_account(
@@ -909,7 +894,6 @@ mod tests {
             &keypair4.pubkey(),
             1,
             bank.last_blockhash(),
-            0,
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(process_entries(&bank, &[entry_1, entry_2]), Ok(()));
@@ -933,7 +917,6 @@ mod tests {
             &keypair1.pubkey(),
             1,
             bank.last_blockhash(),
-            0,
         );
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         let tx = system_transaction::create_user_account(
@@ -941,7 +924,6 @@ mod tests {
             &keypair2.pubkey(),
             1,
             bank.last_blockhash(),
-            0,
         );
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
@@ -952,7 +934,7 @@ mod tests {
 
         // ensure bank can process 2 entries that do not have a common account and tick is registered
         let tx =
-            system_transaction::create_user_account(&keypair2, &keypair3.pubkey(), 1, blockhash, 0);
+            system_transaction::create_user_account(&keypair2, &keypair3.pubkey(), 1, blockhash);
         let entry_1 = next_entry(&blockhash, 1, vec![tx]);
         let tick = next_entry(&entry_1.hash, 1, vec![]);
         let tx = system_transaction::create_user_account(
@@ -960,7 +942,6 @@ mod tests {
             &keypair4.pubkey(),
             1,
             bank.last_blockhash(),
-            0,
         );
         let entry_2 = next_entry(&tick.hash, 1, vec![tx]);
         assert_eq!(
@@ -976,7 +957,6 @@ mod tests {
             &keypair3.pubkey(),
             1,
             bank.last_blockhash(),
-            0,
         );
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
@@ -1007,13 +987,8 @@ mod tests {
         );
 
         // Make sure other errors don't update the signature cache
-        let tx = system_transaction::create_user_account(
-            &mint_keypair,
-            &pubkey,
-            1000,
-            Hash::default(),
-            0,
-        );
+        let tx =
+            system_transaction::create_user_account(&mint_keypair, &pubkey, 1000, Hash::default());
         let signature = tx.signatures[0];
 
         // Should fail with blockhash not found
@@ -1040,14 +1015,12 @@ mod tests {
             &keypair1.pubkey(),
             1,
             bank.last_blockhash(),
-            0,
         );
         let fail_tx = system_transaction::create_user_account(
             &mint_keypair,
             &keypair2.pubkey(),
             2,
             bank.last_blockhash(),
-            0,
         );
 
         let entry_1_to_mint = next_entry(
@@ -1099,7 +1072,6 @@ mod tests {
                             &keypairs[i + NUM_TRANSFERS].pubkey(),
                             1,
                             bank.last_blockhash(),
-                            0,
                         )],
                     )
                 })
@@ -1117,7 +1089,6 @@ mod tests {
                             &keypairs[i].pubkey(),
                             1,
                             bank.last_blockhash(),
-                            0,
                         )],
                     )
                 })

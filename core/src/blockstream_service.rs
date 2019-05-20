@@ -146,7 +146,6 @@ mod test {
             &keypair.pubkey(),
             1,
             Hash::default(),
-            0,
         );
         let entry = Entry::new(&mut blockhash, 1, vec![tx]);
         blockhash = entry.hash;

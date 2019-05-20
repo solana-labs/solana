@@ -320,7 +320,6 @@ mod tests {
             1,
             16,
             &solana_budget_api::id(),
-            0,
         );
         bank_forks
             .write()
@@ -372,7 +371,6 @@ mod tests {
             1,
             16,
             &solana_budget_api::id(),
-            0,
         );
         bank_forks
             .write()
@@ -416,7 +414,7 @@ mod tests {
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let alice = Keypair::new();
-        let tx = system_transaction::transfer(&mint_keypair, &alice.pubkey(), 20, blockhash, 0);
+        let tx = system_transaction::transfer(&mint_keypair, &alice.pubkey(), 20, blockhash);
         let signature = tx.signatures[0];
         bank_forks
             .write()
