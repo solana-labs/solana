@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Checks the status of lcoal metrics
+# Checks the status of local metrics
 #
 
 cd "$(dirname "$0")"

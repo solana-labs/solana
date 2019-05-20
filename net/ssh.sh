@@ -46,7 +46,11 @@ fi
 printNode() {
   declare nodeType=$1
   declare ip=$2
-  printf "  %-25s | For logs run: $0 $ip tail -f solana/$nodeType.log\n" "$0 $ip"
+  if [[ ! $nodeType = influxDb ]]; then
+    printf "  %-25s | For logs run: $0 $ip tail -f solana/$nodeType.log\n" "$0 $ip"
+  else
+    printf "  %-25s \n" "$0 $ip"
+  fi
 }
 
 echo Full nodes:
@@ -69,6 +73,15 @@ if [[ ${#blockstreamerIpList[@]} -eq 0 ]]; then
 else
   for ipAddress in "${blockstreamerIpList[@]}"; do
     printNode fullnode "$ipAddress"
+  done
+fi
+echo
+echo Influx DB Servers:
+if [[ ${#influxDbIpList[@]} -eq 0 ]]; then
+  echo "  None"
+else
+  for ipAddress in "${influxDbIpList[@]}"; do
+    printNode influxDb "$ipAddress"
   done
 fi
 echo

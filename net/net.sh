@@ -566,7 +566,6 @@ start() {
   ls -l "$netLogDir"
 }
 
-
 stopNode() {
   local ipAddress=$1
   local block=$2

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
+set -x
 
 here=$(dirname "$0")
 # shellcheck source=net/common.sh
@@ -18,6 +19,7 @@ gce)
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType="--custom-cpu 16 --custom-memory 20GB"
   blockstreamerMachineType="--machine-type n1-standard-8"
+  influxMachineType="--machine-type n1-standard-16"
   ;;
 ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
@@ -33,6 +35,7 @@ ec2)
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType=c5.2xlarge
   blockstreamerMachineType=c5.2xlarge
+  influxMachineType=c5.2xlarge
   ;;
 azure)
   # shellcheck source=net/scripts/azure-provider.sh
@@ -45,14 +48,13 @@ azure)
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType=Standard_D16s_v3
   blockstreamerMachineType=Standard_D16s_v3
+  influxMachineType=Standard_D16s_v3
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
   ;;
 esac
 
-
-prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
 additionalFullNodeCount=5
 clientNodeCount=1
 blockstreamer=false
@@ -65,6 +67,10 @@ publicNetwork=false
 enableGpu=false
 customAddress=
 zones=()
+
+doInfluxCommand=false
+influxGroupName=influx_group
+influxBootDiskSizeInGb=1000
 
 containsZone() {
   local e match="$1"
@@ -99,7 +105,9 @@ Manage testnet instances
                       zone
    -x               - append to the existing configuration instead of creating a
                       new configuration
-   -f               - Discard validator nodes that didn't bootup successfully
+   -f               - Discard validator nodes that did not bootup successfully
+   -i               - Create, delete or config a single influxDB instance,
+                      not a testnet
 
  create-specific options:
    -n [number]      - Number of additional fullnodes (default: $additionalFullNodeCount)
@@ -125,19 +133,18 @@ Manage testnet instances
 
  info-specific options:
    none
-
 EOF
   exit $exitcode
 }
 
-
 command=$1
 [[ -n $command ]] || usage
 shift
-[[ $command = create || $command = config || $command = info || $command = delete ]] ||
+[[ $command = create || $command = config || $command = info || $command = \
+delete || $command = influx ]] ||
   usage "Invalid command: $command"
 
-while getopts "h?p:Pn:c:z:gG:a:d:uxf" opt; do
+while getopts "h?p:Pn:c:z:gG:a:d:uxfi" opt; do
   case $opt in
   h | \?)
     usage
@@ -185,6 +192,9 @@ while getopts "h?p:Pn:c:z:gG:a:d:uxf" opt; do
   f)
     failOnValidatorBootupFailure=false
     ;;
+  i)
+    doInfluxCommand=true
+    ;;
   *)
     usage "unhandled option: $opt"
     ;;
@@ -202,6 +212,14 @@ if [[ $cloudProvider = ec2 ]]; then
   sshPrivateKey="$HOME/.ssh/solana-net-id_$prefix"
 else
   sshPrivateKey="$netConfigDir/id_$prefix"
+fi
+
+if [[ -z $prefix ]]; then
+  if $doInfluxCommand ; then
+    prefix=influx-db-server
+  else
+    prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
+  fi
 fi
 
 case $cloudProvider in
@@ -419,59 +437,73 @@ EOF
     fi
   }
 
-  if $externalNodes; then
-    echo "Bootstrap leader is already configured"
+  if $doInfluxCommand ; then
+    echo "Looking for influxDB server instance..."
+    for zone in "${zones[@]}"; do
+      cloud_FindInstance "$prefix-$zone"
+      [[ ${#instances[@]} -eq 1 ]] || {
+        echo "Unable to find influx DB server instance"
+        exit 1
+      }
+      echo "influxDbIpList=()" >> "$configFile"
+      echo "influxDbIpListPrivate=()" >> "$configFile"
+      cloud_ForEachInstance recordInstanceIp true influxDbIpList
+    done
   else
-    echo "Looking for bootstrap leader instance..."
-    cloud_FindInstance "$prefix-bootstrap-leader"
-    [[ ${#instances[@]} -eq 1 ]] || {
-      echo "Unable to find bootstrap leader"
-      exit 1
+    if $externalNodes; then
+      echo "Bootstrap leader is already configured"
+    else
+      echo "Looking for bootstrap leader instance..."
+      cloud_FindInstance "$prefix-bootstrap-leader"
+      [[ ${#instances[@]} -eq 1 ]] || {
+        echo "Unable to find bootstrap leader"
+        exit 1
+      }
+
+      echo "fullnodeIpList=()" >> "$configFile"
+      echo "fullnodeIpListPrivate=()" >> "$configFile"
+      cloud_ForEachInstance recordInstanceIp true fullnodeIpList
+    fi
+
+    if [[ $additionalFullNodeCount -gt 0 ]]; then
+      for zone in "${zones[@]}"; do
+        echo "Looking for additional fullnode instances in $zone ..."
+        cloud_FindInstances "$prefix-$zone-fullnode"
+        if [[ ${#instances[@]} -gt 0 ]]; then
+          cloud_ForEachInstance recordInstanceIp "$failOnValidatorBootupFailure" fullnodeIpList
+        else
+          echo "Unable to find additional fullnodes"
+          if $failOnValidatorBootupFailure; then
+            exit 1
+          fi
+        fi
+      done
+    fi
+
+    if $externalNodes; then
+      echo "Let's not reset the current client configuration"
+    else
+      echo "clientIpList=()" >> "$configFile"
+      echo "clientIpListPrivate=()" >> "$configFile"
+    fi
+    echo "Looking for client bencher instances..."
+    cloud_FindInstances "$prefix-client"
+    [[ ${#instances[@]} -eq 0 ]] || {
+      cloud_ForEachInstance recordInstanceIp true clientIpList
     }
 
-    echo "fullnodeIpList=()" >> "$configFile"
-    echo "fullnodeIpListPrivate=()" >> "$configFile"
-    cloud_ForEachInstance recordInstanceIp true fullnodeIpList
+    if $externalNodes; then
+      echo "Let's not reset the current blockstream configuration"
+    else
+      echo "blockstreamerIpList=()" >> "$configFile"
+      echo "blockstreamerIpListPrivate=()" >> "$configFile"
+    fi
+    echo "Looking for blockstreamer instances..."
+    cloud_FindInstances "$prefix-blockstreamer"
+    [[ ${#instances[@]} -eq 0 ]] || {
+      cloud_ForEachInstance recordInstanceIp true blockstreamerIpList
+    }
   fi
-
-  if [[ $additionalFullNodeCount -gt 0 ]]; then
-    for zone in "${zones[@]}"; do
-      echo "Looking for additional fullnode instances in $zone ..."
-      cloud_FindInstances "$prefix-$zone-fullnode"
-      if [[ ${#instances[@]} -gt 0 ]]; then
-        cloud_ForEachInstance recordInstanceIp "$failOnValidatorBootupFailure" fullnodeIpList
-      else
-        echo "Unable to find additional fullnodes"
-        if $failOnValidatorBootupFailure; then
-          exit 1
-        fi
-      fi
-    done
-  fi
-
-  if $externalNodes; then
-    echo "Let's not reset the current client configuration"
-  else
-    echo "clientIpList=()" >> "$configFile"
-    echo "clientIpListPrivate=()" >> "$configFile"
-  fi
-  echo "Looking for client bencher instances..."
-  cloud_FindInstances "$prefix-client"
-  [[ ${#instances[@]} -eq 0 ]] || {
-    cloud_ForEachInstance recordInstanceIp true clientIpList
-  }
-
-  if $externalNodes; then
-    echo "Let's not reset the current blockstream configuration"
-  else
-    echo "blockstreamerIpList=()" >> "$configFile"
-    echo "blockstreamerIpListPrivate=()" >> "$configFile"
-  fi
-  echo "Looking for blockstreamer instances..."
-  cloud_FindInstances "$prefix-blockstreamer"
-  [[ ${#instances[@]} -eq 0 ]] || {
-    cloud_ForEachInstance recordInstanceIp true blockstreamerIpList
-  }
 
   echo "Wrote $configFile"
   $metricsWriteDatapoint "testnet-deploy net-config-complete=1"
@@ -503,12 +535,7 @@ delete() {
   $metricsWriteDatapoint "testnet-deploy net-delete-complete=1"
 }
 
-case $command in
-delete)
-  delete
-  ;;
-
-create)
+create() {
   [[ -n $additionalFullNodeCount ]] || usage "Need number of nodes"
 
   delete
@@ -650,10 +677,94 @@ EOF
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
+}
 
+create_influx_instance() {
+  delete
+
+  rm -rf "$sshPrivateKey"{,.pub}
+
+  # Note: using rsa because |aws ec2 import-key-pair| seems to fail for ecdsa
+  ssh-keygen -t rsa -N '' -f "$sshPrivateKey"
+
+
+  declare startupScript="$netConfigDir"/instance-startup-script.sh
+  cat > "$startupScript" <<EOF
+#!/usr/bin/env bash
+# autogenerated at $(date)
+set -ex
+
+cat > /etc/motd <<EOM
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  This instance has not been fully configured.
+
+  See startup script log messages in /var/log/syslog for status:
+    $ sudo cat /var/log/syslog | egrep \\(startup-script\\|cloud-init\)
+
+  To block until setup is complete, run:
+    $ until [[ -f /.instance-startup-complete ]]; do sleep 1; done
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+EOM
+
+# Place the generated private key at /solana-id_ecdsa so it's retrievable by anybody
+# who is able to log into this machine
+cat > /solana-id_ecdsa <<EOK
+$(cat "$sshPrivateKey")
+EOK
+cat > /solana-id_ecdsa.pub <<EOK
+$(cat "$sshPrivateKey.pub")
+EOK
+chmod 444 /solana-id_ecdsa
+
+USER=\$(id -un)
+
+$(
+  cd "$here"/scripts/
+  cat \
+    disable-background-upgrades.sh \
+    create-solana-user.sh \
+    add-solana-user-authorized_keys.sh \
+    install-earlyoom.sh \
+    install-libssl-compatability.sh \
+    install-nodejs.sh \
+    install-redis.sh \
+    install-rsync.sh \
+    network-config.sh \
+
+)
+
+cat > /etc/motd <<EOM
+$(printNetworkInfo)
+EOM
+
+touch /.instance-startup-complete
+
+EOF
+
+  for zone in "${zones[@]}"; do
+    cloud_Initialize "$influxGroupName" "$zone"
+  done
+
+  cloud_CreateInstances "$influxGroupName" "$prefix-$zone" 1 \
+    false "$influxMachineType" "${zones[0]}" "$influxBootDiskSizeInGb" \
+    "$startupScript" "$customAddress" ""
+
+}
+
+case $command in
+delete)
+  delete
+  ;;
+create)
+  if $doInfluxCommand ; then
+    create_influx_instance
+  else
+    create
+  fi
   prepareInstancesAndWriteConfigFile
   ;;
-
 config)
   prepareInstancesAndWriteConfigFile
   ;;

@@ -36,6 +36,10 @@ clientIpListZone=()
 blockstreamerIpList=()
 blockstreamerIpListPrivate=()
 blockstreamerIpListZone=()
+influxDbIpList=()
+influxDbIpListPrivate=()
+influxDbIpListZone=()
+leaderRotation=
 
 buildSshOptions() {
   sshOptions=(
@@ -59,9 +63,14 @@ loadConfigFile() {
   [[ -n "$publicNetwork" ]] || usage "Config file invalid, publicNetwork unspecified: $configFile"
   [[ -n "$netBasename" ]] || usage "Config file invalid, netBasename unspecified: $configFile"
   [[ -n $sshPrivateKey ]] || usage "Config file invalid, sshPrivateKey unspecified: $configFile"
-  [[ ${#fullnodeIpList[@]} -gt 0 ]] || usage "Config file invalid, fullnodeIpList unspecified: $configFile"
-  [[ ${#fullnodeIpListPrivate[@]} -gt 0 ]] || usage "Config file invalid, fullnodeIpListPrivate unspecified: $configFile"
-  [[ ${#fullnodeIpList[@]} -eq ${#fullnodeIpListPrivate[@]} ]] || usage "Config file invalid, fullnodeIpList/fullnodeIpListPrivate length mismatch: $configFile"
+  [[ ${#influxDbIpList[@]} -gt 0 || ${#fullnodeIpList[@]} -gt 0 ]] || \
+  usage "Config file invalid, fullnodeIpList unspecified: $configFile"
+  [[ ${#influxDbIpList[@]} -gt 0 || ${#fullnodeIpListPrivate[@]} -gt 0 ]] || \
+  usage "Config file invalid, fullnodeIpListPrivate unspecified: $configFile"
+  [[ ${#influxDbIpList[@]} -gt 0 || \
+  ${#fullnodeIpList[@]} -eq ${#fullnodeIpListPrivate[@]} ]] || \
+  usage "Config file invalid, fullnodeIpList/fullnodeIpListPrivate length \
+  mismatch: $configFile"
 
   if $publicNetwork; then
     entrypointIp=${fullnodeIpList[0]}
