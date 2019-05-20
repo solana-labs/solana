@@ -15,6 +15,7 @@ use solana::genesis_utils::create_genesis_block;
 use solana::packet::to_packets_chunked;
 use solana::poh_recorder::WorkingBankEntries;
 use solana::service::Service;
+use solana::test_tx::test_tx;
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
@@ -24,6 +25,7 @@ use solana_sdk::timing::{
     duration_as_ms, timestamp, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES,
 };
 use std::iter;
+use std::rc::Rc;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, RwLock};
@@ -46,6 +48,40 @@ fn check_txs(receiver: &Arc<Receiver<WorkingBankEntries>>, ref_tx_count: usize) 
         }
     }
     assert_eq!(total, ref_tx_count);
+}
+
+#[bench]
+fn bench_consume_buffered(bencher: &mut Bencher) {
+    let (genesis_block, _mint_keypair) = create_genesis_block(100_000);
+    let bank = Arc::new(Bank::new(&genesis_block));
+    let ledger_path = get_tmp_ledger_path!();
+    {
+        let blocktree = Arc::new(
+            Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger"),
+        );
+        let (exit, poh_recorder, poh_service, _signal_receiver) =
+            create_test_recorder(&bank, &blocktree);
+
+        let tx = test_tx();
+        let len = 4096;
+        let chunk_size = 1024;
+        let batches = to_packets_chunked(&vec![tx; len], chunk_size);
+        let mut packets = vec![];
+        for batch in batches {
+            let batch_len = batch.packets.len();
+            packets.push((Rc::new(batch), vec![0usize; batch_len]));
+        }
+        // This tests the performance of buffering packets.
+        // If the packet buffers are copied, performance will be poor.
+        bencher.iter(move || {
+            let packets_len = packets.len();
+            let res = BankingStage::consume_buffered_packets(&poh_recorder, packets.as_slice());
+        });
+
+        exit.store(true, Ordering::Relaxed);
+        poh_service.join().unwrap();
+    }
+    let _unused = Blocktree::destroy(&ledger_path);
 }
 
 #[bench]

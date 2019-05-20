@@ -28,6 +28,7 @@ use solana_sdk::timing::{
 use solana_sdk::transaction::{self, Transaction, TransactionError};
 use std::cmp;
 use std::net::UdpSocket;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex, RwLock};
@@ -36,7 +37,9 @@ use std::time::Duration;
 use std::time::Instant;
 use sys_info;
 
-pub type UnprocessedPackets = Vec<(Packets, Vec<usize>)>;
+// Rc prevents clone/copy of Packets vector buffer
+type PacketsAndOffsets = (Rc<Packets>, Vec<usize>);
+pub type UnprocessedPackets = Vec<PacketsAndOffsets>;
 
 // number of threads is 1 until mt bank is ready
 pub const NUM_THREADS: u32 = 10;
@@ -67,7 +70,7 @@ impl BankingStage {
             poh_recorder,
             verified_receiver,
             verified_vote_receiver,
-            cmp::min(2, Self::num_threads()),
+            cmp::max(2, Self::num_threads()),
         )
     }
 
@@ -109,6 +112,7 @@ impl BankingStage {
                             &cluster_info,
                             &mut recv_start,
                             enable_forwarding,
+                            i,
                         );
                         exit.store(true, Ordering::Relaxed);
                     })
@@ -118,7 +122,7 @@ impl BankingStage {
         Self { bank_thread_hdls }
     }
 
-    fn filter_valid_packets_for_forwarding(all_packets: &[(Packets, Vec<usize>)]) -> Vec<&Packet> {
+    fn filter_valid_packets_for_forwarding(all_packets: &[PacketsAndOffsets]) -> Vec<&Packet> {
         all_packets
             .iter()
             .flat_map(|(p, valid_indexes)| valid_indexes.iter().map(move |x| &p.packets[*x]))
@@ -128,7 +132,7 @@ impl BankingStage {
     fn forward_buffered_packets(
         socket: &std::net::UdpSocket,
         tpu_via_blobs: &std::net::SocketAddr,
-        unprocessed_packets: &[(Packets, Vec<usize>)],
+        unprocessed_packets: &[PacketsAndOffsets],
     ) -> std::io::Result<()> {
         let packets = Self::filter_valid_packets_for_forwarding(unprocessed_packets);
         inc_new_counter_info!("banking_stage-forwarded_packets", packets.len());
@@ -141,19 +145,26 @@ impl BankingStage {
         Ok(())
     }
 
-    fn consume_buffered_packets(
+    pub fn consume_buffered_packets(
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        buffered_packets: &[(Packets, Vec<usize>)],
+        buffered_packets: &[PacketsAndOffsets],
     ) -> Result<UnprocessedPackets> {
         let mut unprocessed_packets = vec![];
         let mut rebuffered_packets = 0;
         let mut new_tx_count = 0;
+        let buffered_len = buffered_packets.len();
         let mut buffered_packets_iter = buffered_packets.iter();
+
+        let proc_start = Instant::now();
         while let Some((msgs, unprocessed_indexes)) = buffered_packets_iter.next() {
             let bank = poh_recorder.lock().unwrap().bank();
             if bank.is_none() {
                 rebuffered_packets += unprocessed_indexes.len();
-                unprocessed_packets.push((msgs.to_owned(), unprocessed_indexes.to_owned()));
+                Self::push_unprocessed(
+                    &mut unprocessed_packets,
+                    msgs.to_owned(),
+                    unprocessed_indexes.to_owned(),
+                );
                 continue;
             }
             let bank = bank.unwrap();
@@ -169,22 +180,38 @@ impl BankingStage {
             new_tx_count += processed;
 
             // Collect any unprocessed transactions in this batch for forwarding
-            if !new_unprocessed_indexes.is_empty() {
-                rebuffered_packets += new_unprocessed_indexes.len();
-                unprocessed_packets.push((msgs.to_owned(), new_unprocessed_indexes));
-            }
+            rebuffered_packets += new_unprocessed_indexes.len();
+            Self::push_unprocessed(
+                &mut unprocessed_packets,
+                msgs.to_owned(),
+                new_unprocessed_indexes,
+            );
 
             if processed < verified_txs_len {
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
                 while let Some((msgs, unprocessed_indexes)) = buffered_packets_iter.next() {
                     let unprocessed_indexes =
                         Self::filter_unprocessed_packets(&bank, &msgs, &unprocessed_indexes);
-                    if !unprocessed_indexes.is_empty() {
-                        unprocessed_packets.push((msgs.to_owned(), unprocessed_indexes));
-                    }
+                    Self::push_unprocessed(
+                        &mut unprocessed_packets,
+                        msgs.to_owned(),
+                        unprocessed_indexes,
+                    );
                 }
             }
         }
+
+        let total_time_s = timing::duration_as_s(&proc_start.elapsed());
+        let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
+
+        debug!(
+            "@{:?} done processing buffered batches: {} time: {:?}ms tx count: {} tx/s: {}",
+            timing::timestamp(),
+            buffered_len,
+            total_time_ms,
+            new_tx_count,
+            (new_tx_count as f32) / (total_time_s)
+        );
 
         inc_new_counter_info!("banking_stage-rebuffered_packets", rebuffered_packets);
         inc_new_counter_info!("banking_stage-consumed_buffered_packets", new_tx_count);
@@ -225,7 +252,7 @@ impl BankingStage {
         socket: &std::net::UdpSocket,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        buffered_packets: &[(Packets, Vec<usize>)],
+        buffered_packets: &[PacketsAndOffsets],
         enable_forwarding: bool,
     ) -> Result<UnprocessedPackets> {
         let rcluster_info = cluster_info.read().unwrap();
@@ -277,6 +304,7 @@ impl BankingStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         recv_start: &mut Instant,
         enable_forwarding: bool,
+        id: u32,
     ) {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packets = vec![];
@@ -303,8 +331,13 @@ impl BankingStage {
                 Duration::from_millis(100)
             };
 
-            match Self::process_packets(&verified_receiver, &poh_recorder, recv_start, recv_timeout)
-            {
+            match Self::process_packets(
+                &verified_receiver,
+                &poh_recorder,
+                recv_start,
+                recv_timeout,
+                id,
+            ) {
                 Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                 Ok(unprocessed_packets) => {
                     if unprocessed_packets.is_empty() {
@@ -645,12 +678,20 @@ impl BankingStage {
         filtered_unprocessed_tx_indexes
     }
 
+    fn generate_packet_indexes(vers: Vec<u8>) -> Vec<usize> {
+        vers.iter()
+            .enumerate()
+            .filter_map(|(index, ver)| if *ver != 0 { Some(index) } else { None })
+            .collect()
+    }
+
     /// Process the incoming packets
     pub fn process_packets(
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
         poh: &Arc<Mutex<PohRecorder>>,
         recv_start: &mut Instant,
         recv_timeout: Duration,
+        id: u32,
     ) -> Result<UnprocessedPackets> {
         let mms = verified_receiver
             .lock()
@@ -658,29 +699,30 @@ impl BankingStage {
             .recv_timeout(recv_timeout)?;
 
         let mms_len = mms.len();
-        let count = mms.iter().map(|x| x.1.len()).sum();
+        let count: usize = mms.iter().map(|x| x.1.len()).sum();
         debug!(
-            "@{:?} process start stalled for: {:?}ms txs: {}",
+            "@{:?} process start stalled for: {:?}ms txs: {} id: {}",
             timing::timestamp(),
             timing::duration_as_ms(&recv_start.elapsed()),
             count,
+            id,
         );
         inc_new_counter_debug!("banking_stage-transactions_received", count);
         let proc_start = Instant::now();
         let mut new_tx_count = 0;
+
+        let mms: Vec<_> = mms
+            .into_iter()
+            .map(|(packets, vers)| (Rc::new(packets), vers))
+            .collect();
+
         let mut mms_iter = mms.into_iter();
         let mut unprocessed_packets = vec![];
         while let Some((msgs, vers)) = mms_iter.next() {
-            let packet_indexes: Vec<usize> = vers
-                .iter()
-                .enumerate()
-                .filter_map(|(index, ver)| if *ver != 0 { Some(index) } else { None })
-                .collect();
+            let packet_indexes = Self::generate_packet_indexes(vers);
             let bank = poh.lock().unwrap().bank();
             if bank.is_none() {
-                if !packet_indexes.is_empty() {
-                    unprocessed_packets.push((msgs, packet_indexes));
-                }
+                Self::push_unprocessed(&mut unprocessed_packets, msgs, packet_indexes);
                 continue;
             }
             let bank = bank.unwrap();
@@ -691,23 +733,15 @@ impl BankingStage {
             new_tx_count += processed;
 
             // Collect any unprocessed transactions in this batch for forwarding
-            if !unprocessed_indexes.is_empty() {
-                unprocessed_packets.push((msgs, unprocessed_indexes));
-            }
+            Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes);
 
             if processed < verified_txs_len {
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
                 while let Some((msgs, vers)) = mms_iter.next() {
-                    let packet_indexes: Vec<usize> = vers
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(index, ver)| if *ver != 0 { Some(index) } else { None })
-                        .collect();
+                    let packet_indexes = Self::generate_packet_indexes(vers);
                     let unprocessed_indexes =
                         Self::filter_unprocessed_packets(&bank, &msgs, &packet_indexes);
-                    if !unprocessed_indexes.is_empty() {
-                        unprocessed_packets.push((msgs, unprocessed_indexes));
-                    }
+                    Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes);
                 }
             }
         }
@@ -719,12 +753,14 @@ impl BankingStage {
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
         debug!(
-            "@{:?} done processing transaction batches: {} time: {:?}ms tx count: {} tx/s: {}",
+            "@{:?} done processing transaction batches: {} time: {:?}ms tx count: {} tx/s: {} total count: {} id: {}",
             timing::timestamp(),
             mms_len,
             total_time_ms,
             new_tx_count,
-            (new_tx_count as f32) / (total_time_s)
+            (new_tx_count as f32) / (total_time_s),
+            count,
+            id,
         );
         inc_new_counter_debug!("banking_stage-process_packets", count);
         inc_new_counter_debug!("banking_stage-process_transactions", new_tx_count);
@@ -732,6 +768,16 @@ impl BankingStage {
         *recv_start = Instant::now();
 
         Ok(unprocessed_packets)
+    }
+
+    fn push_unprocessed(
+        unprocessed_packets: &mut UnprocessedPackets,
+        packets: Rc<Packets>,
+        packet_indexes: Vec<usize>,
+    ) {
+        if !packet_indexes.is_empty() {
+            unprocessed_packets.push((packets, packet_indexes));
+        }
     }
 }
 
@@ -924,8 +970,14 @@ mod tests {
 
             // glad they all fit
             assert_eq!(packets.len(), 1);
+
+            let packets = packets
+                .into_iter()
+                .map(|packets| (packets, vec![0u8, 1u8, 1u8]))
+                .collect();
+
             verified_sender // no_ver, anf, tx
-                .send(vec![(packets[0].clone(), vec![0u8, 1u8, 1u8])])
+                .send(packets)
                 .unwrap();
 
             drop(verified_sender);
@@ -990,9 +1042,11 @@ mod tests {
         );
 
         let packets = to_packets(&[tx]);
-        verified_sender
-            .send(vec![(packets[0].clone(), vec![1u8])])
-            .unwrap();
+        let packets = packets
+            .into_iter()
+            .map(|packets| (packets, vec![1u8]))
+            .collect();
+        verified_sender.send(packets).unwrap();
 
         // Process a second batch that spends one of those lamports.
         let tx = system_transaction::create_user_account(
@@ -1003,9 +1057,11 @@ mod tests {
             0,
         );
         let packets = to_packets(&[tx]);
-        verified_sender
-            .send(vec![(packets[0].clone(), vec![1u8])])
-            .unwrap();
+        let packets = packets
+            .into_iter()
+            .map(|packets| (packets, vec![1u8]))
+            .collect();
+        verified_sender.send(packets).unwrap();
 
         let (vote_sender, vote_receiver) = channel();
         let ledger_path = get_tmp_ledger_path!();
@@ -1493,7 +1549,7 @@ mod tests {
                 let valid_indexes = (0..32)
                     .filter_map(|x| if x % 2 != 0 { Some(x as usize) } else { None })
                     .collect_vec();
-                (packets, valid_indexes)
+                (Rc::new(packets), valid_indexes)
             })
             .collect_vec();
 
