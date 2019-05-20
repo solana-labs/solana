@@ -20,13 +20,13 @@ fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
         w.meta.size = PACKET_DATA_SIZE;
         w.meta.set_addr(&addr);
     }
-    let msgs = Arc::new(msgs);
+    let msgs_ = msgs.clone();
     spawn(move || loop {
         if exit.load(Ordering::Relaxed) {
             return;
         }
         let mut num = 0;
-        for p in &msgs.packets {
+        for p in &msgs_.packets {
             let a = p.meta.addr();
             assert!(p.meta.size < BLOB_SIZE);
             send.send_to(&p.data[..p.meta.size], &a).unwrap();
