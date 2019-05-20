@@ -18,9 +18,10 @@ use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::transaction::Transaction;
-use solana_storage_api::storage_instruction::StorageInstruction;
+use solana_storage_api::storage_contract::{CheckedProof, Proof, ProofStatus};
+use solana_storage_api::storage_instruction::{proof_validation, StorageInstruction};
 use solana_storage_api::{get_segment_from_slot, storage_instruction};
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::io;
 use std::mem::size_of;
 use std::net::UdpSocket;
@@ -34,7 +35,7 @@ use std::time::Duration;
 // Vec of [ledger blocks] x [keys]
 type StorageResults = Vec<Hash>;
 type StorageKeys = Vec<u8>;
-type ReplicatorMap = Vec<HashSet<Pubkey>>;
+type ReplicatorMap = Vec<HashMap<Pubkey, Vec<Proof>>>;
 
 #[derive(Default)]
 pub struct StorageStateInner {
@@ -117,7 +118,7 @@ impl StorageState {
         let replicator_map = &self.state.read().unwrap().replicator_map;
         if index < replicator_map.len() {
             replicator_map[index]
-                .iter()
+                .keys()
                 .cloned()
                 .take(MAX_PUBKEYS_TO_RETURN)
                 .collect::<Vec<_>>()
@@ -350,8 +351,6 @@ impl StorageStage {
                 }
             }
         }
-        // TODO: bundle up mining submissions from replicators
-        // and submit them in a tx to the leader to get reward.
         Ok(())
     }
 
@@ -360,13 +359,13 @@ impl StorageStage {
         slot: u64,
         storage_state: &Arc<RwLock<StorageStateInner>>,
         current_key_idx: &mut usize,
-        transaction_key0: Pubkey,
+        storage_account_key: Pubkey,
     ) {
         match deserialize(data) {
             Ok(StorageInstruction::SubmitMiningProof {
                 slot: proof_slot,
                 signature,
-                ..
+                sha_state,
             }) => {
                 if proof_slot < slot {
                     {
@@ -383,14 +382,21 @@ impl StorageStage {
 
                     let mut statew = storage_state.write().unwrap();
                     let max_segment_index = get_segment_from_slot(slot) as usize;
-                    if statew.replicator_map.len() <= max_segment_index {
+                    if statew.replicator_map.len() < max_segment_index {
                         statew
                             .replicator_map
-                            .resize(max_segment_index, HashSet::new());
+                            .resize(max_segment_index, HashMap::new());
                     }
                     let proof_segment_index = get_segment_from_slot(proof_slot) as usize;
                     if proof_segment_index < statew.replicator_map.len() {
-                        statew.replicator_map[proof_segment_index].insert(transaction_key0);
+                        // Copy the submitted proof
+                        statew.replicator_map[proof_segment_index]
+                            .entry(storage_account_key)
+                            .or_default()
+                            .push(Proof {
+                                signature,
+                                sha_state,
+                            });
                     }
                 }
                 debug!("storage proof: slot: {}", slot);
@@ -426,14 +432,18 @@ impl StorageStage {
                         // Go through the transactions, find proofs, and use them to update
                         // the storage_keys with their signatures
                         for tx in &entry.transactions {
-                            for (i, program_id) in tx.message.program_ids().iter().enumerate() {
+                            for instruction in tx.message.instructions.iter() {
+                                let program_id =
+                                    tx.message.account_keys[instruction.program_ids_index as usize];
                                 if solana_storage_api::check_id(&program_id) {
+                                    let storage_account_key =
+                                        tx.message.account_keys[instruction.accounts[0] as usize];
                                     Self::process_storage_transaction(
-                                        &tx.message().instructions[i].data,
+                                        &instruction.data,
                                         slot,
                                         storage_state,
                                         current_key_idx,
-                                        tx.message.account_keys[0],
+                                        storage_account_key,
                                     );
                                 }
                             }
@@ -454,6 +464,47 @@ impl StorageStage {
                             slot,
                             instruction_sender,
                         )?;
+                        // bundle up mining submissions from replicators
+                        // and submit them in a tx to the leader to get rewarded.
+                        let mut w_state = storage_state.write().unwrap();
+                        let instructions: Vec<_> = w_state
+                            .replicator_map
+                            .iter_mut()
+                            .enumerate()
+                            .flat_map(|(segment, proof_map)| {
+                                let checked_proofs = proof_map
+                                    .iter_mut()
+                                    .map(|(id, proofs)| {
+                                        (
+                                            *id,
+                                            proofs
+                                                .drain(..)
+                                                .map(|proof| CheckedProof {
+                                                    proof,
+                                                    status: ProofStatus::Valid,
+                                                })
+                                                .collect::<Vec<_>>(),
+                                        )
+                                    })
+                                    .collect::<HashMap<_, _>>();
+                                if !checked_proofs.is_empty() {
+                                    let ix = proof_validation(
+                                        &storage_keypair.pubkey(),
+                                        segment as u64,
+                                        checked_proofs,
+                                    );
+                                    Some(ix)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+                        // TODO Avoid AccountInUse errors in this loop
+                        let res: std::result::Result<_, _> = instructions
+                            .into_iter()
+                            .map(|ix| instruction_sender.send(ix))
+                            .collect();
+                        res?
                     }
                 }
             }
