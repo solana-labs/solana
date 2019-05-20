@@ -95,7 +95,6 @@ impl ReplayStage {
         let bank_forks = bank_forks.clone();
         let poh_recorder = poh_recorder.clone();
         let my_id = *my_id;
-        let vote_account = *vote_account;
         let mut ticks_per_slot = 0;
         let mut locktower = Locktower::new_from_forks(&bank_forks.read().unwrap(), &my_id);
         if let Some(root) = locktower.root() {
@@ -105,6 +104,7 @@ impl ReplayStage {
         }
         // Start the replay stage loop
         let leader_schedule_cache = leader_schedule_cache.clone();
+        let vote_account = *vote_account;
         let voting_keypair = voting_keypair.cloned();
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -152,8 +152,8 @@ impl ReplayStage {
                             &bank_forks,
                             &mut locktower,
                             &mut progress,
-                            &voting_keypair,
                             &vote_account,
+                            &voting_keypair,
                             &cluster_info,
                             &blocktree,
                             &leader_schedule_cache,
@@ -297,8 +297,8 @@ impl ReplayStage {
         bank_forks: &Arc<RwLock<BankForks>>,
         locktower: &mut Locktower,
         progress: &mut HashMap<u64, ForkProgress>,
+        vote_account: &Pubkey,
         voting_keypair: &Option<Arc<T>>,
-        vote_account_pubkey: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: &Arc<Blocktree>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -322,13 +322,20 @@ impl ReplayStage {
         }
         locktower.update_epoch(&bank);
         if let Some(ref voting_keypair) = voting_keypair {
+            let node_keypair = cluster_info.read().unwrap().keypair.clone();
+
             // Send our last few votes along with the new one
-            let vote_ix = vote_instruction::vote(vote_account_pubkey, locktower.recent_votes());
-            let vote_tx = Transaction::new_signed_instructions(
-                &[voting_keypair.as_ref()],
-                vec![vote_ix],
-                bank.last_blockhash(),
+            let vote_ix = vote_instruction::vote(
+                &node_keypair.pubkey(),
+                &vote_account,
+                &voting_keypair.pubkey(),
+                locktower.recent_votes(),
             );
+
+            let mut vote_tx = Transaction::new_unsigned_instructions(vec![vote_ix]);
+            let blockhash = bank.last_blockhash();
+            vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
+            vote_tx.partial_sign(&[voting_keypair.as_ref()], blockhash);
             cluster_info.write().unwrap().push_vote(vote_tx);
         }
         Ok(())

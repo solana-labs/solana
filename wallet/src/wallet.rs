@@ -44,7 +44,7 @@ pub enum WalletCommand {
     Balance(Pubkey),
     Cancel(Pubkey),
     Confirm(Signature),
-    AuthorizeVoter(Pubkey),
+    AuthorizeVoter(Pubkey, Keypair, Pubkey),
     CreateVoteAccount(Pubkey, Pubkey, u32, u64),
     ShowVoteAccount(Pubkey),
     CreateStakeAccount(Pubkey, u64),
@@ -193,8 +193,16 @@ pub fn parse_command(
             ))
         }
         ("authorize-voter", Some(matches)) => {
-            let authorized_voter_id = pubkey_of(matches, "authorized_voter_id").unwrap();
-            Ok(WalletCommand::AuthorizeVoter(authorized_voter_id))
+            let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
+            let authorized_voter_keypair =
+                keypair_of(matches, "authorized_voter_keypair_file").unwrap();
+            let new_authorized_voter_id = pubkey_of(matches, "new_authorized_voter_id").unwrap();
+
+            Ok(WalletCommand::AuthorizeVoter(
+                voting_account_id,
+                authorized_voter_keypair,
+                new_authorized_voter_id,
+            ))
         }
         ("show-vote-account", Some(matches)) => {
             let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
@@ -392,15 +400,23 @@ fn process_create_vote_account(
 fn process_authorize_voter(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    authorized_voter_id: &Pubkey,
+    voting_account_id: &Pubkey,
+    authorized_voter_keypair: &Keypair,
+    new_authorized_voter_id: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::authorize_voter(
-        &config.keypair.pubkey(),
-        authorized_voter_id,
+        &config.keypair.pubkey(),           // from
+        voting_account_id,                  // vote account to update
+        &authorized_voter_keypair.pubkey(), // current authorized voter (often the vote account itself)
+        new_authorized_voter_id,            // new vote signer
     )];
 
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let mut tx = Transaction::new_signed_instructions(
+        &[&config.keypair, &authorized_voter_keypair],
+        ixs,
+        recent_blockhash,
+    );
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
@@ -776,9 +792,17 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             )
         }
         // Configure staking account already created
-        WalletCommand::AuthorizeVoter(authorized_voter_id) => {
-            process_authorize_voter(&rpc_client, config, &authorized_voter_id)
-        }
+        WalletCommand::AuthorizeVoter(
+            voting_account_id,
+            authorized_voter_keypair,
+            new_authorized_voter_id,
+        ) => process_authorize_voter(
+            &rpc_client,
+            config,
+            &voting_account_id,
+            &authorized_voter_keypair,
+            &new_authorized_voter_id,
+        ),
         // Show a vote account
         WalletCommand::ShowVoteAccount(voting_account_id) => {
             process_show_vote_account(&rpc_client, config, &voting_account_id)
@@ -996,15 +1020,32 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         )
         .subcommand(
             SubCommand::with_name("authorize-voter")
-                .about("Authorize a different voter for this vote account")
+                .about("Authorize a new vote signing keypair for the given vote account")
                 .arg(
-                    Arg::with_name("authorized_voter_id")
+                    Arg::with_name("voting_account_id")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
-                        .help("Vote signer to authorize"),
+                        .help("Vote account in which to set the authorized voter"),
+                )
+                .arg(
+                    Arg::with_name("authorized_voter_keypair_file")
+                        .index(2)
+                        .value_name("KEYPAIR_FILE")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Keypair file for the currently authorized vote signer"),
+                )
+                .arg(
+                    Arg::with_name("new_authorized_voter_id")
+                        .index(3)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("New vote signer to authorize"),
                 ),
         )
         .subcommand(
@@ -1313,13 +1354,20 @@ mod tests {
         assert!(parse_command(&pubkey, &test_bad_signature).is_err());
 
         // Test AuthorizeVoter Subcommand
-        let test_authorize_voter =
-            test_commands
-                .clone()
-                .get_matches_from(vec!["test", "authorize-voter", &pubkey_string]);
+        let keypair_file = make_tmp_path("keypair_file");
+        gen_keypair_file(&keypair_file).unwrap();
+        let keypair = read_keypair(&keypair_file).unwrap();
+
+        let test_authorize_voter = test_commands.clone().get_matches_from(vec![
+            "test",
+            "authorize-voter",
+            &pubkey_string,
+            &keypair_file,
+            &pubkey_string,
+        ]);
         assert_eq!(
             parse_command(&pubkey, &test_authorize_voter).unwrap(),
-            WalletCommand::AuthorizeVoter(pubkey)
+            WalletCommand::AuthorizeVoter(pubkey, keypair, pubkey)
         );
 
         // Test CreateVoteAccount SubCommand
@@ -1545,7 +1593,8 @@ mod tests {
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
-        config.command = WalletCommand::AuthorizeVoter(bob_pubkey);
+        let bob_keypair = Keypair::new();
+        config.command = WalletCommand::AuthorizeVoter(bob_pubkey, bob_keypair, bob_pubkey);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -1663,7 +1712,7 @@ mod tests {
         config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_id, 0, 10);
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::AuthorizeVoter(bob_pubkey);
+        config.command = WalletCommand::AuthorizeVoter(bob_pubkey, Keypair::new(), bob_pubkey);
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::GetTransactionCount;

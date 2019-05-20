@@ -438,8 +438,6 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
-    use solana_vote_api::vote_instruction;
-    use solana_vote_api::vote_state::Vote;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     fn create_sample_payment(keypair: &Keypair, hash: Hash) -> Transaction {
@@ -457,12 +455,6 @@ mod tests {
     fn create_sample_apply_signature(keypair: &Keypair, hash: Hash) -> Transaction {
         let pubkey = keypair.pubkey();
         let ix = budget_instruction::apply_signature(&pubkey, &pubkey, &pubkey);
-        Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
-    }
-
-    fn create_sample_vote(keypair: &Keypair, hash: Hash) -> Transaction {
-        let pubkey = keypair.pubkey();
-        let ix = vote_instruction::vote(&pubkey, vec![Vote::new(1)]);
         Transaction::new_signed_instructions(&[keypair], vec![ix], hash)
     }
 
@@ -647,8 +639,7 @@ mod tests {
         let hash = Hash::default();
         let next_hash = solana_sdk::hash::hash(&hash.as_ref());
         let keypair = Keypair::new();
-        let vote_account = Keypair::new();
-        let tx_small = create_sample_vote(&vote_account, next_hash);
+        let tx_small = create_sample_timestamp(&keypair, next_hash);
         let tx_large = create_sample_payment(&keypair, next_hash);
 
         let tx_small_size = serialized_size(&tx_small).unwrap() as usize;
