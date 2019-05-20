@@ -137,7 +137,7 @@ fn create_request_processor(
     let t_responder = responder("replicator-responder", storage_socket.clone(), r_responder);
     thread_handles.push(t_responder);
 
-    let exit4 = exit.clone();
+    let exit = exit.clone();
     let t_processor = spawn(move || loop {
         let packets = r_reader.recv_timeout(Duration::from_secs(1));
         if let Ok(packets) = packets {
@@ -156,12 +156,11 @@ fn create_request_processor(
                 }
             }
         }
-        if exit4.load(Ordering::Relaxed) {
+        if exit.load(Ordering::Relaxed) {
             break;
         }
     });
     thread_handles.push(t_processor);
-
     thread_handles
 }
 
@@ -425,13 +424,12 @@ impl Replicator {
         let bal = client.poll_get_balance(&storage_keypair.pubkey());
         if bal.is_err() || bal.unwrap() == 0 {
             let (blockhash, _fee_calculator) = client.get_recent_blockhash().expect("blockhash");
-            //TODO the account space needs to be well defined somewhere
             let tx = system_transaction::create_account(
                 keypair,
                 &storage_keypair.pubkey(),
                 blockhash,
                 1,
-                1024 * 4,
+                1024 * 4, // TODO the account space needs to be well defined somewhere
                 &solana_storage_api::id(),
                 0,
             );

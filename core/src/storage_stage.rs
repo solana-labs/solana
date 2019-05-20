@@ -245,12 +245,11 @@ impl StorageStage {
             .get_account(&storage_keypair.pubkey())
             .is_none()
         {
-            // TODO the account space needs to be well defined somewhere
             let create_instruction = system_instruction::create_account(
                 &keypair.pubkey(),
                 &storage_keypair.pubkey(),
-                1000,
-                1024 * 4,
+                1,
+                1024 * 4, // TODO the account space needs to be well defined somewhere
                 &solana_storage_api::id(),
             );
             instructions.push(create_instruction);
