@@ -11,6 +11,8 @@ use std::collections::HashMap;
 
 pub const TOTAL_VALIDATOR_REWARDS: u64 = 1;
 pub const TOTAL_REPLICATOR_REWARDS: u64 = 1;
+// Todo Tune this for actual use cases when replicators are feature complete
+pub const STORAGE_ACCOUNT_SPACE: u64 = 1024 * 4;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum ProofStatus {
