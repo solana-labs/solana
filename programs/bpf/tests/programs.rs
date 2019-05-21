@@ -2,7 +2,7 @@
 mod bpf {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
-    use solana_runtime::loader_utils::{create_invoke_instruction, load_program};
+    use solana_runtime::loader_utils::load_program;
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::native_loader;
     use std::env;
@@ -27,6 +27,7 @@ mod bpf {
     #[cfg(feature = "bpf_c")]
     mod bpf_c {
         use super::*;
+        use solana_runtime::loader_utils::create_invoke_instruction;
         use solana_sdk::bpf_loader;
         use solana_sdk::client::SyncClient;
         use solana_sdk::signature::KeypairUtil;
@@ -93,22 +94,22 @@ mod bpf {
         }
     }
 
-    // Cannot currently build the Rust BPF program as part
-    // of the rest of the build due to recursive `cargo build` causing
-    // a build deadlock.  Therefore you must build the Rust programs
-    // yourself first by calling `make all` in the Rust BPF program's directory
     #[cfg(feature = "bpf_rust")]
     mod bpf_rust {
         use super::*;
         use solana_sdk::client::SyncClient;
-        use solana_sdk::signature::KeypairUtil;
+        use solana_sdk::instruction::{AccountMeta, Instruction};
+        use solana_sdk::signature::{Keypair, KeypairUtil};
         use std::io::Read;
 
         #[test]
         fn test_program_bpf_rust() {
             solana_logger::setup();
 
-            let programs = ["solana_bpf_rust_noop"];
+            let programs = [
+                // Disable due to #4271 "solana_bpf_rust_iter",
+                "solana_bpf_rust_noop",
+            ];
             for program in programs.iter() {
                 let filename = create_bpf_path(program);
                 println!("Test program: {:?} from {:?}", program, filename);
@@ -129,8 +130,11 @@ mod bpf {
 
                 // Call user program
                 let program_id = load_program(&bank_client, &alice_keypair, &loader_id, elf);
-                let instruction =
-                    create_invoke_instruction(alice_keypair.pubkey(), program_id, &1u8);
+                let account_metas = vec![
+                    AccountMeta::new(alice_keypair.pubkey(), true),
+                    AccountMeta::new(Keypair::new().pubkey(), false),
+                ];
+                let instruction = Instruction::new(program_id, &1u8, account_metas);
                 bank_client
                     .send_instruction(&alice_keypair, instruction)
                     .unwrap();
