@@ -24,7 +24,6 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::message::Message;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_transaction;
 use solana_sdk::timing::timestamp;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::transport::TransportError;
@@ -415,14 +414,13 @@ impl Replicator {
         let bal = client.poll_get_balance(&storage_keypair.pubkey());
         if bal.is_err() || bal.unwrap() == 0 {
             let (blockhash, _fee_calculator) = client.get_recent_blockhash().expect("blockhash");
-            let tx = system_transaction::create_account(
-                keypair,
+
+            let ix = vec![storage_instruction::create_account(
+                &keypair.pubkey(),
                 &storage_keypair.pubkey(),
-                blockhash,
                 1,
-                1024 * 4, // TODO the account space needs to be well defined somewhere
-                &solana_storage_api::id(),
-            );
+            )];
+            let tx = Transaction::new_signed_instructions(&[keypair], ix, blockhash);
             let signature = client.async_send_transaction(tx)?;
             client
                 .poll_for_signature(&signature)

@@ -86,7 +86,9 @@ pub fn process_instruction(
 mod tests {
     use super::*;
     use crate::id;
-    use crate::storage_contract::{CheckedProof, Proof, ProofStatus, StorageContract};
+    use crate::storage_contract::{
+        CheckedProof, Proof, ProofStatus, StorageContract, STORAGE_ACCOUNT_SPACE,
+    };
     use crate::storage_instruction;
     use crate::SLOTS_PER_SEGMENT;
     use bincode::deserialize;
@@ -99,7 +101,6 @@ mod tests {
     use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-    use solana_sdk::system_instruction;
     use std::sync::Arc;
 
     const TICKS_IN_SEGMENT: u64 = SLOTS_PER_SEGMENT * DEFAULT_TICKS_PER_SLOT;
@@ -127,7 +128,7 @@ mod tests {
     fn test_proof_bounds() {
         let pubkey = Pubkey::new_rand();
         let account = Account {
-            data: vec![0; 16 * 1024],
+            data: vec![0; STORAGE_ACCOUNT_SPACE as usize],
             ..Account::default()
         };
 
@@ -195,8 +196,8 @@ mod tests {
         solana_logger::setup();
         let pubkey = Pubkey::new_rand();
         let mut accounts = [Account::default(), Account::default()];
-        accounts[0].data.resize(16 * 1024, 0);
-        accounts[1].data.resize(16 * 1024, 0);
+        accounts[0].data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
+        accounts[1].data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
 
         let ix =
             storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
@@ -210,7 +211,7 @@ mod tests {
         solana_logger::setup();
         let pubkey = Pubkey::new_rand();
         let mut accounts = [Account::default(), Account::default()];
-        accounts[0].data.resize(16 * 1024, 0);
+        accounts[0].data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
 
         let ix =
             storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
@@ -236,10 +237,10 @@ mod tests {
         let slot = 0;
         let bank_client = BankClient::new_shared(&bank);
 
-        let ix = system_instruction::create_account(&mint_pubkey, &validator, 10, 4 * 1042, &id());
+        let ix = storage_instruction::create_account(&mint_pubkey, &validator, 10);
         bank_client.send_instruction(&mint_keypair, ix).unwrap();
 
-        let ix = system_instruction::create_account(&mint_pubkey, &replicator, 10, 4 * 1042, &id());
+        let ix = storage_instruction::create_account(&mint_pubkey, &replicator, 10);
         bank_client.send_instruction(&mint_keypair, ix).unwrap();
 
         // tick the bank up until it's moved into storage segment 2 because the next advertise is for segment 1
@@ -398,18 +399,11 @@ mod tests {
             .transfer(10, &mint_keypair, &replicator_pubkey)
             .unwrap();
 
-        let ix = system_instruction::create_account(
-            &mint_pubkey,
-            &replicator_pubkey,
-            1,
-            4 * 1024,
-            &id(),
-        );
+        let ix = storage_instruction::create_account(&mint_pubkey, &replicator_pubkey, 1);
 
         bank_client.send_instruction(&mint_keypair, ix).unwrap();
 
-        let ix =
-            system_instruction::create_account(&mint_pubkey, &validator_pubkey, 1, 4 * 1024, &id());
+        let ix = storage_instruction::create_account(&mint_pubkey, &validator_pubkey, 1);
 
         bank_client.send_instruction(&mint_keypair, ix).unwrap();
 

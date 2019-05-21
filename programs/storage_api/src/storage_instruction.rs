@@ -1,12 +1,12 @@
 use crate::id;
-use crate::storage_contract::CheckedProof;
+use crate::storage_contract::{CheckedProof, STORAGE_ACCOUNT_SPACE};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
+use solana_sdk::system_instruction;
 
-// TODO maybe split this into StorageReplicator and StorageValidator
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageInstruction {
     SubmitMiningProof {
@@ -25,6 +25,10 @@ pub enum StorageInstruction {
         slot: u64,
         proofs: Vec<CheckedProof>,
     },
+}
+
+pub fn create_account(from: &Pubkey, to: &Pubkey, lamports: u64) -> Instruction {
+    system_instruction::create_account(&from, to, lamports, STORAGE_ACCOUNT_SPACE, &id())
 }
 
 pub fn mining_proof(

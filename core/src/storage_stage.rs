@@ -17,7 +17,6 @@ use solana_sdk::instruction::Instruction;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::system_instruction;
 use solana_sdk::transaction::Transaction;
 use solana_storage_api::storage_instruction::StorageInstruction;
 use solana_storage_api::{get_segment_from_slot, storage_instruction};
@@ -245,12 +244,10 @@ impl StorageStage {
             .get_account(&storage_keypair.pubkey())
             .is_none()
         {
-            let create_instruction = system_instruction::create_account(
+            let create_instruction = storage_instruction::create_account(
                 &keypair.pubkey(),
                 &storage_keypair.pubkey(),
                 1,
-                1024 * 4, // TODO the account space needs to be well defined somewhere
-                &solana_storage_api::id(),
             );
             instructions.push(create_instruction);
             info!("storage account requested");
