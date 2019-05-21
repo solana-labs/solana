@@ -93,10 +93,6 @@ mod bpf {
         }
     }
 
-    // Cannot currently build the Rust BPF program as part
-    // of the rest of the build due to recursive `cargo build` causing
-    // a build deadlock.  Therefore you must build the Rust programs
-    // yourself first by calling `make all` in the Rust BPF program's directory
     #[cfg(feature = "bpf_rust")]
     mod bpf_rust {
         use super::*;
