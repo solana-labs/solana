@@ -47,7 +47,9 @@ test-stable-perf)
 
   (
     cd programs/bpf
-    _ RUST_BACKTRACE=1; export RUST_LOG=solana_bpf_loader=info; cargo test --features="bpf_rust" -- --nocapture test_program_bpf_rust
+    export RUST_BACKTRACE=1
+    export RUST_LOG=solana_bpf_loader=info
+    cargo test --features="bpf_rust" -- --nocapture test_program_bpf_rust
   )
   
 
