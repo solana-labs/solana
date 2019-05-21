@@ -297,11 +297,13 @@ impl ClusterInfo {
 
     /// Record the id of the current leader for use by `leader_tpu_via_blobs()`
     pub fn set_leader(&mut self, leader_id: &Pubkey) {
-        warn!(
-            "{}: LEADER_UPDATE TO {} from {}",
-            self.gossip.id, leader_id, self.gossip_leader_id,
-        );
-        self.gossip_leader_id = *leader_id;
+        if *leader_id != self.gossip_leader_id {
+            warn!(
+                "{}: LEADER_UPDATE TO {} from {}",
+                self.gossip.id, leader_id, self.gossip_leader_id,
+            );
+            self.gossip_leader_id = *leader_id;
+        }
     }
 
     pub fn push_epoch_slots(&mut self, id: Pubkey, root: u64, slots: HashSet<u64>) {
