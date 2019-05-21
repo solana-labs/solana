@@ -194,10 +194,6 @@ pub fn deserialize<'a>(
         };
         offset += size_of::<u64>();
 
-        // let key_slice = unsafe { from_raw_parts(input.add(offset), SIZE_PUBKEY) };
-        // let key = SolPubkey {
-        //     key: key_slice.try_into().unwrap(),
-        // };
         let key = unsafe {
             SolPubkey {
                 key: &*(input.add(offset) as *mut [u8; SIZE_PUBKEY]),
