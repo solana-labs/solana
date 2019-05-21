@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+if [ "$#" -ne 1 ]; then
+    echo "Error: Must provide the full path to the project to dump"
+    exit 1
+fi
+
 ./clean.sh "$1"
 ./build.sh "$1"
 
