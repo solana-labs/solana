@@ -38,7 +38,7 @@ pub enum StakeInstruction {
     ///    0 - payer (TODO unused/remove)
     ///    1 - MiningPool Stake Account to redeem credits from
     ///    2 - Delegate StakeAccount to be updated
-    ///    3 - VoteAccount to which the Stake was delegated to previously
+    ///    3 - VoteAccount to which the Stake is delegated
     RedeemVoteCredits,
 }
 
