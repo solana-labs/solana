@@ -8,7 +8,6 @@ use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_metrics::datapoint;
-use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp::min;
 use std::collections::HashMap;
@@ -22,7 +21,8 @@ use std::time::Duration;
 
 pub const REPAIRMEN_SLEEP_MILLIS: usize = 1000;
 pub const REPAIR_REDUNDANCY: usize = 3;
-pub const NUM_BUFFER_SLOTS: usize = 100;
+pub const NUM_BUFFER_SLOTS: usize = 50;
+pub const GOSSIP_DELAY_SLOTS: usize = 2;
 pub const NUM_SLOTS_PER_UPDATE: usize = 2;
 
 // Represents the blobs that a repairman is responsible for repairing in specific slot. More
@@ -79,7 +79,6 @@ impl ClusterInfoRepairListener {
         blocktree: &Arc<Blocktree>,
         exit: &Arc<AtomicBool>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        epoch_schedule: EpochSchedule,
     ) -> Self {
         let exit = exit.clone();
         let blocktree = blocktree.clone();
@@ -88,13 +87,7 @@ impl ClusterInfoRepairListener {
             .spawn(move || {
                 // Maps a peer to the last timestamp and root they gossiped
                 let mut peer_roots: HashMap<Pubkey, (u64, u64)> = HashMap::new();
-                let _ = Self::recv_loop(
-                    &blocktree,
-                    &mut peer_roots,
-                    exit,
-                    &cluster_info,
-                    epoch_schedule,
-                );
+                let _ = Self::recv_loop(&blocktree, &mut peer_roots, exit, &cluster_info);
             })
             .unwrap();
         Self {
@@ -107,7 +100,6 @@ impl ClusterInfoRepairListener {
         peer_roots: &mut HashMap<Pubkey, (u64, u64)>,
         exit: Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        epoch_schedule: EpochSchedule,
     ) -> Result<()> {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let my_id = cluster_info.read().unwrap().id();
@@ -140,7 +132,6 @@ impl ClusterInfoRepairListener {
                         if Self::should_repair_peer(
                             my_root,
                             peer_epoch_slots.root,
-                            &epoch_schedule,
                             NUM_BUFFER_SLOTS,
                         ) {
                             // Clone out EpochSlots structure to avoid holding lock on gossip
@@ -158,7 +149,6 @@ impl ClusterInfoRepairListener {
                 &peers_needing_repairs,
                 &socket,
                 cluster_info,
-                &epoch_schedule,
                 &mut my_gossiped_root,
             );
 
@@ -173,7 +163,6 @@ impl ClusterInfoRepairListener {
         repairees: &HashMap<Pubkey, EpochSlots>,
         socket: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        epoch_schedule: &EpochSchedule,
         my_gossiped_root: &mut u64,
     ) -> Result<()> {
         for (repairee_id, repairee_epoch_slots) in repairees {
@@ -191,7 +180,6 @@ impl ClusterInfoRepairListener {
                     my_id,
                     repairee_root,
                     peer_roots,
-                    epoch_schedule,
                     NUM_BUFFER_SLOTS,
                 );
 
@@ -359,7 +347,6 @@ impl ClusterInfoRepairListener {
         my_id: &'a Pubkey,
         repairee_root: u64,
         repairman_roots: &'a HashMap<Pubkey, (u64, u64)>,
-        epoch_schedule: &EpochSchedule,
         num_buffer_slots: usize,
     ) -> Vec<&'a Pubkey> {
         let mut repairmen: Vec<_> = repairman_roots
@@ -368,8 +355,7 @@ impl ClusterInfoRepairListener {
                 if Self::should_repair_peer(
                     *repairman_root,
                     repairee_root,
-                    epoch_schedule,
-                    num_buffer_slots,
+                    num_buffer_slots - GOSSIP_DELAY_SLOTS,
                 ) {
                     Some(repairman_id)
                 } else {
@@ -405,16 +391,11 @@ impl ClusterInfoRepairListener {
     fn should_repair_peer(
         repairman_root: u64,
         repairee_root: u64,
-        epoch_schedule: &EpochSchedule,
         num_buffer_slots: usize,
     ) -> bool {
-        // Check if this potential repairman's confirmed leader schedule is greater
-        // than an epoch ahead of the repairee's known schedule
-        let repairman_epoch = epoch_schedule.get_stakers_epoch(repairman_root);
-        let repairee_epoch =
-            epoch_schedule.get_stakers_epoch(repairee_root + num_buffer_slots as u64);
-
-        repairman_epoch > repairee_epoch
+        // Check if this potential repairman's root is greater than the repairee root +
+        // num_buffer_slots
+        repairman_root > repairee_root + num_buffer_slots as u64
     }
 
     fn get_last_ts(pubkey: Pubkey, peer_roots: &mut HashMap<Pubkey, (u64, u64)>) -> Option<u64> {
@@ -629,15 +610,12 @@ mod tests {
 
     #[test]
     fn test_should_repair_peer() {
-        let epoch_schedule = EpochSchedule::new(32, 16, false);
-
         // If repairee is ahead of us, we don't repair
         let repairman_root = 0;
         let repairee_root = 5;
         assert!(!ClusterInfoRepairListener::should_repair_peer(
             repairman_root,
             repairee_root,
-            &epoch_schedule,
             0,
         ));
 
@@ -647,39 +625,33 @@ mod tests {
         assert!(!ClusterInfoRepairListener::should_repair_peer(
             repairman_root,
             repairee_root,
-            &epoch_schedule,
             0,
         ));
 
-        // If repairee is behind but in the same confirmed epoch, we don't repair
+        // If repairee is behind with no buffer, we repair
         let repairman_root = 15;
         let repairee_root = 5;
-        assert!(!ClusterInfoRepairListener::should_repair_peer(
+        assert!(ClusterInfoRepairListener::should_repair_peer(
             repairman_root,
             repairee_root,
-            &epoch_schedule,
             0,
         ));
 
-        // If we have confirmed the next epoch, but the repairee is within the buffer
-        // range, we don't repair
+        // If repairee is behind, but within the buffer, we don't repair
         let repairman_root = 16;
         let repairee_root = 5;
         assert!(!ClusterInfoRepairListener::should_repair_peer(
             repairman_root,
             repairee_root,
-            &epoch_schedule,
             11,
         ));
 
-        // If we have confirmed the next epoch, but the repairee is behind a confirmed epoch
-        // even with the buffer, then we should repair
+        // If repairee is behind, but outside the buffer, we repair
         let repairman_root = 16;
         let repairee_root = 5;
         assert!(ClusterInfoRepairListener::should_repair_peer(
             repairman_root,
             repairee_root,
-            &epoch_schedule,
             10,
         ));
     }
