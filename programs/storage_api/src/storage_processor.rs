@@ -18,7 +18,6 @@ pub fn process_instruction(
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
-    let num_keyed_accounts = keyed_accounts.len();
     let (me, rest) = keyed_accounts.split_at_mut(1);
 
     // accounts_keys[0] must be signed
@@ -30,18 +29,20 @@ pub fn process_instruction(
     let storage_account_pubkey = *storage_account_pubkey.unwrap();
 
     let mut storage_account = StorageAccount::new(&mut me[0].account);
-    let mut rest: Vec<_> = rest
-        .iter_mut()
-        .map(|keyed_account| StorageAccount::new(&mut keyed_account.account))
-        .collect();
 
     match bincode::deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
+        StorageInstruction::InitializeMiningPool => {
+            if !rest.is_empty() {
+                Err(InstructionError::InvalidArgument)?;
+            }
+            storage_account.initialize_mining_pool()
+        }
         StorageInstruction::SubmitMiningProof {
             sha_state,
             slot,
             signature,
         } => {
-            if num_keyed_accounts != 1 {
+            if !rest.is_empty() {
                 Err(InstructionError::InvalidArgument)?;
             }
             storage_account.submit_mining_proof(
@@ -53,9 +54,7 @@ pub fn process_instruction(
             )
         }
         StorageInstruction::AdvertiseStorageRecentBlockhash { hash, slot } => {
-            if num_keyed_accounts != 1 {
-                // keyed_accounts[0] should be the main storage key
-                // to access its data
+            if !rest.is_empty() {
                 Err(InstructionError::InvalidArgument)?;
             }
             storage_account.advertise_storage_recent_blockhash(
@@ -65,18 +64,24 @@ pub fn process_instruction(
             )
         }
         StorageInstruction::ClaimStorageReward { slot } => {
-            if num_keyed_accounts != 1 {
-                // keyed_accounts[0] should be the main storage key
-                // to access its data
+            if rest.len() != 1 {
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.claim_storage_reward(slot, tick_height / DEFAULT_TICKS_PER_SLOT)
+            storage_account.claim_storage_reward(
+                &mut rest[0],
+                slot,
+                tick_height / DEFAULT_TICKS_PER_SLOT,
+            )
         }
         StorageInstruction::ProofValidation { slot, proofs } => {
-            if num_keyed_accounts == 1 {
+            if rest.is_empty() {
                 // have to have at least 1 replicator to do any verification
                 Err(InstructionError::InvalidArgument)?;
             }
+            let mut rest: Vec<_> = rest
+                .iter_mut()
+                .map(|keyed_account| StorageAccount::new(&mut keyed_account.account))
+                .collect();
             storage_account.proof_validation(slot, proofs, &mut rest)
         }
     }
@@ -88,6 +93,7 @@ mod tests {
     use crate::id;
     use crate::storage_contract::{
         CheckedProof, Proof, ProofStatus, StorageContract, STORAGE_ACCOUNT_SPACE,
+        TOTAL_VALIDATOR_REWARDS,
     };
     use crate::storage_instruction;
     use crate::SLOTS_PER_SEGMENT;
@@ -99,6 +105,7 @@ mod tests {
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::instruction::Instruction;
+    use solana_sdk::message::Message;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
     use std::sync::Arc;
@@ -230,6 +237,8 @@ mod tests {
         let replicator = replicator_keypair.pubkey();
         let validator_keypair = Keypair::new();
         let validator = validator_keypair.pubkey();
+        let mining_pool_keypair = Keypair::new();
+        let mining_pool = mining_pool_keypair.pubkey();
 
         let mut bank = Bank::new(&genesis_block);
         bank.add_instruction_processor(id(), process_instruction);
@@ -242,6 +251,16 @@ mod tests {
 
         let ix = storage_instruction::create_account(&mint_pubkey, &replicator, 10);
         bank_client.send_instruction(&mint_keypair, ix).unwrap();
+
+        let message = Message::new(storage_instruction::create_mining_pool_account(
+            &mint_pubkey,
+            &mining_pool,
+            100,
+        ));
+
+        bank_client
+            .send_message(&[&mint_keypair, &mining_pool_keypair], message)
+            .unwrap();
 
         // tick the bank up until it's moved into storage segment 2 because the next advertise is for segment 1
         let next_storage_segment_tick_height = TICKS_IN_SEGMENT * 2;
@@ -316,26 +335,31 @@ mod tests {
             .send_instruction(&validator_keypair, ix)
             .unwrap();
 
-        let ix = storage_instruction::reward_claim(&validator, slot);
+        assert_eq!(bank_client.get_balance(&validator).unwrap(), 10,);
+
+        let ix = storage_instruction::claim_reward(&validator, &mining_pool, slot);
         bank_client
             .send_instruction(&validator_keypair, ix)
             .unwrap();
 
-        // TODO enable when rewards are working
-        // assert_eq!(bank_client.get_balance(&validator).unwrap(), TOTAL_VALIDATOR_REWARDS);
+        assert_eq!(
+            bank_client.get_balance(&validator).unwrap(),
+            10 + TOTAL_VALIDATOR_REWARDS
+        );
 
         // tick the bank into the next storage epoch so that rewards can be claimed
         for _ in 0..=TICKS_IN_SEGMENT {
             bank.register_tick(&bank.last_blockhash());
         }
 
-        let ix = storage_instruction::reward_claim(&replicator, slot);
+        assert_eq!(bank_client.get_balance(&replicator).unwrap(), 10);
+        let ix = storage_instruction::claim_reward(&replicator, &mining_pool, slot);
         bank_client
             .send_instruction(&replicator_keypair, ix)
             .unwrap();
 
         // TODO enable when rewards are working
-        // assert_eq!(bank_client.get_balance(&replicator).unwrap(), TOTAL_REPLICATOR_REWARDS);
+        // assert_eq!(bank_client.get_balance(&replicator).unwrap(), 10 + TOTAL_REPLICATOR_REWARDS);
     }
 
     fn get_storage_slot<C: SyncClient>(client: &C, account: &Pubkey) -> u64 {

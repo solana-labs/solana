@@ -53,6 +53,7 @@ pub enum WalletCommand {
     DelegateStake(Keypair, Pubkey),
     RedeemVoteCredits(Pubkey, Pubkey, Pubkey),
     ShowStakeAccount(Pubkey),
+    ShowStorageAccount(Pubkey),
     Deploy(String),
     GetTransactionCount,
     // Pay(lamports, to, timestamp, timestamp_pubkey, witness(es), cancelable)
@@ -249,6 +250,10 @@ pub fn parse_command(
         ("show-stake-account", Some(matches)) => {
             let staking_account_id = pubkey_of(matches, "staking_account_id").unwrap();
             Ok(WalletCommand::ShowStakeAccount(staking_account_id))
+        }
+        ("show-storage-account", Some(matches)) => {
+            let storage_account_id = pubkey_of(matches, "storage_account_id").unwrap();
+            Ok(WalletCommand::ShowStorageAccount(storage_account_id))
         }
         ("deploy", Some(deploy_matches)) => Ok(WalletCommand::Deploy(
             deploy_matches
@@ -585,6 +590,48 @@ fn process_show_stake_account(
     }
 }
 
+fn process_show_storage_account(
+    rpc_client: &RpcClient,
+    _config: &WalletConfig,
+    storage_account_id: &Pubkey,
+) -> ProcessResult {
+    use solana_storage_api::storage_contract::StorageContract;
+    let storage_contract: StorageContract = rpc_client
+        .get_account(storage_account_id)?
+        .state()
+        .map_err(|err| {
+            WalletError::RpcRequestError(
+                format!("Unable to deserialize storage account: {:?}", err).to_string(),
+            )
+        })?;
+
+    //    let storage_account = StorageAccount::new(&account);
+    //   let storage_contract = &mut account.state()?;
+
+    println!("storage_account: {:?}", storage_contract);
+    Ok("".to_string())
+    /*
+    match storage_account.state() {
+        Ok(StorageState::Delegate {
+            voter_id,
+            credits_observed,
+        }) => {
+            println!("account lamports: {}", storage_account.lamports);
+            println!("voter id: {}", voter_id);
+            println!("credits observed: {}", credits_observed);
+            Ok("".to_string())
+        }
+        Ok(StorageState::MiningPool) => {
+            println!("account lamports: {}", storage_account.lamports);
+            Ok("".to_string())
+        }
+        _ => Err(WalletError::RpcRequestError(
+            "Account data could not be deserialized to storage state".to_string(),
+        ))?,
+    }
+    */
+}
+
 fn process_deploy(
     rpc_client: &RpcClient,
     config: &WalletConfig,
@@ -904,9 +951,12 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             &voting_account_id,
         ),
 
-        // Show a vote account
         WalletCommand::ShowStakeAccount(staking_account_id) => {
             process_show_stake_account(&rpc_client, config, &staking_account_id)
+        }
+
+        WalletCommand::ShowStorageAccount(storage_account_id) => {
+            process_show_storage_account(&rpc_client, config, &storage_account_id)
         }
 
         // Deploy a custom program to the chain
@@ -1274,7 +1324,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("The voting account to which the stake was previously delegated."),
                 ),
         )
-  .subcommand(
+        .subcommand(
             SubCommand::with_name("show-stake-account")
                 .about("Show the contents of a stake account")
                 .arg(
@@ -1285,6 +1335,19 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .required(true)
                         .validator(is_pubkey)
                         .help("Stake account pubkey"),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("show-storage-account")
+                .about("Show the contents of a storage account")
+                .arg(
+                    Arg::with_name("storage_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Storage account pubkey"),
                 )
         )
         .subcommand(

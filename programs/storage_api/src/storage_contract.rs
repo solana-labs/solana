@@ -2,6 +2,7 @@ use crate::get_segment_from_slot;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::Account;
+use solana_sdk::account::KeyedAccount;
 use solana_sdk::account_utils::State;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
@@ -58,6 +59,8 @@ pub enum StorageContract {
         /// Multiple validators can validate the same set of proofs so it needs a Vec
         reward_validations: HashMap<usize, HashMap<Hash, Vec<CheckedProof>>>,
     },
+
+    MiningPool,
 }
 
 pub struct StorageAccount<'a> {
@@ -67,6 +70,16 @@ pub struct StorageAccount<'a> {
 impl<'a> StorageAccount<'a> {
     pub fn new(account: &'a mut Account) -> Self {
         Self { account }
+    }
+
+    pub fn initialize_mining_pool(&mut self) -> Result<(), InstructionError> {
+        let storage_contract = &mut self.account.state()?;
+        if let StorageContract::Default = storage_contract {
+            *storage_contract = StorageContract::MiningPool;
+            Ok(())
+        } else {
+            Err(InstructionError::AccountAlreadyInitialized)?
+        }
     }
 
     pub fn submit_mining_proof(
@@ -241,6 +254,7 @@ impl<'a> StorageAccount<'a> {
 
     pub fn claim_storage_reward(
         &mut self,
+        mining_pool: &mut KeyedAccount,
         slot: u64,
         current_slot: u64,
     ) -> Result<(), InstructionError> {
@@ -266,14 +280,15 @@ impl<'a> StorageAccount<'a> {
                 );
                 return Err(InstructionError::InvalidArgument);
             }
-            let _num_validations = count_valid_proofs(
+            let num_validations = count_valid_proofs(
                 &reward_validations
                     .remove(&claim_segment)
                     .map(|mut proofs| proofs.drain().map(|(_, proof)| proof).collect::<Vec<_>>())
                     .unwrap_or_default(),
             );
-            // TODO can't just create lamports out of thin air
-            // self.account.lamports += TOTAL_VALIDATOR_REWARDS * num_validations;
+            let reward = TOTAL_VALIDATOR_REWARDS * num_validations;
+            mining_pool.account.lamports -= reward;
+            self.account.lamports += reward;
             self.account.set_state(storage_contract)
         } else if let StorageContract::ReplicatorStorage {
             proofs,
@@ -317,10 +332,15 @@ impl<'a> StorageAccount<'a> {
                 })
                 .unwrap_or_default();
             let _num_validations = count_valid_proofs(&checked_proofs);
-            // TODO can't just create lamports out of thin air
-            // self.account.lamports += num_validations
-            //     * TOTAL_REPLICATOR_REWARDS
-            //     * (num_validations / reward_validations[claim_segment].len() as u64);
+
+            // TODO enable when rewards are working
+            /*
+            let reward = num_validations
+                * TOTAL_REPLICATOR_REWARDS
+                * (num_validations / reward_validations[&claim_segment].len() as u64);
+            mining_pool.account.lamports -= reward;
+            self.account.lamports += reward;
+            */
             self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
