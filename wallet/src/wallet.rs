@@ -574,6 +574,10 @@ fn process_show_stake_account(
             println!("credits observed: {}", credits_observed);
             Ok("".to_string())
         }
+        Ok(StakeState::MiningPool) => {
+            println!("account lamports: {}", stake_account.lamports);
+            Ok("".to_string())
+        }
         _ => Err(WalletError::RpcRequestError(
             "Account data could not be deserialized to stake state".to_string(),
         ))?,
