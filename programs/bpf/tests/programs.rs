@@ -27,6 +27,7 @@ mod bpf {
     #[cfg(feature = "bpf_c")]
     mod bpf_c {
         use super::*;
+        use solana_runtime::loader_utils::create_invoke_instruction;
         use solana_sdk::bpf_loader;
         use solana_sdk::client::SyncClient;
         use solana_sdk::signature::KeypairUtil;
