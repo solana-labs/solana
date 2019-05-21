@@ -69,7 +69,7 @@ drone=$!
 
 args=(
   --identity "$dataDir"/config/leader-keypair.json
-  --storage-keypair "$dataDir"/config/storage-keypair.json
+  --storage-keypair "$dataDir"/config/leader-storage-account-keypair.json
   --voting-keypair "$dataDir"/config/leader-vote-account-keypair.json
   --vote-account "$leaderVoteAccountPubkey"
   --ledger "$dataDir"/ledger/
