@@ -67,14 +67,15 @@ fn main() {
             .expect("Unable to create BPF install directory")
             .success());
 
-        let rust_programs = ["noop"];
+        let rust_programs = ["iter", "noop"];
         for program in rust_programs.iter() {
             println!(
-                "cargo:warning=(not a warning) Building Rust-based BPF program: solana_bpf_rust_{}",
+                "cargo:warning=(not a warning) Building Rust-based BPF programs: solana_bpf_rust_{}",
                 program
             );
             assert!(Command::new("./build.sh")
-                .current_dir(format!("rust/{}", program))
+                .current_dir("rust")
+                .arg(program)
                 .status()
                 .expect(&format!(
                     "Failed to call solana-bpf-rust-{}'s build.sh",
