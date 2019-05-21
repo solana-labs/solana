@@ -1,7 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
 use crate::rpc_subscriptions::{Confirmations, RpcSubscriptions};
-use bs58;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::typed::Subscriber;
@@ -10,7 +9,6 @@ use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction;
-use std::mem;
 use std::sync::{atomic, Arc};
 
 #[rpc(server)]
@@ -100,6 +98,16 @@ impl RpcSolPubSubImpl {
     }
 }
 
+use std::str::FromStr;
+
+fn param<T: FromStr>(param_str: &str, thing: &str) -> Result<T> {
+    param_str.parse::<T>().map_err(|_e| Error {
+        code: ErrorCode::InvalidParams,
+        message: format!("Invalid Request: Invalid {} provided", thing),
+        data: None,
+    })
+}
+
 impl RpcSolPubSub for RpcSolPubSubImpl {
     type Metadata = Arc<Session>;
 
@@ -110,26 +118,18 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         pubkey_str: String,
         confirmations: Option<Confirmations>,
     ) {
-        let pubkey_vec = bs58::decode(pubkey_str).into_vec().unwrap();
-        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-            subscriber
-                .reject(Error {
-                    code: ErrorCode::InvalidParams,
-                    message: "Invalid Request: Invalid pubkey provided".into(),
-                    data: None,
-                })
-                .unwrap();
-            return;
+        match param::<Pubkey>(&pubkey_str, "pubkey") {
+            Ok(pubkey) => {
+                let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
+                let sub_id = SubscriptionId::Number(id as u64);
+                info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
+                let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+
+                self.subscriptions
+                    .add_account_subscription(&pubkey, confirmations, &sub_id, &sink)
+            }
+            Err(e) => subscriber.reject(e).unwrap(),
         }
-        let pubkey = Pubkey::new(&pubkey_vec);
-
-        let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
-        let sub_id = SubscriptionId::Number(id as u64);
-        info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
-        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-
-        self.subscriptions
-            .add_account_subscription(&pubkey, confirmations, &sub_id, &sink)
     }
 
     fn account_unsubscribe(
@@ -156,26 +156,18 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         pubkey_str: String,
         confirmations: Option<Confirmations>,
     ) {
-        let pubkey_vec = bs58::decode(pubkey_str).into_vec().unwrap();
-        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-            subscriber
-                .reject(Error {
-                    code: ErrorCode::InvalidParams,
-                    message: "Invalid Request: Invalid pubkey provided".into(),
-                    data: None,
-                })
-                .unwrap();
-            return;
+        match param::<Pubkey>(&pubkey_str, "pubkey") {
+            Ok(pubkey) => {
+                let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
+                let sub_id = SubscriptionId::Number(id as u64);
+                info!("program_subscribe: account={:?} id={:?}", pubkey, sub_id);
+                let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+
+                self.subscriptions
+                    .add_program_subscription(&pubkey, confirmations, &sub_id, &sink)
+            }
+            Err(e) => subscriber.reject(e).unwrap(),
         }
-        let pubkey = Pubkey::new(&pubkey_vec);
-
-        let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
-        let sub_id = SubscriptionId::Number(id as u64);
-        info!("program_subscribe: account={:?} id={:?}", pubkey, sub_id);
-        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-
-        self.subscriptions
-            .add_program_subscription(&pubkey, confirmations, &sub_id, &sink)
     }
 
     fn program_unsubscribe(
@@ -203,29 +195,25 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         confirmations: Option<Confirmations>,
     ) {
         info!("signature_subscribe");
-        let signature_vec = bs58::decode(signature_str).into_vec().unwrap();
-        if signature_vec.len() != mem::size_of::<Signature>() {
-            subscriber
-                .reject(Error {
-                    code: ErrorCode::InvalidParams,
-                    message: "Invalid Request: Invalid signature provided".into(),
-                    data: None,
-                })
-                .unwrap();
-            return;
+        match param::<Signature>(&signature_str, "signature") {
+            Ok(signature) => {
+                let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
+                let sub_id = SubscriptionId::Number(id as u64);
+                info!(
+                    "signature_subscribe: signature={:?} id={:?}",
+                    signature, sub_id
+                );
+                let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+
+                self.subscriptions.add_signature_subscription(
+                    &signature,
+                    confirmations,
+                    &sub_id,
+                    &sink,
+                );
+            }
+            Err(e) => subscriber.reject(e).unwrap(),
         }
-        let signature = Signature::new(&signature_vec);
-
-        let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
-        let sub_id = SubscriptionId::Number(id as u64);
-        info!(
-            "signature_subscribe: signature={:?} id={:?}",
-            signature, sub_id
-        );
-        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-
-        self.subscriptions
-            .add_signature_subscription(&signature, confirmations, &sub_id, &sink);
     }
 
     fn signature_unsubscribe(

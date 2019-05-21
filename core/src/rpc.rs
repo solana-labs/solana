@@ -6,7 +6,6 @@ use crate::contact_info::ContactInfo;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::storage_stage::StorageState;
 use bincode::{deserialize, serialize};
-use bs58;
 use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_drone::drone::request_airdrop_transaction;
@@ -16,7 +15,7 @@ use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction::{self, Transaction};
-use std::mem;
+use solana_vote_api::vote_state::VoteState;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -76,9 +75,8 @@ impl JsonRpcRequestProcessor {
     }
 
     fn get_recent_blockhash(&self) -> (String, FeeCalculator) {
-        let id = self.bank().confirmed_last_blockhash();
         (
-            bs58::encode(id).into_string(),
+            self.bank().confirmed_last_blockhash().to_string(),
             self.bank().fee_calculator.clone(),
         )
     }
@@ -104,14 +102,22 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank().transaction_count() as u64)
     }
 
+    fn get_epoch_vote_accounts(&self) -> Result<Vec<(Pubkey, u64, VoteState)>> {
+        let bank = self.bank();
+        Ok(bank
+            .epoch_vote_accounts(bank.get_stakers_epoch(bank.slot()))
+            .ok_or_else(Error::invalid_request)?
+            .iter()
+            .map(|(k, (s, a))| (*k, *s, VoteState::from(a).unwrap_or_default()))
+            .collect::<Vec<_>>())
+    }
+
     fn get_storage_blockhash(&self) -> Result<String> {
-        let hash = self.storage_state.get_storage_blockhash();
-        Ok(bs58::encode(hash).into_string())
+        Ok(self.storage_state.get_storage_blockhash().to_string())
     }
 
     fn get_storage_slot(&self) -> Result<u64> {
-        let slot = self.storage_state.get_slot();
-        Ok(slot)
+        Ok(self.storage_state.get_slot())
     }
 
     fn get_storage_pubkeys_for_slot(&self, slot: u64) -> Result<Vec<Pubkey>> {
@@ -136,35 +142,11 @@ fn get_tpu_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
 }
 
 fn verify_pubkey(input: String) -> Result<Pubkey> {
-    let pubkey_vec = bs58::decode(input).into_vec().map_err(|err| {
-        info!("verify_pubkey: invalid input: {:?}", err);
-        Error::invalid_request()
-    })?;
-    if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-        info!(
-            "verify_pubkey: invalid pubkey_vec length: {}",
-            pubkey_vec.len()
-        );
-        Err(Error::invalid_request())
-    } else {
-        Ok(Pubkey::new(&pubkey_vec))
-    }
+    input.parse().map_err(|_e| Error::invalid_request())
 }
 
 fn verify_signature(input: &str) -> Result<Signature> {
-    let signature_vec = bs58::decode(input).into_vec().map_err(|err| {
-        info!("verify_signature: invalid input: {}: {:?}", input, err);
-        Error::invalid_request()
-    })?;
-    if signature_vec.len() != mem::size_of::<Signature>() {
-        info!(
-            "verify_signature: invalid signature_vec length: {}",
-            signature_vec.len()
-        );
-        Err(Error::invalid_request())
-    } else {
-        Ok(Signature::new(&signature_vec))
-    }
+    input.parse().map_err(|_e| Error::invalid_request())
 }
 
 #[derive(Clone)]
@@ -223,6 +205,9 @@ pub trait RpcSol {
 
     #[rpc(meta, name = "getSlotLeader")]
     fn get_slot_leader(&self, _: Self::Metadata) -> Result<String>;
+
+    #[rpc(meta, name = "getEpochVoteAccounts")]
+    fn get_epoch_vote_accounts(&self, _: Self::Metadata) -> Result<Vec<(Pubkey, u64, VoteState)>>;
 
     #[rpc(meta, name = "getStorageBlockhash")]
     fn get_storage_blockhash(&self, _: Self::Metadata) -> Result<String>;
@@ -406,7 +391,7 @@ impl RpcSol for RpcSolImpl {
 
             if signature_status == Some(Ok(())) {
                 info!("airdrop signature ok");
-                return Ok(bs58::encode(signature).into_string());
+                return Ok(signature.to_string());
             } else if now.elapsed().as_secs() > 5 {
                 info!("airdrop signature timeout");
                 return Err(Error::internal_error());
@@ -437,7 +422,7 @@ impl RpcSol for RpcSolImpl {
                 info!("send_transaction: send_to error: {:?}", err);
                 Error::internal_error()
             })?;
-        let signature = bs58::encode(tx.signatures[0]).into_string();
+        let signature = tx.signatures[0].to_string();
         trace!(
             "send_transaction: sent {} bytes, signature={}",
             data.len(),
@@ -453,6 +438,16 @@ impl RpcSol for RpcSolImpl {
             .and_then(|leader_data| Some(leader_data.id))
             .unwrap_or_default()
             .to_string())
+    }
+
+    fn get_epoch_vote_accounts(
+        &self,
+        meta: Self::Metadata,
+    ) -> Result<Vec<(Pubkey, u64, VoteState)>> {
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_epoch_vote_accounts()
     }
 
     fn get_storage_blockhash(&self, meta: Self::Metadata) -> Result<String> {
