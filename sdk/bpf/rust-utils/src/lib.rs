@@ -181,8 +181,7 @@ pub fn deserialize<'a>(
 
     let mut ka: [Option<SolKeyedAccount>; MAX_ACCOUNTS] =
         [None, None, None, None, None, None, None, None, None, None];
-    let iter = 0..num_ka; // This weirdness due to #issue $#4271
-    for (i, _) in iter.enumerate() {
+    for i in 0..num_ka {
         let is_signer = unsafe {
             #[allow(clippy::cast_ptr_alignment)]
             let is_signer_ptr: *const u64 = input.add(offset) as *const u64;
@@ -194,10 +193,6 @@ pub fn deserialize<'a>(
         };
         offset += size_of::<u64>();
 
-        // let key_slice = unsafe { from_raw_parts(input.add(offset), SIZE_PUBKEY) };
-        // let key = SolPubkey {
-        //     key: key_slice.try_into().unwrap(),
-        // };
         let key = unsafe {
             SolPubkey {
                 key: &*(input.add(offset) as *mut [u8; SIZE_PUBKEY]),
