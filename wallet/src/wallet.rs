@@ -48,6 +48,7 @@ pub enum WalletCommand {
     CreateVoteAccount(Pubkey, Pubkey, u32, u64),
     ShowVoteAccount(Pubkey),
     CreateStakeAccount(Pubkey, u64),
+    CreateMiningPoolAccount(Pubkey, u64),
     DelegateStake(Keypair, Pubkey),
     ShowStakeAccount(Pubkey),
     Deploy(String),
@@ -213,6 +214,14 @@ pub fn parse_command(
             let lamports = matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::CreateStakeAccount(
                 staking_account_id,
+                lamports,
+            ))
+        }
+        ("create-mining-pool-account", Some(matches)) => {
+            let mining_pool_account_id = pubkey_of(matches, "mining_pool_account_id").unwrap();
+            let lamports = matches.value_of("lamports").unwrap().parse()?;
+            Ok(WalletCommand::CreateMiningPoolAccount(
+                mining_pool_account_id,
                 lamports,
             ))
         }
@@ -469,11 +478,28 @@ fn process_create_stake_account(
     lamports: u64,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
-    let ixs = vec![stake_instruction::create_account(
+    let ixs = stake_instruction::create_delegate_account(
         &config.keypair.pubkey(),
         staking_account_id,
         lamports,
-    )];
+    );
+    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    Ok(signature_str.to_string())
+}
+
+fn process_create_mining_pool_account(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    mining_pool_account_id: &Pubkey,
+    lamports: u64,
+) -> ProcessResult {
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let ixs = stake_instruction::create_mining_pool_account(
+        &config.keypair.pubkey(),
+        mining_pool_account_id,
+        lamports,
+    );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
@@ -813,7 +839,15 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             process_create_stake_account(&rpc_client, config, &staking_account_id, *lamports)
         }
 
-        // Create stake account
+        WalletCommand::CreateMiningPoolAccount(mining_pool_account_id, lamports) => {
+            process_create_mining_pool_account(
+                &rpc_client,
+                config,
+                &mining_pool_account_id,
+                *lamports,
+            )
+        }
+
         WalletCommand::DelegateStake(staking_account_keypair, voting_account_id) => {
             process_delegate_stake(
                 &rpc_client,
@@ -1099,6 +1133,27 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 )
         )
         .subcommand(
+            SubCommand::with_name("create-mining-pool-account")
+                .about("Create mining pool account")
+                .arg(
+                    Arg::with_name("mining_pool_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Staking account address to fund"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(2)
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The number of lamports to assign to the mining pool account"),
+                ),
+        )
+       .subcommand(
             SubCommand::with_name("create-stake-account")
                 .about("Create staking account")
                 .arg(
