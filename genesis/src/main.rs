@@ -99,7 +99,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         )
         .arg(
             Arg::with_name("bootstrap_storage_keypair_file")
-                .short("r")
                 .long("bootstrap-storage-keypair")
                 .value_name("BOOTSTRAP STORAGE KEYPAIR")
                 .takes_value(true)
