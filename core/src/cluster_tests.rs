@@ -20,6 +20,7 @@ use solana_sdk::timing::{
     NUM_CONSECUTIVE_LEADER_SLOTS,
 };
 use solana_sdk::transport::TransportError;
+use std::cmp::max;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -85,14 +86,18 @@ pub fn fullnode_exit(entry_point_info: &ContactInfo, nodes: usize) {
     }
 }
 
-pub fn verify_ledger_ticks(ledger_path: &str, ticks_per_slot: usize) {
+pub fn verify_ledger_ticks(ledger_path: &str, ticks_per_slot: usize) -> u64 {
     let ledger = Blocktree::open(ledger_path).unwrap();
+    let mut greatest_slot = 0;
     let zeroth_slot = ledger.get_slot_entries(0, 0, None).unwrap();
     let last_id = zeroth_slot.last().unwrap().hash;
     let next_slots = ledger.get_slots_since(&[0]).unwrap().remove(&0).unwrap();
     let mut pending_slots: Vec<_> = next_slots
         .into_iter()
-        .map(|slot| (slot, 0, last_id))
+        .map(|slot| {
+            greatest_slot = max(slot, greatest_slot);
+            (slot, 0, last_id)
+        })
         .collect();
     while !pending_slots.is_empty() {
         let (slot, parent_slot, last_id) = pending_slots.pop().unwrap();
@@ -116,6 +121,8 @@ pub fn verify_ledger_ticks(ledger_path: &str, ticks_per_slot: usize) {
                 .map(|child_slot| (child_slot, slot, last_id)),
         );
     }
+
+    greatest_slot
 }
 
 pub fn sleep_n_epochs(

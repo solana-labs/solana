@@ -207,3 +207,54 @@ fn test_listener_startup() {
     let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 4).unwrap();
     assert_eq!(cluster_nodes.len(), 4);
 }
+
+#[test]
+fn test_repairman_catchup() {
+    let mut validator_config = ValidatorConfig::default();
+    let num_ticks_per_second = 100;
+    let num_ticks_per_slot = 10;
+    let num_slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
+
+    validator_config.rpc_config.enable_fullnode_exit = true;
+    let mut cluster = LocalCluster::new(&ClusterConfig {
+        node_stakes: vec![999_990],
+        cluster_lamports: 1_000_000,
+        validator_config: validator_config.clone(),
+        ticks_per_slot: num_ticks_per_slot,
+        slots_per_epoch: num_slots_per_epoch,
+        poh_config: PohConfig::new_sleep(Duration::from_millis(1000 / num_ticks_per_second)),
+        ..ClusterConfig::default()
+    });
+
+    // Sleep for longer than the first 2 warmup epochs
+    cluster_tests::sleep_n_epochs(
+        5.0,
+        &cluster.genesis_block.poh_config,
+        timing::DEFAULT_TICKS_PER_SLOT,
+        num_slots_per_epoch,
+    );
+
+    // Start up a new node, wait for catchup. Backwards repair won't be sufficient because the
+    // leader is sending blobs past this validator's first two confirmed epochs. Thus, the repairman
+    // protocol will have to kick in for this validator to repair.
+    cluster.add_validator(&validator_config, 3);
+
+    cluster_tests::sleep_n_epochs(
+        3.0,
+        &cluster.genesis_block.poh_config,
+        timing::DEFAULT_TICKS_PER_SLOT,
+        num_slots_per_epoch,
+    );
+
+    cluster.close_preserve_ledgers();
+    let all_ids = cluster.get_node_pubkeys();
+    let leader_id = cluster.entry_point_info.id;
+    let validator_id = all_ids.into_iter().find(|x| *x != leader_id).unwrap();
+    let validator_ledger = cluster.fullnode_infos[&validator_id].ledger_path.clone();
+
+    let num_expected_slots = 97;
+    assert!(
+        cluster_tests::verify_ledger_ticks(&validator_ledger, num_ticks_per_slot as usize)
+            > num_expected_slots
+    );
+}

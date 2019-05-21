@@ -223,7 +223,7 @@ impl LocalCluster {
         }
     }
 
-    fn add_validator(&mut self, validator_config: &ValidatorConfig, stake: u64) {
+    pub fn add_validator(&mut self, validator_config: &ValidatorConfig, stake: u64) {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,
