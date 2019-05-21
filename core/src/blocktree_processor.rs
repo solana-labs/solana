@@ -281,7 +281,7 @@ pub fn process_blocktree(
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::blocktree::create_new_tmp_ledger;
     use crate::blocktree::tests::entries_to_blobs;
@@ -295,7 +295,7 @@ mod tests {
     use solana_sdk::system_transaction;
     use solana_sdk::transaction::TransactionError;
 
-    fn fill_blocktree_slot_with_ticks(
+    pub fn fill_blocktree_slot_with_ticks(
         blocktree: &Blocktree,
         ticks_per_slot: u64,
         slot: u64,
