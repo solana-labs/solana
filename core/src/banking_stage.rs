@@ -27,7 +27,6 @@ use solana_sdk::timing::{
 };
 use solana_sdk::transaction::{self, Transaction, TransactionError};
 use std::net::UdpSocket;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex, RwLock};
@@ -36,8 +35,7 @@ use std::time::Duration;
 use std::time::Instant;
 use sys_info;
 
-// Rc prevents clone/copy of Packets vector buffer
-type PacketsAndOffsets = (Rc<Packets>, Vec<usize>);
+type PacketsAndOffsets = (Packets, Vec<usize>);
 pub type UnprocessedPackets = Vec<PacketsAndOffsets>;
 
 // number of threads is 1 until mt bank is ready
@@ -711,11 +709,6 @@ impl BankingStage {
         let proc_start = Instant::now();
         let mut new_tx_count = 0;
 
-        let mms: Vec<_> = mms
-            .into_iter()
-            .map(|(packets, vers)| (Rc::new(packets), vers))
-            .collect();
-
         let mut mms_iter = mms.into_iter();
         let mut unprocessed_packets = vec![];
         while let Some((msgs, vers)) = mms_iter.next() {
@@ -772,7 +765,7 @@ impl BankingStage {
 
     fn push_unprocessed(
         unprocessed_packets: &mut UnprocessedPackets,
-        packets: Rc<Packets>,
+        packets: Packets,
         packet_indexes: Vec<usize>,
     ) {
         if !packet_indexes.is_empty() {
@@ -1537,7 +1530,7 @@ mod tests {
                 let valid_indexes = (0..32)
                     .filter_map(|x| if x % 2 != 0 { Some(x as usize) } else { None })
                     .collect_vec();
-                (Rc::new(packets), valid_indexes)
+                (packets, valid_indexes)
             })
             .collect_vec();
 
