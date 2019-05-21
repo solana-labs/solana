@@ -9,17 +9,15 @@ if [ ! -d "$1" ]; then
     exit 1
 fi
 
-# export XARGO_HOME="$PWD/../../../target/xargo"
-export XARGO_HOME="/Users/jack/workbench/active/solana/target/xargo"
-
+cd "$(dirname "$0")"
+bpf_sdk="$PWD/.."
+export XARGO_HOME="$PWD/../../../target/xargo"
 
 cd "$1"
 
 cargo install xargo
 
 set -e
-
-bpf_sdk=/Users/jack/workbench/active/solana/sdk/bpf
 
 # Ensure the sdk is installed
 "$bpf_sdk"/scripts/install.sh
@@ -35,7 +33,6 @@ export RUSTFLAGS="
     -C link-arg=-shared \
     -C link-arg=--entry=entrypoint \
     -C linker=$bpf_sdk/llvm-native/bin/ld.lld"
-# export XARGO_HOME="$PWD/../../../../target/xargo"
 export XARGO_RUST_SRC="$bpf_sdk/rust-bpf-sysroot/src"
 xargo build --target bpfel-unknown-unknown --release -v
 
