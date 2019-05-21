@@ -4,7 +4,9 @@
 
 extern crate solana_sdk_bpf_utils;
 
-use solana_sdk_bpf_utils::*;
+use solana_sdk_bpf_utils::entrypoint;
+use solana_sdk_bpf_utils::entrypoint::*;
+use solana_sdk_bpf_utils::log::*;
 
 struct SStruct {
     x: u64,
@@ -17,7 +19,7 @@ fn return_sstruct() -> SStruct {
     SStruct { x: 1, y: 2, z: 3 }
 }
 
-solana_entrypoint!(process_instruction);
+entrypoint!(process_instruction);
 fn process_instruction(
     ka: &mut [Option<SolKeyedAccount>; MAX_ACCOUNTS],
     info: &SolClusterInfo,
