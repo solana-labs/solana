@@ -23,7 +23,7 @@ demo demonstrates one way to host an exchange on the Solana blockchain by
 emulating a currency exchange.
 
 The assets are virtual tokens held by investors who may post trade requests to
-the exchange.  A broker monitors the exchange and posts swap requests for
+the exchange.  A Swapper monitors the exchange and posts swap requests for
 matching trade orders.  All the transactions can execute concurrently.
 
 ## Premise
@@ -75,7 +75,7 @@ matching trade orders.  All the transactions can execute concurrently.
     contain the same information as the trade request.
 - Price spread
   - The difference between the two matching trade orders. The spread is the
-    profit of the broker initiating the swap request.
+    profit of the Swapper initiating the swap request.
 - Swap requirements
   - Policies that result in a successful trade swap.
 - Swap request
@@ -85,7 +85,7 @@ matching trade orders.  All the transactions can execute concurrently.
     swap requirements.  A trade swap may not wholly satisfy one or both of the
     trade orders in which case the trade orders are adjusted appropriately.  As
     long as the swap requirements are met there will be an exchange of tokens
-    between accounts.  Any price spread is deposited into the broker's profit
+    between accounts.  Any price spread is deposited into the Swapper's profit
     account.  All trade swaps are recorded in a new account for posterity.
 - Investor
   - Individual investors who hold a number of tokens and wish to trade them on
@@ -93,41 +93,41 @@ matching trade orders.  All the transactions can execute concurrently.
     accounts containing tokens and/or trade requests.  Investors post
     transactions to the exchange in order to request tokens and post or cancel
     trade requests.
-- Broker
-  - An agent who facilitates trading between investors.  Brokers operate as
+- Swapper
+  - An agent who facilitates trading between investors.  Swappers operate as
     Solana thin clients who monitor all the trade orders looking for a trade
-    match.  Once found, the broker issues a swap request to the exchange.
-    Brokers are the engine of the exchange and are rewarded for their efforts by
-    accumulating the price spreads of the swaps they initiate.  Brokers also
+    match.  Once found, the Swapper issues a swap request to the exchange.
+    Swappers are the engine of the exchange and are rewarded for their efforts by
+    accumulating the price spreads of the swaps they initiate.  Swappers also
     provide current bid/ask price and OHLCV (Open, High, Low, Close, Volume)
     information on demand via a public network port.
 - Transaction fees
   - Solana transaction fees are paid for by the transaction submitters who are
-    the Investors and Brokers.
+    the Investors and Swappers.
 
 ## Exchange startup
 
 The exchange is up and running when it reaches a state where it can take
-investor's trades and broker's swap requests.  To achieve this state the
+investor's trades and Swapper's swap requests.  To achieve this state the
 following must occur in order:
 
 - Start the Solana blockchain
-- Start the broker thin-client
-- The broker subscribes to change notifications for all the accounts owned by
+- Start the Swapper thin-client
+- The Swapper subscribes to change notifications for all the accounts owned by
   the exchange program id.  The subscription is managed via Solana's JSON RPC
   interface.
-- The broker starts responding to queries for bid/ask price and OHLCV
+- The Swapper starts responding to queries for bid/ask price and OHLCV
 
-The broker responding successfully to price and OHLCV requests is the signal to
+The Swapper responding successfully to price and OHLCV requests is the signal to
 the investors that trades submitted after that point will be analyzed.  <!--This
 is not ideal, and instead investors should be able to submit trades at any time,
-and the broker could come and go without missing a trade.  One way to achieve
-this is for the broker to read the current state of all accounts looking for all
+and the Swapper could come and go without missing a trade.  One way to achieve
+this is for the Swapper to read the current state of all accounts looking for all
 open trade orders.-->
 
 Investors will initially query the exchange to discover their current balance
 for each type of token.  If the investor does not already have an account for
-each type of token, they will submit account requests.  Brokers as well will
+each type of token, they will submit account requests.  Swappers as well will
 request accounts to hold the tokens they earn by initiating trade swaps.
 
 ```rust
@@ -165,7 +165,7 @@ pub struct TokenAccountInfo {
 }
 ```
 
-For this demo investors or brokers can request more tokens from the exchange at
+For this demo investors or Swappers can request more tokens from the exchange at
 any time by submitting token requests. In non-demos, an exchange of this type
 would provide another way to exchange a 3rd party asset into tokens.
 
@@ -269,10 +269,10 @@ pub enum ExchangeInstruction {
 
 ## Trade swaps
 
-The broker is monitoring the accounts assigned to the exchange program and
+The Swapper is monitoring the accounts assigned to the exchange program and
 building a trade-order table.  The trade order table is used to identify
 matching trade orders which could be fulfilled.  When a match is found the
-broker should issue a swap request.  Swap requests may not satisfy the entirety
+Swapper should issue a swap request.  Swap requests may not satisfy the entirety
 of either order, but the exchange will greedily fulfill it.  Any leftover tokens
 in either account will keep the trade order valid for further swap requests in
 the future.
@@ -310,14 +310,14 @@ whole for clarity.
 | 5 | 1 T AB 2 10 | 2 F AB 1 5 |
 
 As part of a successful swap request, the exchange will credit tokens to the
-broker's account equal to the difference in the price ratios or the two orders.
-These tokens are considered the broker's profit for initiating the trade.
+Swapper's account equal to the difference in the price ratios or the two orders.
+These tokens are considered the Swapper's profit for initiating the trade.
 
-The broker would initiate the following swap on the order table above:
+The Swapper would initiate the following swap on the order table above:
 
   - Row 1, To:   Investor 1 trades 2 A tokens to 8 B tokens
   - Row 1, From: Investor 2 trades 2 A tokens from 8 B tokens
-  - Broker takes 8 B tokens as profit
+  - Swapper takes 8 B tokens as profit
 
 Both row 1 trades are fully realized, table becomes:
 
@@ -328,11 +328,11 @@ Both row 1 trades are fully realized, table becomes:
 | 3 | 1 T AB 2 8  | 2 F AB 3 6 |
 | 4 | 1 T AB 2 10 | 2 F AB 1 5 |
 
-The broker would initiate the following swap:
+The Swapper would initiate the following swap:
 
   - Row 1, To:   Investor 1 trades 1 A token to 4 B tokens
   - Row 1, From: Investor 2 trades 1 A token from 4 B tokens
-  - Broker takes 4 B tokens as profit
+  - Swapper takes 4 B tokens as profit
 
 Row 1 From is not fully realized, table becomes:
 
@@ -343,11 +343,11 @@ Row 1 From is not fully realized, table becomes:
 | 3 | 1 T AB 2 10 | 2 F AB 3 6 |
 | 4 |             | 2 F AB 1 5 |
 
-The broker would initiate the following swap:
+The Swapper would initiate the following swap:
 
   - Row 1, To:   Investor 1 trades 1 A token to 6 B tokens
   - Row 1, From: Investor 2 trades 1 A token from 6 B tokens
-  - Broker takes 2 B tokens as profit
+  - Swapper takes 2 B tokens as profit
 
 Row 1 To is now fully realized, table becomes:
 
@@ -357,11 +357,11 @@ Row 1 To is now fully realized, table becomes:
 | 2 | 1 T AB 2 8  | 2 F AB 3 5 |
 | 3 | 1 T AB 2 10 | 2 F AB 1 5 |
 
-The broker would initiate the following last swap:
+The Swapper would initiate the following last swap:
 
   - Row 1, To:   Investor 1 trades 2 A token to 12 B tokens
   - Row 1, From: Investor 2 trades 2 A token from 12 B tokens
-  - Broker takes 4 B tokens as profit
+  - Swapper takes 4 B tokens as profit
 
 Table becomes:
 
@@ -383,7 +383,7 @@ pub enum ExchangeInstruction {
     /// key 3 - `From` trade order
     /// key 4 - Token account associated with the To Trade
     /// key 5 - Token account associated with From trade
-    /// key 6 - Token account in which to deposit the brokers profit from the swap.
+    /// key 6 - Token account in which to deposit the Swappers profit from the swap.
     SwapRequest,
 }
 
@@ -442,14 +442,14 @@ pub enum ExchangeInstruction {
     /// key 3 - `From` trade order
     /// key 4 - Token account associated with the To Trade
     /// key 5 - Token account associated with From trade
-    /// key 6 - Token account in which to deposit the brokers profit from the swap.
+    /// key 6 - Token account in which to deposit the Swappers profit from the swap.
     SwapRequest,
 }
 ```
 
 ## Quotes and OHLCV
 
-The broker will provide current bid/ask price quotes based on trade actively and
+The Swapper will provide current bid/ask price quotes based on trade actively and
 also provide OHLCV based on some time window.  The details of how the bid/ask
 price quotes are calculated are yet to be decided.
 
