@@ -136,7 +136,7 @@ impl RepairService {
                             &cluster_info,
                             completed_slots_receiver,
                         );
-                        Self::generate_repairs(blocktree, MAX_REPAIR_LENGTH)
+                        Self::generate_repairs(blocktree, root, MAX_REPAIR_LENGTH)
                     }
                 }
             };
@@ -207,11 +207,14 @@ impl RepairService {
         Ok(repairs)
     }
 
-    fn generate_repairs(blocktree: &Blocktree, max_repairs: usize) -> Result<(Vec<RepairType>)> {
+    fn generate_repairs(
+        blocktree: &Blocktree,
+        root: u64,
+        max_repairs: usize,
+    ) -> Result<(Vec<RepairType>)> {
         // Slot height and blob indexes for blobs we want to repair
         let mut repairs: Vec<RepairType> = vec![];
-        let slot = blocktree.get_root()?;
-        Self::generate_repairs_for_fork(blocktree, &mut repairs, max_repairs, slot);
+        Self::generate_repairs_for_fork(blocktree, &mut repairs, max_repairs, root);
 
         // TODO: Incorporate gossip to determine priorities for repair?
 
@@ -382,7 +385,7 @@ mod test {
             blobs.extend(blobs2);
             blocktree.write_blobs(&blobs).unwrap();
             assert_eq!(
-                RepairService::generate_repairs(&blocktree, 2).unwrap(),
+                RepairService::generate_repairs(&blocktree, 0, 2).unwrap(),
                 vec![
                     RepairType::HighestBlob(0, 0),
                     RepairType::Orphan(0),
@@ -408,7 +411,7 @@ mod test {
 
             // Check that repair tries to patch the empty slot
             assert_eq!(
-                RepairService::generate_repairs(&blocktree, 2).unwrap(),
+                RepairService::generate_repairs(&blocktree, 0, 2).unwrap(),
                 vec![RepairType::HighestBlob(0, 0), RepairType::Orphan(0)]
             );
         }
@@ -447,12 +450,12 @@ mod test {
                 .collect();
 
             assert_eq!(
-                RepairService::generate_repairs(&blocktree, std::usize::MAX).unwrap(),
+                RepairService::generate_repairs(&blocktree, 0, std::usize::MAX).unwrap(),
                 expected
             );
 
             assert_eq!(
-                RepairService::generate_repairs(&blocktree, expected.len() - 2).unwrap()[..],
+                RepairService::generate_repairs(&blocktree, 0, expected.len() - 2).unwrap()[..],
                 expected[0..expected.len() - 2]
             );
         }
@@ -479,7 +482,7 @@ mod test {
             let expected: Vec<RepairType> = vec![RepairType::HighestBlob(0, num_entries_per_slot)];
 
             assert_eq!(
-                RepairService::generate_repairs(&blocktree, std::usize::MAX).unwrap(),
+                RepairService::generate_repairs(&blocktree, 0, std::usize::MAX).unwrap(),
                 expected
             );
         }

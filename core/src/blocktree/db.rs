@@ -279,7 +279,12 @@ where
         }
     }
 
-    pub fn batch_processor(&self) -> BatchProcessor<B> {
+    // Note this returns an object that can be used to directly write to multiple column families.
+    // This circumvents the synchronization around APIs that in Blocktree that use
+    // blocktree.batch_processor, so this API should only be used if the caller is sure they
+    // are writing to data iin columns that will not be corrupted by any simultaneous blocktree
+    // operations.
+    pub unsafe fn batch_processor(&self) -> BatchProcessor<B> {
         BatchProcessor {
             backend: Arc::clone(&self.backend),
         }

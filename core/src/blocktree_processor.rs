@@ -149,6 +149,8 @@ pub fn process_blocktree(
         vec![(slot, meta, bank, entry_height, last_entry_hash)]
     };
 
+    blocktree.set_root(0, 0).expect("Couldn't set first root");
+
     let leader_schedule_cache = LeaderScheduleCache::new(*pending_slots[0].2.epoch_schedule(), 0);
 
     let mut fork_info = vec![];
@@ -235,7 +237,7 @@ pub fn process_blocktree(
                 .unwrap();
 
             // only process full slots in blocktree_processor, replay_stage
-            //  handles any partials
+            // handles any partials
             if next_meta.is_full() {
                 let next_bank = Arc::new(Bank::new_from_parent(
                     &bank,
@@ -285,6 +287,7 @@ mod tests {
     use crate::blocktree::tests::entries_to_blobs;
     use crate::entry::{create_ticks, next_entry, next_entry_mut, Entry};
     use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
+    use solana_runtime::epoch_schedule::EpochSchedule;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::InstructionError;
     use solana_sdk::pubkey::Pubkey;
@@ -409,7 +412,7 @@ mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blocktree.set_root(4).unwrap();
+        blocktree.set_root(4, 0).unwrap();
 
         let (bank_forks, bank_forks_info, _) =
             process_blocktree(&genesis_block, &blocktree, None).unwrap();
@@ -483,8 +486,8 @@ mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blocktree.set_root(0).unwrap();
-        blocktree.set_root(1).unwrap();
+        blocktree.set_root(0, 0).unwrap();
+        blocktree.set_root(1, 0).unwrap();
 
         let (bank_forks, bank_forks_info, _) =
             process_blocktree(&genesis_block, &blocktree, None).unwrap();
@@ -528,6 +531,63 @@ mod tests {
             assert_eq!(bank_forks[info.bank_slot].slot(), info.bank_slot);
             assert!(bank_forks[info.bank_slot].is_frozen());
         }
+    }
+
+    #[test]
+    fn test_process_blocktree_epoch_boundary_root() {
+        solana_logger::setup();
+
+        let (genesis_block, _mint_keypair) = create_genesis_block(10_000);
+        let ticks_per_slot = genesis_block.ticks_per_slot;
+
+        // Create a new ledger with slot 0 full of ticks
+        let (ledger_path, blockhash) = create_new_tmp_ledger!(&genesis_block);
+        let mut last_entry_hash = blockhash;
+
+        let blocktree =
+            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
+
+        // Let last_slot be the number of slots in the first two epochs
+        let epoch_schedule = get_epoch_schedule(&genesis_block, None);
+        let last_slot = epoch_schedule.get_last_slot_in_epoch(1);
+
+        // Create a single chain of slots with all indexes in the range [0, last_slot + 1]
+        for i in 1..=last_slot + 1 {
+            last_entry_hash = fill_blocktree_slot_with_ticks(
+                &blocktree,
+                ticks_per_slot,
+                i,
+                i - 1,
+                last_entry_hash,
+            );
+        }
+
+        // Set a root on the last slot of the last confirmed epoch
+        blocktree.set_root(last_slot, 0).unwrap();
+
+        // Set a root on the next slot of the confrimed epoch
+        blocktree.set_root(last_slot + 1, last_slot).unwrap();
+
+        // Check that we can properly restart the ledger / leader scheduler doesn't fail
+        let (bank_forks, bank_forks_info, _) =
+            process_blocktree(&genesis_block, &blocktree, None).unwrap();
+
+        assert_eq!(bank_forks_info.len(), 1); // There is one fork
+        assert_eq!(
+            bank_forks_info[0],
+            BankForksInfo {
+                bank_slot: last_slot + 1, // Head is last_slot + 1
+                entry_height: ticks_per_slot * (last_slot + 2),
+            }
+        );
+
+        // The latest root should have purged all its parents
+        assert!(&bank_forks[last_slot + 1]
+            .parents()
+            .iter()
+            .map(|bank| bank.slot())
+            .collect::<Vec<_>>()
+            .is_empty());
     }
 
     #[test]
@@ -1110,5 +1170,13 @@ mod tests {
             bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default(), i as u64);
             bank.squash();
         }
+    }
+
+    fn get_epoch_schedule(
+        genesis_block: &GenesisBlock,
+        account_paths: Option<String>,
+    ) -> EpochSchedule {
+        let bank = Bank::new_with_paths(&genesis_block, account_paths);
+        bank.epoch_schedule().clone()
     }
 }
