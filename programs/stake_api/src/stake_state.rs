@@ -6,8 +6,8 @@
 use crate::id;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::{Account, KeyedAccount};
+use solana_sdk::account_utils::State;
 use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils::State;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::VoteState;
 

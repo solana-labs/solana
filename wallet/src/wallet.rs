@@ -14,10 +14,11 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone::DRONE_PORT;
 #[cfg(test)]
 use solana_drone::drone_mock::request_airdrop_transaction;
+use solana_sdk::account_utils::State;
 use solana_sdk::bpf_loader;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils::{DecodeError, State};
+use solana_sdk::instruction_processor_utils::DecodeError;
 use solana_sdk::loader_instruction;
 use solana_sdk::message::Message;
 use solana_sdk::pubkey::Pubkey;

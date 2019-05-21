@@ -4,8 +4,8 @@ use crate::id;
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::{Account, KeyedAccount};
+use solana_sdk::account_utils::State;
 use solana_sdk::instruction::InstructionError;
-use solana_sdk::instruction_processor_utils::State;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::VecDeque;
 

@@ -1,7 +1,6 @@
-use crate::account::{Account, KeyedAccount};
+use crate::account::KeyedAccount;
 use crate::instruction::InstructionError;
 use crate::pubkey::Pubkey;
-use bincode::ErrorKind;
 use num_traits::FromPrimitive;
 
 // All native programs export a symbol named process()
@@ -51,40 +50,6 @@ macro_rules! solana_program_id(
         }
     )
 );
-
-/// Conveinence trait to covert bincode errors to instruction errors.
-pub trait State<T> {
-    fn state(&self) -> Result<T, InstructionError>;
-    fn set_state(&mut self, state: &T) -> Result<(), InstructionError>;
-}
-
-impl<T> State<T> for Account
-where
-    T: serde::Serialize + serde::de::DeserializeOwned,
-{
-    fn state(&self) -> Result<T, InstructionError> {
-        self.deserialize_data()
-            .map_err(|_| InstructionError::InvalidAccountData)
-    }
-    fn set_state(&mut self, state: &T) -> Result<(), InstructionError> {
-        self.serialize_data(state).map_err(|err| match *err {
-            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
-            _ => InstructionError::GenericError,
-        })
-    }
-}
-
-impl<'a, T> State<T> for KeyedAccount<'a>
-where
-    T: serde::Serialize + serde::de::DeserializeOwned,
-{
-    fn state(&self) -> Result<T, InstructionError> {
-        self.account.state()
-    }
-    fn set_state(&mut self, state: &T) -> Result<(), InstructionError> {
-        self.account.set_state(state)
-    }
-}
 
 pub trait DecodeError<E> {
     fn decode_custom_error_to_enum(int: u32) -> Option<E>
