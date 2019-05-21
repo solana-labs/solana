@@ -45,11 +45,17 @@ test-stable-perf)
     exit 0
   }
 
+  (
+    cd programs/bpf
+    _ RUST_BACKTRACE=1; export RUST_LOG=solana_bpf_loader=info; cargo test --features="bpf_rust" -- --nocapture test_program_bpf_rust
+  )
+  
+
   # BPF program tests
   _ make -C programs/bpf/c tests
-  _ cargo +"$rust_stable" test \
+  _ RUST_LOG=solana_bpf_loader=info; cargo +"$rust_stable" test \
     --manifest-path programs/bpf/Cargo.toml \
-    --no-default-features --features=bpf_c,bpf_rust
+    --no-default-features --features=bpf_c,bpf_rust -- --nocapture
 
   # Run root package tests with these features
   ROOT_FEATURES=erasure,chacha
