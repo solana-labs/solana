@@ -105,10 +105,7 @@ mod bpf {
         fn test_program_bpf_rust() {
             solana_logger::setup();
 
-            let programs = [
-                "solana_bpf_rust_iter",
-                "solana_bpf_rust_noop",
-            ];
+            let programs = ["solana_bpf_rust_iter", "solana_bpf_rust_noop"];
             for program in programs.iter() {
                 let filename = create_bpf_path(program);
                 println!("Test program: {:?} from {:?}", program, filename);
