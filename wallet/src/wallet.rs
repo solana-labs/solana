@@ -50,6 +50,7 @@ pub enum WalletCommand {
     CreateStakeAccount(Pubkey, u64),
     CreateMiningPoolAccount(Pubkey, u64),
     DelegateStake(Keypair, Pubkey),
+    RedeemVoteCredits(Pubkey, Pubkey, Pubkey),
     ShowStakeAccount(Pubkey),
     Deploy(String),
     GetTransactionCount,
@@ -231,6 +232,16 @@ pub fn parse_command(
             let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
             Ok(WalletCommand::DelegateStake(
                 staking_account_keypair,
+                voting_account_id,
+            ))
+        }
+        ("redeem-vote-credits", Some(matches)) => {
+            let mining_pool_account_id = pubkey_of(matches, "mining_pool_account_id").unwrap();
+            let staking_account_id = pubkey_of(matches, "staking_account_id").unwrap();
+            let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
+            Ok(WalletCommand::RedeemVoteCredits(
+                mining_pool_account_id,
+                staking_account_id,
                 voting_account_id,
             ))
         }
@@ -524,6 +535,25 @@ fn process_delegate_stake(
     );
     let signature_str = rpc_client
         .send_and_confirm_transaction(&mut tx, &[&config.keypair, &staking_account_keypair])?;
+    Ok(signature_str.to_string())
+}
+
+fn process_redeem_vote_credits(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    mining_pool_account_id: &Pubkey,
+    staking_account_id: &Pubkey,
+    voting_account_id: &Pubkey,
+) -> ProcessResult {
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let ixs = vec![stake_instruction::redeem_vote_credits(
+        &config.keypair.pubkey(),
+        mining_pool_account_id,
+        staking_account_id,
+        voting_account_id,
+    )];
+    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
 
@@ -856,6 +886,19 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
                 &voting_account_id,
             )
         }
+
+        WalletCommand::RedeemVoteCredits(
+            mining_pool_account_id,
+            staking_account_id,
+            voting_account_id,
+        ) => process_redeem_vote_credits(
+            &rpc_client,
+            config,
+            &mining_pool_account_id,
+            &staking_account_id,
+            &voting_account_id,
+        ),
+
         // Show a vote account
         WalletCommand::ShowStakeAccount(staking_account_id) => {
             process_show_stake_account(&rpc_client, config, &staking_account_id)
@@ -1196,6 +1239,37 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 ),
         )
         .subcommand(
+            SubCommand::with_name("redeem-vote-credits")
+                .about("Redeem credits in the staking account")
+                .arg(
+                    Arg::with_name("mining_pool_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Mining pool account to redeem credits from"),
+                )
+                .arg(
+                    Arg::with_name("staking_account_id")
+                        .index(2)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Staking account address to redeem credits for"),
+                )
+                .arg(
+                    Arg::with_name("voting_account_id")
+                        .index(3)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("The voting account to which the stake was previously delegated."),
+                ),
+        )
+  .subcommand(
             SubCommand::with_name("show-stake-account")
                 .about("Show the contents of a stake account")
                 .arg(

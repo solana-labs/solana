@@ -10,23 +10,35 @@ use solana_sdk::system_instruction;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum StakeInstruction {
-    /// Initialize the stake account as a Delegate account
-    ///  expects 1 KeyedAccounts: the StakeAccount to be initialized
+    /// Initialize the stake account as a Delegate account.
+    ///
+    /// Expects 2 Accounts:
+    ///    0 - payer (TODO unused/remove)
+    ///    1 - Delegate StakeAccount to be initialized
     InitializeDelegate,
 
     // Initialize the stake account as a MiningPool account
-    ///  expects 1 KeyedAccounts: the StakeAccount to be initialized
+    ///
+    /// Expects 2 Accounts:
+    ///    0 - payer (TODO unused/remove)
+    ///    1 - MiningPool StakeAccount to be initialized
     InitializeMiningPool,
 
     /// `Delegate` or `Assign` a stake account to a particular node
-    ///  expects 2 KeyedAccounts:
-    ///     StakeAccount to be updated
-    ///     VoteAccount to which this Stake will be delegated
+    ///
+    /// Expects 3 Accounts:
+    ///    0 - payer (TODO unused/remove)
+    ///    1 - Delegate StakeAccount to be updated
+    ///    2 - VoteAccount to which this Stake will be delegated
     DelegateStake,
 
     /// Redeem credits in the stake account
-    ///  expects 3 KeyedAccounts: the StakeAccount to be updated
-    ///  and the VoteAccount to which this Stake will be delegated
+    ///
+    /// Expects 4 Accounts:
+    ///    0 - payer (TODO unused/remove)
+    ///    1 - MiningPool Stake Account to redeem credits from
+    ///    2 - Delegate StakeAccount to be updated
+    ///    3 - VoteAccount to which the Stake was delegated to previously
     RedeemVoteCredits,
 }
 
