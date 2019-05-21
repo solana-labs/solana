@@ -98,6 +98,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Path to file containing the bootstrap leader's staking keypair"),
         )
         .arg(
+            Arg::with_name("bootstrap_storage_keypair_file")
+                .long("bootstrap-storage-keypair")
+                .value_name("BOOTSTRAP STORAGE KEYPAIR")
+                .takes_value(true)
+                .required(true)
+                .help("Path to file containing the bootstrap leader's storage keypair"),
+        )
+        .arg(
             Arg::with_name("bootstrap_leader_lamports")
                 .long("bootstrap-leader-lamports")
                 .value_name("LAMPORTS")
@@ -156,6 +164,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_leader_keypair_file = matches.value_of("bootstrap_leader_keypair_file").unwrap();
     let bootstrap_vote_keypair_file = matches.value_of("bootstrap_vote_keypair_file").unwrap();
     let bootstrap_stake_keypair_file = matches.value_of("bootstrap_stake_keypair_file").unwrap();
+    let bootstrap_storage_keypair_file =
+        matches.value_of("bootstrap_storage_keypair_file").unwrap();
     let mint_keypair_file = matches.value_of("mint_keypair_file").unwrap();
     let ledger_path = matches.value_of("ledger_path").unwrap();
     let lamports = value_t_or_exit!(matches, "lamports", u64);
@@ -165,6 +175,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_leader_keypair = read_keypair(bootstrap_leader_keypair_file)?;
     let bootstrap_vote_keypair = read_keypair(bootstrap_vote_keypair_file)?;
     let bootstrap_stake_keypair = read_keypair(bootstrap_stake_keypair_file)?;
+    let bootstrap_storage_keypair = read_keypair(bootstrap_storage_keypair_file)?;
     let mint_keypair = read_keypair(mint_keypair_file)?;
 
     // TODO: de-duplicate the stake once passive staking
@@ -200,6 +211,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     &vote_state,
                     bootstrap_leader_stake_lamports,
                 ),
+            ),
+            // storage account
+            (
+                bootstrap_storage_keypair.pubkey(),
+                Account::new(1, 1024 * 4, &solana_storage_api::id()),
             ),
         ],
         &[

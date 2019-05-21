@@ -92,7 +92,8 @@ setup_vote_and_stake_accounts() {
   if [[ -f "$node_keypair_path".configured ]]; then
     echo "Vote and stake accounts have already been configured"
   else
-    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop $((stake*2+1)) || return $?
+    # Fund the node with enough tokens to fund its Vote, Staking, and Storage accounts
+    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop $((stake*2+2)) || return $?
 
     # Fund the vote account from the node, with the node as the node_pubkey
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
