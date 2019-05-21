@@ -411,11 +411,11 @@ impl LocalCluster {
             let stake_account_pubkey = stake_account_keypair.pubkey();
             let mut transaction = Transaction::new_signed_instructions(
                 &[from_account.as_ref()],
-                vec![stake_instruction::create_account(
+                stake_instruction::create_delegate_account(
                     &from_account.pubkey(),
                     &stake_account_pubkey,
                     amount,
-                )],
+                ),
                 client.get_recent_blockhash().unwrap().0,
             );
 

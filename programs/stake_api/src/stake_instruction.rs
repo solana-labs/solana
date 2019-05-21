@@ -10,26 +10,84 @@ use solana_sdk::system_instruction;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum StakeInstruction {
+    /// Initialize the stake account as a Delegate account.
+    ///
+    /// Expects 2 Accounts:
+    ///    0 - payer (TODO unused/remove)
+    ///    1 - Delegate StakeAccount to be initialized
+    InitializeDelegate,
+
+    // Initialize the stake account as a MiningPool account
+    ///
+    /// Expects 2 Accounts:
+    ///    0 - payer (TODO unused/remove)
+    ///    1 - MiningPool StakeAccount to be initialized
+    InitializeMiningPool,
+
     /// `Delegate` or `Assign` a stake account to a particular node
-    ///  expects 2 KeyedAccounts:
-    ///     StakeAccount to be updated
-    ///     VoteAccount to which this Stake will be delegated
+    ///
+    /// Expects 3 Accounts:
+    ///    0 - payer (TODO unused/remove)
+    ///    1 - Delegate StakeAccount to be updated
+    ///    2 - VoteAccount to which this Stake will be delegated
     DelegateStake,
 
     /// Redeem credits in the stake account
-    ///  expects 3 KeyedAccounts: the StakeAccount to be updated
-    ///  and the VoteAccount to which this Stake will be delegated
+    ///
+    /// Expects 4 Accounts:
+    ///    0 - payer (TODO unused/remove)
+    ///    1 - MiningPool Stake Account to redeem credits from
+    ///    2 - Delegate StakeAccount to be updated
+    ///    3 - VoteAccount to which the Stake is delegated
     RedeemVoteCredits,
 }
 
-pub fn create_account(from_id: &Pubkey, staker_id: &Pubkey, lamports: u64) -> Instruction {
-    system_instruction::create_account(
-        from_id,
-        staker_id,
-        lamports,
-        std::mem::size_of::<StakeState>() as u64,
-        &id(),
-    )
+pub fn create_delegate_account(
+    from_id: &Pubkey,
+    staker_id: &Pubkey,
+    lamports: u64,
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::create_account(
+            from_id,
+            staker_id,
+            lamports,
+            std::mem::size_of::<StakeState>() as u64,
+            &id(),
+        ),
+        Instruction::new(
+            id(),
+            &StakeInstruction::InitializeDelegate,
+            vec![
+                AccountMeta::new(*from_id, true),
+                AccountMeta::new(*staker_id, false),
+            ],
+        ),
+    ]
+}
+
+pub fn create_mining_pool_account(
+    from_id: &Pubkey,
+    staker_id: &Pubkey,
+    lamports: u64,
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::create_account(
+            from_id,
+            staker_id,
+            lamports,
+            std::mem::size_of::<StakeState>() as u64,
+            &id(),
+        ),
+        Instruction::new(
+            id(),
+            &StakeInstruction::InitializeMiningPool,
+            vec![
+                AccountMeta::new(*from_id, true),
+                AccountMeta::new(*staker_id, false),
+            ],
+        ),
+    ]
 }
 
 pub fn redeem_vote_credits(
@@ -67,17 +125,29 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    if keyed_accounts.len() < 3 {
+    if keyed_accounts.len() < 2 {
         Err(InstructionError::InvalidInstructionData)?;
     }
 
-    // 0th index is the guy who paid for the transaction
+    // 0th index is the account who paid for the transaction
+    // TODO: Remove the 0th index from the instruction. The stake program doesn't care who paid.
     let (me, rest) = &mut keyed_accounts.split_at_mut(2);
-
     let me = &mut me[1];
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
+        StakeInstruction::InitializeMiningPool => {
+            if !rest.is_empty() {
+                Err(InstructionError::InvalidInstructionData)?;
+            }
+            me.initialize_mining_pool()
+        }
+        StakeInstruction::InitializeDelegate => {
+            if !rest.is_empty() {
+                Err(InstructionError::InvalidInstructionData)?;
+            }
+            me.initialize_delegate()
+        }
         StakeInstruction::DelegateStake => {
             if rest.len() != 1 {
                 Err(InstructionError::InvalidInstructionData)?;
@@ -127,10 +197,6 @@ mod tests {
 
     #[test]
     fn test_stake_process_instruction() {
-        assert_eq!(
-            process_instruction(&create_account(&Pubkey::default(), &Pubkey::default(), 0)),
-            Err(InstructionError::InvalidInstructionData) // won't even decode ;)
-        );
         assert_eq!(
             process_instruction(&redeem_vote_credits(
                 &Pubkey::default(),

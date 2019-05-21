@@ -13,6 +13,7 @@ use solana_vote_api::vote_state::VoteState;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum StakeState {
+    Uninitialized,
     Delegate {
         voter_id: Pubkey,
         credits_observed: u64,
@@ -22,10 +23,7 @@ pub enum StakeState {
 
 impl Default for StakeState {
     fn default() -> Self {
-        StakeState::Delegate {
-            voter_id: Pubkey::default(),
-            credits_observed: 0,
-        }
+        StakeState::Uninitialized
     }
 }
 //  TODO: trusted values of network parameters come from where?
@@ -90,6 +88,8 @@ impl StakeState {
 }
 
 pub trait StakeAccount {
+    fn initialize_mining_pool(&mut self) -> Result<(), InstructionError>;
+    fn initialize_delegate(&mut self) -> Result<(), InstructionError>;
     fn delegate_stake(&mut self, vote_account: &KeyedAccount) -> Result<(), InstructionError>;
     fn redeem_vote_credits(
         &mut self,
@@ -99,6 +99,23 @@ pub trait StakeAccount {
 }
 
 impl<'a> StakeAccount for KeyedAccount<'a> {
+    fn initialize_mining_pool(&mut self) -> Result<(), InstructionError> {
+        if let StakeState::Uninitialized = self.state()? {
+            self.set_state(&StakeState::MiningPool)
+        } else {
+            Err(InstructionError::InvalidAccountData)
+        }
+    }
+    fn initialize_delegate(&mut self) -> Result<(), InstructionError> {
+        if let StakeState::Uninitialized = self.state()? {
+            self.set_state(&StakeState::Delegate {
+                voter_id: Pubkey::default(),
+                credits_observed: 0,
+            })
+        } else {
+            Err(InstructionError::InvalidAccountData)
+        }
+    }
     fn delegate_stake(&mut self, vote_account: &KeyedAccount) -> Result<(), InstructionError> {
         if self.signer_key().is_none() {
             return Err(InstructionError::MissingRequiredSignature);
@@ -156,7 +173,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 })
             } else {
                 // not worth collecting
-                Ok(())
+                Err(InstructionError::CustomError(1))
             }
         } else {
             Err(InstructionError::InvalidAccountData)
@@ -215,6 +232,7 @@ mod tests {
             assert_eq!(stake_state, StakeState::default());
         }
 
+        stake_keyed_account.initialize_delegate().unwrap();
         assert_eq!(
             stake_keyed_account.delegate_stake(&vote_keyed_account),
             Err(InstructionError::MissingRequiredSignature)
@@ -316,6 +334,7 @@ mod tests {
             &id(),
         );
         let mut stake_keyed_account = KeyedAccount::new(&pubkey, true, &mut stake_account);
+        stake_keyed_account.initialize_delegate().unwrap();
 
         // delegate the stake
         assert!(stake_keyed_account
@@ -338,9 +357,11 @@ mod tests {
             .unwrap();
 
         // no movement in vote account, so no redemption needed
-        assert!(mining_pool_keyed_account
-            .redeem_vote_credits(&mut stake_keyed_account, &mut vote_keyed_account)
-            .is_ok());
+        assert_eq!(
+            mining_pool_keyed_account
+                .redeem_vote_credits(&mut stake_keyed_account, &mut vote_keyed_account),
+            Err(InstructionError::CustomError(1))
+        );
 
         // move the vote account forward
         vote_state.process_vote(&Vote::new(1000));
@@ -383,6 +404,7 @@ mod tests {
         let pubkey = Pubkey::default();
         let mut stake_account = Account::new(0, std::mem::size_of::<StakeState>(), &id());
         let mut stake_keyed_account = KeyedAccount::new(&pubkey, true, &mut stake_account);
+        stake_keyed_account.initialize_delegate().unwrap();
 
         // delegate the stake
         assert!(stake_keyed_account
