@@ -215,7 +215,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             // storage account
             (
                 bootstrap_storage_keypair.pubkey(),
-                Account::new(1, 1024 * 4, &system_program::id()),
+                Account::new(1, 1024 * 4, &solana_storage_api::id()),
             ),
         ],
         &[
