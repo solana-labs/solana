@@ -3,7 +3,7 @@ use crate::account::{Account, KeyedAccount};
 use crate::instruction::InstructionError;
 use bincode::ErrorKind;
 
-/// Conveinence trait to covert bincode errors to instruction errors.
+/// Convenience trait to covert bincode errors to instruction errors.
 pub trait State<T> {
     fn state(&self) -> Result<T, InstructionError>;
     fn set_state(&mut self, state: &T) -> Result<(), InstructionError>;
