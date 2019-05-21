@@ -173,7 +173,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 })
             } else {
                 // not worth collecting
-                Ok(())
+                Err(InstructionError::CustomError(1))
             }
         } else {
             Err(InstructionError::InvalidAccountData)
@@ -357,9 +357,11 @@ mod tests {
             .unwrap();
 
         // no movement in vote account, so no redemption needed
-        assert!(mining_pool_keyed_account
-            .redeem_vote_credits(&mut stake_keyed_account, &mut vote_keyed_account)
-            .is_ok());
+        assert_eq!(
+            mining_pool_keyed_account
+                .redeem_vote_credits(&mut stake_keyed_account, &mut vote_keyed_account),
+            Err(InstructionError::CustomError(1))
+        );
 
         // move the vote account forward
         vote_state.process_vote(&Vote::new(1000));
