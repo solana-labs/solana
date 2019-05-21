@@ -12,7 +12,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     let ones = [1_u64; ITERS];
     let mut sum: u64 = 0;
 
-    for v in ones.iter() {
+    for (_, v) in ones.iter().enumerate() {
         sum += *v;
     }
     sol_log_64(0xff, 0, 0, 0, sum);
