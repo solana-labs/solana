@@ -43,7 +43,6 @@ pub fn helper_abort_verify(
         "Error: BPF program called abort()!",
     ))
 }
-
 pub fn helper_abort(_arg1: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) -> u64 {
     // Never called because its verify function always returns an error
     0
@@ -60,7 +59,6 @@ pub fn helper_sol_panic_verify(
 ) -> Result<(()), Error> {
     Err(Error::new(ErrorKind::Other, "Error: BPF program Panic!"))
 }
-
 pub fn helper_sol_panic(_arg1: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) -> u64 {
     // Never called because its verify function always returns an error
     0
@@ -94,7 +92,6 @@ pub fn helper_sol_log_verify(
         "Error: Load segfault, bad string pointer",
     ))
 }
-
 pub fn helper_sol_log(addr: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) -> u64 {
     let c_buf: *const c_char = addr as *const c_char;
     let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
@@ -104,13 +101,23 @@ pub fn helper_sol_log(addr: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64)
     };
     0
 }
-
 pub fn helper_sol_log_u64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> u64 {
     info!(
         "sol_log_u64: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
         arg1, arg2, arg3, arg4, arg5
     );
     0
+}
+
+use std::alloc::{self, Layout};
+pub fn helper_sol_alloc(size: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) -> u64 {
+    unsafe {
+        warn!("alloc {} bytes", size);
+        let layout =
+            Layout::from_size_align(size as usize, mem::align_of::<u8>()).expect("Bad layout");
+        let buffer = alloc::alloc(layout);
+        buffer as u64
+    }
 }
 
 pub fn create_vm(prog: &[u8]) -> Result<EbpfVmRaw, Error> {
@@ -129,6 +136,8 @@ pub fn create_vm(prog: &[u8]) -> Result<EbpfVmRaw, Error> {
     vm.register_helper_ex("sol_log_", Some(helper_sol_log_verify), helper_sol_log)?;
     vm.register_helper_ex("sol_log_64", None, helper_sol_log_u64)?;
     vm.register_helper_ex("sol_log_64_", None, helper_sol_log_u64)?;
+    // TODO alloc helper not the right place to get memory
+    vm.register_helper_ex("sol_alloc_", None, helper_sol_alloc)?;
     Ok(vm)
 }
 
