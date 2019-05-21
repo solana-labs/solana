@@ -1,4 +1,5 @@
 pub mod account;
+pub mod account_utils;
 pub mod bpf_loader;
 pub mod client;
 pub mod fee_calculator;
@@ -15,6 +16,7 @@ pub mod pubkey;
 pub mod rpc_port;
 pub mod short_vec;
 pub mod signature;
+pub mod syscall;
 pub mod system_instruction;
 pub mod system_program;
 pub mod system_transaction;
