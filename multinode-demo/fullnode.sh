@@ -97,17 +97,16 @@ setup_vote_and_stake_accounts() {
 
     # Fund the vote account from the node, with the node as the node_pubkey
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-          create-vote-account "$vote_pubkey" "$node_pubkey" "$stake" || return $?
+      create-vote-account "$vote_pubkey" "$node_pubkey" "$stake" || return $?
 
     # Fund the stake account from the node, with the node as the node_pubkey
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-           create-stake-account "$stake_pubkey" "$stake" || return $?
+      create-stake-account "$stake_pubkey" "$stake" || return $?
 
     # Delegate the stake.  The transaction fee is paid by the node but the
     #  transaction must be signed by the stake_keypair
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-           delegate-stake "$stake_keypair_path" "$vote_pubkey" || return $?
-
+      delegate-stake "$stake_keypair_path" "$vote_pubkey" || return $?
 
     touch "$node_keypair_path".configured
   fi

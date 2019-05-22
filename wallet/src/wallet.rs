@@ -55,6 +55,8 @@ pub enum WalletCommand {
     RedeemVoteCredits(Pubkey, Pubkey, Pubkey),
     ShowStakeAccount(Pubkey),
     CreateStorageMiningPoolAccount(Pubkey, u64),
+    CreateReplicatorStorageAccount(Pubkey),
+    CreateValidatorStorageAccount(Pubkey),
     ClaimStorageReward(Pubkey, Pubkey, u64),
     ShowStorageAccount(Pubkey),
     Deploy(String),
@@ -261,6 +263,18 @@ pub fn parse_command(
             Ok(WalletCommand::CreateStorageMiningPoolAccount(
                 storage_mining_pool_account_id,
                 lamports,
+            ))
+        }
+        ("create-replicator-storage-account", Some(matches)) => {
+            let storage_account_id = pubkey_of(matches, "storage_account_id").unwrap();
+            Ok(WalletCommand::CreateReplicatorStorageAccount(
+                storage_account_id,
+            ))
+        }
+        ("create-validator-storage-account", Some(matches)) => {
+            let storage_account_id = pubkey_of(matches, "storage_account_id").unwrap();
+            Ok(WalletCommand::CreateValidatorStorageAccount(
+                storage_account_id,
             ))
         }
         ("claim-storage-reward", Some(matches)) => {
@@ -616,14 +630,46 @@ fn process_show_stake_account(
 fn process_create_storage_mining_pool_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    mining_pool_account_id: &Pubkey,
+    storage_account_id: &Pubkey,
     lamports: u64,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_mining_pool_account(
         &config.keypair.pubkey(),
-        mining_pool_account_id,
+        storage_account_id,
         lamports,
+    );
+    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    Ok(signature_str.to_string())
+}
+
+fn process_create_replicator_storage_account(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    storage_account_id: &Pubkey,
+) -> ProcessResult {
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let ixs = storage_instruction::create_replicator_storage_account(
+        &config.keypair.pubkey(),
+        storage_account_id,
+        1,
+    );
+    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    Ok(signature_str.to_string())
+}
+
+fn process_create_validator_storage_account(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    storage_account_id: &Pubkey,
+) -> ProcessResult {
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let ixs = storage_instruction::create_validator_storage_account(
+        &config.keypair.pubkey(),
+        storage_account_id,
+        1,
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
@@ -989,13 +1035,21 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             process_show_stake_account(&rpc_client, config, &staking_account_id)
         }
 
-        WalletCommand::CreateStorageMiningPoolAccount(mining_pool_account_id, lamports) => {
+        WalletCommand::CreateStorageMiningPoolAccount(storage_account_id, lamports) => {
             process_create_storage_mining_pool_account(
                 &rpc_client,
                 config,
-                &mining_pool_account_id,
+                &storage_account_id,
                 *lamports,
             )
+        }
+
+        WalletCommand::CreateReplicatorStorageAccount(storage_account_id) => {
+            process_create_replicator_storage_account(&rpc_client, config, &storage_account_id)
+        }
+
+        WalletCommand::CreateValidatorStorageAccount(storage_account_id) => {
+            process_create_validator_storage_account(&rpc_client, config, &storage_account_id)
         }
 
         WalletCommand::ClaimStorageReward(
@@ -1396,7 +1450,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("create-storage-mining-pool-account")
                 .about("Create mining pool account")
                 .arg(
-                    Arg::with_name("storage_mining_pool_account_id")
+                    Arg::with_name("storage_account_id")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1412,6 +1466,30 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .required(true)
                         .help("The number of lamports to assign to the storage mining pool account"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("create-replicator-storage-account")
+                .about("Create a replicator storage account")
+                .arg(
+                    Arg::with_name("storage_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("create-validator-storage-account")
+                .about("Create a validator storage account")
+                .arg(
+                    Arg::with_name("storage_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                )
         )
         .subcommand(
             SubCommand::with_name("claim-storage-reward")
