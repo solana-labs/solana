@@ -234,6 +234,10 @@ impl StorageStage {
                                 info!("failed to send create storage transaction: {:?}", err);
                                 0
                             });
+
+                        if exit.load(Ordering::Relaxed) {
+                            break;
+                        }
                         sleep(Duration::from_millis(100));
                     }
 

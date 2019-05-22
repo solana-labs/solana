@@ -102,6 +102,7 @@ mod tests {
     };
     use crate::storage_instruction;
     use crate::SLOTS_PER_SEGMENT;
+    use assert_matches::assert_matches;
     use bincode::deserialize;
     use log::*;
     use solana_runtime::bank::Bank;
@@ -140,10 +141,14 @@ mod tests {
     #[test]
     fn test_proof_bounds() {
         let pubkey = Pubkey::new_rand();
-        let account = Account {
+        let mut account = Account {
             data: vec![0; STORAGE_ACCOUNT_SPACE as usize],
             ..Account::default()
         };
+        {
+            let mut storage_account = StorageAccount::new(&mut account);
+            storage_account.initialize_replicator_storage().unwrap();
+        }
 
         let ix = storage_instruction::mining_proof(
             &pubkey,
@@ -225,13 +230,20 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let mut accounts = [Account::default(), Account::default()];
         accounts[0].data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
+        {
+            let mut storage_account = StorageAccount::new(&mut accounts[0]);
+            storage_account.initialize_replicator_storage().unwrap();
+        }
 
         let ix =
             storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
         // move tick height into segment 1
         let ticks_till_next_segment = TICKS_IN_SEGMENT + 1;
 
-        test_instruction(&ix, &mut accounts, ticks_till_next_segment).unwrap();
+        assert_matches!(
+            test_instruction(&ix, &mut accounts, ticks_till_next_segment),
+            Ok(_)
+        );
     }
 
     #[test]
@@ -286,9 +298,7 @@ mod tests {
             SLOTS_PER_SEGMENT,
         );
 
-        bank_client
-            .send_instruction(&validator_keypair, ix)
-            .unwrap();
+        assert_matches!(bank_client.send_instruction(&validator_keypair, ix), Ok(_));
 
         let ix = storage_instruction::mining_proof(
             &replicator,
@@ -296,9 +306,8 @@ mod tests {
             slot,
             Signature::default(),
         );
-        bank_client
-            .send_instruction(&replicator_keypair, ix)
-            .unwrap();
+
+        assert_matches!(bank_client.send_instruction(&replicator_keypair, ix), Ok(_));
 
         let ix = storage_instruction::advertise_recent_blockhash(
             &validator,
@@ -311,10 +320,7 @@ mod tests {
             bank.register_tick(&bank.last_blockhash());
         }
 
-        bank_client
-            .send_instruction(&validator_keypair, ix)
-            .unwrap();
-
+        assert_matches!(bank_client.send_instruction(&validator_keypair, ix), Ok(_));
         let ix = storage_instruction::proof_validation(
             &validator,
             slot,
@@ -327,9 +333,8 @@ mod tests {
                 status: ProofStatus::Valid,
             }],
         );
-        bank_client
-            .send_instruction(&validator_keypair, ix)
-            .unwrap();
+
+        assert_matches!(bank_client.send_instruction(&validator_keypair, ix), Ok(_));
 
         let ix = storage_instruction::advertise_recent_blockhash(
             &validator,
@@ -342,16 +347,22 @@ mod tests {
             bank.register_tick(&bank.last_blockhash());
         }
 
-        bank_client
-            .send_instruction(&validator_keypair, ix)
-            .unwrap();
+        assert_matches!(bank_client.send_instruction(&validator_keypair, ix), Ok(_));
 
         assert_eq!(bank_client.get_balance(&validator).unwrap(), 10,);
 
-        let ix = storage_instruction::claim_reward(&validator, &mining_pool, slot);
-        bank_client
-            .send_instruction(&validator_keypair, ix)
-            .unwrap();
+        let message = Message::new_with_payer(
+            vec![storage_instruction::claim_reward(
+                &validator,
+                &mining_pool,
+                slot,
+            )],
+            Some(&validator),
+        );
+        assert_matches!(
+            bank_client.send_message(&[&validator_keypair], message),
+            Ok(_)
+        );
 
         assert_eq!(
             bank_client.get_balance(&validator).unwrap(),
@@ -364,10 +375,19 @@ mod tests {
         }
 
         assert_eq!(bank_client.get_balance(&replicator).unwrap(), 10);
-        let ix = storage_instruction::claim_reward(&replicator, &mining_pool, slot);
-        bank_client
-            .send_instruction(&replicator_keypair, ix)
-            .unwrap();
+
+        let message = Message::new_with_payer(
+            vec![storage_instruction::claim_reward(
+                &replicator,
+                &mining_pool,
+                slot,
+            )],
+            Some(&replicator),
+        );
+        assert_matches!(
+            bank_client.send_message(&[&replicator_keypair], message),
+            Ok(_)
+        );
 
         // TODO enable when rewards are working
         // assert_eq!(bank_client.get_balance(&replicator).unwrap(), 10 + TOTAL_REPLICATOR_REWARDS);

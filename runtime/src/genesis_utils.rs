@@ -62,7 +62,7 @@ pub fn create_genesis_block_with_leader(
         &[
             solana_vote_program!(),
             solana_stake_program!(),
-            solana_storage_program!(),
+            solana_storage_program!(), // TODO: storage program is only needed by core/, move this line into core/src/genesis_utils.rs
         ],
     );
 
