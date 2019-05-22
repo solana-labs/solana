@@ -471,14 +471,11 @@ impl Accounts {
         let rv = txs
             .iter()
             .map(|tx| {
+                let message = tx.borrow().message();
                 Self::lock_account(
                     (&mut self.account_locks.lock().unwrap(), parent_record_locks),
-                    &tx.borrow().message().account_keys[..(tx
-                        .borrow()
-                        .message()
-                        .account_keys
-                        .len()
-                        - tx.borrow().message().num_credit_only_unsigned_accounts as usize)],
+                    &message.account_keys[..(message.account_keys.len()
+                        - message.num_credit_only_unsigned_accounts as usize)],
                     &mut error_counters,
                 )
             })
@@ -500,10 +497,11 @@ impl Accounts {
     {
         let record_locks = self.record_locks.lock().unwrap();
         for tx in txs {
+            let message = tx.borrow().message();
             Self::lock_record_account(
                 &record_locks.0,
-                &tx.borrow().message().account_keys[..(tx.borrow().message().account_keys.len()
-                    - tx.borrow().message().num_credit_only_unsigned_accounts as usize)],
+                &message.account_keys[..(message.account_keys.len()
+                    - message.num_credit_only_unsigned_accounts as usize)],
             );
         }
     }
