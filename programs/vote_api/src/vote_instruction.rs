@@ -10,6 +10,7 @@ use solana_metrics::datapoint_warn;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::syscall::slot_hashes;
 use solana_sdk::system_instruction;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -93,7 +94,10 @@ pub fn vote(
     authorized_voter_id: &Pubkey,
     recent_votes: Vec<Vote>,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_signer(from_id, vote_id, authorized_voter_id);
+    let mut account_metas = metas_for_authorized_signer(from_id, vote_id, authorized_voter_id);
+
+    // request slot_hashes syscall account after vote_id
+    account_metas.insert(2, AccountMeta::new(slot_hashes::id(), false));
 
     Instruction::new(id(), &VoteInstruction::Vote(recent_votes), account_metas)
 }
@@ -114,7 +118,7 @@ pub fn process_instruction(
     }
 
     // 0th index is the guy who paid for the transaction
-    let (me, other_signers) = &mut keyed_accounts.split_at_mut(2);
+    let (me, rest) = &mut keyed_accounts.split_at_mut(2);
     let me = &mut me[1];
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
@@ -123,33 +127,13 @@ pub fn process_instruction(
             vote_state::initialize_account(me, &node_id, commission)
         }
         VoteInstruction::AuthorizeVoter(voter_id) => {
-            vote_state::authorize_voter(me, other_signers, &voter_id)
+            vote_state::authorize_voter(me, rest, &voter_id)
         }
         VoteInstruction::Vote(votes) => {
             datapoint_warn!("vote-native", ("count", 1, i64));
-            // TODO: remove me when Bank does this
-            let valid_votes = votes
-                .iter()
-                .map(|vote| (vote.slot, vote.hash))
-                .collect::<Vec<_>>();
-
-            use bincode::serialized_size;
-            use solana_sdk::account::Account;
-            use solana_sdk::account_utils::State;
-            use solana_sdk::syscall::slot_hashes;
-            let mut valid_votes_account = Account::new(
-                0,
-                serialized_size(&valid_votes).unwrap() as usize,
-                &Pubkey::default(),
-            );
-            valid_votes_account.set_state(&valid_votes).unwrap();
-            // END TODO: remove me when Bank does this
-            vote_state::process_votes(
-                me,
-                &mut KeyedAccount::new(&slot_hashes::id(), false, &mut valid_votes_account),
-                other_signers,
-                &votes,
-            )
+            let (slot_hashes, other_signers) = rest.split_at_mut(1);
+            let slot_hashes = &mut slot_hashes[0];
+            vote_state::process_votes(me, slot_hashes, other_signers, &votes)
         }
     }
 }
