@@ -302,7 +302,7 @@ impl ReplayStage {
     where
         T: 'static + KeypairUtil + Send + Sync,
     {
-        if let Some(new_root) = locktower.record_vote(bank.slot()) {
+        if let Some(new_root) = locktower.record_vote(bank.slot(), bank.hash()) {
             // get the root bank before squash
             let root_bank = bank_forks
                 .read()

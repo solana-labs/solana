@@ -17,6 +17,10 @@ pub fn id() -> Pubkey {
     Pubkey::new(&SYSCALL_SLOT_HASHES_ID)
 }
 
+pub fn check_id(pubkey: &Pubkey) -> bool {
+    pubkey.as_ref() == SYSCALL_SLOT_HASHES_ID
+}
+
 use crate::account_utils::State;
 use std::ops::{Deref, DerefMut};
 #[derive(Serialize, Deserialize)]

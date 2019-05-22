@@ -127,7 +127,29 @@ pub fn process_instruction(
         }
         VoteInstruction::Vote(votes) => {
             datapoint_warn!("vote-native", ("count", 1, i64));
-            vote_state::process_votes(me, other_signers, &votes)
+            // TODO: remove me when Bank does this
+            let valid_votes = votes
+                .iter()
+                .map(|vote| (vote.slot, vote.hash))
+                .collect::<Vec<_>>();
+
+            use bincode::serialized_size;
+            use solana_sdk::account::Account;
+            use solana_sdk::account_utils::State;
+            use solana_sdk::syscall::slot_hashes;
+            let mut valid_votes_account = Account::new(
+                0,
+                serialized_size(&valid_votes).unwrap() as usize,
+                &Pubkey::default(),
+            );
+            valid_votes_account.set_state(&valid_votes).unwrap();
+            // END TODO: remove me when Bank does this
+            vote_state::process_votes(
+                me,
+                &mut KeyedAccount::new(&slot_hashes::id(), false, &mut valid_votes_account),
+                other_signers,
+                &votes,
+            )
         }
     }
 }

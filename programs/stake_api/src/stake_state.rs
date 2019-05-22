@@ -206,14 +206,14 @@ mod tests {
     use solana_sdk::account::Account;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_api::vote_state::{self, Vote};
+    use solana_vote_api::vote_state;
 
     #[test]
     fn test_stake_delegate_stake() {
         let vote_keypair = Keypair::new();
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
-            vote_state.process_vote(&Vote::new(i));
+            vote_state.process_slot_vote_unchecked(i);
         }
 
         let vote_pubkey = vote_keypair.pubkey();
@@ -272,7 +272,7 @@ mod tests {
 
         // put a credit in the vote_state
         while vote_state.credits() == 0 {
-            vote_state.process_vote(&Vote::new(vote_i));
+            vote_state.process_slot_vote_unchecked(vote_i);
             vote_i += 1;
         }
         // this guy can't collect now, not enough stake to get paid on 1 credit
@@ -291,7 +291,7 @@ mod tests {
 
         // put more credit in the vote_state
         while vote_state.credits() < 10 {
-            vote_state.process_vote(&Vote::new(vote_i));
+            vote_state.process_slot_vote_unchecked(vote_i);
             vote_i += 1;
         }
         vote_state.commission = 0;
@@ -318,7 +318,7 @@ mod tests {
         let vote_keypair = Keypair::new();
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
-            vote_state.process_vote(&Vote::new(i));
+            vote_state.process_slot_vote_unchecked(i);
         }
 
         let vote_pubkey = vote_keypair.pubkey();
@@ -364,7 +364,7 @@ mod tests {
         );
 
         // move the vote account forward
-        vote_state.process_vote(&Vote::new(1000));
+        vote_state.process_slot_vote_unchecked(1000);
         vote_keyed_account.set_state(&vote_state).unwrap();
 
         // now, no lamports in the pool!
@@ -392,7 +392,7 @@ mod tests {
         let vote_keypair = Keypair::new();
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
-            vote_state.process_vote(&Vote::new(i));
+            vote_state.process_slot_vote_unchecked(i);
         }
 
         let vote_pubkey = vote_keypair.pubkey();
@@ -421,7 +421,7 @@ mod tests {
         let mut vote_state = VoteState::default();
         for i in 0..100 {
             // go back in time, previous state had 1000 votes
-            vote_state.process_vote(&Vote::new(i));
+            vote_state.process_slot_vote_unchecked(i);
         }
         vote_keyed_account.set_state(&vote_state).unwrap();
         // voter credits lower than stake_delegate credits...  TODO: is this an error?
