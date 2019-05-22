@@ -29,7 +29,7 @@ pub enum StorageInstruction {
     /// Redeem storage reward credits
     ///
     /// Expects 1 Account:
-    ///    0 - Storage account with credits to redeem (signer)
+    ///    0 - Storage account with credits to redeem
     ///    1 - MiningPool account to redeem credits from
     ClaimStorageReward {
         slot: u64,
@@ -151,7 +151,7 @@ pub fn claim_reward(
 ) -> Instruction {
     let storage_instruction = StorageInstruction::ClaimStorageReward { slot };
     let account_metas = vec![
-        AccountMeta::new(*storage_pubkey, true),
+        AccountMeta::new(*storage_pubkey, false),
         AccountMeta::new(*mining_pool_pubkey, false),
     ];
     Instruction::new(id(), &storage_instruction, account_metas)

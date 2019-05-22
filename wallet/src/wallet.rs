@@ -55,6 +55,7 @@ pub enum WalletCommand {
     RedeemVoteCredits(Pubkey, Pubkey, Pubkey),
     ShowStakeAccount(Pubkey),
     CreateStorageMiningPoolAccount(Pubkey, u64),
+    ClaimStorageReward(Pubkey, Pubkey, u64),
     ShowStorageAccount(Pubkey),
     Deploy(String),
     GetTransactionCount,
@@ -254,11 +255,23 @@ pub fn parse_command(
             Ok(WalletCommand::ShowStakeAccount(staking_account_id))
         }
         ("create-storage-mining-pool-account", Some(matches)) => {
-            let mining_pool_account_id = pubkey_of(matches, "mining_pool_account_id").unwrap();
+            let storage_mining_pool_account_id =
+                pubkey_of(matches, "storage_mining_pool_account_id").unwrap();
             let lamports = matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::CreateStorageMiningPoolAccount(
-                mining_pool_account_id,
+                storage_mining_pool_account_id,
                 lamports,
+            ))
+        }
+        ("claim-storage-reward", Some(matches)) => {
+            let storage_mining_pool_account_id =
+                pubkey_of(matches, "storage_mining_pool_account_id").unwrap();
+            let storage_account_id = pubkey_of(matches, "storage_account_id").unwrap();
+            let slot = matches.value_of("slot").unwrap().parse()?;
+            Ok(WalletCommand::ClaimStorageReward(
+                storage_mining_pool_account_id,
+                storage_account_id,
+                slot,
             ))
         }
         ("show-storage-account", Some(matches)) => {
@@ -617,6 +630,25 @@ fn process_create_storage_mining_pool_account(
     Ok(signature_str.to_string())
 }
 
+fn process_claim_storage_reward(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    storage_mining_pool_account_id: &Pubkey,
+    storage_account_id: &Pubkey,
+    slot: u64,
+) -> ProcessResult {
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+
+    let instruction =
+        storage_instruction::claim_reward(storage_account_id, storage_mining_pool_account_id, slot);
+    let signers = [&config.keypair];
+    let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
+
+    let mut transaction = Transaction::new(&signers, message, recent_blockhash);
+    let signature_str = rpc_client.send_and_confirm_transaction(&mut transaction, &signers)?;
+    Ok(signature_str.to_string())
+}
+
 fn process_show_storage_account(
     rpc_client: &RpcClient,
     _config: &WalletConfig,
@@ -966,6 +998,18 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             )
         }
 
+        WalletCommand::ClaimStorageReward(
+            storage_mining_pool_account_id,
+            storage_account_id,
+            slot,
+        ) => process_claim_storage_reward(
+            &rpc_client,
+            config,
+            &storage_mining_pool_account_id,
+            &storage_account_id,
+            *slot,
+        ),
+
         WalletCommand::ShowStorageAccount(storage_account_id) => {
             process_show_storage_account(&rpc_client, config, &storage_account_id)
         }
@@ -1310,7 +1354,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("mining_pool_account_id")
                         .index(1)
-                        .value_name("PUBKEY")
+                        .value_name("MINING POOL PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1319,7 +1363,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                 .arg(
                     Arg::with_name("staking_account_id")
                         .index(2)
-                        .value_name("PUBKEY")
+                        .value_name("STAKING ACCOUNT PUBKEY")
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
@@ -1352,7 +1396,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("create-storage-mining-pool-account")
                 .about("Create mining pool account")
                 .arg(
-                    Arg::with_name("mining_pool_account_id")
+                    Arg::with_name("storage_mining_pool_account_id")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1369,6 +1413,36 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("The number of lamports to assign to the storage mining pool account"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("claim-storage-reward")
+                .about("Redeem storage reward credits")
+                .arg(
+                    Arg::with_name("storage_mining_pool_account_id")
+                        .index(1)
+                        .value_name("MINING POOL PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Mining pool account to redeem credits from"),
+                )
+                .arg(
+                    Arg::with_name("storage_account_id")
+                        .index(2)
+                        .value_name("STORAGE ACCOUNT PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Storage account address to redeem credits for"),
+                )
+                .arg(
+                    Arg::with_name("slot")
+                        .index(3)
+                        .value_name("SLOT")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The slot to claim rewards for"),
+                ),)
+
         .subcommand(
             SubCommand::with_name("show-storage-account")
                 .about("Show the contents of a storage account")

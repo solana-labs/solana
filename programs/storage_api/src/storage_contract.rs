@@ -302,7 +302,7 @@ impl<'a> StorageAccount<'a> {
                 || !reward_validations.contains_key(&claim_segment)
                 || !proofs.contains_key(&claim_segment)
             {
-                debug!(
+                info!(
                     "current {:?}, claim {:?}, have rewards for {:?} segments",
                     claim_index,
                     claim_segment,

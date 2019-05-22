@@ -1,7 +1,6 @@
 //! storage program
 //!  Receive mining proofs from miners, validate the answers
 //!  and give reward for good proofs.
-
 use crate::storage_contract::StorageAccount;
 use crate::storage_instruction::StorageInstruction;
 use solana_sdk::account::KeyedAccount;
@@ -47,6 +46,7 @@ pub fn process_instruction(
             signature,
         } => {
             if me_unsigned || !rest.is_empty() {
+                // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
             storage_account.submit_mining_proof(
@@ -59,6 +59,7 @@ pub fn process_instruction(
         }
         StorageInstruction::AdvertiseStorageRecentBlockhash { hash, slot } => {
             if me_unsigned || !rest.is_empty() {
+                // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
             storage_account.advertise_storage_recent_blockhash(
@@ -68,7 +69,7 @@ pub fn process_instruction(
             )
         }
         StorageInstruction::ClaimStorageReward { slot } => {
-            if me_unsigned || rest.len() != 1 {
+            if rest.len() != 1 {
                 Err(InstructionError::InvalidArgument)?;
             }
             storage_account.claim_storage_reward(
@@ -79,7 +80,7 @@ pub fn process_instruction(
         }
         StorageInstruction::ProofValidation { slot, proofs } => {
             if me_unsigned || rest.is_empty() {
-                // have to have at least 1 replicator to do any verification
+                // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
             let mut rest: Vec<_> = rest
