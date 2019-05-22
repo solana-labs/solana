@@ -32,10 +32,6 @@ impl Poh {
     }
 
     pub fn hash(&mut self, max_num_hashes: u64) -> bool {
-        if self.remaining_hashes == 1 {
-            return true; // Caller needs to `tick()` first
-        }
-
         let num_hashes = std::cmp::min(self.remaining_hashes - 1, max_num_hashes);
         for _ in 0..num_hashes {
             self.hash = hash(&self.hash.as_ref());

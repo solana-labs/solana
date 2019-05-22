@@ -18,7 +18,7 @@ pub struct PohService {
 //   contention with the PoH hashing within `tick_producer()`.
 //
 // See benches/poh.rs for some benchmarks that attempt to justify this magic number.
-pub const NUM_HASHES_PER_BATCH: u64 = 8;
+pub const NUM_HASHES_PER_BATCH: u64 = 1;
 
 impl PohService {
     pub fn new(
