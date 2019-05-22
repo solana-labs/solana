@@ -418,7 +418,7 @@ mod tests {
     fn test_account_data() {
         solana_logger::setup();
         let mut account = Account::default();
-        account.data.resize(4 * 1024, 0);
+        account.data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
         let storage_account = StorageAccount::new(&mut account);
         // pretend it's a validator op code
         let mut contract = storage_account.account.state().unwrap();
@@ -473,7 +473,10 @@ mod tests {
         // account has no space
         process_validation(&mut account, segment_index, &proof, &checked_proof).unwrap_err();
 
-        account.account.data.resize(4 * 1024, 0);
+        account
+            .account
+            .data
+            .resize(STORAGE_ACCOUNT_SPACE as usize, 0);
         let storage_contract = &mut account.account.state().unwrap();
         if let StorageContract::Uninitialized = storage_contract {
             let mut proof_map = HashMap::new();
