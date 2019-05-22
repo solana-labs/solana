@@ -7,6 +7,7 @@
 use crate::packet::{Packet, Packets};
 use crate::result::Result;
 use solana_metrics::inc_new_counter_debug;
+use solana_sdk::message::MESSAGE_INTRO_BYTES;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::short_vec::decode_len;
 use solana_sdk::signature::Signature;
@@ -15,11 +16,6 @@ use solana_sdk::transaction::Transaction;
 use std::mem::size_of;
 
 type TxOffsets = (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<Vec<u32>>);
-
-// The serialized size of Message::num_required_signatures.
-const NUM_REQUIRED_SIGNATURES_SIZE: usize = 1;
-// The serialized size of Message::num_credit_only_accounts.
-const NUM_CREDIT_ONLY_ACCOUNTS_SIZE: usize = 2;
 
 #[cfg(feature = "cuda")]
 #[repr(C)]
@@ -118,8 +114,7 @@ pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u3
 
     let sig_start = current_offset as usize + sig_size;
     let msg_start = current_offset as usize + msg_start_offset;
-    let pubkey_start =
-        msg_start + NUM_REQUIRED_SIGNATURES_SIZE + NUM_CREDIT_ONLY_ACCOUNTS_SIZE + pubkey_size;
+    let pubkey_start = msg_start + MESSAGE_INTRO_BYTES + pubkey_size;
 
     (
         sig_len as u32,

@@ -99,6 +99,11 @@ pub struct Message {
     pub instructions: Vec<CompiledInstruction>,
 }
 
+// The serialized size of the message intro data before account_keys: size of
+// num_required_signatures + size of num_credit_only_signed_accounts + size of
+// num_credit_only_unsigned_accounts.
+pub const MESSAGE_INTRO_BYTES: usize = 3;
+
 impl Message {
     pub fn new_with_compiled_instructions(
         num_required_signatures: u8,
