@@ -18,7 +18,7 @@ pub struct PohService {
 //   contention with the PoH hashing within `tick_producer()`.
 //
 // See benches/poh.rs for some benchmarks that attempt to justify this magic number.
-pub const NUM_HASHES_PER_BATCH: u64 = 128;
+pub const NUM_HASHES_PER_BATCH: u64 = 1;
 
 impl PohService {
     pub fn new(
@@ -34,6 +34,9 @@ impl PohService {
                 if poh_config.hashes_per_tick.is_none() {
                     Self::sleepy_tick_producer(poh_recorder, &poh_config, &poh_exit_);
                 } else {
+                    // PoH service runs in a tight loop, generating hashes as fast as possible.
+                    // Let's dedicate one of the CPU cores to this thread so that it can gain
+                    // from cache performance.
                     if let Some(cores) = core_affinity::get_core_ids() {
                         core_affinity::set_for_current(cores[0]);
                     }
