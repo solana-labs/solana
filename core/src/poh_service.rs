@@ -2,6 +2,7 @@
 //! "ticks", a measure of time in the PoH stream
 use crate::poh_recorder::PohRecorder;
 use crate::service::Service;
+use core_affinity;
 use solana_sdk::poh_config::PohConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -27,12 +28,16 @@ impl PohService {
     ) -> Self {
         let poh_exit_ = poh_exit.clone();
         let poh_config = poh_config.clone();
+        let core_ids = core_affinity::get_core_ids();
         let tick_producer = Builder::new()
             .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
                 if poh_config.hashes_per_tick.is_none() {
                     Self::sleepy_tick_producer(poh_recorder, &poh_config, &poh_exit_);
                 } else {
+                    if let Some(cores) = core_ids {
+                        core_affinity::set_for_current(cores[0]);
+                    }
                     Self::tick_producer(poh_recorder, &poh_exit_);
                 }
                 poh_exit_.store(true, Ordering::Relaxed);
