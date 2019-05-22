@@ -192,6 +192,51 @@ impl StorageStage {
                 .name("solana-storage-create-accounts".to_string())
                 .spawn(move || {
                     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+
+                    // Create the validator storage account if necessary
+                    loop {
+                        let (blockhash, storage_account, keypair_balance) = {
+                            let working_bank = bank_forks.read().unwrap().working_bank();
+                            (
+                                working_bank.confirmed_last_blockhash(),
+                                working_bank.get_account(&storage_keypair.pubkey()),
+                                working_bank.get_balance(&keypair.pubkey()),
+                            )
+                        };
+
+                        if storage_account.is_some() {
+                            info!("Storage account found: {}", storage_keypair.pubkey());
+                            break;
+                        }
+                        info!("Creating validator storage account");
+                        info!(
+                            "keypair account balance: {}: {}",
+                            keypair.pubkey(),
+                            keypair_balance
+                        );
+                        let signer_keys = vec![keypair.as_ref()];
+                        let message = Message::new_with_payer(
+                            storage_instruction::create_validator_storage_account(
+                                &keypair.pubkey(),
+                                &storage_keypair.pubkey(),
+                                1,
+                            ),
+                            Some(&signer_keys[0].pubkey()),
+                        );
+                        let transaction = Transaction::new(&signer_keys, message, blockhash);
+
+                        transactions_socket
+                            .send_to(
+                                &bincode::serialize(&transaction).unwrap(),
+                                cluster_info.read().unwrap().my_data().tpu,
+                            )
+                            .unwrap_or_else(|err| {
+                                info!("failed to send create storage transaction: {:?}", err);
+                                0
+                            });
+                        sleep(Duration::from_millis(100));
+                    }
+
                     loop {
                         match instruction_receiver.recv_timeout(Duration::from_secs(1)) {
                             Ok(instruction) => {
@@ -238,22 +283,21 @@ impl StorageStage {
     ) -> io::Result<()> {
         let working_bank = bank_forks.read().unwrap().working_bank();
         let blockhash = working_bank.confirmed_last_blockhash();
-        let mut instructions = vec![];
-        let signer_keys = vec![keypair.as_ref(), storage_keypair.as_ref()];
+        let keypair_balance = working_bank.get_balance(&keypair.pubkey());
+
+        info!("keypair account balance: {}", keypair_balance);
         if working_bank
             .get_account(&storage_keypair.pubkey())
             .is_none()
         {
-            let mut create_instruction = storage_instruction::create_validator_storage_account(
-                &keypair.pubkey(),
-                &storage_keypair.pubkey(),
-                1,
+            warn!(
+                "storage account does not exist: {}",
+                storage_keypair.pubkey()
             );
-            instructions.append(&mut create_instruction);
-            info!("storage account requested");
         }
-        instructions.push(instruction);
-        let message = Message::new_with_payer(instructions, Some(&signer_keys[0].pubkey()));
+
+        let signer_keys = vec![keypair.as_ref(), storage_keypair.as_ref()];
+        let message = Message::new_with_payer(vec![instruction], Some(&signer_keys[0].pubkey()));
         let transaction = Transaction::new(&signer_keys, message, blockhash);
 
         transactions_socket.send_to(

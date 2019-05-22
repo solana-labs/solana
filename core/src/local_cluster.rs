@@ -310,7 +310,7 @@ impl LocalCluster {
             &client,
             &self.funding_keypair,
             &replicator_keypair.pubkey(),
-            1,
+            42,
         );
         let replicator_node = Node::new_localhost_replicator(&replicator_id);
 
@@ -322,7 +322,7 @@ impl LocalCluster {
             replicator_keypair,
             storage_keypair,
         )
-        .unwrap();
+        .unwrap_or_else(|err| panic!("Replicator::new() failed: {:?}", err));
 
         self.replicators.push(replicator);
         self.replicator_infos.insert(
@@ -529,7 +529,7 @@ mod test {
         let num_replicators = 1;
         let config = ClusterConfig {
             fullnode_config,
-            num_replicators: 1,
+            num_replicators,
             node_stakes: vec![3; NUM_NODES],
             cluster_lamports: 100,
             ticks_per_slot: 8,
