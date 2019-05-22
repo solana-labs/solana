@@ -27,6 +27,7 @@ use solana_sdk::system_instruction::SystemError;
 use solana_sdk::system_transaction;
 use solana_sdk::transaction::{Transaction, TransactionError};
 use solana_stake_api::stake_instruction;
+use solana_storage_api::storage_instruction;
 use solana_vote_api::vote_instruction;
 use std::fs::File;
 use std::io::Read;
@@ -53,6 +54,7 @@ pub enum WalletCommand {
     DelegateStake(Keypair, Pubkey),
     RedeemVoteCredits(Pubkey, Pubkey, Pubkey),
     ShowStakeAccount(Pubkey),
+    CreateStorageMiningPoolAccount(Pubkey, u64),
     ShowStorageAccount(Pubkey),
     Deploy(String),
     GetTransactionCount,
@@ -250,6 +252,14 @@ pub fn parse_command(
         ("show-stake-account", Some(matches)) => {
             let staking_account_id = pubkey_of(matches, "staking_account_id").unwrap();
             Ok(WalletCommand::ShowStakeAccount(staking_account_id))
+        }
+        ("create-storage-mining-pool-account", Some(matches)) => {
+            let mining_pool_account_id = pubkey_of(matches, "mining_pool_account_id").unwrap();
+            let lamports = matches.value_of("lamports").unwrap().parse()?;
+            Ok(WalletCommand::CreateStorageMiningPoolAccount(
+                mining_pool_account_id,
+                lamports,
+            ))
         }
         ("show-storage-account", Some(matches)) => {
             let storage_account_id = pubkey_of(matches, "storage_account_id").unwrap();
@@ -590,46 +600,38 @@ fn process_show_stake_account(
     }
 }
 
+fn process_create_storage_mining_pool_account(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    mining_pool_account_id: &Pubkey,
+    lamports: u64,
+) -> ProcessResult {
+    let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
+    let ixs = storage_instruction::create_mining_pool_account(
+        &config.keypair.pubkey(),
+        mining_pool_account_id,
+        lamports,
+    );
+    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    Ok(signature_str.to_string())
+}
+
 fn process_show_storage_account(
     rpc_client: &RpcClient,
     _config: &WalletConfig,
     storage_account_id: &Pubkey,
 ) -> ProcessResult {
     use solana_storage_api::storage_contract::StorageContract;
-    let storage_contract: StorageContract = rpc_client
-        .get_account(storage_account_id)?
-        .state()
-        .map_err(|err| {
-            WalletError::RpcRequestError(
-                format!("Unable to deserialize storage account: {:?}", err).to_string(),
-            )
-        })?;
-
-    //    let storage_account = StorageAccount::new(&account);
-    //   let storage_contract = &mut account.state()?;
-
-    println!("storage_account: {:?}", storage_contract);
+    let account = rpc_client.get_account(storage_account_id)?;
+    let storage_contract: StorageContract = account.state().map_err(|err| {
+        WalletError::RpcRequestError(
+            format!("Unable to deserialize storage account: {:?}", err).to_string(),
+        )
+    })?;
+    println!("{:?}", storage_contract);
+    println!("account lamports: {}", account.lamports);
     Ok("".to_string())
-    /*
-    match storage_account.state() {
-        Ok(StorageState::Delegate {
-            voter_id,
-            credits_observed,
-        }) => {
-            println!("account lamports: {}", storage_account.lamports);
-            println!("voter id: {}", voter_id);
-            println!("credits observed: {}", credits_observed);
-            Ok("".to_string())
-        }
-        Ok(StorageState::MiningPool) => {
-            println!("account lamports: {}", storage_account.lamports);
-            Ok("".to_string())
-        }
-        _ => Err(WalletError::RpcRequestError(
-            "Account data could not be deserialized to storage state".to_string(),
-        ))?,
-    }
-    */
 }
 
 fn process_deploy(
@@ -955,6 +957,15 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             process_show_stake_account(&rpc_client, config, &staking_account_id)
         }
 
+        WalletCommand::CreateStorageMiningPoolAccount(mining_pool_account_id, lamports) => {
+            process_create_storage_mining_pool_account(
+                &rpc_client,
+                config,
+                &mining_pool_account_id,
+                *lamports,
+            )
+        }
+
         WalletCommand::ShowStorageAccount(storage_account_id) => {
             process_show_storage_account(&rpc_client, config, &storage_account_id)
         }
@@ -1232,7 +1243,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         )
         .subcommand(
             SubCommand::with_name("create-mining-pool-account")
-                .about("Create mining pool account")
+                .about("Create staking mining pool account")
                 .arg(
                     Arg::with_name("mining_pool_account_id")
                         .index(1)
@@ -1240,7 +1251,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .takes_value(true)
                         .required(true)
                         .validator(is_pubkey)
-                        .help("Staking account address to fund"),
+                        .help("Staking mining pool account address to fund"),
                 )
                 .arg(
                     Arg::with_name("lamports")
@@ -1336,6 +1347,27 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .validator(is_pubkey)
                         .help("Stake account pubkey"),
                 )
+        )
+        .subcommand(
+            SubCommand::with_name("create-storage-mining-pool-account")
+                .about("Create mining pool account")
+                .arg(
+                    Arg::with_name("mining_pool_account_id")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                        .help("Storage mining pool account address to fund"),
+                )
+                .arg(
+                    Arg::with_name("lamports")
+                        .index(2)
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The number of lamports to assign to the storage mining pool account"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("show-storage-account")

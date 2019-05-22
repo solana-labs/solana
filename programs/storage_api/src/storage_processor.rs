@@ -4,7 +4,6 @@
 
 use crate::storage_contract::StorageAccount;
 use crate::storage_instruction::StorageInstruction;
-use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
@@ -19,15 +18,8 @@ pub fn process_instruction(
     solana_logger::setup();
 
     let (me, rest) = keyed_accounts.split_at_mut(1);
-
-    // accounts_keys[0] must be signed
-    let storage_account_pubkey = me[0].signer_key();
-    if storage_account_pubkey.is_none() {
-        info!("account[0] is unsigned");
-        Err(InstructionError::MissingRequiredSignature)?;
-    }
-    let storage_account_pubkey = *storage_account_pubkey.unwrap();
-
+    let me_unsigned = me[0].signer_key().is_none();
+    let storage_account_pubkey = *me[0].unsigned_key();
     let mut storage_account = StorageAccount::new(&mut me[0].account);
 
     match bincode::deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
@@ -37,12 +29,24 @@ pub fn process_instruction(
             }
             storage_account.initialize_mining_pool()
         }
+        StorageInstruction::InitializeReplicatorStorage => {
+            if !rest.is_empty() {
+                Err(InstructionError::InvalidArgument)?;
+            }
+            storage_account.initialize_replicator_storage()
+        }
+        StorageInstruction::InitializeValidatorStorage => {
+            if !rest.is_empty() {
+                Err(InstructionError::InvalidArgument)?;
+            }
+            storage_account.initialize_validator_storage()
+        }
         StorageInstruction::SubmitMiningProof {
             sha_state,
             slot,
             signature,
         } => {
-            if !rest.is_empty() {
+            if me_unsigned || !rest.is_empty() {
                 Err(InstructionError::InvalidArgument)?;
             }
             storage_account.submit_mining_proof(
@@ -54,7 +58,7 @@ pub fn process_instruction(
             )
         }
         StorageInstruction::AdvertiseStorageRecentBlockhash { hash, slot } => {
-            if !rest.is_empty() {
+            if me_unsigned || !rest.is_empty() {
                 Err(InstructionError::InvalidArgument)?;
             }
             storage_account.advertise_storage_recent_blockhash(
@@ -64,7 +68,7 @@ pub fn process_instruction(
             )
         }
         StorageInstruction::ClaimStorageReward { slot } => {
-            if rest.len() != 1 {
+            if me_unsigned || rest.len() != 1 {
                 Err(InstructionError::InvalidArgument)?;
             }
             storage_account.claim_storage_reward(
@@ -74,7 +78,7 @@ pub fn process_instruction(
             )
         }
         StorageInstruction::ProofValidation { slot, proofs } => {
-            if rest.is_empty() {
+            if me_unsigned || rest.is_empty() {
                 // have to have at least 1 replicator to do any verification
                 Err(InstructionError::InvalidArgument)?;
             }
@@ -98,6 +102,7 @@ mod tests {
     use crate::storage_instruction;
     use crate::SLOTS_PER_SEGMENT;
     use bincode::deserialize;
+    use log::*;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::account::{create_keyed_accounts, Account};
@@ -246,21 +251,26 @@ mod tests {
         let slot = 0;
         let bank_client = BankClient::new_shared(&bank);
 
-        let ix = storage_instruction::create_account(&mint_pubkey, &validator, 10);
-        bank_client.send_instruction(&mint_keypair, ix).unwrap();
+        let message = Message::new(storage_instruction::create_validator_storage_account(
+            &mint_pubkey,
+            &validator,
+            10,
+        ));
+        bank_client.send_message(&[&mint_keypair], message).unwrap();
 
-        let ix = storage_instruction::create_account(&mint_pubkey, &replicator, 10);
-        bank_client.send_instruction(&mint_keypair, ix).unwrap();
+        let message = Message::new(storage_instruction::create_replicator_storage_account(
+            &mint_pubkey,
+            &replicator,
+            10,
+        ));
+        bank_client.send_message(&[&mint_keypair], message).unwrap();
 
         let message = Message::new(storage_instruction::create_mining_pool_account(
             &mint_pubkey,
             &mining_pool,
             100,
         ));
-
-        bank_client
-            .send_message(&[&mint_keypair, &mining_pool_keypair], message)
-            .unwrap();
+        bank_client.send_message(&[&mint_keypair], message).unwrap();
 
         // tick the bank up until it's moved into storage segment 2 because the next advertise is for segment 1
         let next_storage_segment_tick_height = TICKS_IN_SEGMENT * 2;
@@ -423,13 +433,19 @@ mod tests {
             .transfer(10, &mint_keypair, &replicator_pubkey)
             .unwrap();
 
-        let ix = storage_instruction::create_account(&mint_pubkey, &replicator_pubkey, 1);
+        let message = Message::new(storage_instruction::create_replicator_storage_account(
+            &mint_pubkey,
+            &replicator_pubkey,
+            1,
+        ));
+        bank_client.send_message(&[&mint_keypair], message).unwrap();
 
-        bank_client.send_instruction(&mint_keypair, ix).unwrap();
-
-        let ix = storage_instruction::create_account(&mint_pubkey, &validator_pubkey, 1);
-
-        bank_client.send_instruction(&mint_keypair, ix).unwrap();
+        let message = Message::new(storage_instruction::create_validator_storage_account(
+            &mint_pubkey,
+            &validator_pubkey,
+            1,
+        ));
+        bank_client.send_message(&[&mint_keypair], message).unwrap();
 
         let ix = storage_instruction::advertise_recent_blockhash(
             &validator_pubkey,

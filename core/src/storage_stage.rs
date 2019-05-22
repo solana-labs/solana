@@ -244,12 +244,12 @@ impl StorageStage {
             .get_account(&storage_keypair.pubkey())
             .is_none()
         {
-            let create_instruction = storage_instruction::create_account(
+            let mut create_instruction = storage_instruction::create_validator_storage_account(
                 &keypair.pubkey(),
                 &storage_keypair.pubkey(),
                 1,
             );
-            instructions.push(create_instruction);
+            instructions.append(&mut create_instruction);
             info!("storage account requested");
         }
         instructions.push(instruction);

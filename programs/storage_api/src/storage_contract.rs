@@ -43,8 +43,7 @@ pub struct CheckedProof {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum StorageContract {
-    //don't move this
-    Default,
+    Uninitialized, // Must be first (aka, 0)
 
     ValidatorStorage {
         slot: u64,
@@ -74,9 +73,37 @@ impl<'a> StorageAccount<'a> {
 
     pub fn initialize_mining_pool(&mut self) -> Result<(), InstructionError> {
         let storage_contract = &mut self.account.state()?;
-        if let StorageContract::Default = storage_contract {
+        if let StorageContract::Uninitialized = storage_contract {
             *storage_contract = StorageContract::MiningPool;
-            Ok(())
+            self.account.set_state(storage_contract)
+        } else {
+            Err(InstructionError::AccountAlreadyInitialized)?
+        }
+    }
+
+    pub fn initialize_replicator_storage(&mut self) -> Result<(), InstructionError> {
+        let storage_contract = &mut self.account.state()?;
+        if let StorageContract::Uninitialized = storage_contract {
+            *storage_contract = StorageContract::ReplicatorStorage {
+                proofs: HashMap::new(),
+                reward_validations: HashMap::new(),
+            };
+            self.account.set_state(storage_contract)
+        } else {
+            Err(InstructionError::AccountAlreadyInitialized)?
+        }
+    }
+
+    pub fn initialize_validator_storage(&mut self) -> Result<(), InstructionError> {
+        let storage_contract = &mut self.account.state()?;
+        if let StorageContract::Uninitialized = storage_contract {
+            *storage_contract = StorageContract::ValidatorStorage {
+                slot: 0,
+                hash: Hash::default(),
+                lockout_validations: HashMap::new(),
+                reward_validations: HashMap::new(),
+            };
+            self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::AccountAlreadyInitialized)?
         }
@@ -91,13 +118,6 @@ impl<'a> StorageAccount<'a> {
         current_slot: u64,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
-        if let StorageContract::Default = storage_contract {
-            *storage_contract = StorageContract::ReplicatorStorage {
-                proofs: HashMap::new(),
-                reward_validations: HashMap::new(),
-            };
-        };
-
         if let StorageContract::ReplicatorStorage { proofs, .. } = &mut storage_contract {
             let segment_index = get_segment_from_slot(slot);
             let current_segment = get_segment_from_slot(current_slot);
@@ -133,15 +153,6 @@ impl<'a> StorageAccount<'a> {
         current_slot: u64,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
-        if let StorageContract::Default = storage_contract {
-            *storage_contract = StorageContract::ValidatorStorage {
-                slot: 0,
-                hash: Hash::default(),
-                lockout_validations: HashMap::new(),
-                reward_validations: HashMap::new(),
-            };
-        };
-
         if let StorageContract::ValidatorStorage {
             slot: state_slot,
             hash: state_hash,
@@ -178,15 +189,6 @@ impl<'a> StorageAccount<'a> {
         replicator_accounts: &mut [StorageAccount],
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
-        if let StorageContract::Default = storage_contract {
-            *storage_contract = StorageContract::ValidatorStorage {
-                slot: 0,
-                hash: Hash::default(),
-                lockout_validations: HashMap::new(),
-                reward_validations: HashMap::new(),
-            };
-        };
-
         if let StorageContract::ValidatorStorage {
             slot: state_slot,
             lockout_validations,
@@ -259,9 +261,6 @@ impl<'a> StorageAccount<'a> {
         current_slot: u64,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
-        if let StorageContract::Default = storage_contract {
-            Err(InstructionError::InvalidArgument)?
-        };
 
         if let StorageContract::ValidatorStorage {
             reward_validations,
@@ -476,7 +475,7 @@ mod tests {
 
         account.account.data.resize(4 * 1024, 0);
         let storage_contract = &mut account.account.state().unwrap();
-        if let StorageContract::Default = storage_contract {
+        if let StorageContract::Uninitialized = storage_contract {
             let mut proof_map = HashMap::new();
             proof_map.insert(proof.sha_state, proof.clone());
             let mut proofs = HashMap::new();
