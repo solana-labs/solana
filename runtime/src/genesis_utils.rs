@@ -41,11 +41,11 @@ pub fn create_genesis_block_with_leader(
                 mint_keypair.pubkey(),
                 Account::new(mint_lamports, 0, &system_program::id()),
             ),
-            // node needs an account to issue votes from, this will require
+            // node needs an account to issue votes and storage proofs from, this will require
             //  airdrops at some point to cover fees...
             (
                 *bootstrap_leader_id,
-                Account::new(1, 0, &system_program::id()),
+                Account::new(42, 0, &system_program::id()),
             ),
             // where votes go to
             (voting_keypair.pubkey(), vote_account),
@@ -59,7 +59,11 @@ pub fn create_genesis_block_with_leader(
                 ),
             ),
         ],
-        &[solana_vote_program!(), solana_stake_program!()],
+        &[
+            solana_vote_program!(),
+            solana_stake_program!(),
+            solana_storage_program!(),
+        ],
     );
 
     GenesisBlockInfo {
