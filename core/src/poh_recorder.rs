@@ -288,11 +288,18 @@ impl PohRecorder {
             0,
             1000
         );
+        let now = Instant::now();
         if let Some(poh_entry) = poh_entry {
             self.tick_height += 1;
             trace!("tick {}", self.tick_height);
 
             if self.start_leader_at_tick.is_none() {
+                inc_new_counter_warn!(
+                    "poh_recorder-tick_overhead",
+                    timing::duration_as_ms(&now.elapsed()) as usize,
+                    0,
+                    1000
+                );
                 return;
             }
 
@@ -305,6 +312,12 @@ impl PohRecorder {
             self.tick_cache.push((entry, self.tick_height));
             let _ = self.flush_cache(true);
         }
+        inc_new_counter_warn!(
+            "poh_recorder-tick_overhead",
+            timing::duration_as_ms(&now.elapsed()) as usize,
+            0,
+            1000
+        );
     }
 
     pub fn record(
