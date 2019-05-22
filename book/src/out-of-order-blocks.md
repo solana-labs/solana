@@ -1,4 +1,4 @@
-# Random Leader Scheduler
+# Out Of Order Blocks
 
 The [deterministic leader schedule](../tree/master/book/src/leader-rotation.md)
 creates a fixed schedule for block production.  The main problems with this
