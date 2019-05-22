@@ -65,7 +65,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
             }
         }
         let mut received = 0;
-        //trace!("sent: {}", sent_len);
+        trace!("sent: {}", sent_len);
         loop {
             if let Ok(mut verifieds) = verified_r.recv_timeout(Duration::from_millis(10)) {
                 while let Some(v) = verifieds.pop() {
@@ -77,7 +77,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
                 }
             }
         }
-        //trace!("received: {}", received);
+        trace!("received: {}", received);
     });
     stage.join().unwrap();
 }
