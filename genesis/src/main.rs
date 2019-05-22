@@ -25,7 +25,7 @@ use solana_sdk::signature::{read_keypair, KeypairUtil};
 use solana_sdk::system_program;
 use solana_sdk::timing;
 use solana_stake_api::stake_state;
-use solana_storage_api::storage_contract::STORAGE_ACCOUNT_SPACE;
+use solana_storage_api::storage_contract;
 use solana_vote_api::vote_state;
 use std::error;
 use std::time::{Duration, Instant};
@@ -216,7 +216,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             // storage account
             (
                 bootstrap_storage_keypair.pubkey(),
-                Account::new(1, STORAGE_ACCOUNT_SPACE as usize, &solana_storage_api::id()),
+                storage_contract::create_validator_storage_account(1),
             ),
         ],
         &[

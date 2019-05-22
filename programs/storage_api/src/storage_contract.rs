@@ -62,6 +62,22 @@ pub enum StorageContract {
     MiningPool,
 }
 
+// utility function, used by Bank, tests, genesis
+pub fn create_validator_storage_account(lamports: u64) -> Account {
+    let mut storage_account = Account::new(lamports, STORAGE_ACCOUNT_SPACE as usize, &crate::id());
+
+    storage_account
+        .set_state(&StorageContract::ValidatorStorage {
+            slot: 0,
+            hash: Hash::default(),
+            lockout_validations: HashMap::new(),
+            reward_validations: HashMap::new(),
+        })
+        .expect("set_state");
+
+    storage_account
+}
+
 pub struct StorageAccount<'a> {
     account: &'a mut Account,
 }
