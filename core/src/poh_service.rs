@@ -28,14 +28,13 @@ impl PohService {
     ) -> Self {
         let poh_exit_ = poh_exit.clone();
         let poh_config = poh_config.clone();
-        let core_ids = core_affinity::get_core_ids();
         let tick_producer = Builder::new()
             .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
                 if poh_config.hashes_per_tick.is_none() {
                     Self::sleepy_tick_producer(poh_recorder, &poh_config, &poh_exit_);
                 } else {
-                    if let Some(cores) = core_ids {
+                    if let Some(cores) = core_affinity::get_core_ids() {
                         core_affinity::set_for_current(cores[0]);
                     }
                     Self::tick_producer(poh_recorder, &poh_exit_);
