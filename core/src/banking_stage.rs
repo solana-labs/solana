@@ -187,8 +187,7 @@ impl BankingStage {
             );
 
             if processed < verified_txs_len {
-                let poh = poh_recorder.lock().unwrap();
-                let next_leader = poh.next_slot_leader();
+                let next_leader = poh_recorder.lock().unwrap().next_slot_leader();
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
                 while let Some((msgs, unprocessed_indexes)) = buffered_packets_iter.next() {
                     let unprocessed_indexes = Self::filter_unprocessed_packets(
@@ -750,8 +749,7 @@ impl BankingStage {
             Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes);
 
             if processed < verified_txs_len {
-                let poh = poh.lock().unwrap();
-                let next_leader = poh.next_slot_leader();
+                let next_leader = poh.lock().unwrap().next_slot_leader();
                 let my_id = cluster_info.read().unwrap().id();
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
                 while let Some((msgs, vers)) = mms_iter.next() {
