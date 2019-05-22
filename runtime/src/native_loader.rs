@@ -32,8 +32,15 @@ const PLATFORM_FILE_EXTENSION_NATIVE: &str = "so";
 const PLATFORM_FILE_EXTENSION_NATIVE: &str = "dll";
 
 fn create_path(name: &str) -> PathBuf {
-    let current_exe = env::current_exe().unwrap();
-    let current_exe_directory = PathBuf::from(current_exe.parent().unwrap());
+    let current_exe = env::current_exe()
+        .unwrap_or_else(|e| panic!("create_path(\"{}\"): current exe not found: {:?}", name, e));
+    let current_exe_directory = PathBuf::from(current_exe.parent().unwrap_or_else(|| {
+        panic!(
+            "create_path(\"{}\"): no parent directory of {:?}",
+            name, current_exe,
+        )
+    }));
+
     let library_file_name = PathBuf::from(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name)
         .with_extension(PLATFORM_FILE_EXTENSION_NATIVE);
 
