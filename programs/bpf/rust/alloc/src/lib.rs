@@ -9,7 +9,7 @@ extern crate alloc;
 extern crate solana_sdk_bpf_utils;
 
 use core::alloc::{GlobalAlloc, Layout};
-use solana_sdk_bpf_utils::*;
+use solana_sdk_bpf_utils::log::*;
 
 #[global_allocator]
 static A: MyAllocator = MyAllocator;
@@ -34,7 +34,7 @@ fn my_alloc_error_handler(_: core::alloc::Layout) -> ! {
 }
 
 #[no_mangle]
-pub extern "C" fn entrypoint() -> bool {
+pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     const ITERS: usize = 500;
     let ones = vec![1_u64; ITERS];
     let mut sum: u64 = 0;
