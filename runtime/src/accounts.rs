@@ -475,7 +475,7 @@ impl Accounts {
                 Self::lock_account(
                     (&mut self.account_locks.lock().unwrap(), parent_record_locks),
                     &message.account_keys[..(message.account_keys.len()
-                        - message.num_credit_only_unsigned_accounts as usize)],
+                        - message.header.num_credit_only_unsigned_accounts as usize)],
                     &mut error_counters,
                 )
             })
@@ -501,7 +501,7 @@ impl Accounts {
             Self::lock_record_account(
                 &record_locks.0,
                 &message.account_keys[..(message.account_keys.len()
-                    - message.num_credit_only_unsigned_accounts as usize)],
+                    - message.header.num_credit_only_unsigned_accounts as usize)],
             );
         }
     }

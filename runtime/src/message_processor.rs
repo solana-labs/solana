@@ -134,7 +134,7 @@ impl MessageProcessor {
             .map(|&index| {
                 let index = index as usize;
                 let key = &message.account_keys[index];
-                (key, index < message.num_required_signatures as usize)
+                (key, index < message.header.num_required_signatures as usize)
             })
             .zip(program_accounts.iter_mut())
             .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))

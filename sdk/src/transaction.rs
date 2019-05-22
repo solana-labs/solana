@@ -67,7 +67,7 @@ pub struct Transaction {
 impl Transaction {
     pub fn new_unsigned(message: Message) -> Self {
         Self {
-            signatures: vec![Signature::default(); message.num_required_signatures as usize],
+            signatures: vec![Signature::default(); message.header.num_required_signatures as usize],
             message,
         }
     }
@@ -177,7 +177,7 @@ impl Transaction {
     /// Check keys and keypair lengths, then sign this transaction.
     pub fn sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
         let signed_keys =
-            &self.message.account_keys[0..self.message.num_required_signatures as usize];
+            &self.message.account_keys[0..self.message.header.num_required_signatures as usize];
         for (i, keypair) in keypairs.iter().enumerate() {
             assert_eq!(keypair.pubkey(), signed_keys[i], "keypair-pubkey mismatch");
         }
@@ -190,7 +190,7 @@ impl Transaction {
     ///  clear any prior signatures and update recent_blockhash
     pub fn partial_sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
         let signed_keys =
-            &self.message.account_keys[0..self.message.num_required_signatures as usize];
+            &self.message.account_keys[0..self.message.header.num_required_signatures as usize];
 
         // if you change the blockhash, you're re-signing...
         if recent_blockhash != self.message.recent_blockhash {

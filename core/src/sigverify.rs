@@ -6,8 +6,9 @@
 
 use crate::packet::{Packet, Packets};
 use crate::result::Result;
+use bincode::serialized_size;
 use solana_metrics::inc_new_counter_debug;
-use solana_sdk::message::MESSAGE_INTRO_BYTES;
+use solana_sdk::message::MessageHeader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::short_vec::decode_len;
 use solana_sdk::signature::Signature;
@@ -114,7 +115,8 @@ pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u3
 
     let sig_start = current_offset as usize + sig_size;
     let msg_start = current_offset as usize + msg_start_offset;
-    let pubkey_start = msg_start + MESSAGE_INTRO_BYTES + pubkey_size;
+    let pubkey_start =
+        msg_start + serialized_size(&MessageHeader::default()).unwrap() as usize + pubkey_size;
 
     (
         sig_len as u32,

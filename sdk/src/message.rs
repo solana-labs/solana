@@ -70,21 +70,26 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
         .collect()
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Message {
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
+pub struct MessageHeader {
     /// The number of signatures required for this message to be considered valid. The
     /// signatures must match the first `num_required_signatures` of `account_keys`.
     pub num_required_signatures: u8,
 
-    /// The number of credit-only signed accounts. The last `num_credit_only_signed_accounts` of
-    /// the signed keys will be cached during runtime to allow parallel processing across
-    /// transactions.
+    /// The last num_credit_only_signed_accounts of the signed keys are credit-only accounts.
+    /// Programs may process multiple transactions that add lamports to the same credit-only
+    /// account within a single PoH entry, but are not permitted to debit lamports or modify
+    /// account data. Transactions targeting the same debit account are evaluated sequentially.
     pub num_credit_only_signed_accounts: u8,
 
-    /// The number of credit-only unsigned accounts. The last `num_credit_only_unsigned_accounts`
-    /// of the unsigned keys will be cached during runtime to allow parallel processing across
-    /// transactions.
+    /// The last num_credit_only_unsigned_accounts of the unsigned keys are credit-only accounts.
     pub num_credit_only_unsigned_accounts: u8,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct Message {
+    /// The message header, identifying signed and credit-only `account_keys`
+    pub header: MessageHeader,
 
     /// All the account keys used by this transaction
     #[serde(with = "short_vec")]
@@ -99,11 +104,6 @@ pub struct Message {
     pub instructions: Vec<CompiledInstruction>,
 }
 
-// The serialized size of the message intro data before account_keys: size of
-// num_required_signatures + size of num_credit_only_signed_accounts + size of
-// num_credit_only_unsigned_accounts.
-pub const MESSAGE_INTRO_BYTES: usize = 3;
-
 impl Message {
     pub fn new_with_compiled_instructions(
         num_required_signatures: u8,
@@ -114,9 +114,11 @@ impl Message {
         instructions: Vec<CompiledInstruction>,
     ) -> Self {
         Self {
-            num_required_signatures,
-            num_credit_only_signed_accounts,
-            num_credit_only_unsigned_accounts,
+            header: MessageHeader {
+                num_required_signatures,
+                num_credit_only_signed_accounts,
+                num_credit_only_unsigned_accounts,
+            },
             account_keys,
             recent_blockhash,
             instructions,
@@ -148,11 +150,11 @@ impl Message {
 
     pub fn program_ids(&self) -> &[Pubkey] {
         &self.account_keys
-            [self.account_keys.len() - self.num_credit_only_unsigned_accounts as usize..]
+            [self.account_keys.len() - self.header.num_credit_only_unsigned_accounts as usize..]
     }
 
     pub fn program_index_in_program_ids(&self, index: u8) -> u8 {
-        index - (self.account_keys.len() as u8 - self.num_credit_only_unsigned_accounts)
+        index - (self.account_keys.len() as u8 - self.header.num_credit_only_unsigned_accounts)
     }
 }
 
@@ -307,11 +309,11 @@ mod tests {
         let id0 = Pubkey::default();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]);
         let message = Message::new(vec![ix]);
-        assert_eq!(message.num_required_signatures, 0);
+        assert_eq!(message.header.num_required_signatures, 0);
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let message = Message::new(vec![ix]);
-        assert_eq!(message.num_required_signatures, 1);
+        assert_eq!(message.header.num_required_signatures, 1);
     }
 
     #[test]
@@ -348,11 +350,11 @@ mod tests {
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]);
         let message = Message::new_with_payer(vec![ix], Some(&payer));
-        assert_eq!(message.num_required_signatures, 1);
+        assert_eq!(message.header.num_required_signatures, 1);
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let message = Message::new_with_payer(vec![ix], Some(&payer));
-        assert_eq!(message.num_required_signatures, 2);
+        assert_eq!(message.header.num_required_signatures, 2);
 
         let ix = Instruction::new(
             program_id,
@@ -360,7 +362,7 @@ mod tests {
             vec![AccountMeta::new(payer, true), AccountMeta::new(id0, true)],
         );
         let message = Message::new_with_payer(vec![ix], Some(&payer));
-        assert_eq!(message.num_required_signatures, 2);
+        assert_eq!(message.header.num_required_signatures, 2);
     }
 
 }
