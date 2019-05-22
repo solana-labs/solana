@@ -142,12 +142,19 @@ pub fn kill_entry_and_spend_and_verify_rest(
     assert!(cluster_nodes.len() >= nodes);
     let client = create_client(entry_point_info.client_facing_addr(), FULLNODE_PORT_RANGE);
     let first_two_epoch_slots = MINIMUM_SLOT_LENGTH * 3;
+
+    for ingress_node in &cluster_nodes {
+        client
+            .poll_get_balance(&ingress_node.id)
+            .unwrap_or_else(|err| panic!("Node {} has no balance: {}", ingress_node.id, err));
+    }
+
     info!("sleeping for 2 leader fortnights");
     sleep(Duration::from_millis(
         slot_millis * first_two_epoch_slots as u64,
     ));
     info!("done sleeping for first 2 warmup epochs");
-    info!("killing entry point");
+    info!("killing entry point: {}", entry_point_info.id);
     assert!(client.fullnode_exit().unwrap());
     info!("sleeping for some time");
     sleep(Duration::from_millis(
@@ -160,10 +167,10 @@ pub fn kill_entry_and_spend_and_verify_rest(
         }
 
         let client = create_client(ingress_node.client_facing_addr(), FULLNODE_PORT_RANGE);
-        let bal = client
+        let balance = client
             .poll_get_balance(&funding_keypair.pubkey())
             .expect("balance in source");
-        assert!(bal > 0);
+        assert_ne!(balance, 0);
 
         let mut result = Ok(());
         let mut retries = 0;

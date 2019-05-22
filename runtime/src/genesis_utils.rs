@@ -14,6 +14,7 @@ pub struct GenesisBlockInfo {
     pub genesis_block: GenesisBlock,
     pub mint_keypair: Keypair,
     pub voting_keypair: Keypair,
+    pub storage_keypair: Keypair,
 }
 
 pub fn create_genesis_block_with_leader(
@@ -77,5 +78,6 @@ pub fn create_genesis_block_with_leader(
         genesis_block,
         mint_keypair,
         voting_keypair,
+        storage_keypair,
     }
 }

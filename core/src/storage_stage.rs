@@ -193,52 +193,12 @@ impl StorageStage {
                 .spawn(move || {
                     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-                    // Create the validator storage account if necessary
-                    loop {
-                        let (blockhash, storage_account, keypair_balance) = {
-                            let working_bank = bank_forks.read().unwrap().working_bank();
-                            (
-                                working_bank.confirmed_last_blockhash(),
-                                working_bank.get_account(&storage_keypair.pubkey()),
-                                working_bank.get_balance(&keypair.pubkey()),
-                            )
-                        };
-
-                        if storage_account.is_some() {
-                            info!("Storage account found: {}", storage_keypair.pubkey());
-                            break;
+                    {
+                        let working_bank = bank_forks.read().unwrap().working_bank();
+                        let storage_account = working_bank.get_account(&storage_keypair.pubkey());
+                        if storage_account.is_none() {
+                            warn!("Storage account not found: {}", storage_keypair.pubkey());
                         }
-                        info!("Creating validator storage account");
-                        info!(
-                            "keypair account balance: {}: {}",
-                            keypair.pubkey(),
-                            keypair_balance
-                        );
-                        let signer_keys = vec![keypair.as_ref()];
-                        let message = Message::new_with_payer(
-                            storage_instruction::create_validator_storage_account(
-                                &keypair.pubkey(),
-                                &storage_keypair.pubkey(),
-                                1,
-                            ),
-                            Some(&signer_keys[0].pubkey()),
-                        );
-                        let transaction = Transaction::new(&signer_keys, message, blockhash);
-
-                        transactions_socket
-                            .send_to(
-                                &bincode::serialize(&transaction).unwrap(),
-                                cluster_info.read().unwrap().my_data().tpu,
-                            )
-                            .unwrap_or_else(|err| {
-                                info!("failed to send create storage transaction: {:?}", err);
-                                0
-                            });
-
-                        if exit.load(Ordering::Relaxed) {
-                            break;
-                        }
-                        sleep(Duration::from_millis(100));
                     }
 
                     loop {
@@ -289,7 +249,15 @@ impl StorageStage {
         let blockhash = working_bank.confirmed_last_blockhash();
         let keypair_balance = working_bank.get_balance(&keypair.pubkey());
 
-        info!("keypair account balance: {}", keypair_balance);
+        if keypair_balance == 0 {
+            warn!("keypair account balance empty: {}", keypair.pubkey(),);
+        } else {
+            debug!(
+                "keypair account balance: {}: {}",
+                keypair.pubkey(),
+                keypair_balance
+            );
+        }
         if working_bank
             .get_account(&storage_keypair.pubkey())
             .is_none()
