@@ -4,13 +4,15 @@ use hashbrown::{HashMap, HashSet};
 use solana_metrics::datapoint_info;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::{Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY};
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 pub const VOTE_THRESHOLD_DEPTH: usize = 8;
 pub const VOTE_THRESHOLD_SIZE: f64 = 2f64 / 3f64;
-const MAX_RECENT_VOTES: usize = 16;
+pub const MAX_RECENT_VOTES: usize = 16;
 
 #[derive(Default)]
 pub struct EpochStakes {
@@ -33,6 +35,7 @@ pub struct Locktower {
     threshold_depth: usize,
     threshold_size: f64,
     lockouts: VoteState,
+    recent_votes: VecDeque<Vote>,
 }
 
 impl EpochStakes {
@@ -83,6 +86,7 @@ impl Locktower {
             threshold_depth: VOTE_THRESHOLD_DEPTH,
             threshold_size: VOTE_THRESHOLD_SIZE,
             lockouts: VoteState::default(),
+            recent_votes: VecDeque::default(),
         };
 
         let bank = locktower.find_heaviest_bank(bank_forks).unwrap();
@@ -96,6 +100,7 @@ impl Locktower {
             threshold_depth,
             threshold_size,
             lockouts: VoteState::default(),
+            recent_votes: VecDeque::default(),
         }
     }
     pub fn collect_vote_lockouts<F>(
@@ -113,8 +118,11 @@ impl Locktower {
             if lamports == 0 {
                 continue;
             }
-            let mut vote_state: VoteState = VoteState::deserialize(&account.data)
-                .expect("bank should always have valid VoteState data");
+            let vote_state = VoteState::from(&account);
+            if vote_state.is_none() {
+                continue;
+            }
+            let mut vote_state = vote_state.unwrap();
 
             if key == self.epoch_stakes.delegate_id
                 || vote_state.node_id == self.epoch_stakes.delegate_id
@@ -136,7 +144,9 @@ impl Locktower {
                 );
             }
             let start_root = vote_state.root_slot;
-            vote_state.process_vote(&Vote { slot: bank_slot });
+
+            vote_state.process_slot_vote_unchecked(bank_slot);
+
             for vote in &vote_state.votes {
                 Self::update_ancestor_lockouts(&mut stake_lockouts, &vote, ancestors);
             }
@@ -220,9 +230,23 @@ impl Locktower {
         }
     }
 
-    pub fn record_vote(&mut self, slot: u64) -> Option<u64> {
+    pub fn record_vote(&mut self, slot: u64, hash: Hash) -> Option<u64> {
         let root_slot = self.lockouts.root_slot;
-        self.lockouts.process_vote(&Vote { slot });
+        let vote = Vote { slot, hash };
+        self.lockouts.process_vote_unchecked(&vote);
+
+        // vote_state doesn't keep around the hashes, so we save them in recent_votes
+        self.recent_votes.push_back(vote);
+        let slots = self
+            .lockouts
+            .votes
+            .iter()
+            .skip(self.lockouts.votes.len().saturating_sub(MAX_RECENT_VOTES))
+            .map(|vote| vote.slot)
+            .collect::<Vec<_>>();
+        self.recent_votes
+            .retain(|vote| slots.iter().any(|slot| vote.slot == *slot));
+
         datapoint_info!(
             "locktower-vote",
             ("latest", slot, i64),
@@ -236,10 +260,7 @@ impl Locktower {
     }
 
     pub fn recent_votes(&self) -> Vec<Vote> {
-        let start = self.lockouts.votes.len().saturating_sub(MAX_RECENT_VOTES);
-        (start..self.lockouts.votes.len())
-            .map(|i| Vote::new(self.lockouts.votes[i].slot))
-            .collect()
+        self.recent_votes.iter().cloned().collect::<Vec<_>>()
     }
 
     pub fn root(&self) -> Option<u64> {
@@ -269,7 +290,7 @@ impl Locktower {
 
     pub fn is_locked_out(&self, slot: u64, descendants: &HashMap<u64, HashSet<u64>>) -> bool {
         let mut lockouts = self.lockouts.clone();
-        lockouts.process_vote(&Vote { slot });
+        lockouts.process_slot_vote_unchecked(slot);
         for vote in &lockouts.votes {
             if vote.slot == slot {
                 continue;
@@ -291,7 +312,7 @@ impl Locktower {
         stake_lockouts: &HashMap<u64, StakeLockout>,
     ) -> bool {
         let mut lockouts = self.lockouts.clone();
-        lockouts.process_vote(&Vote { slot });
+        lockouts.process_slot_vote_unchecked(slot);
         let vote = lockouts.nth_recent_vote(self.threshold_depth);
         if let Some(vote) = vote {
             if let Some(fork_stake) = stake_lockouts.get(&vote.slot) {
@@ -386,7 +407,7 @@ mod test {
             account.lamports = *lamports;
             let mut vote_state = VoteState::default();
             for slot in *votes {
-                vote_state.process_vote(&Vote { slot: *slot });
+                vote_state.process_slot_vote_unchecked(*slot);
             }
             vote_state
                 .serialize(&mut account.data)
@@ -431,7 +452,7 @@ mod test {
         let mut locktower = Locktower::new(epoch_stakes, 0, 0.67);
         let mut ancestors = HashMap::new();
         for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
-            locktower.record_vote(i as u64);
+            locktower.record_vote(i as u64, Hash::default());
             ancestors.insert(i as u64, (0..i as u64).into_iter().collect());
         }
         assert_eq!(locktower.lockouts.root_slot, Some(0));
@@ -569,7 +590,7 @@ mod test {
     #[test]
     fn test_check_already_voted() {
         let mut locktower = Locktower::new(EpochStakes::new_for_tests(2), 0, 0.67);
-        locktower.record_vote(0);
+        locktower.record_vote(0, Hash::default());
         assert!(locktower.has_voted(0));
         assert!(!locktower.has_voted(1));
     }
@@ -580,8 +601,8 @@ mod test {
         let descendants = vec![(0, vec![1].into_iter().collect()), (1, HashSet::new())]
             .into_iter()
             .collect();
-        locktower.record_vote(0);
-        locktower.record_vote(1);
+        locktower.record_vote(0, Hash::default());
+        locktower.record_vote(1, Hash::default());
         assert!(locktower.is_locked_out(0, &descendants));
     }
 
@@ -591,7 +612,7 @@ mod test {
         let descendants = vec![(0, vec![1].into_iter().collect())]
             .into_iter()
             .collect();
-        locktower.record_vote(0);
+        locktower.record_vote(0, Hash::default());
         assert!(!locktower.is_locked_out(1, &descendants));
     }
 
@@ -605,8 +626,8 @@ mod test {
         ]
         .into_iter()
         .collect();
-        locktower.record_vote(0);
-        locktower.record_vote(1);
+        locktower.record_vote(0, Hash::default());
+        locktower.record_vote(1, Hash::default());
         assert!(locktower.is_locked_out(2, &descendants));
     }
 
@@ -616,10 +637,10 @@ mod test {
         let descendants = vec![(0, vec![1, 4].into_iter().collect()), (1, HashSet::new())]
             .into_iter()
             .collect();
-        locktower.record_vote(0);
-        locktower.record_vote(1);
+        locktower.record_vote(0, Hash::default());
+        locktower.record_vote(1, Hash::default());
         assert!(!locktower.is_locked_out(4, &descendants));
-        locktower.record_vote(4);
+        locktower.record_vote(4, Hash::default());
         assert_eq!(locktower.lockouts.votes[0].slot, 0);
         assert_eq!(locktower.lockouts.votes[0].confirmation_count, 2);
         assert_eq!(locktower.lockouts.votes[1].slot, 4);
@@ -638,7 +659,7 @@ mod test {
         )]
         .into_iter()
         .collect();
-        locktower.record_vote(0);
+        locktower.record_vote(0, Hash::default());
         assert!(!locktower.check_vote_stake_threshold(1, &stakes));
     }
     #[test]
@@ -653,7 +674,7 @@ mod test {
         )]
         .into_iter()
         .collect();
-        locktower.record_vote(0);
+        locktower.record_vote(0, Hash::default());
         assert!(locktower.check_vote_stake_threshold(1, &stakes));
     }
 
@@ -669,9 +690,9 @@ mod test {
         )]
         .into_iter()
         .collect();
-        locktower.record_vote(0);
-        locktower.record_vote(1);
-        locktower.record_vote(2);
+        locktower.record_vote(0, Hash::default());
+        locktower.record_vote(1, Hash::default());
+        locktower.record_vote(2, Hash::default());
         assert!(locktower.check_vote_stake_threshold(6, &stakes));
     }
 
@@ -679,7 +700,7 @@ mod test {
     fn test_check_vote_threshold_above_threshold_no_stake() {
         let mut locktower = Locktower::new(EpochStakes::new_for_tests(2), 1, 0.67);
         let stakes = HashMap::new();
-        locktower.record_vote(0);
+        locktower.record_vote(0, Hash::default());
         assert!(!locktower.check_vote_stake_threshold(1, &stakes));
     }
 
@@ -770,7 +791,7 @@ mod test {
         // threshold check
         let vote_to_evaluate = VOTE_THRESHOLD_DEPTH as u64;
         for vote in &locktower_votes {
-            locktower.record_vote(*vote);
+            locktower.record_vote(*vote, Hash::default());
         }
         let stakes_lockouts = locktower.collect_vote_lockouts(
             vote_to_evaluate,
@@ -791,9 +812,11 @@ mod test {
     fn vote_and_check_recent(num_votes: usize) {
         let mut locktower = Locktower::new(EpochStakes::new_for_tests(2), 1, 0.67);
         let start = num_votes.saturating_sub(MAX_RECENT_VOTES);
-        let expected: Vec<_> = (start..num_votes).map(|i| Vote::new(i as u64)).collect();
+        let expected: Vec<_> = (start..num_votes)
+            .map(|i| Vote::new(i as u64, Hash::default()))
+            .collect();
         for i in 0..num_votes {
-            locktower.record_vote(i as u64);
+            locktower.record_vote(i as u64, Hash::default());
         }
         assert_eq!(expected, locktower.recent_votes())
     }

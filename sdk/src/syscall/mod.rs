@@ -2,7 +2,7 @@
 //!
 use crate::pubkey::Pubkey;
 
-pub mod slothashes;
+pub mod slot_hashes;
 
 /// "Sysca11111111111111111111111111111111111111"
 ///   owner pubkey for syscall accounts

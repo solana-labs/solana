@@ -82,3 +82,41 @@ impl Service for ClusterInfoVoteListener {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::locktower::MAX_RECENT_VOTES;
+    use crate::packet;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::transaction::Transaction;
+    use solana_vote_api::vote_instruction;
+    use solana_vote_api::vote_state::Vote;
+
+    #[test]
+    fn test_max_vote_tx_fits() {
+        solana_logger::setup();
+        let node_keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let votes = (0..MAX_RECENT_VOTES)
+            .map(|i| Vote::new(i as u64, Hash::default()))
+            .collect::<Vec<_>>();
+        let vote_ix = vote_instruction::vote(
+            &node_keypair.pubkey(),
+            &vote_keypair.pubkey(),
+            &vote_keypair.pubkey(),
+            votes,
+        );
+
+        let mut vote_tx = Transaction::new_unsigned_instructions(vec![vote_ix]);
+        vote_tx.partial_sign(&[&node_keypair], Hash::default());
+        vote_tx.partial_sign(&[&vote_keypair], Hash::default());
+
+        use bincode::serialized_size;
+        info!("max vote size {}", serialized_size(&vote_tx).unwrap());
+
+        let msgs = packet::to_packets(&[vote_tx]); // panics if won't fit
+
+        assert_eq!(msgs.len(), 1);
+    }
+}
