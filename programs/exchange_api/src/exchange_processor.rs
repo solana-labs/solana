@@ -2,7 +2,7 @@
 
 use crate::exchange_instruction::*;
 use crate::exchange_state::*;
-use crate::id;
+use crate::faucet_id;
 use log::*;
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::account::KeyedAccount;
@@ -192,7 +192,7 @@ impl ExchangeProcessor {
         let mut to_account =
             Self::deserialize_account(&keyed_accounts[TO_ACCOUNT_INDEX].account.data)?;
 
-        if &id() == keyed_accounts[FROM_ACCOUNT_INDEX].unsigned_key() {
+        if &faucet_id() == keyed_accounts[FROM_ACCOUNT_INDEX].unsigned_key() {
             to_account.tokens[token] += tokens;
         } else {
             let state: ExchangeState =
@@ -460,7 +460,7 @@ pub fn process_instruction(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::exchange_instruction;
+    use crate::{exchange_instruction, id};
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::client::SyncClient;
@@ -588,8 +588,13 @@ mod test {
     }
 
     fn transfer(client: &BankClient, owner: &Keypair, to: &Pubkey, token: Token, tokens: u64) {
-        let instruction =
-            exchange_instruction::transfer_request(&owner.pubkey(), to, &id(), token, tokens);
+        let instruction = exchange_instruction::transfer_request(
+            &owner.pubkey(),
+            to,
+            &faucet_id(),
+            token,
+            tokens,
+        );
         client
             .send_instruction(owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
@@ -664,8 +669,13 @@ mod test {
 
         let new = create_token_account(&client, &owner);
 
-        let instruction =
-            exchange_instruction::transfer_request(&owner.pubkey(), &new, &id(), Token::A, 42);
+        let instruction = exchange_instruction::transfer_request(
+            &owner.pubkey(),
+            &new,
+            &faucet_id(),
+            Token::A,
+            42,
+        );
         client
             .send_instruction(&owner, instruction)
             .expect(&format!("{}:{}", line!(), file!()));
