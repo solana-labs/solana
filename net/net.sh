@@ -562,8 +562,7 @@ start() {
   echo "Bootstrap leader deployment took $bootstrapNodeDeployTime seconds"
   echo "Additional fullnode deployment (${#fullnodeIpList[@]} full nodes, ${#blockstreamerIpList[@]} blockstreamer nodes) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
-  echo "Network start logs in $netLogDir:"
-  ls -l "$netLogDir"
+  echo "Network start logs in $netLogDir"
 }
 
 
