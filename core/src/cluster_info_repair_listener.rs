@@ -8,6 +8,7 @@ use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_metrics::datapoint;
+use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp::min;
 use std::collections::HashMap;
@@ -79,6 +80,7 @@ impl ClusterInfoRepairListener {
         blocktree: &Arc<Blocktree>,
         exit: &Arc<AtomicBool>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
+        epoch_schedule: EpochSchedule,
     ) -> Self {
         let exit = exit.clone();
         let blocktree = blocktree.clone();
@@ -87,7 +89,13 @@ impl ClusterInfoRepairListener {
             .spawn(move || {
                 // Maps a peer to the last timestamp and root they gossiped
                 let mut peer_roots: HashMap<Pubkey, (u64, u64)> = HashMap::new();
-                let _ = Self::recv_loop(&blocktree, &mut peer_roots, exit, &cluster_info);
+                let _ = Self::recv_loop(
+                    &blocktree,
+                    &mut peer_roots,
+                    exit,
+                    &cluster_info,
+                    &epoch_schedule,
+                );
             })
             .unwrap();
         Self {
@@ -100,6 +108,7 @@ impl ClusterInfoRepairListener {
         peer_roots: &mut HashMap<Pubkey, (u64, u64)>,
         exit: Arc<AtomicBool>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+        epoch_schedule: &EpochSchedule,
     ) -> Result<()> {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let my_id = cluster_info.read().unwrap().id();
@@ -150,6 +159,7 @@ impl ClusterInfoRepairListener {
                 &socket,
                 cluster_info,
                 &mut my_gossiped_root,
+                epoch_schedule,
             );
 
             sleep(Duration::from_millis(REPAIRMEN_SLEEP_MILLIS as u64));
@@ -164,6 +174,7 @@ impl ClusterInfoRepairListener {
         socket: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         my_gossiped_root: &mut u64,
+        epoch_schedule: &EpochSchedule,
     ) -> Result<()> {
         for (repairee_id, repairee_epoch_slots) in repairees {
             let repairee_root = repairee_epoch_slots.root;
@@ -200,6 +211,7 @@ impl ClusterInfoRepairListener {
                     socket,
                     &repairee_tvu,
                     NUM_SLOTS_PER_UPDATE,
+                    epoch_schedule,
                 );
             }
         }
@@ -216,6 +228,7 @@ impl ClusterInfoRepairListener {
         socket: &UdpSocket,
         repairee_tvu: &SocketAddr,
         num_slots_to_repair: usize,
+        epoch_schedule: &EpochSchedule,
     ) -> Result<()> {
         let slot_iter = blocktree.rooted_slot_iterator(repairee_epoch_slots.root + 1);
 
@@ -229,8 +242,15 @@ impl ClusterInfoRepairListener {
         let mut total_data_blobs_sent = 0;
         let mut total_coding_blobs_sent = 0;
         let mut num_slots_repaired = 0;
+        let max_confirmed_repairee_epoch =
+            epoch_schedule.get_stakers_epoch(repairee_epoch_slots.root);
+        let max_confirmed_repairee_slot =
+            epoch_schedule.get_last_slot_in_epoch(max_confirmed_repairee_epoch);
         for (slot, slot_meta) in slot_iter {
-            if slot > my_root || num_slots_repaired >= num_slots_to_repair {
+            if slot > my_root
+                || num_slots_repaired >= num_slots_to_repair
+                || slot > max_confirmed_repairee_slot
+            {
                 break;
             }
             if !repairee_epoch_slots.slots.contains(&slot) {
@@ -419,14 +439,65 @@ mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::tests::make_many_slot_entries;
-    use crate::packet::Blob;
+    use crate::packet::{Blob, SharedBlob};
     use crate::streamer;
     use std::collections::HashSet;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
+    use std::sync::mpsc::Receiver;
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
+
+    struct MockRepairee {
+        id: Pubkey,
+        receiver: Receiver<Vec<SharedBlob>>,
+        tvu_address: SocketAddr,
+        repairee_exit: Arc<AtomicBool>,
+        repairee_receiver_thread_hdl: JoinHandle<()>,
+    }
+
+    impl MockRepairee {
+        pub fn new(
+            id: Pubkey,
+            receiver: Receiver<Vec<SharedBlob>>,
+            tvu_address: SocketAddr,
+            repairee_exit: Arc<AtomicBool>,
+            repairee_receiver_thread_hdl: JoinHandle<()>,
+        ) -> Self {
+            Self {
+                id,
+                receiver,
+                tvu_address,
+                repairee_exit,
+                repairee_receiver_thread_hdl,
+            }
+        }
+
+        pub fn make_mock_repairee() -> Self {
+            let id = Pubkey::new_rand();
+            let (repairee_sender, repairee_receiver) = channel();
+            let repairee_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
+            let repairee_tvu_addr = repairee_socket.local_addr().unwrap();
+            let repairee_exit = Arc::new(AtomicBool::new(false));
+            let repairee_receiver_thread_hdl =
+                streamer::blob_receiver(repairee_socket, &repairee_exit, repairee_sender);
+
+            Self::new(
+                id,
+                repairee_receiver,
+                repairee_tvu_addr,
+                repairee_exit,
+                repairee_receiver_thread_hdl,
+            )
+        }
+
+        pub fn close(self) -> Result<()> {
+            self.repairee_exit.store(true, Ordering::Relaxed);
+            self.repairee_receiver_thread_hdl.join()?;
+            Ok(())
+        }
+    }
 
     #[test]
     fn test_serve_repairs_to_repairee() {
@@ -448,12 +519,15 @@ mod tests {
         let my_id = Pubkey::new_rand();
         let my_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
+        // Set up a mock repairee with a socket listening for incoming repairs
+        let mock_repairee = MockRepairee::make_mock_repairee();
+
         // Set up the repairee's EpochSlots, such that they are missing every odd indexed slot
         // in the range (repairee_root, num_slots]
-        let repairee_id = Pubkey::new_rand();
         let repairee_root = 0;
         let repairee_slots: HashSet<_> = (0..=num_slots).step_by(2).collect();
-        let repairee_epoch_slots = EpochSlots::new(repairee_id, repairee_root, repairee_slots, 1);
+        let repairee_epoch_slots =
+            EpochSlots::new(mock_repairee.id, repairee_root, repairee_slots, 1);
 
         // Mock out some other repairmen such that each repairman is responsible for 1 blob in a slot
         let num_repairmen = blobs_per_slot - 1;
@@ -462,15 +536,8 @@ mod tests {
         eligible_repairmen.push(my_id);
         let eligible_repairmen_refs: Vec<_> = eligible_repairmen.iter().collect();
 
-        // Set up a blob reciever for the repairee
-        let (repairee_sender, repairee_receiver) = channel();
-        let repairee_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
-        let repairee_tvu = repairee_socket.local_addr().unwrap();
-        let repairee_exit = Arc::new(AtomicBool::new(false));
-        let repairee_receiver_thread_hdl =
-            streamer::blob_receiver(repairee_socket, &repairee_exit, repairee_sender);
-
         // Have all the repairman send the repairs
+        let epoch_schedule = EpochSchedule::new(32, 16, false);
         let num_missing_slots = num_slots / 2;
         for repairman_id in &eligible_repairmen {
             ClusterInfoRepairListener::serve_repairs_to_repairee(
@@ -480,8 +547,9 @@ mod tests {
                 &repairee_epoch_slots,
                 &eligible_repairmen_refs,
                 &my_socket,
-                &repairee_tvu,
+                &mock_repairee.tvu_address,
                 num_missing_slots as usize,
+                &epoch_schedule,
             )
             .unwrap();
         }
@@ -492,17 +560,95 @@ mod tests {
         // `(num_slots / 2) * blobs_per_slot * REPAIR_REDUNDANCY` blobs.
         let num_expected_blobs = (num_slots / 2) * blobs_per_slot * REPAIR_REDUNDANCY as u64;
         while (received_blobs.len() as u64) < num_expected_blobs {
-            received_blobs.extend(repairee_receiver.recv().unwrap());
+            received_blobs.extend(mock_repairee.receiver.recv().unwrap());
         }
 
         // Make sure no extra blobs get sent
         sleep(Duration::from_millis(1000));
-        assert!(repairee_receiver.try_recv().is_err());
+        assert!(mock_repairee.receiver.try_recv().is_err());
         assert_eq!(received_blobs.len() as u64, num_expected_blobs);
 
         // Shutdown
-        repairee_exit.store(true, Ordering::Relaxed);
-        repairee_receiver_thread_hdl.join().unwrap();
+        mock_repairee.close().unwrap();
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_no_repair_past_confirmed_epoch() {
+        let blocktree_path = get_tmp_ledger_path!();
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
+        let stakers_slot_offset = 16;
+        let slots_per_epoch = stakers_slot_offset * 2;
+        let epoch_schedule = EpochSchedule::new(slots_per_epoch, stakers_slot_offset, false);
+
+        // Create blobs for first two epochs and write them to blocktree
+        let total_slots = slots_per_epoch * 2;
+        let (blobs, _) = make_many_slot_entries(0, total_slots, 1);
+        blocktree.insert_data_blobs(&blobs).unwrap();
+
+        // Write roots so that these slots will qualify to be sent by the repairman
+        blocktree.set_root(0, 0).unwrap();
+        blocktree.set_root(slots_per_epoch * 2 - 1, 0).unwrap();
+
+        // Set up my information
+        let my_id = Pubkey::new_rand();
+        let my_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+
+        // Set up a mock repairee with a socket listening for incoming repairs
+        let mock_repairee = MockRepairee::make_mock_repairee();
+
+        // Set up the repairee's EpochSlots, such that:
+        // 1) They are missing all of the second epoch, but have all of the first epoch.
+        // 2) The root only confirms epoch 1, so the leader for epoch 2 is unconfirmed.
+        //
+        // Thus, no repairmen should send any blobs to this repairee b/c this repairee
+        // already has all the slots for which they have a confirmed leader schedule
+        let repairee_root = 0;
+        let repairee_slots: HashSet<_> = (0..=slots_per_epoch).collect();
+        let repairee_epoch_slots =
+            EpochSlots::new(mock_repairee.id, repairee_root, repairee_slots.clone(), 1);
+
+        ClusterInfoRepairListener::serve_repairs_to_repairee(
+            &my_id,
+            total_slots - 1,
+            &blocktree,
+            &repairee_epoch_slots,
+            &vec![&my_id],
+            &my_socket,
+            &mock_repairee.tvu_address,
+            1 as usize,
+            &epoch_schedule,
+        )
+        .unwrap();
+
+        // Make sure no blobs get sent
+        sleep(Duration::from_millis(1000));
+        assert!(mock_repairee.receiver.try_recv().is_err());
+
+        // Set the root to stakers_slot_offset, now epoch 2 should be confirmed, so the repairee
+        // is now eligible to get slots from epoch 2:
+        let repairee_epoch_slots =
+            EpochSlots::new(mock_repairee.id, stakers_slot_offset, repairee_slots, 1);
+        ClusterInfoRepairListener::serve_repairs_to_repairee(
+            &my_id,
+            total_slots - 1,
+            &blocktree,
+            &repairee_epoch_slots,
+            &vec![&my_id],
+            &my_socket,
+            &mock_repairee.tvu_address,
+            1 as usize,
+            &epoch_schedule,
+        )
+        .unwrap();
+
+        // Make sure some blobs get sent this time
+        sleep(Duration::from_millis(1000));
+        assert!(mock_repairee.receiver.try_recv().is_ok());
+
+        // Shutdown
+        mock_repairee.close().unwrap();
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
