@@ -118,7 +118,8 @@ impl Transaction {
         account_keys.extend(&program_ids);
         let message = Message::new_with_compiled_instructions(
             from_keypairs.len() as u8,
-            [0, program_ids.len() as u8],
+            0,
+            program_ids.len() as u8,
             account_keys,
             Hash::default(),
             instructions,

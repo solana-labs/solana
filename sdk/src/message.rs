@@ -76,11 +76,15 @@ pub struct Message {
     /// signatures must match the first `num_required_signatures` of `account_keys`.
     pub num_required_signatures: u8,
 
-    /// The number of credit-only accounts: [signed_keys, unsigned_keys]. The last
-    /// `num_credit_only_accounts` of the signed (first `num_required_signatures`) and unsigned
-    /// portions of `account_keys` will be cached during runtime to allow parallel processing
-    /// across transactions.
-    pub num_credit_only_accounts: [u8; 2],
+    /// The number of credit-only signed accounts. The last `num_credit_only_signed_accounts` of
+    /// the signed keys will be cached during runtime to allow parallel processing across
+    /// transactions.
+    pub num_credit_only_signed_accounts: u8,
+
+    /// The number of credit-only unsigned accounts. The last `num_credit_only_unsigned_accounts`
+    /// of the unsigned keys will be cached during runtime to allow parallel processing across
+    /// transactions.
+    pub num_credit_only_unsigned_accounts: u8,
 
     /// All the account keys used by this transaction
     #[serde(with = "short_vec")]
@@ -98,14 +102,16 @@ pub struct Message {
 impl Message {
     pub fn new_with_compiled_instructions(
         num_required_signatures: u8,
-        num_credit_only_accounts: [u8; 2],
+        num_credit_only_signed_accounts: u8,
+        num_credit_only_unsigned_accounts: u8,
         account_keys: Vec<Pubkey>,
         recent_blockhash: Hash,
         instructions: Vec<CompiledInstruction>,
     ) -> Self {
         Self {
             num_required_signatures,
-            num_credit_only_accounts,
+            num_credit_only_signed_accounts,
+            num_credit_only_unsigned_accounts,
             account_keys,
             recent_blockhash,
             instructions,
@@ -120,13 +126,15 @@ impl Message {
         let program_ids = get_program_ids(&instructions);
         let (mut signed_keys, unsigned_keys) = get_keys(&instructions, payer);
         let num_required_signatures = signed_keys.len() as u8;
-        let num_credit_only_accounts = [0, program_ids.len() as u8];
+        let num_credit_only_signed_accounts = 0;
+        let num_credit_only_unsigned_accounts = program_ids.len() as u8;
         signed_keys.extend(&unsigned_keys);
         signed_keys.extend(&program_ids);
         let instructions = compile_instructions(instructions, &signed_keys);
         Self::new_with_compiled_instructions(
             num_required_signatures,
-            num_credit_only_accounts,
+            num_credit_only_signed_accounts,
+            num_credit_only_unsigned_accounts,
             signed_keys,
             Hash::default(),
             instructions,
@@ -134,11 +142,12 @@ impl Message {
     }
 
     pub fn program_ids(&self) -> &[Pubkey] {
-        &self.account_keys[self.account_keys.len() - self.num_credit_only_accounts[1] as usize..]
+        &self.account_keys
+            [self.account_keys.len() - self.num_credit_only_unsigned_accounts as usize..]
     }
 
     pub fn program_index_in_program_ids(&self, index: u8) -> u8 {
-        index - (self.account_keys.len() as u8 - self.num_credit_only_accounts[1])
+        index - (self.account_keys.len() as u8 - self.num_credit_only_unsigned_accounts)
     }
 }
 

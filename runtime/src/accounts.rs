@@ -478,7 +478,7 @@ impl Accounts {
                         .message()
                         .account_keys
                         .len()
-                        - tx.borrow().message().num_credit_only_accounts[1] as usize)],
+                        - tx.borrow().message().num_credit_only_unsigned_accounts as usize)],
                     &mut error_counters,
                 )
             })
@@ -503,7 +503,7 @@ impl Accounts {
             Self::lock_record_account(
                 &record_locks.0,
                 &tx.borrow().message().account_keys[..(tx.borrow().message().account_keys.len()
-                    - tx.borrow().message().num_credit_only_accounts[1] as usize)],
+                    - tx.borrow().message().num_credit_only_unsigned_accounts as usize)],
             );
         }
     }
