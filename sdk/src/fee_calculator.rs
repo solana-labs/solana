@@ -14,7 +14,7 @@ impl FeeCalculator {
     }
 
     pub fn calculate_fee(&self, message: &Message) -> u64 {
-        self.lamports_per_signature * u64::from(message.num_required_signatures)
+        self.lamports_per_signature * u64::from(message.header.num_required_signatures)
     }
 }
 

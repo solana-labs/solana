@@ -107,7 +107,7 @@ impl AccountMeta {
 /// An instruction to execute a program
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct CompiledInstruction {
-    /// Index into the transaction program ids array indicating the program account that executes this instruction
+    /// Index into the transaction keys array indicating the program account that executes this instruction
     pub program_ids_index: u8,
     /// Ordered indices into the transaction keys array indicating which accounts to pass to the program
     #[serde(with = "short_vec")]

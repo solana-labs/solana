@@ -180,11 +180,13 @@ impl Accounts {
             // If a fee can pay for execution then the program will be scheduled
             let mut called_accounts: Vec<Account> = vec![];
             for key in &message.account_keys {
-                called_accounts.push(
-                    AccountsDB::load(storage, ancestors, accounts_index, key)
-                        .map(|(account, _)| account)
-                        .unwrap_or_default(),
-                );
+                if !message.program_ids().contains(&key) {
+                    called_accounts.push(
+                        AccountsDB::load(storage, ancestors, accounts_index, key)
+                            .map(|(account, _)| account)
+                            .unwrap_or_default(),
+                    );
+                }
             }
             if called_accounts.is_empty() || called_accounts[0].lamports == 0 {
                 error_counters.account_not_found += 1;
@@ -255,11 +257,11 @@ impl Accounts {
             .instructions
             .iter()
             .map(|ix| {
-                if message.program_ids().len() <= ix.program_ids_index as usize {
+                if message.account_keys.len() <= ix.program_ids_index as usize {
                     error_counters.account_not_found += 1;
                     return Err(TransactionError::AccountNotFound);
                 }
-                let program_id = message.program_ids()[ix.program_ids_index as usize];
+                let program_id = message.account_keys[ix.program_ids_index as usize];
                 Self::load_executable_accounts(
                     storage,
                     ancestors,
@@ -469,9 +471,11 @@ impl Accounts {
         let rv = txs
             .iter()
             .map(|tx| {
+                let message = tx.borrow().message();
                 Self::lock_account(
                     (&mut self.account_locks.lock().unwrap(), parent_record_locks),
-                    &tx.borrow().message().account_keys,
+                    &message.account_keys[..(message.account_keys.len()
+                        - message.header.num_credit_only_unsigned_accounts as usize)],
                     &mut error_counters,
                 )
             })
@@ -493,7 +497,12 @@ impl Accounts {
     {
         let record_locks = self.record_locks.lock().unwrap();
         for tx in txs {
-            Self::lock_record_account(&record_locks.0, &tx.borrow().message().account_keys);
+            let message = tx.borrow().message();
+            Self::lock_record_account(
+                &record_locks.0,
+                &message.account_keys[..(message.account_keys.len()
+                    - message.header.num_credit_only_unsigned_accounts as usize)],
+            );
         }
     }
 
@@ -684,7 +693,10 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
+        assert_eq!(
+            loaded_accounts[0],
+            Err(TransactionError::ProgramAccountNotFound)
+        );
     }
 
     #[test]
@@ -736,7 +748,7 @@ mod tests {
         let account = Account::new(2, 1, &Pubkey::default());
         accounts.push((key1, account));
 
-        let instructions = vec![CompiledInstruction::new(0, &(), vec![0, 1])];
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[key1],
@@ -807,7 +819,7 @@ mod tests {
         account.owner = key5;
         accounts.push((key6, account));
 
-        let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
         let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[],
@@ -918,8 +930,8 @@ mod tests {
         accounts.push((key3, account));
 
         let instructions = vec![
-            CompiledInstruction::new(0, &(), vec![0]),
             CompiledInstruction::new(1, &(), vec![0]),
+            CompiledInstruction::new(2, &(), vec![0]),
         ];
         let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],

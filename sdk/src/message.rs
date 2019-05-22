@@ -10,11 +10,7 @@ fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
     keys.iter().position(|k| k == key).unwrap() as u8
 }
 
-fn compile_instruction(
-    ix: Instruction,
-    keys: &[Pubkey],
-    program_ids: &[Pubkey],
-) -> CompiledInstruction {
+fn compile_instruction(ix: Instruction, keys: &[Pubkey]) -> CompiledInstruction {
     let accounts: Vec<_> = ix
         .accounts
         .iter()
@@ -22,19 +18,15 @@ fn compile_instruction(
         .collect();
 
     CompiledInstruction {
-        program_ids_index: position(program_ids, &ix.program_ids_index),
+        program_ids_index: position(keys, &ix.program_ids_index),
         data: ix.data.clone(),
         accounts,
     }
 }
 
-fn compile_instructions(
-    ixs: Vec<Instruction>,
-    keys: &[Pubkey],
-    program_ids: &[Pubkey],
-) -> Vec<CompiledInstruction> {
+fn compile_instructions(ixs: Vec<Instruction>, keys: &[Pubkey]) -> Vec<CompiledInstruction> {
     ixs.into_iter()
-        .map(|ix| compile_instruction(ix, keys, program_ids))
+        .map(|ix| compile_instruction(ix, keys))
         .collect()
 }
 
@@ -78,11 +70,26 @@ fn get_program_ids(instructions: &[Instruction]) -> Vec<Pubkey> {
         .collect()
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Message {
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
+pub struct MessageHeader {
     /// The number of signatures required for this message to be considered valid. The
     /// signatures must match the first `num_required_signatures` of `account_keys`.
     pub num_required_signatures: u8,
+
+    /// The last num_credit_only_signed_accounts of the signed keys are credit-only accounts.
+    /// Programs may process multiple transactions that add lamports to the same credit-only
+    /// account within a single PoH entry, but are not permitted to debit lamports or modify
+    /// account data. Transactions targeting the same debit account are evaluated sequentially.
+    pub num_credit_only_signed_accounts: u8,
+
+    /// The last num_credit_only_unsigned_accounts of the unsigned keys are credit-only accounts.
+    pub num_credit_only_unsigned_accounts: u8,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct Message {
+    /// The message header, identifying signed and credit-only `account_keys`
+    pub header: MessageHeader,
 
     /// All the account keys used by this transaction
     #[serde(with = "short_vec")]
@@ -90,10 +97,6 @@ pub struct Message {
 
     /// The id of a recent ledger entry.
     pub recent_blockhash: Hash,
-
-    /// All the program id keys used to execute this transaction's instructions
-    #[serde(with = "short_vec")]
-    program_ids: Vec<Pubkey>,
 
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
@@ -104,16 +107,20 @@ pub struct Message {
 impl Message {
     pub fn new_with_compiled_instructions(
         num_required_signatures: u8,
+        num_credit_only_signed_accounts: u8,
+        num_credit_only_unsigned_accounts: u8,
         account_keys: Vec<Pubkey>,
         recent_blockhash: Hash,
-        program_ids: Vec<Pubkey>,
         instructions: Vec<CompiledInstruction>,
     ) -> Self {
         Self {
-            num_required_signatures,
+            header: MessageHeader {
+                num_required_signatures,
+                num_credit_only_signed_accounts,
+                num_credit_only_unsigned_accounts,
+            },
             account_keys,
             recent_blockhash,
-            program_ids,
             instructions,
         }
     }
@@ -126,19 +133,28 @@ impl Message {
         let program_ids = get_program_ids(&instructions);
         let (mut signed_keys, unsigned_keys) = get_keys(&instructions, payer);
         let num_required_signatures = signed_keys.len() as u8;
+        let num_credit_only_signed_accounts = 0;
+        let num_credit_only_unsigned_accounts = program_ids.len() as u8;
         signed_keys.extend(&unsigned_keys);
-        let instructions = compile_instructions(instructions, &signed_keys, &program_ids);
+        signed_keys.extend(&program_ids);
+        let instructions = compile_instructions(instructions, &signed_keys);
         Self::new_with_compiled_instructions(
             num_required_signatures,
+            num_credit_only_signed_accounts,
+            num_credit_only_unsigned_accounts,
             signed_keys,
             Hash::default(),
-            program_ids,
             instructions,
         )
     }
 
     pub fn program_ids(&self) -> &[Pubkey] {
-        &self.program_ids
+        &self.account_keys
+            [self.account_keys.len() - self.header.num_credit_only_unsigned_accounts as usize..]
+    }
+
+    pub fn program_index_in_program_ids(&self, index: u8) -> u8 {
+        index - (self.account_keys.len() as u8 - self.header.num_credit_only_unsigned_accounts)
     }
 }
 
@@ -293,16 +309,16 @@ mod tests {
         let id0 = Pubkey::default();
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]);
         let message = Message::new(vec![ix]);
-        assert_eq!(message.num_required_signatures, 0);
+        assert_eq!(message.header.num_required_signatures, 0);
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let message = Message::new(vec![ix]);
-        assert_eq!(message.num_required_signatures, 1);
+        assert_eq!(message.header.num_required_signatures, 1);
     }
 
     #[test]
     fn test_message_kitchen_sink() {
-        let program_id0 = Pubkey::default();
+        let program_id0 = Pubkey::new_rand();
         let program_id1 = Pubkey::new_rand();
         let id0 = Pubkey::default();
         let keypair1 = Keypair::new();
@@ -314,15 +330,15 @@ mod tests {
         ]);
         assert_eq!(
             message.instructions[0],
-            CompiledInstruction::new(0, &0, vec![1])
+            CompiledInstruction::new(2, &0, vec![1])
         );
         assert_eq!(
             message.instructions[1],
-            CompiledInstruction::new(1, &0, vec![0])
+            CompiledInstruction::new(3, &0, vec![0])
         );
         assert_eq!(
             message.instructions[2],
-            CompiledInstruction::new(0, &0, vec![0])
+            CompiledInstruction::new(2, &0, vec![0])
         );
     }
 
@@ -334,11 +350,11 @@ mod tests {
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]);
         let message = Message::new_with_payer(vec![ix], Some(&payer));
-        assert_eq!(message.num_required_signatures, 1);
+        assert_eq!(message.header.num_required_signatures, 1);
 
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let message = Message::new_with_payer(vec![ix], Some(&payer));
-        assert_eq!(message.num_required_signatures, 2);
+        assert_eq!(message.header.num_required_signatures, 2);
 
         let ix = Instruction::new(
             program_id,
@@ -346,7 +362,7 @@ mod tests {
             vec![AccountMeta::new(payer, true), AccountMeta::new(id0, true)],
         );
         let message = Message::new_with_payer(vec![ix], Some(&payer));
-        assert_eq!(message.num_required_signatures, 2);
+        assert_eq!(message.header.num_required_signatures, 2);
     }
 
 }

@@ -125,7 +125,7 @@ impl MessageProcessor {
         program_accounts: &mut [&mut Account],
         tick_height: u64,
     ) -> Result<(), InstructionError> {
-        let program_id = instruction.program_id(message.program_ids());
+        let program_id = instruction.program_id(&message.account_keys);
 
         let mut keyed_accounts = create_keyed_accounts(executable_accounts);
         let mut keyed_accounts2: Vec<_> = instruction
@@ -134,7 +134,7 @@ impl MessageProcessor {
             .map(|&index| {
                 let index = index as usize;
                 let key = &message.account_keys[index];
-                (key, index < message.num_required_signatures as usize)
+                (key, index < message.header.num_required_signatures as usize)
             })
             .zip(program_accounts.iter_mut())
             .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
@@ -173,7 +173,7 @@ impl MessageProcessor {
         program_accounts: &mut [&mut Account],
         tick_height: u64,
     ) -> Result<(), InstructionError> {
-        let program_id = instruction.program_id(message.program_ids());
+        let program_id = instruction.program_id(&message.account_keys);
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard-coded programs not to clobber or allocate
         let pre_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
@@ -221,7 +221,8 @@ impl MessageProcessor {
         tick_height: u64,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
-            let executable_accounts = &mut loaders[instruction.program_ids_index as usize];
+            let executable_accounts = &mut loaders
+                [message.program_index_in_program_ids(instruction.program_ids_index) as usize];
             let mut program_accounts = get_subset_unchecked_mut(accounts, &instruction.accounts)
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
             self.execute_instruction(
