@@ -7,13 +7,18 @@ Start the local metric services:
 
 `$ ./start.sh`
 
-Metrics are enabled on a per-shell basis which means you must `source` the following scripts in each shell in which you start an application you wish to collect metrics from.  For example, if running a Solana fullnode you must call `source ./enable.sh` before starting the node.
+Metrics are enabled on a per-shell basis which means you must `source` the following scripts in each shell in which you start an application you wish to collect metrics from.  For example, if running a Solana fullnode you must call `source ./enable.sh` before starting the node:
 
 `$ source ./enable.sh`
 
 Once metrics have been started and you have an application running you can view the metrics at:
 
 http://localhost:3000/d/local/local-monitor
+
+To test that things are working correctly you can send a test airdrop data point and then check the 
+metrics dashboard:
+
+`$ ./test.sh`
 
 Stop metric services:
 
@@ -26,11 +31,10 @@ adhoc metrics collection/viewing
 * Linux - `sudo apt-get install influxdb-client`
 * macOS - `brew install influxdb`
 
+Simple example of pulling all airdrop measurements out of the `testnet` database:
 
-Simple example of pulling all `thinclient` measurements out
-of the `local` database:
 ```sh
-$ influx -database local -username admin -password admin -execute 'select * from thinclient'
+$ influx -database testnet -username admin -password admin -execute 'SELECT * FROM "drone-airdrop"'
 ```
 
 Reference: https://docs.influxdata.com/influxdb/v1.5/query_language/
@@ -39,7 +43,7 @@ Reference: https://docs.influxdata.com/influxdb/v1.5/query_language/
 
 To monitor activity, run one of:
 
-```
+```sh
 $ docker logs -f influxdb
 $ docker logs -f grafana
 ```
