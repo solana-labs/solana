@@ -695,7 +695,10 @@ mod tests {
 
         assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(TransactionError::AccountNotFound));
+        assert_eq!(
+            loaded_accounts[0],
+            Err(TransactionError::ProgramAccountNotFound)
+        );
     }
 
     #[test]
