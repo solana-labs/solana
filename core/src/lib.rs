@@ -34,7 +34,6 @@ pub mod cluster_tests;
 pub mod entry;
 pub mod erasure;
 pub mod fetch_stage;
-pub mod fullnode;
 pub mod gen_keys;
 pub mod genesis_utils;
 pub mod gossip_service;
@@ -68,6 +67,7 @@ pub mod streamer;
 pub mod test_tx;
 pub mod tpu;
 pub mod tvu;
+pub mod validator;
 pub mod window_service;
 
 #[macro_use]

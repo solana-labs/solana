@@ -2,7 +2,7 @@ use clap::{crate_description, crate_name, crate_version, App, Arg};
 use log::*;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
-use solana::fullnode::{Fullnode, ValidatorConfig};
+use solana::validator::{Fullnode, ValidatorConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
 use solana::socketaddr;
@@ -252,7 +252,7 @@ fn main() {
         node.info.rpc_pubsub = SocketAddr::new(gossip_addr.ip(), port_number + 1);
     };
 
-    let fullnode = Fullnode::new(
+    let validator = Fullnode::new(
         node,
         &keypair,
         ledger_path,
@@ -266,7 +266,7 @@ fn main() {
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| panic!("Unable to create: {}", filename));
     }
-    info!("Node initialized");
-    fullnode.join().expect("fullnode exit");
-    info!("Node exiting..");
+    info!("Validator initialized");
+    validator.join().expect("validator exit");
+    info!("Validator exiting..");
 }

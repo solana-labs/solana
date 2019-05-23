@@ -343,7 +343,7 @@ impl Service for Fullnode {
     }
 }
 
-pub fn new_fullnode_for_tests() -> (Fullnode, ContactInfo, Keypair, String) {
+pub fn new_validator_for_tests() -> (Fullnode, ContactInfo, Keypair, String) {
     use crate::blocktree::create_new_tmp_ledger;
     use crate::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
 

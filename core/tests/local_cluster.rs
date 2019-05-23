@@ -2,9 +2,9 @@ extern crate solana;
 
 use solana::cluster::Cluster;
 use solana::cluster_tests;
-use solana::fullnode::ValidatorConfig;
 use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
+use solana::validator::ValidatorConfig;
 use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::timing;

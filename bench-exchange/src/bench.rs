@@ -892,7 +892,7 @@ pub fn airdrop_lamports(client: &Client, drone_addr: &SocketAddr, id: &Keypair, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana::fullnode::ValidatorConfig;
+    use solana::validator::ValidatorConfig;
     use solana::gossip_service::{discover_cluster, get_clients};
     use solana::local_cluster::{ClusterConfig, LocalCluster};
     use solana_drone::drone::run_local_drone;
