@@ -11,7 +11,7 @@ use solana::banking_stage::{create_test_recorder, BankingStage};
 use solana::blocktree::{get_tmp_ledger_path, Blocktree};
 use solana::cluster_info::ClusterInfo;
 use solana::cluster_info::Node;
-use solana::genesis_utils::create_genesis_block;
+use solana::genesis_utils::{create_genesis_block, GenesisBlockInfo};
 use solana::packet::to_packets_chunked;
 use solana::poh_recorder::WorkingBankEntries;
 use solana::service::Service;
@@ -25,7 +25,6 @@ use solana_sdk::timing::{
     duration_as_ms, timestamp, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES,
 };
 use std::iter;
-use std::rc::Rc;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, RwLock};
@@ -52,7 +51,7 @@ fn check_txs(receiver: &Arc<Receiver<WorkingBankEntries>>, ref_tx_count: usize) 
 
 #[bench]
 fn bench_consume_buffered(bencher: &mut Bencher) {
-    let (genesis_block, _mint_keypair) = create_genesis_block(100_000);
+    let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(100_000);
     let bank = Arc::new(Bank::new(&genesis_block));
     let ledger_path = get_tmp_ledger_path!();
     let my_id = Pubkey::new_rand();
@@ -92,7 +91,11 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     //   a multiple of packet chunk  2X duplicates to avoid races
     let txes = 192 * num_threads * 2;
     let mint_total = 1_000_000_000_000;
-    let (mut genesis_block, mint_keypair) = create_genesis_block(mint_total);
+    let GenesisBlockInfo {
+        mut genesis_block,
+        mint_keypair,
+        ..
+    } = create_genesis_block(mint_total);
 
     // Set a high ticks_per_slot so we don't run out of ticks
     // during the benchmark
@@ -203,7 +206,11 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     //   a multiple of packet chunk  2X duplicates to avoid races
     let txes = 96 * 100 * num_threads * 2;
     let mint_total = 1_000_000_000_000;
-    let (genesis_block, mint_keypair) = create_genesis_block(mint_total);
+    let GenesisBlockInfo {
+        genesis_block,
+        mint_keypair,
+        ..
+    } = create_genesis_block(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
     let (vote_sender, vote_receiver) = channel();

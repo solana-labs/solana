@@ -999,7 +999,9 @@ impl Drop for Bank {
 mod tests {
     use super::*;
     use crate::epoch_schedule::MINIMUM_SLOT_LENGTH;
-    use crate::genesis_utils::{create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS};
+    use crate::genesis_utils::{
+        create_genesis_block_with_leader, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS,
+    };
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::hash;
     use solana_sdk::instruction::InstructionError;
@@ -1014,7 +1016,12 @@ mod tests {
         let dummy_leader_id = Pubkey::new_rand();
         let dummy_leader_lamports = BOOTSTRAP_LEADER_LAMPORTS;
         let mint_lamports = 10_000;
-        let (genesis_block, mint_keypair, voting_keypair) = create_genesis_block_with_leader(
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            voting_keypair,
+            ..
+        } = create_genesis_block_with_leader(
             mint_lamports,
             &dummy_leader_id,
             dummy_leader_lamports,
@@ -1230,8 +1237,11 @@ mod tests {
     #[test]
     fn test_bank_tx_fee() {
         let leader = Pubkey::new_rand();
-        let (genesis_block, mint_keypair, _voting_keypair) =
-            create_genesis_block_with_leader(100, &leader, 3);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block_with_leader(100, &leader, 3);
         let mut bank = Bank::new(&genesis_block);
         bank.fee_calculator.lamports_per_signature = 3;
 
@@ -1271,8 +1281,11 @@ mod tests {
     #[test]
     fn test_filter_program_errors_and_collect_fee() {
         let leader = Pubkey::new_rand();
-        let (genesis_block, mint_keypair, _voting_keypair) =
-            create_genesis_block_with_leader(100, &leader, 3);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block_with_leader(100, &leader, 3);
         let mut bank = Bank::new(&genesis_block);
 
         let key = Keypair::new();
@@ -1584,7 +1597,8 @@ mod tests {
     fn test_bank_epoch_vote_accounts() {
         let leader_id = Pubkey::new_rand();
         let leader_lamports = 3;
-        let mut genesis_block = create_genesis_block_with_leader(5, &leader_id, leader_lamports).0;
+        let mut genesis_block =
+            create_genesis_block_with_leader(5, &leader_id, leader_lamports).genesis_block;
 
         // set this up weird, forces future generation, odd mod(), etc.
         //  this says: "vote_accounts for epoch X should be generated at slot index 3 in epoch X-2...
@@ -1820,8 +1834,11 @@ mod tests {
 
     #[test]
     fn test_bank_vote_accounts() {
-        let (genesis_block, mint_keypair, _voting_keypair) =
-            create_genesis_block_with_leader(500, &Pubkey::new_rand(), 1);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block_with_leader(500, &Pubkey::new_rand(), 1);
         let bank = Arc::new(Bank::new(&genesis_block));
 
         let vote_accounts = bank.vote_accounts();

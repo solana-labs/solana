@@ -167,7 +167,9 @@ mod tests {
     use super::*;
     use crate::blocktree::tests::make_slot_entries;
     use crate::genesis_utils::create_genesis_block;
-    use crate::genesis_utils::{create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS};
+    use crate::genesis_utils::{
+        create_genesis_block_with_leader, GenesisBlockInfo, BOOTSTRAP_LEADER_LAMPORTS,
+    };
     use crate::staking_utils::tests::setup_vote_and_stake_accounts;
     use solana_runtime::bank::Bank;
     use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOT_LENGTH};
@@ -179,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_slot_leader_at() {
-        let (genesis_block, _mint_keypair) = create_genesis_block(2);
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
         let bank = Bank::new(&genesis_block);
         let cache = LeaderScheduleCache::new_from_bank(&bank);
 
@@ -221,7 +223,7 @@ mod tests {
     fn run_thread_race() {
         let slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
         let epoch_schedule = EpochSchedule::new(slots_per_epoch, slots_per_epoch / 2, true);
-        let (genesis_block, _mint_keypair) = create_genesis_block(2);
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let cache = Arc::new(LeaderScheduleCache::new(epoch_schedule, bank.slot()));
 
@@ -265,7 +267,7 @@ mod tests {
             &pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
         )
-        .0;
+        .genesis_block;
         genesis_block.epoch_warmup = false;
 
         let bank = Bank::new(&genesis_block);
@@ -306,7 +308,7 @@ mod tests {
             &pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
         )
-        .0;
+        .genesis_block;
         genesis_block.epoch_warmup = false;
 
         let bank = Bank::new(&genesis_block);
@@ -372,7 +374,11 @@ mod tests {
 
     #[test]
     fn test_next_leader_slot_next_epoch() {
-        let (mut genesis_block, mint_keypair) = create_genesis_block(10_000);
+        let GenesisBlockInfo {
+            mut genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(10_000);
         genesis_block.epoch_warmup = false;
 
         let bank = Bank::new(&genesis_block);
@@ -420,7 +426,7 @@ mod tests {
 
     #[test]
     fn test_schedule_for_unconfirmed_epoch() {
-        let (genesis_block, _mint_keypair) = create_genesis_block(2);
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let cache = LeaderScheduleCache::new_from_bank(&bank);
 

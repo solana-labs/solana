@@ -32,7 +32,7 @@ fn bad_arguments() {
 
 #[test]
 fn nominal() {
-    let genesis_block = create_genesis_block(100).0;
+    let genesis_block = create_genesis_block(100).genesis_block;
     let ticks_per_slot = genesis_block.ticks_per_slot;
 
     let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);

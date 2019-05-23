@@ -9,11 +9,17 @@ use solana_vote_api::vote_state;
 // The default stake placed with the bootstrap leader
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
+pub struct GenesisBlockInfo {
+    pub genesis_block: GenesisBlock,
+    pub mint_keypair: Keypair,
+    pub voting_keypair: Keypair,
+}
+
 pub fn create_genesis_block_with_leader(
     mint_lamports: u64,
     bootstrap_leader_id: &Pubkey,
     bootstrap_leader_stake_lamports: u64,
-) -> (GenesisBlock, Keypair, Keypair) {
+) -> GenesisBlockInfo {
     let mint_keypair = Keypair::new();
     let voting_keypair = Keypair::new();
     let staking_keypair = Keypair::new();
@@ -56,5 +62,9 @@ pub fn create_genesis_block_with_leader(
         &[solana_vote_program!(), solana_stake_program!()],
     );
 
-    (genesis_block, mint_keypair, voting_keypair)
+    GenesisBlockInfo {
+        genesis_block,
+        mint_keypair,
+        voting_keypair,
+    }
 }

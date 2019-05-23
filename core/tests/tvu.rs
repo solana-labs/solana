@@ -8,7 +8,7 @@ use solana::cluster_info::{ClusterInfo, Node};
 use solana::entry::next_entry_mut;
 use solana::entry::EntrySlice;
 use solana::fullnode;
-use solana::genesis_utils::create_genesis_block_with_leader;
+use solana::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
 use solana::gossip_service::GossipService;
 use solana::packet::index_blobs;
 use solana::rpc_subscriptions::RpcSubscriptions;
@@ -75,8 +75,11 @@ fn test_replay() {
 
     let mint_balance = 10_000;
     let leader_balance = 100;
-    let (mut genesis_block, mint_keypair, _voting_keypair) =
-        create_genesis_block_with_leader(mint_balance, &leader.info.id, leader_balance);
+    let GenesisBlockInfo {
+        mut genesis_block,
+        mint_keypair,
+        ..
+    } = create_genesis_block_with_leader(mint_balance, &leader.info.id, leader_balance);
     genesis_block.ticks_per_slot = 160;
     genesis_block.slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
     let (blocktree_path, blockhash) = create_new_tmp_ledger!(&genesis_block);

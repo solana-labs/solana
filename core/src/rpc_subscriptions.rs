@@ -298,7 +298,7 @@ impl RpcSubscriptions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::create_genesis_block;
+    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use jsonrpc_pubsub::typed::Subscriber;
     use solana_budget_api;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -307,7 +307,11 @@ mod tests {
 
     #[test]
     fn test_check_account_subscribe() {
-        let (genesis_block, mint_keypair) = create_genesis_block(100);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(100);
         let bank = Bank::new(&genesis_block);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -358,7 +362,11 @@ mod tests {
 
     #[test]
     fn test_check_program_subscribe() {
-        let (genesis_block, mint_keypair) = create_genesis_block(100);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(100);
         let bank = Bank::new(&genesis_block);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
@@ -408,7 +416,11 @@ mod tests {
     }
     #[test]
     fn test_check_signature_subscribe() {
-        let (genesis_block, mint_keypair) = create_genesis_block(100);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(100);
         let bank = Bank::new(&genesis_block);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));

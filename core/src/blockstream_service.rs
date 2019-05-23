@@ -109,7 +109,7 @@ mod test {
     use super::*;
     use crate::blocktree::create_new_tmp_ledger;
     use crate::entry::{create_ticks, Entry};
-    use crate::genesis_utils::create_genesis_block;
+    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use bincode::{deserialize, serialize};
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
@@ -124,7 +124,9 @@ mod test {
         let leader_id = Pubkey::new_rand();
 
         // Set up genesis block and blocktree
-        let (mut genesis_block, _mint_keypair) = create_genesis_block(1000);
+        let GenesisBlockInfo {
+            mut genesis_block, ..
+        } = create_genesis_block(1000);
         genesis_block.ticks_per_slot = ticks_per_slot;
 
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);

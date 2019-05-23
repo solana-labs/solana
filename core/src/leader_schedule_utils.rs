@@ -65,7 +65,7 @@ mod tests {
     fn test_leader_schedule_via_bank() {
         let pubkey = Pubkey::new_rand();
         let genesis_block =
-            create_genesis_block_with_leader(0, &pubkey, BOOTSTRAP_LEADER_LAMPORTS).0;
+            create_genesis_block_with_leader(0, &pubkey, BOOTSTRAP_LEADER_LAMPORTS).genesis_block;
         let bank = Bank::new(&genesis_block);
 
         let ids_and_stakes: Vec<_> = staking_utils::staked_nodes(&bank).into_iter().collect();
@@ -90,7 +90,7 @@ mod tests {
             &pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
         )
-        .0;
+        .genesis_block;
         let bank = Bank::new(&genesis_block);
         assert_eq!(slot_leader_at(bank.slot(), &bank).unwrap(), pubkey);
     }
