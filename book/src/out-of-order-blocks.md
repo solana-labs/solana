@@ -106,6 +106,16 @@ block.  The reason why the two paths could be different is because Leader 1 may
 complete the block for slot 1 and Leader 2 may decide to attach block 2 to block
 1.
 
+### Ahead of time Execution
+
+Once the leader finds the golden ticket, it can transmit it to the network.  The
+network can choose from the earliest golden ticket as the next leader and start
+forwarding packets to that leader.
+
+It may be necessary to start the leader at the *N+X* block to allow for the
+golden ticket to propagate and for enough transactions to be forwarded to the
+leader so it can start executing them ahead of its block.
+
 ### Grinding
 
 If it is possible to build hardware that is much faster than the expected time
