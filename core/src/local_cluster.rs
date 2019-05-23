@@ -2,7 +2,7 @@ use crate::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree};
 use crate::cluster::Cluster;
 use crate::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
-use crate::fullnode::{Fullnode, FullnodeConfig};
+use crate::fullnode::{Fullnode, ValidatorConfig};
 use crate::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
 use crate::gossip_service::discover_cluster;
 use crate::replicator::Replicator;
@@ -52,7 +52,7 @@ impl ReplicatorInfo {
 #[derive(Clone, Debug)]
 pub struct ClusterConfig {
     /// The fullnode config that should be applied to every node in the cluster
-    pub validator_config: FullnodeConfig,
+    pub validator_config: ValidatorConfig,
     /// Number of replicators in the cluster
     /// Note- replicators will timeout if ticks_per_slot is much larger than the default 8
     pub num_replicators: usize,
@@ -71,7 +71,7 @@ pub struct ClusterConfig {
 impl Default for ClusterConfig {
     fn default() -> Self {
         ClusterConfig {
-            validator_config: FullnodeConfig::default(),
+            validator_config: ValidatorConfig::default(),
             num_replicators: 0,
             num_listeners: 0,
             node_stakes: vec![],
@@ -87,7 +87,7 @@ impl Default for ClusterConfig {
 pub struct LocalCluster {
     /// Keypair with funding to participate in the network
     pub funding_keypair: Keypair,
-    pub validator_config: FullnodeConfig,
+    pub validator_config: ValidatorConfig,
     /// Entry point from which the rest of the network can be discovered
     pub entry_point_info: ContactInfo,
     pub fullnode_infos: HashMap<Pubkey, FullnodeInfo>,
@@ -181,7 +181,7 @@ impl LocalCluster {
             cluster.add_validator(&config.validator_config, *stake);
         }
 
-        let listener_config = FullnodeConfig {
+        let listener_config = ValidatorConfig {
             voting_disabled: true,
             ..config.validator_config.clone()
         };
@@ -223,7 +223,7 @@ impl LocalCluster {
         }
     }
 
-    fn add_validator(&mut self, validator_config: &FullnodeConfig, stake: u64) {
+    fn add_validator(&mut self, validator_config: &ValidatorConfig, stake: u64) {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,
@@ -561,7 +561,7 @@ mod test {
     #[test]
     fn test_local_cluster_start_and_exit_with_config() {
         solana_logger::setup();
-        let mut validator_config = FullnodeConfig::default();
+        let mut validator_config = ValidatorConfig::default();
         validator_config.rpc_config.enable_fullnode_exit = true;
         validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
         const NUM_NODES: usize = 1;

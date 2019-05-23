@@ -8,7 +8,7 @@ use bincode::{deserialize, serialize};
 use solana::blocktree::{create_new_tmp_ledger, Blocktree};
 use solana::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
-use solana::fullnode::FullnodeConfig;
+use solana::fullnode::ValidatorConfig;
 use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::replicator::Replicator;
@@ -103,7 +103,7 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     solana_logger::setup();
     info!("starting replicator test");
 
-    let mut validator_config = FullnodeConfig::default();
+    let mut validator_config = ValidatorConfig::default();
     validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let config = ClusterConfig {
         validator_config,
@@ -189,7 +189,7 @@ fn test_replicator_startup_leader_hang() {
 fn test_replicator_startup_ledger_hang() {
     solana_logger::setup();
     info!("starting replicator test");
-    let mut validator_config = FullnodeConfig::default();
+    let mut validator_config = ValidatorConfig::default();
     validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let cluster = LocalCluster::new_with_equal_stakes(2, 10_000, 100);;
 
@@ -217,7 +217,7 @@ fn test_replicator_startup_ledger_hang() {
 fn test_account_setup() {
     let num_nodes = 1;
     let num_replicators = 1;
-    let mut validator_config = FullnodeConfig::default();
+    let mut validator_config = ValidatorConfig::default();
     validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let config = ClusterConfig {
         validator_config,

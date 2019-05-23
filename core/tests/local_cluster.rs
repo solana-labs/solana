@@ -2,7 +2,7 @@ extern crate solana;
 
 use solana::cluster::Cluster;
 use solana::cluster_tests;
-use solana::fullnode::FullnodeConfig;
+use solana::fullnode::ValidatorConfig;
 use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
@@ -75,7 +75,7 @@ fn test_fullnode_exit_default_config_should_panic() {
 fn test_fullnode_exit_2() {
     solana_logger::setup();
     let num_nodes = 2;
-    let mut validator_config = FullnodeConfig::default();
+    let mut validator_config = ValidatorConfig::default();
     validator_config.rpc_config.enable_fullnode_exit = true;
     let config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -92,7 +92,7 @@ fn test_fullnode_exit_2() {
 fn test_leader_failure_4() {
     solana_logger::setup();
     let num_nodes = 4;
-    let mut validator_config = FullnodeConfig::default();
+    let mut validator_config = ValidatorConfig::default();
     validator_config.rpc_config.enable_fullnode_exit = true;
     let config = ClusterConfig {
         cluster_lamports: 10_000,
@@ -111,7 +111,7 @@ fn test_leader_failure_4() {
 #[test]
 fn test_two_unbalanced_stakes() {
     solana_logger::setup();
-    let mut validator_config = FullnodeConfig::default();
+    let mut validator_config = ValidatorConfig::default();
     let num_ticks_per_second = 100;
     let num_ticks_per_slot = 10;
     let num_slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
@@ -164,7 +164,7 @@ fn test_forwarding() {
 
 #[test]
 fn test_restart_node() {
-    let validator_config = FullnodeConfig::default();
+    let validator_config = ValidatorConfig::default();
     let slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
     let ticks_per_slot = 16;
     let mut cluster = LocalCluster::new(&ClusterConfig {

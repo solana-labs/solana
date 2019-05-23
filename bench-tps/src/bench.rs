@@ -623,7 +623,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
 mod tests {
     use super::*;
     use solana::cluster_info::FULLNODE_PORT_RANGE;
-    use solana::fullnode::FullnodeConfig;
+    use solana::fullnode::ValidatorConfig;
     use solana::local_cluster::{ClusterConfig, LocalCluster};
     use solana_client::thin_client::create_client;
     use solana_drone::drone::run_local_drone;
@@ -651,7 +651,7 @@ mod tests {
     #[test]
     fn test_bench_tps_local_cluster() {
         solana_logger::setup();
-        let validator_config = FullnodeConfig::default();
+        let validator_config = ValidatorConfig::default();
         const NUM_NODES: usize = 1;
         let cluster = LocalCluster::new(&ClusterConfig {
             node_stakes: vec![999_990; NUM_NODES],

@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread::Result;
 
 #[derive(Clone, Debug)]
-pub struct FullnodeConfig {
+pub struct ValidatorConfig {
     pub sigverify_disabled: bool,
     pub voting_disabled: bool,
     pub blockstream: Option<String>,
@@ -40,7 +40,7 @@ pub struct FullnodeConfig {
     pub account_paths: Option<String>,
     pub rpc_config: JsonRpcConfig,
 }
-impl Default for FullnodeConfig {
+impl Default for ValidatorConfig {
     fn default() -> Self {
         // TODO: remove this, temporary parameter to configure
         // storage amount differently for test configurations
@@ -79,7 +79,7 @@ impl Fullnode {
         voting_keypair: &Arc<Keypair>,
         storage_keypair: &Arc<Keypair>,
         entrypoint_info_option: Option<&ContactInfo>,
-        config: &FullnodeConfig,
+        config: &ValidatorConfig,
     ) -> Self {
         info!("creating bank...");
 
@@ -372,7 +372,7 @@ pub fn new_fullnode_for_tests() -> (Fullnode, ContactInfo, Keypair, String) {
         &voting_keypair,
         &storage_keypair,
         None,
-        &FullnodeConfig::default(),
+        &ValidatorConfig::default(),
     );
     discover_cluster(&contact_info.gossip, 1).expect("Node startup failed");
     (node, contact_info, mint_keypair, ledger_path)
@@ -407,7 +407,7 @@ mod tests {
             &voting_keypair,
             &storage_keypair,
             Some(&leader_node.info),
-            &FullnodeConfig::default(),
+            &ValidatorConfig::default(),
         );
         validator.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -438,7 +438,7 @@ mod tests {
                     &voting_keypair,
                     &storage_keypair,
                     Some(&leader_node.info),
-                    &FullnodeConfig::default(),
+                    &ValidatorConfig::default(),
                 )
             })
             .collect();

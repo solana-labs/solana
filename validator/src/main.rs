@@ -2,7 +2,7 @@ use clap::{crate_description, crate_name, crate_version, App, Arg};
 use log::*;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
-use solana::fullnode::{Fullnode, FullnodeConfig};
+use solana::fullnode::{Fullnode, ValidatorConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
 use solana::socketaddr;
@@ -158,7 +158,7 @@ fn main() {
         )
         .get_matches();
 
-    let mut validator_config = FullnodeConfig::default();
+    let mut validator_config = ValidatorConfig::default();
     let keypair = if let Some(identity) = matches.value_of("identity") {
         read_keypair(identity).unwrap_or_else(|err| {
             eprintln!("{}: Unable to open keypair file: {}", err, identity);
