@@ -56,12 +56,12 @@ Difficulty is the number of matching bits that the golden ticket needs to match
 the signature.
 
 The golden ticket connects via PoH entries to a known block with an immutable
-account balance.  So, a simple token balance can be used to set the difficulty.
-Hashing with 1 account has been delegated 100 tokens should generate as many
-tickets as 2 accounts with 50 delegated tokens.
+account state.  The stake size can be used to set the difficulty.  Hashing with
+1 account has been delegated 100 tokens should generate as many tickets as 2
+accounts with 50 delegated tokens.
 
-Given the total delegated state size for the epoch, the difficulty can be
-computed with the leader scheduler.
+Given the total delegated stake size for the epoch, and number of hashes per
+Tick, the difficulty can be computed with the leader scheduler.
 
 ### Generating VDFs for Multiple Forks
 
@@ -71,9 +71,9 @@ lockout distance for the rest of the cluster and also be the heaviest fork
 based on lockout.  Let’s say the difficulty was set to the cluster generating a
 golden ticket block every 3 slots.
 
-For example,
+For example:
 
-starting with ‘n - 3’ forks, the proposed block would only be valid if no one in
+Starting with ‘n - 3’ forks, the proposed block would only be valid if no one in
 the cluster voted.  If they did, the golden ticket would need to be in the ‘n +
 7’ slot and propose the n + 8 block.
 
@@ -101,9 +101,10 @@ schedule completely randomly.
     * The PoH path to a previous block.
 
 The golden ticket PoH path must be at most 1 slot longer that the PoH path to
-the block.  The reason why the two paths could be different is because Leader 1
-may complete the block for slot 1 and Leader 2 may decide to attach block 2 to
-block 1.
+the block, and this should only occur if the block is attached to the previous
+block.  The reason why the two paths could be different is because Leader 1 may
+complete the block for slot 1 and Leader 2 may decide to attach block 2 to block
+1.
 
 ### Grinding
 
