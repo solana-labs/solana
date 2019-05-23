@@ -626,7 +626,7 @@ mod tests {
         let accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
-        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
+        let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
         let tx = Transaction::new_with_compiled_instructions::<Keypair>(
             &[],
             &[],
