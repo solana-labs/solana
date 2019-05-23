@@ -20,7 +20,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 
-pub const REPAIRMEN_SLEEP_MILLIS: usize = 1000;
+pub const REPAIRMEN_SLEEP_MILLIS: usize = 100;
 pub const REPAIR_REDUNDANCY: usize = 3;
 pub const NUM_BUFFER_SLOTS: usize = 50;
 pub const GOSSIP_DELAY_SLOTS: usize = 2;
@@ -137,12 +137,15 @@ impl ClusterInfoRepairListener {
                     {
                         // Following logic needs to be fast because it holds the lock
                         // preventing updates on gossip
-                        peer_roots.insert(peer.id, (ts, peer_epoch_slots.root));
                         if Self::should_repair_peer(
                             my_root,
                             peer_epoch_slots.root,
                             NUM_BUFFER_SLOTS,
                         ) {
+                            // Only update our local timestamp for this peer if we are going to
+                            // repair them
+                            peer_roots.insert(peer.id, (ts, peer_epoch_slots.root));
+
                             // Clone out EpochSlots structure to avoid holding lock on gossip
                             peers_needing_repairs.insert(peer.id, peer_epoch_slots.clone());
                         }
