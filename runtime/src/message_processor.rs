@@ -222,7 +222,7 @@ impl MessageProcessor {
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let executable_index = message
-                .program_index_in_program_ids(instruction.program_ids_index as usize)
+                .program_position(instruction.program_ids_index as usize)
                 .ok_or(TransactionError::InvalidAccountIndex)?;
             let executable_accounts = &mut loaders[executable_index];
             let mut program_accounts = get_subset_unchecked_mut(accounts, &instruction.accounts)

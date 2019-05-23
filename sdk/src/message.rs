@@ -30,14 +30,36 @@ fn compile_instructions(ixs: Vec<Instruction>, keys: &[Pubkey]) -> Vec<CompiledI
         .collect()
 }
 
+/// A helper struct to collect pubkeys referenced by a set of instructions and credit-only counts
+#[derive(Debug, PartialEq, Eq)]
+struct InstructionKeys {
+    pub signed_keys: Vec<Pubkey>,
+    pub unsigned_keys: Vec<Pubkey>,
+    pub num_credit_only_signed_accounts: u8,
+    pub num_credit_only_unsigned_accounts: u8,
+}
+
+impl InstructionKeys {
+    fn new(
+        signed_keys: Vec<Pubkey>,
+        unsigned_keys: Vec<Pubkey>,
+        num_credit_only_signed_accounts: u8,
+        num_credit_only_unsigned_accounts: u8,
+    ) -> Self {
+        Self {
+            signed_keys,
+            unsigned_keys,
+            num_credit_only_signed_accounts,
+            num_credit_only_unsigned_accounts,
+        }
+    }
+}
+
 /// Return pubkeys referenced by all instructions, with the ones needing signatures first. If the
 /// payer key is provided, it is always placed first in the list of signed keys. Credit-only signed
 /// accounts are placed last in the set of signed accounts. Credit-only unsigned accounts,
 /// including program ids, are placed last in the set. No duplicates and order is preserved.
-fn get_keys(
-    instructions: &[Instruction],
-    payer: Option<&Pubkey>,
-) -> (Vec<Pubkey>, Vec<Pubkey>, u8, u8) {
+fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> InstructionKeys {
     let programs: Vec<_> = get_program_ids(instructions)
         .iter()
         .map(|program_id| AccountMeta {
@@ -84,7 +106,7 @@ fn get_keys(
             }
         }
     }
-    (
+    InstructionKeys::new(
         signed_keys,
         unsigned_keys,
         num_credit_only_signed_accounts,
@@ -161,12 +183,12 @@ impl Message {
     }
 
     pub fn new_with_payer(instructions: Vec<Instruction>, payer: Option<&Pubkey>) -> Self {
-        let (
+        let InstructionKeys {
             mut signed_keys,
             unsigned_keys,
             num_credit_only_signed_accounts,
             num_credit_only_unsigned_accounts,
-        ) = get_keys(&instructions, payer);
+        } = get_keys(&instructions, payer);
         let num_required_signatures = signed_keys.len() as u8;
         signed_keys.extend(&unsigned_keys);
         let instructions = compile_instructions(instructions, &signed_keys);
@@ -187,13 +209,11 @@ impl Message {
             .collect()
     }
 
-    pub fn program_index_in_program_ids(&self, index: usize) -> Option<usize> {
+    pub fn program_position(&self, index: usize) -> Option<usize> {
         let program_ids = self.program_ids();
         program_ids
             .iter()
-            .enumerate()
-            .find(|(_, &&pubkey)| pubkey == self.account_keys[index])
-            .map(|(i, _)| i)
+            .position(|&&pubkey| pubkey == self.account_keys[index])
     }
 
     fn is_credit_debit(&self, i: usize) -> bool {
@@ -269,7 +289,7 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(keys, (vec![id0], vec![], 0, 0));
+        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
 
     #[test]
@@ -284,7 +304,7 @@ mod tests {
             )],
             Some(&id0),
         );
-        assert_eq!(keys, (vec![id0], vec![], 0, 0));
+        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
 
     #[test]
@@ -299,7 +319,7 @@ mod tests {
             )],
             Some(&id0),
         );
-        assert_eq!(keys, (vec![id0], vec![], 0, 0));
+        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
 
     #[test]
@@ -313,7 +333,7 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(keys, (vec![id0], vec![], 0, 0));
+        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
 
     #[test]
@@ -328,7 +348,7 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(keys, (vec![], vec![id0, id1], 0, 0));
+        assert_eq!(keys, InstructionKeys::new(vec![], vec![id0, id1], 0, 0));
     }
 
     #[test]
@@ -344,7 +364,7 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(keys, (vec![id0], vec![id1], 0, 0));
+        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![id1], 0, 0));
     }
 
     #[test]
@@ -359,7 +379,7 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(keys, (vec![id1], vec![id0], 0, 0));
+        assert_eq!(keys, InstructionKeys::new(vec![id1], vec![id0], 0, 0));
     }
 
     #[test]
@@ -400,7 +420,10 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(keys, (vec![id3, id1], vec![id2, id0], 1, 1));
+        assert_eq!(
+            keys,
+            InstructionKeys::new(vec![id3, id1], vec![id2, id0], 1, 1)
+        );
     }
 
     #[test]
@@ -472,11 +495,14 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(keys, (vec![id1], vec![id0, program_id], 1, 2));
+        assert_eq!(
+            keys,
+            InstructionKeys::new(vec![id1], vec![id0, program_id], 1, 2)
+        );
     }
 
     #[test]
-    fn test_program_index_in_program_ids() {
+    fn test_program_position() {
         let program_id0 = Pubkey::default();
         let program_id1 = Pubkey::new_rand();
         let id = Pubkey::new_rand();
@@ -484,9 +510,9 @@ mod tests {
             Instruction::new(program_id0, &0, vec![AccountMeta::new(id, false)]),
             Instruction::new(program_id1, &0, vec![AccountMeta::new(id, true)]),
         ]);
-        assert_eq!(message.program_index_in_program_ids(0), None);
-        assert_eq!(message.program_index_in_program_ids(1), Some(0));
-        assert_eq!(message.program_index_in_program_ids(2), Some(1));
+        assert_eq!(message.program_position(0), None);
+        assert_eq!(message.program_position(1), Some(0));
+        assert_eq!(message.program_position(2), Some(1));
     }
 
     #[test]
