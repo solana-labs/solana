@@ -19,23 +19,23 @@ censor — is not addressed in this design.
 
 ## Random Leaders
 
-Leaders can generate a *golden ticket* to propose a subsequent block.
+Validators can generate a *golden ticket* to propose a subsequent block.
 
-* *N* number of bits of a leader's vote signature that must match a PoH hash.
+* *N* number of bits of a validator's vote signature that must match a PoH hash.
 This hash can be in between ticks.
 
-The leader must find the golden ticket in the empty PoH entries leading up to
-the proposed block.  Once the golden ticket is found, the leader can propose the
+The validator must find the golden ticket in the empty PoH entries leading up to
+the proposed block.  Once the golden ticket is found, the validator can propose the
 block for the next slot.
 
-To find the golden ticket, the leader signs the BlockHash of the block that the
+To find the golden ticket, the validator signs the BlockHash of the block that the
 entries are generated from with a Vote.  Since each validator is resetting its
 PoH every time it votes, each validator can search for a golden ticket from that
 starting point, and look for a PoH hash matching *N* bits of the Vote signature.
 
 The same proposed [fork selection]/fork-selection.md) rules apply.  Once a block
 is voted on, the validator would switch its PoH to reset on this new block, and
-either a new golden ticket block is proposed, or the next scheduled leader
+either a new golden ticket block is proposed, or the next scheduled validator
 proposes a block.
 
 To make it easy to verify, the vote with the golden ticket must be present in
@@ -51,6 +51,14 @@ to the leaders’ VoteState account.
 
 To reduce the ability to grind the value, the golden ticket must appear *X*
 ticks after the block, where *X* is half of the number of ticks per block.
+
+It is possible to build hardware that is much faster than the expected time to
+find the golden ticket, Since the network is still relying on staked lamports as
+the Sybil resistant mechanism, it could increase the difficulty for recent
+stakes.  Regardless of hardware the goal should be a stake weighted distribution
+of validators scheduled over the epoch.  One approach would be to increase the
+difficulty by 1 bit whenever the validator has taken more than the stake
+weighted alloted number of slots.
 
 ### Difficulty
 
@@ -120,11 +128,6 @@ leader so it can start executing them ahead of its block.
 
 ### Grinding
 
-If it is possible to build hardware that is much faster than the expected time
-to find the golden ticket, then an attacker could grind the Block Hash value to
-ensure that they are the leader 50% of the time.  Since the network is still
-relying on staked lamports as the Sybil resistant mechanism, we could increase
-the difficulty for consecutive stakes.
 
 ## Ledger Interpretation
 
