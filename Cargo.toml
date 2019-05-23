@@ -6,7 +6,7 @@ members = [
     "client",
     "core",
     "drone",
-    "fullnode",
+    "validator",
     "genesis",
     "gossip",
     "install",

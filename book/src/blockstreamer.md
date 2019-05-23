@@ -12,7 +12,7 @@ To run a blockstreamer, include the argument `no-signer` and (optional)
 `blockstream` socket location:
 
 ```bash
-$ ./multinode-demo/fullnode-x.sh --no-signer --blockstream <SOCKET>
+$ ./multinode-demo/validator-x.sh --no-signer --blockstream <SOCKET>
 ```
 
 The stream will output a series of JSON objects:

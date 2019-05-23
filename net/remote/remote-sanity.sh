@@ -143,7 +143,7 @@ echo "--- $entrypointIp: validator sanity"
 if $validatorSanity; then
   (
     set -x -o pipefail
-    timeout 10s ./multinode-demo/fullnode-x.sh --stake 0 \
+    timeout 10s ./multinode-demo/validator-x.sh --stake 0 \
       "$entrypointRsyncUrl" \
       "$entrypointIp:8001" 2>&1 | tee validator-sanity.log
   ) || {

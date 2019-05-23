@@ -53,8 +53,8 @@ fi
 
 solana_bench_tps=$(solana_program bench-tps)
 solana_drone=$(solana_program drone)
-solana_fullnode=$(solana_program fullnode)
-solana_fullnode_cuda=$(solana_program fullnode-cuda)
+solana_validator=$(solana_program validator)
+solana_validator_cuda=$(solana_program validator-cuda)
 solana_genesis=$(solana_program genesis)
 solana_gossip=$(solana_program gossip)
 solana_keygen=$(solana_program keygen)

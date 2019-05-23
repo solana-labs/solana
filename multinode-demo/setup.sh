@@ -5,7 +5,7 @@ here=$(dirname "$0")
 source "$here"/common.sh
 
 set -e
-"$here"/clear-fullnode-config.sh
+"$here"/clear-config.sh
 
 # Create genesis ledger
 $solana_keygen -o "$SOLANA_CONFIG_DIR"/mint-keypair.json

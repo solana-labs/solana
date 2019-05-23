@@ -27,7 +27,7 @@ Start a local cluster and run sanity on it
                  nodes (at the cadence specified by -k).  When disabled all
                  nodes will be first killed then restarted (default: $rollingRestart)
    -b          - Disable leader rotation
-   -x          - Add an extra fullnode (may be supplied multiple times)
+   -x          - Add an extra validator (may be supplied multiple times)
    -r          - Select the RPC endpoint hosted by a node that starts as
                  a validator node.  If unspecified the RPC endpoint hosted by
                  the bootstrap leader will be used.
@@ -81,7 +81,7 @@ nodes=(
     --enable-rpc-exit \
     --no-restart \
     --init-complete-file init-complete-node1.log"
-  "multinode-demo/fullnode.sh \
+  "multinode-demo/validator.sh \
     $maybeNoLeaderRotation \
     --enable-rpc-exit \
     --no-restart \
@@ -91,7 +91,7 @@ nodes=(
 
 for i in $(seq 1 $extraNodes); do
   nodes+=(
-    "multinode-demo/fullnode.sh \
+    "multinode-demo/validator.sh \
       --no-restart \
       --label dyn$i \
       --init-complete-file init-complete-node$((2 + i)).log \
@@ -323,7 +323,7 @@ while [[ $iteration -le $iterations ]]; do
     cat log-transactionCount.txt
   ) || flag_error
 
-  echo "--- RPC API: fullnode getTransactionCount ($iteration)"
+  echo "--- RPC API: validator getTransactionCount ($iteration)"
   (
     set -x
     curl --retry 5 --retry-delay 2 --retry-connrefused \

@@ -119,7 +119,7 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 
 Now configure a key pair for your validator by running:
 ```bash
-$ solana-keygen -o fullnode-keypair.json
+$ solana-keygen -o validator-keypair.json
 ```
 
 Then use one of the following commands, depending on your installation
@@ -127,34 +127,34 @@ choice, to start the node:
 
 If this is a `solana-install`-installation:
 ```bash
-$ clear-fullnode-config.sh
-$ fullnode.sh --identity fullnode-keypair.json --poll-for-new-genesis-block testnet.solana.com
+$ clear-config.sh
+$ validator.sh --identity validator-keypair.json --poll-for-new-genesis-block testnet.solana.com
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
-$ clear-fullnode-config.sh
-$ solana-install run fullnode.sh -- --identity fullnode-keypair.json --poll-for-new-genesis-block testnet.solana.com
+$ clear-config.sh
+$ solana-install run validator.sh -- --identity validator-keypair.json --poll-for-new-genesis-block testnet.solana.com
 ```
 
 If you built from source:
 ```bash
-$ USE_INSTALL=1 ./multinode-demo/clear-fullnode-config.sh
-$ USE_INSTALL=1 ./multinode-demo/fullnode.sh --identity fullnode-keypair.json --poll-for-new-genesis-block testnet.solana.com
+$ USE_INSTALL=1 ./multinode-demo/clear-config.sh
+$ USE_INSTALL=1 ./multinode-demo/validator.sh --identity validator-keypair.json --poll-for-new-genesis-block testnet.solana.com
 ```
 
 #### Controlling local network port allocation
 By default the validator will dynamically select available network ports in the
 8000-10000 range, and may be overridden with `--dynamic-port-range`.  For
-example, `fullnode.sh --dynamic-port-range 11000-11010 ...` will restrict the
+example, `validator.sh --dynamic-port-range 11000-11010 ...` will restrict the
 validator to ports 11000-11011.
 
 ### Validator Monitoring
-When `fullnode.sh` starts, it will output a fullnode configuration that looks
+When `validator.sh` starts, it will output a validator configuration that looks
 similar to:
 ```bash
-======================[ Fullnode configuration ]======================
+======================[ Validator configuration ]======================
 node pubkey: 4ceWXsL3UJvn7NYZiRkw7NsryMpviaKBDYr8GK7J61Dm
 vote pubkey: 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 ledger: ...
@@ -164,7 +164,7 @@ accounts: ...
 
 The **node pubkey** for your validator can also be found by running:
 ```bash
-$ solana-keygen pubkey fullnode-keypair.json
+$ solana-keygen pubkey validator-keypair.json
 ```
 
 From another console, confirm the IP address and **node pubkey** of your validator is visible in the
@@ -182,9 +182,9 @@ $ solana-wallet -n testnet.solana.com show-vote-account 2ozWvfaXQd1X6uKh8jERoRGA
 The vote pubkey for the validator can also be found by running:
 ```bash
 # If this is a `solana-install`-installation run:
-$ solana-keygen pubkey ~/.local/share/solana/install/active_release/config-local/fullnode-vote-keypair.json
+$ solana-keygen pubkey ~/.local/share/solana/install/active_release/config-local/validator-vote-keypair.json
 # Otherwise run:
-$ solana-keygen pubkey ./config-local/fullnode-vote-keypair.json
+$ solana-keygen pubkey ./config-local/validator-vote-keypair.json
 ```
 
 ### Sharing Metrics From Your Validator

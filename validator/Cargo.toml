@@ -1,7 +1,7 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
-name = "solana-fullnode"
+name = "solana-validator"
 description = "Blockchain, Rebuilt for Scale"
 version = "0.15.0"
 repository = "https://github.com/solana-labs/solana"
