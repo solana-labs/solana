@@ -483,7 +483,11 @@ mod tests {
     fn test_bank_forks_snapshot_n() {
         solana_logger::setup();
         let path = get_tmp_bank_accounts_path!();
-        let (genesis_block, mint_keypair) = create_genesis_block(10_000);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(10_000);
         for index in 0..10 {
             let bank0 = Bank::new_with_paths(&genesis_block, Some(path.paths.clone()));
             bank0.freeze();
@@ -499,7 +503,6 @@ mod tests {
                     &key1,
                     1,
                     genesis_block.hash(),
-                    0,
                 );
                 assert_eq!(bank.process_transaction(&tx), Ok(()));
                 bank.freeze();

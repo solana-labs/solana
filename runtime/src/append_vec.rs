@@ -220,6 +220,32 @@ impl AppendVec {
     }
 
     #[allow(clippy::mutex_atomic)]
+    pub fn setup_accounts(&self) -> Option<u64> {
+        let mut start: usize = 0;
+        self.current_len
+            .store(self.file_size as usize, Ordering::Relaxed);
+        let mut last_write_version = None;
+        while let Some((account, next)) = self.get_account(start) {
+            if next > self.file_size as usize {
+                break;
+            }
+            if last_write_version.is_none() {
+                last_write_version = Some(account.meta.write_version);
+            } else {
+                if account.meta.write_version <= last_write_version.unwrap() {
+                    break;
+                }
+                last_write_version = Some(account.meta.write_version);
+            }
+            start = next;
+        }
+        self.current_len.store(start, Ordering::Relaxed);
+        let mut offset = self.append_offset.lock().unwrap();
+        *offset = start;
+        last_write_version
+    }
+
+    #[allow(clippy::mutex_atomic)]
     pub fn append_accounts(&self, accounts: &[(StorageMeta, &Account)]) -> Vec<usize> {
         let mut offset = self.append_offset.lock().unwrap();
         let mut rv = vec![];
@@ -302,6 +328,7 @@ pub mod test_utils {
     }
 }
 
+#[allow(clippy::mutex_atomic)]
 impl Serialize for AppendVec {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
@@ -310,13 +337,16 @@ impl Serialize for AppendVec {
         use serde::ser::Error;
         let len = serialized_size(&self.path).unwrap()
             + std::mem::size_of::<u64>() as u64
-            + serialized_size(&self.file_size).unwrap();
+            + std::mem::size_of::<u64>() as u64
+            + std::mem::size_of::<usize>() as u64;
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);
         serialize_into(&mut wr, &self.path).map_err(Error::custom)?;
         serialize_into(&mut wr, &(self.current_len.load(Ordering::Relaxed) as u64))
             .map_err(Error::custom)?;
         serialize_into(&mut wr, &self.file_size).map_err(Error::custom)?;
+        let offset = *self.append_offset.lock().unwrap();
+        serialize_into(&mut wr, &offset).map_err(Error::custom)?;
         let len = wr.position() as usize;
         serializer.serialize_bytes(&wr.into_inner()[..len])
     }
@@ -341,6 +371,7 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
         let path: PathBuf = deserialize_from(&mut rd).map_err(Error::custom)?;
         let current_len: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
         let file_size: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
+        let offset: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
 
         let data = OpenOptions::new()
             .read(true)
@@ -357,7 +388,7 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
         Ok(AppendVec {
             path,
             map,
-            append_offset: Mutex::new(0),
+            append_offset: Mutex::new(offset),
             current_len: AtomicUsize::new(current_len as usize),
             file_size,
         })

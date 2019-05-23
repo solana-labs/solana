@@ -151,7 +151,7 @@ pub struct AccountStorageEntry {
 
 impl AccountStorageEntry {
     pub fn new(path: &str, fork_id: Fork, id: usize, file_size: u64) -> Self {
-        let p = format!("{}/{}", path, id);
+        let p = format!("{}/{}.{}", path, fork_id, id);
         let path = Path::new(&p);
         let _ignored = remove_dir_all(path);
         create_dir_all(path).expect("Create directory failed");
@@ -385,7 +385,7 @@ impl AccountsDB {
             let mut stores = self.storage.write().unwrap();
             let path_index = thread_rng().gen_range(0, self.paths.len());
             let storage = Arc::new(self.new_storage_entry(fork_id, &self.paths[path_index]));
-            stores.insert(storage.id, storage.clone());
+            stores.0.insert(storage.id, storage.clone());
             candidates.push(storage);
         }
         let rv = thread_rng().gen_range(0, candidates.len());
@@ -418,6 +418,7 @@ impl AccountsDB {
                     pubkey: **pubkey,
                     data_len,
                 };
+                //info!("store: {:?}, {}", pubkey, account.lamports);
                 (meta, *account)
             })
             .collect();
@@ -526,7 +527,7 @@ impl AccountsDB {
         }
     }
 
-    pub fn generate_index(&mut self) {
+    fn generate_index(&mut self) {
         let mut forks: Vec<Fork> = self
             .storage
             .read()
