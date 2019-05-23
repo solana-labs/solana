@@ -40,7 +40,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use solana_sdk::transaction::Transaction;
 use std::cmp::min;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
@@ -306,7 +306,7 @@ impl ClusterInfo {
         }
     }
 
-    pub fn push_epoch_slots(&mut self, id: Pubkey, root: u64, slots: HashSet<u64>) {
+    pub fn push_epoch_slots(&mut self, id: Pubkey, root: u64, slots: BTreeSet<u64>) {
         let now = timestamp();
         let mut entry = CrdsValue::EpochSlots(EpochSlots::new(id, root, slots, now));
         entry.sign(&self.keypair);
@@ -1205,11 +1205,13 @@ impl ClusterInfo {
     ) -> Vec<SharedBlob> {
         let self_id = me.read().unwrap().gossip.id;
         inc_new_counter_debug!("cluster_info-push_message", 1, 0, 1000);
+
         let prunes: Vec<_> = me
             .write()
             .unwrap()
             .gossip
             .process_push_message(data, timestamp());
+
         if !prunes.is_empty() {
             inc_new_counter_debug!("cluster_info-push_message-prunes", prunes.len());
             let ci = me.read().unwrap().lookup(from).cloned();
