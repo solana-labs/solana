@@ -73,12 +73,13 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   echo "rsync://$url"
 }
 
-setup_vote_and_stake_accounts() {
+setup_validator_accounts() {
   declare entrypoint_ip=$1
   declare node_keypair_path=$2
   declare vote_keypair_path=$3
   declare stake_keypair_path=$4
-  declare stake=$5
+  declare storage_keypair_path=$5
+  declare stake=$6
 
   declare node_pubkey
   node_pubkey=$($solana_keygen pubkey "$node_keypair_path")
@@ -89,6 +90,9 @@ setup_vote_and_stake_accounts() {
   declare stake_pubkey
   stake_pubkey=$($solana_keygen pubkey "$stake_keypair_path")
 
+  declare storage_pubkey
+  storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
+
   if [[ -f "$node_keypair_path".configured ]]; then
     echo "Vote and stake accounts have already been configured"
   else
@@ -97,27 +101,30 @@ setup_vote_and_stake_accounts() {
 
     # Fund the vote account from the node, with the node as the node_pubkey
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-          create-vote-account "$vote_pubkey" "$node_pubkey" "$stake" || return $?
+      create-vote-account "$vote_pubkey" "$node_pubkey" "$stake" || return $?
 
     # Fund the stake account from the node, with the node as the node_pubkey
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-           create-stake-account "$stake_pubkey" "$stake" || return $?
+      create-stake-account "$stake_pubkey" "$stake" || return $?
 
     # Delegate the stake.  The transaction fee is paid by the node but the
     #  transaction must be signed by the stake_keypair
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-           delegate-stake "$stake_keypair_path" "$vote_pubkey" || return $?
+      delegate-stake "$stake_keypair_path" "$vote_pubkey" || return $?
 
+    # Setup validator storage account
+    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
+      create-validator-storage-account "$storage_pubkey" || return $?
 
     touch "$node_keypair_path".configured
   fi
 
   $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-          show-vote-account "$vote_pubkey"
-
+    show-vote-account "$vote_pubkey"
   $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-          show-stake-account "$stake_pubkey"
-
+    show-stake-account "$stake_pubkey"
+  $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
+    show-storage-account "$storage_pubkey"
 
   return 0
 }
@@ -132,14 +139,28 @@ ledger_not_setup() {
 setup_replicator_account() {
   declare entrypoint_ip=$1
   declare node_keypair_path=$2
-  declare stake=$3
+  declare storage_keypair_path=$2
+  declare stake=$4
+
+  declare storage_pubkey
+  storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
 
   if [[ -f "$node_keypair_path".configured ]]; then
     echo "Replicator account has already been configured"
   else
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop "$stake" || return $?
+
+    # Setup replicator storage account
+    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
+      create-replicator-storage-account "$storage_keypair_path" || return $?
+
     touch "$node_keypair_path".configured
   fi
+
+  $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
+    show-storage-account "$storage_pubkey"
+
+  return 0
 }
 
 args=()
@@ -228,7 +249,6 @@ if [[ $node_type = bootstrap_leader ]]; then
   accounts_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts
   fullnode_storage_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-storage-keypair.json
 
-
   default_arg --rpc-port 8899
   default_arg --rpc-drone-address 127.0.0.1:9900
   default_arg --gossip-port 8001
@@ -300,11 +320,13 @@ else
 
   fullnode_pubkey=$($solana_keygen pubkey "$fullnode_keypair_path")
   fullnode_vote_pubkey=$($solana_keygen pubkey "$fullnode_vote_keypair_path")
+  fullnode_storage_pubkey=$($solana_keygen pubkey "$fullnode_storage_keypair_path")
 
   cat <<EOF
 ======================[ Fullnode configuration ]======================
 node pubkey: $fullnode_pubkey
 vote pubkey: $fullnode_vote_pubkey
+storage pubkey: $fullnode_storage_pubkey
 ledger: $ledger_config_dir
 accounts: $accounts_config_dir
 ======================================================================
@@ -362,9 +384,17 @@ while true; do
   trap '[[ -n $pid ]] && kill "$pid" >/dev/null 2>&1 && wait "$pid"' INT TERM ERR
 
   if [[ $node_type = validator ]] && ((stake)); then
-    setup_vote_and_stake_accounts "${entrypoint_address%:*}" "$fullnode_keypair_path" "$fullnode_vote_keypair_path" "$fullnode_stake_keypair_path" "$stake"
+    setup_validator_accounts "${entrypoint_address%:*}" \
+      "$fullnode_keypair_path" \
+      "$fullnode_vote_keypair_path" \
+      "$fullnode_stake_keypair_path" \
+      "$fullnode_storage_keypair_path" \
+      "$stake"
   elif [[ $node_type = replicator ]] && ((stake)); then
-    setup_replicator_account "${entrypoint_address%:*}" "$replicator_keypair_path" "$stake"
+    setup_replicator_account "${entrypoint_address%:*}" \
+      "$replicator_keypair_path" \
+      "$replicator_storage_keypair_path" \
+      "$stake"
   fi
 
   echo "$PS4$program ${args[*]}"

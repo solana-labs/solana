@@ -27,9 +27,11 @@ solana-logger = { path = "../logger", version = "0.15.0"  }
 solana-metrics = { path = "../metrics", version = "0.15.0"  }
 solana-sdk = { path = "../sdk", version = "0.15.0"  }
 solana-stake-api = { path = "../programs/stake_api", version = "0.15.0"  }
+solana-storage-api = { path = "../programs/storage_api", version = "0.15.0"  }
 solana-vote-api = { path = "../programs/vote_api", version = "0.15.0"  }
 solana-vote-program = { path = "../programs/vote_program", version = "0.15.0"  }
 solana-stake-program = { path = "../programs/stake_program", version = "0.15.0"  }
+solana-storage-program = { path = "../programs/storage_program", version = "0.15.0"  }
 solana-noop-program = { path = "../programs/noop_program", version = "0.15.0"  }
 
 [lib]

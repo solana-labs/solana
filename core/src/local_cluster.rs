@@ -11,6 +11,7 @@ use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
 use solana_sdk::client::SyncClient;
 use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::message::Message;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -19,6 +20,7 @@ use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use solana_sdk::transaction::Transaction;
 use solana_stake_api::stake_instruction;
+use solana_storage_api::storage_instruction;
 use solana_vote_api::vote_instruction;
 use solana_vote_api::vote_state::VoteState;
 use std::collections::HashMap;
@@ -120,6 +122,7 @@ impl LocalCluster {
             mut genesis_block,
             mint_keypair,
             voting_keypair,
+            storage_keypair,
         } = create_genesis_block_with_leader(
             config.cluster_lamports,
             &leader_pubkey,
@@ -135,7 +138,7 @@ impl LocalCluster {
         let (genesis_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
         let leader_contact_info = leader_node.info.clone();
-        let leader_storage_keypair = Arc::new(Keypair::new());
+        let leader_storage_keypair = Arc::new(storage_keypair);
         let leader_voting_keypair = Arc::new(voting_keypair);
         let leader_server = Fullnode::new(
             leader_node,
@@ -238,12 +241,12 @@ impl LocalCluster {
             // setup as a listener
             info!("listener {} ", validator_pubkey,);
         } else {
-            // Send each validator some lamports to vote
+            // Give the validator some lamports to setup vote and storage accounts
             let validator_balance = Self::transfer_with_client(
                 &client,
                 &self.funding_keypair,
                 &validator_pubkey,
-                stake * 2 + 1,
+                stake * 2 + 2,
             );
             info!(
                 "validator {} balance {}",
@@ -257,6 +260,9 @@ impl LocalCluster {
                 stake,
             )
             .unwrap();
+
+            Self::setup_storage_account(&client, &storage_keypair, &validator_keypair, false)
+                .unwrap();
         }
 
         let voting_keypair = Arc::new(voting_keypair);
@@ -298,21 +304,24 @@ impl LocalCluster {
 
     fn add_replicator(&mut self) {
         let replicator_keypair = Arc::new(Keypair::new());
-        let replicator_id = replicator_keypair.pubkey();
+        let replicator_pubkey = replicator_keypair.pubkey();
         let storage_keypair = Arc::new(Keypair::new());
-        let storage_id = storage_keypair.pubkey();
+        let storage_pubkey = storage_keypair.pubkey();
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,
         );
 
+        // Give the replicator some lamports to setup its storage accounts
         Self::transfer_with_client(
             &client,
             &self.funding_keypair,
             &replicator_keypair.pubkey(),
-            1,
+            42,
         );
-        let replicator_node = Node::new_localhost_replicator(&replicator_id);
+        let replicator_node = Node::new_localhost_replicator(&replicator_pubkey);
+
+        Self::setup_storage_account(&client, &storage_keypair, &replicator_keypair, true).unwrap();
 
         let (replicator_ledger_path, _blockhash) = create_new_tmp_ledger!(&self.genesis_block);
         let replicator = Replicator::new(
@@ -322,12 +331,12 @@ impl LocalCluster {
             replicator_keypair,
             storage_keypair,
         )
-        .unwrap();
+        .unwrap_or_else(|err| panic!("Replicator::new() failed: {:?}", err));
 
         self.replicators.push(replicator);
         self.replicator_infos.insert(
-            replicator_id,
-            ReplicatorInfo::new(storage_id, replicator_ledger_path),
+            replicator_pubkey,
+            ReplicatorInfo::new(storage_pubkey, replicator_ledger_path),
         );
     }
 
@@ -464,6 +473,36 @@ impl LocalCluster {
             "expected successful vote account registration",
         ))
     }
+
+    fn setup_storage_account(
+        client: &ThinClient,
+        storage_keypair: &Keypair,
+        from_keypair: &Arc<Keypair>,
+        replicator: bool,
+    ) -> Result<()> {
+        let message = Message::new_with_payer(
+            if replicator {
+                storage_instruction::create_replicator_storage_account(
+                    &from_keypair.pubkey(),
+                    &storage_keypair.pubkey(),
+                    1,
+                )
+            } else {
+                storage_instruction::create_validator_storage_account(
+                    &from_keypair.pubkey(),
+                    &storage_keypair.pubkey(),
+                    1,
+                )
+            },
+            Some(&from_keypair.pubkey()),
+        );
+        let signer_keys = vec![from_keypair.as_ref()];
+        let blockhash = client.get_recent_blockhash().unwrap().0;
+        let mut transaction = Transaction::new(&signer_keys, message, blockhash);
+        client
+            .retry_transfer(&from_keypair, &mut transaction, 5)
+            .map(|_signature| ())
+    }
 }
 
 impl Cluster for LocalCluster {
@@ -529,7 +568,7 @@ mod test {
         let num_replicators = 1;
         let config = ClusterConfig {
             fullnode_config,
-            num_replicators: 1,
+            num_replicators,
             node_stakes: vec![3; NUM_NODES],
             cluster_lamports: 100,
             ticks_per_slot: 8,

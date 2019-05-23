@@ -192,6 +192,15 @@ impl StorageStage {
                 .name("solana-storage-create-accounts".to_string())
                 .spawn(move || {
                     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+
+                    {
+                        let working_bank = bank_forks.read().unwrap().working_bank();
+                        let storage_account = working_bank.get_account(&storage_keypair.pubkey());
+                        if storage_account.is_none() {
+                            warn!("Storage account not found: {}", storage_keypair.pubkey());
+                        }
+                    }
+
                     loop {
                         match instruction_receiver.recv_timeout(Duration::from_secs(1)) {
                             Ok(instruction) => {
@@ -238,22 +247,29 @@ impl StorageStage {
     ) -> io::Result<()> {
         let working_bank = bank_forks.read().unwrap().working_bank();
         let blockhash = working_bank.confirmed_last_blockhash();
-        let mut instructions = vec![];
-        let signer_keys = vec![keypair.as_ref(), storage_keypair.as_ref()];
+        let keypair_balance = working_bank.get_balance(&keypair.pubkey());
+
+        if keypair_balance == 0 {
+            warn!("keypair account balance empty: {}", keypair.pubkey(),);
+        } else {
+            debug!(
+                "keypair account balance: {}: {}",
+                keypair.pubkey(),
+                keypair_balance
+            );
+        }
         if working_bank
             .get_account(&storage_keypair.pubkey())
             .is_none()
         {
-            let create_instruction = storage_instruction::create_account(
-                &keypair.pubkey(),
-                &storage_keypair.pubkey(),
-                1,
+            warn!(
+                "storage account does not exist: {}",
+                storage_keypair.pubkey()
             );
-            instructions.push(create_instruction);
-            info!("storage account requested");
         }
-        instructions.push(instruction);
-        let message = Message::new_with_payer(instructions, Some(&signer_keys[0].pubkey()));
+
+        let signer_keys = vec![keypair.as_ref(), storage_keypair.as_ref()];
+        let message = Message::new_with_payer(vec![instruction], Some(&signer_keys[0].pubkey()));
         let transaction = Transaction::new(&signer_keys, message, blockhash);
 
         transactions_socket.send_to(

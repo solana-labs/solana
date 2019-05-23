@@ -290,8 +290,8 @@ impl Replicator {
             .expect("ledger encrypt not successful");
         loop {
             self.create_sampling_offsets();
-            if self.sample_file_to_create_mining_hash().is_err() {
-                info!("Error sampling file, exiting...");
+            if let Err(err) = self.sample_file_to_create_mining_hash() {
+                warn!("Error sampling file, exiting: {:?}", err);
                 break;
             }
             self.submit_mining_proof();
@@ -365,7 +365,10 @@ impl Replicator {
             self.num_chacha_blocks = num_encrypted_bytes / CHACHA_BLOCK_SIZE;
         }
 
-        info!("Done encrypting the ledger");
+        info!(
+            "Done encrypting the ledger: {:?}",
+            self.ledger_data_file_encrypted
+        );
         Ok(())
     }
 
@@ -406,29 +409,30 @@ impl Replicator {
         if client.poll_get_balance(&keypair.pubkey())? == 0 {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                "No account has been setup",
+                "keypair account has no balance",
             ))?
         }
 
-        // check if the account exists
-        let bal = client.poll_get_balance(&storage_keypair.pubkey());
-        if bal.is_err() || bal.unwrap() == 0 {
+        // check if the storage account exists
+        let balance = client.poll_get_balance(&storage_keypair.pubkey());
+        if balance.is_err() || balance.unwrap() == 0 {
             let (blockhash, _fee_calculator) = client.get_recent_blockhash().expect("blockhash");
 
-            let ix = vec![storage_instruction::create_account(
+            let ix = storage_instruction::create_replicator_storage_account(
                 &keypair.pubkey(),
                 &storage_keypair.pubkey(),
                 1,
-            )];
+            );
             let tx = Transaction::new_signed_instructions(&[keypair], ix, blockhash);
             let signature = client.async_send_transaction(tx)?;
             client
                 .poll_for_signature(&signature)
                 .map_err(|err| match err {
                     TransportError::IoError(e) => e,
-                    TransportError::TransactionError(_) => {
-                        io::Error::new(ErrorKind::Other, "signature not found")
-                    }
+                    TransportError::TransactionError(_) => io::Error::new(
+                        ErrorKind::Other,
+                        "setup_mining_account: signature not found",
+                    ),
                 })?;
         }
         Ok(())
@@ -504,10 +508,11 @@ impl Replicator {
                 .expect("rpc request")
                 .as_u64()
                 .unwrap();
-            info!("max slot: {}", storage_slot);
+            info!("storage slot: {}", storage_slot);
             if get_segment_from_slot(storage_slot) != 0 {
                 return Ok((storage_blockhash, storage_slot));
             }
+            info!("waiting for segment...");
             sleep(Duration::from_secs(5));
         }
         Err(Error::new(
