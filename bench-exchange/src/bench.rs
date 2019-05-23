@@ -907,7 +907,7 @@ mod tests {
         solana_logger::setup();
 
         const NUM_NODES: usize = 1;
-        let fullnode_config = FullnodeConfig::default();
+        let validator_config = FullnodeConfig::default();
 
         let mut config = Config::default();
         config.identity = Keypair::new();
@@ -929,7 +929,7 @@ mod tests {
         let cluster = LocalCluster::new(&ClusterConfig {
             node_stakes: vec![100_000; NUM_NODES],
             cluster_lamports: 100_000_000_000_000,
-            fullnode_config,
+            validator_config,
             native_instruction_processors: [solana_exchange_program!()].to_vec(),
             ..ClusterConfig::default()
         });

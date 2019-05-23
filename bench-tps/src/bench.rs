@@ -651,12 +651,12 @@ mod tests {
     #[test]
     fn test_bench_tps_local_cluster() {
         solana_logger::setup();
-        let fullnode_config = FullnodeConfig::default();
+        let validator_config = FullnodeConfig::default();
         const NUM_NODES: usize = 1;
         let cluster = LocalCluster::new(&ClusterConfig {
             node_stakes: vec![999_990; NUM_NODES],
             cluster_lamports: 2_000_000,
-            fullnode_config,
+            validator_config,
             ..ClusterConfig::default()
         });
 

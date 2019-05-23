@@ -103,10 +103,10 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     solana_logger::setup();
     info!("starting replicator test");
 
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+    let mut validator_config = FullnodeConfig::default();
+    validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let config = ClusterConfig {
-        fullnode_config,
+        validator_config,
         num_replicators,
         node_stakes: vec![100; num_nodes],
         cluster_lamports: 10_000,
@@ -189,8 +189,8 @@ fn test_replicator_startup_leader_hang() {
 fn test_replicator_startup_ledger_hang() {
     solana_logger::setup();
     info!("starting replicator test");
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+    let mut validator_config = FullnodeConfig::default();
+    validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let cluster = LocalCluster::new_with_equal_stakes(2, 10_000, 100);;
 
     info!("starting replicator node");
@@ -217,10 +217,10 @@ fn test_replicator_startup_ledger_hang() {
 fn test_account_setup() {
     let num_nodes = 1;
     let num_replicators = 1;
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+    let mut validator_config = FullnodeConfig::default();
+    validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let config = ClusterConfig {
-        fullnode_config,
+        validator_config,
         num_replicators,
         node_stakes: vec![100; num_nodes],
         cluster_lamports: 10_000,
