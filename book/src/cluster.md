@@ -28,7 +28,7 @@ its copy.
 
 ## Joining a Cluster
 
-Fullnodes and replicators enter the cluster via registration messages sent to
+Validators and replicators enter the cluster via registration messages sent to
 its *control plane*. The control plane is implemented using a *gossip*
 protocol, meaning that a node may register with any existing node, and expect
 its registration to propagate to all nodes in the cluster. The time it takes

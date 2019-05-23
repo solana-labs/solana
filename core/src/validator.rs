@@ -57,7 +57,7 @@ impl Default for ValidatorConfig {
     }
 }
 
-pub struct Fullnode {
+pub struct Validator {
     pub id: Pubkey,
     exit: Arc<AtomicBool>,
     rpc_service: Option<JsonRpcService>,
@@ -70,7 +70,7 @@ pub struct Fullnode {
     ip_echo_server: solana_netutil::IpEchoServer,
 }
 
-impl Fullnode {
+impl Validator {
     pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
@@ -321,7 +321,7 @@ pub fn new_banks_from_blocktree(
     )
 }
 
-impl Service for Fullnode {
+impl Service for Validator {
     type JoinReturnType = ();
 
     fn join(self) -> Result<()> {
@@ -343,7 +343,7 @@ impl Service for Fullnode {
     }
 }
 
-pub fn new_validator_for_tests() -> (Fullnode, ContactInfo, Keypair, String) {
+pub fn new_validator_for_tests() -> (Validator, ContactInfo, Keypair, String) {
     use crate::blocktree::create_new_tmp_ledger;
     use crate::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
 
@@ -364,7 +364,7 @@ pub fn new_validator_for_tests() -> (Fullnode, ContactInfo, Keypair, String) {
 
     let voting_keypair = Arc::new(Keypair::new());
     let storage_keypair = Arc::new(Keypair::new());
-    let node = Fullnode::new(
+    let node = Validator::new(
         node,
         &node_keypair,
         &ledger_path,
@@ -399,7 +399,7 @@ mod tests {
 
         let voting_keypair = Arc::new(Keypair::new());
         let storage_keypair = Arc::new(Keypair::new());
-        let validator = Fullnode::new(
+        let validator = Validator::new(
             validator_node,
             &Arc::new(validator_keypair),
             &validator_ledger_path,
@@ -419,7 +419,7 @@ mod tests {
         let leader_node = Node::new_localhost_with_pubkey(&leader_keypair.pubkey());
 
         let mut ledger_paths = vec![];
-        let validators: Vec<Fullnode> = (0..2)
+        let validators: Vec<Validator> = (0..2)
             .map(|_| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
@@ -430,7 +430,7 @@ mod tests {
                 ledger_paths.push(validator_ledger_path.clone());
                 let voting_keypair = Arc::new(Keypair::new());
                 let storage_keypair = Arc::new(Keypair::new());
-                Fullnode::new(
+                Validator::new(
                     validator_node,
                     &Arc::new(validator_keypair),
                     &validator_ledger_path,

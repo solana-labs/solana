@@ -22,7 +22,7 @@
   - [Staking Delegation and Rewards](stake-delegation-and-rewards.md)
   - [Performance Metrics](performance-metrics.md)
 
-- [Anatomy of a Fullnode](fullnode.md)
+- [Anatomy of a Validator](fullnode.md)
   - [TPU](tpu.md)
   - [TVU](tvu.md)
     - [Blocktree](blocktree.md)

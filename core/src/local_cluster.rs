@@ -6,7 +6,7 @@ use crate::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
 use crate::gossip_service::discover_cluster;
 use crate::replicator::Replicator;
 use crate::service::Service;
-use crate::validator::{Fullnode, ValidatorConfig};
+use crate::validator::{Validator, ValidatorConfig};
 use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
 use solana_sdk::client::SyncClient;
@@ -28,7 +28,7 @@ use std::fs::remove_dir_all;
 use std::io::{Error, ErrorKind, Result};
 use std::sync::Arc;
 
-pub struct FullnodeInfo {
+pub struct ValidatorInfo {
     pub keypair: Arc<Keypair>,
     pub voting_keypair: Arc<Keypair>,
     pub storage_keypair: Arc<Keypair>,
@@ -90,9 +90,9 @@ pub struct LocalCluster {
     pub validator_config: ValidatorConfig,
     /// Entry point from which the rest of the network can be discovered
     pub entry_point_info: ContactInfo,
-    pub fullnode_infos: HashMap<Pubkey, FullnodeInfo>,
-    pub listener_infos: HashMap<Pubkey, FullnodeInfo>,
-    fullnodes: HashMap<Pubkey, Fullnode>,
+    pub fullnode_infos: HashMap<Pubkey, ValidatorInfo>,
+    pub listener_infos: HashMap<Pubkey, ValidatorInfo>,
+    fullnodes: HashMap<Pubkey, Validator>,
     genesis_ledger_path: String,
     pub genesis_block: GenesisBlock,
     replicators: Vec<Replicator>,
@@ -140,7 +140,7 @@ impl LocalCluster {
         let leader_contact_info = leader_node.info.clone();
         let leader_storage_keypair = Arc::new(storage_keypair);
         let leader_voting_keypair = Arc::new(voting_keypair);
-        let leader_server = Fullnode::new(
+        let leader_server = Validator::new(
             leader_node,
             &leader_keypair,
             &leader_ledger_path,
@@ -156,7 +156,7 @@ impl LocalCluster {
         fullnodes.insert(leader_pubkey, leader_server);
         fullnode_infos.insert(
             leader_pubkey,
-            FullnodeInfo {
+            ValidatorInfo {
                 keypair: leader_keypair,
                 voting_keypair: leader_voting_keypair,
                 storage_keypair: leader_storage_keypair,
@@ -266,7 +266,7 @@ impl LocalCluster {
         }
 
         let voting_keypair = Arc::new(voting_keypair);
-        let validator_server = Fullnode::new(
+        let validator_server = Validator::new(
             validator_node,
             &validator_keypair,
             &ledger_path,
@@ -282,7 +282,7 @@ impl LocalCluster {
         if validator_config.voting_disabled {
             self.listener_infos.insert(
                 validator_keypair.pubkey(),
-                FullnodeInfo {
+                ValidatorInfo {
                     keypair: validator_keypair,
                     voting_keypair,
                     storage_keypair,
@@ -292,7 +292,7 @@ impl LocalCluster {
         } else {
             self.fullnode_infos.insert(
                 validator_keypair.pubkey(),
-                FullnodeInfo {
+                ValidatorInfo {
                     keypair: validator_keypair,
                     voting_keypair,
                     storage_keypair,
@@ -522,7 +522,7 @@ impl Cluster for LocalCluster {
         if pubkey == self.entry_point_info.id {
             self.entry_point_info = node.info.clone();
         }
-        let restarted_node = Fullnode::new(
+        let restarted_node = Validator::new(
             node,
             &fullnode_info.keypair,
             &fullnode_info.ledger_path,

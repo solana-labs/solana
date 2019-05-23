@@ -1,6 +1,6 @@
-# Anatomy of a Fullnode
+# Anatomy of a Validator
 
-<img alt="Fullnode block diagrams" src="img/fullnode.svg" class="center"/>
+<img alt="Validator block diagrams" src="img/fullnode.svg" class="center"/>
 
 ## Pipelining
 
@@ -19,7 +19,7 @@ dryer and the first is being folded. In this way, one can make progress on
 three loads of laundry simultaneously. Given infinite loads, the pipeline will
 consistently complete a load at the rate of the slowest stage in the pipeline.
 
-## Pipelining in the Fullnode
+## Pipelining in the Validator
 
 The fullnode contains two pipelined processes, one used in leader mode called
 the TPU and one used in validator mode called the TVU. In both cases, the

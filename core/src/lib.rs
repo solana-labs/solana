@@ -1,6 +1,6 @@
 //! The `solana` library implements the Solana high-performance blockchain architecture.
 //! It includes a full Rust implementation of the architecture (see
-//! [Fullnode](server/struct.Fullnode.html)) as well as hooks to GPU implementations of its most
+//! [Validator](server/struct.Validator.html)) as well as hooks to GPU implementations of its most
 //! paralellizable components (i.e. [SigVerify](sigverify/index.html)).  It also includes
 //! command-line tools to spin up fullnodes and a Rust library
 //!

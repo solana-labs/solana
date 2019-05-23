@@ -2,7 +2,7 @@ use clap::{crate_description, crate_name, crate_version, App, Arg};
 use log::*;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
-use solana::validator::{Fullnode, ValidatorConfig};
+use solana::validator::{Validator, ValidatorConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
 use solana::socketaddr;
@@ -252,7 +252,7 @@ fn main() {
         node.info.rpc_pubsub = SocketAddr::new(gossip_addr.ip(), port_number + 1);
     };
 
-    let validator = Fullnode::new(
+    let validator = Validator::new(
         node,
         &keypair,
         ledger_path,
