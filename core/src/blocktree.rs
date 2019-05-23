@@ -203,7 +203,7 @@ impl Blocktree {
     pub fn slot_data_iterator(
         &self,
         slot: u64,
-    ) -> Result<impl Iterator<Item = ((u64, u64), Vec<u8>)>> {
+    ) -> Result<impl Iterator<Item = ((u64, u64), Box<[u8]>)>> {
         let slot_iterator = self.db.iter::<cf::Data>(Some((slot, 0)))?;
         Ok(slot_iterator.take_while(move |((blob_slot, _), _)| *blob_slot == slot))
     }
