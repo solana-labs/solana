@@ -433,9 +433,14 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getRecentBlockhash', []);
 
     // Legacy v0.14 response.  TODO: Remove in July 2019
-    const res_014 = GetRecentBlockhash_014(unsafeRes);
-    if (!res_014.error) {
+    try {
+      const res_014 = GetRecentBlockhash_014(unsafeRes);
+      if (res_014.error) {
+        throw new Error(res_014.error.message);
+      }
       return res_014.result;
+    } catch (e) {
+      // Not legacy format
     }
     // End Legacy v0.14 response
 
