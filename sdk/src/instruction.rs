@@ -96,8 +96,8 @@ pub struct AccountMeta {
     pub pubkey: Pubkey,
     /// True if an Instruciton requires a Transaction signature matching `pubkey`.
     pub is_signer: bool,
-    /// True if the `pubkey` can be loaded as a credit-only account.
-    pub is_credit_only: bool,
+    /// True if the `pubkey` can be loaded as a credit-debit account.
+    pub is_debitable: bool,
 }
 
 impl AccountMeta {
@@ -105,7 +105,7 @@ impl AccountMeta {
         Self {
             pubkey,
             is_signer,
-            is_credit_only: false,
+            is_debitable: true,
         }
     }
 
@@ -113,7 +113,7 @@ impl AccountMeta {
         Self {
             pubkey,
             is_signer,
-            is_credit_only: true,
+            is_debitable: false,
         }
     }
 }

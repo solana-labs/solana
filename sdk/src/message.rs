@@ -43,7 +43,7 @@ fn get_keys(
         .map(|program_id| AccountMeta {
             pubkey: *program_id,
             is_signer: false,
-            is_credit_only: true,
+            is_debitable: false,
         })
         .collect();
     let mut keys_and_signed: Vec<_> = instructions
@@ -54,7 +54,7 @@ fn get_keys(
     keys_and_signed.sort_by(|x, y| {
         y.is_signer
             .cmp(&x.is_signer)
-            .then(x.is_credit_only.cmp(&y.is_credit_only))
+            .then(y.is_debitable.cmp(&x.is_debitable))
     });
 
     let payer_account_meta;
@@ -62,7 +62,7 @@ fn get_keys(
         payer_account_meta = AccountMeta {
             pubkey: *payer,
             is_signer: true,
-            is_credit_only: false,
+            is_debitable: true,
         };
         keys_and_signed.insert(0, &payer_account_meta);
     }
@@ -74,12 +74,12 @@ fn get_keys(
     for account_meta in keys_and_signed.into_iter().unique_by(|x| x.pubkey) {
         if account_meta.is_signer {
             signed_keys.push(account_meta.pubkey);
-            if account_meta.is_credit_only {
+            if !account_meta.is_debitable {
                 num_credit_only_signed_accounts += 1;
             }
         } else {
             unsigned_keys.push(account_meta.pubkey);
-            if account_meta.is_credit_only {
+            if !account_meta.is_debitable {
                 num_credit_only_unsigned_accounts += 1;
             }
         }
