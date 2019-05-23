@@ -31,7 +31,7 @@ use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use std::borrow::Borrow;
 use std::cmp;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockReadGuard};
 use std::time::Instant;
 
 type BankStatusCache = StatusCache<Result<()>>;
@@ -189,6 +189,10 @@ impl Bank {
 
     pub fn slot(&self) -> u64 {
         self.slot
+    }
+
+    pub fn freeze_lock(&self) -> RwLockReadGuard<Hash> {
+        self.hash.read().unwrap()
     }
 
     pub fn hash(&self) -> Hash {

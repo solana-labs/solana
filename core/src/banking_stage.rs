@@ -427,6 +427,8 @@ impl BankingStage {
             bank.load_and_execute_transactions(txs, lock_results, MAX_RECENT_BLOCKHASHES / 2);
         let load_execute_time = now.elapsed();
 
+        let freeze_lock = bank.freeze_lock();
+
         let mut recordable_txs = vec![];
         let (record_time, record_locks) = {
             let now = Instant::now();
@@ -442,6 +444,7 @@ impl BankingStage {
         };
 
         drop(record_locks);
+        drop(freeze_lock);
 
         debug!(
             "bank: {} load_execute: {}us record: {}us commit: {}us txs_len: {}",
