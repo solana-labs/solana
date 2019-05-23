@@ -144,6 +144,7 @@ impl BankingStage {
     }
 
     pub fn consume_buffered_packets(
+        my_id: &Pubkey,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         buffered_packets: &[PacketsAndOffsets],
     ) -> Result<UnprocessedPackets> {
@@ -186,10 +187,16 @@ impl BankingStage {
             );
 
             if processed < verified_txs_len {
+                let next_leader = poh_recorder.lock().unwrap().next_slot_leader();
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
                 while let Some((msgs, unprocessed_indexes)) = buffered_packets_iter.next() {
-                    let unprocessed_indexes =
-                        Self::filter_unprocessed_packets(&bank, &msgs, &unprocessed_indexes);
+                    let unprocessed_indexes = Self::filter_unprocessed_packets(
+                        &bank,
+                        &msgs,
+                        &unprocessed_indexes,
+                        my_id,
+                        next_leader,
+                    );
                     Self::push_unprocessed(
                         &mut unprocessed_packets,
                         msgs.to_owned(),
@@ -271,7 +278,7 @@ impl BankingStage {
 
         match decision {
             BufferedPacketsDecision::Consume => {
-                Self::consume_buffered_packets(poh_recorder, buffered_packets)
+                Self::consume_buffered_packets(&rcluster_info.id(), poh_recorder, buffered_packets)
             }
             BufferedPacketsDecision::Forward => {
                 if enable_forwarding {
@@ -334,6 +341,7 @@ impl BankingStage {
                 &poh_recorder,
                 recv_start,
                 recv_timeout,
+                cluster_info,
                 id,
             ) {
                 Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
@@ -654,7 +662,18 @@ impl BankingStage {
         bank: &Arc<Bank>,
         msgs: &Packets,
         transaction_indexes: &[usize],
+        my_id: &Pubkey,
+        next_leader: Option<Pubkey>,
     ) -> Vec<usize> {
+        // Check if we are the next leader. If so, let's not filter the packets
+        // as we'll filter it again while processing the packets.
+        // Filtering helps if we were going to forward the packets to some other node
+        if let Some(leader) = next_leader {
+            if leader == *my_id {
+                return transaction_indexes.to_vec();
+            }
+        }
+
         let (transactions, transaction_indexes) =
             Self::transactions_from_packets(msgs, &transaction_indexes);
 
@@ -689,6 +708,7 @@ impl BankingStage {
         poh: &Arc<Mutex<PohRecorder>>,
         recv_start: &mut Instant,
         recv_timeout: Duration,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         id: u32,
     ) -> Result<UnprocessedPackets> {
         let mms = verified_receiver
@@ -729,11 +749,18 @@ impl BankingStage {
             Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes);
 
             if processed < verified_txs_len {
+                let next_leader = poh.lock().unwrap().next_slot_leader();
+                let my_id = cluster_info.read().unwrap().id();
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
                 while let Some((msgs, vers)) = mms_iter.next() {
                     let packet_indexes = Self::generate_packet_indexes(vers);
-                    let unprocessed_indexes =
-                        Self::filter_unprocessed_packets(&bank, &msgs, &packet_indexes);
+                    let unprocessed_indexes = Self::filter_unprocessed_packets(
+                        &bank,
+                        &msgs,
+                        &packet_indexes,
+                        &my_id,
+                        next_leader,
+                    );
                     Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes);
                 }
             }
