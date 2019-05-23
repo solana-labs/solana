@@ -42,7 +42,9 @@ test('load BPF Rust program', async () => {
 
   const connection = new Connection(url);
   const from = await newAccountWithLamports(connection, 1024);
-  const data = await fs.readFile('test/fixtures/noop-rust/solana_bpf_rust_noop.so');
+  const data = await fs.readFile(
+    'test/fixtures/noop-rust/solana_bpf_rust_noop.so',
+  );
   const programId = await BpfLoader.load(connection, from, data);
   const transaction = new Transaction().add({
     keys: [{pubkey: from.publicKey, isSigner: true}],

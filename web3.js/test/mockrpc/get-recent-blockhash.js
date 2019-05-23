@@ -17,8 +17,10 @@ export function mockGetRecentBlockhash() {
       error: null,
       result: [
         recentBlockhash.publicKey.toBase58(),
-        { /* empty fee calculator */}
-      ]
+        {
+          /* empty fee calculator */
+        },
+      ],
     },
   ]);
 }
