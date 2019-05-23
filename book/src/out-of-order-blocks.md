@@ -39,7 +39,7 @@ proposes a block.
 To make it easy to verify, the vote with the golden ticket must be present in
 the proposed block as the first transaction.
 
-#### Grinding
+### Grinding
 
 Because the golden ticket is biasable, the last leader has the most opportunity
 to influence the BlockHash to generate the golden ticket for itself.  This
@@ -50,7 +50,7 @@ to the leaders’ VoteState account.
 To reduce the ability to grind the value, the golden ticket must appear *X*
 ticks after the block, where *X* is half of the number of ticks per block.
 
-#### Difficulty
+### Difficulty
 
 Difficulty is the number of matching bits that the golden ticket needs to match
 the signature.
@@ -63,7 +63,7 @@ tickets as 2 accounts with 50 delegated tokens.
 Given the total delegated state size for the epoch, the difficulty can be
 computed with the leader scheduler.
 
-#### Generating VDFs for Multiple Forks
+### Generating VDFs for Multiple Forks
 
 The number of potential forks the attacker can choose from is limited by
 the fork selection algorithm.  The generated golden ticket needs to be past the
@@ -77,7 +77,7 @@ starting with ‘n - 3’ forks, the proposed block would only be valid if no on
 the cluster voted.  If they did, the golden ticket would need to be in the ‘n +
 7’ slot and propose the n + 8 block.
 
-#### Transaction Ingress Point
+### Transaction Ingress Point
 
 Because there is no deterministic ingress point, there is no place for
 validators to forward transactions.  This design will end up requiring a shared
@@ -88,3 +88,27 @@ The validators already transmit their votes through gossip, so the golden ticket
 block can pick up the validator votes and any additional transactions that have
 not been encoded into the ledger.  These transactions could come from rejected
 forks.
+
+## Only Random Leaders
+
+If the random source is considered secure, it is possible to generate a leader
+schedule completely randomly.
+
+1. Leader 2 finds the golden ticket in slot 1
+2. Leader 2 proposes block for slot 2
+3. Block contains up to two PoH paths:
+    * The golden ticket PoH.
+    * The PoH path to a previous block.
+
+The golden ticket PoH path must be at most 1 slot longer that the PoH path to
+the block.  The reason why the two paths could be different is because Leader 1
+may complete the block for slot 1 and Leader 2 may decide to attach block 2 to
+block 1.
+
+### Grinding
+
+If it is possible to build hardware that is much faster than the expected time
+to find the golden ticket, then an attacker could grind the Block Hash value to
+ensure that they are the leader 50% of the time.  Since the network is still
+relying on staked lamports as the Sybil resistant mechanism, we could increase
+the difficulty for consequtive stakes.
