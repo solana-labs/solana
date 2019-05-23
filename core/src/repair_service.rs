@@ -9,8 +9,9 @@ use crate::service::Service;
 use solana_metrics::datapoint_info;
 use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::net::UdpSocket;
+use std::ops::Bound::{Excluded, Unbounded};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
@@ -89,20 +90,21 @@ impl RepairService {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         repair_strategy: RepairStrategy,
     ) {
-        let mut epoch_slots: HashSet<u64> = HashSet::new();
+        let mut epoch_slots: BTreeSet<u64> = BTreeSet::new();
         let id = cluster_info.read().unwrap().id();
+        let mut current_root = 0;
         if let RepairStrategy::RepairAll {
             ref bank_forks,
             ref epoch_schedule,
             ..
         } = repair_strategy
         {
-            let root = bank_forks.read().unwrap().root();
+            current_root = bank_forks.read().unwrap().root();
             Self::initialize_epoch_slots(
                 id,
                 blocktree,
                 &mut epoch_slots,
-                root,
+                current_root,
                 epoch_schedule,
                 cluster_info,
             );
@@ -128,15 +130,16 @@ impl RepairService {
                         ref completed_slots_receiver,
                         ..
                     } => {
-                        let root = bank_forks.read().unwrap().root();
+                        let new_root = bank_forks.read().unwrap().root();
                         Self::update_epoch_slots(
                             id,
-                            root,
+                            new_root,
+                            &mut current_root,
                             &mut epoch_slots,
                             &cluster_info,
                             completed_slots_receiver,
                         );
-                        Self::generate_repairs(blocktree, root, MAX_REPAIR_LENGTH)
+                        Self::generate_repairs(blocktree, new_root, MAX_REPAIR_LENGTH)
                     }
                 }
             };
@@ -281,7 +284,7 @@ impl RepairService {
 
     fn get_completed_slots_past_root(
         blocktree: &Blocktree,
-        slots_in_gossip: &mut HashSet<u64>,
+        slots_in_gossip: &mut BTreeSet<u64>,
         root: u64,
         epoch_schedule: &EpochSchedule,
     ) {
@@ -305,7 +308,7 @@ impl RepairService {
     fn initialize_epoch_slots(
         id: Pubkey,
         blocktree: &Blocktree,
-        slots_in_gossip: &mut HashSet<u64>,
+        slots_in_gossip: &mut BTreeSet<u64>,
         root: u64,
         epoch_schedule: &EpochSchedule,
         cluster_info: &RwLock<ClusterInfo>,
@@ -326,29 +329,43 @@ impl RepairService {
     // for details.
     fn update_epoch_slots(
         id: Pubkey,
-        root: u64,
-        slots_in_gossip: &mut HashSet<u64>,
+        latest_known_root: u64,
+        prev_root: &mut u64,
+        slots_in_gossip: &mut BTreeSet<u64>,
         cluster_info: &RwLock<ClusterInfo>,
         completed_slots_receiver: &CompletedSlotsReceiver,
     ) {
         let mut should_update = false;
         while let Ok(completed_slots) = completed_slots_receiver.try_recv() {
+            should_update = latest_known_root != *prev_root;
             for slot in completed_slots {
                 // If the newly completed slot > root, and the set did not contain this value
                 // before, we should update gossip.
-                if slot > root && slots_in_gossip.insert(slot) {
-                    should_update = true;
+                if slot > latest_known_root {
+                    should_update |= slots_in_gossip.insert(slot);
                 }
             }
         }
 
         if should_update {
-            slots_in_gossip.retain(|x| *x > root);
-            cluster_info
-                .write()
-                .unwrap()
-                .push_epoch_slots(id, root, slots_in_gossip.clone());
+            // Filter out everything <= root
+            if latest_known_root != *prev_root {
+                *prev_root = latest_known_root;
+                Self::retain_slots_greater_than_root(slots_in_gossip, latest_known_root);
+            }
+            cluster_info.write().unwrap().push_epoch_slots(
+                id,
+                latest_known_root,
+                slots_in_gossip.clone(),
+            );
         }
+    }
+
+    fn retain_slots_greater_than_root(slot_set: &mut BTreeSet<u64>, root: u64) {
+        *slot_set = slot_set
+            .range((Excluded(&root), Unbounded))
+            .cloned()
+            .collect();
     }
 }
 
@@ -603,7 +620,7 @@ mod test {
                     blobs
                 })
                 .collect();
-            let mut full_slots = HashSet::new();
+            let mut full_slots = BTreeSet::new();
 
             blocktree.write_blobs(&fork1_blobs).unwrap();
             blocktree.write_blobs(&fork2_incomplete_blobs).unwrap();
@@ -618,7 +635,7 @@ mod test {
                 &epoch_schedule,
             );
 
-            let mut expected: HashSet<_> = fork1.into_iter().filter(|x| *x > root).collect();
+            let mut expected: BTreeSet<_> = fork1.into_iter().filter(|x| *x > root).collect();
             assert_eq!(full_slots, expected);
 
             // Test that slots past the last confirmed epoch boundary don't get included
@@ -682,7 +699,7 @@ mod test {
                 })
                 .unwrap();
 
-            let mut completed_slots = HashSet::new();
+            let mut completed_slots = BTreeSet::new();
             let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
             let cluster_info = RwLock::new(ClusterInfo::new_with_invalid_keypair(
                 node_info.info.clone(),
@@ -692,13 +709,14 @@ mod test {
                 RepairService::update_epoch_slots(
                     Pubkey::default(),
                     root,
+                    &mut root.clone(),
                     &mut completed_slots,
                     &cluster_info,
                     &completed_slots_receiver,
                 );
             }
 
-            let mut expected: HashSet<_> = (1..num_slots + 1).collect();
+            let mut expected: BTreeSet<_> = (1..num_slots + 1).collect();
             assert_eq!(completed_slots, expected);
 
             // Update with new root, should filter out the slots <= root
@@ -708,12 +726,13 @@ mod test {
             RepairService::update_epoch_slots(
                 Pubkey::default(),
                 root,
+                &mut 0,
                 &mut completed_slots,
                 &cluster_info,
                 &completed_slots_receiver,
             );
             expected.insert(num_slots + 2);
-            expected.retain(|x| *x > root);
+            RepairService::retain_slots_greater_than_root(&mut expected, root);
             assert_eq!(completed_slots, expected);
             writer.join().unwrap();
         }

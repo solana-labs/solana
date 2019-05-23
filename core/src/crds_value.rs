@@ -3,7 +3,7 @@ use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signable, Signature};
 use solana_sdk::transaction::Transaction;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::fmt;
 
 /// CrdsValue that is replicated across the cluster
@@ -21,13 +21,13 @@ pub enum CrdsValue {
 pub struct EpochSlots {
     pub from: Pubkey,
     pub root: u64,
-    pub slots: HashSet<u64>,
+    pub slots: BTreeSet<u64>,
     pub signature: Signature,
     pub wallclock: u64,
 }
 
 impl EpochSlots {
-    pub fn new(from: Pubkey, root: u64, slots: HashSet<u64>, wallclock: u64) -> Self {
+    pub fn new(from: Pubkey, root: u64, slots: BTreeSet<u64>, wallclock: u64) -> Self {
         Self {
             from,
             root,
@@ -47,7 +47,7 @@ impl Signable for EpochSlots {
         #[derive(Serialize)]
         struct SignData<'a> {
             root: u64,
-            slots: &'a HashSet<u64>,
+            slots: &'a BTreeSet<u64>,
             wallclock: u64,
         }
         let data = SignData {
@@ -220,7 +220,11 @@ impl Signable for CrdsValue {
     }
 
     fn get_signature(&self) -> Signature {
-        unimplemented!()
+        match self {
+            CrdsValue::ContactInfo(contact_info) => contact_info.get_signature(),
+            CrdsValue::Vote(vote) => vote.get_signature(),
+            CrdsValue::EpochSlots(epoch_slots) => epoch_slots.get_signature(),
+        }
     }
 
     fn set_signature(&mut self, _: Signature) {
@@ -233,6 +237,7 @@ mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
     use crate::test_tx::test_tx;
+    use bincode::deserialize;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::timing::timestamp;
 
@@ -261,7 +266,7 @@ mod test {
         let key = v.clone().vote().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::Vote(key));
 
-        let v = CrdsValue::EpochSlots(EpochSlots::new(Pubkey::default(), 0, HashSet::new(), 0));
+        let v = CrdsValue::EpochSlots(EpochSlots::new(Pubkey::default(), 0, BTreeSet::new(), 0));
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().epoch_slots().unwrap().from;
         assert_eq!(v.label(), CrdsValueLabel::EpochSlots(key));
@@ -275,13 +280,26 @@ mod test {
         verify_signatures(&mut v, &keypair, &wrong_keypair);
         v = CrdsValue::Vote(Vote::new(&keypair.pubkey(), test_tx(), timestamp()));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
-        v = CrdsValue::EpochSlots(EpochSlots::new(
-            keypair.pubkey(),
-            0,
-            HashSet::new(),
-            timestamp(),
-        ));
+        let btreeset: BTreeSet<u64> = vec![1, 2, 3, 6, 8].into_iter().collect();
+        v = CrdsValue::EpochSlots(EpochSlots::new(keypair.pubkey(), 0, btreeset, timestamp()));
         verify_signatures(&mut v, &keypair, &wrong_keypair);
+    }
+
+    fn test_serialize_deserialize_value(value: &mut CrdsValue, keypair: &Keypair) {
+        let num_tries = 10;
+        value.sign(keypair);
+        let original_signature = value.get_signature();
+        for _ in 0..num_tries {
+            let serialized_value = serialize(value).unwrap();
+            let deserialized_value: CrdsValue = deserialize(&serialized_value).unwrap();
+
+            // Signatures shouldn't change
+            let deserialized_signature = deserialized_value.get_signature();
+            assert_eq!(original_signature, deserialized_signature);
+
+            // After deserializing, check that the signature is still the same
+            assert!(deserialized_value.verify());
+        }
     }
 
     fn verify_signatures(
@@ -294,5 +312,6 @@ mod test {
         assert!(value.verify());
         value.sign(&wrong_keypair);
         assert!(!value.verify());
+        test_serialize_deserialize_value(value, correct_keypair);
     }
 }

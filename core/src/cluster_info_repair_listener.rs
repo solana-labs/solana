@@ -444,7 +444,7 @@ mod tests {
     use crate::blocktree::tests::make_many_slot_entries;
     use crate::packet::{Blob, SharedBlob};
     use crate::streamer;
-    use std::collections::HashSet;
+    use std::collections::BTreeSet;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::mpsc::Receiver;
@@ -528,7 +528,7 @@ mod tests {
         // Set up the repairee's EpochSlots, such that they are missing every odd indexed slot
         // in the range (repairee_root, num_slots]
         let repairee_root = 0;
-        let repairee_slots: HashSet<_> = (0..=num_slots).step_by(2).collect();
+        let repairee_slots: BTreeSet<_> = (0..=num_slots).step_by(2).collect();
         let repairee_epoch_slots =
             EpochSlots::new(mock_repairee.id, repairee_root, repairee_slots, 1);
 
@@ -608,7 +608,7 @@ mod tests {
         // Thus, no repairmen should send any blobs to this repairee b/c this repairee
         // already has all the slots for which they have a confirmed leader schedule
         let repairee_root = 0;
-        let repairee_slots: HashSet<_> = (0..=slots_per_epoch).collect();
+        let repairee_slots: BTreeSet<_> = (0..=slots_per_epoch).collect();
         let repairee_epoch_slots =
             EpochSlots::new(mock_repairee.id, repairee_root, repairee_slots.clone(), 1);
 
