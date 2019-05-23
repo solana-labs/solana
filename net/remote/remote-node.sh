@@ -16,7 +16,7 @@ set +x
 export RUST_LOG
 
 # Use a very large stake (relative to the default multinode-demo/ stake of 43)
-# for the testnet fullnodes setup by net/.  This make it less likely that
+# for the testnet validators setup by net/.  This make it less likely that
 # low-staked ephemeral validator a random user may attach to testnet will cause
 # trouble
 #
@@ -71,8 +71,8 @@ local|tar)
 
   case $nodeType in
   bootstrap-leader)
-    if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
-      echo Selecting solana-fullnode-cuda
+    if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-validator-cuda ]]; then
+      echo Selecting solana-validator-cuda
       export SOLANA_CUDA=1
     fi
     set -x
@@ -89,13 +89,13 @@ local|tar)
       --gossip-port "$entrypointIp":8001
     )
 
-    ./multinode-demo/fullnode.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
+    ./multinode-demo/validator.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
     ;;
-  fullnode|blockstreamer)
+  validator|blockstreamer)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
 
-    if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
-      echo Selecting solana-fullnode-cuda
+    if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-validator-cuda ]]; then
+      echo Selecting solana-validator-cuda
       export SOLANA_CUDA=1
     fi
 
@@ -117,7 +117,7 @@ local|tar)
 
     set -x
     if [[ $skipSetup != true ]]; then
-      ./multinode-demo/clear-fullnode-config.sh
+      ./multinode-demo/clear-config.sh
     fi
 
     if [[ $nodeType = blockstreamer ]]; then
@@ -144,7 +144,7 @@ local|tar)
       curl --head "$(curl ifconfig.io)"
     fi
 
-    ./multinode-demo/fullnode.sh "${args[@]}" > fullnode.log 2>&1 &
+    ./multinode-demo/validator.sh "${args[@]}" > fullnode.log 2>&1 &
     ;;
   *)
     echo "Error: unknown node type: $nodeType"

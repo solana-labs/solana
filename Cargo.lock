@@ -2442,24 +2442,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-fullnode"
-version = "0.15.0"
-dependencies = [
- "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.39 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana 0.15.0",
- "solana-drone 0.15.0",
- "solana-logger 0.15.0",
- "solana-metrics 0.15.0",
- "solana-netutil 0.15.0",
- "solana-runtime 0.15.0",
- "solana-sdk 0.15.0",
- "solana-vote-api 0.15.0",
- "solana-vote-signer 0.15.0",
-]
-
-[[package]]
 name = "solana-genesis"
 version = "0.15.0"
 dependencies = [
@@ -2750,6 +2732,24 @@ dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.39 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-metrics 0.15.0",
+]
+
+[[package]]
+name = "solana-validator"
+version = "0.15.0"
+dependencies = [
+ "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.39 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana 0.15.0",
+ "solana-drone 0.15.0",
+ "solana-logger 0.15.0",
+ "solana-metrics 0.15.0",
+ "solana-netutil 0.15.0",
+ "solana-runtime 0.15.0",
+ "solana-sdk 0.15.0",
+ "solana-vote-api 0.15.0",
+ "solana-vote-signer 0.15.0",
 ]
 
 [[package]]

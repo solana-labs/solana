@@ -60,33 +60,33 @@ echo --- Creating tarball
   # shellcheck source=/dev/null
   source ./target/perf-libs/env.sh
   (
-    cd fullnode
+    cd validator
     cargo +"$rust_stable" install --path . --features=cuda --root ../solana-release-cuda
   )
-  cp solana-release-cuda/bin/solana-fullnode solana-release/bin/solana-fullnode-cuda
+  cp solana-release-cuda/bin/solana-validator solana-release/bin/solana-validator-cuda
   cp -a scripts multinode-demo solana-release/
 
-  # Add a wrapper script for fullnode.sh
+  # Add a wrapper script for validator.sh
   # TODO: Remove multinode/... from tarball
-  cat > solana-release/bin/fullnode.sh <<'EOF'
+  cat > solana-release/bin/validator.sh <<'EOF'
 #!/usr/bin/env bash
 set -e
 cd "$(dirname "$0")"/..
 export USE_INSTALL=1
-exec multinode-demo/fullnode.sh "$@"
+exec multinode-demo/validator.sh "$@"
 EOF
-  chmod +x solana-release/bin/fullnode.sh
+  chmod +x solana-release/bin/validator.sh
 
-  # Add a wrapper script for clear-fullnode-config.sh
+  # Add a wrapper script for clear-config.sh
   # TODO: Remove multinode/... from tarball
-  cat > solana-release/bin/clear-fullnode-config.sh <<'EOF'
+  cat > solana-release/bin/clear-config.sh <<'EOF'
 #!/usr/bin/env bash
 set -e
 cd "$(dirname "$0")"/..
 export USE_INSTALL=1
-exec multinode-demo/clear-fullnode-config.sh "$@"
+exec multinode-demo/clear-validator-config.sh "$@"
 EOF
-  chmod +x solana-release/bin/clear-fullnode-config.sh
+  chmod +x solana-release/bin/clear-config.sh
 
   tar jvcf solana-release-$TARGET.tar.bz2 solana-release/
   cp solana-release/bin/solana-install solana-install-$TARGET

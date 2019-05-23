@@ -25,7 +25,7 @@ CRATES=(
   runtime
   vote-signer
   core
-  fullnode
+  validator
   genesis
   gossip
   ledger-tool

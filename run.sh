@@ -12,7 +12,7 @@ cd "$(dirname "$0")/"
 PATH=$PWD/target/debug:$PATH
 
 ok=true
-for program in solana-{drone,genesis,keygen,fullnode}; do
+for program in solana-{drone,genesis,keygen,validator}; do
   $program -V || ok=false
 done
 $ok || {
@@ -80,13 +80,13 @@ args=(
 if [[ -n $blockstreamSocket ]]; then
   args+=(--blockstream "$blockstreamSocket")
 fi
-solana-fullnode "${args[@]}" &
-fullnode=$!
+solana-validator "${args[@]}" &
+validator=$!
 
 abort() {
   set +e
-  kill "$drone" "$fullnode"
+  kill "$drone" "$validator"
 }
 trap abort INT TERM EXIT
 
-wait "$fullnode"
+wait "$validator"

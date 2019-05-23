@@ -58,7 +58,7 @@ $ solana-install deploy http://example.com/path/to/solana-release.tar.bz2 update
 $ solana-install init --pubkey 92DMonmBYXwEMHJ99c9ceRSpAmk9v6i3RdvDdXaVcrfj  # <-- pubkey is obtained from whoever is deploying the updates
 $ export PATH=~/.local/share/solana-install/bin:$PATH
 $ solana-keygen ...  # <-- runs the latest solana-keygen
-$ solana-install run solana-fullnode ...  # <-- runs a fullnode, restarting it as necesary when an update is applied
+$ solana-install run solana-validator ...  # <-- runs a validator, restarting it as necesary when an update is applied
 ```
 
 ### On-chain Update Manifest

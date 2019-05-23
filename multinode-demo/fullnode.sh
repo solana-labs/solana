@@ -19,7 +19,7 @@ fullnode_usage() {
 Fullnode Usage:
 usage: $0 [--blockstream PATH] [--init-complete-file FILE] [--label LABEL] [--stake LAMPORTS] [--no-voting] [--rpc-port port] [rsync network path to bootstrap leader configuration] [cluster entry point]
 
-Start a full node or a replicator
+Start a validator or a replicator
 
   --blockstream PATH        - open blockstream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
@@ -186,6 +186,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --replicator ]]; then
       node_type=replicator
       shift
+    elif [[ $1 = --validator ]]; then
+      node_type=validator
+      shift
     elif [[ $1 = --poll-for-new-genesis-block ]]; then
       poll_for_new_genesis_block=1
       shift
@@ -323,7 +326,7 @@ else
   fullnode_storage_pubkey=$($solana_keygen pubkey "$fullnode_storage_keypair_path")
 
   cat <<EOF
-======================[ Fullnode configuration ]======================
+======================[ Validator configuration ]======================
 node pubkey: $fullnode_pubkey
 vote pubkey: $fullnode_vote_pubkey
 storage pubkey: $fullnode_storage_pubkey
@@ -340,9 +343,9 @@ EOF
   default_arg --accounts "$accounts_config_dir"
 
   if [[ -n $SOLANA_CUDA ]]; then
-    program=$solana_fullnode_cuda
+    program=$solana_validator_cuda
   else
-    program=$solana_fullnode
+    program=$solana_validator
   fi
 
 fi
