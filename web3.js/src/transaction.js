@@ -77,7 +77,7 @@ type SignaturePubkeyPair = {|
  *
  */
 type TransactionCtorFields = {|
-  recentBlockhash?: Blockhash,
+  recentBlockhash?: Blockhash | null,
   signatures?: Array<SignaturePubkeyPair>,
 |};
 
@@ -109,7 +109,7 @@ export class Transaction {
   /**
    * A recent transaction id.  Must be populated by the caller
    */
-  recentBlockhash: ?Blockhash;
+  recentBlockhash: Blockhash | null;
 
   /**
    * Construct an empty Transaction
@@ -122,7 +122,9 @@ export class Transaction {
    * Add one or more instructions to this Transaction
    */
   add(
-    ...items: Array<Transaction | TransactionInstructionCtorFields>
+    ...items: Array<
+      Transaction | TransactionInstruction | TransactionInstructionCtorFields,
+    >
   ): Transaction {
     if (items.length === 0) {
       throw new Error('No instructions');
@@ -131,6 +133,8 @@ export class Transaction {
     items.forEach(item => {
       if (item instanceof Transaction) {
         this.instructions = this.instructions.concat(item.instructions);
+      } else if (item instanceof TransactionInstruction) {
+        this.instructions.push(item);
       } else {
         this.instructions.push(new TransactionInstruction(item));
       }
