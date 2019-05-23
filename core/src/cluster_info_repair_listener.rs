@@ -958,8 +958,8 @@ mod tests {
 
         // 3) There should only be repairmen who are not responsible for repairing this slot
         // if we have more repairman than `num_blobs_in_slot * repair_redundancy`. In this case the
-        // first `num_blobs_in_slot * repair_redundancy` repairmen woudl send one blob, and the rest
-        // would noe be responsible for sending any repairs
+        // first `num_blobs_in_slot * repair_redundancy` repairmen would send one blob, and the rest
+        // would not be responsible for sending any repairs
         assert_eq!(
             none_results,
             num_repairmen.saturating_sub(num_blobs_in_slot * repair_redundancy)

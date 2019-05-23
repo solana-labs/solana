@@ -1,6 +1,7 @@
 extern crate solana;
 
 use crate::solana::blocktree::Blocktree;
+use hashbrown::HashSet;
 use solana::cluster::Cluster;
 use solana::cluster_tests;
 use solana::gossip_service::discover_cluster;
@@ -211,16 +212,48 @@ fn test_listener_startup() {
 
 #[test]
 fn test_repairman_catchup() {
+    run_repairman_catchup(5);
+}
+
+fn run_repairman_catchup(num_repairmen: u64) {
     let mut validator_config = ValidatorConfig::default();
     let num_ticks_per_second = 100;
     let num_ticks_per_slot = 40;
     let num_slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
-    let stakers_slot_offset = num_slots_per_epoch;
+    let num_root_buffer_slots = 10;
+    // Calculate the leader schedule num_root_buffer slots ahead. Otherwise, if stakers_slot_offset ==
+    // num_slots_per_epoch, and num_slots_per_epoch == MINIMUM_SLOT_LENGTH, then repairmen
+    // will stop sending repairs after the last slot in epoch 1 (0-indexed), because the root
+    // is at most in the first epoch.
+    //
+    // For example:
+    // Assume:
+    // 1) num_slots_per_epoch = 32
+    // 2) stakers_slot_offset = 32
+    // 3) MINIMUM_SLOT_LENGTH = 32
+    //
+    // Then the last slot in epoch 1 is slot 63. After completing slots 0 to 63, the root on the
+    // repairee is at most 31. Because, the stakers_slot_offset == 32, then the max confirmed epoch
+    // on the repairee is epoch 1.
+    // Thus the repairmen won't send any slots past epoch 1, slot 63 to this repairee until the repairee
+    // updates their root, and the repairee can't update their root until they get slot 64, so no progress
+    // is made. This is also not accounting for the fact that the repairee may not vote on every slot, so
+    // their root could actually be much less than 31. This is why we give a num_root_buffer_slots buffer.
+    let stakers_slot_offset = num_slots_per_epoch + num_root_buffer_slots;
 
     validator_config.rpc_config.enable_fullnode_exit = true;
+
+    let lamports_per_repairman = 1000;
+
+    // Make the repairee_stake small relative to the repairmen stake so that the repairee doesn't
+    // get included in the leader schedule, causing slots to get skipped while it's still trying
+    // to catch up
+    let repairee_stake = 3;
+    let cluster_lamports = 2 * lamports_per_repairman * num_repairmen + repairee_stake;
+    let node_stakes: Vec<_> = (0..num_repairmen).map(|_| lamports_per_repairman).collect();
     let mut cluster = LocalCluster::new(&ClusterConfig {
-        node_stakes: vec![999_990],
-        cluster_lamports: 1_000_000,
+        node_stakes,
+        cluster_lamports,
         validator_config: validator_config.clone(),
         ticks_per_slot: num_ticks_per_slot,
         slots_per_epoch: num_slots_per_epoch,
@@ -229,6 +262,7 @@ fn test_repairman_catchup() {
         ..ClusterConfig::default()
     });
 
+    let repairman_pubkeys: HashSet<_> = cluster.get_node_pubkeys().into_iter().collect();
     let epoch_schedule = EpochSchedule::new(num_slots_per_epoch, stakers_slot_offset, true);
     let num_warmup_epochs = (epoch_schedule.get_stakers_epoch(0) + 1) as f64;
 
@@ -243,11 +277,14 @@ fn test_repairman_catchup() {
     // Start up a new node, wait for catchup. Backwards repair won't be sufficient because the
     // leader is sending blobs past this validator's first two confirmed epochs. Thus, the repairman
     // protocol will have to kick in for this validator to repair.
-    cluster.add_validator(&validator_config, 3);
 
-    let all_ids = cluster.get_node_pubkeys();
-    let leader_id = cluster.entry_point_info.id;
-    let validator_id = all_ids.into_iter().find(|x| *x != leader_id).unwrap();
+    cluster.add_validator(&validator_config, repairee_stake);
+
+    let all_pubkeys = cluster.get_node_pubkeys();
+    let repairee_id = all_pubkeys
+        .into_iter()
+        .find(|x| !repairman_pubkeys.contains(x))
+        .unwrap();
 
     // Wait for repairman protocol to catch this validator up
     cluster_tests::sleep_n_epochs(
@@ -258,7 +295,7 @@ fn test_repairman_catchup() {
     );
 
     cluster.close_preserve_ledgers();
-    let validator_ledger_path = cluster.fullnode_infos[&validator_id].ledger_path.clone();
+    let validator_ledger_path = cluster.fullnode_infos[&repairee_id].ledger_path.clone();
 
     // Expect at least the the first two epochs to have been rooted after waiting 3 epochs.
     let num_expected_slots = num_slots_per_epoch * 2;

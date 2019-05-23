@@ -75,7 +75,7 @@ impl RepairService {
                 &blocktree,
                 &exit,
                 cluster_info.clone(),
-                epoch_schedule.clone(),
+                *epoch_schedule,
             )),
 
             _ => None,
