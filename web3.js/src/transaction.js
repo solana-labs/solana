@@ -153,14 +153,10 @@ export class Transaction {
 
     const keys = this.signatures.map(({publicKey}) => publicKey.toString());
     let numRequiredSignatures = 0;
+    let numCreditOnlySignedAccounts = 0;
+    let numCreditOnlyUnsignedAccounts = 0;
 
-    const programIds = [];
     this.instructions.forEach(instruction => {
-      const programId = instruction.programId.toString();
-      if (!programIds.includes(programId)) {
-        programIds.push(programId);
-      }
-
       instruction.keys.forEach(keySignerPair => {
         const keyStr = keySignerPair.pubkey.toString();
         if (!keys.includes(keyStr)) {
@@ -170,6 +166,12 @@ export class Transaction {
           keys.push(keyStr);
         }
       });
+
+      const programId = instruction.programId.toString();
+      if (!keys.includes(programId)) {
+        keys.push(programId);
+        numCreditOnlyUnsignedAccounts += 1;
+      }
     });
 
     if (numRequiredSignatures > this.signatures.length) {
@@ -183,9 +185,6 @@ export class Transaction {
     let keyCount = [];
     shortvec.encodeLength(keyCount, keys.length);
 
-    let programIdCount = [];
-    shortvec.encodeLength(programIdCount, programIds.length);
-
     const instructions = this.instructions.map(instruction => {
       const {data, programId} = instruction;
       let keyIndicesCount = [];
@@ -193,7 +192,7 @@ export class Transaction {
       let dataCount = [];
       shortvec.encodeLength(dataCount, instruction.data.length);
       return {
-        programIdIndex: programIds.indexOf(programId.toString()),
+        programIdIndex: keys.indexOf(programId.toString()),
         keyIndicesCount: Buffer.from(keyIndicesCount),
         keyIndices: Buffer.from(
           instruction.keys.map(keyObj =>
@@ -247,27 +246,22 @@ export class Transaction {
 
     const signDataLayout = BufferLayout.struct([
       BufferLayout.blob(1, 'numRequiredSignatures'),
+      BufferLayout.blob(1, 'numCreditOnlySignedAccounts'),
+      BufferLayout.blob(1, 'numCreditOnlyUnsignedAccounts'),
       BufferLayout.blob(keyCount.length, 'keyCount'),
       BufferLayout.seq(Layout.publicKey('key'), keys.length, 'keys'),
       Layout.publicKey('recentBlockhash'),
-
-      BufferLayout.blob(programIdCount.length, 'programIdCount'),
-      BufferLayout.seq(
-        Layout.publicKey('programId'),
-        programIds.length,
-        'programIds',
-      ),
     ]);
 
     const transaction = {
       numRequiredSignatures: Buffer.from([this.signatures.length]),
+      numCreditOnlySignedAccounts: Buffer.from([numCreditOnlySignedAccounts]),
+      numCreditOnlyUnsignedAccounts: Buffer.from([
+        numCreditOnlyUnsignedAccounts,
+      ]),
       keyCount: Buffer.from(keyCount),
       keys: keys.map(key => new PublicKey(key).toBuffer()),
       recentBlockhash: Buffer.from(bs58.decode(recentBlockhash)),
-      programIdCount: Buffer.from(programIdCount),
-      programIds: programIds.map(programId =>
-        new PublicKey(programId).toBuffer(),
-      ),
     };
 
     let signData = Buffer.alloc(2048);
@@ -438,6 +432,8 @@ export class Transaction {
     }
 
     byteArray = byteArray.slice(1); // Skip numRequiredSignatures byte
+    byteArray = byteArray.slice(1); // Skip numCreditOnlySignedAccounts byte
+    byteArray = byteArray.slice(1); // Skip numCreditOnlyUnsignedAccounts byte
 
     const accountCount = shortvec.decodeLength(byteArray);
     let accounts = [];
@@ -449,14 +445,6 @@ export class Transaction {
 
     const recentBlockhash = byteArray.slice(0, PUBKEY_LENGTH);
     byteArray = byteArray.slice(PUBKEY_LENGTH);
-
-    const programIdCount = shortvec.decodeLength(byteArray);
-    let programs = [];
-    for (let i = 0; i < programIdCount; i++) {
-      const program = byteArray.slice(0, PUBKEY_LENGTH);
-      byteArray = byteArray.slice(PUBKEY_LENGTH);
-      programs.push(program);
-    }
 
     const instructionCount = shortvec.decodeLength(byteArray);
     let instructions = [];
@@ -484,7 +472,7 @@ export class Transaction {
     for (let i = 0; i < instructionCount; i++) {
       let instructionData = {
         keys: [],
-        programId: new PublicKey(programs[instructions[i].programIndex]),
+        programId: new PublicKey(accounts[instructions[i].programIndex]),
         data: Buffer.from(instructions[i].data),
       };
       for (let j = 0; j < instructions[i].accountIndex.length; j++) {
