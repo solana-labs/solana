@@ -79,17 +79,20 @@ Starting with ‘n - 3’ forks, the proposed block would only be valid if no on
 the cluster voted.  If they did, the golden ticket would need to be in the ‘n +
 7’ slot and propose the n + 8 block.
 
-### Transaction Ingress Point
+### Slot Acquisition
 
 Because there is no deterministic ingress point, there is no place for
-validators to forward transactions.  This design will end up requiring a shared
-*mempool* of transactions between all the nodes, just like traditional PoW
-systems.
+validators to forward transactions. 
 
 The validators already transmit their votes through gossip, so the golden ticket
 block can pick up the validator votes and any additional transactions that have
 not been encoded into the ledger.  These transactions could come from rejected
 forks.
+
+But to receive transactions a head of time, the leader can transmit the golden
+ticket to the rest of the network prior to transmitting the entire block.  The
+network can pick the earliest known golden ticket based on PoH hash counts and
+start forwarding transactions to that leader.
 
 ## Only Random Leaders
 
