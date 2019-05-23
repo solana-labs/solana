@@ -24,6 +24,7 @@ use solana_sdk::hash::{extend_and_hash, Hash};
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::syscall::slot_hashes::{self, SlotHashes};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
@@ -198,13 +199,30 @@ impl Bank {
         *self.hash.read().unwrap() != Hash::default()
     }
 
-    pub fn freeze(&self) {
+    fn update_slot_hashes(&self) {
+        let mut account = self
+            .get_account(&slot_hashes::id())
+            .unwrap_or_else(|| slot_hashes::create_account(1));
+
+        let mut slot_hashes = SlotHashes::from(&account).unwrap();
+        slot_hashes.add(self.slot(), self.hash());
+        slot_hashes.to(&mut account).unwrap();
+
+        self.store(&slot_hashes::id(), &account);
+    }
+
+    fn set_hash(&self) {
         let mut hash = self.hash.write().unwrap();
 
         if *hash == Hash::default() {
             //  freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
         }
+    }
+
+    pub fn freeze(&self) {
+        self.set_hash();
+        self.update_slot_hashes();
     }
 
     pub fn epoch_schedule(&self) -> &EpochSchedule {
@@ -1467,17 +1485,22 @@ mod tests {
     fn test_bank_hash_internal_state_squash() {
         let collector_id = Pubkey::default();
         let bank0 = Arc::new(Bank::new(&create_genesis_block(10).0));
+        let hash0 = bank0.hash_internal_state();
+        // save hash0 because new_from_parent
+        // updates syscall entries
+
         let bank1 = Bank::new_from_parent(&bank0, &collector_id, 1);
 
         // no delta in bank1, hashes match
-        assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
+        assert_eq!(hash0, bank1.hash_internal_state());
 
         // remove parent
         bank1.squash();
         assert!(bank1.parents().is_empty());
 
-        // hash should still match
-        assert_eq!(bank0.hash(), bank1.hash());
+        // hash should still match,
+        //  can't use hash_internal_state() after a freeze()...
+        assert_eq!(hash0, bank1.hash());
     }
 
     /// Verifies that last ids and accounts are correctly referenced from parent
