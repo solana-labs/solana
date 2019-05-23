@@ -165,7 +165,7 @@ where
         // in tested environments.
         if !sustained {
             while shared_tx_active_thread_count.load(Ordering::Relaxed) > 0 {
-                sleep(Duration::from_millis(100));
+                sleep(Duration::from_millis(1));
             }
         }
 
