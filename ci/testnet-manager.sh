@@ -342,7 +342,8 @@ deploy() {
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
+          ${maybeDelete:+-D} \
+          --hashes-per-tick auto
     )
     ;;
   testnet-beta)
@@ -369,7 +370,8 @@ deploy() {
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
+          ${maybeDelete:+-D} \
+          --hashes-per-tick auto
     )
     ;;
   testnet)
@@ -413,7 +415,8 @@ deploy() {
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
+          ${maybeDelete:+-D} \
+          --hashes-per-tick auto
     )
     ;;
   testnet-demo)
@@ -433,7 +436,8 @@ deploy() {
           ${skipCreate:+-e} \
           ${maybeSkipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D}
+          ${maybeDelete:+-D} \
+          --hashes-per-tick auto
 
       if [[ -n $GCE_LOW_QUOTA_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
@@ -444,7 +448,8 @@ deploy() {
             ${skipCreate:+-e} \
             ${skipStart:+-s} \
             ${maybeStop:+-S} \
-            ${maybeDelete:+-D}
+            ${maybeDelete:+-D} \
+            --hashes-per-tick auto
       fi
     )
     ;;
