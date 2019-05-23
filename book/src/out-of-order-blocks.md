@@ -19,17 +19,19 @@ censor — is not addressed in this design.
 
 ## Random Leaders
 
-Leaders can generate a *golden ticket* to propose a block.
+Leaders can generate a *golden ticket* to propose a subsequent block.
 
 * *N* number of bits of a leader's vote signature that must match a PoH hash.
 This hash can be in between ticks.
 
 The leader must find the golden ticket in the empty PoH entries leading up to
 the proposed block.  Once the golden ticket is found, the leader can propose the
-next slot.  The leader signs the BlockHash of the block that the entries are
-generated from with a Vote.  Since each validator is resetting its PoH every
-time it votes, each validator can search for a golden ticket from that starting
-point.
+block for the next slot.
+
+To find the golden ticket, the leader signs the BlockHash of the block that the
+entries are generated from with a Vote.  Since each validator is resetting its
+PoH every time it votes, each validator can search for a golden ticket from that
+starting point, and look for a PoH hash matching *N* bits of the Vote signature.
 
 The same proposed [fork selection]/fork-selection.md) rules apply.  Once a block
 is voted on, the validator would switch its PoH to reset on this new block, and
