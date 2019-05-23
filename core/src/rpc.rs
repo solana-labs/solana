@@ -477,7 +477,7 @@ impl RpcSol for RpcSolImpl {
 mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use crate::genesis_utils::create_genesis_block;
+    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use jsonrpc_core::{MetaIoHandler, Response};
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::instruction::InstructionError;
@@ -833,11 +833,15 @@ mod tests {
     }
 
     fn new_bank_forks() -> (Arc<RwLock<BankForks>>, Keypair) {
-        let (genesis_block, alice) = create_genesis_block(10_000);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(10_000);
         let bank = Bank::new(&genesis_block);
         (
             Arc::new(RwLock::new(BankForks::new(bank.slot(), bank))),
-            alice,
+            mint_keypair,
         )
     }
 

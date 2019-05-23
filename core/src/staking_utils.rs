@@ -113,7 +113,8 @@ where
 pub(crate) mod tests {
     use super::*;
     use crate::genesis_utils::{
-        create_genesis_block, create_genesis_block_with_leader, BOOTSTRAP_LEADER_LAMPORTS,
+        create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
+        BOOTSTRAP_LEADER_LAMPORTS,
     };
     use hashbrown::HashSet;
     use solana_sdk::instruction::Instruction;
@@ -131,8 +132,11 @@ pub(crate) mod tests {
 
     #[test]
     fn test_vote_account_stakes_at_epoch() {
-        let (genesis_block, _mint_keypair, voting_keypair) =
-            create_genesis_block_with_leader(1, &Pubkey::new_rand(), BOOTSTRAP_LEADER_LAMPORTS);
+        let GenesisBlockInfo {
+            genesis_block,
+            voting_keypair,
+            ..
+        } = create_genesis_block_with_leader(1, &Pubkey::new_rand(), BOOTSTRAP_LEADER_LAMPORTS);
 
         let bank = Bank::new(&genesis_block);
 
@@ -206,7 +210,11 @@ pub(crate) mod tests {
         let stake = 42;
         let validator = Keypair::new();
 
-        let (genesis_block, mint_keypair) = create_genesis_block(10_000);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(10_000);
 
         let bank = Bank::new(&genesis_block);
         let vote_id = Pubkey::new_rand();

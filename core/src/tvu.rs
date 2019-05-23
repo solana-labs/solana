@@ -183,7 +183,7 @@ pub mod tests {
     use crate::banking_stage::create_test_recorder;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::genesis_utils::create_genesis_block;
+    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use solana_runtime::bank::Bank;
     use std::sync::atomic::Ordering;
@@ -196,7 +196,7 @@ pub mod tests {
         let target1 = Node::new_localhost_with_pubkey(&target1_keypair.pubkey());
 
         let starting_balance = 10_000;
-        let (genesis_block, _mint_keypair) = create_genesis_block(starting_balance);
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(starting_balance);
 
         let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
 

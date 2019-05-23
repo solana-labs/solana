@@ -53,7 +53,7 @@ impl<'a, 'b, I: Borrow<Transaction>> Drop for LockedAccountsResults<'a, 'b, I> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_utils::create_genesis_block_with_leader;
+    use crate::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction;
@@ -108,8 +108,11 @@ mod tests {
 
     fn setup() -> (Bank, Vec<Transaction>) {
         let dummy_leader_id = Pubkey::new_rand();
-        let (genesis_block, mint_keypair, _) =
-            create_genesis_block_with_leader(500, &dummy_leader_id, 100);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block_with_leader(500, &dummy_leader_id, 100);
         let bank = Bank::new(&genesis_block);
 
         let pubkey = Pubkey::new_rand();

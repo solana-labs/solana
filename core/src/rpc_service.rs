@@ -88,14 +88,18 @@ impl Service for JsonRpcService {
 mod tests {
     use super::*;
     use crate::contact_info::ContactInfo;
-    use crate::genesis_utils::create_genesis_block;
+    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use solana_runtime::bank::Bank;
     use solana_sdk::signature::KeypairUtil;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     #[test]
     fn test_rpc_new() {
-        let (genesis_block, alice) = create_genesis_block(10_000);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(10_000);
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Bank::new(&genesis_block);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
@@ -123,7 +127,7 @@ mod tests {
                 .request_processor
                 .read()
                 .unwrap()
-                .get_balance(&alice.pubkey())
+                .get_balance(&mint_keypair.pubkey())
         );
         exit.store(true, Ordering::Relaxed);
         rpc_service.join().unwrap();

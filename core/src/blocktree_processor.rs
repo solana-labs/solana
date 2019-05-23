@@ -286,7 +286,9 @@ pub mod tests {
     use crate::blocktree::create_new_tmp_ledger;
     use crate::blocktree::tests::entries_to_blobs;
     use crate::entry::{create_ticks, next_entry, next_entry_mut, Entry};
-    use crate::genesis_utils::{create_genesis_block, create_genesis_block_with_leader};
+    use crate::genesis_utils::{
+        create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
+    };
     use solana_runtime::epoch_schedule::EpochSchedule;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::InstructionError;
@@ -315,7 +317,7 @@ pub mod tests {
     fn test_process_blocktree_with_incomplete_slot() {
         solana_logger::setup();
 
-        let (genesis_block, _mint_keypair) = create_genesis_block(10_000);
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
         let ticks_per_slot = genesis_block.ticks_per_slot;
 
         /*
@@ -372,7 +374,7 @@ pub mod tests {
     fn test_process_blocktree_with_two_forks_and_squash() {
         solana_logger::setup();
 
-        let (genesis_block, _mint_keypair) = create_genesis_block(10_000);
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
         let ticks_per_slot = genesis_block.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
@@ -446,7 +448,7 @@ pub mod tests {
     fn test_process_blocktree_with_two_forks() {
         solana_logger::setup();
 
-        let (genesis_block, _mint_keypair) = create_genesis_block(10_000);
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
         let ticks_per_slot = genesis_block.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
@@ -537,7 +539,7 @@ pub mod tests {
     fn test_process_blocktree_epoch_boundary_root() {
         solana_logger::setup();
 
-        let (genesis_block, _mint_keypair) = create_genesis_block(10_000);
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
         let ticks_per_slot = genesis_block.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
@@ -627,7 +629,11 @@ pub mod tests {
     fn test_process_empty_entry_is_registered() {
         solana_logger::setup();
 
-        let (genesis_block, mint_keypair) = create_genesis_block(2);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(2);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
         let slot_entries = create_ticks(genesis_block.ticks_per_slot - 1, genesis_block.hash());
@@ -654,8 +660,11 @@ pub mod tests {
         solana_logger::setup();
         let leader_pubkey = Pubkey::new_rand();
         let mint = 100;
-        let (genesis_block, mint_keypair, _voting_keypair) =
-            create_genesis_block_with_leader(mint, &leader_pubkey, 50);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block_with_leader(mint, &leader_pubkey, 50);
         let (ledger_path, mut last_entry_hash) = create_new_tmp_ledger!(&genesis_block);
         debug!("ledger_path: {:?}", ledger_path);
 
@@ -722,7 +731,9 @@ pub mod tests {
 
     #[test]
     fn test_process_ledger_with_one_tick_per_slot() {
-        let (mut genesis_block, _mint_keypair) = create_genesis_block(123);
+        let GenesisBlockInfo {
+            mut genesis_block, ..
+        } = create_genesis_block(123);
         genesis_block.ticks_per_slot = 1;
         let (ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
@@ -744,7 +755,7 @@ pub mod tests {
 
     #[test]
     fn test_process_entries_tick() {
-        let (genesis_block, _mint_keypair) = create_genesis_block(1000);
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(1000);
         let bank = Bank::new(&genesis_block);
 
         // ensure bank can process a tick
@@ -756,7 +767,11 @@ pub mod tests {
 
     #[test]
     fn test_process_entries_2_entries_collision() {
-        let (genesis_block, mint_keypair) = create_genesis_block(1000);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -786,7 +801,11 @@ pub mod tests {
 
     #[test]
     fn test_process_entries_2_txes_collision() {
-        let (genesis_block, mint_keypair) = create_genesis_block(1000);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -839,7 +858,11 @@ pub mod tests {
 
     #[test]
     fn test_process_entries_2_txes_collision_and_error() {
-        let (genesis_block, mint_keypair) = create_genesis_block(1000);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -917,7 +940,11 @@ pub mod tests {
 
     #[test]
     fn test_process_entries_2_entries_par() {
-        let (genesis_block, mint_keypair) = create_genesis_block(1000);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -964,7 +991,11 @@ pub mod tests {
 
     #[test]
     fn test_process_entries_2_entries_tick() {
-        let (genesis_block, mint_keypair) = create_genesis_block(1000);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(1000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -1028,7 +1059,11 @@ pub mod tests {
     #[test]
     fn test_update_transaction_statuses() {
         // Make sure instruction errors still update the signature cache
-        let (genesis_block, mint_keypair) = create_genesis_block(11_000);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(11_000);
         let bank = Bank::new(&genesis_block);
         let pubkey = Pubkey::new_rand();
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
@@ -1066,7 +1101,11 @@ pub mod tests {
 
     #[test]
     fn test_update_transaction_statuses_fail() {
-        let (genesis_block, mint_keypair) = create_genesis_block(11_000);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(11_000);
         let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -1107,7 +1146,11 @@ pub mod tests {
         // this test throws lots of rayon threads at process_entries()
         //  finds bugs in very low-layer stuff
         solana_logger::setup();
-        let (genesis_block, mint_keypair) = create_genesis_block(1_000_000_000);
+        let GenesisBlockInfo {
+            genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block(1_000_000_000);
         let mut bank = Bank::new(&genesis_block);
 
         const NUM_TRANSFERS: usize = 100;

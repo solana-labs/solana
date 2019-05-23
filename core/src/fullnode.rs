@@ -345,14 +345,17 @@ impl Service for Fullnode {
 
 pub fn new_fullnode_for_tests() -> (Fullnode, ContactInfo, Keypair, String) {
     use crate::blocktree::create_new_tmp_ledger;
-    use crate::genesis_utils::create_genesis_block_with_leader;
+    use crate::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
 
     let node_keypair = Arc::new(Keypair::new());
     let node = Node::new_localhost_with_pubkey(&node_keypair.pubkey());
     let contact_info = node.info.clone();
 
-    let (mut genesis_block, mint_keypair, _voting_keypair) =
-        create_genesis_block_with_leader(10_000, &contact_info.id, 42);
+    let GenesisBlockInfo {
+        mut genesis_block,
+        mint_keypair,
+        ..
+    } = create_genesis_block_with_leader(10_000, &contact_info.id, 42);
     genesis_block
         .native_instruction_processors
         .push(solana_budget_program!());
@@ -390,7 +393,7 @@ mod tests {
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let genesis_block =
-            create_genesis_block_with_leader(10_000, &leader_keypair.pubkey(), 1000).0;
+            create_genesis_block_with_leader(10_000, &leader_keypair.pubkey(), 1000).genesis_block;
         let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
 
         let voting_keypair = Arc::new(Keypair::new());
@@ -419,8 +422,9 @@ mod tests {
             .map(|_| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
-                let (genesis_block, _mint_keypair, _voting_keypair) =
-                    create_genesis_block_with_leader(10_000, &leader_keypair.pubkey(), 1000);
+                let genesis_block =
+                    create_genesis_block_with_leader(10_000, &leader_keypair.pubkey(), 1000)
+                        .genesis_block;
                 let (validator_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_block);
                 ledger_paths.push(validator_ledger_path.clone());
                 let voting_keypair = Arc::new(Keypair::new());

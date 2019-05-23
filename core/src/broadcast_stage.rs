@@ -298,7 +298,7 @@ mod test {
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
-    use crate::genesis_utils::create_genesis_block;
+    use crate::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use crate::service::Service;
     use solana_runtime::bank::Bank;
     use solana_sdk::hash::Hash;
@@ -337,7 +337,7 @@ mod test {
 
         let exit_sender = Arc::new(AtomicBool::new(false));
 
-        let (genesis_block, _) = create_genesis_block(10_000);
+        let GenesisBlockInfo { genesis_block, .. } = create_genesis_block(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
 
         // Start up the broadcast stage

@@ -296,7 +296,7 @@ mod test {
         let me_id = Pubkey::new_rand();
         let leader_id = Pubkey::new_rand();
         let bank = Arc::new(Bank::new(
-            &create_genesis_block_with_leader(100, &leader_id, 10).0,
+            &create_genesis_block_with_leader(100, &leader_id, 10).genesis_block,
         ));
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
@@ -358,7 +358,7 @@ mod test {
             .expect("Expected to be able to open database ledger");
         let blocktree = Arc::new(blocktree);
 
-        let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
+        let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).genesis_block);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let repair_strategy = RepairStrategy::RepairAll {
             bank_forks: bank_forks.clone(),
@@ -445,7 +445,7 @@ mod test {
             .expect("Expected to be able to open database ledger");
 
         let blocktree = Arc::new(blocktree);
-        let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).0);
+        let bank = Bank::new(&create_genesis_block_with_leader(100, &me_id, 10).genesis_block);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(0, bank)));
         let epoch_schedule = *bank_forks.read().unwrap().working_bank().epoch_schedule();
         let repair_strategy = RepairStrategy::RepairAll {
