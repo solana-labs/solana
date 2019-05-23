@@ -51,9 +51,10 @@ function confirmTransaction(signature) {
   console.log('Confirming transaction:', signature);
   return connection.getSignatureStatus(signature).then(confirmation => {
     if (confirmation && 'Ok' in confirmation) {
+      console.log('Transaction confirmed');
+    } else {
       throw new Error(`Transaction was not confirmed (${confirmation})`);
     }
-    console.log('Transaction confirmed');
   });
 }
 
