@@ -227,9 +227,9 @@ impl MessageProcessor {
             let executable_accounts = &mut loaders[executable_index];
             let mut program_accounts = get_subset_unchecked_mut(accounts, &instruction.accounts)
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
-            // TODO: previous expression breaks if an executable account is also included as a
-            // regular account for an instruction, because the executable account is not passed in
-            // as part of the accounts slice
+            // TODO: `get_subset_unchecked_mut` panics on an index out of bounds if an executable
+            // account is also included as a regular account for an instruction, because the
+            // executable account is not passed in as part of the accounts slice
             self.execute_instruction(
                 message,
                 instruction,
