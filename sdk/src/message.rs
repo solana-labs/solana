@@ -30,35 +30,88 @@ fn compile_instructions(ixs: Vec<Instruction>, keys: &[Pubkey]) -> Vec<CompiledI
         .collect()
 }
 
-/// Return pubkeys referenced by all instructions, with the ones needing signatures first.
-/// If the payer key is provided, it is always placed first in the list of signed keys.
-/// No duplicates and order is preserved.
-fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> (Vec<Pubkey>, Vec<Pubkey>) {
+/// A helper struct to collect pubkeys referenced by a set of instructions and credit-only counts
+#[derive(Debug, PartialEq, Eq)]
+struct InstructionKeys {
+    pub signed_keys: Vec<Pubkey>,
+    pub unsigned_keys: Vec<Pubkey>,
+    pub num_credit_only_signed_accounts: u8,
+    pub num_credit_only_unsigned_accounts: u8,
+}
+
+impl InstructionKeys {
+    fn new(
+        signed_keys: Vec<Pubkey>,
+        unsigned_keys: Vec<Pubkey>,
+        num_credit_only_signed_accounts: u8,
+        num_credit_only_unsigned_accounts: u8,
+    ) -> Self {
+        Self {
+            signed_keys,
+            unsigned_keys,
+            num_credit_only_signed_accounts,
+            num_credit_only_unsigned_accounts,
+        }
+    }
+}
+
+/// Return pubkeys referenced by all instructions, with the ones needing signatures first. If the
+/// payer key is provided, it is always placed first in the list of signed keys. Credit-only signed
+/// accounts are placed last in the set of signed accounts. Credit-only unsigned accounts,
+/// including program ids, are placed last in the set. No duplicates and order is preserved.
+fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> InstructionKeys {
+    let programs: Vec<_> = get_program_ids(instructions)
+        .iter()
+        .map(|program_id| AccountMeta {
+            pubkey: *program_id,
+            is_signer: false,
+            is_debitable: false,
+        })
+        .collect();
     let mut keys_and_signed: Vec<_> = instructions
         .iter()
         .flat_map(|ix| ix.accounts.iter())
         .collect();
-    keys_and_signed.sort_by(|x, y| y.is_signer.cmp(&x.is_signer));
+    keys_and_signed.extend(&programs);
+    keys_and_signed.sort_by(|x, y| {
+        y.is_signer
+            .cmp(&x.is_signer)
+            .then(y.is_debitable.cmp(&x.is_debitable))
+    });
 
     let payer_account_meta;
     if let Some(payer) = payer {
         payer_account_meta = AccountMeta {
             pubkey: *payer,
             is_signer: true,
+            is_debitable: true,
         };
         keys_and_signed.insert(0, &payer_account_meta);
     }
 
     let mut signed_keys = vec![];
     let mut unsigned_keys = vec![];
+    let mut num_credit_only_signed_accounts = 0;
+    let mut num_credit_only_unsigned_accounts = 0;
     for account_meta in keys_and_signed.into_iter().unique_by(|x| x.pubkey) {
         if account_meta.is_signer {
             signed_keys.push(account_meta.pubkey);
+            if !account_meta.is_debitable {
+                num_credit_only_signed_accounts += 1;
+            }
         } else {
             unsigned_keys.push(account_meta.pubkey);
+            if !account_meta.is_debitable {
+                num_credit_only_unsigned_accounts += 1;
+            }
         }
     }
-    (signed_keys, unsigned_keys)
+    InstructionKeys::new(
+        signed_keys,
+        unsigned_keys,
+        num_credit_only_signed_accounts,
+        num_credit_only_unsigned_accounts,
+    )
 }
 
 /// Return program ids referenced by all instructions.  No duplicates and order is preserved.
@@ -130,13 +183,14 @@ impl Message {
     }
 
     pub fn new_with_payer(instructions: Vec<Instruction>, payer: Option<&Pubkey>) -> Self {
-        let program_ids = get_program_ids(&instructions);
-        let (mut signed_keys, unsigned_keys) = get_keys(&instructions, payer);
+        let InstructionKeys {
+            mut signed_keys,
+            unsigned_keys,
+            num_credit_only_signed_accounts,
+            num_credit_only_unsigned_accounts,
+        } = get_keys(&instructions, payer);
         let num_required_signatures = signed_keys.len() as u8;
-        let num_credit_only_signed_accounts = 0;
-        let num_credit_only_unsigned_accounts = program_ids.len() as u8;
         signed_keys.extend(&unsigned_keys);
-        signed_keys.extend(&program_ids);
         let instructions = compile_instructions(instructions, &signed_keys);
         Self::new_with_compiled_instructions(
             num_required_signatures,
@@ -148,13 +202,39 @@ impl Message {
         )
     }
 
-    pub fn program_ids(&self) -> &[Pubkey] {
-        &self.account_keys
-            [self.account_keys.len() - self.header.num_credit_only_unsigned_accounts as usize..]
+    pub fn program_ids(&self) -> Vec<&Pubkey> {
+        self.instructions
+            .iter()
+            .map(|ix| &self.account_keys[ix.program_ids_index as usize])
+            .collect()
     }
 
-    pub fn program_index_in_program_ids(&self, index: u8) -> u8 {
-        index - (self.account_keys.len() as u8 - self.header.num_credit_only_unsigned_accounts)
+    pub fn program_position(&self, index: usize) -> Option<usize> {
+        let program_ids = self.program_ids();
+        program_ids
+            .iter()
+            .position(|&&pubkey| pubkey == self.account_keys[index])
+    }
+
+    fn is_credit_debit(&self, i: usize) -> bool {
+        i < (self.header.num_required_signatures - self.header.num_credit_only_signed_accounts)
+            as usize
+            || (i >= self.header.num_required_signatures as usize
+                && i < self.account_keys.len()
+                    - self.header.num_credit_only_unsigned_accounts as usize)
+    }
+
+    pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
+        let mut credit_debit_keys = vec![];
+        let mut credit_only_keys = vec![];
+        for (i, key) in self.account_keys.iter().enumerate() {
+            if self.is_credit_debit(i) {
+                credit_debit_keys.push(key);
+            } else {
+                credit_only_keys.push(key);
+            }
+        }
+        (credit_debit_keys, credit_only_keys)
     }
 }
 
@@ -209,7 +289,7 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(keys, (vec![id0], vec![]));
+        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
 
     #[test]
@@ -224,7 +304,7 @@ mod tests {
             )],
             Some(&id0),
         );
-        assert_eq!(keys, (vec![id0], vec![]));
+        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
 
     #[test]
@@ -239,7 +319,7 @@ mod tests {
             )],
             Some(&id0),
         );
-        assert_eq!(keys, (vec![id0], vec![]));
+        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
 
     #[test]
@@ -253,7 +333,7 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(keys, (vec![id0], vec![]));
+        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
 
     #[test]
@@ -268,7 +348,7 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(keys, (vec![], vec![id0, id1]));
+        assert_eq!(keys, InstructionKeys::new(vec![], vec![id0, id1], 0, 0));
     }
 
     #[test]
@@ -284,7 +364,7 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(keys, (vec![id0], vec![id1]));
+        assert_eq!(keys, InstructionKeys::new(vec![id0], vec![id1], 0, 0));
     }
 
     #[test]
@@ -299,7 +379,7 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(keys, (vec![id1], vec![id0]));
+        assert_eq!(keys, InstructionKeys::new(vec![id1], vec![id0], 0, 0));
     }
 
     #[test]
@@ -314,6 +394,36 @@ mod tests {
         let ix = Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]);
         let message = Message::new(vec![ix]);
         assert_eq!(message.header.num_required_signatures, 1);
+    }
+
+    #[test]
+    fn test_message_credit_only_keys_last() {
+        let program_id = Pubkey::default();
+        let id0 = Pubkey::default(); // Identical key/program_id should be de-duped
+        let id1 = Pubkey::new_rand();
+        let id2 = Pubkey::new_rand();
+        let id3 = Pubkey::new_rand();
+        let keys = get_keys(
+            &[
+                Instruction::new(
+                    program_id,
+                    &0,
+                    vec![AccountMeta::new_credit_only(id0, false)],
+                ),
+                Instruction::new(
+                    program_id,
+                    &0,
+                    vec![AccountMeta::new_credit_only(id1, true)],
+                ),
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id2, false)]),
+                Instruction::new(program_id, &0, vec![AccountMeta::new(id3, true)]),
+            ],
+            None,
+        );
+        assert_eq!(
+            keys,
+            InstructionKeys::new(vec![id3, id1], vec![id2, id0], 1, 1)
+        );
     }
 
     #[test]
@@ -365,4 +475,97 @@ mod tests {
         assert_eq!(message.header.num_required_signatures, 2);
     }
 
+    #[test]
+    fn test_message_program_last() {
+        let program_id = Pubkey::default();
+        let id0 = Pubkey::new_rand();
+        let id1 = Pubkey::new_rand();
+        let keys = get_keys(
+            &[
+                Instruction::new(
+                    program_id,
+                    &0,
+                    vec![AccountMeta::new_credit_only(id0, false)],
+                ),
+                Instruction::new(
+                    program_id,
+                    &0,
+                    vec![AccountMeta::new_credit_only(id1, true)],
+                ),
+            ],
+            None,
+        );
+        assert_eq!(
+            keys,
+            InstructionKeys::new(vec![id1], vec![id0, program_id], 1, 2)
+        );
+    }
+
+    #[test]
+    fn test_program_position() {
+        let program_id0 = Pubkey::default();
+        let program_id1 = Pubkey::new_rand();
+        let id = Pubkey::new_rand();
+        let message = Message::new(vec![
+            Instruction::new(program_id0, &0, vec![AccountMeta::new(id, false)]),
+            Instruction::new(program_id1, &0, vec![AccountMeta::new(id, true)]),
+        ]);
+        assert_eq!(message.program_position(0), None);
+        assert_eq!(message.program_position(1), Some(0));
+        assert_eq!(message.program_position(2), Some(1));
+    }
+
+    #[test]
+    fn test_is_credit_debit() {
+        let key0 = Pubkey::new_rand();
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
+        let key3 = Pubkey::new_rand();
+        let key4 = Pubkey::new_rand();
+        let key5 = Pubkey::new_rand();
+
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 3,
+                num_credit_only_signed_accounts: 2,
+                num_credit_only_unsigned_accounts: 1,
+            },
+            account_keys: vec![key0, key1, key2, key3, key4, key5],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+        assert_eq!(message.is_credit_debit(0), true);
+        assert_eq!(message.is_credit_debit(1), false);
+        assert_eq!(message.is_credit_debit(2), false);
+        assert_eq!(message.is_credit_debit(3), true);
+        assert_eq!(message.is_credit_debit(4), true);
+        assert_eq!(message.is_credit_debit(5), false);
+    }
+
+    #[test]
+    fn test_get_account_keys_by_lock_type() {
+        let program_id = Pubkey::default();
+        let id0 = Pubkey::new_rand();
+        let id1 = Pubkey::new_rand();
+        let id2 = Pubkey::new_rand();
+        let id3 = Pubkey::new_rand();
+        let message = Message::new(vec![
+            Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta::new(id1, true)]),
+            Instruction::new(
+                program_id,
+                &0,
+                vec![AccountMeta::new_credit_only(id2, false)],
+            ),
+            Instruction::new(
+                program_id,
+                &0,
+                vec![AccountMeta::new_credit_only(id3, true)],
+            ),
+        ]);
+        assert_eq!(
+            message.get_account_keys_by_lock_type(),
+            (vec![&id1, &id0], vec![&id3, &id2, &program_id])
+        );
+    }
 }

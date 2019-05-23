@@ -221,10 +221,15 @@ impl MessageProcessor {
         tick_height: u64,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
-            let executable_accounts = &mut loaders
-                [message.program_index_in_program_ids(instruction.program_ids_index) as usize];
+            let executable_index = message
+                .program_position(instruction.program_ids_index as usize)
+                .ok_or(TransactionError::InvalidAccountIndex)?;
+            let executable_accounts = &mut loaders[executable_index];
             let mut program_accounts = get_subset_unchecked_mut(accounts, &instruction.accounts)
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+            // TODO: `get_subset_unchecked_mut` panics on an index out of bounds if an executable
+            // account is also included as a regular account for an instruction, because the
+            // executable account is not passed in as part of the accounts slice
             self.execute_instruction(
                 message,
                 instruction,
