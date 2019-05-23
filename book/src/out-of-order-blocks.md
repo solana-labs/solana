@@ -122,4 +122,4 @@ If it is possible to build hardware that is much faster than the expected time
 to find the golden ticket, then an attacker could grind the Block Hash value to
 ensure that they are the leader 50% of the time.  Since the network is still
 relying on staked lamports as the Sybil resistant mechanism, we could increase
-the difficulty for consequtive stakes.
+the difficulty for consecutive stakes.
