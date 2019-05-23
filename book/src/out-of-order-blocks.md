@@ -96,15 +96,12 @@ schedule completely randomly.
 
 1. Leader 2 finds the golden ticket in slot 1
 2. Leader 2 proposes block for slot 2
-3. Block contains up to two PoH paths:
-    * The golden ticket PoH.
-    * The PoH path to a previous block.
 
-The golden ticket PoH path must be at most 1 slot longer that the PoH path to
-the block, and this should only occur if the block is attached to the previous
-block.  The reason why the two paths could be different is because Leader 1 may
-complete the block for slot 1 and Leader 2 may decide to attach block 2 to block
-1.
+PoH path with the golden ticket should attack to the proposed block, except if
+the block attaches to the previous block directly. In this scenario, the PoH
+path for the golden ticket was generated concurrently with the previous leaders
+block, and the proposed block is directly attached to the previous block as
+well.
 
 ### Ahead of time Execution
 
@@ -123,3 +120,9 @@ to find the golden ticket, then an attacker could grind the Block Hash value to
 ensure that they are the leader 50% of the time.  Since the network is still
 relying on staked lamports as the Sybil resistant mechanism, we could increase
 the difficulty for consecutive stakes.
+
+## Ledger Interpretation
+
+The PoH with the golden ticket needs to be included in the ledger.  In the case
+where the blocks directly attach, it should be included as an entry in the
+block.
