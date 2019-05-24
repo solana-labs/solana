@@ -9,8 +9,10 @@ use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
+use std::alloc::{self, Layout};
 use std::any::Any;
 use std::ffi::CStr;
+use std::fmt;
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind};
 use std::mem;
@@ -21,7 +23,7 @@ pub fn helper_abort_verify(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any+'static>>,
+    _context: &mut Option<Box<Any + 'static>>,
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
@@ -36,7 +38,7 @@ pub fn helper_abort(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any+'static>>,
+    _context: &mut Option<Box<Any + 'static>>,
 ) -> u64 {
     // Never called because its verify function always returns an error
     0
@@ -48,7 +50,7 @@ pub fn helper_sol_panic_verify(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any+'static>>,
+    _context: &mut Option<Box<Any + 'static>>,
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
@@ -60,7 +62,7 @@ pub fn helper_sol_panic(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any+'static>>,
+    _context: &mut Option<Box<Any + 'static>>,
 ) -> u64 {
     // Never called because its verify function always returns an error
     0
@@ -72,7 +74,7 @@ pub fn helper_sol_log_verify(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any+'static>>,
+    _context: &mut Option<Box<Any + 'static>>,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
@@ -101,7 +103,7 @@ pub fn helper_sol_log(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    _context: &mut Option<Box<Any+'static>>,
+    _context: &mut Option<Box<Any + 'static>>,
 ) -> u64 {
     let c_buf: *const c_char = addr as *const c_char;
     let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
@@ -117,7 +119,7 @@ pub fn helper_sol_log_u64(
     arg3: u64,
     arg4: u64,
     arg5: u64,
-    _context: &mut Option<Box<Any+'static>>,
+    _context: &mut Option<Box<Any + 'static>>,
 ) -> u64 {
     info!(
         "sol_log_u64: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
@@ -126,89 +128,95 @@ pub fn helper_sol_log_u64(
     0
 }
 
-#[derive(Debug)]
-struct AllocInfo {
-    allocated: u64,
-    max: u64,
+/// Loosely on the unstable std::alloc::Alloc trait
+trait Alloc {
+    fn alloc(&mut self, layout: Layout) -> Result<*mut u8, AllocErr>;
+    fn dealloc(&mut self, ptr: *mut u8, layout: Layout);
 }
 
-use std::alloc::{self, Layout};
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct AllocErr;
+
+impl fmt::Display for AllocErr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("memory allocation failed")
+    }
+}
+
+#[derive(Debug)]
+struct BPFAllocator {
+    heap: Vec<u8>,
+    pos: usize,
+}
+
+impl Alloc for BPFAllocator {
+    fn alloc(&mut self, layout: Layout) -> Result<*mut u8, AllocErr> {
+        if self.pos + layout.size() < self.heap.len() {
+            let ptr = unsafe { self.heap.as_mut_ptr().offset(self.pos as isize) };
+            self.pos += layout.size();
+            Ok(ptr)
+        } else {
+            println!("Error: Alloc {:?} bytes failed", layout.size());
+            Err(AllocErr)
+        }
+    }
+
+    fn dealloc(&mut self, _ptr: *mut u8, _layout: Layout) {
+        // Using bump allocator, free not supported
+    }
+}
+
+struct AllocFreeContext {
+    allocator: Alloc
+}
+
 pub fn helper_sol_alloc_free(
     size: u64,
     free_ptr: u64,
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    context: &mut Option<Box<Any+'static>>,
+    context: &mut Option<Box<Any + 'static>>,
 ) -> u64 {
-    println!("context: {:?}", context);
-    if let Some(context2) = context {
-        println!("context2: {:?}", context2);
+    match context {
+        Some(context) => {
+            match context.downcast_mut::<BPFAllocator>() {
+                Some(info) => {
+                    if free_ptr != 0 {
+                        println!("Free {:?} bytes at {:?}", size, free_ptr);
+                        let layout =
+                        Layout::from_size_align(size as usize, mem::align_of::<u8>()).expect("Error: Bad layout");
+                        info.dealloc(free_ptr as *mut u8, layout);
+                        0
 
-        let x: Option<&mut AllocInfo> = context2.downcast_mut();
-        match x {
-            Some(info) => {
-                info.allocated += 1;
-                println!("info: {:?}", info);
-            }
-            None => {
-                println!("Error, not able to downcast: {:?}", context2);
+                    // unsafe {
+                    //     alloc::dealloc(free_ptr as *mut u8, layout);
+                    // }
+                    // 0
+                    } else {
+                            println!("Alloc {} bytes", size);
+                            let layout =
+                                Layout::from_size_align(size as usize, mem::align_of::<u8>()).expect("Error: Bad layout");
+                            match info.alloc(layout) {
+                                Ok(ptr) => ptr as u64,
+                                Err(_) => 0,
+                            }
+                            
+                            // alloc::alloc(layout) as u64
+                    }
+                }
+                None => {
+                    println!("Error: Not able to downcast: {:?}", context);
+                    panic!();
+                }
             }
         }
-    }
-
-    // match context_any.downcast_mut::<Box<AllocInfo>>() {
-    //     Some(info) => {
-    //         info.allocated += 1;
-    //         println!("info: {:?}", info);
-    //     }
-    //     None => {
-    //         println!("Error, not able to downcast: {:?}", context_any);
-    //     }
-    // }
-    // }
-
-    if free_ptr != 0 {
-        println!("Free {:?} bytes at {:?}", free_ptr, size);
-        let layout =
-            Layout::from_size_align(size as usize, mem::align_of::<u8>()).expect("Bad layout");
-        unsafe {
-            alloc::dealloc(free_ptr as *mut u8, layout);
-        }
-        0
-    } else {
-        unsafe {
-            println!("alloc {} bytes", size);
-            let layout =
-                Layout::from_size_align(size as usize, mem::align_of::<u8>()).expect("Bad layout");
-            let buffer = alloc::alloc(layout);
-            buffer as u64
+        None => {
+            println!("Error: No helper context");
+            panic!();
         }
     }
 }
-
-// fn h(context: &mut T) {
-//     let context_any = context as &mut Any;
-
-//     match context_any.downcast_mut::<AllocInfo>() {
-//         Some(info) => {
-//             info.allocated += 1;
-//             println!("info: {:?}", info);
-//         }
-//         None => {
-//             println!("{:?}", context);
-//         }
-//     }
-// }
-
-// fn rh(mut context: T) {
-//     println!("rh context: {:?}", context);
-//     h(&mut context);
-//     h(&mut context);
-//     h(&mut context);
-//     h(&mut context);
-//     h(&mut context);
-// }
 
 pub fn create_vm(prog: &[u8]) -> Result<(EbpfVmRaw, MemoryRegion), Error> {
     let mut vm = EbpfVmRaw::new(None)?;
@@ -241,10 +249,7 @@ pub fn create_vm(prog: &[u8]) -> Result<(EbpfVmRaw, MemoryRegion), Error> {
     let heap = vec![0_u8; 2048];
     let heap_region = MemoryRegion::new_from_slice(&heap);
 
-    let context = Box::new(AllocInfo {
-        allocated: 0,
-        max: 42,
-    });
+    let context = Box::new(BPFAllocator { heap, pos: 0 });
 
     // TODO alloc helper not the right place to get memory
     vm.register_helper_ex(
@@ -254,11 +259,6 @@ pub fn create_vm(prog: &[u8]) -> Result<(EbpfVmRaw, MemoryRegion), Error> {
         Some(context),
     )?;
 
-    //     let context = AllocInfo {
-    //         allocated: 0,
-    //         max: 42,
-    //     };
-    //     rh(context);
     Ok((vm, heap_region))
 }
 
