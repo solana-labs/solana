@@ -154,20 +154,20 @@ validator to ports 11000-11011.
 When `validator.sh` starts, it will output a validator configuration that looks
 similar to:
 ```bash
-======================[ Validator configuration ]======================
-node pubkey: 4ceWXsL3UJvn7NYZiRkw7NsryMpviaKBDYr8GK7J61Dm
+======================[ validator configuration ]======================
+identity pubkey: 4ceWXsL3UJvn7NYZiRkw7NsryMpviaKBDYr8GK7J61Dm
 vote pubkey: 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 ledger: ...
 accounts: ...
 ======================================================================
 ```
 
-The **node pubkey** for your validator can also be found by running:
+The **identity pubkey** for your validator can also be found by running:
 ```bash
 $ solana-keygen pubkey validator-keypair.json
 ```
 
-From another console, confirm the IP address and **node pubkey** of your validator is visible in the
+From another console, confirm the IP address and **identity pubkey** of your validator is visible in the
 gossip network by running:
 ```bash
 $ solana-gossip --entrypoint testnet.solana.com:8001 spy
@@ -190,7 +190,7 @@ $ solana-keygen pubkey ./config-local/validator-vote-keypair.json
 ### Sharing Metrics From Your Validator
 If you have obtained a metrics username/password from the Solana maintainers to
 help us monitor the health of the testnet, please perform the following steps
-before starting the validator node to activate metrics reporting:
+before starting the validator to activate metrics reporting:
 ```bash
 export u="username obtained from the Solana maintainers"
 export p="password obtained from the Solana maintainers"
