@@ -22,7 +22,7 @@ The Vote account contains the following state information:
 
 * votes - The submitted votes.
 
-* `delegate_id` - An identity that may operate with the weight of this
+* `delegate_pubkey` - An identity that may operate with the weight of this
   account's stake. It is typically the identity of a fullnode, but may be any
 identity involved in stake-weighted computations.
 
