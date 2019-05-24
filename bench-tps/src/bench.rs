@@ -588,12 +588,12 @@ pub fn generate_keypairs(seed_keypair: &Keypair, count: usize) -> Vec<Keypair> {
 pub fn generate_and_fund_keypairs<T: Client>(
     client: &T,
     drone_addr: Option<SocketAddr>,
-    funding_id: &Keypair,
+    funding_pubkey: &Keypair,
     tx_count: usize,
     lamports_per_account: u64,
 ) -> (Vec<Keypair>, u64) {
     info!("Creating {} keypairs...", tx_count * 2);
-    let mut keypairs = generate_keypairs(funding_id, tx_count * 2);
+    let mut keypairs = generate_keypairs(funding_pubkey, tx_count * 2);
 
     info!("Get lamports...");
 
@@ -606,11 +606,11 @@ pub fn generate_and_fund_keypairs<T: Client>(
     if lamports_per_account > last_keypair_balance {
         let extra = lamports_per_account - last_keypair_balance;
         let total = extra * (keypairs.len() as u64);
-        if client.get_balance(&funding_id.pubkey()).unwrap_or(0) < total {
-            airdrop_lamports(client, &drone_addr.unwrap(), funding_id, total);
+        if client.get_balance(&funding_pubkey.pubkey()).unwrap_or(0) < total {
+            airdrop_lamports(client, &drone_addr.unwrap(), funding_pubkey, total);
         }
         info!("adding more lamports {}", extra);
-        fund_keys(client, funding_id, &keypairs, extra);
+        fund_keys(client, funding_pubkey, &keypairs, extra);
     }
 
     // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.

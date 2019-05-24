@@ -11,7 +11,7 @@ use solana_sdk::system_instruction;
 pub fn load_program(
     bank_client: &BankClient,
     from_keypair: &Keypair,
-    loader_id: &Pubkey,
+    loader_pubkey: &Pubkey,
     program: Vec<u8>,
 ) -> Pubkey {
     let program_keypair = Keypair::new();
@@ -22,7 +22,7 @@ pub fn load_program(
         &program_pubkey,
         1,
         program.len() as u64,
-        loader_id,
+        loader_pubkey,
     );
     bank_client
         .send_instruction(&from_keypair, instruction)
@@ -32,7 +32,7 @@ pub fn load_program(
     let mut offset = 0;
     for chunk in program.chunks(chunk_size) {
         let instruction =
-            loader_instruction::write(&program_pubkey, loader_id, offset, chunk.to_vec());
+            loader_instruction::write(&program_pubkey, loader_pubkey, offset, chunk.to_vec());
         let message = Message::new_with_payer(vec![instruction], Some(&from_keypair.pubkey()));
         bank_client
             .send_message(&[from_keypair, &program_keypair], message)
@@ -40,7 +40,7 @@ pub fn load_program(
         offset += chunk_size as u32;
     }
 
-    let instruction = loader_instruction::finalize(&program_pubkey, loader_id);
+    let instruction = loader_instruction::finalize(&program_pubkey, loader_pubkey);
     let message = Message::new_with_payer(vec![instruction], Some(&from_keypair.pubkey()));
     bank_client
         .send_message(&[from_keypair, &program_keypair], message)

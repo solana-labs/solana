@@ -36,14 +36,14 @@ pub struct ValidatorInfo {
 }
 
 pub struct ReplicatorInfo {
-    pub replicator_storage_id: Pubkey,
+    pub replicator_storage_pubkey: Pubkey,
     pub ledger_path: String,
 }
 
 impl ReplicatorInfo {
-    fn new(storage_id: Pubkey, ledger_path: String) -> Self {
+    fn new(storage_pubkey: Pubkey, ledger_path: String) -> Self {
         Self {
-            replicator_storage_id: storage_id,
+            replicator_storage_pubkey: storage_pubkey,
             ledger_path,
         }
     }

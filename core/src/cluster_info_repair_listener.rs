@@ -179,12 +179,12 @@ impl ClusterInfoRepairListener {
         my_gossiped_root: &mut u64,
         epoch_schedule: &EpochSchedule,
     ) -> Result<()> {
-        for (repairee_id, repairee_epoch_slots) in repairees {
+        for (repairee_pubkey, repairee_epoch_slots) in repairees {
             let repairee_root = repairee_epoch_slots.root;
 
             let repairee_tvu = {
                 let r_cluster_info = cluster_info.read().unwrap();
-                let contact_info = r_cluster_info.get_contact_info_for_node(repairee_id);
+                let contact_info = r_cluster_info.get_contact_info_for_node(repairee_pubkey);
                 contact_info.map(|c| c.tvu)
             };
 
@@ -199,7 +199,7 @@ impl ClusterInfoRepairListener {
 
                 Self::shuffle_repairmen(
                     &mut eligible_repairmen,
-                    repairee_id,
+                    repairee_pubkey,
                     repairee_epoch_slots.root,
                 );
 
@@ -317,13 +317,13 @@ impl ClusterInfoRepairListener {
 
     fn shuffle_repairmen(
         eligible_repairmen: &mut Vec<&Pubkey>,
-        repairee_id: &Pubkey,
+        repairee_pubkey: &Pubkey,
         repairee_root: u64,
     ) {
         // Make a seed from pubkey + repairee root
         let mut seed = [0u8; mem::size_of::<Pubkey>()];
-        let repairee_id_bytes = repairee_id.as_ref();
-        seed[..repairee_id_bytes.len()].copy_from_slice(repairee_id_bytes);
+        let repairee_pubkey_bytes = repairee_pubkey.as_ref();
+        seed[..repairee_pubkey_bytes.len()].copy_from_slice(repairee_pubkey_bytes);
         LittleEndian::write_u64(&mut seed[0..], repairee_root);
 
         // Deterministically shuffle the eligible repairmen based on the seed

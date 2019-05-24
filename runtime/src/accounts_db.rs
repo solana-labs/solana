@@ -295,8 +295,8 @@ impl AccountsDB {
         };
         if candidates.is_empty() {
             let mut stores = self.storage.write().unwrap();
-            let path_idx = thread_rng().gen_range(0, self.paths.len());
-            let storage = Arc::new(self.new_storage_entry(fork_id, &self.paths[path_idx]));
+            let path_index = thread_rng().gen_range(0, self.paths.len());
+            let storage = Arc::new(self.new_storage_entry(fork_id, &self.paths[path_index]));
             stores.insert(storage.id, storage.clone());
             candidates.push(storage);
         }

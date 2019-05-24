@@ -715,11 +715,11 @@ pub fn create_token_accounts(client: &Client, signers: &[Arc<Keypair>], accounts
             let mut to_create_txs: Vec<_> = chunk
                 .par_iter()
                 .map(|(signer, new)| {
-                    let owner_id = &signer.pubkey();
+                    let owner_pubkey = &signer.pubkey();
                     let space = mem::size_of::<ExchangeState>() as u64;
                     let create_ix =
-                        system_instruction::create_account(owner_id, new, 1, space, &id());
-                    let request_ix = exchange_instruction::account_request(owner_id, new);
+                        system_instruction::create_account(owner_pubkey, new, 1, space, &id());
+                    let request_ix = exchange_instruction::account_request(owner_pubkey, new);
                     (
                         signer,
                         Transaction::new_unsigned_instructions(vec![create_ix, request_ix]),

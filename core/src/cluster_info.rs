@@ -2283,8 +2283,8 @@ fn test_add_entrypoint() {
         ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
         node_keypair,
     );
-    let entrypoint_id = Pubkey::new_rand();
-    let entrypoint = ContactInfo::new_localhost(&entrypoint_id, timestamp());
+    let entrypoint_pubkey = Pubkey::new_rand();
+    let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
     cluster_info.set_entrypoint(entrypoint.clone());
     let pulls = cluster_info.new_pull_requests(&HashMap::new());
     assert_eq!(1, pulls.len());
@@ -2305,7 +2305,11 @@ fn test_add_entrypoint() {
     // now add this message back to the table and make sure after the next pull, the entrypoint is unset
     let entrypoint_crdsvalue = CrdsValue::ContactInfo(entrypoint.clone());
     let cluster_info = Arc::new(RwLock::new(cluster_info));
-    ClusterInfo::handle_pull_response(&cluster_info, &entrypoint_id, vec![entrypoint_crdsvalue]);
+    ClusterInfo::handle_pull_response(
+        &cluster_info,
+        &entrypoint_pubkey,
+        vec![entrypoint_crdsvalue],
+    );
     let pulls = cluster_info
         .write()
         .unwrap()
