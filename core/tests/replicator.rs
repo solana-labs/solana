@@ -241,7 +241,7 @@ fn test_account_setup() {
     cluster.replicator_infos.iter().for_each(|(_, value)| {
         assert_eq!(
             client
-                .poll_get_balance(&value.replicator_storage_id)
+                .poll_get_balance(&value.replicator_storage_pubkey)
                 .unwrap(),
             1
         );

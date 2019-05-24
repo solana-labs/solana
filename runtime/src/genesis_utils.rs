@@ -19,7 +19,7 @@ pub struct GenesisBlockInfo {
 
 pub fn create_genesis_block_with_leader(
     mint_lamports: u64,
-    bootstrap_leader_id: &Pubkey,
+    bootstrap_leader_pubkey: &Pubkey,
     bootstrap_leader_stake_lamports: u64,
 ) -> GenesisBlockInfo {
     let mint_keypair = Keypair::new();
@@ -31,13 +31,13 @@ pub fn create_genesis_block_with_leader(
     //  is fully implemented
     let (vote_account, vote_state) = vote_state::create_bootstrap_leader_account(
         &voting_keypair.pubkey(),
-        &bootstrap_leader_id,
+        &bootstrap_leader_pubkey,
         0,
         bootstrap_leader_stake_lamports,
     );
 
     let genesis_block = GenesisBlock::new(
-        &bootstrap_leader_id,
+        &bootstrap_leader_pubkey,
         &[
             // the mint
             (
@@ -47,7 +47,7 @@ pub fn create_genesis_block_with_leader(
             // node needs an account to issue votes and storage proofs from, this will require
             //  airdrops at some point to cover fees...
             (
-                *bootstrap_leader_id,
+                *bootstrap_leader_pubkey,
                 Account::new(42, 0, &system_program::id()),
             ),
             // where votes go to

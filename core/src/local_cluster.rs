@@ -36,14 +36,14 @@ pub struct ValidatorInfo {
 }
 
 pub struct ReplicatorInfo {
-    pub replicator_storage_id: Pubkey,
+    pub replicator_storage_pubkey: Pubkey,
     pub ledger_path: String,
 }
 
 impl ReplicatorInfo {
-    fn new(storage_id: Pubkey, ledger_path: String) -> Self {
+    fn new(storage_pubkey: Pubkey, ledger_path: String) -> Self {
         Self {
-            replicator_storage_id: storage_id,
+            replicator_storage_pubkey: storage_pubkey,
             ledger_path,
         }
     }
@@ -396,7 +396,7 @@ impl LocalCluster {
         amount: u64,
     ) -> Result<()> {
         let vote_account_pubkey = vote_account.pubkey();
-        let node_id = from_account.pubkey();
+        let node_pubkey = from_account.pubkey();
 
         // Create the vote account if necessary
         if client.poll_get_balance(&vote_account_pubkey).unwrap_or(0) == 0 {
@@ -407,7 +407,7 @@ impl LocalCluster {
                 vote_instruction::create_account(
                     &from_account.pubkey(),
                     &vote_account_pubkey,
-                    &node_id,
+                    &node_pubkey,
                     0,
                     amount,
                 ),
@@ -461,7 +461,7 @@ impl LocalCluster {
         let vote_account_user_data = client.get_account_data(&vote_account_pubkey);
         if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
             if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
-                if vote_state.node_id == node_id {
+                if vote_state.node_pubkey == node_pubkey {
                     info!("vote account registered");
                     return Ok(());
                 }
@@ -506,7 +506,7 @@ impl LocalCluster {
 }
 
 impl Cluster for LocalCluster {
-    fn get_node_ids(&self) -> Vec<Pubkey> {
+    fn get_node_pubkeys(&self) -> Vec<Pubkey> {
         self.fullnodes.keys().cloned().collect()
     }
 

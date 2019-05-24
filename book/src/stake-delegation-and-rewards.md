@@ -22,11 +22,11 @@ The Vote account contains the following state information:
 
 * votes - The submitted votes.
 
-* `delegate_id` - An identity that may operate with the weight of this
+* `delegate_pubkey` - An identity that may operate with the weight of this
   account's stake. It is typically the identity of a fullnode, but may be any
 identity involved in stake-weighted computations.
 
-* `authorized_voter_id` - Only this identity is authorized to submit votes.
+* `authorized_voter_pubkey` - Only this identity is authorized to submit votes.
 
 * `credits` - The amount of unclaimed rewards.
 

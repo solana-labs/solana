@@ -496,8 +496,8 @@ impl Replicator {
                 let cluster_info = cluster_info.read().unwrap();
                 let rpc_peers = cluster_info.rpc_peers();
                 debug!("rpc peers: {:?}", rpc_peers);
-                let node_idx = thread_rng().gen_range(0, rpc_peers.len());
-                RpcClient::new_socket(rpc_peers[node_idx].rpc)
+                let node_index = thread_rng().gen_range(0, rpc_peers.len());
+                RpcClient::new_socket(rpc_peers[node_index].rpc)
             };
             let storage_blockhash = rpc_client
                 .retry_make_rpc_request(&RpcRequest::GetStorageBlockhash, None, 0)

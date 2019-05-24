@@ -144,7 +144,7 @@ impl BankingStage {
     }
 
     pub fn consume_buffered_packets(
-        my_id: &Pubkey,
+        my_pubkey: &Pubkey,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         buffered_packets: &[PacketsAndOffsets],
     ) -> Result<UnprocessedPackets> {
@@ -194,7 +194,7 @@ impl BankingStage {
                         &bank,
                         &msgs,
                         &unprocessed_indexes,
-                        my_id,
+                        my_pubkey,
                         next_leader,
                     );
                     Self::push_unprocessed(
@@ -226,12 +226,12 @@ impl BankingStage {
     }
 
     fn consume_or_forward_packets(
-        leader_id: Option<Pubkey>,
+        leader_pubkey: Option<Pubkey>,
         bank_is_available: bool,
         would_be_leader: bool,
-        my_id: &Pubkey,
+        my_pubkey: &Pubkey,
     ) -> BufferedPacketsDecision {
-        leader_id.map_or(
+        leader_pubkey.map_or(
             // If leader is not known, return the buffered packets as is
             BufferedPacketsDecision::Hold,
             // else process the packets
@@ -242,7 +242,7 @@ impl BankingStage {
                 } else if would_be_leader {
                     // If the node will be the leader soon, hold the packets for now
                     BufferedPacketsDecision::Hold
-                } else if x != *my_id {
+                } else if x != *my_pubkey {
                     // If the current node is not the leader, forward the buffered packets
                     BufferedPacketsDecision::Forward
                 } else {
@@ -282,8 +282,8 @@ impl BankingStage {
             }
             BufferedPacketsDecision::Forward => {
                 if enable_forwarding {
-                    next_leader.map_or(Ok(buffered_packets.to_vec()), |leader_id| {
-                        rcluster_info.lookup(&leader_id).map_or(
+                    next_leader.map_or(Ok(buffered_packets.to_vec()), |leader_pubkey| {
+                        rcluster_info.lookup(&leader_pubkey).map_or(
                             Ok(buffered_packets.to_vec()),
                             |leader| {
                                 let _ = Self::forward_buffered_packets(
@@ -665,14 +665,14 @@ impl BankingStage {
         bank: &Arc<Bank>,
         msgs: &Packets,
         transaction_indexes: &[usize],
-        my_id: &Pubkey,
+        my_pubkey: &Pubkey,
         next_leader: Option<Pubkey>,
     ) -> Vec<usize> {
         // Check if we are the next leader. If so, let's not filter the packets
         // as we'll filter it again while processing the packets.
         // Filtering helps if we were going to forward the packets to some other node
         if let Some(leader) = next_leader {
-            if leader == *my_id {
+            if leader == *my_pubkey {
                 return transaction_indexes.to_vec();
             }
         }
@@ -753,7 +753,7 @@ impl BankingStage {
 
             if processed < verified_txs_len {
                 let next_leader = poh.lock().unwrap().next_slot_leader();
-                let my_id = cluster_info.read().unwrap().id();
+                let my_pubkey = cluster_info.read().unwrap().id();
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
                 while let Some((msgs, vers)) = mms_iter.next() {
                     let packet_indexes = Self::generate_packet_indexes(vers);
@@ -761,7 +761,7 @@ impl BankingStage {
                         &bank,
                         &msgs,
                         &packet_indexes,
-                        &my_id,
+                        &my_pubkey,
                         next_leader,
                     );
                     Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes);
@@ -1391,40 +1391,65 @@ mod tests {
 
     #[test]
     fn test_should_process_or_forward_packets() {
-        let my_id = Pubkey::new_rand();
-        let my_id1 = Pubkey::new_rand();
+        let my_pubkey = Pubkey::new_rand();
+        let my_pubkey1 = Pubkey::new_rand();
 
         assert_eq!(
-            BankingStage::consume_or_forward_packets(None, true, false, &my_id),
+            BankingStage::consume_or_forward_packets(None, true, false, &my_pubkey),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(None, false, false, &my_id),
+            BankingStage::consume_or_forward_packets(None, false, false, &my_pubkey),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(None, false, false, &my_id1),
+            BankingStage::consume_or_forward_packets(None, false, false, &my_pubkey1),
             BufferedPacketsDecision::Hold
         );
 
         assert_eq!(
-            BankingStage::consume_or_forward_packets(Some(my_id1.clone()), false, false, &my_id),
+            BankingStage::consume_or_forward_packets(
+                Some(my_pubkey1.clone()),
+                false,
+                false,
+                &my_pubkey
+            ),
             BufferedPacketsDecision::Forward
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(Some(my_id1.clone()), false, true, &my_id),
+            BankingStage::consume_or_forward_packets(
+                Some(my_pubkey1.clone()),
+                false,
+                true,
+                &my_pubkey
+            ),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(Some(my_id1.clone()), true, false, &my_id),
+            BankingStage::consume_or_forward_packets(
+                Some(my_pubkey1.clone()),
+                true,
+                false,
+                &my_pubkey
+            ),
             BufferedPacketsDecision::Consume
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(Some(my_id1.clone()), false, false, &my_id1),
+            BankingStage::consume_or_forward_packets(
+                Some(my_pubkey1.clone()),
+                false,
+                false,
+                &my_pubkey1
+            ),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(Some(my_id1.clone()), true, false, &my_id1),
+            BankingStage::consume_or_forward_packets(
+                Some(my_pubkey1.clone()),
+                true,
+                false,
+                &my_pubkey1
+            ),
             BufferedPacketsDecision::Consume
         );
     }

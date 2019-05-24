@@ -80,20 +80,20 @@ pub fn should_retransmit_and_persist(
     blob: &Blob,
     bank: Option<Arc<Bank>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
-    my_id: &Pubkey,
+    my_pubkey: &Pubkey,
 ) -> bool {
-    let slot_leader_id = match bank {
+    let slot_leader_pubkey = match bank {
         None => leader_schedule_cache.slot_leader_at(blob.slot(), None),
         Some(bank) => leader_schedule_cache.slot_leader_at(blob.slot(), Some(&bank)),
     };
 
-    if blob.id() == *my_id {
+    if blob.id() == *my_pubkey {
         inc_new_counter_debug!("streamer-recv_window-circular_transmission", 1);
         false
-    } else if slot_leader_id == None {
+    } else if slot_leader_pubkey == None {
         inc_new_counter_debug!("streamer-recv_window-unknown_leader", 1);
         true
-    } else if slot_leader_id != Some(blob.id()) {
+    } else if slot_leader_pubkey != Some(blob.id()) {
         inc_new_counter_debug!("streamer-recv_window-wrong_leader", 1);
         false
     } else {
@@ -103,7 +103,7 @@ pub fn should_retransmit_and_persist(
 
 fn recv_window<F>(
     blocktree: &Arc<Blocktree>,
-    my_id: &Pubkey,
+    my_pubkey: &Pubkey,
     r: &BlobReceiver,
     retransmit: &BlobSender,
     genesis_blockhash: &Hash,
@@ -126,9 +126,9 @@ where
             && blob.read().unwrap().genesis_blockhash() == *genesis_blockhash
     });
 
-    retransmit_blobs(&blobs, retransmit, my_id)?;
+    retransmit_blobs(&blobs, retransmit, my_pubkey)?;
 
-    trace!("{} num blobs received: {}", my_id, blobs.len());
+    trace!("{} num blobs received: {}", my_pubkey, blobs.len());
 
     process_blobs(&blobs, blocktree)?;
 
@@ -294,14 +294,14 @@ mod test {
     #[test]
     fn test_should_retransmit_and_persist() {
         let me_id = Pubkey::new_rand();
-        let leader_id = Pubkey::new_rand();
+        let leader_pubkey = Pubkey::new_rand();
         let bank = Arc::new(Bank::new(
-            &create_genesis_block_with_leader(100, &leader_id, 10).genesis_block,
+            &create_genesis_block_with_leader(100, &leader_pubkey, 10).genesis_block,
         ));
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         let mut blob = Blob::default();
-        blob.set_id(&leader_id);
+        blob.set_id(&leader_pubkey);
 
         // without a Bank and blobs not from me, blob continues
         assert_eq!(

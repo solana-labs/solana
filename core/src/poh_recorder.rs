@@ -88,11 +88,12 @@ impl PohRecorder {
 
     pub fn would_be_leader(&self, within_next_n_ticks: u64) -> bool {
         let close_to_leader_tick = self.start_leader_at_tick.map_or(false, |leader_tick| {
-            let leader_ideal_start_tick =
+            let leader_pubkeyeal_start_tick =
                 leader_tick.saturating_sub(self.max_last_leader_grace_ticks);
 
             self.tick_height() <= self.last_leader_tick.unwrap_or(0)
-                && self.tick_height() >= leader_ideal_start_tick.saturating_sub(within_next_n_ticks)
+                && self.tick_height()
+                    >= leader_pubkeyeal_start_tick.saturating_sub(within_next_n_ticks)
         });
 
         self.working_bank.is_some() || close_to_leader_tick
@@ -128,7 +129,7 @@ impl PohRecorder {
                     self.max_last_leader_grace_ticks
                 );
 
-                let leader_ideal_start_tick =
+                let leader_pubkeyeal_start_tick =
                     target_tick.saturating_sub(self.max_last_leader_grace_ticks);
                 // Is the current tick in the same slot as the target tick?
                 // Check if either grace period has expired,
@@ -140,7 +141,8 @@ impl PohRecorder {
                 {
                     return (
                         true,
-                        self.tick_height().saturating_sub(leader_ideal_start_tick),
+                        self.tick_height()
+                            .saturating_sub(leader_pubkeyeal_start_tick),
                     );
                 }
 

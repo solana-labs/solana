@@ -20,7 +20,7 @@ pub struct EpochStakes {
     stakes: HashMap<Pubkey, u64>,
     self_staked: u64,
     total_staked: u64,
-    delegate_id: Pubkey,
+    delegate_pubkey: Pubkey,
 }
 
 #[derive(Default, Debug)]
@@ -39,15 +39,15 @@ pub struct Locktower {
 }
 
 impl EpochStakes {
-    pub fn new(epoch: u64, stakes: HashMap<Pubkey, u64>, delegate_id: &Pubkey) -> Self {
+    pub fn new(epoch: u64, stakes: HashMap<Pubkey, u64>, delegate_pubkey: &Pubkey) -> Self {
         let total_staked = stakes.values().sum();
-        let self_staked = *stakes.get(&delegate_id).unwrap_or(&0);
+        let self_staked = *stakes.get(&delegate_pubkey).unwrap_or(&0);
         Self {
             epoch,
             stakes,
             total_staked,
             self_staked,
-            delegate_id: *delegate_id,
+            delegate_pubkey: *delegate_pubkey,
         }
     }
     pub fn new_for_tests(lamports: u64) -> Self {
@@ -61,21 +61,21 @@ impl EpochStakes {
         let stakes = accounts.iter().map(|(k, (v, _))| (*k, *v)).collect();
         Self::new(epoch, stakes, &accounts[0].0)
     }
-    pub fn new_from_bank(bank: &Bank, my_id: &Pubkey) -> Self {
+    pub fn new_from_bank(bank: &Bank, my_pubkey: &Pubkey) -> Self {
         let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
         let stakes = staking_utils::vote_account_stakes_at_epoch(bank, bank_epoch)
             .expect("voting require a bank with stakes");
-        Self::new(bank_epoch, stakes, my_id)
+        Self::new(bank_epoch, stakes, my_pubkey)
     }
 }
 
 impl Locktower {
-    pub fn new_from_forks(bank_forks: &BankForks, my_id: &Pubkey) -> Self {
+    pub fn new_from_forks(bank_forks: &BankForks, my_pubkey: &Pubkey) -> Self {
         let mut frozen_banks: Vec<_> = bank_forks.frozen_banks().values().cloned().collect();
         frozen_banks.sort_by_key(|b| (b.parents().len(), b.slot()));
         let epoch_stakes = {
             if let Some(bank) = frozen_banks.last() {
-                EpochStakes::new_from_bank(bank, my_id)
+                EpochStakes::new_from_bank(bank, my_pubkey)
             } else {
                 return Self::default();
             }
@@ -124,8 +124,8 @@ impl Locktower {
             }
             let mut vote_state = vote_state.unwrap();
 
-            if key == self.epoch_stakes.delegate_id
-                || vote_state.node_id == self.epoch_stakes.delegate_id
+            if key == self.epoch_stakes.delegate_pubkey
+                || vote_state.node_pubkey == self.epoch_stakes.delegate_pubkey
             {
                 debug!("vote state {:?}", vote_state);
                 debug!(
@@ -220,7 +220,8 @@ impl Locktower {
                 bank.slot(),
                 self.epoch_stakes.epoch
             );
-            self.epoch_stakes = EpochStakes::new_from_bank(bank, &self.epoch_stakes.delegate_id);
+            self.epoch_stakes =
+                EpochStakes::new_from_bank(bank, &self.epoch_stakes.delegate_pubkey);
             datapoint_info!(
                 "locktower-epoch",
                 ("epoch", self.epoch_stakes.epoch, i64),
@@ -382,8 +383,8 @@ impl Locktower {
     fn initialize_lockouts_from_bank(bank: &Bank, current_epoch: u64) -> VoteState {
         let mut lockouts = VoteState::default();
         if let Some(iter) = bank.epoch_vote_accounts(current_epoch) {
-            for (delegate_id, (_, account)) in iter {
-                if *delegate_id == bank.collector_id() {
+            for (delegate_pubkey, (_, account)) in iter {
+                if *delegate_pubkey == bank.collector_id() {
                     let state = VoteState::deserialize(&account.data).expect("votes");
                     if lockouts.votes.len() < state.votes.len() {
                         lockouts = state;

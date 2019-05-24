@@ -72,9 +72,9 @@ pub struct ClusterInfo {
     pub gossip: CrdsGossip,
     /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
     pub(crate) keypair: Arc<Keypair>,
-    // TODO: remove gossip_leader_id once all usage of `set_leader()` and `leader_data()` is
+    // TODO: remove gossip_leader_pubkey once all usage of `set_leader()` and `leader_data()` is
     // purged
-    gossip_leader_id: Pubkey,
+    gossip_leader_pubkey: Pubkey,
     /// The network entrypoint
     entrypoint: Option<ContactInfo>,
 }
@@ -175,7 +175,7 @@ impl ClusterInfo {
         let mut me = Self {
             gossip: CrdsGossip::default(),
             keypair,
-            gossip_leader_id: Pubkey::default(),
+            gossip_leader_pubkey: Pubkey::default(),
             entrypoint: None,
         };
         let id = contact_info.id;
@@ -232,18 +232,18 @@ impl ClusterInfo {
 
     // Deprecated: don't use leader_data().
     pub fn leader_data(&self) -> Option<&ContactInfo> {
-        let leader_id = self.gossip_leader_id;
-        if leader_id == Pubkey::default() {
+        let leader_pubkey = self.gossip_leader_pubkey;
+        if leader_pubkey == Pubkey::default() {
             return None;
         }
-        self.lookup(&leader_id)
+        self.lookup(&leader_pubkey)
     }
 
     pub fn contact_info_trace(&self) -> String {
         let now = timestamp();
         let mut spy_nodes = 0;
         let mut replicators = 0;
-        let my_id = self.my_data().id;
+        let my_pubkey = self.my_data().id;
         let nodes: Vec<_> = self
             .all_peers()
             .into_iter()
@@ -268,7 +268,7 @@ impl ClusterInfo {
                     addr_to_string(&node.gossip),
                     now.saturating_sub(last_updated),
                     node.id,
-                    if node.id == my_id { "(me)" } else { "" }.to_string(),
+                    if node.id == my_pubkey { "(me)" } else { "" }.to_string(),
                     addr_to_string(&node.tpu),
                     addr_to_string(&node.rpc),
                 )
@@ -296,13 +296,13 @@ impl ClusterInfo {
     }
 
     /// Record the id of the current leader for use by `leader_tpu_via_blobs()`
-    pub fn set_leader(&mut self, leader_id: &Pubkey) {
-        if *leader_id != self.gossip_leader_id {
+    pub fn set_leader(&mut self, leader_pubkey: &Pubkey) {
+        if *leader_pubkey != self.gossip_leader_pubkey {
             warn!(
                 "{}: LEADER_UPDATE TO {} from {}",
-                self.gossip.id, leader_id, self.gossip_leader_id,
+                self.gossip.id, leader_pubkey, self.gossip_leader_pubkey,
             );
-            self.gossip_leader_id = *leader_id;
+            self.gossip_leader_pubkey = *leader_pubkey;
         }
     }
 
@@ -730,7 +730,7 @@ impl ClusterInfo {
         obj: &Arc<RwLock<Self>>,
         peers: &[ContactInfo],
         blob: &SharedBlob,
-        slot_leader_id: Option<Pubkey>,
+        slot_leader_pubkey: Option<Pubkey>,
         s: &UdpSocket,
         forwarded: bool,
     ) -> Result<()> {
@@ -746,7 +746,7 @@ impl ClusterInfo {
         trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders
             .par_iter()
-            .filter(|v| v.id != slot_leader_id.unwrap_or_default())
+            .filter(|v| v.id != slot_leader_pubkey.unwrap_or_default())
             .map(|v| {
                 debug!(
                     "{}: retransmit blob {} to {} {}",
@@ -2283,8 +2283,8 @@ fn test_add_entrypoint() {
         ContactInfo::new_localhost(&node_keypair.pubkey(), timestamp()),
         node_keypair,
     );
-    let entrypoint_id = Pubkey::new_rand();
-    let entrypoint = ContactInfo::new_localhost(&entrypoint_id, timestamp());
+    let entrypoint_pubkey = Pubkey::new_rand();
+    let entrypoint = ContactInfo::new_localhost(&entrypoint_pubkey, timestamp());
     cluster_info.set_entrypoint(entrypoint.clone());
     let pulls = cluster_info.new_pull_requests(&HashMap::new());
     assert_eq!(1, pulls.len());
@@ -2305,7 +2305,11 @@ fn test_add_entrypoint() {
     // now add this message back to the table and make sure after the next pull, the entrypoint is unset
     let entrypoint_crdsvalue = CrdsValue::ContactInfo(entrypoint.clone());
     let cluster_info = Arc::new(RwLock::new(cluster_info));
-    ClusterInfo::handle_pull_response(&cluster_info, &entrypoint_id, vec![entrypoint_crdsvalue]);
+    ClusterInfo::handle_pull_response(
+        &cluster_info,
+        &entrypoint_pubkey,
+        vec![entrypoint_crdsvalue],
+    );
     let pulls = cluster_info
         .write()
         .unwrap()

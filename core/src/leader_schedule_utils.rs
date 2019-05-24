@@ -41,9 +41,9 @@ fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
     // Sort first by stake. If stakes are the same, sort by pubkey to ensure a
     // deterministic result.
     // Note: Use unstable sort, because we dedup right after to remove the equal elements.
-    stakes.sort_unstable_by(|(l_id, l_stake), (r_id, r_stake)| {
+    stakes.sort_unstable_by(|(l_pubkey, l_stake), (r_pubkey, r_stake)| {
         if r_stake == l_stake {
-            r_id.cmp(&l_id)
+            r_pubkey.cmp(&l_pubkey)
         } else {
             r_stake.cmp(&l_stake)
         }
@@ -68,10 +68,10 @@ mod tests {
             create_genesis_block_with_leader(0, &pubkey, BOOTSTRAP_LEADER_LAMPORTS).genesis_block;
         let bank = Bank::new(&genesis_block);
 
-        let ids_and_stakes: Vec<_> = staking_utils::staked_nodes(&bank).into_iter().collect();
+        let pubkeys_and_stakes: Vec<_> = staking_utils::staked_nodes(&bank).into_iter().collect();
         let seed = [0u8; 32];
         let leader_schedule = LeaderSchedule::new(
-            &ids_and_stakes,
+            &pubkeys_and_stakes,
             seed,
             genesis_block.slots_per_epoch,
             NUM_CONSECUTIVE_LEADER_SLOTS,

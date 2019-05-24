@@ -107,12 +107,12 @@ mod tests {
     }
 
     fn setup() -> (Bank, Vec<Transaction>) {
-        let dummy_leader_id = Pubkey::new_rand();
+        let dummy_leader_pubkey = Pubkey::new_rand();
         let GenesisBlockInfo {
             genesis_block,
             mint_keypair,
             ..
-        } = create_genesis_block_with_leader(500, &dummy_leader_id, 100);
+        } = create_genesis_block_with_leader(500, &dummy_leader_pubkey, 100);
         let bank = Bank::new(&genesis_block);
 
         let pubkey = Pubkey::new_rand();

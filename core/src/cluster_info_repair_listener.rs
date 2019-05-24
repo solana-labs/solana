@@ -111,7 +111,7 @@ impl ClusterInfoRepairListener {
         epoch_schedule: &EpochSchedule,
     ) -> Result<()> {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let my_id = cluster_info.read().unwrap().id();
+        let my_pubkey = cluster_info.read().unwrap().id();
         let mut my_gossiped_root = 0;
 
         loop {
@@ -127,7 +127,7 @@ impl ClusterInfoRepairListener {
             for peer in peers {
                 let last_update_ts = Self::get_last_ts(peer.id, peer_roots);
                 let my_root =
-                    Self::read_my_gossiped_root(&my_id, cluster_info, &mut my_gossiped_root);
+                    Self::read_my_gossiped_root(&my_pubkey, cluster_info, &mut my_gossiped_root);
                 {
                     let r_cluster_info = cluster_info.read().unwrap();
 
@@ -155,7 +155,7 @@ impl ClusterInfoRepairListener {
 
             // After updating all the peers, send out repairs to those that need it
             let _ = Self::serve_repairs(
-                &my_id,
+                &my_pubkey,
                 blocktree,
                 peer_roots,
                 &peers_needing_repairs,
@@ -170,7 +170,7 @@ impl ClusterInfoRepairListener {
     }
 
     fn serve_repairs(
-        my_id: &Pubkey,
+        my_pubkey: &Pubkey,
         blocktree: &Blocktree,
         peer_roots: &HashMap<Pubkey, (u64, u64)>,
         repairees: &HashMap<Pubkey, EpochSlots>,
@@ -179,19 +179,19 @@ impl ClusterInfoRepairListener {
         my_gossiped_root: &mut u64,
         epoch_schedule: &EpochSchedule,
     ) -> Result<()> {
-        for (repairee_id, repairee_epoch_slots) in repairees {
+        for (repairee_pubkey, repairee_epoch_slots) in repairees {
             let repairee_root = repairee_epoch_slots.root;
 
             let repairee_tvu = {
                 let r_cluster_info = cluster_info.read().unwrap();
-                let contact_info = r_cluster_info.get_contact_info_for_node(repairee_id);
+                let contact_info = r_cluster_info.get_contact_info_for_node(repairee_pubkey);
                 contact_info.map(|c| c.tvu)
             };
 
             if let Some(repairee_tvu) = repairee_tvu {
                 // For every repairee, get the set of repairmen who are responsible for
                 let mut eligible_repairmen = Self::find_eligible_repairmen(
-                    my_id,
+                    my_pubkey,
                     repairee_root,
                     peer_roots,
                     NUM_BUFFER_SLOTS,
@@ -199,14 +199,15 @@ impl ClusterInfoRepairListener {
 
                 Self::shuffle_repairmen(
                     &mut eligible_repairmen,
-                    repairee_id,
+                    repairee_pubkey,
                     repairee_epoch_slots.root,
                 );
 
-                let my_root = Self::read_my_gossiped_root(my_id, cluster_info, my_gossiped_root);
+                let my_root =
+                    Self::read_my_gossiped_root(my_pubkey, cluster_info, my_gossiped_root);
 
                 let _ = Self::serve_repairs_to_repairee(
-                    my_id,
+                    my_pubkey,
                     my_root,
                     blocktree,
                     &repairee_epoch_slots,
@@ -223,7 +224,7 @@ impl ClusterInfoRepairListener {
     }
 
     fn serve_repairs_to_repairee(
-        my_id: &Pubkey,
+        my_pubkey: &Pubkey,
         my_root: u64,
         blocktree: &Blocktree,
         repairee_epoch_slots: &EpochSlots,
@@ -266,7 +267,7 @@ impl ClusterInfoRepairListener {
                 // the cluster
                 let num_blobs_in_slot = slot_meta.received as usize;
                 if let Some(my_repair_indexes) = Self::calculate_my_repairman_index_for_slot(
-                    my_id,
+                    my_pubkey,
                     &eligible_repairmen,
                     num_blobs_in_slot,
                     REPAIR_REDUNDANCY,
@@ -316,13 +317,13 @@ impl ClusterInfoRepairListener {
 
     fn shuffle_repairmen(
         eligible_repairmen: &mut Vec<&Pubkey>,
-        repairee_id: &Pubkey,
+        repairee_pubkey: &Pubkey,
         repairee_root: u64,
     ) {
         // Make a seed from pubkey + repairee root
         let mut seed = [0u8; mem::size_of::<Pubkey>()];
-        let repairee_id_bytes = repairee_id.as_ref();
-        seed[..repairee_id_bytes.len()].copy_from_slice(repairee_id_bytes);
+        let repairee_pubkey_bytes = repairee_pubkey.as_ref();
+        seed[..repairee_pubkey_bytes.len()].copy_from_slice(repairee_pubkey_bytes);
         LittleEndian::write_u64(&mut seed[0..], repairee_root);
 
         // Deterministically shuffle the eligible repairmen based on the seed
@@ -334,7 +335,7 @@ impl ClusterInfoRepairListener {
     // such that each blob in the slot is the responsibility of `repair_redundancy` or
     // `repair_redundancy + 1` number of repairmen in the cluster.
     fn calculate_my_repairman_index_for_slot(
-        my_id: &Pubkey,
+        my_pubkey: &Pubkey,
         eligible_repairmen: &[&Pubkey],
         num_blobs_in_slot: usize,
         repair_redundancy: usize,
@@ -350,7 +351,7 @@ impl ClusterInfoRepairListener {
         // Calculate the indexes this node is responsible for
         if let Some(my_position) = eligible_repairmen[..total_repairmen_for_slot]
             .iter()
-            .position(|id| *id == my_id)
+            .position(|id| *id == my_pubkey)
         {
             let start_index = my_position % num_blobs_in_slot;
             Some(BlobIndexesToRepairIterator::new(
@@ -367,7 +368,7 @@ impl ClusterInfoRepairListener {
     }
 
     fn find_eligible_repairmen<'a>(
-        my_id: &'a Pubkey,
+        my_pubkey: &'a Pubkey,
         repairee_root: u64,
         repairman_roots: &'a HashMap<Pubkey, (u64, u64)>,
         num_buffer_slots: usize,
@@ -387,19 +388,19 @@ impl ClusterInfoRepairListener {
             })
             .collect();
 
-        repairmen.push(my_id);
+        repairmen.push(my_pubkey);
         repairmen
     }
 
     fn read_my_gossiped_root(
-        my_id: &Pubkey,
+        my_pubkey: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         old_root: &mut u64,
     ) -> u64 {
         let new_root = cluster_info
             .read()
             .unwrap()
-            .get_gossiped_root_for_node(&my_id, None);
+            .get_gossiped_root_for_node(&my_pubkey, None);
 
         if let Some(new_root) = new_root {
             *old_root = new_root;
@@ -519,7 +520,7 @@ mod tests {
         blocktree.set_root(num_slots - 1, 0).unwrap();
 
         // Set up my information
-        let my_id = Pubkey::new_rand();
+        let my_pubkey = Pubkey::new_rand();
         let my_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
         // Set up a mock repairee with a socket listening for incoming repairs
@@ -536,7 +537,7 @@ mod tests {
         let num_repairmen = blobs_per_slot - 1;
         let mut eligible_repairmen: Vec<_> =
             (0..num_repairmen).map(|_| Pubkey::new_rand()).collect();
-        eligible_repairmen.push(my_id);
+        eligible_repairmen.push(my_pubkey);
         let eligible_repairmen_refs: Vec<_> = eligible_repairmen.iter().collect();
 
         // Have all the repairman send the repairs
@@ -595,7 +596,7 @@ mod tests {
         blocktree.set_root(slots_per_epoch * 2 - 1, 0).unwrap();
 
         // Set up my information
-        let my_id = Pubkey::new_rand();
+        let my_pubkey = Pubkey::new_rand();
         let my_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
         // Set up a mock repairee with a socket listening for incoming repairs
@@ -613,11 +614,11 @@ mod tests {
             EpochSlots::new(mock_repairee.id, repairee_root, repairee_slots.clone(), 1);
 
         ClusterInfoRepairListener::serve_repairs_to_repairee(
-            &my_id,
+            &my_pubkey,
             total_slots - 1,
             &blocktree,
             &repairee_epoch_slots,
-            &vec![&my_id],
+            &vec![&my_pubkey],
             &my_socket,
             &mock_repairee.tvu_address,
             1 as usize,
@@ -634,11 +635,11 @@ mod tests {
         let repairee_epoch_slots =
             EpochSlots::new(mock_repairee.id, stakers_slot_offset, repairee_slots, 1);
         ClusterInfoRepairListener::serve_repairs_to_repairee(
-            &my_id,
+            &my_pubkey,
             total_slots - 1,
             &blocktree,
             &repairee_epoch_slots,
-            &vec![&my_id],
+            &vec![&my_pubkey],
             &my_socket,
             &mock_repairee.tvu_address,
             1 as usize,

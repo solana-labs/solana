@@ -50,7 +50,7 @@ pub fn staked_nodes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashMap<P
         .map(|vote_accounts| to_staked_nodes(to_vote_states(vote_accounts.into_iter())))
 }
 
-// input (vote_id, (stake, vote_account)) => (stake, vote_state)
+// input (vote_pubkey, (stake, vote_account)) => (stake, vote_state)
 fn to_vote_states(
     node_staked_accounts: impl Iterator<Item = (impl Borrow<Pubkey>, impl Borrow<(u64, Account)>)>,
 ) -> impl Iterator<Item = (u64, VoteState)> {
@@ -67,7 +67,7 @@ fn to_staked_nodes(
 ) -> HashMap<Pubkey, u64> {
     let mut map: HashMap<Pubkey, u64> = HashMap::new();
     node_staked_accounts.for_each(|(stake, state)| {
-        map.entry(state.node_id)
+        map.entry(state.node_pubkey)
             .and_modify(|s| *s += stake)
             .or_insert(stake);
     });
@@ -158,8 +158,8 @@ pub(crate) mod tests {
     pub(crate) fn setup_vote_and_stake_accounts(
         bank: &Bank,
         from_account: &Keypair,
-        vote_id: &Pubkey,
-        node_id: &Pubkey,
+        vote_pubkey: &Pubkey,
+        node_pubkey: &Pubkey,
         amount: u64,
     ) {
         fn process_instructions<T: KeypairUtil>(
@@ -178,7 +178,13 @@ pub(crate) mod tests {
         process_instructions(
             bank,
             &[from_account],
-            vote_instruction::create_account(&from_account.pubkey(), vote_id, node_id, 0, amount),
+            vote_instruction::create_account(
+                &from_account.pubkey(),
+                vote_pubkey,
+                node_pubkey,
+                0,
+                amount,
+            ),
         );
 
         let stake_account_keypair = Keypair::new();
@@ -200,7 +206,7 @@ pub(crate) mod tests {
             vec![stake_instruction::delegate_stake(
                 &from_account.pubkey(),
                 &stake_account_pubkey,
-                vote_id,
+                vote_pubkey,
             )],
         );
     }
@@ -217,7 +223,7 @@ pub(crate) mod tests {
         } = create_genesis_block(10_000);
 
         let bank = Bank::new(&genesis_block);
-        let vote_id = Pubkey::new_rand();
+        let vote_pubkey = Pubkey::new_rand();
 
         // Give the validator some stake but don't setup a staking account
         // Validator has no lamports staked, so they get filtered out. Only the bootstrap leader
@@ -230,7 +236,7 @@ pub(crate) mod tests {
         setup_vote_and_stake_accounts(
             &bank,
             &mint_keypair,
-            &vote_id,
+            &vote_pubkey,
             &mint_keypair.pubkey(),
             stake,
         );

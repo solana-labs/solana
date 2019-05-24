@@ -268,7 +268,7 @@ impl Bank {
 
     fn process_genesis_block(&mut self, genesis_block: &GenesisBlock) {
         // Bootstrap leader collects fees until `new_from_parent` is called.
-        self.collector_id = genesis_block.bootstrap_leader_id;
+        self.collector_id = genesis_block.bootstrap_leader_pubkey;
         self.fee_calculator = genesis_block.fee_calculator.clone();
 
         for (pubkey, account) in genesis_block.accounts.iter() {
@@ -1017,7 +1017,7 @@ mod tests {
 
     #[test]
     fn test_bank_new() {
-        let dummy_leader_id = Pubkey::new_rand();
+        let dummy_leader_pubkey = Pubkey::new_rand();
         let dummy_leader_lamports = BOOTSTRAP_LEADER_LAMPORTS;
         let mint_lamports = 10_000;
         let GenesisBlockInfo {
@@ -1027,7 +1027,7 @@ mod tests {
             ..
         } = create_genesis_block_with_leader(
             mint_lamports,
-            &dummy_leader_id,
+            &dummy_leader_pubkey,
             dummy_leader_lamports,
         );
         let bank = Bank::new(&genesis_block);
@@ -1599,10 +1599,10 @@ mod tests {
 
     #[test]
     fn test_bank_epoch_vote_accounts() {
-        let leader_id = Pubkey::new_rand();
+        let leader_pubkey = Pubkey::new_rand();
         let leader_lamports = 3;
         let mut genesis_block =
-            create_genesis_block_with_leader(5, &leader_id, leader_lamports).genesis_block;
+            create_genesis_block_with_leader(5, &leader_pubkey, leader_lamports).genesis_block;
 
         // set this up weird, forces future generation, odd mod(), etc.
         //  this says: "vote_accounts for epoch X should be generated at slot index 3 in epoch X-2...
@@ -1619,7 +1619,7 @@ mod tests {
                 .iter()
                 .filter_map(|(pubkey, (_, account))| {
                     if let Ok(vote_state) = VoteState::deserialize(&account.data) {
-                        if vote_state.node_id == leader_id {
+                        if vote_state.node_pubkey == leader_pubkey {
                             Some((*pubkey, true))
                         } else {
                             None
@@ -1645,7 +1645,7 @@ mod tests {
         // child crosses epoch boundary and is the first slot in the epoch
         let child = Bank::new_from_parent(
             &parent,
-            &leader_id,
+            &leader_pubkey,
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH),
         );
 
@@ -1654,7 +1654,7 @@ mod tests {
         // child crosses epoch boundary but isn't the first slot in the epoch
         let child = Bank::new_from_parent(
             &parent,
-            &leader_id,
+            &leader_pubkey,
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH) + 1,
         );
         assert!(child.epoch_vote_accounts(i).is_some());

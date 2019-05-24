@@ -20,8 +20,13 @@ pub enum LoaderInstruction {
     Finalize,
 }
 
-pub fn write(account_id: &Pubkey, program_id: &Pubkey, offset: u32, bytes: Vec<u8>) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*account_id, true)];
+pub fn write(
+    account_pubkey: &Pubkey,
+    program_id: &Pubkey,
+    offset: u32,
+    bytes: Vec<u8>,
+) -> Instruction {
+    let account_metas = vec![AccountMeta::new(*account_pubkey, true)];
     Instruction::new(
         *program_id,
         &LoaderInstruction::Write { offset, bytes },
@@ -29,7 +34,7 @@ pub fn write(account_id: &Pubkey, program_id: &Pubkey, offset: u32, bytes: Vec<u
     )
 }
 
-pub fn finalize(account_id: &Pubkey, program_id: &Pubkey) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*account_id, true)];
+pub fn finalize(account_pubkey: &Pubkey, program_id: &Pubkey) -> Instruction {
+    let account_metas = vec![AccountMeta::new(*account_pubkey, true)];
     Instruction::new(*program_id, &LoaderInstruction::Finalize, account_metas)
 }

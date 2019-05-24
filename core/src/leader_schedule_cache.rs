@@ -385,13 +385,13 @@ mod tests {
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         // Create new vote account
-        let node_id = Pubkey::new_rand();
-        let vote_id = Pubkey::new_rand();
+        let node_pubkey = Pubkey::new_rand();
+        let vote_pubkey = Pubkey::new_rand();
         setup_vote_and_stake_accounts(
             &bank,
             &mint_keypair,
-            &vote_id,
-            &node_id,
+            &vote_pubkey,
+            &node_pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
         );
 
@@ -412,14 +412,14 @@ mod tests {
 
         let schedule = cache.compute_epoch_schedule(epoch, &bank).unwrap();
         let mut index = 0;
-        while schedule[index] != node_id {
+        while schedule[index] != node_pubkey {
             index += 1;
             assert_ne!(index, genesis_block.slots_per_epoch);
         }
         expected_slot += index;
 
         assert_eq!(
-            cache.next_leader_slot(&node_id, 0, &bank, None),
+            cache.next_leader_slot(&node_pubkey, 0, &bank, None),
             Some(expected_slot),
         );
     }

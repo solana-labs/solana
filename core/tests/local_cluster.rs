@@ -134,8 +134,8 @@ fn test_two_unbalanced_stakes() {
         num_slots_per_epoch,
     );
     cluster.close_preserve_ledgers();
-    let leader_id = cluster.entry_point_info.id;
-    let leader_ledger = cluster.fullnode_infos[&leader_id].ledger_path.clone();
+    let leader_pubkey = cluster.entry_point_info.id;
+    let leader_ledger = cluster.fullnode_infos[&leader_pubkey].ledger_path.clone();
     cluster_tests::verify_ledger_ticks(&leader_ledger, num_ticks_per_slot as usize);
 }
 
@@ -154,9 +154,12 @@ fn test_forwarding() {
     let (cluster_nodes, _) = discover_cluster(&cluster.entry_point_info.gossip, 2).unwrap();
     assert!(cluster_nodes.len() >= 2);
 
-    let leader_id = cluster.entry_point_info.id;
+    let leader_pubkey = cluster.entry_point_info.id;
 
-    let validator_info = cluster_nodes.iter().find(|c| c.id != leader_id).unwrap();
+    let validator_info = cluster_nodes
+        .iter()
+        .find(|c| c.id != leader_pubkey)
+        .unwrap();
 
     // Confirm that transactions were forwarded to and processed by the leader.
     cluster_tests::send_many_transactions(&validator_info, &cluster.funding_keypair, 20);
@@ -175,7 +178,7 @@ fn test_restart_node() {
         slots_per_epoch,
         ..ClusterConfig::default()
     });
-    let nodes = cluster.get_node_ids();
+    let nodes = cluster.get_node_pubkeys();
     cluster_tests::sleep_n_epochs(
         1.0,
         &cluster.genesis_block.poh_config,

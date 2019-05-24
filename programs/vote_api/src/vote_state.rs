@@ -62,8 +62,8 @@ impl Lockout {
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct VoteState {
     pub votes: VecDeque<Lockout>,
-    pub node_id: Pubkey,
-    pub authorized_voter_id: Pubkey,
+    pub node_pubkey: Pubkey,
+    pub authorized_voter_pubkey: Pubkey,
     /// fraction of std::u32::MAX that represents what part of a rewards
     ///  payout should be given to this VoteAccount
     pub commission: u32,
@@ -72,14 +72,14 @@ pub struct VoteState {
 }
 
 impl VoteState {
-    pub fn new(vote_id: &Pubkey, node_id: &Pubkey, commission: u32) -> Self {
+    pub fn new(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u32) -> Self {
         let votes = VecDeque::new();
         let credits = 0;
         let root_slot = None;
         Self {
             votes,
-            node_id: *node_id,
-            authorized_voter_id: *vote_id,
+            node_pubkey: *node_pubkey,
+            authorized_voter_pubkey: *vote_pubkey,
             credits,
             commission,
             root_slot,
@@ -218,12 +218,12 @@ impl VoteState {
 pub fn authorize_voter(
     vote_account: &mut KeyedAccount,
     other_signers: &[KeyedAccount],
-    authorized_voter_id: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
     // current authorized signer must say "yay"
-    let authorized = Some(&vote_state.authorized_voter_id);
+    let authorized = Some(&vote_state.authorized_voter_pubkey);
     if vote_account.signer_key() != authorized
         && other_signers
             .iter()
@@ -232,7 +232,7 @@ pub fn authorize_voter(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    vote_state.authorized_voter_id = *authorized_voter_id;
+    vote_state.authorized_voter_pubkey = *authorized_voter_pubkey;
     vote_account.set_state(&vote_state)
 }
 
@@ -241,17 +241,17 @@ pub fn authorize_voter(
 /// that the transaction must be signed by the staker's keys
 pub fn initialize_account(
     vote_account: &mut KeyedAccount,
-    node_id: &Pubkey,
+    node_pubkey: &Pubkey,
     commission: u32,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState = vote_account.state()?;
 
-    if vote_state.authorized_voter_id != Pubkey::default() {
+    if vote_state.authorized_voter_pubkey != Pubkey::default() {
         return Err(InstructionError::AccountAlreadyInitialized);
     }
     vote_account.set_state(&VoteState::new(
         vote_account.unsigned_key(),
-        node_id,
+        node_pubkey,
         commission,
     ))
 }
@@ -264,7 +264,7 @@ pub fn process_votes(
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
-    if vote_state.authorized_voter_id == Pubkey::default() {
+    if vote_state.authorized_voter_pubkey == Pubkey::default() {
         return Err(InstructionError::UninitializedAccount);
     }
 
@@ -274,8 +274,8 @@ pub fn process_votes(
 
     let slot_hashes: Vec<(u64, Hash)> = slot_hashes_account.state()?;
 
-    let authorized = Some(&vote_state.authorized_voter_id);
-    // find a signer that matches the authorized_voter_id
+    let authorized = Some(&vote_state.authorized_voter_pubkey);
+    // find a signer that matches the authorized_voter_pubkey
     if vote_account.signer_key() != authorized
         && other_signers
             .iter()
@@ -290,16 +290,16 @@ pub fn process_votes(
 
 // utility function, used by Bank, tests
 pub fn create_account(
-    vote_id: &Pubkey,
-    node_id: &Pubkey,
+    vote_pubkey: &Pubkey,
+    node_pubkey: &Pubkey,
     commission: u32,
     lamports: u64,
 ) -> Account {
     let mut vote_account = Account::new(lamports, VoteState::size_of(), &id());
 
     initialize_account(
-        &mut KeyedAccount::new(vote_id, false, &mut vote_account),
-        node_id,
+        &mut KeyedAccount::new(vote_pubkey, false, &mut vote_account),
+        node_pubkey,
         commission,
     )
     .unwrap();
@@ -308,14 +308,14 @@ pub fn create_account(
 
 // utility function, used by solana-genesis, tests
 pub fn create_bootstrap_leader_account(
-    vote_id: &Pubkey,
-    node_id: &Pubkey,
+    vote_pubkey: &Pubkey,
+    node_pubkey: &Pubkey,
     commission: u32,
     lamports: u64,
 ) -> (Account, VoteState) {
     // Construct a vote account for the bootstrap_leader such that the leader_scheduler
     // will be forced to select it as the leader for height 0
-    let mut vote_account = create_account(&vote_id, &node_id, commission, lamports);
+    let mut vote_account = create_account(&vote_pubkey, &node_pubkey, commission, lamports);
 
     let mut vote_state: VoteState = vote_account.state().unwrap();
     // TODO: get a hash for slot 0?
@@ -340,26 +340,26 @@ mod tests {
 
     #[test]
     fn test_initialize_vote_account() {
-        let vote_account_id = Pubkey::new_rand();
+        let vote_account_pubkey = Pubkey::new_rand();
         let mut vote_account = Account::new(100, VoteState::size_of(), &id());
 
-        let node_id = Pubkey::new_rand();
+        let node_pubkey = Pubkey::new_rand();
 
         //init should pass
-        let mut vote_account = KeyedAccount::new(&vote_account_id, false, &mut vote_account);
-        let res = initialize_account(&mut vote_account, &node_id, 0);
+        let mut vote_account = KeyedAccount::new(&vote_account_pubkey, false, &mut vote_account);
+        let res = initialize_account(&mut vote_account, &node_pubkey, 0);
         assert_eq!(res, Ok(()));
 
         // reinit should fail
-        let res = initialize_account(&mut vote_account, &node_id, 0);
+        let res = initialize_account(&mut vote_account, &node_pubkey, 0);
         assert_eq!(res, Err(InstructionError::AccountAlreadyInitialized));
     }
 
     fn create_test_account() -> (Pubkey, Account) {
-        let vote_id = Pubkey::new_rand();
+        let vote_pubkey = Pubkey::new_rand();
         (
-            vote_id,
-            vote_state::create_account(&vote_id, &Pubkey::new_rand(), 0, 100),
+            vote_pubkey,
+            vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100),
         )
     }
 
@@ -376,7 +376,7 @@ mod tests {
     }
 
     fn simulate_process_vote(
-        vote_id: &Pubkey,
+        vote_pubkey: &Pubkey,
         vote_account: &mut Account,
         vote: &Vote,
         slot_hashes: &[(u64, Hash)],
@@ -385,7 +385,7 @@ mod tests {
             create_test_slot_hashes_account(slot_hashes);
 
         process_votes(
-            &mut KeyedAccount::new(vote_id, true, vote_account),
+            &mut KeyedAccount::new(vote_pubkey, true, vote_account),
             &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
             &[],
             &[vote.clone()],
@@ -395,18 +395,18 @@ mod tests {
 
     /// exercises all the keyed accounts stuff
     fn simulate_process_vote_unchecked(
-        vote_id: &Pubkey,
+        vote_pubkey: &Pubkey,
         vote_account: &mut Account,
         vote: &Vote,
     ) -> Result<VoteState, InstructionError> {
-        simulate_process_vote(vote_id, vote_account, vote, &[(vote.slot, vote.hash)])
+        simulate_process_vote(vote_pubkey, vote_account, vote, &[(vote.slot, vote.hash)])
     }
 
     #[test]
     fn test_vote_create_bootstrap_leader_account() {
-        let vote_id = Pubkey::new_rand();
+        let vote_pubkey = Pubkey::new_rand();
         let (_vote_account, vote_state) =
-            vote_state::create_bootstrap_leader_account(&vote_id, &Pubkey::new_rand(), 0, 100);
+            vote_state::create_bootstrap_leader_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
 
         assert_eq!(vote_state.votes.len(), 1);
         assert_eq!(vote_state.votes[0], Lockout::new(&Vote::default()));
@@ -426,44 +426,49 @@ mod tests {
 
     #[test]
     fn test_voter_registration() {
-        let (vote_id, vote_account) = create_test_account();
+        let (vote_pubkey, vote_account) = create_test_account();
 
         let vote_state: VoteState = vote_account.state().unwrap();
-        assert_eq!(vote_state.authorized_voter_id, vote_id);
+        assert_eq!(vote_state.authorized_voter_pubkey, vote_pubkey);
         assert!(vote_state.votes.is_empty());
     }
 
     #[test]
     fn test_vote() {
-        let (vote_id, mut vote_account) = create_test_account();
+        let (vote_pubkey, mut vote_account) = create_test_account();
 
         let vote = Vote::new(1, Hash::default());
         let vote_state =
-            simulate_process_vote_unchecked(&vote_id, &mut vote_account, &vote).unwrap();
+            simulate_process_vote_unchecked(&vote_pubkey, &mut vote_account, &vote).unwrap();
         assert_eq!(vote_state.votes, vec![Lockout::new(&vote)]);
         assert_eq!(vote_state.credits(), 0);
     }
 
     #[test]
     fn test_vote_slot_hashes() {
-        let (vote_id, mut vote_account) = create_test_account();
+        let (vote_pubkey, mut vote_account) = create_test_account();
 
         let hash = hash(&[0u8]);
         let vote = Vote::new(0, hash);
 
         // wrong hash
-        let vote_state =
-            simulate_process_vote(&vote_id, &mut vote_account, &vote, &[(0, Hash::default())])
-                .unwrap();
+        let vote_state = simulate_process_vote(
+            &vote_pubkey,
+            &mut vote_account,
+            &vote,
+            &[(0, Hash::default())],
+        )
+        .unwrap();
         assert_eq!(vote_state.votes.len(), 0);
 
         // wrong slot
         let vote_state =
-            simulate_process_vote(&vote_id, &mut vote_account, &vote, &[(1, hash)]).unwrap();
+            simulate_process_vote(&vote_pubkey, &mut vote_account, &vote, &[(1, hash)]).unwrap();
         assert_eq!(vote_state.votes.len(), 0);
 
         // empty slot_hashes
-        let vote_state = simulate_process_vote(&vote_id, &mut vote_account, &vote, &[]).unwrap();
+        let vote_state =
+            simulate_process_vote(&vote_pubkey, &mut vote_account, &vote, &[]).unwrap();
         assert_eq!(vote_state.votes.len(), 0);
 
         // this one would work, but the wrong account is passed for slot_hashes_id
@@ -471,7 +476,7 @@ mod tests {
             create_test_slot_hashes_account(&[(vote.slot, vote.hash)]);
         assert_eq!(
             process_votes(
-                &mut KeyedAccount::new(&vote_id, true, &mut vote_account),
+                &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
                 &mut KeyedAccount::new(&Pubkey::default(), false, &mut slot_hashes_account),
                 &[],
                 &[vote.clone()],
@@ -482,7 +487,7 @@ mod tests {
 
     #[test]
     fn test_vote_signature() {
-        let (vote_id, mut vote_account) = create_test_account();
+        let (vote_pubkey, mut vote_account) = create_test_account();
 
         let vote = vec![Vote::new(1, Hash::default())];
 
@@ -491,7 +496,7 @@ mod tests {
 
         // unsigned
         let res = process_votes(
-            &mut KeyedAccount::new(&vote_id, false, &mut vote_account),
+            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
             &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
             &[],
             &vote,
@@ -500,7 +505,7 @@ mod tests {
 
         // unsigned
         let res = process_votes(
-            &mut KeyedAccount::new(&vote_id, true, &mut vote_account),
+            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
             &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
             &[],
             &vote,
@@ -508,29 +513,29 @@ mod tests {
         assert_eq!(res, Ok(()));
 
         // another voter
-        let authorized_voter_id = Pubkey::new_rand();
+        let authorized_voter_pubkey = Pubkey::new_rand();
         let res = authorize_voter(
-            &mut KeyedAccount::new(&vote_id, false, &mut vote_account),
+            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
             &[],
-            &authorized_voter_id,
+            &authorized_voter_pubkey,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         let res = authorize_voter(
-            &mut KeyedAccount::new(&vote_id, true, &mut vote_account),
+            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
             &[],
-            &authorized_voter_id,
+            &authorized_voter_pubkey,
         );
         assert_eq!(res, Ok(()));
-        // verify authorized_voter_id can authorize authorized_voter_id ;)
+        // verify authorized_voter_pubkey can authorize authorized_voter_pubkey ;)
         let res = authorize_voter(
-            &mut KeyedAccount::new(&vote_id, false, &mut vote_account),
+            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
             &[KeyedAccount::new(
-                &authorized_voter_id,
+                &authorized_voter_pubkey,
                 true,
                 &mut Account::default(),
             )],
-            &authorized_voter_id,
+            &authorized_voter_pubkey,
         );
         assert_eq!(res, Ok(()));
 
@@ -539,7 +544,7 @@ mod tests {
         let (slot_hashes_id, mut slot_hashes_account) =
             create_test_slot_hashes_account(&[(2, Hash::default())]);
         let res = process_votes(
-            &mut KeyedAccount::new(&vote_id, true, &mut vote_account),
+            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
             &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
             &[],
             &vote,
@@ -549,10 +554,10 @@ mod tests {
         // signed by authorized voter
         let vote = vec![Vote::new(2, Hash::default())];
         let res = process_votes(
-            &mut KeyedAccount::new(&vote_id, false, &mut vote_account),
+            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
             &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
             &[KeyedAccount::new(
-                &authorized_voter_id,
+                &authorized_voter_pubkey,
                 true,
                 &mut Account::default(),
             )],
@@ -563,11 +568,11 @@ mod tests {
 
     #[test]
     fn test_vote_without_initialization() {
-        let vote_id = Pubkey::new_rand();
+        let vote_pubkey = Pubkey::new_rand();
         let mut vote_account = Account::new(100, VoteState::size_of(), &id());
 
         let res = simulate_process_vote_unchecked(
-            &vote_id,
+            &vote_pubkey,
             &mut vote_account,
             &Vote::new(1, Hash::default()),
         );
@@ -576,7 +581,7 @@ mod tests {
 
     #[test]
     fn test_vote_lockout() {
-        let (_vote_id, vote_account) = create_test_account();
+        let (_vote_pubkey, vote_account) = create_test_account();
 
         let mut vote_state: VoteState = vote_account.state().unwrap();
 
@@ -604,8 +609,8 @@ mod tests {
 
     #[test]
     fn test_vote_double_lockout_after_expiration() {
-        let voter_id = Pubkey::new_rand();
-        let mut vote_state = VoteState::new(&voter_id, &Pubkey::new_rand(), 0);
+        let voter_pubkey = Pubkey::new_rand();
+        let mut vote_state = VoteState::new(&voter_pubkey, &Pubkey::new_rand(), 0);
 
         for i in 0..3 {
             vote_state.process_slot_vote_unchecked(i as u64);
@@ -632,8 +637,8 @@ mod tests {
 
     #[test]
     fn test_expire_multiple_votes() {
-        let voter_id = Pubkey::new_rand();
-        let mut vote_state = VoteState::new(&voter_id, &Pubkey::new_rand(), 0);
+        let voter_pubkey = Pubkey::new_rand();
+        let mut vote_state = VoteState::new(&voter_pubkey, &Pubkey::new_rand(), 0);
 
         for i in 0..3 {
             vote_state.process_slot_vote_unchecked(i as u64);
@@ -663,8 +668,8 @@ mod tests {
 
     #[test]
     fn test_vote_credits() {
-        let voter_id = Pubkey::new_rand();
-        let mut vote_state = VoteState::new(&voter_id, &Pubkey::new_rand(), 0);
+        let voter_pubkey = Pubkey::new_rand();
+        let mut vote_state = VoteState::new(&voter_pubkey, &Pubkey::new_rand(), 0);
 
         for i in 0..MAX_LOCKOUT_HISTORY {
             vote_state.process_slot_vote_unchecked(i as u64);
@@ -682,8 +687,8 @@ mod tests {
 
     #[test]
     fn test_duplicate_vote() {
-        let voter_id = Pubkey::new_rand();
-        let mut vote_state = VoteState::new(&voter_id, &Pubkey::new_rand(), 0);
+        let voter_pubkey = Pubkey::new_rand();
+        let mut vote_state = VoteState::new(&voter_pubkey, &Pubkey::new_rand(), 0);
         vote_state.process_slot_vote_unchecked(0);
         vote_state.process_slot_vote_unchecked(1);
         vote_state.process_slot_vote_unchecked(0);
@@ -694,8 +699,8 @@ mod tests {
 
     #[test]
     fn test_nth_recent_vote() {
-        let voter_id = Pubkey::new_rand();
-        let mut vote_state = VoteState::new(&voter_id, &Pubkey::new_rand(), 0);
+        let voter_pubkey = Pubkey::new_rand();
+        let mut vote_state = VoteState::new(&voter_pubkey, &Pubkey::new_rand(), 0);
         for i in 0..MAX_LOCKOUT_HISTORY {
             vote_state.process_slot_vote_unchecked(i as u64);
         }

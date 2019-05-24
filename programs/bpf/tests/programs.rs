@@ -76,7 +76,7 @@ mod bpf {
                 let bank = Bank::new(&genesis_block);
                 let bank_client = BankClient::new(bank);
 
-                let loader_id = load_program(
+                let loader_pubkey = load_program(
                     &bank_client,
                     &alice_keypair,
                     &native_loader::id(),
@@ -84,7 +84,7 @@ mod bpf {
                 );
 
                 // Call user program
-                let program_id = load_program(&bank_client, &alice_keypair, &loader_id, elf);
+                let program_id = load_program(&bank_client, &alice_keypair, &loader_pubkey, elf);
                 let instruction =
                     create_invoke_instruction(alice_keypair.pubkey(), program_id, &1u8);
                 bank_client
@@ -121,7 +121,7 @@ mod bpf {
                 let bank = Bank::new(&genesis_block);
                 let bank_client = BankClient::new(bank);
 
-                let loader_id = load_program(
+                let loader_pubkey = load_program(
                     &bank_client,
                     &alice_keypair,
                     &native_loader::id(),
@@ -129,7 +129,7 @@ mod bpf {
                 );
 
                 // Call user program
-                let program_id = load_program(&bank_client, &alice_keypair, &loader_id, elf);
+                let program_id = load_program(&bank_client, &alice_keypair, &loader_pubkey, elf);
                 let account_metas = vec![
                     AccountMeta::new(alice_keypair.pubkey(), true),
                     AccountMeta::new(Keypair::new().pubkey(), false),
