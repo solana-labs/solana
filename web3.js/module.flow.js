@@ -124,13 +124,13 @@ declare module '@solana/web3.js' {
   declare export type TransactionSignature = string;
 
   declare type TransactionInstructionCtorFields = {|
-    keys: ?Array<{pubkey: PublicKey, isSigner: boolean}>,
+    keys: ?Array<{pubkey: PublicKey, isSigner: boolean, isDebitable: boolean}>,
     programId?: PublicKey,
     data?: Buffer,
   |};
 
   declare export class TransactionInstruction {
-    keys: Array<{pubkey: PublicKey, isSigner: boolean}>;
+    keys: Array<{pubkey: PublicKey, isSigner: boolean, isDebitable: boolean}>;
     programId: PublicKey;
     data: Buffer;
   }

@@ -201,7 +201,10 @@ export class BudgetProgram {
         }
 
         return new Transaction().add({
-          keys: [{pubkey: from, isSigner: true}, {pubkey: to, isSigner: false}],
+          keys: [
+            {pubkey: from, isSigner: true, isDebitable: true},
+            {pubkey: to, isSigner: false, isDebitable: false},
+          ],
           programId: this.programId,
           data: data.slice(0, pos),
         });
@@ -222,9 +225,9 @@ export class BudgetProgram {
 
         return new Transaction().add({
           keys: [
-            {pubkey: from, isSigner: true},
-            {pubkey: program, isSigner: false},
-            {pubkey: to, isSigner: false},
+            {pubkey: from, isSigner: true, isDebitable: true},
+            {pubkey: program, isSigner: false, isDebitable: true},
+            {pubkey: to, isSigner: false, isDebitable: false},
           ],
           programId: this.programId,
           data: data.slice(0, pos),
@@ -246,9 +249,9 @@ export class BudgetProgram {
 
         return new Transaction().add({
           keys: [
-            {pubkey: from, isSigner: true},
-            {pubkey: program, isSigner: false},
-            {pubkey: to, isSigner: false},
+            {pubkey: from, isSigner: true, isDebitable: true},
+            {pubkey: program, isSigner: false, isDebitable: true},
+            {pubkey: to, isSigner: false, isDebitable: false},
           ],
           programId: this.programId,
           data: data.slice(0, pos),
@@ -294,9 +297,9 @@ export class BudgetProgram {
 
     return new Transaction().add({
       keys: [
-        {pubkey: from, isSigner: true},
-        {pubkey: program, isSigner: false},
-        {pubkey: to, isSigner: false},
+        {pubkey: from, isSigner: true, isDebitable: true},
+        {pubkey: program, isSigner: false, isDebitable: true},
+        {pubkey: to, isSigner: false, isDebitable: false},
       ],
       programId: this.programId,
       data: data.slice(0, pos),
@@ -321,9 +324,9 @@ export class BudgetProgram {
 
     return new Transaction().add({
       keys: [
-        {pubkey: from, isSigner: true},
-        {pubkey: program, isSigner: false},
-        {pubkey: to, isSigner: false},
+        {pubkey: from, isSigner: true, isDebitable: true},
+        {pubkey: program, isSigner: false, isDebitable: true},
+        {pubkey: to, isSigner: false, isDebitable: false},
       ],
       programId: this.programId,
       data,
@@ -351,9 +354,9 @@ export class BudgetProgram {
 
     return new Transaction().add({
       keys: [
-        {pubkey: from, isSigner: true},
-        {pubkey: program, isSigner: false},
-        {pubkey: to, isSigner: false},
+        {pubkey: from, isSigner: true, isDebitable: true},
+        {pubkey: program, isSigner: false, isDebitable: true},
+        {pubkey: to, isSigner: false, isDebitable: false},
       ],
       programId: this.programId,
       data,
