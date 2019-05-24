@@ -51,7 +51,8 @@ pub fn create_account(
     lamports: u64,
 ) -> Vec<Instruction> {
     let space = VoteState::size_of() as u64;
-    let create_ix = system_instruction::create_account(from_pubkey, vote_pubkey, lamports, space, &id());
+    let create_ix =
+        system_instruction::create_account(from_pubkey, vote_pubkey, lamports, space, &id());
     let init_ix = initialize_account(from_pubkey, vote_pubkey, node_pubkey, commission);
     vec![create_ix, init_ix]
 }
@@ -79,7 +80,8 @@ pub fn authorize_voter(
     authorized_voter_pubkey: &Pubkey, // currently authorized
     new_authorized_voter_pubkey: &Pubkey,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_signer(from_pubkey, vote_pubkey, authorized_voter_pubkey);
+    let account_metas =
+        metas_for_authorized_signer(from_pubkey, vote_pubkey, authorized_voter_pubkey);
 
     Instruction::new(
         id(),
@@ -94,7 +96,8 @@ pub fn vote(
     authorized_voter_pubkey: &Pubkey,
     recent_votes: Vec<Vote>,
 ) -> Instruction {
-    let mut account_metas = metas_for_authorized_signer(from_pubkey, vote_pubkey, authorized_voter_pubkey);
+    let mut account_metas =
+        metas_for_authorized_signer(from_pubkey, vote_pubkey, authorized_voter_pubkey);
 
     // request slot_hashes syscall account after vote_pubkey
     account_metas.insert(2, AccountMeta::new(slot_hashes::id(), false));

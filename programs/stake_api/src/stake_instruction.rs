@@ -105,7 +105,11 @@ pub fn redeem_vote_credits(
     Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
 }
 
-pub fn delegate_stake(from_pubkey: &Pubkey, stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
+pub fn delegate_stake(
+    from_pubkey: &Pubkey,
+    stake_pubkey: &Pubkey,
+    vote_pubkey: &Pubkey,
+) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*stake_pubkey, true),

@@ -1408,23 +1408,48 @@ mod tests {
         );
 
         assert_eq!(
-            BankingStage::consume_or_forward_packets(Some(my_pubkey1.clone()), false, false, &my_pubkey),
+            BankingStage::consume_or_forward_packets(
+                Some(my_pubkey1.clone()),
+                false,
+                false,
+                &my_pubkey
+            ),
             BufferedPacketsDecision::Forward
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(Some(my_pubkey1.clone()), false, true, &my_pubkey),
+            BankingStage::consume_or_forward_packets(
+                Some(my_pubkey1.clone()),
+                false,
+                true,
+                &my_pubkey
+            ),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(Some(my_pubkey1.clone()), true, false, &my_pubkey),
+            BankingStage::consume_or_forward_packets(
+                Some(my_pubkey1.clone()),
+                true,
+                false,
+                &my_pubkey
+            ),
             BufferedPacketsDecision::Consume
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(Some(my_pubkey1.clone()), false, false, &my_pubkey1),
+            BankingStage::consume_or_forward_packets(
+                Some(my_pubkey1.clone()),
+                false,
+                false,
+                &my_pubkey1
+            ),
             BufferedPacketsDecision::Hold
         );
         assert_eq!(
-            BankingStage::consume_or_forward_packets(Some(my_pubkey1.clone()), true, false, &my_pubkey1),
+            BankingStage::consume_or_forward_packets(
+                Some(my_pubkey1.clone()),
+                true,
+                false,
+                &my_pubkey1
+            ),
             BufferedPacketsDecision::Consume
         );
     }

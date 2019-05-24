@@ -178,7 +178,13 @@ pub(crate) mod tests {
         process_instructions(
             bank,
             &[from_account],
-            vote_instruction::create_account(&from_account.pubkey(), vote_pubkey, node_pubkey, 0, amount),
+            vote_instruction::create_account(
+                &from_account.pubkey(),
+                vote_pubkey,
+                node_pubkey,
+                0,
+                amount,
+            ),
         );
 
         let stake_account_keypair = Keypair::new();

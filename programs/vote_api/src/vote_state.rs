@@ -452,9 +452,13 @@ mod tests {
         let vote = Vote::new(0, hash);
 
         // wrong hash
-        let vote_state =
-            simulate_process_vote(&vote_pubkey, &mut vote_account, &vote, &[(0, Hash::default())])
-                .unwrap();
+        let vote_state = simulate_process_vote(
+            &vote_pubkey,
+            &mut vote_account,
+            &vote,
+            &[(0, Hash::default())],
+        )
+        .unwrap();
         assert_eq!(vote_state.votes.len(), 0);
 
         // wrong slot
@@ -463,7 +467,8 @@ mod tests {
         assert_eq!(vote_state.votes.len(), 0);
 
         // empty slot_hashes
-        let vote_state = simulate_process_vote(&vote_pubkey, &mut vote_account, &vote, &[]).unwrap();
+        let vote_state =
+            simulate_process_vote(&vote_pubkey, &mut vote_account, &vote, &[]).unwrap();
         assert_eq!(vote_state.votes.len(), 0);
 
         // this one would work, but the wrong account is passed for slot_hashes_id

@@ -203,7 +203,8 @@ impl ClusterInfoRepairListener {
                     repairee_epoch_slots.root,
                 );
 
-                let my_root = Self::read_my_gossiped_root(my_pubkey, cluster_info, my_gossiped_root);
+                let my_root =
+                    Self::read_my_gossiped_root(my_pubkey, cluster_info, my_gossiped_root);
 
                 let _ = Self::serve_repairs_to_repairee(
                     my_pubkey,

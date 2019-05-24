@@ -50,8 +50,8 @@ impl Stakes {
                     .map(|old_voter_pubkey| (old_account.lamports, old_voter_pubkey))
             });
 
-            let stake =
-                StakeState::voter_pubkey_from(account).map(|voter_pubkey| (account.lamports, voter_pubkey));
+            let stake = StakeState::voter_pubkey_from(account)
+                .map(|voter_pubkey| (account.lamports, voter_pubkey));
 
             // if adjustments need to be made...
             if stake != old_stake {
@@ -174,7 +174,8 @@ mod tests {
     fn test_stakes_change_delegate() {
         let mut stakes = Stakes::default();
 
-        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) = create_staked_node_accounts(10);
+        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
+            create_staked_node_accounts(10);
 
         let ((vote_pubkey2, vote_account2), (_stake_pubkey2, stake_account2)) =
             create_staked_node_accounts(10);
@@ -208,7 +209,8 @@ mod tests {
     fn test_stakes_multiple_stakers() {
         let mut stakes = Stakes::default();
 
-        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) = create_staked_node_accounts(10);
+        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
+            create_staked_node_accounts(10);
 
         let (stake_pubkey2, stake_account2) = create_stake_account(10, &vote_pubkey);
 
@@ -229,7 +231,8 @@ mod tests {
     fn test_stakes_not_delegate() {
         let mut stakes = Stakes::default();
 
-        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) = create_staked_node_accounts(10);
+        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
+            create_staked_node_accounts(10);
 
         stakes.store(&vote_pubkey, &vote_account);
         stakes.store(&stake_pubkey, &stake_account);

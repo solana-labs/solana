@@ -220,7 +220,8 @@ impl Locktower {
                 bank.slot(),
                 self.epoch_stakes.epoch
             );
-            self.epoch_stakes = EpochStakes::new_from_bank(bank, &self.epoch_stakes.delegate_pubkey);
+            self.epoch_stakes =
+                EpochStakes::new_from_bank(bank, &self.epoch_stakes.delegate_pubkey);
             datapoint_info!(
                 "locktower-epoch",
                 ("epoch", self.epoch_stakes.epoch, i64),
