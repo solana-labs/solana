@@ -47,14 +47,14 @@ pub enum SystemInstruction {
 }
 
 pub fn create_account(
-    from_id: &Pubkey,
+    from_pubkey: &Pubkey,
     to_id: &Pubkey,
     lamports: u64,
     space: u64,
     program_id: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*from_id, true),
+        AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_id, false),
     ];
     Instruction::new(
@@ -69,13 +69,13 @@ pub fn create_account(
 }
 
 /// Create and sign a transaction to create a system account
-pub fn create_user_account(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction {
+pub fn create_user_account(from_pubkey: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction {
     let program_id = system_program::id();
-    create_account(from_id, to_id, lamports, 0, &program_id)
+    create_account(from_pubkey, to_id, lamports, 0, &program_id)
 }
 
-pub fn assign(from_id: &Pubkey, program_id: &Pubkey) -> Instruction {
-    let account_metas = vec![AccountMeta::new(*from_id, true)];
+pub fn assign(from_pubkey: &Pubkey, program_id: &Pubkey) -> Instruction {
+    let account_metas = vec![AccountMeta::new(*from_pubkey, true)];
     Instruction::new(
         system_program::id(),
         &SystemInstruction::Assign {
@@ -85,9 +85,9 @@ pub fn assign(from_id: &Pubkey, program_id: &Pubkey) -> Instruction {
     )
 }
 
-pub fn transfer(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction {
+pub fn transfer(from_pubkey: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*from_id, true),
+        AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*to_id, false),
     ];
     Instruction::new(
@@ -98,10 +98,10 @@ pub fn transfer(from_id: &Pubkey, to_id: &Pubkey, lamports: u64) -> Instruction 
 }
 
 /// Create and sign new SystemInstruction::Transfer transaction to many destinations
-pub fn transfer_many(from_id: &Pubkey, to_lamports: &[(Pubkey, u64)]) -> Vec<Instruction> {
+pub fn transfer_many(from_pubkey: &Pubkey, to_lamports: &[(Pubkey, u64)]) -> Vec<Instruction> {
     to_lamports
         .iter()
-        .map(|(to_id, lamports)| transfer(from_id, to_id, *lamports))
+        .map(|(to_id, lamports)| transfer(from_pubkey, to_id, *lamports))
         .collect()
 }
 

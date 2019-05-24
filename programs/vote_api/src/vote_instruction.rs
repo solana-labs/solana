@@ -27,13 +27,13 @@ pub enum VoteInstruction {
 }
 
 fn initialize_account(
-    from_id: &Pubkey,
+    from_pubkey: &Pubkey,
     vote_id: &Pubkey,
     node_id: &Pubkey,
     commission: u32,
 ) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*from_id, true),
+        AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*vote_id, false),
     ];
     Instruction::new(
@@ -44,24 +44,24 @@ fn initialize_account(
 }
 
 pub fn create_account(
-    from_id: &Pubkey,
+    from_pubkey: &Pubkey,
     vote_id: &Pubkey,
     node_id: &Pubkey,
     commission: u32,
     lamports: u64,
 ) -> Vec<Instruction> {
     let space = VoteState::size_of() as u64;
-    let create_ix = system_instruction::create_account(from_id, vote_id, lamports, space, &id());
-    let init_ix = initialize_account(from_id, vote_id, node_id, commission);
+    let create_ix = system_instruction::create_account(from_pubkey, vote_id, lamports, space, &id());
+    let init_ix = initialize_account(from_pubkey, vote_id, node_id, commission);
     vec![create_ix, init_ix]
 }
 
 fn metas_for_authorized_signer(
-    from_id: &Pubkey,
+    from_pubkey: &Pubkey,
     vote_id: &Pubkey,
     authorized_voter_id: &Pubkey, // currently authorized
 ) -> Vec<AccountMeta> {
-    let mut account_metas = vec![AccountMeta::new(*from_id, true)]; // sender
+    let mut account_metas = vec![AccountMeta::new(*from_pubkey, true)]; // sender
 
     let is_own_signer = authorized_voter_id == vote_id;
 
@@ -74,12 +74,12 @@ fn metas_for_authorized_signer(
 }
 
 pub fn authorize_voter(
-    from_id: &Pubkey,
+    from_pubkey: &Pubkey,
     vote_id: &Pubkey,
     authorized_voter_id: &Pubkey, // currently authorized
     new_authorized_voter_id: &Pubkey,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_signer(from_id, vote_id, authorized_voter_id);
+    let account_metas = metas_for_authorized_signer(from_pubkey, vote_id, authorized_voter_id);
 
     Instruction::new(
         id(),
@@ -89,12 +89,12 @@ pub fn authorize_voter(
 }
 
 pub fn vote(
-    from_id: &Pubkey,
+    from_pubkey: &Pubkey,
     vote_id: &Pubkey,
     authorized_voter_id: &Pubkey,
     recent_votes: Vec<Vote>,
 ) -> Instruction {
-    let mut account_metas = metas_for_authorized_signer(from_id, vote_id, authorized_voter_id);
+    let mut account_metas = metas_for_authorized_signer(from_pubkey, vote_id, authorized_voter_id);
 
     // request slot_hashes syscall account after vote_id
     account_metas.insert(2, AccountMeta::new(slot_hashes::id(), false));

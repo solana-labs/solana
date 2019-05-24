@@ -43,13 +43,13 @@ pub enum StakeInstruction {
 }
 
 pub fn create_delegate_account(
-    from_id: &Pubkey,
+    from_pubkey: &Pubkey,
     staker_id: &Pubkey,
     lamports: u64,
 ) -> Vec<Instruction> {
     vec![
         system_instruction::create_account(
-            from_id,
+            from_pubkey,
             staker_id,
             lamports,
             std::mem::size_of::<StakeState>() as u64,
@@ -59,7 +59,7 @@ pub fn create_delegate_account(
             id(),
             &StakeInstruction::InitializeDelegate,
             vec![
-                AccountMeta::new(*from_id, true),
+                AccountMeta::new(*from_pubkey, true),
                 AccountMeta::new(*staker_id, false),
             ],
         ),
@@ -67,13 +67,13 @@ pub fn create_delegate_account(
 }
 
 pub fn create_mining_pool_account(
-    from_id: &Pubkey,
+    from_pubkey: &Pubkey,
     staker_id: &Pubkey,
     lamports: u64,
 ) -> Vec<Instruction> {
     vec![
         system_instruction::create_account(
-            from_id,
+            from_pubkey,
             staker_id,
             lamports,
             std::mem::size_of::<StakeState>() as u64,
@@ -83,7 +83,7 @@ pub fn create_mining_pool_account(
             id(),
             &StakeInstruction::InitializeMiningPool,
             vec![
-                AccountMeta::new(*from_id, true),
+                AccountMeta::new(*from_pubkey, true),
                 AccountMeta::new(*staker_id, false),
             ],
         ),
@@ -91,13 +91,13 @@ pub fn create_mining_pool_account(
 }
 
 pub fn redeem_vote_credits(
-    from_id: &Pubkey,
+    from_pubkey: &Pubkey,
     mining_pool_id: &Pubkey,
     stake_id: &Pubkey,
     vote_id: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*from_id, true),
+        AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*mining_pool_id, false),
         AccountMeta::new(*stake_id, false),
         AccountMeta::new(*vote_id, false),
@@ -105,9 +105,9 @@ pub fn redeem_vote_credits(
     Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
 }
 
-pub fn delegate_stake(from_id: &Pubkey, stake_id: &Pubkey, vote_id: &Pubkey) -> Instruction {
+pub fn delegate_stake(from_pubkey: &Pubkey, stake_id: &Pubkey, vote_id: &Pubkey) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*from_id, true),
+        AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*stake_id, true),
         AccountMeta::new(*vote_id, false),
     ];
