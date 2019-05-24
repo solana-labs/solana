@@ -4,7 +4,7 @@ import * as BufferLayout from 'buffer-layout';
 
 import {Transaction} from './transaction';
 import {PublicKey} from './publickey';
-import * as Layout from './layout';
+import {SystemProgram} from './system-program';
 
 /**
  * Represents a condition that is met by executing a `applySignature()`
@@ -114,20 +114,10 @@ function serializeCondition(condition: BudgetCondition) {
       return data;
     }
     case 'signature': {
-      const dataLayout = BufferLayout.struct([
-        BufferLayout.u32('condition'),
-        Layout.publicKey('from'),
-      ]);
-
       const from = condition.from.toBuffer();
       const data = Buffer.alloc(4 + from.length);
-      dataLayout.encode(
-        {
-          instruction: 1, // Signature
-          from,
-        },
-        data,
-      );
+      data.writeUInt32LE(1, 0); // Condition enum = Signature
+      from.copy(data, 4);
       return data;
     }
     default:
@@ -190,8 +180,8 @@ export class BudgetProgram {
     pos += 4;
 
     switch (conditions.length) {
-      case 0:
-        data.writeUInt32LE(0, pos); // Budget enum = Pay
+      case 0: {
+        data.writeUInt32LE(0, pos); // BudgetExpr enum = Pay
         pos += 4;
 
         {
@@ -199,17 +189,27 @@ export class BudgetProgram {
           payment.copy(data, pos);
           pos += payment.length;
         }
+        const trimmedData = data.slice(0, pos);
 
-        return new Transaction().add({
+        const transaction = SystemProgram.createAccount(
+          from,
+          program,
+          amount,
+          trimmedData.length,
+          this.programId,
+        );
+
+        return transaction.add({
           keys: [
-            {pubkey: from, isSigner: true, isDebitable: true},
             {pubkey: to, isSigner: false, isDebitable: false},
+            {pubkey: program, isSigner: false, isDebitable: true},
           ],
           programId: this.programId,
-          data: data.slice(0, pos),
+          data: trimmedData,
         });
-      case 1:
-        data.writeUInt32LE(1, pos); // Budget enum = After
+      }
+      case 1: {
+        data.writeUInt32LE(1, pos); // BudgetExpr enum = After
         pos += 4;
         {
           const condition = conditions[0];
@@ -218,23 +218,32 @@ export class BudgetProgram {
           conditionData.copy(data, pos);
           pos += conditionData.length;
 
+          data.writeUInt32LE(0, pos); // BudgetExpr enum = Pay
+          pos += 4;
+
           const paymentData = serializePayment({amount, to});
           paymentData.copy(data, pos);
           pos += paymentData.length;
         }
+        const trimmedData = data.slice(0, pos);
 
-        return new Transaction().add({
-          keys: [
-            {pubkey: from, isSigner: true, isDebitable: true},
-            {pubkey: program, isSigner: false, isDebitable: true},
-            {pubkey: to, isSigner: false, isDebitable: false},
-          ],
+        const transaction = SystemProgram.createAccount(
+          from,
+          program,
+          amount,
+          trimmedData.length,
+          this.programId,
+        );
+
+        return transaction.add({
+          keys: [{pubkey: program, isSigner: false, isDebitable: true}],
           programId: this.programId,
-          data: data.slice(0, pos),
+          data: trimmedData,
         });
+      }
 
-      case 2:
-        data.writeUInt32LE(2, pos); // Budget enum = Or
+      case 2: {
+        data.writeUInt32LE(2, pos); // BudgetExpr enum = Or
         pos += 4;
 
         for (let condition of conditions) {
@@ -242,20 +251,29 @@ export class BudgetProgram {
           conditionData.copy(data, pos);
           pos += conditionData.length;
 
+          data.writeUInt32LE(0, pos); // BudgetExpr enum = Pay
+          pos += 4;
+
           const paymentData = serializePayment({amount, to});
           paymentData.copy(data, pos);
           pos += paymentData.length;
         }
+        const trimmedData = data.slice(0, pos);
 
-        return new Transaction().add({
-          keys: [
-            {pubkey: from, isSigner: true, isDebitable: true},
-            {pubkey: program, isSigner: false, isDebitable: true},
-            {pubkey: to, isSigner: false, isDebitable: false},
-          ],
+        const transaction = SystemProgram.createAccount(
+          from,
+          program,
+          amount,
+          trimmedData.length,
+          this.programId,
+        );
+
+        return transaction.add({
+          keys: [{pubkey: program, isSigner: false, isDebitable: true}],
           programId: this.programId,
-          data: data.slice(0, pos),
+          data: trimmedData,
         });
+      }
 
       default:
         throw new Error(
@@ -282,7 +300,7 @@ export class BudgetProgram {
     data.writeUInt32LE(0, pos); // NewBudget instruction
     pos += 4;
 
-    data.writeUInt32LE(3, pos); // Budget enum = And
+    data.writeUInt32LE(3, pos); // BudgetExpr enum = And
     pos += 4;
 
     for (let condition of [condition1, condition2]) {
@@ -291,18 +309,27 @@ export class BudgetProgram {
       pos += conditionData.length;
     }
 
+    data.writeUInt32LE(0, pos); // BudgetExpr enum = Pay
+    pos += 4;
+
     const paymentData = serializePayment({amount, to});
     paymentData.copy(data, pos);
     pos += paymentData.length;
 
-    return new Transaction().add({
-      keys: [
-        {pubkey: from, isSigner: true, isDebitable: true},
-        {pubkey: program, isSigner: false, isDebitable: true},
-        {pubkey: to, isSigner: false, isDebitable: false},
-      ],
+    const trimmedData = data.slice(0, pos);
+
+    const transaction = SystemProgram.createAccount(
+      from,
+      program,
+      amount,
+      trimmedData.length,
+      this.programId,
+    );
+
+    return transaction.add({
+      keys: [{pubkey: program, isSigner: false, isDebitable: true}],
       programId: this.programId,
-      data: data.slice(0, pos),
+      data: trimmedData,
     });
   }
 

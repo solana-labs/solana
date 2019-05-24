@@ -8,7 +8,6 @@ const solanaWeb3 = require('..');
 
 const account1 = new solanaWeb3.Account();
 const account2 = new solanaWeb3.Account();
-const contractFunds = new solanaWeb3.Account();
 const contractState = new solanaWeb3.Account();
 
 const approver1 = new solanaWeb3.Account();
@@ -24,37 +23,34 @@ function showBalance() {
   return Promise.all([
     connection.getBalance(account1.publicKey),
     connection.getBalance(account2.publicKey),
-    connection.getBalance(contractFunds.publicKey),
     connection.getBalance(contractState.publicKey),
-  ]).then(
-    ([fromBalance, toBalance, contractFundsBalance, contractStateBalance]) => {
-      console.log(
-        `Account1:       ${account1.publicKey} has a balance of ${fromBalance}`,
-      );
-      console.log(
-        `Account2:       ${account2.publicKey} has a balance of ${toBalance}`,
-      );
-      console.log(
-        `Contract Funds: ${
-          contractFunds.publicKey
-        } has a balance of ${contractFundsBalance}`,
-      );
-      console.log(
-        `Contract State: ${
-          contractState.publicKey
-        } has a balance of ${contractStateBalance}`,
-      );
-    },
-  );
+  ]).then(([fromBalance, toBalance, contractStateBalance]) => {
+    console.log(
+      `Account1:       ${account1.publicKey} has a balance of ${fromBalance}`,
+    );
+    console.log(
+      `Account2:       ${account2.publicKey} has a balance of ${toBalance}`,
+    );
+    console.log(
+      `Contract State: ${
+        contractState.publicKey
+      } has a balance of ${contractStateBalance}`,
+    );
+  });
 }
 
 function confirmTransaction(signature) {
   console.log('Confirming transaction:', signature);
   return connection.getSignatureStatus(signature).then(confirmation => {
-    if (confirmation !== 'Confirmed') {
+    if (confirmation && 'Ok' in confirmation) {
+      console.log('Transaction confirmed');
+    } else if (confirmation) {
+      throw new Error(
+        `Transaction was not confirmed (${JSON.stringify(confirmation.Err)})`,
+      );
+    } else {
       throw new Error(`Transaction was not confirmed (${confirmation})`);
     }
-    console.log('Transaction confirmed');
   });
 }
 
@@ -89,42 +85,20 @@ showBalance()
   .then(confirmTransaction)
   .then(showBalance)
   .then(() => {
-    console.log(`\n== Creating account for the contract funds`);
-    const transaction = solanaWeb3.SystemProgram.createAccount(
-      account1.publicKey,
-      contractFunds.publicKey,
-      50, // number of lamports to transfer
-      0,
-      solanaWeb3.BudgetProgram.programId,
-    );
-    return connection.sendTransaction(transaction, account1);
-  })
-  .then(confirmTransaction)
-  .then(showBalance)
-  .then(() => {
-    console.log(`\n== Creating account for the contract state`);
-    const transaction = solanaWeb3.SystemProgram.createAccount(
-      account1.publicKey,
-      contractState.publicKey,
-      1, // account1 pays 1 lamport to hold the contract state
-      solanaWeb3.BudgetProgram.space,
-      solanaWeb3.BudgetProgram.programId,
-    );
-    return connection.sendTransaction(transaction, account1);
-  })
-  .then(confirmTransaction)
-  .then(showBalance)
-  .then(() => {
     console.log(`\n== Initializing contract`);
     const transaction = solanaWeb3.BudgetProgram.payOnBoth(
-      contractFunds.publicKey,
+      account1.publicKey,
       contractState.publicKey,
       account2.publicKey,
       50,
       solanaWeb3.BudgetProgram.signatureCondition(approver1.publicKey),
       solanaWeb3.BudgetProgram.signatureCondition(approver2.publicKey),
     );
-    return connection.sendTransaction(transaction, contractFunds);
+    return solanaWeb3.sendAndConfirmTransaction(
+      connection,
+      transaction,
+      account1,
+    );
   })
   .then(confirmTransaction)
   .then(showBalance)
@@ -135,7 +109,11 @@ showBalance()
       contractState.publicKey,
       account2.publicKey,
     );
-    return connection.sendTransaction(transaction, approver1);
+    return solanaWeb3.sendAndConfirmTransaction(
+      connection,
+      transaction,
+      approver1,
+    );
   })
   .then(confirmTransaction)
   .then(showBalance)
@@ -146,7 +124,11 @@ showBalance()
       contractState.publicKey,
       account2.publicKey,
     );
-    return connection.sendTransaction(transaction, approver2);
+    return solanaWeb3.sendAndConfirmTransaction(
+      connection,
+      transaction,
+      approver2,
+    );
   })
   .then(confirmTransaction)
   .then(showBalance)
