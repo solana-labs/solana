@@ -243,7 +243,7 @@ impl ClusterInfo {
         let now = timestamp();
         let mut spy_nodes = 0;
         let mut replicators = 0;
-        let my_id = self.my_data().id;
+        let my_pubkey = self.my_data().id;
         let nodes: Vec<_> = self
             .all_peers()
             .into_iter()
@@ -268,7 +268,7 @@ impl ClusterInfo {
                     addr_to_string(&node.gossip),
                     now.saturating_sub(last_updated),
                     node.id,
-                    if node.id == my_id { "(me)" } else { "" }.to_string(),
+                    if node.id == my_pubkey { "(me)" } else { "" }.to_string(),
                     addr_to_string(&node.tpu),
                     addr_to_string(&node.rpc),
                 )

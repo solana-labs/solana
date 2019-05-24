@@ -61,21 +61,21 @@ impl EpochStakes {
         let stakes = accounts.iter().map(|(k, (v, _))| (*k, *v)).collect();
         Self::new(epoch, stakes, &accounts[0].0)
     }
-    pub fn new_from_bank(bank: &Bank, my_id: &Pubkey) -> Self {
+    pub fn new_from_bank(bank: &Bank, my_pubkey: &Pubkey) -> Self {
         let bank_epoch = bank.get_epoch_and_slot_index(bank.slot()).0;
         let stakes = staking_utils::vote_account_stakes_at_epoch(bank, bank_epoch)
             .expect("voting require a bank with stakes");
-        Self::new(bank_epoch, stakes, my_id)
+        Self::new(bank_epoch, stakes, my_pubkey)
     }
 }
 
 impl Locktower {
-    pub fn new_from_forks(bank_forks: &BankForks, my_id: &Pubkey) -> Self {
+    pub fn new_from_forks(bank_forks: &BankForks, my_pubkey: &Pubkey) -> Self {
         let mut frozen_banks: Vec<_> = bank_forks.frozen_banks().values().cloned().collect();
         frozen_banks.sort_by_key(|b| (b.parents().len(), b.slot()));
         let epoch_stakes = {
             if let Some(bank) = frozen_banks.last() {
-                EpochStakes::new_from_bank(bank, my_id)
+                EpochStakes::new_from_bank(bank, my_pubkey)
             } else {
                 return Self::default();
             }

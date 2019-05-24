@@ -80,14 +80,14 @@ pub fn should_retransmit_and_persist(
     blob: &Blob,
     bank: Option<Arc<Bank>>,
     leader_schedule_cache: &Arc<LeaderScheduleCache>,
-    my_id: &Pubkey,
+    my_pubkey: &Pubkey,
 ) -> bool {
     let slot_leader_id = match bank {
         None => leader_schedule_cache.slot_leader_at(blob.slot(), None),
         Some(bank) => leader_schedule_cache.slot_leader_at(blob.slot(), Some(&bank)),
     };
 
-    if blob.id() == *my_id {
+    if blob.id() == *my_pubkey {
         inc_new_counter_debug!("streamer-recv_window-circular_transmission", 1);
         false
     } else if slot_leader_id == None {
@@ -103,7 +103,7 @@ pub fn should_retransmit_and_persist(
 
 fn recv_window<F>(
     blocktree: &Arc<Blocktree>,
-    my_id: &Pubkey,
+    my_pubkey: &Pubkey,
     r: &BlobReceiver,
     retransmit: &BlobSender,
     genesis_blockhash: &Hash,
@@ -126,9 +126,9 @@ where
             && blob.read().unwrap().genesis_blockhash() == *genesis_blockhash
     });
 
-    retransmit_blobs(&blobs, retransmit, my_id)?;
+    retransmit_blobs(&blobs, retransmit, my_pubkey)?;
 
-    trace!("{} num blobs received: {}", my_id, blobs.len());
+    trace!("{} num blobs received: {}", my_pubkey, blobs.len());
 
     process_blobs(&blobs, blocktree)?;
 

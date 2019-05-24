@@ -72,7 +72,7 @@ impl ForkProgress {
 impl ReplayStage {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new<T>(
-        my_id: &Pubkey,
+        my_pubkey: &Pubkey,
         vote_account: &Pubkey,
         voting_keypair: Option<&Arc<T>>,
         blocktree: Arc<Blocktree>,
@@ -94,9 +94,9 @@ impl ReplayStage {
         let subscriptions = subscriptions.clone();
         let bank_forks = bank_forks.clone();
         let poh_recorder = poh_recorder.clone();
-        let my_id = *my_id;
+        let my_pubkey = *my_pubkey;
         let mut ticks_per_slot = 0;
-        let mut locktower = Locktower::new_from_forks(&bank_forks.read().unwrap(), &my_id);
+        let mut locktower = Locktower::new_from_forks(&bank_forks.read().unwrap(), &my_pubkey);
         // Start the replay stage loop
         let leader_schedule_cache = leader_schedule_cache.clone();
         let vote_account = *vote_account;
@@ -124,7 +124,7 @@ impl ReplayStage {
                     Self::replay_active_banks(
                         &blocktree,
                         &bank_forks,
-                        &my_id,
+                        &my_pubkey,
                         &mut ticks_per_slot,
                         &mut progress,
                         &slot_full_sender,
@@ -156,7 +156,7 @@ impl ReplayStage {
                         )?;
 
                         Self::reset_poh_recorder(
-                            &my_id,
+                            &my_pubkey,
                             &blocktree,
                             &bank,
                             &poh_recorder,
@@ -182,7 +182,7 @@ impl ReplayStage {
                             poh_tick_height + 1,
                         );
                         Self::start_leader(
-                            &my_id,
+                            &my_pubkey,
                             &bank_forks,
                             &poh_recorder,
                             &cluster_info,
@@ -211,7 +211,7 @@ impl ReplayStage {
         (Self { t_replay }, slot_full_receiver, root_slot_receiver)
     }
     pub fn start_leader(
-        my_id: &Pubkey,
+        my_pubkey: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -220,7 +220,7 @@ impl ReplayStage {
         grace_ticks: u64,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) {
-        trace!("{} checking poh slot {}", my_id, poh_slot);
+        trace!("{} checking poh slot {}", my_pubkey, poh_slot);
         if bank_forks.read().unwrap().get(poh_slot).is_none() {
             let parent_slot = poh_recorder.lock().unwrap().start_slot();
             let parent = {
@@ -235,16 +235,16 @@ impl ReplayStage {
                 .map(|next_leader| {
                     debug!(
                         "me: {} leader {} at poh slot {}",
-                        my_id, next_leader, poh_slot
+                        my_pubkey, next_leader, poh_slot
                     );
                     cluster_info.write().unwrap().set_leader(&next_leader);
-                    if next_leader == *my_id && reached_leader_tick {
-                        debug!("{} starting tpu for slot {}", my_id, poh_slot);
+                    if next_leader == *my_pubkey && reached_leader_tick {
+                        debug!("{} starting tpu for slot {}", my_pubkey, poh_slot);
                         datapoint_warn!(
                             "replay_stage-new_leader",
                             ("count", poh_slot, i64),
                             ("grace", grace_ticks, i64));
-                        let tpu_bank = Bank::new_from_parent(&parent, my_id, poh_slot);
+                        let tpu_bank = Bank::new_from_parent(&parent, my_pubkey, poh_slot);
                         bank_forks.write().unwrap().insert(tpu_bank);
                         if let Some(tpu_bank) = bank_forks.read().unwrap().get(poh_slot).cloned() {
                             assert_eq!(
@@ -253,7 +253,7 @@ impl ReplayStage {
                             );
                             debug!(
                                 "poh_recorder new working bank: me: {} next_slot: {} next_leader: {}",
-                                my_id,
+                                my_pubkey,
                                 tpu_bank.slot(),
                                 next_leader
                             );
@@ -262,7 +262,7 @@ impl ReplayStage {
                     }
                 })
                 .or_else(|| {
-                    warn!("{} No next leader found", my_id);
+                    warn!("{} No next leader found", my_pubkey);
                     None
                 });
         }
@@ -345,7 +345,7 @@ impl ReplayStage {
     }
 
     fn reset_poh_recorder(
-        my_id: &Pubkey,
+        my_pubkey: &Pubkey,
         blocktree: &Blocktree,
         bank: &Arc<Bank>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -353,7 +353,7 @@ impl ReplayStage {
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
     ) {
         let next_leader_slot =
-            leader_schedule_cache.next_leader_slot(&my_id, bank.slot(), &bank, Some(blocktree));
+            leader_schedule_cache.next_leader_slot(&my_pubkey, bank.slot(), &bank, Some(blocktree));
         poh_recorder.lock().unwrap().reset(
             bank.tick_height(),
             bank.last_blockhash(),
@@ -363,7 +363,7 @@ impl ReplayStage {
         );
         debug!(
             "{:?} voted and reset poh at {}. next leader slot {:?}",
-            my_id,
+            my_pubkey,
             bank.tick_height(),
             next_leader_slot
         );
@@ -372,7 +372,7 @@ impl ReplayStage {
     fn replay_active_banks(
         blocktree: &Arc<Blocktree>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        my_id: &Pubkey,
+        my_pubkey: &Pubkey,
         ticks_per_slot: &mut u64,
         progress: &mut HashMap<u64, ForkProgress>,
         slot_full_sender: &Sender<(u64, Pubkey)>,
@@ -383,12 +383,12 @@ impl ReplayStage {
         for bank_slot in &active_banks {
             let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
             *ticks_per_slot = bank.ticks_per_slot();
-            if bank.collector_id() != *my_id {
+            if bank.collector_id() != *my_pubkey {
                 Self::replay_blocktree_into_bank(&bank, &blocktree, progress)?;
             }
             let max_tick_height = (*bank_slot + 1) * bank.ticks_per_slot() - 1;
             if bank.tick_height() == max_tick_height {
-                Self::process_completed_bank(my_id, bank, slot_full_sender);
+                Self::process_completed_bank(my_pubkey, bank, slot_full_sender);
             }
         }
         Ok(())
@@ -556,14 +556,14 @@ impl ReplayStage {
     }
 
     fn process_completed_bank(
-        my_id: &Pubkey,
+        my_pubkey: &Pubkey,
         bank: Arc<Bank>,
         slot_full_sender: &Sender<(u64, Pubkey)>,
     ) {
         bank.freeze();
         info!("bank frozen {}", bank.slot());
         if let Err(e) = slot_full_sender.send((bank.slot(), bank.collector_id())) {
-            trace!("{} slot_full alert failed: {:?}", my_id, e);
+            trace!("{} slot_full alert failed: {:?}", my_pubkey, e);
         }
     }
 
