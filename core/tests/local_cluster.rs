@@ -1,11 +1,12 @@
 extern crate solana;
 
+use crate::solana::blocktree::Blocktree;
 use solana::cluster::Cluster;
 use solana::cluster_tests;
 use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::validator::ValidatorConfig;
-use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
+use solana_runtime::epoch_schedule::{EpochSchedule, MINIMUM_SLOT_LENGTH};
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::timing;
 use std::time::Duration;
@@ -214,6 +215,7 @@ fn test_repairman_catchup() {
     let num_ticks_per_second = 100;
     let num_ticks_per_slot = 40;
     let num_slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
+    let stakers_slot_offset = num_slots_per_epoch;
 
     validator_config.rpc_config.enable_fullnode_exit = true;
     let mut cluster = LocalCluster::new(&ClusterConfig {
@@ -222,13 +224,17 @@ fn test_repairman_catchup() {
         validator_config: validator_config.clone(),
         ticks_per_slot: num_ticks_per_slot,
         slots_per_epoch: num_slots_per_epoch,
+        stakers_slot_offset,
         poh_config: PohConfig::new_sleep(Duration::from_millis(1000 / num_ticks_per_second)),
         ..ClusterConfig::default()
     });
 
-    // Sleep for longer than the first 2 warmup epochs
+    let epoch_schedule = EpochSchedule::new(num_slots_per_epoch, stakers_slot_offset, true);
+    let num_warmup_epochs = (epoch_schedule.get_stakers_epoch(0) + 1) as f64;
+
+    // Sleep for longer than the first N warmup epochs, with a one epoch buffer for timing issues
     cluster_tests::sleep_n_epochs(
-        5.0,
+        num_warmup_epochs + 1.0,
         &cluster.genesis_block.poh_config,
         num_ticks_per_slot,
         num_slots_per_epoch,
@@ -239,22 +245,25 @@ fn test_repairman_catchup() {
     // protocol will have to kick in for this validator to repair.
     cluster.add_validator(&validator_config, 3);
 
+    let all_ids = cluster.get_node_pubkeys();
+    let leader_id = cluster.entry_point_info.id;
+    let validator_id = all_ids.into_iter().find(|x| *x != leader_id).unwrap();
+
+    // Wait for repairman protocol to catch this validator up
     cluster_tests::sleep_n_epochs(
-        3.0,
+        num_warmup_epochs + 1.0,
         &cluster.genesis_block.poh_config,
         num_ticks_per_slot,
         num_slots_per_epoch,
     );
 
     cluster.close_preserve_ledgers();
-    let all_ids = cluster.get_node_pubkeys();
-    let leader_id = cluster.entry_point_info.id;
-    let validator_id = all_ids.into_iter().find(|x| *x != leader_id).unwrap();
-    let validator_ledger = cluster.fullnode_infos[&validator_id].ledger_path.clone();
+    let validator_ledger_path = cluster.fullnode_infos[&validator_id].ledger_path.clone();
 
-    let num_expected_slots = 97;
-    assert!(
-        cluster_tests::verify_ledger_ticks(&validator_ledger, num_ticks_per_slot as usize)
-            > num_expected_slots
-    );
+    // Expect at least the the first two epochs to have been rooted after waiting 3 epochs.
+    let num_expected_slots = num_slots_per_epoch * 2;
+    let validator_ledger = Blocktree::open(&validator_ledger_path).unwrap();
+    let validator_rooted_slots: Vec<_> =
+        validator_ledger.rooted_slot_iterator(0).unwrap().collect();
+    assert!(validator_rooted_slots.len() as u64 > num_expected_slots);
 }
