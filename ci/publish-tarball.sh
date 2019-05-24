@@ -48,7 +48,7 @@ echo --- Creating tarball
   COMMIT="$(git rev-parse HEAD)"
 
   (
-    echo "channel: $CHANNEL"
+    echo "channel: $CHANNEL_OR_TAG"
     echo "commit: $COMMIT"
     echo "target: $TARGET"
   ) > solana-release/version.yml
@@ -57,6 +57,9 @@ echo --- Creating tarball
   scripts/cargo-install-all.sh +"$rust_stable" solana-release
 
   ./fetch-perf-libs.sh
+  mkdir solana-release/target
+  cp -a target/perf-libs solana-release/target/
+
   # shellcheck source=/dev/null
   source ./target/perf-libs/env.sh
   (

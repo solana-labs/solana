@@ -20,6 +20,11 @@ if [[ $(uname) != Linux ]]; then
   fi
 fi
 
+if [[ -f "$SOLANA_ROOT"/target/perf-libs/env.sh ]]; then
+  # shellcheck source=/dev/null
+  source "$SOLANA_ROOT"/target/perf-libs/env.sh
+fi
+
 if [[ -n $USE_INSTALL || ! -f "$SOLANA_ROOT"/Cargo.toml ]]; then
   solana_program() {
     declare program="$1"
@@ -46,9 +51,6 @@ else
     declare manifest_path="--manifest-path=$SOLANA_ROOT/$program/Cargo.toml"
     printf "cargo run $manifest_path $maybe_release $maybe_package --bin solana-%s %s -- " "$program" "$features"
   }
-  # shellcheck disable=2154 # 'here' is referenced but not assigned
-  LD_LIBRARY_PATH=$(cd "$SOLANA_ROOT/target/perf-libs" && pwd):$LD_LIBRARY_PATH
-  export LD_LIBRARY_PATH
 fi
 
 solana_bench_tps=$(solana_program bench-tps)
