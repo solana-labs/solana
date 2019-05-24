@@ -369,6 +369,6 @@ mod tests {
         vm.set_verifier(bpf_verifier::check).unwrap();
         vm.set_max_instruction_count(10).unwrap();
         vm.set_program(prog).unwrap();
-        vm.execute_program(input).unwrap();
+        vm.execute_program(input, &[], &[]).unwrap();
     }
 }
