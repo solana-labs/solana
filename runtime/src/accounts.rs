@@ -884,7 +884,7 @@ mod tests {
         account.owner = native_loader::id();
         accounts.push((key1, account));
 
-        let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
         let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
             &[],
