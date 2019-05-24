@@ -10,7 +10,7 @@ use rand_chacha::ChaChaRng;
 use solana_metrics::datapoint;
 use solana_runtime::epoch_schedule::EpochSchedule;
 use solana_sdk::pubkey::Pubkey;
-use std::cmp::min;
+use std::cmp;
 use std::collections::HashMap;
 use std::mem;
 use std::net::SocketAddr;
@@ -87,7 +87,10 @@ impl ClusterInfoRepairListener {
         let thread = Builder::new()
             .name("solana-cluster_info_repair_listener".to_string())
             .spawn(move || {
-                // Maps a peer to the last timestamp and root they gossiped
+                // Maps a peer to
+                // 1) The latest timestamp of the EpochSlots gossip message at which a repair was
+                // sent to this peer
+                // 2) The latest root the peer gossiped
                 let mut peer_roots: HashMap<Pubkey, (u64, u64)> = HashMap::new();
                 let _ = Self::recv_loop(
                     &blocktree,
@@ -132,23 +135,30 @@ impl ClusterInfoRepairListener {
                     let r_cluster_info = cluster_info.read().unwrap();
 
                     // Update our local map with the updated peers' information
-                    if let Some((peer_epoch_slots, ts)) =
+                    if let Some((peer_epoch_slots, updated_ts)) =
                         r_cluster_info.get_epoch_state_for_node(&peer.id, last_update_ts)
                     {
-                        // Following logic needs to be fast because it holds the lock
-                        // preventing updates on gossip
-                        if Self::should_repair_peer(
-                            my_root,
-                            peer_epoch_slots.root,
-                            NUM_BUFFER_SLOTS,
-                        ) {
-                            // Only update our local timestamp for this peer if we are going to
-                            // repair them
-                            peer_roots.insert(peer.id, (ts, peer_epoch_slots.root));
+                        let peer_entry = peer_roots.entry(peer.id).or_default();
+                        let peer_root = cmp::max(peer_epoch_slots.root, peer_entry.1);
 
-                            // Clone out EpochSlots structure to avoid holding lock on gossip
-                            peers_needing_repairs.insert(peer.id, peer_epoch_slots.clone());
-                        }
+                        let last_repair_ts = {
+                            // Following logic needs to be fast because it holds the lock
+                            // preventing updates on gossip
+                            if Self::should_repair_peer(
+                                my_root,
+                                peer_epoch_slots.root,
+                                NUM_BUFFER_SLOTS,
+                            ) {
+                                // Clone out EpochSlots structure to avoid holding lock on gossip
+                                peers_needing_repairs.insert(peer.id, peer_epoch_slots.clone());
+                                updated_ts
+                            } else {
+                                // No repairs were sent, don't need to update the timestamp
+                                peer_entry.0
+                            }
+                        };
+
+                        *peer_entry = (last_repair_ts, peer_root);
                     }
                 }
             }
@@ -341,9 +351,9 @@ impl ClusterInfoRepairListener {
         repair_redundancy: usize,
     ) -> Option<BlobIndexesToRepairIterator> {
         let total_blobs = num_blobs_in_slot * repair_redundancy;
-        let total_repairmen_for_slot = min(total_blobs, eligible_repairmen.len());
+        let total_repairmen_for_slot = cmp::min(total_blobs, eligible_repairmen.len());
 
-        let blobs_per_repairman = min(
+        let blobs_per_repairman = cmp::min(
             (total_blobs + total_repairmen_for_slot - 1) / total_repairmen_for_slot,
             num_blobs_in_slot,
         );
@@ -393,6 +403,7 @@ impl ClusterInfoRepairListener {
         repairmen
     }
 
+    // Read my root out of gossip, and update the cached `old_root`
     fn read_my_gossiped_root(
         my_pubkey: &Pubkey,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -841,7 +852,7 @@ mod tests {
 
         // 1) If there are a sufficient number of repairmen, then each blob should be sent
         // `repair_redundancy` OR `repair_redundancy + 1` times.
-        let num_expected_redundancy = min(num_repairmen, repair_redundancy);
+        let num_expected_redundancy = cmp::min(num_repairmen, repair_redundancy);
         for b in results.keys() {
             assert!(
                 results[b] == num_expected_redundancy || results[b] == num_expected_redundancy + 1
