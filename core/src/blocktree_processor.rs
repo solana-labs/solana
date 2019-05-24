@@ -946,6 +946,8 @@ pub mod tests {
 
     #[test]
     fn test_process_entries_2nd_entry_collision_with_self_and_error() {
+        solana_logger::setup();
+
         let GenesisBlockInfo {
             genesis_block,
             mint_keypair,
@@ -956,8 +958,8 @@ pub mod tests {
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
 
-        // fund: put 4 in each of 1 and 2
-        assert_matches!(bank.transfer(4, &mint_keypair, &keypair1.pubkey()), Ok(_));
+        // fund: put some money in each of 1 and 2
+        assert_matches!(bank.transfer(5, &mint_keypair, &keypair1.pubkey()), Ok(_));
         assert_matches!(bank.transfer(4, &mint_keypair, &keypair2.pubkey()), Ok(_));
 
         // 3 entries: first has a transfer, 2nd has a conflict with 1st, 3rd has a conflict with itself
@@ -971,8 +973,8 @@ pub mod tests {
                 bank.last_blockhash(),
             )],
         );
-        // now:
-        // keypair1=3
+        // should now be:
+        // keypair1=4
         // keypair2=4
         // keypair3=0
 
@@ -989,12 +991,12 @@ pub mod tests {
                 system_transaction::transfer(
                     &keypair1,
                     &mint_keypair.pubkey(),
-                    1,
+                    2,
                     bank.last_blockhash(),
-                ), // will collide
+                ), // will collide with predecessor
             ],
         );
-        // now:
+        // should now be:
         // keypair1=2
         // keypair2=2
         // keypair3=2
@@ -1017,10 +1019,10 @@ pub mod tests {
                 ), // should be fine
             ],
         );
-        // still now:
-        // keypair1=2
-        // keypair2=2
-        // keypair3=2
+        // would now be:
+        // keypair1=0
+        // keypair2=3
+        // keypair3=3
 
         assert!(process_entries(
             &bank,
@@ -1032,7 +1034,7 @@ pub mod tests {
         )
         .is_err());
 
-        // First transaction in first entry succeeded, so keypair1 lost 1 lamport
+        // last entry should have been aborted before par_execute_entries
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
         assert_eq!(bank.get_balance(&keypair2.pubkey()), 2);
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 2);
