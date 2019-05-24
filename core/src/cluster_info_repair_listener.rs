@@ -389,6 +389,7 @@ impl ClusterInfoRepairListener {
             .collect();
 
         repairmen.push(my_pubkey);
+        repairmen.sort();
         repairmen
     }
 
