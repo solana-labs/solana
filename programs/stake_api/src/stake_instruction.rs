@@ -92,13 +92,13 @@ pub fn create_mining_pool_account(
 
 pub fn redeem_vote_credits(
     from_pubkey: &Pubkey,
-    mining_pool_id: &Pubkey,
+    mining_pool_pubkey: &Pubkey,
     stake_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
-        AccountMeta::new(*mining_pool_id, false),
+        AccountMeta::new(*mining_pool_pubkey, false),
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new(*vote_pubkey, false),
     ];
