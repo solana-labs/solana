@@ -34,12 +34,12 @@ BIN_CRATES=(
   bench-streamer
   bench-tps
   drone
-  fullnode
   genesis
   gossip
   install
   keygen
   ledger-tool
+  validator
   wallet
 )
 
