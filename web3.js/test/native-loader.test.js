@@ -29,7 +29,7 @@ test('load native program', async () => {
     'solana_noop_program',
   );
   const transaction = new Transaction().add({
-    keys: [{pubkey: from.publicKey, isSigner: true}],
+    keys: [{pubkey: from.publicKey, isSigner: true, isDebitable: true}],
     programId,
   });
 

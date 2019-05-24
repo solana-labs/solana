@@ -30,7 +30,7 @@ export const PACKET_DATA_SIZE = 512;
  * @property {?Buffer} data
  */
 type TransactionInstructionCtorFields = {|
-  keys?: Array<{pubkey: PublicKey, isSigner: boolean}>,
+  keys?: Array<{pubkey: PublicKey, isSigner: boolean, isDebitable: boolean}>,
   programId?: PublicKey,
   data?: Buffer,
 |};
@@ -43,7 +43,11 @@ export class TransactionInstruction {
    * Public keys to include in this transaction
    * Boolean represents whether this pubkey needs to sign the transaction
    */
-  keys: Array<{pubkey: PublicKey, isSigner: boolean}> = [];
+  keys: Array<{
+    pubkey: PublicKey,
+    isSigner: boolean,
+    isDebitable: boolean,
+  }> = [];
 
   /**
    * Program Id to execute
@@ -166,6 +170,13 @@ export class Transaction {
         if (!keys.includes(keyStr)) {
           if (keySignerPair.isSigner) {
             numRequiredSignatures += 1;
+            if (!keySignerPair.isDebitable) {
+              numCreditOnlySignedAccounts += 1;
+            }
+          } else {
+            if (!keySignerPair.isDebitable) {
+              numCreditOnlyUnsignedAccounts += 1;
+            }
           }
           keys.push(keyStr);
         }
@@ -422,6 +433,20 @@ export class Transaction {
     const PUBKEY_LENGTH = 32;
     const SIGNATURE_LENGTH = 64;
 
+    function isCreditDebit(
+      i: number,
+      numRequiredSignatures: number,
+      numCreditOnlySignedAccounts: number,
+      numCreditOnlyUnsignedAccounts: number,
+      numKeys: number,
+    ): boolean {
+      return (
+        i < numRequiredSignatures - numCreditOnlySignedAccounts ||
+        (i >= numRequiredSignatures &&
+          i < numKeys - numCreditOnlyUnsignedAccounts)
+      );
+    }
+
     let transaction = new Transaction();
 
     // Slice up wire data
@@ -435,9 +460,12 @@ export class Transaction {
       signatures.push(signature);
     }
 
-    byteArray = byteArray.slice(1); // Skip numRequiredSignatures byte
-    byteArray = byteArray.slice(1); // Skip numCreditOnlySignedAccounts byte
-    byteArray = byteArray.slice(1); // Skip numCreditOnlyUnsignedAccounts byte
+    const numRequiredSignatures = byteArray.shift();
+    // byteArray = byteArray.slice(1); // Skip numRequiredSignatures byte
+    const numCreditOnlySignedAccounts = byteArray.shift();
+    // byteArray = byteArray.slice(1); // Skip numCreditOnlySignedAccounts byte
+    const numCreditOnlyUnsignedAccounts = byteArray.shift();
+    // byteArray = byteArray.slice(1); // Skip numCreditOnlyUnsignedAccounts byte
 
     const accountCount = shortvec.decodeLength(byteArray);
     let accounts = [];
@@ -481,10 +509,18 @@ export class Transaction {
       };
       for (let j = 0; j < instructions[i].accountIndex.length; j++) {
         const pubkey = new PublicKey(accounts[instructions[i].accountIndex[j]]);
+
         instructionData.keys.push({
           pubkey,
           isSigner: transaction.signatures.some(
             keyObj => keyObj.publicKey.toString() === pubkey.toString(),
+          ),
+          isDebitable: isCreditDebit(
+            j,
+            numRequiredSignatures,
+            numCreditOnlySignedAccounts,
+            numCreditOnlyUnsignedAccounts,
+            accounts.length,
           ),
         });
       }
