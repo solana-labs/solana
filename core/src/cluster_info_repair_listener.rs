@@ -128,38 +128,14 @@ impl ClusterInfoRepairListener {
             // Iterate through all the known nodes in the network, looking for ones that
             // need repairs
             for peer in peers {
-                let last_update_ts = Self::get_last_ts(peer.id, peer_roots);
-                let my_root =
-                    Self::read_my_gossiped_root(&my_pubkey, cluster_info, &mut my_gossiped_root);
-                {
-                    let r_cluster_info = cluster_info.read().unwrap();
-
-                    // Update our local map with the updated peers' information
-                    if let Some((peer_epoch_slots, updated_ts)) =
-                        r_cluster_info.get_epoch_state_for_node(&peer.id, last_update_ts)
-                    {
-                        let peer_entry = peer_roots.entry(peer.id).or_default();
-                        let peer_root = cmp::max(peer_epoch_slots.root, peer_entry.1);
-
-                        let last_repair_ts = {
-                            // Following logic needs to be fast because it holds the lock
-                            // preventing updates on gossip
-                            if Self::should_repair_peer(
-                                my_root,
-                                peer_epoch_slots.root,
-                                NUM_BUFFER_SLOTS,
-                            ) {
-                                // Clone out EpochSlots structure to avoid holding lock on gossip
-                                peers_needing_repairs.insert(peer.id, peer_epoch_slots.clone());
-                                updated_ts
-                            } else {
-                                // No repairs were sent, don't need to update the timestamp
-                                peer_entry.0
-                            }
-                        };
-
-                        *peer_entry = (last_repair_ts, peer_root);
-                    }
+                if let Some(repairee_epoch_slots) = Self::process_potential_repairee(
+                    &my_pubkey,
+                    &peer.id,
+                    cluster_info,
+                    peer_roots,
+                    &mut my_gossiped_root,
+                ) {
+                    peers_needing_repairs.insert(peer.id, repairee_epoch_slots);
                 }
             }
 
@@ -176,6 +152,46 @@ impl ClusterInfoRepairListener {
             );
 
             sleep(Duration::from_millis(REPAIRMEN_SLEEP_MILLIS as u64));
+        }
+    }
+
+    fn process_potential_repairee(
+        my_id: &Pubkey,
+        peer_id: &Pubkey,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        peer_roots: &mut HashMap<Pubkey, (u64, u64)>,
+        my_gossiped_root: &mut u64,
+    ) -> Option<EpochSlots> {
+        let last_cached_repair_ts = Self::get_last_ts(peer_id, peer_roots);
+        let my_root = Self::read_my_gossiped_root(&my_id, cluster_info, my_gossiped_root);
+        {
+            let r_cluster_info = cluster_info.read().unwrap();
+
+            // Update our local map with the updated peers' information
+            if let Some((peer_epoch_slots, updated_ts)) =
+                r_cluster_info.get_epoch_state_for_node(&peer_id, last_cached_repair_ts)
+            {
+                let peer_entry = peer_roots.entry(*peer_id).or_default();
+                let peer_root = cmp::max(peer_epoch_slots.root, peer_entry.1);
+                let mut result = None;
+                let last_repair_ts = {
+                    // Following logic needs to be fast because it holds the lock
+                    // preventing updates on gossip
+                    if Self::should_repair_peer(my_root, peer_epoch_slots.root, NUM_BUFFER_SLOTS) {
+                        // Clone out EpochSlots structure to avoid holding lock on gossip
+                        result = Some(peer_epoch_slots.clone());
+                        updated_ts
+                    } else {
+                        // No repairs were sent, don't need to update the timestamp
+                        peer_entry.0
+                    }
+                };
+
+                *peer_entry = (last_repair_ts, peer_root);
+                result
+            } else {
+                None
+            }
         }
     }
 
@@ -434,8 +450,8 @@ impl ClusterInfoRepairListener {
         repairman_root > repairee_root + num_buffer_slots as u64
     }
 
-    fn get_last_ts(pubkey: Pubkey, peer_roots: &mut HashMap<Pubkey, (u64, u64)>) -> Option<u64> {
-        peer_roots.get(&pubkey).map(|(last_ts, _)| *last_ts)
+    fn get_last_ts(pubkey: &Pubkey, peer_roots: &mut HashMap<Pubkey, (u64, u64)>) -> Option<u64> {
+        peer_roots.get(pubkey).map(|(last_ts, _)| *last_ts)
     }
 }
 
@@ -455,6 +471,7 @@ mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::tests::make_many_slot_entries;
+    use crate::cluster_info::Node;
     use crate::packet::{Blob, SharedBlob};
     use crate::streamer;
     use std::collections::BTreeSet;
@@ -513,6 +530,79 @@ mod tests {
             self.repairee_receiver_thread_hdl.join()?;
             Ok(())
         }
+    }
+
+    #[test]
+    fn test_process_potential_repairee() {
+        // Set up node ids
+        let my_id = Pubkey::new_rand();
+        let peer_id = Pubkey::new_rand();
+
+        // Set up cluster_info
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_invalid_keypair(
+            Node::new_localhost().info,
+        )));
+
+        // Push a repairee's epoch slots into cluster info
+        let repairee_root = 0;
+        let repairee_slots = BTreeSet::new();
+        cluster_info.write().unwrap().push_epoch_slots(
+            peer_id,
+            repairee_root,
+            repairee_slots.clone(),
+        );
+
+        // Set up locally cached information
+        let mut peer_roots = HashMap::new();
+        let mut my_gossiped_root = repairee_root;
+
+        // Root is not sufficiently far ahead, we shouldn't repair
+        assert!(ClusterInfoRepairListener::process_potential_repairee(
+            &my_id,
+            &peer_id,
+            &cluster_info,
+            &mut peer_roots,
+            &mut my_gossiped_root,
+        )
+        .is_none());
+
+        // Update the root to be sufficiently far ahead. A repair should now occur even if the
+        // object in gossip is not updated
+        my_gossiped_root = repairee_root + NUM_BUFFER_SLOTS as u64 + 1;
+        assert!(ClusterInfoRepairListener::process_potential_repairee(
+            &my_id,
+            &peer_id,
+            &cluster_info,
+            &mut peer_roots,
+            &mut my_gossiped_root,
+        )
+        .is_some());
+
+        // An repair was already sent, so if gossip is not updated, no repair should be sent again,
+        // even if our root moves forward
+        my_gossiped_root += 4;
+        assert!(ClusterInfoRepairListener::process_potential_repairee(
+            &my_id,
+            &peer_id,
+            &cluster_info,
+            &mut peer_roots,
+            &mut my_gossiped_root,
+        )
+        .is_none());
+
+        // Update the gossiped EpochSlots. Now a repair should be sent again
+        cluster_info
+            .write()
+            .unwrap()
+            .push_epoch_slots(peer_id, repairee_root, repairee_slots);
+        assert!(ClusterInfoRepairListener::process_potential_repairee(
+            &my_id,
+            &peer_id,
+            &cluster_info,
+            &mut peer_roots,
+            &mut my_gossiped_root,
+        )
+        .is_some());
     }
 
     #[test]
