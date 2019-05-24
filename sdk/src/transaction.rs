@@ -28,6 +28,9 @@ pub enum TransactionError {
     /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
     InsufficientFundsForFee,
 
+    /// This account may not be used to pay transaction fees
+    InvalidAccountForFee,
+
     /// The bank has seen `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
     /// its `recent_blockhash`, or as a double-spend attack.

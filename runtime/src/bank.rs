@@ -602,6 +602,14 @@ impl Bank {
                 1000
             );
         }
+        if 0 != error_counters.invalid_account_for_fee {
+            inc_new_counter_error!(
+                "bank-process_transactions-error-invalid_account_for_fee",
+                error_counters.invalid_account_for_fee,
+                0,
+                1000
+            );
+        }
         if 0 != error_counters.insufficient_funds {
             inc_new_counter_error!(
                 "bank-process_transactions-error-insufficient_funds",

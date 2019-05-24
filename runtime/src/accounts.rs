@@ -15,6 +15,7 @@ use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::system_program;
 use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
 use std::borrow::Borrow;
@@ -191,6 +192,9 @@ impl Accounts {
             if called_accounts.is_empty() || called_accounts[0].lamports == 0 {
                 error_counters.account_not_found += 1;
                 Err(TransactionError::AccountNotFound)
+            } else if called_accounts[0].owner != system_program::id() {
+                error_counters.invalid_account_for_fee += 1;
+                Err(TransactionError::InvalidAccountForFee)
             } else if called_accounts[0].lamports < fee {
                 error_counters.insufficient_funds += 1;
                 Err(TransactionError::InsufficientFundsForFee)
@@ -730,6 +734,36 @@ mod tests {
         assert_eq!(
             loaded_accounts[0],
             Err(TransactionError::InsufficientFundsForFee)
+        );
+    }
+
+    #[test]
+    fn test_load_accounts_invalid_account_for_fee() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+
+        let account = Account::new(1, 1, &Pubkey::new_rand()); // <-- owner is not the system program
+        accounts.push((key0, account));
+
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
+        let tx = Transaction::new_with_compiled_instructions(
+            &[&keypair],
+            &[],
+            Hash::default(),
+            vec![native_loader::id()],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+
+        assert_eq!(error_counters.invalid_account_for_fee, 1);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(
+            loaded_accounts[0],
+            Err(TransactionError::InvalidAccountForFee)
         );
     }
 
