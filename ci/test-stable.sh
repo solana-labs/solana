@@ -45,6 +45,8 @@ test-stable-perf)
     exit 0
   }
 
+  _ export RUST_LOG=solana_bpf_loader=info,solana_rbpf=trace; cargo test --features="bpf_rust" -- --nocapture test_program_bpf_rust
+
   # BPF program tests
   _ make -C programs/bpf/c tests
   _ cargo +"$rust_stable" test \
