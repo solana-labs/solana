@@ -256,7 +256,7 @@ rollingNodeRestart() {
 }
 
 verifyLedger() {
-  for ledger in bootstrap-leader fullnode; do
+  for ledger in bootstrap-leader validator; do
     echo "--- $ledger ledger verification"
     (
       source multinode-demo/common.sh
