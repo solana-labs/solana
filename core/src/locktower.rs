@@ -125,7 +125,7 @@ impl Locktower {
             let mut vote_state = vote_state.unwrap();
 
             if key == self.epoch_stakes.delegate_id
-                || vote_state.node_id == self.epoch_stakes.delegate_id
+                || vote_state.node_pubkey == self.epoch_stakes.delegate_id
             {
                 debug!("vote state {:?}", vote_state);
                 debug!(

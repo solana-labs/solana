@@ -263,7 +263,7 @@ mod test {
     fn test_new_mark_creation_time() {
         let mut crds = Crds::default();
         let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
-        let node_id = entry.label().pubkey();
+        let node_pubkey = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
         crds.insert(entry.clone(), 0).unwrap();
         let old = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
@@ -276,7 +276,7 @@ mod test {
 
         // odds of getting the other request should be 1 in u64::max_value()
         for _ in 0..10 {
-            let req = node.new_pull_request(&crds, &node_id, u64::max_value(), &HashMap::new());
+            let req = node.new_pull_request(&crds, &node_pubkey, u64::max_value(), &HashMap::new());
             let (to, _, self_info) = req.unwrap();
             assert_eq!(to, old.label().pubkey());
             assert_eq!(self_info, entry);
@@ -287,12 +287,12 @@ mod test {
     fn test_process_pull_request() {
         let mut node_crds = Crds::default();
         let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
-        let node_id = entry.label().pubkey();
+        let node_pubkey = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         node_crds.insert(entry.clone(), 0).unwrap();
         let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         node_crds.insert(new.clone(), 0).unwrap();
-        let req = node.new_pull_request(&node_crds, &node_id, 0, &HashMap::new());
+        let req = node.new_pull_request(&node_crds, &node_pubkey, 0, &HashMap::new());
 
         let mut dest_crds = Crds::default();
         let mut dest = CrdsGossipPull::default();
@@ -319,7 +319,7 @@ mod test {
     fn test_process_pull_request_response() {
         let mut node_crds = Crds::default();
         let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
-        let node_id = entry.label().pubkey();
+        let node_pubkey = entry.label().pubkey();
         let mut node = CrdsGossipPull::default();
         node_crds.insert(entry.clone(), 0).unwrap();
 
@@ -347,7 +347,7 @@ mod test {
         let mut done = false;
         for _ in 0..30 {
             // there is a chance of a false positive with bloom filters
-            let req = node.new_pull_request(&node_crds, &node_id, 0, &HashMap::new());
+            let req = node.new_pull_request(&node_crds, &node_pubkey, 0, &HashMap::new());
             let (_, filter, caller) = req.unwrap();
             let rsp = dest.process_pull_request(&mut dest_crds, caller, filter, 0);
             // if there is a false positive this is empty
@@ -357,7 +357,7 @@ mod test {
             }
 
             assert_eq!(rsp.len(), 1);
-            let failed = node.process_pull_response(&mut node_crds, &node_id, rsp, 1);
+            let failed = node.process_pull_response(&mut node_crds, &node_pubkey, rsp, 1);
             assert_eq!(failed, 0);
             assert_eq!(
                 node_crds
@@ -384,7 +384,7 @@ mod test {
         let mut node_crds = Crds::default();
         let entry = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
         let node_label = entry.label();
-        let node_id = node_label.pubkey();
+        let node_pubkey = node_label.pubkey();
         let mut node = CrdsGossipPull::default();
         node_crds.insert(entry.clone(), 0).unwrap();
         let old = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
@@ -395,7 +395,7 @@ mod test {
         assert_eq!(node_crds.lookup(&node_label).unwrap().label(), node_label);
 
         // purge
-        node.purge_active(&mut node_crds, &node_id, 1);
+        node.purge_active(&mut node_crds, &node_pubkey, 1);
 
         //verify self is still valid after purge
         assert_eq!(node_crds.lookup(&node_label).unwrap().label(), node_label);

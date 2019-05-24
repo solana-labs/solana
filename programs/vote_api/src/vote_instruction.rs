@@ -16,7 +16,7 @@ use solana_sdk::system_instruction;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {
     /// Initialize the VoteState for this `vote account`
-    /// takes a node_id and commission
+    /// takes a node_pubkey and commission
     InitializeAccount(Pubkey, u32),
 
     /// Authorize a voter to send signed votes.
@@ -29,7 +29,7 @@ pub enum VoteInstruction {
 fn initialize_account(
     from_pubkey: &Pubkey,
     vote_id: &Pubkey,
-    node_id: &Pubkey,
+    node_pubkey: &Pubkey,
     commission: u32,
 ) -> Instruction {
     let account_metas = vec![
@@ -38,7 +38,7 @@ fn initialize_account(
     ];
     Instruction::new(
         id(),
-        &VoteInstruction::InitializeAccount(*node_id, commission),
+        &VoteInstruction::InitializeAccount(*node_pubkey, commission),
         account_metas,
     )
 }
@@ -46,13 +46,13 @@ fn initialize_account(
 pub fn create_account(
     from_pubkey: &Pubkey,
     vote_id: &Pubkey,
-    node_id: &Pubkey,
+    node_pubkey: &Pubkey,
     commission: u32,
     lamports: u64,
 ) -> Vec<Instruction> {
     let space = VoteState::size_of() as u64;
     let create_ix = system_instruction::create_account(from_pubkey, vote_id, lamports, space, &id());
-    let init_ix = initialize_account(from_pubkey, vote_id, node_id, commission);
+    let init_ix = initialize_account(from_pubkey, vote_id, node_pubkey, commission);
     vec![create_ix, init_ix]
 }
 
@@ -123,8 +123,8 @@ pub fn process_instruction(
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
-        VoteInstruction::InitializeAccount(node_id, commission) => {
-            vote_state::initialize_account(me, &node_id, commission)
+        VoteInstruction::InitializeAccount(node_pubkey, commission) => {
+            vote_state::initialize_account(me, &node_pubkey, commission)
         }
         VoteInstruction::AuthorizeVoter(voter_id) => {
             vote_state::authorize_voter(me, rest, &voter_id)

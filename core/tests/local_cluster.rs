@@ -175,7 +175,7 @@ fn test_restart_node() {
         slots_per_epoch,
         ..ClusterConfig::default()
     });
-    let nodes = cluster.get_node_ids();
+    let nodes = cluster.get_node_pubkeys();
     cluster_tests::sleep_n_epochs(
         1.0,
         &cluster.genesis_block.poh_config,

@@ -62,7 +62,7 @@ impl Lockout {
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct VoteState {
     pub votes: VecDeque<Lockout>,
-    pub node_id: Pubkey,
+    pub node_pubkey: Pubkey,
     pub authorized_voter_id: Pubkey,
     /// fraction of std::u32::MAX that represents what part of a rewards
     ///  payout should be given to this VoteAccount
@@ -72,13 +72,13 @@ pub struct VoteState {
 }
 
 impl VoteState {
-    pub fn new(vote_id: &Pubkey, node_id: &Pubkey, commission: u32) -> Self {
+    pub fn new(vote_id: &Pubkey, node_pubkey: &Pubkey, commission: u32) -> Self {
         let votes = VecDeque::new();
         let credits = 0;
         let root_slot = None;
         Self {
             votes,
-            node_id: *node_id,
+            node_pubkey: *node_pubkey,
             authorized_voter_id: *vote_id,
             credits,
             commission,
@@ -241,7 +241,7 @@ pub fn authorize_voter(
 /// that the transaction must be signed by the staker's keys
 pub fn initialize_account(
     vote_account: &mut KeyedAccount,
-    node_id: &Pubkey,
+    node_pubkey: &Pubkey,
     commission: u32,
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState = vote_account.state()?;
@@ -251,7 +251,7 @@ pub fn initialize_account(
     }
     vote_account.set_state(&VoteState::new(
         vote_account.unsigned_key(),
-        node_id,
+        node_pubkey,
         commission,
     ))
 }
@@ -291,7 +291,7 @@ pub fn process_votes(
 // utility function, used by Bank, tests
 pub fn create_account(
     vote_id: &Pubkey,
-    node_id: &Pubkey,
+    node_pubkey: &Pubkey,
     commission: u32,
     lamports: u64,
 ) -> Account {
@@ -299,7 +299,7 @@ pub fn create_account(
 
     initialize_account(
         &mut KeyedAccount::new(vote_id, false, &mut vote_account),
-        node_id,
+        node_pubkey,
         commission,
     )
     .unwrap();
@@ -309,13 +309,13 @@ pub fn create_account(
 // utility function, used by solana-genesis, tests
 pub fn create_bootstrap_leader_account(
     vote_id: &Pubkey,
-    node_id: &Pubkey,
+    node_pubkey: &Pubkey,
     commission: u32,
     lamports: u64,
 ) -> (Account, VoteState) {
     // Construct a vote account for the bootstrap_leader such that the leader_scheduler
     // will be forced to select it as the leader for height 0
-    let mut vote_account = create_account(&vote_id, &node_id, commission, lamports);
+    let mut vote_account = create_account(&vote_id, &node_pubkey, commission, lamports);
 
     let mut vote_state: VoteState = vote_account.state().unwrap();
     // TODO: get a hash for slot 0?
@@ -343,15 +343,15 @@ mod tests {
         let vote_account_id = Pubkey::new_rand();
         let mut vote_account = Account::new(100, VoteState::size_of(), &id());
 
-        let node_id = Pubkey::new_rand();
+        let node_pubkey = Pubkey::new_rand();
 
         //init should pass
         let mut vote_account = KeyedAccount::new(&vote_account_id, false, &mut vote_account);
-        let res = initialize_account(&mut vote_account, &node_id, 0);
+        let res = initialize_account(&mut vote_account, &node_pubkey, 0);
         assert_eq!(res, Ok(()));
 
         // reinit should fail
-        let res = initialize_account(&mut vote_account, &node_id, 0);
+        let res = initialize_account(&mut vote_account, &node_pubkey, 0);
         assert_eq!(res, Err(InstructionError::AccountAlreadyInitialized));
     }
 

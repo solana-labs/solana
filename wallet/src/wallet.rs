@@ -187,7 +187,7 @@ pub fn parse_command(
         }
         ("create-vote-account", Some(matches)) => {
             let voting_account_pubkey = pubkey_of(matches, "voting_account_pubkey").unwrap();
-            let node_id = pubkey_of(matches, "node_id").unwrap();
+            let node_pubkey = pubkey_of(matches, "node_pubkey").unwrap();
             let commission = if let Some(commission) = matches.value_of("commission") {
                 commission.parse()?
             } else {
@@ -196,7 +196,7 @@ pub fn parse_command(
             let lamports = matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::CreateVoteAccount(
                 voting_account_pubkey,
-                node_id,
+                node_pubkey,
                 commission,
                 lamports,
             ))
@@ -443,14 +443,14 @@ fn process_create_vote_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
     voting_account_pubkey: &Pubkey,
-    node_id: &Pubkey,
+    node_pubkey: &Pubkey,
     commission: u32,
     lamports: u64,
 ) -> ProcessResult {
     let ixs = vote_instruction::create_account(
         &config.keypair.pubkey(),
         voting_account_pubkey,
-        node_id,
+        node_pubkey,
         commission,
         lamports,
     );
@@ -499,7 +499,7 @@ fn process_show_vote_account(
     })?;
 
     println!("account lamports: {}", vote_account_lamports.unwrap());
-    println!("node id: {}", vote_state.node_id);
+    println!("node id: {}", vote_state.node_pubkey);
     println!("authorized voter id: {}", vote_state.authorized_voter_id);
     println!("credits: {}", vote_state.credits());
     println!(
@@ -969,12 +969,12 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
 
         // Create vote account
-        WalletCommand::CreateVoteAccount(voting_account_pubkey, node_id, commission, lamports) => {
+        WalletCommand::CreateVoteAccount(voting_account_pubkey, node_pubkey, commission, lamports) => {
             process_create_vote_account(
                 &rpc_client,
                 config,
                 &voting_account_pubkey,
-                &node_id,
+                &node_pubkey,
                 *commission,
                 *lamports,
             )
@@ -1302,7 +1302,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Vote account address to fund"),
                 )
                 .arg(
-                    Arg::with_name("node_id")
+                    Arg::with_name("node_pubkey")
                         .index(2)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1752,31 +1752,31 @@ mod tests {
         );
 
         // Test CreateVoteAccount SubCommand
-        let node_id = Pubkey::new_rand();
-        let node_id_string = format!("{}", node_id);
+        let node_pubkey = Pubkey::new_rand();
+        let node_pubkey_string = format!("{}", node_pubkey);
         let test_create_vote_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-vote-account",
             &pubkey_string,
-            &node_id_string,
+            &node_pubkey_string,
             "50",
             "--commission",
             "10",
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_vote_account).unwrap(),
-            WalletCommand::CreateVoteAccount(pubkey, node_id, 10, 50)
+            WalletCommand::CreateVoteAccount(pubkey, node_pubkey, 10, 50)
         );
         let test_create_vote_account2 = test_commands.clone().get_matches_from(vec![
             "test",
             "create-vote-account",
             &pubkey_string,
-            &node_id_string,
+            &node_pubkey_string,
             "50",
         ]);
         assert_eq!(
             parse_command(&pubkey, &test_create_vote_account2).unwrap(),
-            WalletCommand::CreateVoteAccount(pubkey, node_id, 0, 50)
+            WalletCommand::CreateVoteAccount(pubkey, node_pubkey, 0, 50)
         );
 
         // Test Create Stake Account
@@ -1969,8 +1969,8 @@ mod tests {
         assert_eq!(process_command(&config).unwrap(), "Confirmed");
 
         let bob_pubkey = Pubkey::new_rand();
-        let node_id = Pubkey::new_rand();
-        config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_id, 0, 10);
+        let node_pubkey = Pubkey::new_rand();
+        config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_pubkey, 0, 10);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -1984,8 +1984,8 @@ mod tests {
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let bob_keypair = Keypair::new();
-        let node_id = Pubkey::new_rand();
-        config.command = WalletCommand::DelegateStake(bob_keypair.into(), node_id);
+        let node_pubkey = Pubkey::new_rand();
+        config.command = WalletCommand::DelegateStake(bob_keypair.into(), node_pubkey);
         let signature = process_command(&config);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
@@ -2090,7 +2090,7 @@ mod tests {
         config.command = WalletCommand::Balance(config.keypair.pubkey());
         assert!(process_command(&config).is_err());
 
-        config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_id, 0, 10);
+        config.command = WalletCommand::CreateVoteAccount(bob_pubkey, node_pubkey, 0, 10);
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::AuthorizeVoter(bob_pubkey, Keypair::new(), bob_pubkey);

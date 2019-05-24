@@ -67,7 +67,7 @@ fn to_staked_nodes(
 ) -> HashMap<Pubkey, u64> {
     let mut map: HashMap<Pubkey, u64> = HashMap::new();
     node_staked_accounts.for_each(|(stake, state)| {
-        map.entry(state.node_id)
+        map.entry(state.node_pubkey)
             .and_modify(|s| *s += stake)
             .or_insert(stake);
     });
@@ -159,7 +159,7 @@ pub(crate) mod tests {
         bank: &Bank,
         from_account: &Keypair,
         vote_id: &Pubkey,
-        node_id: &Pubkey,
+        node_pubkey: &Pubkey,
         amount: u64,
     ) {
         fn process_instructions<T: KeypairUtil>(
@@ -178,7 +178,7 @@ pub(crate) mod tests {
         process_instructions(
             bank,
             &[from_account],
-            vote_instruction::create_account(&from_account.pubkey(), vote_id, node_id, 0, amount),
+            vote_instruction::create_account(&from_account.pubkey(), vote_id, node_pubkey, 0, amount),
         );
 
         let stake_account_keypair = Keypair::new();

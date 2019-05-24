@@ -1619,7 +1619,7 @@ mod tests {
                 .iter()
                 .filter_map(|(pubkey, (_, account))| {
                     if let Ok(vote_state) = VoteState::deserialize(&account.data) {
-                        if vote_state.node_id == leader_id {
+                        if vote_state.node_pubkey == leader_id {
                             Some((*pubkey, true))
                         } else {
                             None
