@@ -85,7 +85,9 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
         // Test use of allocated vector
 
         const ITERS: usize = 100;
+        sol_log("alloc vector");
         let ones = vec![1_u64; ITERS];
+        sol_log("done alloc vector");
         let mut sum: u64 = 0;
 
         sol_log("start loop");

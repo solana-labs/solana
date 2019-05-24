@@ -81,7 +81,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     println!("Interpreted:");
     assert_eq!(
         1, /*true*/
-        vm.execute_program(&mut inner_iter).unwrap()
+        vm.execute_program(&mut inner_iter, &[], &[]).unwrap()
     );
     assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
     assert_eq!(
@@ -90,7 +90,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     );
 
     bencher.iter(|| {
-        vm.execute_program(&mut inner_iter).unwrap();
+        vm.execute_program(&mut inner_iter, &[], &[]).unwrap();
     });
     let instructions = vm.get_last_instruction_count();
     let summary = bencher.bench(|_bencher| {}).unwrap();

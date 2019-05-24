@@ -174,17 +174,20 @@ pub fn helper_sol_alloc_free(
             return {
                 let layout = Layout::from_size_align(size as usize, mem::align_of::<u8>()).unwrap();
                 if free_ptr == 0 {
+                    println!("alloc {:?} bytes", layout.size());
                     match allocator.alloc(layout) {
                         Ok(ptr) => ptr as u64,
                         Err(_) => 0,
                     }
                 } else {
+                    println!("free {:?} bytes", layout.size());
                     allocator.dealloc(free_ptr as *mut u8, layout);
                     0
                 }
             };
         };
     }
+    println!("failed to get context");
     panic!("Failed to get alloc_free context");
 }
 
