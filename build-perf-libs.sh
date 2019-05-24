@@ -12,8 +12,12 @@ if [[ -d target/perf-libs ]]; then
   exit 1
 fi
 
-set -x
-git clone git@github.com:solana-labs/solana-perf-libs.git target/perf-libs
-cd target/perf-libs
-make -j"$(nproc)"
-make DESTDIR=. install
+(
+  set -x
+  git clone git@github.com:solana-labs/solana-perf-libs.git target/perf-libs
+  cd target/perf-libs
+  make -j"$(nproc)"
+  make DESTDIR=. install
+)
+
+./fetch-perf-libs.sh
