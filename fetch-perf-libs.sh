@@ -23,7 +23,7 @@ if [[ ! -d target/perf-libs ]]; then
   echo "Downloaded solana-perf version: $(cat solana-perf-HEAD.txt)"
 fi
 
-cat > env.sh <<'EOF'
+cat > target/perf-libs/env.sh <<'EOF'
 SOLANA_PERF_LIBS="$(dirname "${BASH_SOURCE[0]}")"
 
 if [[ -r "$SOLANA_PERF_LIBS"/solana-perf-CUDA_HOME.txt ]]; then
