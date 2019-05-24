@@ -21,7 +21,7 @@ use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 
 pub const REPAIRMEN_SLEEP_MILLIS: usize = 100;
-pub const REPAIR_REDUNDANCY: usize = 3;
+pub const REPAIR_REDUNDANCY: usize = 1;
 pub const NUM_BUFFER_SLOTS: usize = 50;
 pub const GOSSIP_DELAY_SLOTS: usize = 2;
 pub const NUM_SLOTS_PER_UPDATE: usize = 2;
