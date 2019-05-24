@@ -212,7 +212,7 @@ fn test_listener_startup() {
 fn test_repairman_catchup() {
     let mut validator_config = ValidatorConfig::default();
     let num_ticks_per_second = 100;
-    let num_ticks_per_slot = 10;
+    let num_ticks_per_slot = 40;
     let num_slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
 
     validator_config.rpc_config.enable_fullnode_exit = true;
@@ -230,7 +230,7 @@ fn test_repairman_catchup() {
     cluster_tests::sleep_n_epochs(
         5.0,
         &cluster.genesis_block.poh_config,
-        timing::DEFAULT_TICKS_PER_SLOT,
+        num_ticks_per_slot,
         num_slots_per_epoch,
     );
 
@@ -242,7 +242,7 @@ fn test_repairman_catchup() {
     cluster_tests::sleep_n_epochs(
         3.0,
         &cluster.genesis_block.poh_config,
-        timing::DEFAULT_TICKS_PER_SLOT,
+        num_ticks_per_slot,
         num_slots_per_epoch,
     );
 
