@@ -132,7 +132,7 @@ setup_validator_accounts() {
 setup_replicator_account() {
   declare entrypoint_ip=$1
   declare node_keypair_path=$2
-  declare storage_keypair_path=$2
+  declare storage_keypair_path=$3
   declare stake=$4
 
   declare storage_pubkey
@@ -145,7 +145,7 @@ setup_replicator_account() {
 
     # Setup replicator storage account
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-      create-replicator-storage-account "$storage_keypair_path" || return $?
+      create-replicator-storage-account "$storage_pubkey" || return $?
 
     touch "$node_keypair_path".configured
   fi
