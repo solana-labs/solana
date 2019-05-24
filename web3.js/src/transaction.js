@@ -164,6 +164,8 @@ export class Transaction {
     let numCreditOnlySignedAccounts = 0;
     let numCreditOnlyUnsignedAccounts = 0;
 
+    const programIds = [];
+
     this.instructions.forEach(instruction => {
       instruction.keys.forEach(keySignerPair => {
         const keyStr = keySignerPair.pubkey.toString();
@@ -183,6 +185,12 @@ export class Transaction {
       });
 
       const programId = instruction.programId.toString();
+      if (!programIds.includes(programId)) {
+        programIds.push(programId);
+      }
+    });
+
+    programIds.forEach(programId => {
       if (!keys.includes(programId)) {
         keys.push(programId);
         numCreditOnlyUnsignedAccounts += 1;
