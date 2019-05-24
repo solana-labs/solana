@@ -13,6 +13,7 @@ use core::mem;
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
+    sol_log("1");
     unsafe {
         // Confirm large allocation fails
 
@@ -24,6 +25,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
         }
     }
 
+    sol_log("2");
     unsafe {
         // Test modest allocation and deallocation
 
@@ -36,6 +38,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
         alloc::alloc::dealloc(ptr, layout);
     }
 
+    sol_log("3");
     unsafe {
         // Test allocated memory read and write
 
@@ -45,15 +48,18 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
             sol_log("Error: Alloc of 100 bytes failed");
             alloc::alloc::handle_alloc_error(layout);
         }
-
+        sol_log("fill");
         let iter = 0..100; // This weirdness due to #issue $#4271
         for (i, _) in iter.enumerate() {
             *ptr.add(i) = i as u8;
         }
+        sol_log("check");
         let iter = 0..100; // This weirdness due to #issue $#4271
         for (i, _) in iter.enumerate() {
             assert_eq!(*ptr.add(i as usize), i as u8);
         }
+        sol_log("done checking");
+        sol_log_64(0x3, 0, 0, 0, *ptr.add(42) as u64);
         assert_eq!(*ptr.add(42), 42);
         alloc::alloc::dealloc(ptr, layout);
     }
@@ -77,6 +83,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     //     alloc::alloc::dealloc(ptr, layout);
     // }
 
+    sol_log("4");
     {
         // Test use of allocated vector
 
@@ -87,7 +94,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
         for (_, v) in ones.iter().enumerate() {
             sum += *v;
         }
-        sol_log_64(0xff, 0, 0, 0, sum);
+        sol_log_64(0x4, 0, 0, 0, sum);
         assert_eq!(sum, ITERS as u64);
     }
 
