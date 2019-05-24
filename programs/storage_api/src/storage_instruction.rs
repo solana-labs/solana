@@ -6,6 +6,7 @@ use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::system_instruction;
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageInstruction {
@@ -35,8 +36,8 @@ pub enum StorageInstruction {
         slot: u64,
     },
     ProofValidation {
-        slot: u64,
-        proofs: Vec<CheckedProof>,
+        segment: u64,
+        proofs: Vec<(Pubkey, Vec<CheckedProof>)>,
     },
 }
 
@@ -131,16 +132,18 @@ pub fn advertise_recent_blockhash(
     Instruction::new(id(), &storage_instruction, account_metas)
 }
 
-pub fn proof_validation(
+pub fn proof_validation<S: std::hash::BuildHasher>(
     storage_pubkey: &Pubkey,
-    slot: u64,
-    proofs: Vec<CheckedProof>,
+    segment: u64,
+    checked_proofs: HashMap<Pubkey, Vec<CheckedProof>, S>,
 ) -> Instruction {
     let mut account_metas = vec![AccountMeta::new(*storage_pubkey, true)];
-    proofs.iter().for_each(|checked_proof| {
-        account_metas.push(AccountMeta::new(checked_proof.proof.id, false))
+    let mut proofs = vec![];
+    checked_proofs.into_iter().for_each(|(id, p)| {
+        proofs.push((id, p));
+        account_metas.push(AccountMeta::new(id, false))
     });
-    let storage_instruction = StorageInstruction::ProofValidation { slot, proofs };
+    let storage_instruction = StorageInstruction::ProofValidation { segment, proofs };
     Instruction::new(id(), &storage_instruction, account_metas)
 }
 

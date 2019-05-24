@@ -13,7 +13,7 @@ use std::collections::HashMap;
 pub const TOTAL_VALIDATOR_REWARDS: u64 = 1;
 pub const TOTAL_REPLICATOR_REWARDS: u64 = 1;
 // Todo Tune this for actual use cases when replicators are feature complete
-pub const STORAGE_ACCOUNT_SPACE: u64 = 1024 * 4;
+pub const STORAGE_ACCOUNT_SPACE: u64 = 1024 * 8;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum ProofStatus {
@@ -30,7 +30,6 @@ impl Default for ProofStatus {
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Proof {
-    pub id: Pubkey,
     pub signature: Signature,
     pub sha_state: Hash,
 }
@@ -46,17 +45,19 @@ pub enum StorageContract {
     Uninitialized, // Must be first (aka, 0)
 
     ValidatorStorage {
+        // Most recently advertised slot
         slot: u64,
+        // Most recently advertised blockhash
         hash: Hash,
-        lockout_validations: HashMap<usize, HashMap<Hash, CheckedProof>>,
-        reward_validations: HashMap<usize, HashMap<Hash, CheckedProof>>,
+        lockout_validations: HashMap<usize, HashMap<Hash, ProofStatus>>,
+        reward_validations: HashMap<usize, HashMap<Hash, ProofStatus>>,
     },
     ReplicatorStorage {
         /// Map of Proofs per segment, in a HashMap based on the sha_state
         proofs: HashMap<usize, HashMap<Hash, Proof>>,
         /// Map of Rewards per segment, in a HashMap based on the sha_state
         /// Multiple validators can validate the same set of proofs so it needs a Vec
-        reward_validations: HashMap<usize, HashMap<Hash, Vec<CheckedProof>>>,
+        reward_validations: HashMap<usize, HashMap<Hash, Vec<ProofStatus>>>,
     },
 
     MiningPool,
@@ -127,7 +128,6 @@ impl<'a> StorageAccount<'a> {
 
     pub fn submit_mining_proof(
         &mut self,
-        id: Pubkey,
         sha_state: Hash,
         slot: u64,
         signature: Signature,
@@ -148,14 +148,19 @@ impl<'a> StorageAccount<'a> {
                 sha_state, slot
             );
 
-            proofs.entry(segment_index).or_default().insert(
+            let segment_proofs = proofs.entry(segment_index).or_default();
+            if segment_proofs.contains_key(&sha_state) {
+                // do not accept duplicate proofs
+                return Err(InstructionError::InvalidArgument);
+            }
+            segment_proofs.insert(
                 sha_state,
                 Proof {
-                    id,
                     sha_state,
                     signature,
                 },
             );
+
             self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
@@ -200,8 +205,8 @@ impl<'a> StorageAccount<'a> {
 
     pub fn proof_validation(
         &mut self,
-        slot: u64,
-        proofs: Vec<CheckedProof>,
+        segment: u64,
+        proofs: Vec<(Pubkey, Vec<CheckedProof>)>,
         replicator_accounts: &mut [StorageAccount],
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
@@ -211,14 +216,14 @@ impl<'a> StorageAccount<'a> {
             ..
         } = &mut storage_contract
         {
-            let segment_index = get_segment_from_slot(slot);
+            let segment_index = segment as usize;
             let state_segment = get_segment_from_slot(*state_slot);
 
             if segment_index > state_segment {
                 return Err(InstructionError::InvalidArgument);
             }
 
-            let mut previous_proofs = replicator_accounts
+            let accounts_and_proofs = replicator_accounts
                 .iter_mut()
                 .filter_map(|account| {
                     account
@@ -226,32 +231,33 @@ impl<'a> StorageAccount<'a> {
                         .state()
                         .ok()
                         .map(move |contract| match contract {
-                            StorageContract::ReplicatorStorage { proofs, .. } => Some((
-                                account,
-                                proofs.get(&segment_index).cloned().unwrap_or_default(),
-                            )),
+                            StorageContract::ReplicatorStorage { proofs, .. } => {
+                                if let Some(proofs) = proofs.get(&segment_index).cloned() {
+                                    Some((account, proofs))
+                                } else {
+                                    None
+                                }
+                            }
                             _ => None,
                         })
                 })
                 .flatten()
                 .collect::<Vec<_>>();
 
-            if previous_proofs.len() != proofs.len() {
+            if accounts_and_proofs.len() != proofs.len() {
                 // don't have all the accounts to validate the proofs against
                 return Err(InstructionError::InvalidArgument);
             }
 
             let valid_proofs: Vec<_> = proofs
                 .into_iter()
-                .enumerate()
-                .filter_map(|(i, entry)| {
-                    let (account, proofs) = &mut previous_proofs[i];
-                    proofs.get(&entry.proof.sha_state).map(|proof| {
-                        if process_validation(account, segment_index, &proof, &entry).is_ok() {
-                            Some(entry)
-                        } else {
-                            None
-                        }
+                .zip(accounts_and_proofs.into_iter())
+                .flat_map(|((_id, checked_proofs), (account, proofs))| {
+                    checked_proofs.into_iter().filter_map(move |checked_proof| {
+                        proofs.get(&checked_proof.proof.sha_state).map(|proof| {
+                            process_validation(account, segment_index, &proof, &checked_proof)
+                                .map(|_| checked_proof)
+                        })
                     })
                 })
                 .flatten()
@@ -262,8 +268,9 @@ impl<'a> StorageAccount<'a> {
                 lockout_validations
                     .entry(segment_index)
                     .or_default()
-                    .insert(proof.proof.sha_state, proof);
+                    .insert(proof.proof.sha_state, proof.status);
             });
+
             self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
@@ -333,11 +340,11 @@ impl<'a> StorageAccount<'a> {
                 .map(|mut proofs| {
                     proofs
                         .drain()
-                        .map(|(_, proof)| {
+                        .map(|(sha_state, proof)| {
                             proof
                                 .into_iter()
                                 .map(|proof| {
-                                    segment_proofs.remove(&proof.proof.sha_state);
+                                    segment_proofs.remove(&sha_state);
                                     proof
                                 })
                                 .collect::<Vec<_>>()
@@ -346,16 +353,12 @@ impl<'a> StorageAccount<'a> {
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
-            let _num_validations = count_valid_proofs(&checked_proofs);
-
-            // TODO enable when rewards are working
-            /*
-            let reward = num_validations
-                * TOTAL_REPLICATOR_REWARDS
-                * (num_validations / reward_validations[&claim_segment].len() as u64);
+            let total_proofs = checked_proofs.len() as u64;
+            let num_validations = count_valid_proofs(&checked_proofs);
+            let reward =
+                num_validations * TOTAL_REPLICATOR_REWARDS * (num_validations / total_proofs);
             mining_pool.account.lamports -= reward;
             self.account.lamports += reward;
-            */
             self.account.set_state(storage_contract)
         } else {
             Err(InstructionError::InvalidArgument)?
@@ -390,7 +393,7 @@ fn store_validation_result(
                     .or_default()
                     .entry(checked_proof.proof.sha_state)
                     .or_default()
-                    .push(checked_proof);
+                    .push(checked_proof.status);
             } else {
                 return Err(InstructionError::InvalidAccountData);
             }
@@ -400,10 +403,10 @@ fn store_validation_result(
     storage_account.account.set_state(&storage_contract)
 }
 
-fn count_valid_proofs(proofs: &[CheckedProof]) -> u64 {
+fn count_valid_proofs(proofs: &[ProofStatus]) -> u64 {
     let mut num = 0;
     for proof in proofs {
-        if let ProofStatus::Valid = proof.status {
+        if let ProofStatus::Valid = proof {
             num += 1;
         }
     }
@@ -477,7 +480,6 @@ mod tests {
         };
         let segment_index = 0_usize;
         let proof = Proof {
-            id: Pubkey::default(),
             signature: Signature::default(),
             sha_state: Hash::default(),
         };
