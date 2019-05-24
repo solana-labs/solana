@@ -340,13 +340,13 @@ mod tests {
 
     #[test]
     fn test_initialize_vote_account() {
-        let vote_account_id = Pubkey::new_rand();
+        let vote_account_pubkey = Pubkey::new_rand();
         let mut vote_account = Account::new(100, VoteState::size_of(), &id());
 
         let node_pubkey = Pubkey::new_rand();
 
         //init should pass
-        let mut vote_account = KeyedAccount::new(&vote_account_id, false, &mut vote_account);
+        let mut vote_account = KeyedAccount::new(&vote_account_pubkey, false, &mut vote_account);
         let res = initialize_account(&mut vote_account, &node_pubkey, 0);
         assert_eq!(res, Ok(()));
 
