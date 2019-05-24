@@ -24,7 +24,7 @@ if [[ ! -d target/perf-libs ]]; then
 fi
 
 cat > target/perf-libs/env.sh <<'EOF'
-SOLANA_PERF_LIBS="$(dirname "${BASH_SOURCE[0]}")"
+SOLANA_PERF_LIBS="$(cd $(dirname "${BASH_SOURCE[0]}"); pwd)"
 
 if [[ -r "$SOLANA_PERF_LIBS"/solana-perf-CUDA_HOME.txt ]]; then
   CUDA_HOME=$(cat "$SOLANA_PERF_LIBS"/solana-perf-CUDA_HOME.txt)
