@@ -156,7 +156,10 @@ fn test_forwarding() {
 
     let leader_pubkey = cluster.entry_point_info.id;
 
-    let validator_info = cluster_nodes.iter().find(|c| c.id != leader_pubkey).unwrap();
+    let validator_info = cluster_nodes
+        .iter()
+        .find(|c| c.id != leader_pubkey)
+        .unwrap();
 
     // Confirm that transactions were forwarded to and processed by the leader.
     cluster_tests::send_many_transactions(&validator_info, &cluster.funding_keypair, 20);

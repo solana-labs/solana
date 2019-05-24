@@ -92,7 +92,8 @@ impl PohRecorder {
                 leader_tick.saturating_sub(self.max_last_leader_grace_ticks);
 
             self.tick_height() <= self.last_leader_tick.unwrap_or(0)
-                && self.tick_height() >= leader_pubkeyeal_start_tick.saturating_sub(within_next_n_ticks)
+                && self.tick_height()
+                    >= leader_pubkeyeal_start_tick.saturating_sub(within_next_n_ticks)
         });
 
         self.working_bank.is_some() || close_to_leader_tick
@@ -140,7 +141,8 @@ impl PohRecorder {
                 {
                     return (
                         true,
-                        self.tick_height().saturating_sub(leader_pubkeyeal_start_tick),
+                        self.tick_height()
+                            .saturating_sub(leader_pubkeyeal_start_tick),
                     );
                 }
 
