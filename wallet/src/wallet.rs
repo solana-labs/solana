@@ -186,7 +186,7 @@ pub fn parse_command(
             }
         }
         ("create-vote-account", Some(matches)) => {
-            let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
+            let voting_account_pubkey = pubkey_of(matches, "voting_account_pubkey").unwrap();
             let node_id = pubkey_of(matches, "node_id").unwrap();
             let commission = if let Some(commission) = matches.value_of("commission") {
                 commission.parse()?
@@ -195,102 +195,102 @@ pub fn parse_command(
             };
             let lamports = matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::CreateVoteAccount(
-                voting_account_id,
+                voting_account_pubkey,
                 node_id,
                 commission,
                 lamports,
             ))
         }
         ("authorize-voter", Some(matches)) => {
-            let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
+            let voting_account_pubkey = pubkey_of(matches, "voting_account_pubkey").unwrap();
             let authorized_voter_keypair =
                 keypair_of(matches, "authorized_voter_keypair_file").unwrap();
             let new_authorized_voter_id = pubkey_of(matches, "new_authorized_voter_id").unwrap();
 
             Ok(WalletCommand::AuthorizeVoter(
-                voting_account_id,
+                voting_account_pubkey,
                 authorized_voter_keypair,
                 new_authorized_voter_id,
             ))
         }
         ("show-vote-account", Some(matches)) => {
-            let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
-            Ok(WalletCommand::ShowVoteAccount(voting_account_id))
+            let voting_account_pubkey = pubkey_of(matches, "voting_account_pubkey").unwrap();
+            Ok(WalletCommand::ShowVoteAccount(voting_account_pubkey))
         }
         ("create-stake-account", Some(matches)) => {
-            let staking_account_id = pubkey_of(matches, "staking_account_id").unwrap();
+            let staking_account_pubkey = pubkey_of(matches, "staking_account_pubkey").unwrap();
             let lamports = matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::CreateStakeAccount(
-                staking_account_id,
+                staking_account_pubkey,
                 lamports,
             ))
         }
         ("create-mining-pool-account", Some(matches)) => {
-            let mining_pool_account_id = pubkey_of(matches, "mining_pool_account_id").unwrap();
+            let mining_pool_account_pubkey = pubkey_of(matches, "mining_pool_account_pubkey").unwrap();
             let lamports = matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::CreateMiningPoolAccount(
-                mining_pool_account_id,
+                mining_pool_account_pubkey,
                 lamports,
             ))
         }
         ("delegate-stake", Some(matches)) => {
             let staking_account_keypair =
                 keypair_of(matches, "staking_account_keypair_file").unwrap();
-            let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
+            let voting_account_pubkey = pubkey_of(matches, "voting_account_pubkey").unwrap();
             Ok(WalletCommand::DelegateStake(
                 staking_account_keypair,
-                voting_account_id,
+                voting_account_pubkey,
             ))
         }
         ("redeem-vote-credits", Some(matches)) => {
-            let mining_pool_account_id = pubkey_of(matches, "mining_pool_account_id").unwrap();
-            let staking_account_id = pubkey_of(matches, "staking_account_id").unwrap();
-            let voting_account_id = pubkey_of(matches, "voting_account_id").unwrap();
+            let mining_pool_account_pubkey = pubkey_of(matches, "mining_pool_account_pubkey").unwrap();
+            let staking_account_pubkey = pubkey_of(matches, "staking_account_pubkey").unwrap();
+            let voting_account_pubkey = pubkey_of(matches, "voting_account_pubkey").unwrap();
             Ok(WalletCommand::RedeemVoteCredits(
-                mining_pool_account_id,
-                staking_account_id,
-                voting_account_id,
+                mining_pool_account_pubkey,
+                staking_account_pubkey,
+                voting_account_pubkey,
             ))
         }
         ("show-stake-account", Some(matches)) => {
-            let staking_account_id = pubkey_of(matches, "staking_account_id").unwrap();
-            Ok(WalletCommand::ShowStakeAccount(staking_account_id))
+            let staking_account_pubkey = pubkey_of(matches, "staking_account_pubkey").unwrap();
+            Ok(WalletCommand::ShowStakeAccount(staking_account_pubkey))
         }
         ("create-storage-mining-pool-account", Some(matches)) => {
-            let storage_mining_pool_account_id =
-                pubkey_of(matches, "storage_mining_pool_account_id").unwrap();
+            let storage_mining_pool_account_pubkey =
+                pubkey_of(matches, "storage_mining_pool_account_pubkey").unwrap();
             let lamports = matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::CreateStorageMiningPoolAccount(
-                storage_mining_pool_account_id,
+                storage_mining_pool_account_pubkey,
                 lamports,
             ))
         }
         ("create-replicator-storage-account", Some(matches)) => {
-            let storage_account_id = pubkey_of(matches, "storage_account_id").unwrap();
+            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::CreateReplicatorStorageAccount(
-                storage_account_id,
+                storage_account_pubkey,
             ))
         }
         ("create-validator-storage-account", Some(matches)) => {
-            let storage_account_id = pubkey_of(matches, "storage_account_id").unwrap();
+            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::CreateValidatorStorageAccount(
-                storage_account_id,
+                storage_account_pubkey,
             ))
         }
         ("claim-storage-reward", Some(matches)) => {
-            let storage_mining_pool_account_id =
-                pubkey_of(matches, "storage_mining_pool_account_id").unwrap();
-            let storage_account_id = pubkey_of(matches, "storage_account_id").unwrap();
+            let storage_mining_pool_account_pubkey =
+                pubkey_of(matches, "storage_mining_pool_account_pubkey").unwrap();
+            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             let slot = matches.value_of("slot").unwrap().parse()?;
             Ok(WalletCommand::ClaimStorageReward(
-                storage_mining_pool_account_id,
-                storage_account_id,
+                storage_mining_pool_account_pubkey,
+                storage_account_pubkey,
                 slot,
             ))
         }
         ("show-storage-account", Some(matches)) => {
-            let storage_account_id = pubkey_of(matches, "storage_account_id").unwrap();
-            Ok(WalletCommand::ShowStorageAccount(storage_account_id))
+            let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
+            Ok(WalletCommand::ShowStorageAccount(storage_account_pubkey))
         }
         ("deploy", Some(deploy_matches)) => Ok(WalletCommand::Deploy(
             deploy_matches
@@ -442,14 +442,14 @@ fn process_confirm(rpc_client: &RpcClient, signature: &Signature) -> ProcessResu
 fn process_create_vote_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    voting_account_id: &Pubkey,
+    voting_account_pubkey: &Pubkey,
     node_id: &Pubkey,
     commission: u32,
     lamports: u64,
 ) -> ProcessResult {
     let ixs = vote_instruction::create_account(
         &config.keypair.pubkey(),
-        voting_account_id,
+        voting_account_pubkey,
         node_id,
         commission,
         lamports,
@@ -463,14 +463,14 @@ fn process_create_vote_account(
 fn process_authorize_voter(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    voting_account_id: &Pubkey,
+    voting_account_pubkey: &Pubkey,
     authorized_voter_keypair: &Keypair,
     new_authorized_voter_id: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::authorize_voter(
         &config.keypair.pubkey(),           // from
-        voting_account_id,                  // vote account to update
+        voting_account_pubkey,                  // vote account to update
         &authorized_voter_keypair.pubkey(), // current authorized voter (often the vote account itself)
         new_authorized_voter_id,            // new vote signer
     )];
@@ -487,11 +487,11 @@ fn process_authorize_voter(
 fn process_show_vote_account(
     rpc_client: &RpcClient,
     _config: &WalletConfig,
-    voting_account_id: &Pubkey,
+    voting_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     use solana_vote_api::vote_state::VoteState;
-    let vote_account_lamports = rpc_client.retry_get_balance(voting_account_id, 5)?;
-    let vote_account_data = rpc_client.get_account_data(voting_account_id)?;
+    let vote_account_lamports = rpc_client.retry_get_balance(voting_account_pubkey, 5)?;
+    let vote_account_data = rpc_client.get_account_data(voting_account_pubkey)?;
     let vote_state = VoteState::deserialize(&vote_account_data).map_err(|_| {
         WalletError::RpcRequestError(
             "Account data could not be deserialized to vote state".to_string(),
@@ -528,13 +528,13 @@ fn process_show_vote_account(
 fn process_create_stake_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    staking_account_id: &Pubkey,
+    staking_account_pubkey: &Pubkey,
     lamports: u64,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = stake_instruction::create_delegate_account(
         &config.keypair.pubkey(),
-        staking_account_id,
+        staking_account_pubkey,
         lamports,
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
@@ -545,13 +545,13 @@ fn process_create_stake_account(
 fn process_create_mining_pool_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    mining_pool_account_id: &Pubkey,
+    mining_pool_account_pubkey: &Pubkey,
     lamports: u64,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = stake_instruction::create_mining_pool_account(
         &config.keypair.pubkey(),
-        mining_pool_account_id,
+        mining_pool_account_pubkey,
         lamports,
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
@@ -563,13 +563,13 @@ fn process_delegate_stake(
     rpc_client: &RpcClient,
     config: &WalletConfig,
     staking_account_keypair: &Keypair,
-    voting_account_id: &Pubkey,
+    voting_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::delegate_stake(
         &config.keypair.pubkey(),
         &staking_account_keypair.pubkey(),
-        voting_account_id,
+        voting_account_pubkey,
     )];
     let mut tx = Transaction::new_signed_instructions(
         &[&config.keypair, &staking_account_keypair],
@@ -584,16 +584,16 @@ fn process_delegate_stake(
 fn process_redeem_vote_credits(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    mining_pool_account_id: &Pubkey,
-    staking_account_id: &Pubkey,
-    voting_account_id: &Pubkey,
+    mining_pool_account_pubkey: &Pubkey,
+    staking_account_pubkey: &Pubkey,
+    voting_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::redeem_vote_credits(
         &config.keypair.pubkey(),
-        mining_pool_account_id,
-        staking_account_id,
-        voting_account_id,
+        mining_pool_account_pubkey,
+        staking_account_pubkey,
+        voting_account_pubkey,
     )];
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
@@ -603,10 +603,10 @@ fn process_redeem_vote_credits(
 fn process_show_stake_account(
     rpc_client: &RpcClient,
     _config: &WalletConfig,
-    staking_account_id: &Pubkey,
+    staking_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     use solana_stake_api::stake_state::StakeState;
-    let stake_account = rpc_client.get_account(staking_account_id)?;
+    let stake_account = rpc_client.get_account(staking_account_pubkey)?;
     match stake_account.state() {
         Ok(StakeState::Delegate {
             voter_id,
@@ -630,13 +630,13 @@ fn process_show_stake_account(
 fn process_create_storage_mining_pool_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    storage_account_id: &Pubkey,
+    storage_account_pubkey: &Pubkey,
     lamports: u64,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_mining_pool_account(
         &config.keypair.pubkey(),
-        storage_account_id,
+        storage_account_pubkey,
         lamports,
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
@@ -647,12 +647,12 @@ fn process_create_storage_mining_pool_account(
 fn process_create_replicator_storage_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    storage_account_id: &Pubkey,
+    storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_replicator_storage_account(
         &config.keypair.pubkey(),
-        storage_account_id,
+        storage_account_pubkey,
         1,
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
@@ -663,12 +663,12 @@ fn process_create_replicator_storage_account(
 fn process_create_validator_storage_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    storage_account_id: &Pubkey,
+    storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_validator_storage_account(
         &config.keypair.pubkey(),
-        storage_account_id,
+        storage_account_pubkey,
         1,
     );
     let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
@@ -679,14 +679,14 @@ fn process_create_validator_storage_account(
 fn process_claim_storage_reward(
     rpc_client: &RpcClient,
     config: &WalletConfig,
-    storage_mining_pool_account_id: &Pubkey,
-    storage_account_id: &Pubkey,
+    storage_mining_pool_account_pubkey: &Pubkey,
+    storage_account_pubkey: &Pubkey,
     slot: u64,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
     let instruction =
-        storage_instruction::claim_reward(storage_account_id, storage_mining_pool_account_id, slot);
+        storage_instruction::claim_reward(storage_account_pubkey, storage_mining_pool_account_pubkey, slot);
     let signers = [&config.keypair];
     let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
 
@@ -698,10 +698,10 @@ fn process_claim_storage_reward(
 fn process_show_storage_account(
     rpc_client: &RpcClient,
     _config: &WalletConfig,
-    storage_account_id: &Pubkey,
+    storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     use solana_storage_api::storage_contract::StorageContract;
-    let account = rpc_client.get_account(storage_account_id)?;
+    let account = rpc_client.get_account(storage_account_pubkey)?;
     let storage_contract: StorageContract = account.state().map_err(|err| {
         WalletError::RpcRequestError(
             format!("Unable to deserialize storage account: {:?}", err).to_string(),
@@ -969,11 +969,11 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
 
         // Create vote account
-        WalletCommand::CreateVoteAccount(voting_account_id, node_id, commission, lamports) => {
+        WalletCommand::CreateVoteAccount(voting_account_pubkey, node_id, commission, lamports) => {
             process_create_vote_account(
                 &rpc_client,
                 config,
-                &voting_account_id,
+                &voting_account_pubkey,
                 &node_id,
                 *commission,
                 *lamports,
@@ -981,91 +981,91 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         }
         // Configure staking account already created
         WalletCommand::AuthorizeVoter(
-            voting_account_id,
+            voting_account_pubkey,
             authorized_voter_keypair,
             new_authorized_voter_id,
         ) => process_authorize_voter(
             &rpc_client,
             config,
-            &voting_account_id,
+            &voting_account_pubkey,
             &authorized_voter_keypair,
             &new_authorized_voter_id,
         ),
         // Show a vote account
-        WalletCommand::ShowVoteAccount(voting_account_id) => {
-            process_show_vote_account(&rpc_client, config, &voting_account_id)
+        WalletCommand::ShowVoteAccount(voting_account_pubkey) => {
+            process_show_vote_account(&rpc_client, config, &voting_account_pubkey)
         }
 
         // Create stake account
-        WalletCommand::CreateStakeAccount(staking_account_id, lamports) => {
-            process_create_stake_account(&rpc_client, config, &staking_account_id, *lamports)
+        WalletCommand::CreateStakeAccount(staking_account_pubkey, lamports) => {
+            process_create_stake_account(&rpc_client, config, &staking_account_pubkey, *lamports)
         }
 
-        WalletCommand::CreateMiningPoolAccount(mining_pool_account_id, lamports) => {
+        WalletCommand::CreateMiningPoolAccount(mining_pool_account_pubkey, lamports) => {
             process_create_mining_pool_account(
                 &rpc_client,
                 config,
-                &mining_pool_account_id,
+                &mining_pool_account_pubkey,
                 *lamports,
             )
         }
 
-        WalletCommand::DelegateStake(staking_account_keypair, voting_account_id) => {
+        WalletCommand::DelegateStake(staking_account_keypair, voting_account_pubkey) => {
             process_delegate_stake(
                 &rpc_client,
                 config,
                 &staking_account_keypair,
-                &voting_account_id,
+                &voting_account_pubkey,
             )
         }
 
         WalletCommand::RedeemVoteCredits(
-            mining_pool_account_id,
-            staking_account_id,
-            voting_account_id,
+            mining_pool_account_pubkey,
+            staking_account_pubkey,
+            voting_account_pubkey,
         ) => process_redeem_vote_credits(
             &rpc_client,
             config,
-            &mining_pool_account_id,
-            &staking_account_id,
-            &voting_account_id,
+            &mining_pool_account_pubkey,
+            &staking_account_pubkey,
+            &voting_account_pubkey,
         ),
 
-        WalletCommand::ShowStakeAccount(staking_account_id) => {
-            process_show_stake_account(&rpc_client, config, &staking_account_id)
+        WalletCommand::ShowStakeAccount(staking_account_pubkey) => {
+            process_show_stake_account(&rpc_client, config, &staking_account_pubkey)
         }
 
-        WalletCommand::CreateStorageMiningPoolAccount(storage_account_id, lamports) => {
+        WalletCommand::CreateStorageMiningPoolAccount(storage_account_pubkey, lamports) => {
             process_create_storage_mining_pool_account(
                 &rpc_client,
                 config,
-                &storage_account_id,
+                &storage_account_pubkey,
                 *lamports,
             )
         }
 
-        WalletCommand::CreateReplicatorStorageAccount(storage_account_id) => {
-            process_create_replicator_storage_account(&rpc_client, config, &storage_account_id)
+        WalletCommand::CreateReplicatorStorageAccount(storage_account_pubkey) => {
+            process_create_replicator_storage_account(&rpc_client, config, &storage_account_pubkey)
         }
 
-        WalletCommand::CreateValidatorStorageAccount(storage_account_id) => {
-            process_create_validator_storage_account(&rpc_client, config, &storage_account_id)
+        WalletCommand::CreateValidatorStorageAccount(storage_account_pubkey) => {
+            process_create_validator_storage_account(&rpc_client, config, &storage_account_pubkey)
         }
 
         WalletCommand::ClaimStorageReward(
-            storage_mining_pool_account_id,
-            storage_account_id,
+            storage_mining_pool_account_pubkey,
+            storage_account_pubkey,
             slot,
         ) => process_claim_storage_reward(
             &rpc_client,
             config,
-            &storage_mining_pool_account_id,
-            &storage_account_id,
+            &storage_mining_pool_account_pubkey,
+            &storage_account_pubkey,
             *slot,
         ),
 
-        WalletCommand::ShowStorageAccount(storage_account_id) => {
-            process_show_storage_account(&rpc_client, config, &storage_account_id)
+        WalletCommand::ShowStorageAccount(storage_account_pubkey) => {
+            process_show_storage_account(&rpc_client, config, &storage_account_pubkey)
         }
 
         // Deploy a custom program to the chain
@@ -1263,7 +1263,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("authorize-voter")
                 .about("Authorize a new vote signing keypair for the given vote account")
                 .arg(
-                    Arg::with_name("voting_account_id")
+                    Arg::with_name("voting_account_pubkey")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1293,7 +1293,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("create-vote-account")
                 .about("Create vote account for a node")
                 .arg(
-                    Arg::with_name("voting_account_id")
+                    Arg::with_name("voting_account_pubkey")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1330,7 +1330,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("show-vote-account")
                 .about("Show the contents of a vote account")
                 .arg(
-                    Arg::with_name("voting_account_id")
+                    Arg::with_name("voting_account_pubkey")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1343,7 +1343,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("create-mining-pool-account")
                 .about("Create staking mining pool account")
                 .arg(
-                    Arg::with_name("mining_pool_account_id")
+                    Arg::with_name("mining_pool_account_pubkey")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1364,7 +1364,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("create-stake-account")
                 .about("Create staking account")
                 .arg(
-                    Arg::with_name("staking_account_id")
+                    Arg::with_name("staking_account_pubkey")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1393,7 +1393,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Keypair file for the staking account, for signing the delegate transaction."),
                 )
                 .arg(
-                    Arg::with_name("voting_account_id")
+                    Arg::with_name("voting_account_pubkey")
                         .index(2)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1406,7 +1406,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("redeem-vote-credits")
                 .about("Redeem credits in the staking account")
                 .arg(
-                    Arg::with_name("mining_pool_account_id")
+                    Arg::with_name("mining_pool_account_pubkey")
                         .index(1)
                         .value_name("MINING POOL PUBKEY")
                         .takes_value(true)
@@ -1415,7 +1415,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Mining pool account to redeem credits from"),
                 )
                 .arg(
-                    Arg::with_name("staking_account_id")
+                    Arg::with_name("staking_account_pubkey")
                         .index(2)
                         .value_name("STAKING ACCOUNT PUBKEY")
                         .takes_value(true)
@@ -1424,7 +1424,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Staking account address to redeem credits for"),
                 )
                 .arg(
-                    Arg::with_name("voting_account_id")
+                    Arg::with_name("voting_account_pubkey")
                         .index(3)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1437,7 +1437,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("show-stake-account")
                 .about("Show the contents of a stake account")
                 .arg(
-                    Arg::with_name("staking_account_id")
+                    Arg::with_name("staking_account_pubkey")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1450,7 +1450,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("create-storage-mining-pool-account")
                 .about("Create mining pool account")
                 .arg(
-                    Arg::with_name("storage_account_id")
+                    Arg::with_name("storage_account_pubkey")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1471,7 +1471,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("create-replicator-storage-account")
                 .about("Create a replicator storage account")
                 .arg(
-                    Arg::with_name("storage_account_id")
+                    Arg::with_name("storage_account_pubkey")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1483,7 +1483,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("create-validator-storage-account")
                 .about("Create a validator storage account")
                 .arg(
-                    Arg::with_name("storage_account_id")
+                    Arg::with_name("storage_account_pubkey")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -1495,7 +1495,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("claim-storage-reward")
                 .about("Redeem storage reward credits")
                 .arg(
-                    Arg::with_name("storage_mining_pool_account_id")
+                    Arg::with_name("storage_mining_pool_account_pubkey")
                         .index(1)
                         .value_name("MINING POOL PUBKEY")
                         .takes_value(true)
@@ -1504,7 +1504,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Mining pool account to redeem credits from"),
                 )
                 .arg(
-                    Arg::with_name("storage_account_id")
+                    Arg::with_name("storage_account_pubkey")
                         .index(2)
                         .value_name("STORAGE ACCOUNT PUBKEY")
                         .takes_value(true)
@@ -1525,7 +1525,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("show-storage-account")
                 .about("Show the contents of a storage account")
                 .arg(
-                    Arg::with_name("storage_account_id")
+                    Arg::with_name("storage_account_pubkey")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
