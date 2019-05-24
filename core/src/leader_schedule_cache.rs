@@ -386,11 +386,11 @@ mod tests {
 
         // Create new vote account
         let node_pubkey = Pubkey::new_rand();
-        let vote_id = Pubkey::new_rand();
+        let vote_pubkey = Pubkey::new_rand();
         setup_vote_and_stake_accounts(
             &bank,
             &mint_keypair,
-            &vote_id,
+            &vote_pubkey,
             &node_pubkey,
             BOOTSTRAP_LEADER_LAMPORTS,
         );

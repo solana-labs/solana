@@ -88,19 +88,19 @@ mod tests {
 
     //  set up some dummies  for a staked node    ((     vote      )  (     stake     ))
     fn create_staked_node_accounts(stake: u64) -> ((Pubkey, Account), (Pubkey, Account)) {
-        let vote_id = Pubkey::new_rand();
-        let vote_account = vote_state::create_account(&vote_id, &Pubkey::new_rand(), 0, 1);
+        let vote_pubkey = Pubkey::new_rand();
+        let vote_account = vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1);
         (
-            (vote_id, vote_account),
-            create_stake_account(stake, &vote_id),
+            (vote_pubkey, vote_account),
+            create_stake_account(stake, &vote_pubkey),
         )
     }
 
-    //   add stake to a vote_id                               (   stake    )
-    fn create_stake_account(stake: u64, vote_id: &Pubkey) -> (Pubkey, Account) {
+    //   add stake to a vote_pubkey                               (   stake    )
+    fn create_stake_account(stake: u64, vote_pubkey: &Pubkey) -> (Pubkey, Account) {
         (
             Pubkey::new_rand(),
-            stake_state::create_delegate_stake_account(&vote_id, &VoteState::default(), stake),
+            stake_state::create_delegate_stake_account(&vote_pubkey, &VoteState::default(), stake),
         )
     }
 
@@ -108,32 +108,32 @@ mod tests {
     fn test_stakes_basic() {
         let mut stakes = Stakes::default();
 
-        let ((vote_id, vote_account), (stake_pubkey, mut stake_account)) =
+        let ((vote_pubkey, vote_account), (stake_pubkey, mut stake_account)) =
             create_staked_node_accounts(10);
 
-        stakes.store(&vote_id, &vote_account);
+        stakes.store(&vote_pubkey, &vote_account);
         stakes.store(&stake_pubkey, &stake_account);
 
         {
             let vote_accounts = stakes.vote_accounts();
-            assert!(vote_accounts.get(&vote_id).is_some());
-            assert_eq!(vote_accounts.get(&vote_id).unwrap().0, 10);
+            assert!(vote_accounts.get(&vote_pubkey).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 10);
         }
 
         stake_account.lamports = 42;
         stakes.store(&stake_pubkey, &stake_account);
         {
             let vote_accounts = stakes.vote_accounts();
-            assert!(vote_accounts.get(&vote_id).is_some());
-            assert_eq!(vote_accounts.get(&vote_id).unwrap().0, 42);
+            assert!(vote_accounts.get(&vote_pubkey).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 42);
         }
 
         stake_account.lamports = 0;
         stakes.store(&stake_pubkey, &stake_account);
         {
             let vote_accounts = stakes.vote_accounts();
-            assert!(vote_accounts.get(&vote_id).is_some());
-            assert_eq!(vote_accounts.get(&vote_id).unwrap().0, 0);
+            assert!(vote_accounts.get(&vote_pubkey).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 0);
         }
     }
 
@@ -141,32 +141,32 @@ mod tests {
     fn test_stakes_vote_account_disappear_reappear() {
         let mut stakes = Stakes::default();
 
-        let ((vote_id, mut vote_account), (stake_pubkey, stake_account)) =
+        let ((vote_pubkey, mut vote_account), (stake_pubkey, stake_account)) =
             create_staked_node_accounts(10);
 
-        stakes.store(&vote_id, &vote_account);
+        stakes.store(&vote_pubkey, &vote_account);
         stakes.store(&stake_pubkey, &stake_account);
 
         {
             let vote_accounts = stakes.vote_accounts();
-            assert!(vote_accounts.get(&vote_id).is_some());
-            assert_eq!(vote_accounts.get(&vote_id).unwrap().0, 10);
+            assert!(vote_accounts.get(&vote_pubkey).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 10);
         }
 
         vote_account.lamports = 0;
-        stakes.store(&vote_id, &vote_account);
+        stakes.store(&vote_pubkey, &vote_account);
 
         {
             let vote_accounts = stakes.vote_accounts();
-            assert!(vote_accounts.get(&vote_id).is_none());
+            assert!(vote_accounts.get(&vote_pubkey).is_none());
         }
         vote_account.lamports = 1;
-        stakes.store(&vote_id, &vote_account);
+        stakes.store(&vote_pubkey, &vote_account);
 
         {
             let vote_accounts = stakes.vote_accounts();
-            assert!(vote_accounts.get(&vote_id).is_some());
-            assert_eq!(vote_accounts.get(&vote_id).unwrap().0, 10);
+            assert!(vote_accounts.get(&vote_pubkey).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 10);
         }
     }
 
@@ -174,54 +174,54 @@ mod tests {
     fn test_stakes_change_delegate() {
         let mut stakes = Stakes::default();
 
-        let ((vote_id, vote_account), (stake_pubkey, stake_account)) = create_staked_node_accounts(10);
+        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) = create_staked_node_accounts(10);
 
-        let ((vote_id2, vote_account2), (_stake_pubkey2, stake_account2)) =
+        let ((vote_pubkey2, vote_account2), (_stake_pubkey2, stake_account2)) =
             create_staked_node_accounts(10);
 
-        stakes.store(&vote_id, &vote_account);
-        stakes.store(&vote_id2, &vote_account2);
+        stakes.store(&vote_pubkey, &vote_account);
+        stakes.store(&vote_pubkey2, &vote_account2);
 
-        // delegates to vote_id
+        // delegates to vote_pubkey
         stakes.store(&stake_pubkey, &stake_account);
 
         {
             let vote_accounts = stakes.vote_accounts();
-            assert!(vote_accounts.get(&vote_id).is_some());
-            assert_eq!(vote_accounts.get(&vote_id).unwrap().0, 10);
-            assert!(vote_accounts.get(&vote_id2).is_some());
-            assert_eq!(vote_accounts.get(&vote_id2).unwrap().0, 0);
+            assert!(vote_accounts.get(&vote_pubkey).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 10);
+            assert!(vote_accounts.get(&vote_pubkey2).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey2).unwrap().0, 0);
         }
 
-        // delegates to vote_id2
+        // delegates to vote_pubkey2
         stakes.store(&stake_pubkey, &stake_account2);
 
         {
             let vote_accounts = stakes.vote_accounts();
-            assert!(vote_accounts.get(&vote_id).is_some());
-            assert_eq!(vote_accounts.get(&vote_id).unwrap().0, 0);
-            assert!(vote_accounts.get(&vote_id2).is_some());
-            assert_eq!(vote_accounts.get(&vote_id2).unwrap().0, 10);
+            assert!(vote_accounts.get(&vote_pubkey).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 0);
+            assert!(vote_accounts.get(&vote_pubkey2).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey2).unwrap().0, 10);
         }
     }
     #[test]
     fn test_stakes_multiple_stakers() {
         let mut stakes = Stakes::default();
 
-        let ((vote_id, vote_account), (stake_pubkey, stake_account)) = create_staked_node_accounts(10);
+        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) = create_staked_node_accounts(10);
 
-        let (stake_pubkey2, stake_account2) = create_stake_account(10, &vote_id);
+        let (stake_pubkey2, stake_account2) = create_stake_account(10, &vote_pubkey);
 
-        stakes.store(&vote_id, &vote_account);
+        stakes.store(&vote_pubkey, &vote_account);
 
-        // delegates to vote_id
+        // delegates to vote_pubkey
         stakes.store(&stake_pubkey, &stake_account);
         stakes.store(&stake_pubkey2, &stake_account2);
 
         {
             let vote_accounts = stakes.vote_accounts();
-            assert!(vote_accounts.get(&vote_id).is_some());
-            assert_eq!(vote_accounts.get(&vote_id).unwrap().0, 20);
+            assert!(vote_accounts.get(&vote_pubkey).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 20);
         }
     }
 
@@ -229,23 +229,23 @@ mod tests {
     fn test_stakes_not_delegate() {
         let mut stakes = Stakes::default();
 
-        let ((vote_id, vote_account), (stake_pubkey, stake_account)) = create_staked_node_accounts(10);
+        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) = create_staked_node_accounts(10);
 
-        stakes.store(&vote_id, &vote_account);
+        stakes.store(&vote_pubkey, &vote_account);
         stakes.store(&stake_pubkey, &stake_account);
 
         {
             let vote_accounts = stakes.vote_accounts();
-            assert!(vote_accounts.get(&vote_id).is_some());
-            assert_eq!(vote_accounts.get(&vote_id).unwrap().0, 10);
+            assert!(vote_accounts.get(&vote_pubkey).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 10);
         }
 
         // not a stake account, and whacks above entry
         stakes.store(&stake_pubkey, &Account::new(1, 0, &solana_stake_api::id()));
         {
             let vote_accounts = stakes.vote_accounts();
-            assert!(vote_accounts.get(&vote_id).is_some());
-            assert_eq!(vote_accounts.get(&vote_id).unwrap().0, 0);
+            assert!(vote_accounts.get(&vote_pubkey).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 0);
         }
     }
 

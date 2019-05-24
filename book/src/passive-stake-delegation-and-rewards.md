@@ -85,7 +85,7 @@ contains the following state information:
 
 * Account::lamports - The staked lamports.
 
-* `voter_id` - The pubkey of the VoteState instance the lamports are
+* `voter_pubkey` - The pubkey of the VoteState instance the lamports are
 delegated to.
 
 * `credits_observed` - The total credits claimed over the lifetime of the
@@ -109,7 +109,7 @@ program.
 
 * `account[0]` - RW - The StakeState::Delegate instance.
   `StakeState::Delegate::credits_observed` is initialized to `VoteState::credits`.
-  `StakeState::Delegate::voter_id` is initialized to `account[1]`
+  `StakeState::Delegate::voter_pubkey` is initialized to `account[1]`
 
 * `account[1]` - R - The VoteState instance.
 
@@ -127,7 +127,7 @@ reward.
 * `account[1]` - RW - The StakeState::Delegate instance that is redeeming votes
 credits.
 * `account[2]` - R - The VoteState instance, must be the same as
-`StakeState::voter_id`
+`StakeState::voter_pubkey`
 
 Reward is payed out for the difference between `VoteState::credits` to
 `StakeState::Delgate.credits_observed`, and `credits_observed` is updated to
@@ -181,7 +181,7 @@ the VoteState program or submitting votes to the program.
 
 The total stake allocated to a VoteState program can be calculated by the sum of
 all the StakeState programs that have the VoteState pubkey as the
-`StakeState::Delegate::voter_id`.
+`StakeState::Delegate::voter_pubkey`.
 
 ## Example Callflow
 
@@ -194,12 +194,12 @@ nodes since stake is used as weight in the network control and data planes.  One
 way to implement this would be for the StakeState to delegate to a pool of
 validators instead of a single one.
 
-Instead of a single `vote_id` and `credits_observed` entry in the StakeState
+Instead of a single `vote_pubkey` and `credits_observed` entry in the StakeState
 program, the program can be initialized with a vector of tuples.
 
 ```rust,ignore
 Voter {
-    voter_id: Pubkey,
+    voter_pubkey: Pubkey,
     credits_observed: u64,
     weight: u8,
 }

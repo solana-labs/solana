@@ -94,22 +94,22 @@ pub fn redeem_vote_credits(
     from_pubkey: &Pubkey,
     mining_pool_id: &Pubkey,
     stake_pubkey: &Pubkey,
-    vote_id: &Pubkey,
+    vote_pubkey: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*mining_pool_id, false),
         AccountMeta::new(*stake_pubkey, false),
-        AccountMeta::new(*vote_id, false),
+        AccountMeta::new(*vote_pubkey, false),
     ];
     Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
 }
 
-pub fn delegate_stake(from_pubkey: &Pubkey, stake_pubkey: &Pubkey, vote_id: &Pubkey) -> Instruction {
+pub fn delegate_stake(from_pubkey: &Pubkey, stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*stake_pubkey, true),
-        AccountMeta::new(*vote_id, false),
+        AccountMeta::new(*vote_pubkey, false),
     ];
     Instruction::new(id(), &StakeInstruction::DelegateStake, account_metas)
 }
