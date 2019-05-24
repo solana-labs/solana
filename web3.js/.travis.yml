@@ -1,3 +1,4 @@
+dist: xenial
 sudo: required
 language: node_js
 node_js:
@@ -16,12 +17,12 @@ notifications:
 
 before_install:
   - wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-  - sudo apt-add-repository "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-7 main"
-  - sudo apt-add-repository "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu trusty main"
+  - sudo apt-add-repository "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-7 main"
+  - sudo apt-add-repository "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu xenial main"
   - sudo apt-get update
   - sudo apt-get install -y clang-7 --allow-unauthenticated
   - clang-7 --version
-  - curl https://sh.rustup.rs -sSf | sh -s -- -y 
+  - curl https://sh.rustup.rs -sSf | sh -s -- -y
   - PATH=$HOME/.cargo/bin:$PATH
   - rustup --version
 
