@@ -45,10 +45,13 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
             sol_log("Error: Alloc of 100 bytes failed");
             alloc::alloc::handle_alloc_error(layout);
         }
-        for i in 0..100 {
+
+        let iter = 0..100; // This weirdness due to #issue $#4271
+        for (i, _) in iter.enumerate() {
             *ptr.add(i) = i as u8;
         }
-        for i in 0..100 {
+        let iter = 0..100; // This weirdness due to #issue $#4271
+        for (i, _) in iter.enumerate() {
             assert_eq!(*ptr.add(i as usize), i as u8);
         }
         assert_eq!(*ptr.add(42), 42);
