@@ -107,6 +107,7 @@ mod bpf {
             solana_logger::setup();
 
             let programs = [
+                "solana_bpf_rust_alloc",
                 // Disable due to #4271 "solana_bpf_rust_iter",
                 "solana_bpf_rust_noop",
             ];

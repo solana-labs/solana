@@ -67,7 +67,7 @@ fn main() {
             .expect("Unable to create BPF install directory")
             .success());
 
-        let rust_programs = ["iter", "noop"];
+        let rust_programs = ["alloc", "iter", "noop"];
         for program in rust_programs.iter() {
             println!(
                 "cargo:warning=(not a warning) Building Rust-based BPF programs: solana_bpf_rust_{}",

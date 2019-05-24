@@ -1,5 +1,9 @@
+pub mod alloc;
+pub mod allocator_bump;
+pub mod allocator_system;
 pub mod bpf_verifier;
 
+use alloc::Alloc;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use libc::c_char;
 use log::*;
@@ -9,14 +13,31 @@ use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
-use std::alloc::{self, Layout};
+use std::alloc::Layout;
 use std::any::Any;
 use std::ffi::CStr;
-use std::fmt;
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind};
 use std::mem;
 
+/// Program heap allocators are intended to allocate/free from a given
+/// chunk of memory.  The specific allocator implementation is
+/// selectable at build-time.
+/// Enable only one of the following BPFAllocator implementations.
+
+/// Simple bump allocator, never frees
+use allocator_bump::BPFAllocator;
+
+/// Use the system heap (test purposes only).  This allocator relies on the system heap
+/// and there is no mechanism to check read-write access privileges
+/// at the moment.  Therefor you must disable memory bounds checking
+// use allocator_system::BPFAllocator;
+
+/// Default program heap size, allocators
+/// are expected to enforce this
+const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
+
+/// Abort helper functions, called when the BPF program calls `abort()`
 pub fn helper_abort_verify(
     _arg1: u64,
     _arg2: u64,
@@ -44,6 +65,9 @@ pub fn helper_abort(
     0
 }
 
+/// Panic helper functions, called when the BPF program calls 'sol_panic_()`
+/// The verify function returns an error which will cause the BPF program
+/// to be halted immediately
 pub fn helper_sol_panic_verify(
     _arg1: u64,
     _arg2: u64,
@@ -68,6 +92,9 @@ pub fn helper_sol_panic(
     0
 }
 
+/// Logging helper functions, called when the BPF program calls `sol_log_()` or
+/// `sol_log_64_()`.  Both functions use a common verify function to validate
+/// their parameters.
 pub fn helper_sol_log_verify(
     addr: u64,
     _arg2: u64,
@@ -128,48 +155,12 @@ pub fn helper_sol_log_u64(
     0
 }
 
-/// Loosely on the unstable std::alloc::Alloc trait
-trait Alloc {
-    fn alloc(&mut self, layout: Layout) -> Result<*mut u8, AllocErr>;
-    fn dealloc(&mut self, ptr: *mut u8, layout: Layout);
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct AllocErr;
-
-impl fmt::Display for AllocErr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("memory allocation failed")
-    }
-}
-
-#[derive(Debug)]
-struct BPFAllocator {
-    heap: Vec<u8>,
-    pos: usize,
-}
-
-impl Alloc for BPFAllocator {
-    fn alloc(&mut self, layout: Layout) -> Result<*mut u8, AllocErr> {
-        if self.pos + layout.size() < self.heap.len() {
-            let ptr = unsafe { self.heap.as_mut_ptr().offset(self.pos as isize) };
-            self.pos += layout.size();
-            Ok(ptr)
-        } else {
-            println!("Error: Alloc {:?} bytes failed", layout.size());
-            Err(AllocErr)
-        }
-    }
-
-    fn dealloc(&mut self, _ptr: *mut u8, _layout: Layout) {
-        // Using bump allocator, free not supported
-    }
-}
-
-struct AllocFreeContext {
-    allocator: Alloc
-}
-
+/// Dynamic memory allocation helper called when the BPF program calls
+/// `sol_alloc_free_()`.  The allocator is expected to allocate/free
+/// from/to a given chunk of memory and enforce size restrictions.  The
+/// memory chunk is given to the allocator during allocator creation and
+/// information about that memory (start address and size) is passed
+/// to the VM to use for enforcement.
 pub fn helper_sol_alloc_free(
     size: u64,
     free_ptr: u64,
@@ -178,44 +169,23 @@ pub fn helper_sol_alloc_free(
     _arg5: u64,
     context: &mut Option<Box<Any + 'static>>,
 ) -> u64 {
-    match context {
-        Some(context) => {
-            match context.downcast_mut::<BPFAllocator>() {
-                Some(info) => {
-                    if free_ptr != 0 {
-                        println!("Free {:?} bytes at {:?}", size, free_ptr);
-                        let layout =
-                        Layout::from_size_align(size as usize, mem::align_of::<u8>()).expect("Error: Bad layout");
-                        info.dealloc(free_ptr as *mut u8, layout);
-                        0
-
-                    // unsafe {
-                    //     alloc::dealloc(free_ptr as *mut u8, layout);
-                    // }
-                    // 0
-                    } else {
-                            println!("Alloc {} bytes", size);
-                            let layout =
-                                Layout::from_size_align(size as usize, mem::align_of::<u8>()).expect("Error: Bad layout");
-                            match info.alloc(layout) {
-                                Ok(ptr) => ptr as u64,
-                                Err(_) => 0,
-                            }
-                            
-                            // alloc::alloc(layout) as u64
+    if let Some(context) = context {
+        if let Some(allocator) = context.downcast_mut::<BPFAllocator>() {
+            return {
+                let layout = Layout::from_size_align(size as usize, mem::align_of::<u8>()).unwrap();
+                if free_ptr == 0 {
+                    match allocator.alloc(layout) {
+                        Ok(ptr) => ptr as u64,
+                        Err(_) => 0,
                     }
+                } else {
+                    allocator.dealloc(free_ptr as *mut u8, layout);
+                    0
                 }
-                None => {
-                    println!("Error: Not able to downcast: {:?}", context);
-                    panic!();
-                }
-            }
-        }
-        None => {
-            println!("Error: No helper context");
-            panic!();
-        }
+            };
+        };
     }
+    panic!("Failed to get alloc_free context");
 }
 
 pub fn create_vm(prog: &[u8]) -> Result<(EbpfVmRaw, MemoryRegion), Error> {
@@ -246,12 +216,9 @@ pub fn create_vm(prog: &[u8]) -> Result<(EbpfVmRaw, MemoryRegion), Error> {
     vm.register_helper_ex("sol_log_64", None, helper_sol_log_u64, None)?;
     vm.register_helper_ex("sol_log_64_", None, helper_sol_log_u64, None)?;
 
-    let heap = vec![0_u8; 2048];
+    let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
     let heap_region = MemoryRegion::new_from_slice(&heap);
-
-    let context = Box::new(BPFAllocator { heap, pos: 0 });
-
-    // TODO alloc helper not the right place to get memory
+    let context = Box::new(BPFAllocator::new(heap));
     vm.register_helper_ex(
         "sol_alloc_free_",
         None,
@@ -330,8 +297,6 @@ fn entrypoint(
             }
         };
         let mut v = serialize_parameters(program_id, params, &tx_data, tick_height);
-
-        println!("Heap region: {:?}", heap_region);
 
         match vm.execute_program(v.as_mut_slice(), &[], &[heap_region]) {
             Ok(status) => {

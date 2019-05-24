@@ -1,49 +1,92 @@
 //! @brief Example Rust-based BPF program that prints out the parameters passed to it
 
 #![no_std]
-#![feature(allocator_api)]
-#![feature(alloc_error_handler)]
 
 #[macro_use]
 extern crate alloc;
 extern crate solana_sdk_bpf_utils;
 
-use core::alloc::{GlobalAlloc, Layout};
 use solana_sdk_bpf_utils::log::*;
 
-#[global_allocator]
-static A: MyAllocator = MyAllocator;
-
-struct MyAllocator;
-unsafe impl GlobalAlloc for MyAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        sol_alloc_(layout.size() as u64)
-    }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
-        // TODO
-    }
-}
-extern "C" {
-    fn sol_alloc_(size: u64) -> *mut u8;
-}
-
-#[alloc_error_handler]
-fn my_alloc_error_handler(_: core::alloc::Layout) -> ! {
-    sol_log("aloc_error_handler");
-    panic!();
-}
+use core::alloc::Layout;
+use core::mem;
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
-    const ITERS: usize = 500;
-    let ones = vec![1_u64; ITERS];
-    let mut sum: u64 = 0;
+    unsafe {
+        // Confirm large allocation fails
 
-    for v in ones.iter() {
-        sum += *v;
+        let layout = Layout::from_size_align(core::usize::MAX, mem::align_of::<u8>()).unwrap();
+        let ptr = alloc::alloc::alloc(layout);
+        if !ptr.is_null() {
+            sol_log("Error: Alloc of very larger buffer should fail");
+            panic!();
+        }
     }
-    sol_log_64(0xff, 0, 0, 0, sum);
-    assert_eq!(sum, ITERS as u64);
+
+    unsafe {
+        // Test modest allocation and deallocation
+
+        let layout = Layout::from_size_align(100, mem::align_of::<u8>()).unwrap();
+        let ptr = alloc::alloc::alloc(layout);
+        if ptr.is_null() {
+            sol_log("Error: Alloc of 100 bytes failed");
+            alloc::alloc::handle_alloc_error(layout);
+        }
+        alloc::alloc::dealloc(ptr, layout);
+    }
+
+    unsafe {
+        // Test allocated memory read and write
+
+        let layout = Layout::from_size_align(100, mem::align_of::<u8>()).unwrap();
+        let ptr = alloc::alloc::alloc(layout);
+        if ptr.is_null() {
+            sol_log("Error: Alloc of 100 bytes failed");
+            alloc::alloc::handle_alloc_error(layout);
+        }
+        for i in 0..100 {
+            *ptr.add(i) = i as u8;
+        }
+        for i in 0..100 {
+            assert_eq!(*ptr.add(i as usize), i as u8);
+        }
+        assert_eq!(*ptr.add(42), 42);
+        alloc::alloc::dealloc(ptr, layout);
+    }
+
+    // // TODO not supported for system or bump allocator
+    // unsafe {
+    //     // Test alloc all bytes and one more (assumes heap size of 2048)
+
+    //     let layout = Layout::from_size_align(2048, mem::align_of::<u8>()).unwrap();
+    //     let ptr = alloc::alloc::alloc(layout);
+    //     if ptr.is_null() {
+    //         sol_log("Error: Alloc of 2048 bytes failed");
+    //         alloc::alloc::handle_alloc_error(layout);
+    //     }
+    //     let layout = Layout::from_size_align(1, mem::align_of::<u8>()).unwrap();
+    //     let ptr_fail = alloc::alloc::alloc(layout);
+    //     if !ptr_fail.is_null() {
+    //         sol_log("Error: Able to alloc 1 more then max");
+    //         panic!();
+    //     }
+    //     alloc::alloc::dealloc(ptr, layout);
+    // }
+
+    {
+        // Test use of allocated vector
+
+        const ITERS: usize = 100;
+        let ones = vec![1_u64; ITERS];
+        let mut sum: u64 = 0;
+
+        for (_, v) in ones.iter().enumerate() {
+            sum += *v;
+        }
+        sol_log_64(0xff, 0, 0, 0, sum);
+        assert_eq!(sum, ITERS as u64);
+    }
 
     sol_log("Success");
     true

@@ -1,6 +1,5 @@
 //! @brief Solana Rust-based BPF program panic handling
 
-// #[cfg(not(test))]
 use crate::log::*;
 use core::panic::PanicInfo;
 
@@ -18,9 +17,15 @@ fn panic(info: &PanicInfo) -> ! {
                 sol_panic_();
             }
         }
-        sol_log_64(0, 0, 0, u64::from(location.line()), u64::from(location.column()));
+        sol_log_64(
+            0,
+            0,
+            0,
+            u64::from(location.line()),
+            u64::from(location.column()),
+        );
     } else {
-        sol_log("Panic! but could not get location information");
+        sol_log("Panic!, but could not get location information");
     }
     unsafe {
         sol_panic_();
