@@ -76,7 +76,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
 
     let elf = load_elf().unwrap();
-    let mut vm = solana_bpf_loader::create_vm(&elf).unwrap();
+    let (mut vm, _) = solana_bpf_loader::create_vm(&elf).unwrap();
 
     println!("Interpreted:");
     assert_eq!(
