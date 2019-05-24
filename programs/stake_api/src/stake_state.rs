@@ -15,7 +15,7 @@ use solana_vote_api::vote_state::VoteState;
 pub enum StakeState {
     Uninitialized,
     Delegate {
-        voter_id: Pubkey,
+        voter_pubkey: Pubkey,
         credits_observed: u64,
     },
     MiningPool,
@@ -46,13 +46,13 @@ impl StakeState {
     }
 
     // utility function, used by Stakes, tests
-    pub fn voter_id_from(account: &Account) -> Option<Pubkey> {
-        Self::from(account).and_then(|state: Self| state.voter_id())
+    pub fn voter_pubkey_from(account: &Account) -> Option<Pubkey> {
+        Self::from(account).and_then(|state: Self| state.voter_pubkey())
     }
 
-    pub fn voter_id(&self) -> Option<Pubkey> {
+    pub fn voter_pubkey(&self) -> Option<Pubkey> {
         match self {
-            StakeState::Delegate { voter_id, .. } => Some(*voter_id),
+            StakeState::Delegate { voter_pubkey, .. } => Some(*voter_pubkey),
             _ => None,
         }
     }
@@ -109,7 +109,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
     fn initialize_delegate(&mut self) -> Result<(), InstructionError> {
         if let StakeState::Uninitialized = self.state()? {
             self.set_state(&StakeState::Delegate {
-                voter_id: Pubkey::default(),
+                voter_pubkey: Pubkey::default(),
                 credits_observed: 0,
             })
         } else {
@@ -124,7 +124,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         if let StakeState::Delegate { .. } = self.state()? {
             let vote_state: VoteState = vote_account.state()?;
             self.set_state(&StakeState::Delegate {
-                voter_id: *vote_account.unsigned_key(),
+                voter_pubkey: *vote_account.unsigned_key(),
                 credits_observed: vote_state.credits(),
             })
         } else {
@@ -140,14 +140,14 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
         if let (
             StakeState::MiningPool,
             StakeState::Delegate {
-                voter_id,
+                voter_pubkey,
                 credits_observed,
             },
         ) = (self.state()?, stake_account.state()?)
         {
             let vote_state: VoteState = vote_account.state()?;
 
-            if voter_id != *vote_account.unsigned_key() {
+            if voter_pubkey != *vote_account.unsigned_key() {
                 return Err(InstructionError::InvalidArgument);
             }
 
@@ -168,7 +168,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
                 vote_account.account.lamports += voters_reward;
 
                 stake_account.set_state(&StakeState::Delegate {
-                    voter_id,
+                    voter_pubkey,
                     credits_observed: vote_state.credits(),
                 })
             } else {
@@ -183,7 +183,7 @@ impl<'a> StakeAccount for KeyedAccount<'a> {
 
 // utility function, used by Bank, tests, genesis
 pub fn create_delegate_stake_account(
-    voter_id: &Pubkey,
+    voter_pubkey: &Pubkey,
     vote_state: &VoteState,
     lamports: u64,
 ) -> Account {
@@ -191,7 +191,7 @@ pub fn create_delegate_stake_account(
 
     stake_account
         .set_state(&StakeState::Delegate {
-            voter_id: *voter_id,
+            voter_pubkey: *voter_pubkey,
             credits_observed: vote_state.credits(),
         })
         .expect("set_state");
@@ -254,7 +254,7 @@ mod tests {
         assert_eq!(
             stake_state,
             StakeState::Delegate {
-                voter_id: vote_keypair.pubkey(),
+                voter_pubkey: vote_keypair.pubkey(),
                 credits_observed: vote_state.credits()
             }
         );
@@ -438,7 +438,7 @@ mod tests {
         let mut vote1_keyed_account = KeyedAccount::new(&vote1_pubkey, false, &mut vote1_account);
         vote1_keyed_account.set_state(&vote_state).unwrap();
 
-        // wrong voter_id...
+        // wrong voter_pubkey...
         assert_eq!(
             mining_pool_keyed_account
                 .redeem_vote_credits(&mut stake_keyed_account, &mut vote1_keyed_account),

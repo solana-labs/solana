@@ -59,16 +59,16 @@ pub fn create_account(
 fn metas_for_authorized_signer(
     from_pubkey: &Pubkey,
     vote_id: &Pubkey,
-    authorized_voter_id: &Pubkey, // currently authorized
+    authorized_voter_pubkey: &Pubkey, // currently authorized
 ) -> Vec<AccountMeta> {
     let mut account_metas = vec![AccountMeta::new(*from_pubkey, true)]; // sender
 
-    let is_own_signer = authorized_voter_id == vote_id;
+    let is_own_signer = authorized_voter_pubkey == vote_id;
 
     account_metas.push(AccountMeta::new(*vote_id, is_own_signer)); // vote account
 
     if !is_own_signer {
-        account_metas.push(AccountMeta::new(*authorized_voter_id, true)) // signer
+        account_metas.push(AccountMeta::new(*authorized_voter_pubkey, true)) // signer
     }
     account_metas
 }
@@ -76,14 +76,14 @@ fn metas_for_authorized_signer(
 pub fn authorize_voter(
     from_pubkey: &Pubkey,
     vote_id: &Pubkey,
-    authorized_voter_id: &Pubkey, // currently authorized
-    new_authorized_voter_id: &Pubkey,
+    authorized_voter_pubkey: &Pubkey, // currently authorized
+    new_authorized_voter_pubkey: &Pubkey,
 ) -> Instruction {
-    let account_metas = metas_for_authorized_signer(from_pubkey, vote_id, authorized_voter_id);
+    let account_metas = metas_for_authorized_signer(from_pubkey, vote_id, authorized_voter_pubkey);
 
     Instruction::new(
         id(),
-        &VoteInstruction::AuthorizeVoter(*new_authorized_voter_id),
+        &VoteInstruction::AuthorizeVoter(*new_authorized_voter_pubkey),
         account_metas,
     )
 }
@@ -91,10 +91,10 @@ pub fn authorize_voter(
 pub fn vote(
     from_pubkey: &Pubkey,
     vote_id: &Pubkey,
-    authorized_voter_id: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
     recent_votes: Vec<Vote>,
 ) -> Instruction {
-    let mut account_metas = metas_for_authorized_signer(from_pubkey, vote_id, authorized_voter_id);
+    let mut account_metas = metas_for_authorized_signer(from_pubkey, vote_id, authorized_voter_pubkey);
 
     // request slot_hashes syscall account after vote_id
     account_metas.insert(2, AccountMeta::new(slot_hashes::id(), false));
@@ -126,8 +126,8 @@ pub fn process_instruction(
         VoteInstruction::InitializeAccount(node_pubkey, commission) => {
             vote_state::initialize_account(me, &node_pubkey, commission)
         }
-        VoteInstruction::AuthorizeVoter(voter_id) => {
-            vote_state::authorize_voter(me, rest, &voter_id)
+        VoteInstruction::AuthorizeVoter(voter_pubkey) => {
+            vote_state::authorize_voter(me, rest, &voter_pubkey)
         }
         VoteInstruction::Vote(votes) => {
             datapoint_warn!("vote-native", ("count", 1, i64));

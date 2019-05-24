@@ -15,12 +15,12 @@ pub struct Stakes {
 }
 
 impl Stakes {
-    // sum the stakes that point to the given voter_id
-    fn calculate_stake(&self, voter_id: &Pubkey) -> u64 {
+    // sum the stakes that point to the given voter_pubkey
+    fn calculate_stake(&self, voter_pubkey: &Pubkey) -> u64 {
         self.stake_accounts
             .iter()
             .filter(|(_, stake_account)| {
-                Some(*voter_id) == StakeState::voter_id_from(stake_account)
+                Some(*voter_pubkey) == StakeState::voter_pubkey_from(stake_account)
             })
             .map(|(_, stake_account)| stake_account.lamports)
             .sum()
@@ -44,25 +44,25 @@ impl Stakes {
                 self.vote_accounts.insert(*pubkey, (stake, account.clone()));
             }
         } else if solana_stake_api::check_id(&account.owner) {
-            //  old_stake is stake lamports and voter_id from the pre-store() version
+            //  old_stake is stake lamports and voter_pubkey from the pre-store() version
             let old_stake = self.stake_accounts.get(pubkey).and_then(|old_account| {
-                StakeState::voter_id_from(old_account)
-                    .map(|old_voter_id| (old_account.lamports, old_voter_id))
+                StakeState::voter_pubkey_from(old_account)
+                    .map(|old_voter_pubkey| (old_account.lamports, old_voter_pubkey))
             });
 
             let stake =
-                StakeState::voter_id_from(account).map(|voter_id| (account.lamports, voter_id));
+                StakeState::voter_pubkey_from(account).map(|voter_pubkey| (account.lamports, voter_pubkey));
 
             // if adjustments need to be made...
             if stake != old_stake {
-                if let Some((old_stake, old_voter_id)) = old_stake {
+                if let Some((old_stake, old_voter_pubkey)) = old_stake {
                     self.vote_accounts
-                        .entry(old_voter_id)
+                        .entry(old_voter_pubkey)
                         .and_modify(|e| e.0 -= old_stake);
                 }
-                if let Some((stake, voter_id)) = stake {
+                if let Some((stake, voter_pubkey)) = stake {
                     self.vote_accounts
-                        .entry(voter_id)
+                        .entry(voter_pubkey)
                         .and_modify(|e| e.0 += stake);
                 }
             }

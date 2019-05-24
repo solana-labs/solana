@@ -205,12 +205,13 @@ pub fn parse_command(
             let voting_account_pubkey = pubkey_of(matches, "voting_account_pubkey").unwrap();
             let authorized_voter_keypair =
                 keypair_of(matches, "authorized_voter_keypair_file").unwrap();
-            let new_authorized_voter_id = pubkey_of(matches, "new_authorized_voter_id").unwrap();
+            let new_authorized_voter_pubkey =
+                pubkey_of(matches, "new_authorized_voter_pubkey").unwrap();
 
             Ok(WalletCommand::AuthorizeVoter(
                 voting_account_pubkey,
                 authorized_voter_keypair,
-                new_authorized_voter_id,
+                new_authorized_voter_pubkey,
             ))
         }
         ("show-vote-account", Some(matches)) => {
@@ -226,7 +227,8 @@ pub fn parse_command(
             ))
         }
         ("create-mining-pool-account", Some(matches)) => {
-            let mining_pool_account_pubkey = pubkey_of(matches, "mining_pool_account_pubkey").unwrap();
+            let mining_pool_account_pubkey =
+                pubkey_of(matches, "mining_pool_account_pubkey").unwrap();
             let lamports = matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::CreateMiningPoolAccount(
                 mining_pool_account_pubkey,
@@ -243,7 +245,8 @@ pub fn parse_command(
             ))
         }
         ("redeem-vote-credits", Some(matches)) => {
-            let mining_pool_account_pubkey = pubkey_of(matches, "mining_pool_account_pubkey").unwrap();
+            let mining_pool_account_pubkey =
+                pubkey_of(matches, "mining_pool_account_pubkey").unwrap();
             let staking_account_pubkey = pubkey_of(matches, "staking_account_pubkey").unwrap();
             let voting_account_pubkey = pubkey_of(matches, "voting_account_pubkey").unwrap();
             Ok(WalletCommand::RedeemVoteCredits(
@@ -465,14 +468,14 @@ fn process_authorize_voter(
     config: &WalletConfig,
     voting_account_pubkey: &Pubkey,
     authorized_voter_keypair: &Keypair,
-    new_authorized_voter_id: &Pubkey,
+    new_authorized_voter_pubkey: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::authorize_voter(
         &config.keypair.pubkey(),           // from
-        voting_account_pubkey,                  // vote account to update
+        voting_account_pubkey,              // vote account to update
         &authorized_voter_keypair.pubkey(), // current authorized voter (often the vote account itself)
-        new_authorized_voter_id,            // new vote signer
+        new_authorized_voter_pubkey,        // new vote signer
     )];
 
     let mut tx = Transaction::new_signed_instructions(
@@ -500,7 +503,10 @@ fn process_show_vote_account(
 
     println!("account lamports: {}", vote_account_lamports.unwrap());
     println!("node id: {}", vote_state.node_pubkey);
-    println!("authorized voter id: {}", vote_state.authorized_voter_id);
+    println!(
+        "authorized voter pubkey: {}",
+        vote_state.authorized_voter_pubkey
+    );
     println!("credits: {}", vote_state.credits());
     println!(
         "commission: {}%",
@@ -609,11 +615,11 @@ fn process_show_stake_account(
     let stake_account = rpc_client.get_account(staking_account_pubkey)?;
     match stake_account.state() {
         Ok(StakeState::Delegate {
-            voter_id,
+            voter_pubkey,
             credits_observed,
         }) => {
             println!("account lamports: {}", stake_account.lamports);
-            println!("voter id: {}", voter_id);
+            println!("voter pubkey: {}", voter_pubkey);
             println!("credits observed: {}", credits_observed);
             Ok("".to_string())
         }
@@ -685,8 +691,11 @@ fn process_claim_storage_reward(
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
 
-    let instruction =
-        storage_instruction::claim_reward(storage_account_pubkey, storage_mining_pool_account_pubkey, slot);
+    let instruction = storage_instruction::claim_reward(
+        storage_account_pubkey,
+        storage_mining_pool_account_pubkey,
+        slot,
+    );
     let signers = [&config.keypair];
     let message = Message::new_with_payer(vec![instruction], Some(&signers[0].pubkey()));
 
@@ -969,27 +978,30 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         WalletCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
 
         // Create vote account
-        WalletCommand::CreateVoteAccount(voting_account_pubkey, node_pubkey, commission, lamports) => {
-            process_create_vote_account(
-                &rpc_client,
-                config,
-                &voting_account_pubkey,
-                &node_pubkey,
-                *commission,
-                *lamports,
-            )
-        }
+        WalletCommand::CreateVoteAccount(
+            voting_account_pubkey,
+            node_pubkey,
+            commission,
+            lamports,
+        ) => process_create_vote_account(
+            &rpc_client,
+            config,
+            &voting_account_pubkey,
+            &node_pubkey,
+            *commission,
+            *lamports,
+        ),
         // Configure staking account already created
         WalletCommand::AuthorizeVoter(
             voting_account_pubkey,
             authorized_voter_keypair,
-            new_authorized_voter_id,
+            new_authorized_voter_pubkey,
         ) => process_authorize_voter(
             &rpc_client,
             config,
             &voting_account_pubkey,
             &authorized_voter_keypair,
-            &new_authorized_voter_id,
+            &new_authorized_voter_pubkey,
         ),
         // Show a vote account
         WalletCommand::ShowVoteAccount(voting_account_pubkey) => {
@@ -1280,7 +1292,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
                         .help("Keypair file for the currently authorized vote signer"),
                 )
                 .arg(
-                    Arg::with_name("new_authorized_voter_id")
+                    Arg::with_name("new_authorized_voter_pubkey")
                         .index(3)
                         .value_name("PUBKEY")
                         .takes_value(true)

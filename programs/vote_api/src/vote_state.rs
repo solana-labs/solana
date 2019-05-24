@@ -63,7 +63,7 @@ impl Lockout {
 pub struct VoteState {
     pub votes: VecDeque<Lockout>,
     pub node_pubkey: Pubkey,
-    pub authorized_voter_id: Pubkey,
+    pub authorized_voter_pubkey: Pubkey,
     /// fraction of std::u32::MAX that represents what part of a rewards
     ///  payout should be given to this VoteAccount
     pub commission: u32,
@@ -79,7 +79,7 @@ impl VoteState {
         Self {
             votes,
             node_pubkey: *node_pubkey,
-            authorized_voter_id: *vote_id,
+            authorized_voter_pubkey: *vote_id,
             credits,
             commission,
             root_slot,
@@ -218,12 +218,12 @@ impl VoteState {
 pub fn authorize_voter(
     vote_account: &mut KeyedAccount,
     other_signers: &[KeyedAccount],
-    authorized_voter_id: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
     // current authorized signer must say "yay"
-    let authorized = Some(&vote_state.authorized_voter_id);
+    let authorized = Some(&vote_state.authorized_voter_pubkey);
     if vote_account.signer_key() != authorized
         && other_signers
             .iter()
@@ -232,7 +232,7 @@ pub fn authorize_voter(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    vote_state.authorized_voter_id = *authorized_voter_id;
+    vote_state.authorized_voter_pubkey = *authorized_voter_pubkey;
     vote_account.set_state(&vote_state)
 }
 
@@ -246,7 +246,7 @@ pub fn initialize_account(
 ) -> Result<(), InstructionError> {
     let vote_state: VoteState = vote_account.state()?;
 
-    if vote_state.authorized_voter_id != Pubkey::default() {
+    if vote_state.authorized_voter_pubkey != Pubkey::default() {
         return Err(InstructionError::AccountAlreadyInitialized);
     }
     vote_account.set_state(&VoteState::new(
@@ -264,7 +264,7 @@ pub fn process_votes(
 ) -> Result<(), InstructionError> {
     let mut vote_state: VoteState = vote_account.state()?;
 
-    if vote_state.authorized_voter_id == Pubkey::default() {
+    if vote_state.authorized_voter_pubkey == Pubkey::default() {
         return Err(InstructionError::UninitializedAccount);
     }
 
@@ -274,8 +274,8 @@ pub fn process_votes(
 
     let slot_hashes: Vec<(u64, Hash)> = slot_hashes_account.state()?;
 
-    let authorized = Some(&vote_state.authorized_voter_id);
-    // find a signer that matches the authorized_voter_id
+    let authorized = Some(&vote_state.authorized_voter_pubkey);
+    // find a signer that matches the authorized_voter_pubkey
     if vote_account.signer_key() != authorized
         && other_signers
             .iter()
@@ -429,7 +429,7 @@ mod tests {
         let (vote_id, vote_account) = create_test_account();
 
         let vote_state: VoteState = vote_account.state().unwrap();
-        assert_eq!(vote_state.authorized_voter_id, vote_id);
+        assert_eq!(vote_state.authorized_voter_pubkey, vote_id);
         assert!(vote_state.votes.is_empty());
     }
 
@@ -508,29 +508,29 @@ mod tests {
         assert_eq!(res, Ok(()));
 
         // another voter
-        let authorized_voter_id = Pubkey::new_rand();
+        let authorized_voter_pubkey = Pubkey::new_rand();
         let res = authorize_voter(
             &mut KeyedAccount::new(&vote_id, false, &mut vote_account),
             &[],
-            &authorized_voter_id,
+            &authorized_voter_pubkey,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         let res = authorize_voter(
             &mut KeyedAccount::new(&vote_id, true, &mut vote_account),
             &[],
-            &authorized_voter_id,
+            &authorized_voter_pubkey,
         );
         assert_eq!(res, Ok(()));
-        // verify authorized_voter_id can authorize authorized_voter_id ;)
+        // verify authorized_voter_pubkey can authorize authorized_voter_pubkey ;)
         let res = authorize_voter(
             &mut KeyedAccount::new(&vote_id, false, &mut vote_account),
             &[KeyedAccount::new(
-                &authorized_voter_id,
+                &authorized_voter_pubkey,
                 true,
                 &mut Account::default(),
             )],
-            &authorized_voter_id,
+            &authorized_voter_pubkey,
         );
         assert_eq!(res, Ok(()));
 
@@ -552,7 +552,7 @@ mod tests {
             &mut KeyedAccount::new(&vote_id, false, &mut vote_account),
             &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
             &[KeyedAccount::new(
-                &authorized_voter_id,
+                &authorized_voter_pubkey,
                 true,
                 &mut Account::default(),
             )],
@@ -604,8 +604,8 @@ mod tests {
 
     #[test]
     fn test_vote_double_lockout_after_expiration() {
-        let voter_id = Pubkey::new_rand();
-        let mut vote_state = VoteState::new(&voter_id, &Pubkey::new_rand(), 0);
+        let voter_pubkey = Pubkey::new_rand();
+        let mut vote_state = VoteState::new(&voter_pubkey, &Pubkey::new_rand(), 0);
 
         for i in 0..3 {
             vote_state.process_slot_vote_unchecked(i as u64);
@@ -632,8 +632,8 @@ mod tests {
 
     #[test]
     fn test_expire_multiple_votes() {
-        let voter_id = Pubkey::new_rand();
-        let mut vote_state = VoteState::new(&voter_id, &Pubkey::new_rand(), 0);
+        let voter_pubkey = Pubkey::new_rand();
+        let mut vote_state = VoteState::new(&voter_pubkey, &Pubkey::new_rand(), 0);
 
         for i in 0..3 {
             vote_state.process_slot_vote_unchecked(i as u64);
@@ -663,8 +663,8 @@ mod tests {
 
     #[test]
     fn test_vote_credits() {
-        let voter_id = Pubkey::new_rand();
-        let mut vote_state = VoteState::new(&voter_id, &Pubkey::new_rand(), 0);
+        let voter_pubkey = Pubkey::new_rand();
+        let mut vote_state = VoteState::new(&voter_pubkey, &Pubkey::new_rand(), 0);
 
         for i in 0..MAX_LOCKOUT_HISTORY {
             vote_state.process_slot_vote_unchecked(i as u64);
@@ -682,8 +682,8 @@ mod tests {
 
     #[test]
     fn test_duplicate_vote() {
-        let voter_id = Pubkey::new_rand();
-        let mut vote_state = VoteState::new(&voter_id, &Pubkey::new_rand(), 0);
+        let voter_pubkey = Pubkey::new_rand();
+        let mut vote_state = VoteState::new(&voter_pubkey, &Pubkey::new_rand(), 0);
         vote_state.process_slot_vote_unchecked(0);
         vote_state.process_slot_vote_unchecked(1);
         vote_state.process_slot_vote_unchecked(0);
@@ -694,8 +694,8 @@ mod tests {
 
     #[test]
     fn test_nth_recent_vote() {
-        let voter_id = Pubkey::new_rand();
-        let mut vote_state = VoteState::new(&voter_id, &Pubkey::new_rand(), 0);
+        let voter_pubkey = Pubkey::new_rand();
+        let mut vote_state = VoteState::new(&voter_pubkey, &Pubkey::new_rand(), 0);
         for i in 0..MAX_LOCKOUT_HISTORY {
             vote_state.process_slot_vote_unchecked(i as u64);
         }
