@@ -464,7 +464,7 @@ start() {
   fi
 
   declare bootstrapLeader=true
-  declare nodeType=fullnode
+  declare nodeType=validator
   declare loopCount=0
   for ipAddress in "${fullnodeIpList[@]}" - "${blockstreamerIpList[@]}"; do
     if [[ $ipAddress = - ]]; then

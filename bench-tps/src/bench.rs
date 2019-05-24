@@ -623,8 +623,8 @@ pub fn generate_and_fund_keypairs<T: Client>(
 mod tests {
     use super::*;
     use solana::cluster_info::FULLNODE_PORT_RANGE;
-    use solana::validator::ValidatorConfig;
     use solana::local_cluster::{ClusterConfig, LocalCluster};
+    use solana::validator::ValidatorConfig;
     use solana_client::thin_client::create_client;
     use solana_drone::drone::run_local_drone;
     use solana_runtime::bank::Bank;
