@@ -146,24 +146,20 @@ impl BankingStage {
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        buffered_packets: &[PacketsAndOffsets],
+        buffered_packets: &mut Vec<PacketsAndOffsets>,
     ) -> Result<UnprocessedPackets> {
         let mut unprocessed_packets = vec![];
         let mut rebuffered_packets = 0;
         let mut new_tx_count = 0;
         let buffered_len = buffered_packets.len();
-        let mut buffered_packets_iter = buffered_packets.iter();
+        let mut buffered_packets_iter = buffered_packets.drain(..);
 
         let proc_start = Instant::now();
         while let Some((msgs, unprocessed_indexes)) = buffered_packets_iter.next() {
             let bank = poh_recorder.lock().unwrap().bank();
             if bank.is_none() {
                 rebuffered_packets += unprocessed_indexes.len();
-                Self::push_unprocessed(
-                    &mut unprocessed_packets,
-                    msgs.to_owned(),
-                    unprocessed_indexes.to_owned(),
-                );
+                Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes);
                 continue;
             }
             let bank = bank.unwrap();
@@ -180,11 +176,7 @@ impl BankingStage {
 
             // Collect any unprocessed transactions in this batch for forwarding
             rebuffered_packets += new_unprocessed_indexes.len();
-            Self::push_unprocessed(
-                &mut unprocessed_packets,
-                msgs.to_owned(),
-                new_unprocessed_indexes,
-            );
+            Self::push_unprocessed(&mut unprocessed_packets, msgs, new_unprocessed_indexes);
 
             if processed < verified_txs_len {
                 let next_leader = poh_recorder.lock().unwrap().next_slot_leader();
@@ -197,11 +189,7 @@ impl BankingStage {
                         my_pubkey,
                         next_leader,
                     );
-                    Self::push_unprocessed(
-                        &mut unprocessed_packets,
-                        msgs.to_owned(),
-                        unprocessed_indexes,
-                    );
+                    Self::push_unprocessed(&mut unprocessed_packets, msgs, unprocessed_indexes);
                 }
             }
         }
@@ -257,7 +245,7 @@ impl BankingStage {
         socket: &std::net::UdpSocket,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        buffered_packets: &[PacketsAndOffsets],
+        buffered_packets: &mut Vec<PacketsAndOffsets>,
         enable_forwarding: bool,
     ) -> Result<UnprocessedPackets> {
         let rcluster_info = cluster_info.read().unwrap();
@@ -319,7 +307,7 @@ impl BankingStage {
                     &socket,
                     poh_recorder,
                     cluster_info,
-                    &buffered_packets,
+                    &mut buffered_packets,
                     enable_forwarding,
                 )
                 .map(|packets| buffered_packets = packets)
