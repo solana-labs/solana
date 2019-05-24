@@ -52,6 +52,7 @@ Operate a configured testnet
 
    --hashes-per-tick NUM_HASHES|sleep|auto
                                       - Override the default --hashes-per-tick for the cluster
+   -n NUM_FULL_NODES                  - Number of fullnodes to apply command to.
 
  sanity/start/update-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
@@ -86,6 +87,7 @@ benchTpsExtraArgs=
 benchExchangeExtraArgs=
 failOnValidatorBootupFailure=true
 genesisOptions=
+numFullnodesRequested=
 
 command=$1
 [[ -n $command ]] || usage
@@ -106,7 +108,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?T:t:o:f:rD:i:c:F" opt "${shortArgs[@]}"; do
+while getopts "h?T:t:o:f:rD:i:c:Fn:" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -129,6 +131,9 @@ while getopts "h?T:t:o:f:rD:i:c:F" opt "${shortArgs[@]}"; do
     ;;
   f)
     cargoFeatures=$OPTARG
+    ;;
+  n)
+    numFullnodesRequested=$OPTARG
     ;;
   i)
     updateManifestKeypairFile=$OPTARG
@@ -159,7 +164,6 @@ while getopts "h?T:t:o:f:rD:i:c:F" opt "${shortArgs[@]}"; do
         echo "Error: Expecting tuple \"clientType=numClientType=extraArgs\" but got \"$OPTARG\""
         exit 1
       fi
-      set -x
       local keyValue
       IFS='=' read -ra keyValue <<< "$OPTARG"
       local clientType=${keyValue[0]}
@@ -197,6 +201,12 @@ while getopts "h?T:t:o:f:rD:i:c:F" opt "${shortArgs[@]}"; do
 done
 
 loadConfigFile
+
+if [[ -n $numFullnodesRequested ]]; then
+  truncatedNodeList=( "${fullnodeIpList[@]:0:$numFullnodesRequested}" )
+  unset fullnodeIpList
+  fullnodeIpList=( "${truncatedNodeList[@]}" )
+fi
 
 numClients=${#clientIpList[@]}
 numClientsRequested=$((numBenchTpsClients+numBenchExchangeClients))
