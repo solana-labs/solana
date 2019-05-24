@@ -226,12 +226,12 @@ impl BankingStage {
     }
 
     fn consume_or_forward_packets(
-        leader_id: Option<Pubkey>,
+        leader_pubkey: Option<Pubkey>,
         bank_is_available: bool,
         would_be_leader: bool,
         my_pubkey: &Pubkey,
     ) -> BufferedPacketsDecision {
-        leader_id.map_or(
+        leader_pubkey.map_or(
             // If leader is not known, return the buffered packets as is
             BufferedPacketsDecision::Hold,
             // else process the packets
@@ -282,8 +282,8 @@ impl BankingStage {
             }
             BufferedPacketsDecision::Forward => {
                 if enable_forwarding {
-                    next_leader.map_or(Ok(buffered_packets.to_vec()), |leader_id| {
-                        rcluster_info.lookup(&leader_id).map_or(
+                    next_leader.map_or(Ok(buffered_packets.to_vec()), |leader_pubkey| {
+                        rcluster_info.lookup(&leader_pubkey).map_or(
                             Ok(buffered_packets.to_vec()),
                             |leader| {
                                 let _ = Self::forward_buffered_packets(

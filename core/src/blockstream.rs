@@ -65,14 +65,14 @@ pub trait BlockstreamEvents {
         &self,
         slot: u64,
         tick_height: u64,
-        leader_id: &Pubkey,
+        leader_pubkey: &Pubkey,
         entries: &Entry,
     ) -> Result<()>;
     fn emit_block_event(
         &self,
         slot: u64,
         tick_height: u64,
-        leader_id: &Pubkey,
+        leader_pubkey: &Pubkey,
         blockhash: Hash,
     ) -> Result<()>;
 }
@@ -90,7 +90,7 @@ where
         &self,
         slot: u64,
         tick_height: u64,
-        leader_id: &Pubkey,
+        leader_pubkey: &Pubkey,
         entry: &Entry,
     ) -> Result<()> {
         let transactions: Vec<Vec<u8>> = serialize_transactions(entry);
@@ -105,7 +105,7 @@ where
             Utc::now().to_rfc3339_opts(SecondsFormat::Nanos, true),
             slot,
             tick_height,
-            leader_id,
+            leader_pubkey,
             json_entry,
         );
         self.output.write(payload)?;
@@ -116,7 +116,7 @@ where
         &self,
         slot: u64,
         tick_height: u64,
-        leader_id: &Pubkey,
+        leader_pubkey: &Pubkey,
         blockhash: Hash,
     ) -> Result<()> {
         let payload = format!(
@@ -124,7 +124,7 @@ where
             Utc::now().to_rfc3339_opts(SecondsFormat::Nanos, true),
             slot,
             tick_height,
-            leader_id,
+            leader_pubkey,
             blockhash,
         );
         self.output.write(payload)?;
@@ -206,19 +206,19 @@ mod test {
         let tick_height_initial = 0;
         let tick_height_final = tick_height_initial + ticks_per_slot + 2;
         let mut curr_slot = 0;
-        let leader_id = Pubkey::new_rand();
+        let leader_pubkey = Pubkey::new_rand();
 
         for tick_height in tick_height_initial..=tick_height_final {
             if tick_height == 5 {
                 blockstream
-                    .emit_block_event(curr_slot, tick_height - 1, &leader_id, blockhash)
+                    .emit_block_event(curr_slot, tick_height - 1, &leader_pubkey, blockhash)
                     .unwrap();
                 curr_slot += 1;
             }
             let entry = Entry::new(&mut blockhash, 1, vec![]); // just ticks
             blockhash = entry.hash;
             blockstream
-                .emit_entry_event(curr_slot, tick_height, &leader_id, &entry)
+                .emit_entry_event(curr_slot, tick_height, &leader_pubkey, &entry)
                 .unwrap();
             expected_entries.push(entry.clone());
             entries.push(entry);

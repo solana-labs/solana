@@ -121,7 +121,7 @@ mod test {
     #[test]
     fn test_blockstream_service_process_entries() {
         let ticks_per_slot = 5;
-        let leader_id = Pubkey::new_rand();
+        let leader_pubkey = Pubkey::new_rand();
 
         // Set up genesis block and blocktree
         let GenesisBlockInfo {
@@ -162,7 +162,7 @@ mod test {
             .write_entries(1, 0, 0, ticks_per_slot, &entries)
             .unwrap();
 
-        slot_full_sender.send((1, leader_id)).unwrap();
+        slot_full_sender.send((1, leader_pubkey)).unwrap();
         BlockstreamService::process_entries(
             &slot_full_receiver,
             &Arc::new(blocktree),
