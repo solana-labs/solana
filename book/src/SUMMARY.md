@@ -22,7 +22,7 @@
   - [Staking Delegation and Rewards](stake-delegation-and-rewards.md)
   - [Performance Metrics](performance-metrics.md)
 
-- [Anatomy of a Fullnode](fullnode.md)
+- [Anatomy of a Validator](validator.md)
   - [TPU](tpu.md)
   - [TVU](tvu.md)
     - [Blocktree](blocktree.md)
@@ -56,7 +56,7 @@
   - [Cluster Test Framework](cluster-test-framework.md)
   - [Credit-only Accounts](credit-only-credit-debit-accounts.md)
   - [Deterministic Transaction Fees](transaction-fees.md)
-  - [Validator](validator.md)
+  - [Validator](validator-proposal.md)
 
 - [Implemented Design Proposals](implemented-proposals.md)
   - [Fork Selection](fork-selection.md)

@@ -1,56 +1,29 @@
 # Anatomy of a Validator
 
-## History
+<img alt="Validator block diagrams" src="img/validator.svg" class="center"/>
 
-When we first started Solana, the goal was to de-risk our TPS claims. We knew
-that between optimistic concurrency control and sufficiently long leader slots,
-that PoS consensus was not the biggest risk to TPS. It was GPU-based signature
-verification, software pipelining and concurrent banking. Thus, the TPU was
-born. After topping 100k TPS, we split the team into one group working toward
-710k TPS and another to flesh out the validator pipeline. Hence, the TVU was
-born. The current architecture is a consequence of incremental development with
-that ordering and project priorities. It is not a reflection of what we ever
-believed was the most technically elegant cross-section of those technologies.
-In the context of leader rotation, the strong distinction between leading and
-validating is blurred.
+## Pipelining
 
-## Difference between validating and leading
+The validators make extensive use of an optimization common in CPU design,
+called *pipelining*.  Pipelining is the right tool for the job when there's a
+stream of input data that needs to be processed by a sequence of steps, and
+there's different hardware responsible for each. The quintessential example is
+using a washer and dryer to wash/dry/fold several loads of laundry. Washing
+must occur before drying and drying before folding, but each of the three
+operations is performed by a separate unit. To maximize efficiency, one creates
+a pipeline of *stages*. We'll call the washer one stage, the dryer another, and
+the folding process a third. To run the pipeline, one adds a second load of
+laundry to the washer just after the first load is added to the dryer.
+Likewise, the third load is added to the washer after the second is in the
+dryer and the first is being folded. In this way, one can make progress on
+three loads of laundry simultaneously. Given infinite loads, the pipeline will
+consistently complete a load at the rate of the slowest stage in the pipeline.
 
-The fundamental difference between the pipelines is when the PoH is present. In
-a leader, we process transactions, removing bad ones, and then tag the result
-with a PoH hash. In the validator, we verify that hash, peel it off, and
-process the transactions in exactly the same way. The only difference is that
-if a validator sees a bad transaction, it can't simply remove it like the
-leader does, because that would cause the PoH hash to change.  Instead, it
-rejects the whole block. The other difference between the pipelines is what
-happens *after* banking. The leader broadcasts entries to downstream validators
-whereas the validator will have already done that in RetransmitStage, which is
-a confirmation time optimization.  The validation pipeline, on the other hand,
-has one last step. Any time it finishes processing a block, it needs to weigh
-any forks it's observing, possibly cast a vote, and if so, reset its PoH hash
-to the block hash it just voted on.
+## Pipelining in the Validator
 
-## Proposed Design
-
-We unwrap the many abstraction layers and build a single pipeline that can
-toggle leader mode on whenever the validator's ID shows up in the leader
-schedule.
-
-<img alt="Validator block diagram" src="img/validator.svg" class="center"/>
-
-## Notable changes
-
-* No threads are shut down to switch out of leader mode. Instead, FetchStage
-  should forward transactions to the next leader.
-* Hoist FetchStage and BroadcastStage out of TPU
-* Blocktree renamed to Blockstore
-* BankForks renamed to Banktree
-* TPU moves to new socket-free crate called solana-tpu.
-* TPU's BankingStage absorbs ReplayStage
-* TVU goes away
-* New RepairStage absorbs Blob Fetch Stage and repair requests
-* JSON RPC Service is optional - used for debugging. It should instead be part
-  of a separate `solana-blockstreamer` executable.
-* New MulticastStage absorbs retransmit part of RetransmitStage
-* MulticastStage downstream of Blockstore
-
+The validator contains two pipelined processes, one used in leader mode called
+the TPU and one used in validator mode called the TVU. In both cases, the
+hardware being pipelined is the same, the network input, the GPU cards, the CPU
+cores, writes to disk, and the network output.  What it does with that hardware
+is different.  The TPU exists to create ledger entries whereas the TVU exists
+to validate them.

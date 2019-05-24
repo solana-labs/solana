@@ -8,13 +8,13 @@ use bincode::{deserialize, serialize};
 use solana::blocktree::{create_new_tmp_ledger, Blocktree};
 use solana::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
-use solana::fullnode::FullnodeConfig;
 use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
 use solana::replicator::Replicator;
 use solana::replicator::ReplicatorRequest;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer::blob_receiver;
+use solana::validator::ValidatorConfig;
 use solana_client::thin_client::create_client;
 use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::hash::Hash;
@@ -103,10 +103,10 @@ fn run_replicator_startup_basic(num_nodes: usize, num_replicators: usize) {
     solana_logger::setup();
     info!("starting replicator test");
 
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+    let mut validator_config = ValidatorConfig::default();
+    validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let config = ClusterConfig {
-        fullnode_config,
+        validator_config,
         num_replicators,
         node_stakes: vec![100; num_nodes],
         cluster_lamports: 10_000,
@@ -189,8 +189,8 @@ fn test_replicator_startup_leader_hang() {
 fn test_replicator_startup_ledger_hang() {
     solana_logger::setup();
     info!("starting replicator test");
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+    let mut validator_config = ValidatorConfig::default();
+    validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let cluster = LocalCluster::new_with_equal_stakes(2, 10_000, 100);;
 
     info!("starting replicator node");
@@ -217,10 +217,10 @@ fn test_replicator_startup_ledger_hang() {
 fn test_account_setup() {
     let num_nodes = 1;
     let num_replicators = 1;
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+    let mut validator_config = ValidatorConfig::default();
+    validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
     let config = ClusterConfig {
-        fullnode_config,
+        validator_config,
         num_replicators,
         node_stakes: vec![100; num_nodes],
         cluster_lamports: 10_000,

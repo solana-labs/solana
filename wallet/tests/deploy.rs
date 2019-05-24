@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use solana::fullnode::new_fullnode_for_tests;
+use solana::validator::new_validator_for_tests;
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_drone::drone::run_local_drone;
@@ -20,7 +20,7 @@ fn test_wallet_deploy_program() {
     pathbuf.push("noop");
     pathbuf.set_extension("so");
 
-    let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
+    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
 
     let (sender, receiver) = channel();
     run_local_drone(alice, sender, None);

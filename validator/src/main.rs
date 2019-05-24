@@ -2,10 +2,10 @@ use clap::{crate_description, crate_name, crate_version, App, Arg};
 use log::*;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::contact_info::ContactInfo;
-use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
 use solana::socketaddr;
+use solana::validator::{Validator, ValidatorConfig};
 use solana_netutil::parse_port_range;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::fs::File;
@@ -23,7 +23,7 @@ fn port_range_validator(port_range: String) -> Result<(), String> {
 
 fn main() {
     solana_logger::setup();
-    solana_metrics::set_panic_hook("fullnode");
+    solana_metrics::set_panic_hook("validator");
 
     let default_dynamic_port_range =
         &format!("{}-{}", FULLNODE_PORT_RANGE.0, FULLNODE_PORT_RANGE.1);
@@ -158,7 +158,7 @@ fn main() {
         )
         .get_matches();
 
-    let mut fullnode_config = FullnodeConfig::default();
+    let mut validator_config = ValidatorConfig::default();
     let keypair = if let Some(identity) = matches.value_of("identity") {
         read_keypair(identity).unwrap_or_else(|err| {
             eprintln!("{}: Unable to open keypair file: {}", err, identity);
@@ -192,14 +192,14 @@ fn main() {
 
     let ledger_path = matches.value_of("ledger").unwrap();
 
-    fullnode_config.sigverify_disabled = matches.is_present("no_sigverify");
+    validator_config.sigverify_disabled = matches.is_present("no_sigverify");
 
-    fullnode_config.voting_disabled = matches.is_present("no_voting");
+    validator_config.voting_disabled = matches.is_present("no_voting");
 
     if matches.is_present("enable_rpc_exit") {
-        fullnode_config.rpc_config.enable_fullnode_exit = true;
+        validator_config.rpc_config.enable_fullnode_exit = true;
     }
-    fullnode_config.rpc_config.drone_addr = matches.value_of("rpc_drone_address").map(|address| {
+    validator_config.rpc_config.drone_addr = matches.value_of("rpc_drone_address").map(|address| {
         solana_netutil::parse_host_port(address).expect("failed to parse drone address")
     });
 
@@ -216,9 +216,9 @@ fn main() {
     );
 
     if let Some(paths) = matches.value_of("accounts") {
-        fullnode_config.account_paths = Some(paths.to_string());
+        validator_config.account_paths = Some(paths.to_string());
     } else {
-        fullnode_config.account_paths = None;
+        validator_config.account_paths = None;
     }
     let cluster_entrypoint = matches.value_of("entrypoint").map(|entrypoint| {
         let entrypoint_addr = solana_netutil::parse_host_port(entrypoint)
@@ -238,7 +238,7 @@ fn main() {
         (Some(signer_service), signer_addr)
     };
     let init_complete_file = matches.value_of("init_complete_file");
-    fullnode_config.blockstream = matches.value_of("blockstream").map(ToString::to_string);
+    validator_config.blockstream = matches.value_of("blockstream").map(ToString::to_string);
 
     let keypair = Arc::new(keypair);
     let mut node = Node::new_with_external_ip(&keypair.pubkey(), &gossip_addr, dynamic_port_range);
@@ -252,7 +252,7 @@ fn main() {
         node.info.rpc_pubsub = SocketAddr::new(gossip_addr.ip(), port_number + 1);
     };
 
-    let fullnode = Fullnode::new(
+    let validator = Validator::new(
         node,
         &keypair,
         ledger_path,
@@ -260,13 +260,13 @@ fn main() {
         &Arc::new(voting_keypair),
         &Arc::new(storage_keypair),
         cluster_entrypoint.as_ref(),
-        &fullnode_config,
+        &validator_config,
     );
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| panic!("Unable to create: {}", filename));
     }
-    info!("Node initialized");
-    fullnode.join().expect("fullnode exit");
-    info!("Node exiting..");
+    info!("Validator initialized");
+    validator.join().expect("validator exit");
+    info!("Validator exiting..");
 }

@@ -265,9 +265,9 @@ elif [[ $node_type = replicator ]]; then
   read -r entrypoint entrypoint_address shift < <(find_entrypoint "${positional_args[@]}")
   shift "$shift"
 
-  replicator_keypair_path=$SOLANA_CONFIG_DIR/replicator-id.json
-  replicator_storage_keypair_path="$SOLANA_CONFIG_DIR"/replicator-storage-id.json
-  ledger_config_dir=$SOLANA_CONFIG_DIR/replicator-ledger
+  replicator_keypair_path=$SOLANA_CONFIG_DIR/replicator-keypair$label.json
+  replicator_storage_keypair_path="$SOLANA_CONFIG_DIR"/replicator-storage-keypair$label.json
+  ledger_config_dir=$SOLANA_CONFIG_DIR/replicator-ledger$label
 
   mkdir -p "$SOLANA_CONFIG_DIR"
   [[ -r "$replicator_keypair_path" ]] || $solana_keygen -o "$replicator_keypair_path"

@@ -20,7 +20,7 @@ least amount of internal plumbing exposed to the test.
 Tests are provided an entry point, which is a `contact_info::ContactInfo`
 structure, and a keypair that has already been funded.
 
-Each node in the cluster is configured with a `fullnode::FullnodeConfig` at boot
+Each node in the cluster is configured with a `fullnode::ValidatorConfig` at boot
 time.  At boot time this configuration specifies any extra cluster configuration
 required for the test. The cluster should boot with the configuration when it
 is run in-process or in a data center.
@@ -61,18 +61,18 @@ let cluster_nodes = discover_nodes(&entry_point_info, num_nodes);
 
 To enable specific scenarios, the cluster needs to be booted with special
 configurations.  These configurations can be captured in
-`fullnode::FullnodeConfig`.
+`fullnode::ValidatorConfig`.
 
 For example:
 
 ```rust,ignore
-let mut fullnode_config = FullnodeConfig::default();
-fullnode_config.rpc_config.enable_fullnode_exit = true;
+let mut validator_config = ValidatorConfig::default();
+validator_config.rpc_config.enable_fullnode_exit = true;
 let local = LocalCluster::new_with_config(
                 num_nodes,
                 10_000,
                 100,
-                &fullnode_config
+                &validator_config
                 );
 ```
 
@@ -86,9 +86,9 @@ advertised gossip nodes.
 Configure the RPC service:
 
 ```rust,ignore
-let mut fullnode_config = FullnodeConfig::default();
-fullnode_config.rpc_config.enable_rpc_gossip_push = true;
-fullnode_config.rpc_config.enable_rpc_gossip_refresh_active_set = true;
+let mut validator_config = ValidatorConfig::default();
+validator_config.rpc_config.enable_rpc_gossip_push = true;
+validator_config.rpc_config.enable_rpc_gossip_refresh_active_set = true;
 ```
 
 Wire the RPCs and write a new test:

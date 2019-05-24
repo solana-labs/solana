@@ -57,7 +57,7 @@ Forwarding is preferred, as it would minimize network congestion, allowing the
 cluster to advertise higher TPS capacity.
 
 
-## Fullnode Loop
+## Validator Loop
 
 The PoH Recorder manages the transition between modes. Once a ledger is
 replayed, the validator can run until the recorder indicates it should be

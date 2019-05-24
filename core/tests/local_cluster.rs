@@ -2,9 +2,9 @@ extern crate solana;
 
 use solana::cluster::Cluster;
 use solana::cluster_tests;
-use solana::fullnode::FullnodeConfig;
 use solana::gossip_service::discover_cluster;
 use solana::local_cluster::{ClusterConfig, LocalCluster};
+use solana::validator::ValidatorConfig;
 use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::timing;
@@ -75,12 +75,12 @@ fn test_fullnode_exit_default_config_should_panic() {
 fn test_fullnode_exit_2() {
     solana_logger::setup();
     let num_nodes = 2;
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.rpc_config.enable_fullnode_exit = true;
+    let mut validator_config = ValidatorConfig::default();
+    validator_config.rpc_config.enable_fullnode_exit = true;
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; 2],
-        fullnode_config,
+        validator_config,
         ..ClusterConfig::default()
     };
     let local = LocalCluster::new(&config);
@@ -92,12 +92,12 @@ fn test_fullnode_exit_2() {
 fn test_leader_failure_4() {
     solana_logger::setup();
     let num_nodes = 4;
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.rpc_config.enable_fullnode_exit = true;
+    let mut validator_config = ValidatorConfig::default();
+    validator_config.rpc_config.enable_fullnode_exit = true;
     let config = ClusterConfig {
         cluster_lamports: 10_000,
         node_stakes: vec![100; 4],
-        fullnode_config: fullnode_config.clone(),
+        validator_config: validator_config.clone(),
         ..ClusterConfig::default()
     };
     let local = LocalCluster::new(&config);
@@ -111,16 +111,16 @@ fn test_leader_failure_4() {
 #[test]
 fn test_two_unbalanced_stakes() {
     solana_logger::setup();
-    let mut fullnode_config = FullnodeConfig::default();
+    let mut validator_config = ValidatorConfig::default();
     let num_ticks_per_second = 100;
     let num_ticks_per_slot = 10;
     let num_slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
 
-    fullnode_config.rpc_config.enable_fullnode_exit = true;
+    validator_config.rpc_config.enable_fullnode_exit = true;
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![999_990, 3],
         cluster_lamports: 1_000_000,
-        fullnode_config: fullnode_config.clone(),
+        validator_config: validator_config.clone(),
         ticks_per_slot: num_ticks_per_slot,
         slots_per_epoch: num_slots_per_epoch,
         poh_config: PohConfig::new_sleep(Duration::from_millis(1000 / num_ticks_per_second)),
@@ -164,13 +164,13 @@ fn test_forwarding() {
 
 #[test]
 fn test_restart_node() {
-    let fullnode_config = FullnodeConfig::default();
+    let validator_config = ValidatorConfig::default();
     let slots_per_epoch = MINIMUM_SLOT_LENGTH as u64;
     let ticks_per_slot = 16;
     let mut cluster = LocalCluster::new(&ClusterConfig {
         node_stakes: vec![3],
         cluster_lamports: 100,
-        fullnode_config: fullnode_config.clone(),
+        validator_config: validator_config.clone(),
         ticks_per_slot,
         slots_per_epoch,
         ..ClusterConfig::default()

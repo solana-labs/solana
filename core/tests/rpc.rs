@@ -3,7 +3,7 @@ use log::*;
 use reqwest;
 use reqwest::header::CONTENT_TYPE;
 use serde_json::{json, Value};
-use solana::fullnode::new_fullnode_for_tests;
+use solana::validator::new_validator_for_tests;
 use solana_client::rpc_client::get_rpc_request_str;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -16,7 +16,7 @@ use std::time::Duration;
 fn test_rpc_send_tx() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
+    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let bob_pubkey = Pubkey::new_rand();
 
     let client = reqwest::Client::new();

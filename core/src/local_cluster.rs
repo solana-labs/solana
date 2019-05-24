@@ -2,11 +2,11 @@ use crate::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree};
 use crate::cluster::Cluster;
 use crate::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
-use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::genesis_utils::{create_genesis_block_with_leader, GenesisBlockInfo};
 use crate::gossip_service::discover_cluster;
 use crate::replicator::Replicator;
 use crate::service::Service;
+use crate::validator::{Validator, ValidatorConfig};
 use solana_client::thin_client::create_client;
 use solana_client::thin_client::ThinClient;
 use solana_sdk::client::SyncClient;
@@ -28,7 +28,7 @@ use std::fs::remove_dir_all;
 use std::io::{Error, ErrorKind, Result};
 use std::sync::Arc;
 
-pub struct FullnodeInfo {
+pub struct ValidatorInfo {
     pub keypair: Arc<Keypair>,
     pub voting_keypair: Arc<Keypair>,
     pub storage_keypair: Arc<Keypair>,
@@ -52,7 +52,7 @@ impl ReplicatorInfo {
 #[derive(Clone, Debug)]
 pub struct ClusterConfig {
     /// The fullnode config that should be applied to every node in the cluster
-    pub fullnode_config: FullnodeConfig,
+    pub validator_config: ValidatorConfig,
     /// Number of replicators in the cluster
     /// Note- replicators will timeout if ticks_per_slot is much larger than the default 8
     pub num_replicators: usize,
@@ -71,7 +71,7 @@ pub struct ClusterConfig {
 impl Default for ClusterConfig {
     fn default() -> Self {
         ClusterConfig {
-            fullnode_config: FullnodeConfig::default(),
+            validator_config: ValidatorConfig::default(),
             num_replicators: 0,
             num_listeners: 0,
             node_stakes: vec![],
@@ -87,12 +87,12 @@ impl Default for ClusterConfig {
 pub struct LocalCluster {
     /// Keypair with funding to participate in the network
     pub funding_keypair: Keypair,
-    pub fullnode_config: FullnodeConfig,
+    pub validator_config: ValidatorConfig,
     /// Entry point from which the rest of the network can be discovered
     pub entry_point_info: ContactInfo,
-    pub fullnode_infos: HashMap<Pubkey, FullnodeInfo>,
-    pub listener_infos: HashMap<Pubkey, FullnodeInfo>,
-    fullnodes: HashMap<Pubkey, Fullnode>,
+    pub fullnode_infos: HashMap<Pubkey, ValidatorInfo>,
+    pub listener_infos: HashMap<Pubkey, ValidatorInfo>,
+    fullnodes: HashMap<Pubkey, Validator>,
     genesis_ledger_path: String,
     pub genesis_block: GenesisBlock,
     replicators: Vec<Replicator>,
@@ -140,7 +140,7 @@ impl LocalCluster {
         let leader_contact_info = leader_node.info.clone();
         let leader_storage_keypair = Arc::new(storage_keypair);
         let leader_voting_keypair = Arc::new(voting_keypair);
-        let leader_server = Fullnode::new(
+        let leader_server = Validator::new(
             leader_node,
             &leader_keypair,
             &leader_ledger_path,
@@ -148,7 +148,7 @@ impl LocalCluster {
             &leader_voting_keypair,
             &leader_storage_keypair,
             None,
-            &config.fullnode_config,
+            &config.validator_config,
         );
 
         let mut fullnodes = HashMap::new();
@@ -156,7 +156,7 @@ impl LocalCluster {
         fullnodes.insert(leader_pubkey, leader_server);
         fullnode_infos.insert(
             leader_pubkey,
-            FullnodeInfo {
+            ValidatorInfo {
                 keypair: leader_keypair,
                 voting_keypair: leader_voting_keypair,
                 storage_keypair: leader_storage_keypair,
@@ -173,17 +173,17 @@ impl LocalCluster {
             genesis_block,
             fullnode_infos,
             replicator_infos: HashMap::new(),
-            fullnode_config: config.fullnode_config.clone(),
+            validator_config: config.validator_config.clone(),
             listener_infos: HashMap::new(),
         };
 
         for stake in &config.node_stakes[1..] {
-            cluster.add_validator(&config.fullnode_config, *stake);
+            cluster.add_validator(&config.validator_config, *stake);
         }
 
-        let listener_config = FullnodeConfig {
+        let listener_config = ValidatorConfig {
             voting_disabled: true,
-            ..config.fullnode_config.clone()
+            ..config.validator_config.clone()
         };
         (0..config.num_listeners).for_each(|_| cluster.add_validator(&listener_config, 0));
 
@@ -223,7 +223,7 @@ impl LocalCluster {
         }
     }
 
-    fn add_validator(&mut self, fullnode_config: &FullnodeConfig, stake: u64) {
+    fn add_validator(&mut self, validator_config: &ValidatorConfig, stake: u64) {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,
@@ -237,7 +237,7 @@ impl LocalCluster {
         let validator_node = Node::new_localhost_with_pubkey(&validator_keypair.pubkey());
         let ledger_path = tmp_copy_blocktree!(&self.genesis_ledger_path);
 
-        if fullnode_config.voting_disabled {
+        if validator_config.voting_disabled {
             // setup as a listener
             info!("listener {} ", validator_pubkey,);
         } else {
@@ -266,7 +266,7 @@ impl LocalCluster {
         }
 
         let voting_keypair = Arc::new(voting_keypair);
-        let validator_server = Fullnode::new(
+        let validator_server = Validator::new(
             validator_node,
             &validator_keypair,
             &ledger_path,
@@ -274,15 +274,15 @@ impl LocalCluster {
             &voting_keypair,
             &storage_keypair,
             Some(&self.entry_point_info),
-            &fullnode_config,
+            &validator_config,
         );
 
         self.fullnodes
             .insert(validator_keypair.pubkey(), validator_server);
-        if fullnode_config.voting_disabled {
+        if validator_config.voting_disabled {
             self.listener_infos.insert(
                 validator_keypair.pubkey(),
-                FullnodeInfo {
+                ValidatorInfo {
                     keypair: validator_keypair,
                     voting_keypair,
                     storage_keypair,
@@ -292,7 +292,7 @@ impl LocalCluster {
         } else {
             self.fullnode_infos.insert(
                 validator_keypair.pubkey(),
-                FullnodeInfo {
+                ValidatorInfo {
                     keypair: validator_keypair,
                     voting_keypair,
                     storage_keypair,
@@ -522,7 +522,7 @@ impl Cluster for LocalCluster {
         if pubkey == self.entry_point_info.id {
             self.entry_point_info = node.info.clone();
         }
-        let restarted_node = Fullnode::new(
+        let restarted_node = Validator::new(
             node,
             &fullnode_info.keypair,
             &fullnode_info.ledger_path,
@@ -530,7 +530,7 @@ impl Cluster for LocalCluster {
             &fullnode_info.voting_keypair,
             &fullnode_info.storage_keypair,
             None,
-            &self.fullnode_config,
+            &self.validator_config,
         );
 
         self.fullnodes.insert(pubkey, restarted_node);
@@ -561,13 +561,13 @@ mod test {
     #[test]
     fn test_local_cluster_start_and_exit_with_config() {
         solana_logger::setup();
-        let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.rpc_config.enable_fullnode_exit = true;
-        fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+        let mut validator_config = ValidatorConfig::default();
+        validator_config.rpc_config.enable_fullnode_exit = true;
+        validator_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
         const NUM_NODES: usize = 1;
         let num_replicators = 1;
         let config = ClusterConfig {
-            fullnode_config,
+            validator_config,
             num_replicators,
             node_stakes: vec![3; NUM_NODES],
             cluster_lamports: 100,

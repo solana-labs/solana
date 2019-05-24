@@ -1,4 +1,4 @@
-use solana::fullnode::new_fullnode_for_tests;
+use solana::validator::new_validator_for_tests;
 use solana_client::rpc_client::RpcClient;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::signature::KeypairUtil;
@@ -8,7 +8,7 @@ use std::sync::mpsc::channel;
 
 #[test]
 fn test_wallet_request_airdrop() {
-    let (server, leader_data, alice, ledger_path) = new_fullnode_for_tests();
+    let (server, leader_data, alice, ledger_path) = new_validator_for_tests();
     let (sender, receiver) = channel();
     run_local_drone(alice, sender, None);
     let drone_addr = receiver.recv().unwrap();
