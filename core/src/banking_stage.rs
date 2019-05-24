@@ -247,7 +247,7 @@ impl BankingStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         buffered_packets: &mut Vec<PacketsAndOffsets>,
         enable_forwarding: bool,
-    ) -> Result<UnprocessedPackets> {
+    ) -> Result<()> {
         let rcluster_info = cluster_info.read().unwrap();
 
         let (decision, next_leader) = {
@@ -266,28 +266,35 @@ impl BankingStage {
 
         match decision {
             BufferedPacketsDecision::Consume => {
-                Self::consume_buffered_packets(&rcluster_info.id(), poh_recorder, buffered_packets)
+                let mut unprocessed = Self::consume_buffered_packets(
+                    &rcluster_info.id(),
+                    poh_recorder,
+                    buffered_packets,
+                )?;
+                buffered_packets.append(&mut unprocessed);
+                Ok(())
             }
             BufferedPacketsDecision::Forward => {
                 if enable_forwarding {
-                    next_leader.map_or(Ok(buffered_packets.to_vec()), |leader_pubkey| {
-                        rcluster_info.lookup(&leader_pubkey).map_or(
-                            Ok(buffered_packets.to_vec()),
-                            |leader| {
+                    next_leader.map_or(Ok(()), |leader_pubkey| {
+                        rcluster_info
+                            .lookup(&leader_pubkey)
+                            .map_or(Ok(()), |leader| {
                                 let _ = Self::forward_buffered_packets(
                                     &socket,
                                     &leader.tpu_via_blobs,
                                     &buffered_packets,
                                 );
-                                Ok(vec![])
-                            },
-                        )
+                                buffered_packets.clear();
+                                Ok(())
+                            })
                     })
                 } else {
-                    Ok(vec![])
+                    buffered_packets.clear();
+                    Ok(())
                 }
             }
-            _ => Ok(buffered_packets.to_vec()),
+            _ => Ok(()),
         }
     }
 
@@ -310,7 +317,6 @@ impl BankingStage {
                     &mut buffered_packets,
                     enable_forwarding,
                 )
-                .map(|packets| buffered_packets = packets)
                 .unwrap_or_else(|_| buffered_packets.clear());
             }
 
@@ -333,7 +339,7 @@ impl BankingStage {
                 id,
             ) {
                 Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
-                Ok(unprocessed_packets) => {
+                Ok(mut unprocessed_packets) => {
                     if unprocessed_packets.is_empty() {
                         continue;
                     }
@@ -342,7 +348,7 @@ impl BankingStage {
                         .map(|(_, unprocessed)| unprocessed.len())
                         .sum();
                     inc_new_counter_info!("banking_stage-buffered_packets", num);
-                    buffered_packets.extend_from_slice(&unprocessed_packets);
+                    buffered_packets.append(&mut unprocessed_packets);
                 }
                 Err(err) => {
                     debug!("solana-banking-stage-tx: exit due to {:?}", err);
