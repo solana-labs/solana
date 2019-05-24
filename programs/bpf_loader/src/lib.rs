@@ -1,5 +1,9 @@
+pub mod alloc;
+pub mod allocator_bump;
+pub mod allocator_system;
 pub mod bpf_verifier;
 
+use alloc::Alloc;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use libc::c_char;
 use log::*;
@@ -9,32 +13,38 @@ use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
+use std::alloc::Layout;
+use std::any::Any;
 use std::ffi::CStr;
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind};
 use std::mem;
 
-// TODO use rbpf's disassemble
-#[allow(dead_code)]
-fn dump_program(key: &Pubkey, prog: &[u8]) {
-    let mut eight_bytes: Vec<u8> = Vec::new();
-    info!("BPF Program: {:?}", key);
-    for i in prog.iter() {
-        if eight_bytes.len() >= 7 {
-            info!("{:02X?}", eight_bytes);
-            eight_bytes.clear();
-        } else {
-            eight_bytes.push(i.clone());
-        }
-    }
-}
+/// Program heap allocators are intended to allocate/free from a given
+/// chunk of memory.  The specific allocator implementation is
+/// selectable at build-time.
+/// Enable only one of the following BPFAllocator implementations.
 
+/// Simple bump allocator, never frees
+use allocator_bump::BPFAllocator;
+
+/// Use the system heap (test purposes only).  This allocator relies on the system heap
+/// and there is no mechanism to check read-write access privileges
+/// at the moment.  Therefor you must disable memory bounds checking
+// use allocator_system::BPFAllocator;
+
+/// Default program heap size, allocators
+/// are expected to enforce this
+const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
+
+/// Abort helper functions, called when the BPF program calls `abort()`
 pub fn helper_abort_verify(
     _arg1: u64,
     _arg2: u64,
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
+    _context: &mut Option<Box<Any + 'static>>,
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
@@ -43,35 +53,55 @@ pub fn helper_abort_verify(
         "Error: BPF program called abort()!",
     ))
 }
-
-pub fn helper_abort(_arg1: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) -> u64 {
+pub fn helper_abort(
+    _arg1: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _arg5: u64,
+    _context: &mut Option<Box<Any + 'static>>,
+) -> u64 {
     // Never called because its verify function always returns an error
     0
 }
 
+/// Panic helper functions, called when the BPF program calls 'sol_panic_()`
+/// The verify function returns an error which will cause the BPF program
+/// to be halted immediately
 pub fn helper_sol_panic_verify(
     _arg1: u64,
     _arg2: u64,
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
+    _context: &mut Option<Box<Any + 'static>>,
     _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
     Err(Error::new(ErrorKind::Other, "Error: BPF program Panic!"))
 }
-
-pub fn helper_sol_panic(_arg1: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) -> u64 {
+pub fn helper_sol_panic(
+    _arg1: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _arg5: u64,
+    _context: &mut Option<Box<Any + 'static>>,
+) -> u64 {
     // Never called because its verify function always returns an error
     0
 }
 
+/// Logging helper functions, called when the BPF program calls `sol_log_()` or
+/// `sol_log_64_()`.  Both functions use a common verify function to validate
+/// their parameters.
 pub fn helper_sol_log_verify(
     addr: u64,
     _arg2: u64,
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
+    _context: &mut Option<Box<Any + 'static>>,
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
@@ -94,8 +124,14 @@ pub fn helper_sol_log_verify(
         "Error: Load segfault, bad string pointer",
     ))
 }
-
-pub fn helper_sol_log(addr: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) -> u64 {
+pub fn helper_sol_log(
+    addr: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _arg5: u64,
+    _context: &mut Option<Box<Any + 'static>>,
+) -> u64 {
     let c_buf: *const c_char = addr as *const c_char;
     let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
     match c_str.to_str() {
@@ -104,8 +140,14 @@ pub fn helper_sol_log(addr: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64)
     };
     0
 }
-
-pub fn helper_sol_log_u64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> u64 {
+pub fn helper_sol_log_u64(
+    arg1: u64,
+    arg2: u64,
+    arg3: u64,
+    arg4: u64,
+    arg5: u64,
+    _context: &mut Option<Box<Any + 'static>>,
+) -> u64 {
     info!(
         "sol_log_u64: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
         arg1, arg2, arg3, arg4, arg5
@@ -113,23 +155,78 @@ pub fn helper_sol_log_u64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64)
     0
 }
 
-pub fn create_vm(prog: &[u8]) -> Result<EbpfVmRaw, Error> {
+/// Dynamic memory allocation helper called when the BPF program calls
+/// `sol_alloc_free_()`.  The allocator is expected to allocate/free
+/// from/to a given chunk of memory and enforce size restrictions.  The
+/// memory chunk is given to the allocator during allocator creation and
+/// information about that memory (start address and size) is passed
+/// to the VM to use for enforcement.
+pub fn helper_sol_alloc_free(
+    size: u64,
+    free_ptr: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _arg5: u64,
+    context: &mut Option<Box<Any + 'static>>,
+) -> u64 {
+    if let Some(context) = context {
+        if let Some(allocator) = context.downcast_mut::<BPFAllocator>() {
+            return {
+                let layout = Layout::from_size_align(size as usize, mem::align_of::<u8>()).unwrap();
+                if free_ptr == 0 {
+                    match allocator.alloc(layout) {
+                        Ok(ptr) => ptr as u64,
+                        Err(_) => 0,
+                    }
+                } else {
+                    allocator.dealloc(free_ptr as *mut u8, layout);
+                    0
+                }
+            };
+        };
+    }
+    panic!("Failed to get alloc_free context");
+}
+
+pub fn create_vm(prog: &[u8]) -> Result<(EbpfVmRaw, MemoryRegion), Error> {
     let mut vm = EbpfVmRaw::new(None)?;
     vm.set_verifier(bpf_verifier::check)?;
-    vm.set_max_instruction_count(36000)?; // TODO 36000 is a wag, need to tune
+    vm.set_max_instruction_count(36000)?;
     vm.set_elf(&prog)?;
-    vm.register_helper_ex("abort", Some(helper_abort_verify), helper_abort)?;
-    vm.register_helper_ex("sol_panic", Some(helper_sol_panic_verify), helper_sol_panic)?;
+    vm.register_helper_ex("abort", Some(helper_abort_verify), helper_abort, None)?;
+    vm.register_helper_ex(
+        "sol_panic",
+        Some(helper_sol_panic_verify),
+        helper_sol_panic,
+        None,
+    )?;
     vm.register_helper_ex(
         "sol_panic_",
         Some(helper_sol_panic_verify),
         helper_sol_panic,
+        None,
     )?;
-    vm.register_helper_ex("sol_log", Some(helper_sol_log_verify), helper_sol_log)?;
-    vm.register_helper_ex("sol_log_", Some(helper_sol_log_verify), helper_sol_log)?;
-    vm.register_helper_ex("sol_log_64", None, helper_sol_log_u64)?;
-    vm.register_helper_ex("sol_log_64_", None, helper_sol_log_u64)?;
-    Ok(vm)
+    vm.register_helper_ex("sol_log", Some(helper_sol_log_verify), helper_sol_log, None)?;
+    vm.register_helper_ex(
+        "sol_log_",
+        Some(helper_sol_log_verify),
+        helper_sol_log,
+        None,
+    )?;
+    vm.register_helper_ex("sol_log_64", None, helper_sol_log_u64, None)?;
+    vm.register_helper_ex("sol_log_64_", None, helper_sol_log_u64, None)?;
+
+    let heap = vec![0_u8; DEFAULT_HEAP_SIZE];
+    let heap_region = MemoryRegion::new_from_slice(&heap);
+    let context = Box::new(BPFAllocator::new(heap));
+    vm.register_helper_ex(
+        "sol_alloc_free_",
+        None,
+        helper_sol_alloc_free,
+        Some(context),
+    )?;
+
+    Ok((vm, heap_region))
 }
 
 fn serialize_parameters(
@@ -192,16 +289,16 @@ fn entrypoint(
         let (progs, params) = keyed_accounts.split_at_mut(1);
         let prog = &progs[0].account.data;
         info!("Call BPF program");
-        //dump_program(keyed_accounts[0].key, prog);
-        let mut vm = match create_vm(prog) {
-            Ok(vm) => vm,
+        let (mut vm, heap_region) = match create_vm(prog) {
+            Ok(info) => info,
             Err(e) => {
                 warn!("Failed to create BPF VM: {}", e);
                 return Err(InstructionError::GenericError);
             }
         };
         let mut v = serialize_parameters(program_id, params, &tx_data, tick_height);
-        match vm.execute_program(v.as_mut_slice()) {
+
+        match vm.execute_program(v.as_mut_slice(), &[], &[heap_region]) {
             Ok(status) => {
                 if 0 == status {
                     warn!("BPF program failed: {}", status);
@@ -272,6 +369,6 @@ mod tests {
         vm.set_verifier(bpf_verifier::check).unwrap();
         vm.set_max_instruction_count(10).unwrap();
         vm.set_program(prog).unwrap();
-        vm.execute_program(input).unwrap();
+        vm.execute_program(input, &[], &[]).unwrap();
     }
 }

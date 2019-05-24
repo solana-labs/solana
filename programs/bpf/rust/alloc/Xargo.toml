@@ -1,0 +1,7 @@
+
+
+[dependencies.compiler_builtins]
+path = "../../../../sdk/bpf/rust-bpf-sysroot/src/compiler-builtins"
+
+[target.bpfel-unknown-unknown.dependencies]
+alloc = { path = "../../../../sdk/bpf/rust-bpf-sysroot/src/liballoc" }
