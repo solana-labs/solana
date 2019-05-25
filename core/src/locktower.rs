@@ -120,6 +120,14 @@ impl Locktower {
             }
             let vote_state = VoteState::from(&account);
             if vote_state.is_none() {
+                datapoint_warn!(
+                    "locktower_warn",
+                    (
+                        "warn",
+                        format!("Unable to get vote_state from account {}", key),
+                        String
+                    ),
+                );
                 continue;
             }
             let mut vote_state = vote_state.unwrap();
