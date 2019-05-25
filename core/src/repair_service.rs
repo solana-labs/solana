@@ -352,9 +352,9 @@ impl RepairService {
         cluster_info: &RwLock<ClusterInfo>,
         completed_slots_receiver: &CompletedSlotsReceiver,
     ) {
-        let mut should_update = false;
+        // If the latest known root is different, update gossip.
+        let mut should_update = latest_known_root != *prev_root;
         while let Ok(completed_slots) = completed_slots_receiver.try_recv() {
-            should_update = latest_known_root != *prev_root;
             for slot in completed_slots {
                 // If the newly completed slot > root, and the set did not contain this value
                 // before, we should update gossip.
@@ -370,6 +370,7 @@ impl RepairService {
                 *prev_root = latest_known_root;
                 Self::retain_slots_greater_than_root(slots_in_gossip, latest_known_root);
             }
+
             cluster_info.write().unwrap().push_epoch_slots(
                 id,
                 latest_known_root,
@@ -412,6 +413,7 @@ mod test {
     use rand::seq::SliceRandom;
     use rand::{thread_rng, Rng};
     use std::cmp::min;
+    use std::sync::mpsc::channel;
     use std::thread::Builder;
 
     #[test]
@@ -761,5 +763,95 @@ mod test {
             writer.join().unwrap();
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_update_epoch_slots_new_root() {
+        let mut current_root = 0;
+
+        let mut completed_slots = BTreeSet::new();
+        let node_info = Node::new_localhost_with_pubkey(&Pubkey::default());
+        let cluster_info = RwLock::new(ClusterInfo::new_with_invalid_keypair(
+            node_info.info.clone(),
+        ));
+        let my_pubkey = Pubkey::new_rand();
+        let (completed_slots_sender, completed_slots_receiver) = channel();
+
+        // Send a new slot before the root is updated
+        let newly_completed_slot = 63;
+        completed_slots_sender
+            .send(vec![newly_completed_slot])
+            .unwrap();
+        RepairService::update_epoch_slots(
+            my_pubkey.clone(),
+            current_root,
+            &mut current_root.clone(),
+            &mut completed_slots,
+            &cluster_info,
+            &completed_slots_receiver,
+        );
+
+        // We should see epoch state update
+        let (my_epoch_slots_in_gossip, updated_ts) = {
+            let r_cluster_info = cluster_info.read().unwrap();
+
+            let (my_epoch_slots_in_gossip, updated_ts) = r_cluster_info
+                .get_epoch_state_for_node(&my_pubkey, None)
+                .clone()
+                .unwrap();
+
+            (my_epoch_slots_in_gossip.clone(), updated_ts)
+        };
+
+        assert_eq!(my_epoch_slots_in_gossip.root, 0);
+        assert_eq!(current_root, 0);
+        assert_eq!(my_epoch_slots_in_gossip.slots.len(), 1);
+        assert!(my_epoch_slots_in_gossip
+            .slots
+            .contains(&newly_completed_slot));
+
+        // Calling update again with no updates to either the roots or set of completed slots
+        // should not update gossip
+        RepairService::update_epoch_slots(
+            my_pubkey.clone(),
+            current_root,
+            &mut current_root,
+            &mut completed_slots,
+            &cluster_info,
+            &completed_slots_receiver,
+        );
+
+        assert!(cluster_info
+            .read()
+            .unwrap()
+            .get_epoch_state_for_node(&my_pubkey, Some(updated_ts))
+            .is_none());
+
+        sleep(Duration::from_millis(10));
+        // Updating just the root again should update gossip (simulates replay stage updating root
+        // after a slot has been signaled as completed)
+        RepairService::update_epoch_slots(
+            my_pubkey.clone(),
+            current_root + 1,
+            &mut current_root,
+            &mut completed_slots,
+            &cluster_info,
+            &completed_slots_receiver,
+        );
+
+        let r_cluster_info = cluster_info.read().unwrap();
+
+        let (my_epoch_slots_in_gossip, _) = r_cluster_info
+            .get_epoch_state_for_node(&my_pubkey, Some(updated_ts))
+            .clone()
+            .unwrap();
+
+        // Check the root was updated correctly
+        assert_eq!(my_epoch_slots_in_gossip.root, 1);
+        assert_eq!(current_root, 1);
+        assert_eq!(my_epoch_slots_in_gossip.slots.len(), 1);
+        assert!(my_epoch_slots_in_gossip
+            .slots
+            .contains(&newly_completed_slot));
     }
 }
