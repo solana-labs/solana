@@ -8,6 +8,7 @@ source ci/rust-version.sh stable
 
 export RUST_BACKTRACE=1
 
+rm -rf target/perf-libs
 ./fetch-perf-libs.sh
 export LD_LIBRARY_PATH=$PWD/target/perf-libs:$LD_LIBRARY_PATH
 

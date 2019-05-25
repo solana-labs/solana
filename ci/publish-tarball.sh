@@ -56,6 +56,7 @@ echo --- Creating tarball
   source ci/rust-version.sh stable
   scripts/cargo-install-all.sh +"$rust_stable" solana-release
 
+  rm -rf target/perf-libs
   ./fetch-perf-libs.sh
   mkdir solana-release/target
   cp -a target/perf-libs solana-release/target/
