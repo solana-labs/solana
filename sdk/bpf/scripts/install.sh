@@ -8,6 +8,23 @@ else
   machine=linux
 fi
 
+download() {
+  declare url=$1
+  declare filename=$2
+  declare progress=$3
+
+  declare args=(
+    "$url" -O "$filename"
+    "--progress=dot:$progress"
+    "--retry-connrefused"
+    "--read-timeout=30"
+  )
+  # Github release URLs 302 to AWS S3.  Sometimes that S3 URL returns 403
+  args+=("--retry-on-http-error=403")
+
+  wget "${args[@]}"
+}
+
 # Install Criterion
 version=v2.3.2
 if [[ ! -r criterion-$machine-$version.md ]]; then
@@ -18,11 +35,13 @@ if [[ ! -r criterion-$machine-$version.md ]]; then
     rm -rf criterion*
     mkdir criterion
     cd criterion
-    wget --progress=dot:mega https://github.com/Snaipe/Criterion/releases/download/$version/$filename
+
+    base=https://github.com/Snaipe/Criterion/releases/
+    download $base/download/$version/$filename $filename mega
     tar --strip-components 1 -jxf $filename
     rm -rf $filename
 
-    echo "https://github.com/Snaipe/Criterion/releases/tag/$version" > ../criterion-$machine-$version.md
+    echo "$base/tag/$version" > ../criterion-$machine-$version.md
   )
   # shellcheck disable=SC2181
   if [[ $? -ne 0 ]]; then
@@ -41,11 +60,13 @@ if [[ ! -f llvm-native-$machine-$version.md ]]; then
     rm -rf llvm-native*
     mkdir -p llvm-native
     cd llvm-native
-    wget --progress=dot:giga https://github.com/solana-labs/llvm-builder/releases/download/$version/$filename
+
+    base=https://github.com/solana-labs/llvm-builder/releases
+    download $base/download/$version/$filename $filename giga
     tar -jxf $filename
     rm -rf $filename
 
-    echo "https://github.com/solana-labs/llvm-builder/releases/tag/$version" > ../llvm-native-$machine-$version.md
+    echo "$base/tag/$version" > ../llvm-native-$machine-$version.md
   )
   exitcode=$?
   if [[ $exitcode -ne 0 ]]; then
@@ -65,7 +86,9 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
     rm -rf rust-bpf-$machine-*
     mkdir -p rust-bpf
     pushd rust-bpf
-    wget --progress=dot:giga https://github.com/solana-labs/rust-bpf-builder/releases/download/$version/$filename
+
+    base=https://github.com/solana-labs/rust-bpf-builder/releases
+    download $base/download/$version/$filename $filename giga
     tar -jxf $filename
     rm -rf $filename
     popd
@@ -78,7 +101,7 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
     set -e
     rustup toolchain link bpf rust-bpf
 
-    echo "https://github.com/solana-labs/rust-bpf-builder/releases/tag/$version" > rust-bpf-$machine-$version.md
+    echo "$base/tag/$version" > rust-bpf-$machine-$version.md
   )
   exitcode=$?
   if [[ $exitcode -ne 0 ]]; then
@@ -91,13 +114,12 @@ fi
 version=v0.2
 if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
   (
-    filename=solana-rust-bpf-sysroot.tar.bz2
-
     set -ex
     rm -rf rust-bpf-sysroot*
-    git clone --recursive --single-branch --branch $version https://github.com/solana-labs/rust-bpf-sysroot.git
+    cmd="git clone --recursive --single-branch --branch $version https://github.com/solana-labs/rust-bpf-sysroot.git"
+    $cmd
 
-    echo "git clone --recursive --single-branch --branch $version https://github.com/solana-labs/rust-bpf-sysroot.git" > rust-bpf-sysroot-$version.md
+    echo "$cmd" > rust-bpf-sysroot-$version.md
   )
   exitcode=$?
   if [[ $exitcode -ne 0 ]]; then
