@@ -61,6 +61,7 @@ test-stable-perf)
     # is not yet loaded.
     sudo --non-interactive ./net/scripts/enable-nvidia-persistence-mode.sh
 
+    rm -rf target/perf-libs
     ./fetch-perf-libs.sh
     # shellcheck source=/dev/null
     source ./target/perf-libs/env.sh
