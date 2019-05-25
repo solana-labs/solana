@@ -2,6 +2,7 @@ extern crate solana;
 
 use crate::solana::blocktree::Blocktree;
 use hashbrown::HashSet;
+use log::*;
 use solana::cluster::Cluster;
 use solana::cluster_tests;
 use solana::gossip_service::discover_cluster;
@@ -302,5 +303,13 @@ fn run_repairman_catchup(num_repairmen: u64) {
     let validator_ledger = Blocktree::open(&validator_ledger_path).unwrap();
     let validator_rooted_slots: Vec<_> =
         validator_ledger.rooted_slot_iterator(0).unwrap().collect();
+
+    if validator_rooted_slots.len() as u64 <= num_expected_slots {
+        error!(
+            "Num expected slots: {}, number of rooted slots: {}",
+            num_expected_slots,
+            validator_rooted_slots.len()
+        );
+    }
     assert!(validator_rooted_slots.len() as u64 > num_expected_slots);
 }
