@@ -95,9 +95,9 @@ if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
 
     set -ex
     rm -rf rust-bpf-sysroot*
-    git clone --recursive --single-branch --branch $version git@github.com:solana-labs/rust-bpf-sysroot.git
+    git clone --recursive --single-branch --branch $version https://github.com/solana-labs/rust-bpf-sysroot.git
 
-    echo "git clone --recursive --single-branch --branch $version git@github.com:solana-labs/rust-bpf-sysroot.git" > rust-bpf-sysroot-$version.md
+    echo "git clone --recursive --single-branch --branch $version https://github.com/solana-labs/rust-bpf-sysroot.git" > rust-bpf-sysroot-$version.md
   )
   exitcode=$?
   if [[ $exitcode -ne 0 ]]; then
