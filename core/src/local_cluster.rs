@@ -64,6 +64,7 @@ pub struct ClusterConfig {
     pub cluster_lamports: u64,
     pub ticks_per_slot: u64,
     pub slots_per_epoch: u64,
+    pub stakers_slot_offset: u64,
     pub native_instruction_processors: Vec<(String, Pubkey)>,
     pub poh_config: PohConfig,
 }
@@ -78,6 +79,7 @@ impl Default for ClusterConfig {
             cluster_lamports: 0,
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
             slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
+            stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
             native_instruction_processors: vec![],
             poh_config: PohConfig::default(),
         }
@@ -130,6 +132,7 @@ impl LocalCluster {
         );
         genesis_block.ticks_per_slot = config.ticks_per_slot;
         genesis_block.slots_per_epoch = config.slots_per_epoch;
+        genesis_block.stakers_slot_offset = config.stakers_slot_offset;
         genesis_block.poh_config = config.poh_config.clone();
         genesis_block
             .native_instruction_processors
@@ -223,7 +226,7 @@ impl LocalCluster {
         }
     }
 
-    fn add_validator(&mut self, validator_config: &ValidatorConfig, stake: u64) {
+    pub fn add_validator(&mut self, validator_config: &ValidatorConfig, stake: u64) {
         let client = create_client(
             self.entry_point_info.client_facing_addr(),
             FULLNODE_PORT_RANGE,

@@ -4,6 +4,7 @@
 use crate::bank_forks::BankForks;
 use crate::blocktree::{Blocktree, CompletedSlotsReceiver, SlotMeta};
 use crate::cluster_info::ClusterInfo;
+use crate::cluster_info_repair_listener::ClusterInfoRepairListener;
 use crate::result::Result;
 use crate::service::Service;
 use solana_metrics::datapoint_info;
@@ -56,23 +57,36 @@ impl Default for RepairSlotRange {
 
 pub struct RepairService {
     t_repair: JoinHandle<()>,
+    cluster_info_repair_listener: Option<ClusterInfoRepairListener>,
 }
 
 impl RepairService {
     pub fn new(
         blocktree: Arc<Blocktree>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         repair_strategy: RepairStrategy,
     ) -> Self {
-        let exit = exit.clone();
+        let cluster_info_repair_listener = match repair_strategy {
+            RepairStrategy::RepairAll {
+                ref epoch_schedule, ..
+            } => Some(ClusterInfoRepairListener::new(
+                &blocktree,
+                &exit,
+                cluster_info.clone(),
+                *epoch_schedule,
+            )),
+
+            _ => None,
+        };
+
         let t_repair = Builder::new()
             .name("solana-repair-service".to_string())
             .spawn(move || {
                 Self::run(
                     &blocktree,
-                    exit,
+                    &exit,
                     &repair_socket,
                     &cluster_info,
                     repair_strategy,
@@ -80,12 +94,15 @@ impl RepairService {
             })
             .unwrap();
 
-        RepairService { t_repair }
+        RepairService {
+            t_repair,
+            cluster_info_repair_listener,
+        }
     }
 
     fn run(
         blocktree: &Arc<Blocktree>,
-        exit: Arc<AtomicBool>,
+        exit: &Arc<AtomicBool>,
         repair_socket: &Arc<UdpSocket>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         repair_strategy: RepairStrategy,
@@ -373,7 +390,14 @@ impl Service for RepairService {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
-        self.t_repair.join()
+        let mut results = vec![self.t_repair.join()];
+        if let Some(cluster_info_repair_listener) = self.cluster_info_repair_listener {
+            results.push(cluster_info_repair_listener.join());
+        }
+        for r in results {
+            r?;
+        }
+        Ok(())
     }
 }
 

@@ -92,11 +92,13 @@ pub fn should_retransmit_and_persist(
         false
     } else if slot_leader_pubkey == None {
         inc_new_counter_debug!("streamer-recv_window-unknown_leader", 1);
-        true
+        false
     } else if slot_leader_pubkey != Some(blob.id()) {
         inc_new_counter_debug!("streamer-recv_window-wrong_leader", 1);
         false
     } else {
+        // At this point, slot_leader_id == blob.id() && blob.id() != *my_id, so
+        // the blob is valid to process
         true
     }
 }
@@ -190,7 +192,7 @@ impl WindowService {
 
         let repair_service = RepairService::new(
             blocktree.clone(),
-            exit,
+            exit.clone(),
             repair_socket,
             cluster_info.clone(),
             repair_strategy,
@@ -303,10 +305,10 @@ mod test {
         let mut blob = Blob::default();
         blob.set_id(&leader_pubkey);
 
-        // without a Bank and blobs not from me, blob continues
+        // without a Bank and blobs not from me, blob gets thrown out
         assert_eq!(
             should_retransmit_and_persist(&blob, None, &cache, &me_id),
-            true
+            false
         );
 
         // with a Bank for slot 0, blob continues
@@ -322,12 +324,11 @@ mod test {
             false
         );
 
-        // with a Bank and no idea who leader is, we keep the blobs (for now)
-        // TODO: persist in blocktree that we didn't know who the leader was at the time?
+        // with a Bank and no idea who leader is, blob gets thrown out
         blob.set_slot(MINIMUM_SLOT_LENGTH as u64 * 3);
         assert_eq!(
             should_retransmit_and_persist(&blob, Some(bank), &cache, &me_id),
-            true
+            false
         );
 
         // if the blob came back from me, it doesn't continue, whether or not I have a bank
