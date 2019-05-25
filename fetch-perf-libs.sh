@@ -14,17 +14,17 @@ if [[ ! -d target/perf-libs ]]; then
   fi
 
   mkdir -p target/perf-libs
-  cd target/perf-libs
   (
     set -x
+    cd target/perf-libs
     curl https://solana-perf.s3.amazonaws.com/v0.12.1/x86_64-unknown-linux-gnu/solana-perf.tgz | tar zxvf -
   )
-
-  echo "Downloaded solana-perf version: $(cat solana-perf-HEAD.txt)"
 fi
 
 cat > target/perf-libs/env.sh <<'EOF'
 SOLANA_PERF_LIBS="$(cd $(dirname "${BASH_SOURCE[0]}"); pwd)"
+
+echo "solana-perf-libs version: $(cat $SOLANA_PERF_LIBS/solana-perf-HEAD.txt)"
 
 if [[ -r "$SOLANA_PERF_LIBS"/solana-perf-CUDA_HOME.txt ]]; then
   CUDA_HOME=$(cat "$SOLANA_PERF_LIBS"/solana-perf-CUDA_HOME.txt)
@@ -55,9 +55,8 @@ else
   echo Warning: unable to validate CUDA version
   echo ==============================================
 fi
-
 EOF
 
 echo
-echo "source ./target/perf-libs/env.sh to setup environment"
+echo "source $PWD/target/perf-libs/env.sh to setup environment"
 exit 0
