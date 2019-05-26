@@ -522,19 +522,26 @@ create)
 
   printNetworkInfo() {
     cat <<EOF
-========================================================================================
-
-Network composition:
+==[ Network composition ]===============================================================
   Bootstrap leader = $bootstrapLeaderMachineType (GPU=$enableGpu)
   Additional fullnodes = $additionalFullNodeCount x $fullNodeMachineType
   Client(s) = $clientNodeCount x $clientMachineType
   Blockstreamer = $blockstreamer
-
 ========================================================================================
 
 EOF
   }
   printNetworkInfo
+
+  creationDate=$(date)
+  creationInfo() {
+    cat <<EOF
+
+  Instance running since: $creationDate
+
+========================================================================================
+EOF
+  }
 
   declare startupScript="$netConfigDir"/instance-startup-script.sh
   cat > "$startupScript" <<EOF
@@ -554,6 +561,7 @@ cat > /etc/motd <<EOM
     $ until [[ -f /.instance-startup-complete ]]; do sleep 1; done
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+$(creationInfo)
 EOM
 
 # Place the generated private key at /solana-id_ecdsa so it's retrievable by anybody
@@ -579,6 +587,7 @@ $(
     install-nodejs.sh \
     install-redis.sh \
     install-rsync.sh \
+    localtime.sh \
     network-config.sh \
     remove-docker-interface.sh \
 
@@ -590,6 +599,7 @@ $(
 
 cat > /etc/motd <<EOM
 $(printNetworkInfo)
+$(creationInfo)
 EOM
 
 touch /.instance-startup-complete

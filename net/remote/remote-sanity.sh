@@ -69,8 +69,9 @@ local|tar)
   entrypointRsyncUrl="$entrypointIp:~/solana"
 
   solana_gossip=solana-gossip
-  solana_ledger_tool=solana-ledger-tool
+  solana_install=solana-install
   solana_keygen=solana-keygen
+  solana_ledger_tool=solana-ledger-tool
 
   ledger=config-local/bootstrap-leader-ledger
   client_id=config-local/client-id.json
@@ -161,6 +162,23 @@ if $validatorSanity; then
 else
   echo "^^^ +++"
   echo "Note: validator sanity disabled"
+fi
+
+if [[ -r update_manifest_keypair.json ]]; then
+  echo "--- $entrypointIp: solana-install test"
+
+  (
+    set -x
+    update_manifest_pubkey=$($solana_keygen pubkey update_manifest_keypair.json)
+    rm -rf install-data-dir
+    $solana_install init \
+      --no-modify-path \
+      --data-dir install-data-dir \
+      --url http://"$entrypointIp":8899 \
+      --pubkey "$update_manifest_pubkey"
+
+    $solana_install info
+  )
 fi
 
 echo --- Pass
