@@ -587,6 +587,7 @@ $(
     install-nodejs.sh \
     install-redis.sh \
     install-rsync.sh \
+    localtime.sh \
     network-config.sh \
     remove-docker-interface.sh \
 
