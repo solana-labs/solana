@@ -212,6 +212,7 @@ fn test_listener_startup() {
 }
 
 #[test]
+#[ignore]
 fn test_repairman_catchup() {
     run_repairman_catchup(5);
 }
