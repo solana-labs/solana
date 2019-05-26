@@ -193,7 +193,11 @@ impl BankForks {
         trace!("path: {:?}", bank_file_path);
         let file = File::create(bank_file_path)?;
         let mut stream = BufWriter::new(file);
-        let bank = self.get(slot).unwrap().clone();
+        let bank_slot = self.get(slot);
+        if bank_slot.is_none() {
+            return Err(BankForks::get_io_error("bank_forks get error"));
+        }
+        let bank = bank_slot.unwrap().clone();
         serialize_into(&mut stream, &*bank)
             .map_err(|_| BankForks::get_io_error("serialize bank error"))?;
         let mut parent_slot: u64 = 0;

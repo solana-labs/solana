@@ -418,7 +418,6 @@ impl AccountsDB {
                     pubkey: **pubkey,
                     data_len,
                 };
-                //info!("store: {:?}, {}", pubkey, account.lamports);
                 (meta, *account)
             })
             .collect();

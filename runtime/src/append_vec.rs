@@ -220,32 +220,6 @@ impl AppendVec {
     }
 
     #[allow(clippy::mutex_atomic)]
-    pub fn setup_accounts(&self) -> Option<u64> {
-        let mut start: usize = 0;
-        self.current_len
-            .store(self.file_size as usize, Ordering::Relaxed);
-        let mut last_write_version = None;
-        while let Some((account, next)) = self.get_account(start) {
-            if next > self.file_size as usize {
-                break;
-            }
-            if last_write_version.is_none() {
-                last_write_version = Some(account.meta.write_version);
-            } else {
-                if account.meta.write_version <= last_write_version.unwrap() {
-                    break;
-                }
-                last_write_version = Some(account.meta.write_version);
-            }
-            start = next;
-        }
-        self.current_len.store(start, Ordering::Relaxed);
-        let mut offset = self.append_offset.lock().unwrap();
-        *offset = start;
-        last_write_version
-    }
-
-    #[allow(clippy::mutex_atomic)]
     pub fn append_accounts(&self, accounts: &[(StorageMeta, &Account)]) -> Vec<usize> {
         let mut offset = self.append_offset.lock().unwrap();
         let mut rv = vec![];
