@@ -1,7 +1,7 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::packet::{Blob, Packets, SharedBlobs, PacketsRecycler};
+use crate::packet::{Blob, Packets, PacketsRecycler, SharedBlobs};
 use crate::result::{Error, Result};
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -132,7 +132,7 @@ pub fn blob_receiver(
         .unwrap()
 }
 
-fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender) -> Result<()> {
+fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender, recycler: &PacketsRecycler) -> Result<()> {
     trace!(
         "recv_blob_packets: receiving on {}",
         sock.local_addr().unwrap()
@@ -140,8 +140,9 @@ fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender) -> Result<()> {
 
     let blobs = Blob::recv_from(sock)?;
     for blob in blobs {
-        let packets = blob.read().unwrap().load_packets();
-        s.send(Packets::new(packets))?;
+        let mut packets = Packets::new_with_recycler(recycler.clone());
+        blob.read().unwrap().load_packets(&mut packets.packets);
+        s.send(packets)?;
     }
 
     Ok(())
@@ -158,13 +159,14 @@ pub fn blob_packet_receiver(
     sock.set_read_timeout(Some(timer))
         .expect("set socket timeout");
     let exit = exit.clone();
+    let recycler = PacketsRecycler::default();
     Builder::new()
         .name("solana-blob_packet_receiver".to_string())
         .spawn(move || loop {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            let _ = recv_blob_packets(&sock, &s);
+            let _ = recv_blob_packets(&sock, &s, &recycler);
         })
         .unwrap()
 }

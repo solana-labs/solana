@@ -559,9 +559,8 @@ impl Blob {
     }
 
     // other side of store_packets
-    pub fn load_packets(&self) -> Vec<Packet> {
+    pub fn load_packets(&self, packets: &mut PinnedVec<Packet>) {
         // rough estimate
-        let mut packets: Vec<Packet> = Vec::with_capacity(self.size() / PACKET_DATA_SIZE);
         let mut pos = 0;
         let size_len = bincode::serialized_size(&0usize).unwrap() as usize;
 
@@ -581,7 +580,6 @@ impl Blob {
             pos += size;
             packets.push(packet);
         }
-        packets
     }
 
     pub fn recv_blob(socket: &UdpSocket, r: &SharedBlob) -> io::Result<()> {
@@ -853,10 +851,12 @@ mod tests {
 
         let blobs = packets_to_blobs(&packets[..]);
 
-        let reconstructed_packets: Vec<Packet> =
-            blobs.iter().flat_map(|b| b.load_packets()).collect();
+        let mut reconstructed_packets = PinnedVec::default();
+        blobs
+            .iter()
+            .for_each(|b| b.load_packets(&mut reconstructed_packets));
 
-        assert_eq!(reconstructed_packets, packets);
+        assert_eq!(reconstructed_packets[..], packets[..]);
     }
 
     #[test]
