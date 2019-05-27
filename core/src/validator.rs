@@ -38,7 +38,7 @@ pub struct ValidatorConfig {
     pub storage_rotate_count: u64,
     pub account_paths: Option<String>,
     pub rpc_config: JsonRpcConfig,
-    pub use_snapshot: bool,
+    pub snapshot_path: Option<String>,
 }
 impl Default for ValidatorConfig {
     fn default() -> Self {
@@ -53,7 +53,7 @@ impl Default for ValidatorConfig {
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
             account_paths: None,
             rpc_config: JsonRpcConfig::default(),
-            use_snapshot: false,
+            snapshot_path: None,
         }
     }
 }
@@ -98,7 +98,7 @@ impl Validator {
         ) = new_banks_from_blocktree(
             ledger_path,
             config.account_paths.clone(),
-            config.use_snapshot,
+            config.snapshot_path.clone(),
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
@@ -126,7 +126,7 @@ impl Validator {
             &leader_schedule_cache,
             &poh_config,
         );
-        if config.use_snapshot {
+        if config.snapshot_path.is_some() {
             poh_recorder.set_bank(&bank);
         }
 
@@ -294,10 +294,10 @@ fn get_bank_forks(
     genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
     account_paths: Option<String>,
-    use_snapshot: bool,
+    snapshot_path: Option<String>,
 ) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
-    if use_snapshot {
-        let bank_forks = BankForks::load_from_snapshot();
+    if snapshot_path.is_some() {
+        let bank_forks = BankForks::load_from_snapshot(&snapshot_path);
         match bank_forks {
             Ok(v) => {
                 let bank = &v.working_bank();
@@ -313,8 +313,8 @@ fn get_bank_forks(
     let (mut bank_forks, bank_forks_info, leader_schedule_cache) =
         blocktree_processor::process_blocktree(&genesis_block, &blocktree, account_paths)
             .expect("process_blocktree failed");
-    if use_snapshot {
-        bank_forks.set_snapshot_config(true);
+    if snapshot_path.is_some() {
+        bank_forks.set_snapshot_config(snapshot_path);
         let _ = bank_forks.add_snapshot(0, 0);
     }
     (bank_forks, bank_forks_info, leader_schedule_cache)
@@ -323,7 +323,7 @@ fn get_bank_forks(
 pub fn new_banks_from_blocktree(
     blocktree_path: &str,
     account_paths: Option<String>,
-    use_snapshot: bool,
+    snapshot_path: Option<String>,
 ) -> (
     BankForks,
     Vec<BankForksInfo>,
@@ -341,7 +341,7 @@ pub fn new_banks_from_blocktree(
             .expect("Expected to successfully open database ledger");
 
     let (bank_forks, bank_forks_info, leader_schedule_cache) =
-        get_bank_forks(&genesis_block, &blocktree, account_paths, use_snapshot);
+        get_bank_forks(&genesis_block, &blocktree, account_paths, snapshot_path);
 
     (
         bank_forks,

@@ -157,10 +157,11 @@ fn main() {
                 .help("Range to use for dynamically assigned ports"),
         )
         .arg(
-            clap::Arg::with_name("use_snapshot")
-                .long("use-snapshot")
-                .takes_value(false)
-                .help("Load / Store bank snapshots"),
+            clap::Arg::with_name("snapshot_path")
+                .long("snapshot-path")
+                .value_name("PATHS")
+                .takes_value(true)
+                .help("Snapshot path"),
         )
          .get_matches();
 
@@ -200,8 +201,6 @@ fn main() {
 
     validator_config.sigverify_disabled = matches.is_present("no_sigverify");
 
-    validator_config.use_snapshot = matches.is_present("use_snapshot");
-
     validator_config.voting_disabled = matches.is_present("no_voting");
 
     if matches.is_present("enable_rpc_exit") {
@@ -227,6 +226,11 @@ fn main() {
         validator_config.account_paths = Some(paths.to_string());
     } else {
         validator_config.account_paths = None;
+    }
+    if let Some(paths) = matches.value_of("snapshot_path") {
+        validator_config.snapshot_path = Some(paths.to_string());
+    } else {
+        validator_config.snapshot_path = None;
     }
     let cluster_entrypoint = matches.value_of("entrypoint").map(|entrypoint| {
         let entrypoint_addr = solana_netutil::parse_host_port(entrypoint)

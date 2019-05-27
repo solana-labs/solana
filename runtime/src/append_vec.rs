@@ -74,7 +74,7 @@ pub struct AppendVec {
 
 impl Drop for AppendVec {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.path.parent().unwrap());
+        let _ignored = std::fs::remove_dir_all(&self.path.parent().unwrap());
     }
 }
 
@@ -275,7 +275,7 @@ pub mod test_utils {
         fn drop(&mut self) {
             let mut path = PathBuf::new();
             std::mem::swap(&mut path, &mut self.path);
-            let _ = std::fs::remove_file(path);
+            let _ignored = std::fs::remove_file(path);
         }
     }
 
