@@ -58,7 +58,7 @@ fn main() -> Result<(), String> {
                 .arg({
                     let arg = Arg::with_name("data_dir")
                         .short("d")
-                        .long("data_dir")
+                        .long("data-dir")
                         .value_name("PATH")
                         .takes_value(true)
                         .required(true)
