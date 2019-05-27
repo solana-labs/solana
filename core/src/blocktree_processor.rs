@@ -3,7 +3,7 @@ use crate::blocktree::Blocktree;
 use crate::entry::{Entry, EntrySlice};
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use rayon::prelude::*;
-use solana_metrics::{datapoint, inc_new_counter_debug};
+use solana_metrics::{datapoint, datapoint_error, inc_new_counter_debug};
 use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -45,7 +45,7 @@ fn par_execute_entries(
                     }
                     if !Bank::can_commit(&r) {
                         warn!("Unexpected validator error: {:?}, tx: {:?}", e, tx);
-                        datapoint!(
+                        datapoint_error!(
                             "validator_process_entry_error",
                             ("error", format!("error: {:?}, tx: {:?}", e, tx), String)
                         );
