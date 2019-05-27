@@ -89,7 +89,8 @@ local|tar)
       --gossip-port "$entrypointIp":8001
     )
 
-    ./multinode-demo/validator.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
+    nohup ./multinode-demo/validator.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
+    sleep 1
     ;;
   validator|blockstreamer)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
@@ -144,7 +145,8 @@ local|tar)
       curl --head "$(curl ifconfig.io)"
     fi
 
-    ./multinode-demo/validator.sh "${args[@]}" > fullnode.log 2>&1 &
+    nohup ./multinode-demo/validator.sh "${args[@]}" > fullnode.log 2>&1 &
+    sleep 1
     ;;
   *)
     echo "Error: unknown node type: $nodeType"
