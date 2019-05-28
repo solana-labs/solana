@@ -15,6 +15,8 @@ use bincode::deserialize;
 use rand::thread_rng;
 use rand::Rng;
 #[cfg(feature = "chacha")]
+use rand::SeedableRng;
+#[cfg(feature = "chacha")]
 use rand_chacha::ChaChaRng;
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
