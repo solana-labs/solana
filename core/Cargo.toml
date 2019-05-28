@@ -67,7 +67,7 @@ solana-vote-program = { path = "../programs/vote_program", version = "0.16.0"   
 solana-exchange-program = { path = "../programs/exchange_program", version = "0.16.0"   }
 solana-config-program = { path = "../programs/config_program", version = "0.16.0"   }
 solana-vote-signer = { path = "../vote-signer", version = "0.16.0"   }
-sys-info = "0.5.6"
+sys-info = "0.5.7"
 tokio = "0.1"
 tokio-codec = "0.1"
 untrusted = "0.6.2"
