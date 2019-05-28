@@ -43,7 +43,7 @@ pub fn process_instruction(
             sha_state,
             slot,
             signature,
-            proof_index: _,
+            ..
         } => {
             if me_unsigned || !rest.is_empty() {
                 // This instruction must be signed by `me`
