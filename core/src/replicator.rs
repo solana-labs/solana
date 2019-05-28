@@ -14,6 +14,10 @@ use crate::window_service::WindowService;
 use bincode::deserialize;
 use rand::thread_rng;
 use rand::Rng;
+#[cfg(feature = "chacha")]
+use rand::SeedableRng;
+#[cfg(feature = "chacha")]
+use rand_chacha::ChaChaRng;
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::RpcRequest;
 use solana_client::thin_client::ThinClient;
@@ -64,6 +68,8 @@ pub struct Replicator {
     num_chacha_blocks: usize,
     #[cfg(feature = "chacha")]
     blocktree: Arc<Blocktree>,
+    #[cfg(feature = "chacha")]
+    rng: ChaChaRng,
 }
 
 pub(crate) fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
@@ -261,6 +267,11 @@ impl Replicator {
         //always push this last
         thread_handles.push(t_replicate);
 
+        let mut rng_seed = [0u8; 32];
+        rng_seed.copy_from_slice(&signature.to_bytes()[0..32]);
+        #[cfg(feature = "chacha")]
+        let rng = ChaChaRng::from_seed(rng_seed);
+
         Ok(Self {
             gossip_service,
             fetch_stage,
@@ -280,6 +291,8 @@ impl Replicator {
             num_chacha_blocks: 0,
             #[cfg(feature = "chacha")]
             blocktree,
+            #[cfg(feature = "chacha")]
+            rng,
         })
     }
 
@@ -288,13 +301,15 @@ impl Replicator {
         self.thread_handles.pop().unwrap().join().unwrap();
         self.encrypt_ledger()
             .expect("ledger encrypt not successful");
+        let mut proof_index = 0;
         loop {
             self.create_sampling_offsets();
+            proof_index += 1;
             if let Err(err) = self.sample_file_to_create_mining_hash() {
                 warn!("Error sampling file, exiting: {:?}", err);
                 break;
             }
-            self.submit_mining_proof();
+            self.submit_mining_proof(proof_index);
             // TODO: Replicators should be submitting proofs as fast as possible
             sleep(Duration::from_secs(2));
         }
@@ -381,15 +396,9 @@ impl Replicator {
         #[cfg(feature = "chacha")]
         {
             use crate::storage_stage::NUM_STORAGE_SAMPLES;
-            use rand::{Rng, SeedableRng};
-            use rand_chacha::ChaChaRng;
-
-            let mut rng_seed = [0u8; 32];
-            rng_seed.copy_from_slice(&self.signature.to_bytes()[0..32]);
-            let mut rng = ChaChaRng::from_seed(rng_seed);
             for _ in 0..NUM_STORAGE_SAMPLES {
                 self.sampling_offsets
-                    .push(rng.gen_range(0, self.num_chacha_blocks) as u64);
+                    .push(self.rng.gen_range(0, self.num_chacha_blocks) as u64);
             }
         }
     }
@@ -438,7 +447,7 @@ impl Replicator {
         Ok(())
     }
 
-    fn submit_mining_proof(&self) {
+    fn submit_mining_proof(&self, proof_index: u64) {
         // No point if we've got no storage account...
         let nodes = self.cluster_info.read().unwrap().tvu_peers();
         let client = crate::gossip_service::get_client(&nodes);
@@ -457,6 +466,7 @@ impl Replicator {
             self.hash,
             self.slot,
             Signature::new(&self.signature.to_bytes()),
+            proof_index,
         );
         let message = Message::new_with_payer(vec![instruction], Some(&self.keypair.pubkey()));
         let mut transaction = Transaction::new(

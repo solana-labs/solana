@@ -366,6 +366,7 @@ impl StorageStage {
                 slot: proof_slot,
                 signature,
                 sha_state,
+                ..
             }) => {
                 if proof_slot < slot {
                     {
@@ -701,6 +702,7 @@ mod tests {
             Hash::default(),
             0,
             keypair.sign_message(b"test"),
+            0,
         );
         let mining_proof_tx = Transaction::new_unsigned_instructions(vec![mining_proof_ix]);
         let mining_txs = vec![mining_proof_tx];
