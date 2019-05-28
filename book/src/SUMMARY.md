@@ -19,7 +19,7 @@
   - [Data Plane Fanout](data-plane-fanout.md)
   - [Ledger Replication](ledger-replication.md)
   - [Secure Vote Signing](vote-signing.md)
-  - [Staking Delegation and Rewards](stake-delegation-and-rewards.md)
+  - [Stake Delegation and Rewards](stake-delegation-and-rewards.md)
   - [Performance Metrics](performance-metrics.md)
 
 - [Anatomy of a Validator](validator.md)
@@ -39,7 +39,6 @@
   - [Ledger Replication](ledger-replication-to-implement.md)
   - [Secure Vote Signing](vote-signing-to-implement.md)
   - [Staking Rewards](staking-rewards.md)
-  - [Passive Stake Delegation and Rewards](passive-stake-delegation-and-rewards.md)
   - [Cluster Economics](ed_overview.md)
     - [Validation-client Economics](ed_validation_client_economics.md)
       - [State-validation Protocol-based Rewards](ed_vce_state_validation_protocol_based_rewards.md)
@@ -67,3 +66,4 @@
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
   - [Persistent Account Storage](persistent-account-storage.md)
   - [Cluster Software Installation and Updates](installer.md)
+  - [Passive Stake Delegation and Rewards](passive-stake-delegation-and-rewards.md)
