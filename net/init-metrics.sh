@@ -17,7 +17,6 @@ usage: $0 [-e] [-d] [-c] [username]
 Creates a testnet dev metrics database
 
   username        InfluxDB user with access to create a new database
-  -c              Use Influx Cloud instance
   -d              Delete the database instead of creating it
   -e              Assume database already exists and SOLANA_METRICS_CONFIG is
                   defined in the environment already
@@ -31,14 +30,11 @@ loadConfigFile
 useEnv=false
 delete=false
 host="https://metrics.solana.com:8086"
-while getopts "hcde" opt; do
+while getopts "hde" opt; do
   case $opt in
   h|\?)
     usage
     exit 0
-    ;;
-  c)
-    host="https://clocktower-f1d56615.influxcloud.net:8086"
     ;;
   d)
     delete=true
