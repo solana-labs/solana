@@ -46,7 +46,7 @@ Program accounts store the functions that define the rules of the program.
 ```
 struct ProgramAccount {
     lamports: u64,
-    functions: Set<Pubkey>,
+    functions: Vec<Pubkey>,
 }
 ```
 
@@ -64,3 +64,24 @@ struct FunctionAccount {
 
 For a function to succeed the state transition, it must be in the set of
 functions in the tokens OwnerProgram.
+
+## Instruction Processing
+
+Instructions contain the function index of the function in the ProgramAccount
+`functions` list.
+
+```
+pub struct Instruction {
+    /// Pubkey of the instruction processor that executes this instruction
+    pub program_ids_index: Pubkey,
+    /// The program function to execute
+    pub function_index: u64,
+    /// Metadata for what accounts should be passed to the instruction processor
+    pub accounts: Vec<AccountMeta>,
+    /// Opaque data passed to the instruction processor
+    pub data: Vec<u8>,
+}
+```
+
+An instruction may only write and spend tokens from a single kind of
+OwnerProgram at a time.
