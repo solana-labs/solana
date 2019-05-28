@@ -1,8 +1,8 @@
 # Staking Rewards
 
-Initial Proof of Stake (PoS) (i.e. using in-protocol asset, SOL, to provide
-secure consensus) design ideas outlined here. Solana will implement a proof of
-stake reward/security scheme for node validators in the cluster. The purpose is
+A Proof of Stake (PoS), (i.e. using in-protocol asset, SOL, to provide
+secure consensus) design is outlined here. Solana implements a proof of
+stake reward/security scheme for validator nodes in the cluster. The purpose is
 threefold:
 
 - Align validator incentives with that of the greater cluster through
@@ -64,7 +64,7 @@ capital-at-risk to prevent a logical/optimal strategy of multiple chain voting.
 We intend to implement slashing rules which, if broken, result some amount of
 the offending validator's deposited stake to be removed from circulation. Given
 the ordering properties of the PoH data structure, we believe we can simplify
-our slashing rules to the level of a voting lockout time assigned per vote.  
+our slashing rules to the level of a voting lockout time assigned per vote.
 
 I.e. Each vote has an associated lockout time (PoH duration) that represents a
 duration by any additional vote from that validator must be in a PoH that
@@ -110,7 +110,7 @@ in a slashable amount as a function of either:
 1. the fraction of validators, out of the total validator pool, that were also
    slashed during the same time period (ala Casper)
 2. the amount of time since the vote was cast (e.g. a linearly increasing % of
-   total deposited as slashable amount over time), or both.  
+   total deposited as slashable amount over time), or both.
 
 This is an area currently under exploration
 
