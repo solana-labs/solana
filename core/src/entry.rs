@@ -201,6 +201,31 @@ where
     Ok((entries, num_ticks))
 }
 
+// stub to interface with cuda code
+#[cfg(feature = "cuda")]
+enum GpuCtx {}
+
+#[cfg(feature = "cuda")]
+#[link(name = "cuda-crypt")]
+extern "C" {
+    fn poh_start_verify_many(
+        hashes: *const Hash,
+        num_hashes_arr: *const u64,
+        num_elems: usize,
+        use_non_default_stream: u8,
+    ) -> *mut GpuCtx;
+
+    fn poh_finish_verify_many(
+        hashes: *const Hash,
+        num_elems: usize,
+        cur_ctx: *mut GpuCtx,
+        use_non_default_stream: u8,
+    );
+}
+
+//#[cfg(feature = "cuda")]
+//const NUM_BYTES_PER_HASH: usize = 32; //TODO: Is there a place to get this?
+
 // an EntrySlice is a slice of Entries
 pub trait EntrySlice {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
@@ -212,6 +237,7 @@ pub trait EntrySlice {
 }
 
 impl EntrySlice for [Entry] {
+    #[cfg(not(feature = "cuda"))]
     fn verify(&self, start_hash: &Hash) -> bool {
         let genesis = [Entry {
             num_hashes: 0,
@@ -231,6 +257,74 @@ impl EntrySlice for [Entry] {
             }
             r
         })
+    }
+
+    #[cfg(feature = "cuda")]
+    fn verify(&self, start_hash: &Hash) -> bool {
+        let genesis = [Entry {
+            num_hashes: 0,
+            hash: *start_hash,
+            transactions: vec![],
+        }];
+
+        let start_hashes: Vec<Hash> = genesis
+            .par_iter()
+            .chain(self)
+            .map(|entry| entry.hash)
+            .take(self.len())
+            .collect();
+
+        let num_hashes_vec: Vec<u64> = self
+            .into_iter()
+            .map(|entry| entry.num_hashes.saturating_sub(1))
+            .collect();
+
+        let ctx;
+        unsafe {
+            ctx = poh_start_verify_many(
+                start_hashes.as_ptr(),
+                num_hashes_vec.as_ptr(),
+                self.len(),
+                1,
+            );
+        }
+
+        let tx_hashes: Vec<Option<Hash>> = self
+            .into_par_iter()
+            .map(|entry| {
+                if entry.transactions.is_empty() {
+                    None
+                } else {
+                    Some(hash_transactions(&entry.transactions))
+                }
+            })
+            .collect();
+
+        let end_hashes: Vec<Hash> = Vec::with_capacity(self.len());
+
+        unsafe {
+            poh_finish_verify_many(end_hashes.as_ptr(), self.len(), ctx, 1);
+        }
+
+        //        let end_hashes: Vec<Hash> = (0..self.len())
+        //            .into_iter()
+        //            .map(|i| {
+        //                Hash::new(&end_hashes_raw[(i * NUM_BYTES_PER_HASH)..((i + 1) * NUM_BYTES_PER_HASH)])
+        //            })
+        //            .collect();
+
+        end_hashes
+            .into_par_iter()
+            .zip(tx_hashes)
+            .zip(self)
+            .all(|((hash, tx_hash), answer)| {
+                let mut poh = Poh::new(hash, None);
+                if let Some(mixin) = tx_hash {
+                    poh.record(mixin).unwrap().hash == answer.hash
+                } else {
+                    poh.tick().unwrap().hash == answer.hash
+                }
+            })
     }
 
     fn to_blobs(&self) -> Vec<Blob> {
@@ -555,6 +649,8 @@ mod tests {
         bad_ticks[1].hash = one;
         assert!(!bad_ticks.verify(&zero)); // inductive step, bad
     }
+
+    //TODO: Should test verify slice with txs, esp w/ cuda verification
 
     fn blob_sized_entries(num_entries: usize) -> Vec<Entry> {
         // rough guess
