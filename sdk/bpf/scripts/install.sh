@@ -19,9 +19,6 @@ download() {
     "--retry-connrefused"
     "--read-timeout=30"
   )
-  # Github release URLs 302 to AWS S3.  Sometimes that S3 URL returns 403
-  args+=("--retry-on-http-error=403")
-
   wget "${args[@]}"
 }
 
@@ -36,7 +33,7 @@ if [[ ! -r criterion-$machine-$version.md ]]; then
     mkdir criterion
     cd criterion
 
-    base=https://github.com/Snaipe/Criterion/releases/
+    base=https://github.com/Snaipe/Criterion/releases
     download $base/download/$version/$filename $filename mega
     tar --strip-components 1 -jxf $filename
     rm -rf $filename
