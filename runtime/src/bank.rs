@@ -1348,6 +1348,36 @@ mod tests {
     }
 
     #[test]
+    fn test_need_credit_only_accounts() {
+        let (genesis_block, mint_keypair) = create_genesis_block(10);
+        let bank = Bank::new(&genesis_block);
+        let payer0 = Keypair::new();
+        let payer1 = Keypair::new();
+        let recipient = Pubkey::new_rand();
+        // Fund additional payers
+        bank.transfer(3, &mint_keypair, &payer0.pubkey()).unwrap();
+        bank.transfer(3, &mint_keypair, &payer1.pubkey()).unwrap();
+        let tx0 = system_transaction::transfer(&mint_keypair, &recipient, 1, genesis_block.hash());
+        let tx1 = system_transaction::transfer(&payer0, &recipient, 1, genesis_block.hash());
+        let tx2 = system_transaction::transfer(&payer1, &recipient, 1, genesis_block.hash());
+        let txs = vec![tx0, tx1, tx2];
+        let results = bank.process_transactions(&txs);
+
+        // If multiple transactions attempt to deposit into the same account, only the first will
+        // succeed, even though such atomic adds are safe. A System Transfer `To` account should be
+        // given credit-only handling
+
+        assert_eq!(results[0], Ok(()));
+        assert_eq!(results[1], Err(TransactionError::AccountInUse));
+        assert_eq!(results[2], Err(TransactionError::AccountInUse));
+
+        // After credit-only account handling is implemented, the following checks should pass instead:
+        // assert_eq!(results[0], Ok(()));
+        // assert_eq!(results[1], Ok(()));
+        // assert_eq!(results[2], Ok(()));
+    }
+
+    #[test]
     fn test_interleaving_locks() {
         let (genesis_block, mint_keypair) = create_genesis_block(3);
         let bank = Bank::new(&genesis_block);
