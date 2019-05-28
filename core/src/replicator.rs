@@ -394,9 +394,6 @@ impl Replicator {
         #[cfg(feature = "chacha")]
         {
             use crate::storage_stage::NUM_STORAGE_SAMPLES;
-            use rand::{Rng, SeedableRng};
-            use rand_chacha::ChaChaRng;
-
             for _ in 0..NUM_STORAGE_SAMPLES {
                 self.sampling_offsets
                     .push(self.rng.gen_range(0, self.num_chacha_blocks) as u64);
