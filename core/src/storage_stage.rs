@@ -366,7 +366,7 @@ impl StorageStage {
                 slot: proof_slot,
                 signature,
                 sha_state,
-                proof_index: _,
+                ..
             }) => {
                 if proof_slot < slot {
                     {
