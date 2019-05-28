@@ -27,6 +27,7 @@ before_install:
   - rustup --version
 
 script:
+  - ls -l lib
   - npm run doc
   - npm run flow
   - npm run lint
@@ -43,6 +44,7 @@ before_deploy:
   - rm -rf deploy
   - mkdir -p deploy
   - cp -r doc deploy/solanaWeb3Api-$TRAVIS_BRANCH
+  - ls -l lib
   - cp lib/index.iife.js deploy/solanaWeb3.min.js
   - ( cd deploy; tar zcf solanaWeb3Api.tgz solanaWeb3Api-$TRAVIS_BRANCH )
 
