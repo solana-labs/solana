@@ -215,18 +215,21 @@ impl Bank {
         self.store(&slot_hashes::id(), &account);
     }
 
-    fn set_hash(&self) {
+    fn set_hash(&self) -> bool {
         let mut hash = self.hash.write().unwrap();
 
         if *hash == Hash::default() {
             //  freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
+            return true;
         }
+        return false;
     }
 
     pub fn freeze(&self) {
-        self.set_hash();
-        self.update_slot_hashes();
+        if self.set_hash() {
+            self.update_slot_hashes();
+        }
     }
 
     pub fn epoch_schedule(&self) -> &EpochSchedule {
