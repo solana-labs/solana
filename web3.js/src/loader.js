@@ -5,7 +5,7 @@ import * as BufferLayout from 'buffer-layout';
 import {Account} from './account';
 import {PublicKey} from './publickey';
 import {NUM_TICKS_PER_SECOND} from './timing';
-import {Transaction} from './transaction';
+import {Transaction, PACKET_DATA_SIZE} from './transaction';
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import {sleep} from './util/sleep';
 import type {Connection} from './connection';
@@ -19,7 +19,12 @@ export class Loader {
    * Amount of program data placed in each load Transaction
    */
   static get chunkSize(): number {
-    return 229; // Keep program chunks under PACKET_DATA_SIZE
+    // Keep program chunks under PACKET_DATA_SIZE, leaving enough room for the
+    // rest of the Transaction fields
+    //
+    // TODO: replace 300 with a proper constant for the size of the other
+    // Transaction fields
+    return PACKET_DATA_SIZE - 300;
   }
 
   /**
