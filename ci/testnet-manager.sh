@@ -132,19 +132,16 @@ case $TESTNET in
 testnet-edge|testnet-edge-perf)
   CHANNEL_OR_TAG=edge
   CHANNEL_BRANCH=$EDGE_CHANNEL
-  : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
   ;;
 testnet-beta|testnet-beta-perf)
   CHANNEL_OR_TAG=beta
   CHANNEL_BRANCH=$BETA_CHANNEL
-  : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
   ;;
 testnet)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
   CHANNEL_BRANCH=$STABLE_CHANNEL
   : "${EC2_NODE_COUNT:=10}"
   : "${GCE_NODE_COUNT:=}"
-  : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
   ;;
 testnet-perf)
   CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
@@ -155,7 +152,6 @@ testnet-demo)
   CHANNEL_BRANCH=$BETA_CHANNEL
   : "${GCE_NODE_COUNT:=150}"
   : "${GCE_LOW_QUOTA_NODE_COUNT:=70}"
-  : "${TESTNET_DB_HOST:=https://clocktower-f1d56615.influxcloud.net:8086}"
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
