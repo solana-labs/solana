@@ -129,6 +129,22 @@ pub fn get_client(nodes: &[ContactInfo]) -> ThinClient {
     create_client(nodes[select], FULLNODE_PORT_RANGE)
 }
 
+pub fn get_multi_client(nodes: &[ContactInfo]) -> (ThinClient, usize) {
+    let addrs: Vec<_> = nodes
+        .iter()
+        .filter_map(ContactInfo::valid_client_facing_addr)
+        .map(|addrs| addrs)
+        .collect();
+    let rpcs: Vec<_> = addrs.iter().map(|addr| addr.0).collect();
+    let tpus: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
+    let (_, transactions_socket) = solana_netutil::bind_in_range(FULLNODE_PORT_RANGE).unwrap();
+    let num_nodes = tpus.len();
+    (
+        ThinClient::new_from_addrs(tpus, transactions_socket, rpcs),
+        num_nodes,
+    )
+}
+
 fn spy(
     spy_ref: Arc<RwLock<ClusterInfo>>,
     num_nodes: Option<usize>,
