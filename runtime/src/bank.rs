@@ -221,9 +221,10 @@ impl Bank {
         if *hash == Hash::default() {
             //  freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
-            return true;
+            true
+        } else {
+            false
         }
-        return false;
     }
 
     pub fn freeze(&self) {
