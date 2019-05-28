@@ -192,17 +192,17 @@ impl<T: Clone> PinnedVec<T> {
         let old_ptr = self.x.as_mut_ptr();
         let old_capacity = self.x.capacity();
         self.x.push(x);
-        self.check_ptr(old_ptr, old_capacity);
+        self.check_ptr(old_ptr, old_capacity, "push");
     }
 
     pub fn resize(&mut self, size: usize, elem: T) {
         let old_ptr = self.x.as_mut_ptr();
         let old_capacity = self.x.capacity();
         self.x.resize(size, elem);
-        self.check_ptr(old_ptr, old_capacity);
+        self.check_ptr(old_ptr, old_capacity, "resize");
     }
 
-    fn check_ptr(&mut self, _old_ptr: *mut T, _old_capacity: usize) {
+    fn check_ptr(&mut self, _old_ptr: *mut T, _old_capacity: usize, _from: &'static str) {
         #[cfg(feature = "cuda")]
         {
             if self.pinnable && (self.x.as_ptr() != _old_ptr || self.x.capacity() != _old_capacity)
@@ -211,6 +211,12 @@ impl<T: Clone> PinnedVec<T> {
                     unpin(_old_ptr);
                 }
 
+                trace!(
+                    "pinning from check_ptr old: {} size: {} from: {}",
+                    _old_capacity,
+                    self.x.capacity(),
+                    _from
+                );
                 pin(&mut self.x);
                 self.pinned = true;
             }
@@ -227,6 +233,12 @@ impl<T: Clone> Clone for PinnedVec<T> {
         } else {
             false
         };
+        debug!(
+            "clone PinnedVec: size: {} pinned?: {} pinnable?: {}",
+            self.x.capacity(),
+            self.pinned,
+            self.pinnable
+        );
         Self {
             x,
             pinned,

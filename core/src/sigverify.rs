@@ -155,13 +155,13 @@ pub fn get_packet_offsets(packet: &Packet, current_offset: u32) -> (u32, u32, u3
 
 pub fn generate_offsets(batches: &[Packets], recycler: &Recycler<TxOffset>) -> Result<TxOffsets> {
     debug!("allocating..");
-    let mut signature_offsets: PinnedVec<_> = recycler.allocate();
+    let mut signature_offsets: PinnedVec<_> = recycler.allocate("sig_offsets");
     signature_offsets.set_pinnable();
-    let mut pubkey_offsets: PinnedVec<_> = recycler.allocate();
+    let mut pubkey_offsets: PinnedVec<_> = recycler.allocate("pubkey_offsets");
     pubkey_offsets.set_pinnable();
-    let mut msg_start_offsets: PinnedVec<_> = recycler.allocate();
+    let mut msg_start_offsets: PinnedVec<_> = recycler.allocate("msg_start_offsets");
     msg_start_offsets.set_pinnable();
-    let mut msg_sizes: PinnedVec<_> = recycler.allocate();
+    let mut msg_sizes: PinnedVec<_> = recycler.allocate("msg_size_offsets");
     msg_sizes.set_pinnable();
     let mut current_packet = 0;
     let mut v_sig_lens = Vec::new();
@@ -264,7 +264,7 @@ pub fn ed25519_verify(
 
     debug!("CUDA ECDSA for {}", batch_size(batches));
     debug!("allocating out..");
-    let mut out = recycler_out.allocate();
+    let mut out = recycler_out.allocate("out_buffer");
     out.set_pinnable();
     let mut elems = Vec::new();
     let mut rvs = Vec::new();

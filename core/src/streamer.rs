@@ -21,9 +21,10 @@ fn recv_loop(
     exit: Arc<AtomicBool>,
     channel: &PacketSender,
     recycler: &PacketsRecycler,
+    name: &'static str,
 ) -> Result<()> {
     loop {
-        let mut msgs = Packets::new_with_recycler(recycler.clone());
+        let mut msgs = Packets::new_with_recycler(recycler.clone(), name);
         loop {
             // Check for exit signal, even if socket is busy
             // (for instance the leader trasaction socket)
@@ -42,6 +43,8 @@ pub fn receiver(
     sock: Arc<UdpSocket>,
     exit: &Arc<AtomicBool>,
     packet_sender: PacketSender,
+    recycler: PacketsRecycler,
+    name: &'static str,
 ) -> JoinHandle<()> {
     let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
     if res.is_err() {
@@ -51,8 +54,7 @@ pub fn receiver(
     Builder::new()
         .name("solana-receiver".to_string())
         .spawn(move || {
-            let recycler = PacketsRecycler::default();
-            let _ = recv_loop(&sock, exit, &packet_sender, &recycler);
+            let _ = recv_loop(&sock, exit, &packet_sender, &recycler.clone(), name);
         })
         .unwrap()
 }
@@ -140,7 +142,7 @@ fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender, recycler: &PacketsRecyc
 
     let blobs = Blob::recv_from(sock)?;
     for blob in blobs {
-        let mut packets = Packets::new_with_recycler(recycler.clone());
+        let mut packets = Packets::new_with_recycler(recycler.clone(), "recv_blob_packets");
         blob.read().unwrap().load_packets(&mut packets.packets);
         s.send(packets)?;
     }
@@ -175,6 +177,7 @@ pub fn blob_packet_receiver(
 mod test {
     use super::*;
     use crate::packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
+    use crate::recycler::Recycler;
     use crate::streamer::{receiver, responder};
     use std::io;
     use std::io::Write;
@@ -215,7 +218,7 @@ mod test {
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(Arc::new(read), &exit, s_reader);
+        let t_receiver = receiver(Arc::new(read), &exit, s_reader, Recycler::default(), "test");
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);

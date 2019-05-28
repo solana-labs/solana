@@ -5,6 +5,7 @@ use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::GossipService;
 use crate::packet::to_shared_blob;
+use crate::recycler::Recycler;
 use crate::repair_service::{RepairService, RepairSlotRange, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -121,7 +122,14 @@ fn create_request_processor(
     let (s_reader, r_reader) = channel();
     let (s_responder, r_responder) = channel();
     let storage_socket = Arc::new(socket);
-    let t_receiver = receiver(storage_socket.clone(), exit, s_reader);
+    let recycler = Recycler::default();
+    let t_receiver = receiver(
+        storage_socket.clone(),
+        exit,
+        s_reader,
+        recycler,
+        "replicator",
+    );
     thread_handles.push(t_receiver);
 
     let t_responder = responder("replicator-responder", storage_socket.clone(), r_responder);
