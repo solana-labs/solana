@@ -189,7 +189,8 @@ impl CrdsGossipPush {
                 continue;
             }
             let size = cmp::max(CRDS_GOSSIP_BLOOM_SIZE, network_size);
-            let bloom = Bloom::random(size, 0.1, 1024 * 8 * 4);
+            let mut bloom = Bloom::random(size, 0.1, 1024 * 8 * 4);
+            bloom.add(&item.id);
             new_items.insert(item.id, bloom);
         }
         let mut keys: Vec<Pubkey> = self.active_set.keys().cloned().collect();
@@ -265,6 +266,7 @@ impl CrdsGossipPush {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
+    use solana_sdk::signature::Signable;
 
     #[test]
     fn test_process_push() {
@@ -423,6 +425,29 @@ mod test {
         expected.insert(peer.label().pubkey(), vec![new_msg.clone()]);
         assert_eq!(push.process_push_message(&mut crds, new_msg, 0), Ok(None));
         assert_eq!(push.active_set.len(), 1);
+        assert_eq!(push.new_push_messages(&crds, 0), expected);
+    }
+    #[test]
+    fn test_personalized_push_messages() {
+        let mut crds = Crds::default();
+        let mut push = CrdsGossipPush::default();
+        let peer_1 = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
+        assert_eq!(crds.insert(peer_1.clone(), 0), Ok(None));
+        let peer_2 = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
+        assert_eq!(crds.insert(peer_2.clone(), 0), Ok(None));
+        let peer_3 = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
+        assert_eq!(
+            push.process_push_message(&mut crds, peer_3.clone(), 0),
+            Ok(None)
+        );
+        push.refresh_push_active_set(&crds, &HashMap::new(), &Pubkey::default(), 1, 1);
+
+        // push 3's contact info to 1 and 2 and 3
+        let new_msg = CrdsValue::ContactInfo(ContactInfo::new_localhost(&peer_3.pubkey(), 0));
+        let mut expected = HashMap::new();
+        expected.insert(peer_1.pubkey(), vec![new_msg.clone()]);
+        expected.insert(peer_2.pubkey(), vec![new_msg.clone()]);
+        assert_eq!(push.active_set.len(), 3);
         assert_eq!(push.new_push_messages(&crds, 0), expected);
     }
     #[test]
