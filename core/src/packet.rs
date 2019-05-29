@@ -742,12 +742,17 @@ mod tests {
 
     #[test]
     fn test_store_blobs_max() {
-        let meta = Meta::default();
-        let serialized_meta_size = bincode::serialized_size(&meta).unwrap() as usize;
-        let serialized_packet_size = serialized_meta_size + PACKET_DATA_SIZE;
+        let serialized_size_size = bincode::serialized_size(&0usize).unwrap() as usize;
+        let serialized_packet_size = serialized_size_size + PACKET_DATA_SIZE;
         let num_packets = (BLOB_SIZE - BLOB_HEADER_SIZE) / serialized_packet_size + 1;
         let mut blob = Blob::default();
-        let packets: Vec<_> = (0..num_packets).map(|_| Packet::default()).collect();
+        let packets: Vec<_> = (0..num_packets)
+            .map(|_| {
+                let mut packet = Packet::default();
+                packet.meta.size = PACKET_DATA_SIZE;
+                packet
+            })
+            .collect();
 
         // Everything except the last packet should have been written
         assert_eq!(blob.store_packets(&packets[..]), (num_packets - 1) as u64);
