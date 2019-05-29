@@ -46,6 +46,14 @@ pub struct StorageStateInner {
     slot: u64,
 }
 
+// Used to track root slots in storage stage
+#[derive(Default)]
+struct StorageSlots {
+    last_root: u64,
+    slot_count: u64,
+    pending_roots: Vec<u64>,
+}
+
 #[derive(Clone, Default)]
 pub struct StorageState {
     state: Arc<RwLock<StorageStateInner>>,
@@ -151,9 +159,7 @@ impl StorageStage {
                 .name("solana-storage-mining-verify-stage".to_string())
                 .spawn(move || {
                     let mut current_key = 0;
-                    let mut slot_count = 0;
-                    let mut last_root = 0;
-                    let mut pending_roots = vec![];
+                    let mut storage_slots = StorageSlots::default();
                     loop {
                         if let Some(ref some_blocktree) = blocktree {
                             if let Err(e) = Self::process_entries(
@@ -161,9 +167,7 @@ impl StorageStage {
                                 &storage_state_inner,
                                 &slot_receiver,
                                 &some_blocktree,
-                                &mut slot_count,
-                                &mut last_root,
-                                &mut pending_roots,
+                                &mut storage_slots,
                                 &mut current_key,
                                 storage_rotate_count,
                                 &instruction_sender,
@@ -416,27 +420,28 @@ impl StorageStage {
         storage_state: &Arc<RwLock<StorageStateInner>>,
         slot_receiver: &Receiver<Vec<u64>>,
         blocktree: &Arc<Blocktree>,
-        slot_count: &mut u64,
-        last_root: &mut u64,
-        pending_roots: &mut Vec<u64>,
+        storage_slots: &mut StorageSlots,
         current_key_idx: &mut usize,
         storage_rotate_count: u64,
         instruction_sender: &InstructionSender,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
-        let mut slots: Vec<u64> = slot_receiver.recv_timeout(timeout)?;
-        pending_roots.append(&mut slots);
-        pending_roots.sort_unstable_by(|a, b| b.cmp(a));
+        storage_slots
+            .pending_roots
+            .append(&mut slot_receiver.recv_timeout(timeout)?);
+        storage_slots
+            .pending_roots
+            .sort_unstable_by(|a, b| b.cmp(a));
         // check if any rooted slots were missed leading up to this one and bump slot count and process proofs for each missed root
-        while let Some(slot) = pending_roots.pop() {
-            if slot > *last_root {
+        while let Some(slot) = storage_slots.pending_roots.pop() {
+            if slot > storage_slots.last_root {
                 if !blocktree.is_full(slot) {
                     // stick this slot back into pending_roots. Evaluate it next time around.
-                    pending_roots.push(slot);
+                    storage_slots.pending_roots.push(slot);
                     break;
                 }
-                *slot_count += 1;
-                *last_root = slot;
+                storage_slots.slot_count += 1;
+                storage_slots.last_root = slot;
 
                 if let Ok(entries) = blocktree.get_slot_entries(slot, 0, None) {
                     for entry in &entries {
@@ -460,12 +465,12 @@ impl StorageStage {
                             }
                         }
                     }
-                    if *slot_count % storage_rotate_count == 0 {
+                    if storage_slots.slot_count % storage_rotate_count == 0 {
                         // assume the last entry in the slot is the blockhash for that slot
                         let entry_hash = entries.last().unwrap().hash;
                         debug!(
                             "crosses sending at root slot: {}! with last entry's hash {}",
-                            slot_count, entry_hash
+                            storage_slots.slot_count, entry_hash
                         );
                         Self::process_entry_crossing(
                             &storage_keypair,
