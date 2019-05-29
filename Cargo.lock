@@ -2629,6 +2629,7 @@ dependencies = [
  "solana-storage-program 0.16.0",
  "solana-vote-api 0.16.0",
  "solana-vote-program 0.16.0",
+ "sys-info 0.5.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

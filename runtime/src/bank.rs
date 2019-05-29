@@ -3,7 +3,7 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 use crate::accounts::{AccountLockType, Accounts};
-use crate::accounts_db::{ErrorCounters, InstructionAccounts, InstructionLoaders, ParThreadPool};
+use crate::accounts_db::{ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::epoch_schedule::EpochSchedule;
@@ -100,9 +100,6 @@ pub struct Bank {
 
     /// The Message processor
     message_processor: MessageProcessor,
-
-    /// Thread pool for par iter
-    pub thread_pool: ParThreadPool,
 }
 
 impl Default for BlockhashQueue {

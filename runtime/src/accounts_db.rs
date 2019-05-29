@@ -31,9 +31,11 @@ use std::fs::{create_dir_all, remove_dir_all};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
+use sys_info;
 
 const ACCOUNT_DATA_FILE_SIZE: u64 = 64 * 1024 * 1024;
 const ACCOUNT_DATA_FILE: &str = "data";
+pub const NUM_THREADS: u32 = 10;
 
 #[derive(Debug, Default)]
 pub struct ErrorCounters {
@@ -166,23 +168,7 @@ impl AccountStorageEntry {
     }
 }
 
-pub struct ParThreadPool {
-    pub pool: ThreadPool,
-}
-
-impl Default for ParThreadPool {
-    fn default() -> Self {
-        ParThreadPool {
-            pool: rayon::ThreadPoolBuilder::new()
-                .num_threads(16)
-                .build()
-                .unwrap(),
-        }
-    }
-}
-
 // This structure handles the load/store of the accounts
-#[derive(Default)]
 pub struct AccountsDB {
     /// Keeps tracks of index into AppendVec on a per fork basis
     pub accounts_index: RwLock<AccountsIndex<AccountInfo>>,
@@ -203,11 +189,28 @@ pub struct AccountsDB {
     file_size: u64,
 
     /// Thread pool used for par_iter
-    thread_pool: ParThreadPool,
+    thread_pool: ThreadPool,
 }
 
 pub fn get_paths_vec(paths: &str) -> Vec<String> {
     paths.split(',').map(ToString::to_string).collect()
+}
+
+impl Default for AccountsDB {
+    fn default() -> Self {
+        AccountsDB {
+            accounts_index: RwLock::new(AccountsIndex::default()),
+            storage: RwLock::new(HashMap::new()),
+            next_id: AtomicUsize::new(0),
+            write_version: AtomicUsize::new(0),
+            paths: Vec::default(),
+            file_size: u64::default(),
+            thread_pool: rayon::ThreadPoolBuilder::new()
+                .num_threads(2)
+                .build()
+                .unwrap(),
+        }
+    }
 }
 
 impl AccountsDB {
@@ -220,7 +223,10 @@ impl AccountsDB {
             write_version: AtomicUsize::new(0),
             paths,
             file_size,
-            thread_pool: ParThreadPool::default(),
+            thread_pool: rayon::ThreadPoolBuilder::new()
+                .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                .build()
+                .unwrap(),
         }
     }
 
@@ -262,7 +268,7 @@ impl AccountsDB {
             .filter(|store| store.fork_id == fork_id)
             .cloned()
             .collect();
-        self.thread_pool.pool.install(|| {
+        self.thread_pool.install(|| {
             storage_maps
                 .into_par_iter()
                 .map(|storage| {
