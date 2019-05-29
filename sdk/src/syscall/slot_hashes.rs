@@ -70,7 +70,7 @@ mod tests {
     use crate::hash::hash;
 
     #[test]
-    fn test_slot_hashes_id() {
+    fn test_id() {
         let ids = [("Sysca11S1otHashes11111111111111111111111111", id())];
         // to get the bytes above:
         //        ids.iter().for_each(|(name, _)| {
@@ -81,7 +81,7 @@ mod tests {
     }
 
     #[test]
-    fn test_slot_hashes_create_account() {
+    fn test_create_account() {
         let lamports = 42;
         let account = create_account(lamports);
         let slot_hashes = SlotHashes::from(&account);
@@ -93,7 +93,10 @@ mod tests {
                 hash(&[(i >> 24) as u8, (i >> 16) as u8, (i >> 8) as u8, i as u8]),
             );
         }
-        assert_eq!(slot_hashes[0].0, MAX_SLOT_HASHES as u64);
+        for i in 0..MAX_SLOT_HASHES {
+            assert_eq!(slot_hashes[i].0, (MAX_SLOT_HASHES - i) as u64);
+        }
+
         assert_eq!(slot_hashes.len(), MAX_SLOT_HASHES);
     }
 }
