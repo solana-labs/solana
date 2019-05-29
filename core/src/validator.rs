@@ -18,7 +18,6 @@ use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu};
 use solana_metrics::inc_new_counter_info;
-use solana_runtime::bank::Bank;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
@@ -85,10 +84,6 @@ impl Validator {
 
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
-        let genesis_block =
-            GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
-        let bank = Bank::new_with_paths(&genesis_block, None);
-        let genesis_blockhash = bank.last_blockhash();
 
         let (
             bank_forks,
@@ -239,7 +234,6 @@ impl Validator {
             &poh_recorder,
             &leader_schedule_cache,
             &exit,
-            &genesis_blockhash,
             completed_slots_receiver,
         );
 
@@ -258,7 +252,6 @@ impl Validator {
             config.sigverify_disabled,
             &blocktree,
             &exit,
-            &genesis_blockhash,
         );
 
         inc_new_counter_info!("fullnode-new", 1);

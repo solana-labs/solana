@@ -12,7 +12,6 @@ use crate::streamer::BlobReceiver;
 use crate::window_service::{should_retransmit_and_persist, WindowService};
 use solana_metrics::{datapoint_info, inc_new_counter_error};
 use solana_runtime::epoch_schedule::EpochSchedule;
-use solana_sdk::hash::Hash;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
@@ -116,7 +115,6 @@ impl RetransmitStage {
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: BlobReceiver,
         exit: &Arc<AtomicBool>,
-        genesis_blockhash: &Hash,
         completed_slots_receiver: CompletedSlotsReceiver,
         epoch_schedule: EpochSchedule,
     ) -> Self {
@@ -144,7 +142,6 @@ impl RetransmitStage {
             repair_socket,
             exit,
             repair_strategy,
-            genesis_blockhash,
             move |id, blob, working_bank| {
                 should_retransmit_and_persist(blob, working_bank, &leader_schedule_cache, id)
             },
