@@ -24,6 +24,7 @@ use solana_sdk::hash::{extend_and_hash, Hash};
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::syscall::fees::{self, Fees};
 use solana_sdk::syscall::slot_hashes::{self, SlotHashes};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_us, MAX_RECENT_BLOCKHASHES};
@@ -215,6 +216,18 @@ impl Bank {
         self.store(&slot_hashes::id(), &account);
     }
 
+    fn update_fees(&self) {
+        let mut account = self
+            .get_account(&fees::id())
+            .unwrap_or_else(|| fees::create_account(1));
+
+        let mut fees = Fees::from(&account).unwrap();
+        fees.fee_calculator = self.fee_calculator.clone();
+        fees.to(&mut account).unwrap();
+
+        self.store(&fees::id(), &account);
+    }
+
     fn set_hash(&self) -> bool {
         let mut hash = self.hash.write().unwrap();
 
@@ -274,6 +287,7 @@ impl Bank {
         // Bootstrap leader collects fees until `new_from_parent` is called.
         self.collector_id = genesis_block.bootstrap_leader_pubkey;
         self.fee_calculator = genesis_block.fee_calculator.clone();
+        self.update_fees();
 
         for (pubkey, account) in genesis_block.accounts.iter() {
             self.store(pubkey, account);
@@ -1929,6 +1943,21 @@ mod tests {
         let max_tick_height = ((bank.slot + 1) * bank.ticks_per_slot - 1) as usize;
         bank.tick_height.store(max_tick_height, Ordering::Relaxed);
         assert!(bank.is_votable());
+    }
+
+    #[test]
+    fn test_bank_fees_account() {
+        let (mut genesis_block, _) = create_genesis_block(500);
+        genesis_block.fee_calculator.lamports_per_signature = 12345;
+        let bank = Arc::new(Bank::new(&genesis_block));
+
+        let fees_account = bank.get_account(&fees::id()).unwrap();
+        let fees = Fees::from(&fees_account).unwrap();
+        assert_eq!(
+            bank.fee_calculator.lamports_per_signature,
+            fees.fee_calculator.lamports_per_signature
+        );
+        assert_eq!(fees.fee_calculator.lamports_per_signature, 12345);
     }
 
     #[test]
