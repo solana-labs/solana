@@ -818,18 +818,12 @@ impl Blocktree {
         }
     }
 
-    pub fn set_root(&self, new_root: u64, prev_root: u64) -> Result<()> {
-        let mut current_slot = new_root;
+    pub fn set_roots(&self, rooted_slots: &[u64]) -> Result<()> {
         unsafe {
             let mut batch_processor = self.db.batch_processor();
             let mut write_batch = batch_processor.batch()?;
-            if new_root == 0 {
-                write_batch.put::<cf::Root>(0, &true)?;
-            } else {
-                while current_slot != prev_root {
-                    write_batch.put::<cf::Root>(current_slot, &true)?;
-                    current_slot = self.meta(current_slot).unwrap().unwrap().parent_slot;
-                }
+            for slot in rooted_slots {
+                write_batch.put::<cf::Root>(*slot, &true)?;
             }
 
             batch_processor.write(write_batch)?;
@@ -3128,30 +3122,12 @@ pub mod tests {
     }
 
     #[test]
-    fn test_set_root() {
+    fn test_set_roots() {
         let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        blocktree.set_root(0, 0).unwrap();
         let chained_slots = vec![0, 2, 4, 7, 12, 15];
 
-        // Make a chain of slots
-        let all_blobs = make_chaining_slot_entries(&chained_slots, 10);
-
-        // Insert the chain of slots into the ledger
-        for (slot_blobs, _) in all_blobs {
-            blocktree.insert_data_blobs(&slot_blobs[..]).unwrap();
-        }
-
-        blocktree.set_root(4, 0).unwrap();
-        for i in &chained_slots[0..3] {
-            assert!(blocktree.is_root(*i));
-        }
-
-        for i in &chained_slots[3..] {
-            assert!(!blocktree.is_root(*i));
-        }
-
-        blocktree.set_root(15, 4).unwrap();
+        blocktree.set_roots(&chained_slots).unwrap();
 
         for i in chained_slots {
             assert!(blocktree.is_root(i));

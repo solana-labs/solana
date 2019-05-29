@@ -155,7 +155,7 @@ pub fn process_blocktree(
         vec![(slot, meta, bank, entry_height, last_entry_hash)]
     };
 
-    blocktree.set_root(0, 0).expect("Couldn't set first root");
+    blocktree.set_roots(&[0]).expect("Couldn't set first root");
 
     let leader_schedule_cache = LeaderScheduleCache::new(*pending_slots[0].2.epoch_schedule(), 0);
 
@@ -420,7 +420,7 @@ pub mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blocktree.set_root(4, 0).unwrap();
+        blocktree.set_roots(&[4, 1, 0]).unwrap();
 
         let (bank_forks, bank_forks_info, _) =
             process_blocktree(&genesis_block, &blocktree, None).unwrap();
@@ -494,8 +494,7 @@ pub mod tests {
         info!("last_fork1_entry.hash: {:?}", last_fork1_entry_hash);
         info!("last_fork2_entry.hash: {:?}", last_fork2_entry_hash);
 
-        blocktree.set_root(0, 0).unwrap();
-        blocktree.set_root(1, 0).unwrap();
+        blocktree.set_roots(&[0, 1]).unwrap();
 
         let (bank_forks, bank_forks_info, _) =
             process_blocktree(&genesis_block, &blocktree, None).unwrap();
@@ -571,10 +570,11 @@ pub mod tests {
         }
 
         // Set a root on the last slot of the last confirmed epoch
-        blocktree.set_root(last_slot, 0).unwrap();
+        let rooted_slots: Vec<_> = (0..=last_slot).collect();
+        blocktree.set_roots(&rooted_slots).unwrap();
 
         // Set a root on the next slot of the confrimed epoch
-        blocktree.set_root(last_slot + 1, last_slot).unwrap();
+        blocktree.set_roots(&[last_slot + 1]).unwrap();
 
         // Check that we can properly restart the ledger / leader scheduler doesn't fail
         let (bank_forks, bank_forks_info, _) =
