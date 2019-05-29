@@ -333,7 +333,6 @@ mod test {
             entry_receiver,
             &exit_sender,
             &blocktree,
-            &Hash::default(),
         );
 
         MockBroadcastStage {

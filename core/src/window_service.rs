@@ -454,7 +454,6 @@ mod test {
             Arc::new(leader_node.sockets.repair),
             &exit,
             repair_strategy,
-            &Hash::default(),
             |_, _, _| true,
         );
         let t_responder = {

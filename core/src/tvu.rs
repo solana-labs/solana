@@ -235,7 +235,6 @@ pub mod tests {
             &poh_recorder,
             &leader_schedule_cache,
             &exit,
-            &Hash::default(),
             completed_slots_receiver,
         );
         exit.store(true, Ordering::Relaxed);

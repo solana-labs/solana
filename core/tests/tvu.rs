@@ -137,7 +137,6 @@ fn test_replay() {
             &poh_recorder,
             &leader_schedule_cache,
             &exit,
-            &solana_sdk::hash::Hash::default(),
             completed_slots_receiver,
         );
 
