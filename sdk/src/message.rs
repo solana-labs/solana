@@ -6,7 +6,7 @@ use crate::pubkey::Pubkey;
 use crate::short_vec;
 use itertools::Itertools;
 
-fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
+pub fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
     keys.iter().position(|k| k == key).unwrap() as u8
 }
 
@@ -216,7 +216,7 @@ impl Message {
             .position(|&&pubkey| pubkey == self.account_keys[index])
     }
 
-    fn is_credit_debit(&self, i: usize) -> bool {
+    pub fn is_credit_debit(&self, i: usize) -> bool {
         i < (self.header.num_required_signatures - self.header.num_credit_only_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
@@ -235,6 +235,19 @@ impl Message {
             }
         }
         (credit_debit_keys, credit_only_keys)
+    }
+
+    pub fn get_account_indexes_by_lock_type(&self) -> (Vec<u8>, Vec<u8>) {
+        let mut credit_debit_indexes = vec![];
+        let mut credit_only_indexes = vec![];
+        for (i, _key) in self.account_keys.iter().enumerate() {
+            if self.is_credit_debit(i) {
+                credit_debit_indexes.push(i as u8);
+            } else {
+                credit_only_indexes.push(i as u8);
+            }
+        }
+        (credit_debit_indexes, credit_only_indexes)
     }
 }
 
@@ -566,6 +579,33 @@ mod tests {
         assert_eq!(
             message.get_account_keys_by_lock_type(),
             (vec![&id1, &id0], vec![&id3, &id2, &program_id])
+        );
+    }
+
+    #[test]
+    fn test_get_account_indexes_by_lock_type() {
+        let program_id = Pubkey::default();
+        let id0 = Pubkey::new_rand();
+        let id1 = Pubkey::new_rand();
+        let id2 = Pubkey::new_rand();
+        let id3 = Pubkey::new_rand();
+        let message = Message::new(vec![
+            Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
+            Instruction::new(program_id, &0, vec![AccountMeta::new(id1, true)]),
+            Instruction::new(
+                program_id,
+                &0,
+                vec![AccountMeta::new_credit_only(id2, false)],
+            ),
+            Instruction::new(
+                program_id,
+                &0,
+                vec![AccountMeta::new_credit_only(id3, true)],
+            ),
+        ]);
+        assert_eq!(
+            message.get_account_indexes_by_lock_type(),
+            (vec![0, 2], vec![1, 3, 4])
         );
     }
 }
