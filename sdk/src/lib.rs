@@ -2,6 +2,7 @@ pub mod account;
 pub mod account_utils;
 pub mod bpf_loader;
 pub mod client;
+pub mod credit_only_account;
 pub mod fee_calculator;
 pub mod genesis_block;
 pub mod hash;
