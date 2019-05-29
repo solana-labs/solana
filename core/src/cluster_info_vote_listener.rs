@@ -101,14 +101,10 @@ mod tests {
         let votes = (0..MAX_RECENT_VOTES)
             .map(|i| Vote::new(i as u64, Hash::default()))
             .collect::<Vec<_>>();
-        let vote_ix = vote_instruction::vote(
-            &node_keypair.pubkey(),
-            &vote_keypair.pubkey(),
-            &vote_keypair.pubkey(),
-            votes,
-        );
+        let vote_ix = vote_instruction::vote(&vote_keypair.pubkey(), &vote_keypair.pubkey(), votes);
 
-        let mut vote_tx = Transaction::new_unsigned_instructions(vec![vote_ix]);
+        let mut vote_tx = Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));
+
         vote_tx.partial_sign(&[&node_keypair], Hash::default());
         vote_tx.partial_sign(&[&vote_keypair], Hash::default());
 

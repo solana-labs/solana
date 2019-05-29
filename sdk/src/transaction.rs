@@ -75,6 +75,21 @@ impl Transaction {
         }
     }
 
+    pub fn new_with_payer(instructions: Vec<Instruction>, payer: Option<&Pubkey>) -> Self {
+        let message = Message::new_with_payer(instructions, payer);
+        Self::new_unsigned(message)
+    }
+
+    pub fn new_signed_with_payer<T: KeypairUtil>(
+        instructions: Vec<Instruction>,
+        payer: Option<&Pubkey>,
+        signing_keypairs: &[&T],
+        recent_blockhash: Hash,
+    ) -> Self {
+        let message = Message::new_with_payer(instructions, payer);
+        Self::new(signing_keypairs, message, recent_blockhash)
+    }
+
     pub fn new_unsigned_instructions(instructions: Vec<Instruction>) -> Self {
         let message = Message::new(instructions);
         Self::new_unsigned(message)
@@ -167,25 +182,11 @@ impl Transaction {
         serialize(&self.message()).unwrap()
     }
 
-    /// Sign this transaction.
-    pub fn sign_unchecked<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
-        self.message.recent_blockhash = recent_blockhash;
-        let message_data = self.message_data();
-        self.signatures = keypairs
-            .iter()
-            .map(|keypair| keypair.sign_message(&message_data))
-            .collect();
-    }
-
     /// Check keys and keypair lengths, then sign this transaction.
     pub fn sign<T: KeypairUtil>(&mut self, keypairs: &[&T], recent_blockhash: Hash) {
-        let signed_keys =
-            &self.message.account_keys[0..self.message.header.num_required_signatures as usize];
-        for (i, keypair) in keypairs.iter().enumerate() {
-            assert_eq!(keypair.pubkey(), signed_keys[i], "keypair-pubkey mismatch");
-        }
-        assert_eq!(keypairs.len(), signed_keys.len(), "not enough keypairs");
-        self.sign_unchecked(keypairs, recent_blockhash);
+        self.partial_sign(keypairs, recent_blockhash);
+
+        assert_eq!(self.is_signed(), true, "not enough keypairs");
     }
 
     /// Sign using some subset of required keys

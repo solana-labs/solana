@@ -333,13 +333,14 @@ impl ReplayStage {
 
             // Send our last few votes along with the new one
             let vote_ix = vote_instruction::vote(
-                &node_keypair.pubkey(),
                 &vote_account,
                 &voting_keypair.pubkey(),
                 locktower.recent_votes(),
             );
 
-            let mut vote_tx = Transaction::new_unsigned_instructions(vec![vote_ix]);
+            let mut vote_tx =
+                Transaction::new_with_payer(vec![vote_ix], Some(&node_keypair.pubkey()));;
+
             let blockhash = bank.last_blockhash();
             vote_tx.partial_sign(&[node_keypair.as_ref()], blockhash);
             vote_tx.partial_sign(&[voting_keypair.as_ref()], blockhash);
