@@ -620,8 +620,8 @@ mod tests {
         blocktree.insert_data_blobs(&blobs).unwrap();
 
         // Write roots so that these slots will qualify to be sent by the repairman
-        blocktree.set_root(0, 0).unwrap();
-        blocktree.set_root(num_slots - 1, 0).unwrap();
+        let roots: Vec<_> = (0..=num_slots - 1).collect();
+        blocktree.set_roots(&roots).unwrap();
 
         // Set up my information
         let my_pubkey = Pubkey::new_rand();
@@ -696,8 +696,8 @@ mod tests {
         blocktree.insert_data_blobs(&blobs).unwrap();
 
         // Write roots so that these slots will qualify to be sent by the repairman
-        blocktree.set_root(0, 0).unwrap();
-        blocktree.set_root(slots_per_epoch * 2 - 1, 0).unwrap();
+        let roots: Vec<_> = (0..=slots_per_epoch * 2 - 1).collect();
+        blocktree.set_roots(&roots).unwrap();
 
         // Set up my information
         let my_pubkey = Pubkey::new_rand();

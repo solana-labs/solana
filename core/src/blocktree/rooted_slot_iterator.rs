@@ -51,7 +51,7 @@ mod tests {
     fn test_rooted_slot_iterator() {
         let blocktree_path = get_tmp_ledger_path("test_rooted_slot_iterator");
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
-        blocktree.set_root(0, 0).unwrap();
+        blocktree.set_roots(&[0]).unwrap();
         let ticks_per_slot = 5;
         /*
             Build a blocktree in the ledger with the following fork structure:
@@ -98,7 +98,7 @@ mod tests {
             fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 4, fork_point, fork_hash);
 
         // Set a root
-        blocktree.set_root(3, 0).unwrap();
+        blocktree.set_roots(&[1, 2, 3]).unwrap();
 
         // Trying to get an iterator on a different fork will error
         assert!(RootedSlotIterator::new(4, &blocktree).is_err());

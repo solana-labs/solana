@@ -316,10 +316,9 @@ impl ReplayStage {
                 .map(|bank| bank.slot())
                 .collect::<Vec<_>>();
             rooted_slots.push(root_bank.slot());
-            let old_root = bank_forks.read().unwrap().root();
             blocktree
-                .set_root(new_root, old_root)
-                .expect("Ledger set root failed");
+                .set_roots(&rooted_slots)
+                .expect("Ledger set roots failed");
             // Set root first in leader schedule_cache before bank_forks because bank_forks.root
             // is consumed by repair_service to update gossip, so we don't want to get blobs for
             // repair on gossip before we update leader schedule, otherwise they may get dropped.
