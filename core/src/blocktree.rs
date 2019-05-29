@@ -177,6 +177,15 @@ impl Blocktree {
         self.meta_cf.get(slot)
     }
 
+    pub fn is_full(&self, slot: u64) -> bool {
+        if let Ok(meta) = self.meta_cf.get(slot) {
+            if let Some(meta) = meta {
+                return meta.is_full();
+            }
+        }
+        false
+    }
+
     pub fn erasure_meta(&self, slot: u64, set_index: u64) -> Result<Option<ErasureMeta>> {
         self.erasure_meta_cf.get((slot, set_index))
     }
