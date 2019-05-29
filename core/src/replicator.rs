@@ -523,7 +523,7 @@ impl Replicator {
                 return Ok((storage_blockhash, storage_slot));
             }
             info!("waiting for segment...");
-            sleep(Duration::from_secs(10));
+            sleep(Duration::from_secs(5));
         }
         Err(Error::new(
             ErrorKind::Other,

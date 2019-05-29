@@ -175,7 +175,6 @@ pub fn process_blocktree(
     let mut fork_info = vec![];
     let mut last_status_report = Instant::now();
     let mut root = 0;
-
     while !pending_slots.is_empty() {
         let (slot, meta, bank, mut entry_height, mut last_entry_hash) =
             pending_slots.pop().unwrap();
@@ -867,7 +866,7 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries(&bank, &[entry_1_to_mint, entry_2_to_3_mint_to_1],),
+            process_entries(&bank, &[entry_1_to_mint, entry_2_to_3_mint_to_1]),
             Ok(())
         );
 
@@ -935,7 +934,7 @@ pub mod tests {
 
         assert!(process_entries(
             &bank,
-            &[entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()],
+            &[entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()]
         )
         .is_err());
 
@@ -1044,7 +1043,7 @@ pub mod tests {
                 entry_1_to_mint.clone(),
                 entry_2_to_3_and_1_to_mint.clone(),
                 entry_conflict_itself.clone()
-            ],
+            ]
         )
         .is_err());
 
@@ -1152,7 +1151,7 @@ pub mod tests {
         );
         let entry_2 = next_entry(&tick.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()],),
+            process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()]),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
