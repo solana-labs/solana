@@ -967,18 +967,18 @@ impl ClusterInfo {
     }
     fn new_push_requests(&mut self) -> Vec<(SocketAddr, Protocol)> {
         let self_id = self.gossip.id;
-        let (_, peers, msgs) = self.gossip.new_push_messages(timestamp());
-        peers
+        let (_, push_messages) = self.gossip.new_push_messages(timestamp());
+        push_messages
             .into_iter()
-            .filter_map(|p| {
-                let peer_label = CrdsValueLabel::ContactInfo(p);
+            .filter_map(|(peer, messages)| {
+                let peer_label = CrdsValueLabel::ContactInfo(peer);
                 self.gossip
                     .crds
                     .lookup(&peer_label)
                     .and_then(CrdsValue::contact_info)
-                    .map(|p| p.gossip)
+                    .map(|p| (p.gossip, messages))
             })
-            .map(|peer| (peer, Protocol::PushMessage(self_id, msgs.clone())))
+            .map(|(peer, msgs)| (peer, Protocol::PushMessage(self_id, msgs)))
             .collect()
     }
 
@@ -2091,11 +2091,14 @@ mod tests {
         let mut cluster_info = ClusterInfo::new(contact_info.clone(), Arc::new(keypair));
         cluster_info.set_leader(&leader.id);
         cluster_info.insert_info(peer.clone());
+        cluster_info.gossip.refresh_push_active_set(&HashMap::new());
         //check that all types of gossip messages are signed correctly
-        let (_, _, vals) = cluster_info.gossip.new_push_messages(timestamp());
+        let (_, push_messages) = cluster_info.gossip.new_push_messages(timestamp());
         // there should be some pushes ready
-        assert!(vals.len() > 0);
-        vals.par_iter().for_each(|v| assert!(v.verify()));
+        assert_eq!(push_messages.len() > 0, true);
+        push_messages
+            .values()
+            .for_each(|v| v.par_iter().for_each(|v| assert!(v.verify())));
 
         let (_, _, val) = cluster_info
             .gossip
