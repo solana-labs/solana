@@ -1,11 +1,8 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use crate::packet::{
-    deserialize_packets_in_blob, Blob, Meta, Packets, SharedBlobs, PACKET_DATA_SIZE,
-};
+use crate::packet::{Blob, Packets, SharedBlobs};
 use crate::result::{Error, Result};
-use bincode;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -135,25 +132,9 @@ fn recv_blob_packets(sock: &UdpSocket, s: &PacketSender) -> Result<()> {
         sock.local_addr().unwrap()
     );
 
-    let meta = Meta::default();
-    let serialized_meta_size = bincode::serialized_size(&meta)? as usize;
-    let serialized_packet_size = serialized_meta_size + PACKET_DATA_SIZE;
     let blobs = Blob::recv_from(sock)?;
     for blob in blobs {
-        let r_blob = blob.read().unwrap();
-        let data = {
-            let msg_size = r_blob.size();
-            &r_blob.data()[..msg_size]
-        };
-
-        let packets =
-            deserialize_packets_in_blob(data, serialized_packet_size, serialized_meta_size);
-
-        if packets.is_err() {
-            continue;
-        }
-
-        let packets = packets?;
+        let packets = blob.read().unwrap().load_packets();
         s.send(Packets::new(packets))?;
     }
 
