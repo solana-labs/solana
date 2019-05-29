@@ -98,7 +98,7 @@ impl CrdsGossipPush {
     /// peers.
     /// The list of push messages is created such that all the randomly selected peers have not
     /// pruned the source addresses.
-    pub fn new_push_messages(&mut self, crds: &Crds, now: u64) -> (Vec<Pubkey>, Vec<CrdsValue>) {
+    pub fn new_push_messages(&mut self, crds: &Crds, now: u64) -> HashMap<Pubkey, Vec<CrdsValue>> {
         let max = self.active_set.len();
         let mut nodes: Vec<_> = (0..max).collect();
         nodes.shuffle(&mut rand::thread_rng());
@@ -110,15 +110,8 @@ impl CrdsGossipPush {
             .collect();
         let mut total_bytes: usize = 0;
         let mut values = vec![];
+        let mut push_messages: HashMap<Pubkey, Vec<CrdsValue>> = HashMap::new();
         for (label, hash) in &self.push_messages {
-            let mut failed = false;
-            for p in &peers {
-                let filter = self.active_set.get_mut(p);
-                failed |= filter.is_none() || filter.unwrap().contains(&label.pubkey());
-            }
-            if failed {
-                continue;
-            }
             let res = crds.lookup_versioned(label);
             if res.is_none() {
                 continue;
@@ -137,10 +130,16 @@ impl CrdsGossipPush {
             }
             values.push(value.clone());
         }
-        for v in &values {
+        for v in values {
+            for p in peers.iter() {
+                let filter = self.active_set.get_mut(p);
+                if filter.is_some() && !filter.unwrap().contains(&v.label().pubkey()) {
+                    push_messages.entry(*p).or_default().push(v.clone());
+                }
+            }
             self.push_messages.remove(&v.label());
         }
-        (peers, values)
+        push_messages
     }
 
     /// add the `from` to the peer's filter of nodes
@@ -420,15 +419,11 @@ mod test {
         push.refresh_push_active_set(&crds, &HashMap::new(), &Pubkey::default(), 1, 1);
 
         let new_msg = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
-        assert_eq!(
-            push.process_push_message(&mut crds, new_msg.clone(), 0),
-            Ok(None)
-        );
+        let mut expected = HashMap::new();
+        expected.insert(peer.label().pubkey(), vec![new_msg.clone()]);
+        assert_eq!(push.process_push_message(&mut crds, new_msg, 0), Ok(None));
         assert_eq!(push.active_set.len(), 1);
-        assert_eq!(
-            push.new_push_messages(&crds, 0),
-            (vec![peer.label().pubkey()], vec![new_msg])
-        );
+        assert_eq!(push.new_push_messages(&crds, 0), expected);
     }
     #[test]
     fn test_process_prune() {
@@ -439,15 +434,13 @@ mod test {
         push.refresh_push_active_set(&crds, &HashMap::new(), &Pubkey::default(), 1, 1);
 
         let new_msg = CrdsValue::ContactInfo(ContactInfo::new_localhost(&Pubkey::new_rand(), 0));
+        let expected = HashMap::new();
         assert_eq!(
             push.process_push_message(&mut crds, new_msg.clone(), 0),
             Ok(None)
         );
         push.process_prune_msg(&peer.label().pubkey(), &[new_msg.label().pubkey()]);
-        assert_eq!(
-            push.new_push_messages(&crds, 0),
-            (vec![peer.label().pubkey()], vec![])
-        );
+        assert_eq!(push.new_push_messages(&crds, 0), expected);
     }
     #[test]
     fn test_purge_old_pending_push_messages() {
@@ -460,15 +453,13 @@ mod test {
         let mut ci = ContactInfo::new_localhost(&Pubkey::new_rand(), 0);
         ci.wallclock = 1;
         let new_msg = CrdsValue::ContactInfo(ci.clone());
+        let expected = HashMap::new();
         assert_eq!(
             push.process_push_message(&mut crds, new_msg.clone(), 1),
             Ok(None)
         );
         push.purge_old_pending_push_messages(&crds, 0);
-        assert_eq!(
-            push.new_push_messages(&crds, 0),
-            (vec![peer.label().pubkey()], vec![])
-        );
+        assert_eq!(push.new_push_messages(&crds, 0), expected);
     }
 
     #[test]

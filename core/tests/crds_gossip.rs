@@ -171,12 +171,12 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
             .collect();
         let transfered: Vec<_> = requests
             .into_par_iter()
-            .map(|(from, peers, msgs)| {
+            .map(|(from, push_messages)| {
                 let mut bytes: usize = 0;
                 let mut delivered: usize = 0;
                 let mut num_msgs: usize = 0;
                 let mut prunes: usize = 0;
-                for to in peers {
+                for (to, msgs) in push_messages {
                     bytes += serialized_size(&msgs).unwrap() as usize;
                     num_msgs += 1;
                     let rsps = network

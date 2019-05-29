@@ -65,9 +65,9 @@ impl CrdsGossip {
             .collect()
     }
 
-    pub fn new_push_messages(&mut self, now: u64) -> (Pubkey, Vec<Pubkey>, Vec<CrdsValue>) {
-        let (peers, values) = self.push.new_push_messages(&self.crds, now);
-        (self.id, peers, values)
+    pub fn new_push_messages(&mut self, now: u64) -> (Pubkey, HashMap<Pubkey, Vec<CrdsValue>>) {
+        let push_messages = self.push.new_push_messages(&self.crds, now);
+        (self.id, push_messages)
     }
 
     /// add the `from` to the peer's filter of nodes
