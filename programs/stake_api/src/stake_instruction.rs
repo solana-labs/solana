@@ -4,6 +4,7 @@ use bincode::deserialize;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::credit_only_account::KeyedCreditOnlyAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction;
@@ -121,6 +122,7 @@ pub fn delegate_stake(
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
+    _keyed_credit_only_accounts: &mut [KeyedCreditOnlyAccount],
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), InstructionError> {
@@ -193,6 +195,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut keyed_accounts,
+                &mut [],
                 &instruction.data,
                 0,
             )
@@ -233,6 +236,7 @@ mod tests {
                     false,
                     &mut Account::default(),
                 )],
+                &mut [],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
                 0,
             ),
@@ -247,6 +251,7 @@ mod tests {
                     KeyedAccount::new(&Pubkey::default(), true, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                 ],
+                &mut [],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
                 0,
             ),
@@ -261,6 +266,7 @@ mod tests {
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                 ],
+                &mut [],
                 &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
                 0,
             ),
@@ -276,6 +282,7 @@ mod tests {
                     KeyedAccount::new(&Pubkey::default(), true, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                 ],
+                &mut [],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
                 0,
             ),
@@ -292,6 +299,7 @@ mod tests {
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                 ],
+                &mut [],
                 &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
                 0,
             ),

@@ -4,6 +4,7 @@
 use crate::storage_contract::StorageAccount;
 use crate::storage_instruction::StorageInstruction;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::credit_only_account::KeyedCreditOnlyAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
@@ -11,6 +12,7 @@ use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
+    _keyed_credit_only_accounts: &mut [KeyedCreditOnlyAccount],
     data: &[u8],
     tick_height: u64,
 ) -> Result<(), InstructionError> {
@@ -133,7 +135,7 @@ mod tests {
             })
             .collect();
 
-        let ret = process_instruction(&id(), &mut keyed_accounts, &ix.data, tick_height);
+        let ret = process_instruction(&id(), &mut keyed_accounts, &mut [], &ix.data, tick_height);
         info!("ret: {:?}", ret);
         ret
     }
@@ -171,7 +173,7 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let mut accounts = [(pubkey, Account::default())];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
-        assert!(process_instruction(&id(), &mut keyed_accounts, &[], 42).is_err());
+        assert!(process_instruction(&id(), &mut keyed_accounts, &mut [], &[], 42).is_err());
     }
 
     #[test]
@@ -188,7 +190,7 @@ mod tests {
         );
 
         assert_eq!(
-            process_instruction(&id(), &mut keyed_accounts, &ix.data, 42),
+            process_instruction(&id(), &mut keyed_accounts, &mut [], &ix.data, 42),
             Err(InstructionError::InvalidAccountData)
         );
     }

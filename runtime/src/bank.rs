@@ -664,7 +664,7 @@ impl Bank {
                     Err(e) => Err(e.clone()),
                     Ok((ref mut accounts, ref mut loaders)) => self
                         .message_processor
-                        .process_message(tx.message(), loaders, accounts, tick_height),
+                        .process_message(tx.message(), loaders, accounts, &mut [], tick_height),
                 })
                 .collect();
 

@@ -1,5 +1,6 @@
 use log::*;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::credit_only_account::KeyedCreditOnlyAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::{SystemError, SystemInstruction};
@@ -69,6 +70,7 @@ fn transfer_lamports(
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
+    _keyed_credit_only_accounts: &mut [KeyedCreditOnlyAccount],
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), InstructionError> {
@@ -246,7 +248,13 @@ mod tests {
             program_id: another_program_owner,
         };
         let data = serialize(&instruction).unwrap();
-        let result = process_instruction(&system_program::id(), &mut keyed_accounts, &data, 0);
+        let result = process_instruction(
+            &system_program::id(),
+            &mut keyed_accounts,
+            &mut [],
+            &data,
+            0,
+        );
         assert_eq!(result, Err(InstructionError::IncorrectProgramId));
         assert_eq!(from_account.owner, new_program_owner);
     }

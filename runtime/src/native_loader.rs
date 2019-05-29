@@ -7,6 +7,7 @@ use libloading::os::unix::*;
 use libloading::os::windows::*;
 use log::*;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::credit_only_account::KeyedCreditOnlyAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::loader_instruction::LoaderInstruction;
@@ -58,6 +59,7 @@ fn create_path(name: &str) -> PathBuf {
 pub fn entrypoint(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
+    keyed_credit_only_accounts: &mut [KeyedCreditOnlyAccount],
     ix_data: &[u8],
     tick_height: u64,
     symbol_cache: &SymbolCache,
@@ -68,7 +70,13 @@ pub fn entrypoint(
         let name_vec = &names[0].account.data;
         if let Some(entrypoint) = symbol_cache.read().unwrap().get(name_vec) {
             unsafe {
-                return entrypoint(program_id, params, ix_data, tick_height);
+                return entrypoint(
+                    program_id,
+                    params,
+                    keyed_credit_only_accounts,
+                    ix_data,
+                    tick_height,
+                );
             }
         }
         let name = match str::from_utf8(name_vec) {
@@ -95,7 +103,13 @@ pub fn entrypoint(
                             return Err(InstructionError::GenericError);
                         }
                     };
-                let ret = entrypoint(program_id, params, ix_data, tick_height);
+                let ret = entrypoint(
+                    program_id,
+                    params,
+                    keyed_credit_only_accounts,
+                    ix_data,
+                    tick_height,
+                );
                 symbol_cache
                     .write()
                     .unwrap()

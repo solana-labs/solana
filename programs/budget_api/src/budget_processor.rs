@@ -6,6 +6,7 @@ use bincode::deserialize;
 use chrono::prelude::{DateTime, Utc};
 use log::*;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::credit_only_account::KeyedCreditOnlyAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 
@@ -73,6 +74,7 @@ fn apply_timestamp(
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
+    _keyed_credit_only_accounts: &mut [KeyedCreditOnlyAccount],
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), InstructionError> {

@@ -9,6 +9,7 @@ use libc::c_char;
 use log::*;
 use solana_rbpf::{EbpfVmRaw, MemoryRegion};
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::credit_only_account::KeyedCreditOnlyAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
@@ -280,6 +281,7 @@ solana_entrypoint!(entrypoint);
 fn entrypoint(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
+    _keyed_credit_only_accounts: &mut [KeyedCreditOnlyAccount],
     tx_data: &[u8],
     tick_height: u64,
 ) -> Result<(), InstructionError> {

@@ -8,6 +8,7 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics::datapoint_warn;
 use solana_sdk::account::KeyedAccount;
+use solana_sdk::credit_only_account::KeyedCreditOnlyAccount;
 use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::syscall::slot_hashes;
@@ -108,6 +109,7 @@ pub fn vote(
 pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
+    _keyed_credit_only_accounts: &mut [KeyedCreditOnlyAccount],
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), InstructionError> {
@@ -150,7 +152,7 @@ mod tests {
     #[test]
     fn test_vote_process_instruction_decode_bail() {
         assert_eq!(
-            super::process_instruction(&Pubkey::default(), &mut [], &[], 0,),
+            super::process_instruction(&Pubkey::default(), &mut [], &mut [], &[], 0,),
             Err(InstructionError::InvalidInstructionData),
         );
     }
@@ -170,6 +172,7 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut keyed_accounts,
+                &mut [],
                 &instruction.data,
                 0,
             )

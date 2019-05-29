@@ -1,4 +1,5 @@
 use crate::account::KeyedAccount;
+use crate::credit_only_account::KeyedCreditOnlyAccount;
 use crate::instruction::InstructionError;
 use crate::pubkey::Pubkey;
 use num_traits::FromPrimitive;
@@ -10,6 +11,7 @@ pub const ENTRYPOINT: &str = "process";
 pub type Entrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
+    keyed_credit_only_accounts: &mut [KeyedCreditOnlyAccount],
     data: &[u8],
     tick_height: u64,
 ) -> Result<(), InstructionError>;
@@ -23,10 +25,11 @@ macro_rules! solana_entrypoint(
         pub extern "C" fn process(
             program_id: &solana_sdk::pubkey::Pubkey,
             keyed_accounts: &mut [solana_sdk::account::KeyedAccount],
+            keyed_credit_only_accounts: &mut [solana_sdk::credit_only_account::KeyedCreditOnlyAccount],
             data: &[u8],
             tick_height: u64
         ) -> Result<(), solana_sdk::instruction::InstructionError> {
-            $entrypoint(program_id, keyed_accounts, data, tick_height)
+            $entrypoint(program_id, keyed_accounts, keyed_credit_only_accounts, data, tick_height)
         }
     )
 );

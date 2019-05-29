@@ -1,14 +1,16 @@
 use crate::native_loader;
 use crate::system_instruction_processor;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
+use solana_sdk::credit_only_account::{CreditOnlyAccount, KeyedCreditOnlyAccount};
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
-use solana_sdk::message::Message;
+use solana_sdk::message::{position, Message};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
 use solana_sdk::transaction::TransactionError;
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, RwLock};
 
 #[cfg(unix)]
 use libloading::os::unix::*;
@@ -80,8 +82,13 @@ fn verify_instruction(
     Ok(())
 }
 
-pub type ProcessInstruction =
-    fn(&Pubkey, &mut [KeyedAccount], &[u8], u64) -> Result<(), InstructionError>;
+pub type ProcessInstruction = fn(
+    &Pubkey,
+    &mut [KeyedAccount],
+    &mut [KeyedCreditOnlyAccount],
+    &[u8],
+    u64,
+) -> Result<(), InstructionError>;
 
 pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<instruction_processor_utils::Entrypoint>>>;
 
@@ -123,6 +130,7 @@ impl MessageProcessor {
         instruction: &CompiledInstruction,
         executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
+        mut keyed_credit_only_accounts: &mut [KeyedCreditOnlyAccount],
         tick_height: u64,
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
@@ -146,6 +154,7 @@ impl MessageProcessor {
                 return process_instruction(
                     &program_id,
                     &mut keyed_accounts[1..],
+                    &mut keyed_credit_only_accounts,
                     &instruction.data,
                     tick_height,
                 );
@@ -155,6 +164,7 @@ impl MessageProcessor {
         native_loader::entrypoint(
             &program_id,
             &mut keyed_accounts,
+            &mut keyed_credit_only_accounts,
             &instruction.data,
             tick_height,
             &self.symbol_cache,
@@ -170,29 +180,46 @@ impl MessageProcessor {
         message: &Message,
         instruction: &CompiledInstruction,
         executable_accounts: &mut [(Pubkey, Account)],
-        program_accounts: &mut [&mut Account],
+        program_credit_debit_accounts: &mut [&mut Account],
+        program_credit_only_accounts: &[&Arc<CreditOnlyAccount>],
         tick_height: u64,
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard-coded programs not to clobber or allocate
-        let pre_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
-        let pre_data: Vec<_> = program_accounts
+        let pre_total: u64 = program_credit_debit_accounts
+            .iter()
+            .map(|a| a.lamports)
+            .sum();
+        let pre_data: Vec<_> = program_credit_debit_accounts
             .iter_mut()
             .map(|a| (a.owner, a.lamports, a.data.clone()))
+            .collect();
+
+        let mut keyed_credit_only_accounts: Vec<_> = message
+            .get_account_keys_by_lock_type()
+            .1
+            .iter()
+            .zip(program_credit_only_accounts.iter())
+            .map(|(key, account)| {
+                let is_signer =
+                    position(&message.account_keys, key) < message.header.num_required_signatures;
+                KeyedCreditOnlyAccount::new(key, is_signer, account)
+            })
             .collect();
 
         self.process_instruction(
             message,
             instruction,
             executable_accounts,
-            program_accounts,
+            program_credit_debit_accounts,
+            &mut keyed_credit_only_accounts,
             tick_height,
         )?;
 
         // Verify the instruction
         for ((pre_program_id, pre_lamports, pre_data), post_account) in
-            pre_data.iter().zip(program_accounts.iter())
+            pre_data.iter().zip(program_credit_debit_accounts.iter())
         {
             verify_instruction(
                 &program_id,
@@ -203,9 +230,17 @@ impl MessageProcessor {
             )?;
         }
         // The total sum of all the lamports in all the accounts cannot change.
-        let post_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
+        let credit_debit_total: u64 = program_credit_debit_accounts
+            .iter()
+            .map(|a| a.lamports)
+            .sum();
+        let credit_only_credits: u64 = keyed_credit_only_accounts.iter().map(|a| a.credits).sum();
+        let post_total = credit_debit_total + credit_only_credits;
         if pre_total != post_total {
             return Err(InstructionError::UnbalancedInstruction);
+        }
+        for ka in keyed_credit_only_accounts {
+            ka.account.lamports.fetch_add(ka.credits, Ordering::Relaxed);
         }
         Ok(())
     }
@@ -217,7 +252,8 @@ impl MessageProcessor {
         &self,
         message: &Message,
         loaders: &mut [Vec<(Pubkey, Account)>],
-        accounts: &mut [Account],
+        credit_debit_accounts: &mut [Account],
+        credit_only_accounts: &mut [&Arc<CreditOnlyAccount>],
         tick_height: u64,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
@@ -225,16 +261,52 @@ impl MessageProcessor {
                 .program_position(instruction.program_ids_index as usize)
                 .ok_or(TransactionError::InvalidAccountIndex)?;
             let executable_accounts = &mut loaders[executable_index];
-            let mut program_accounts = get_subset_unchecked_mut(accounts, &instruction.accounts)
-                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+
+            let (message_credit_debit_indexes, message_credit_only_indexes) =
+                message.get_account_indexes_by_lock_type();
+
+            let credit_debit_indexes: Vec<u8> = instruction
+                .accounts
+                .iter()
+                .filter(|&&i| message.is_credit_debit(i as usize))
+                .map(|&i| {
+                    message_credit_debit_indexes
+                        .iter()
+                        .position(|&x| x == i)
+                        .unwrap() as u8
+                })
+                .collect();
+            let credit_only_indexes: Vec<u8> = instruction
+                .accounts
+                .iter()
+                .filter(|&&i| !message.is_credit_debit(i as usize))
+                .map(|&i| {
+                    message_credit_only_indexes
+                        .iter()
+                        .position(|&x| x == i)
+                        .unwrap() as u8
+                })
+                .collect();
+
+            let mut program_credit_debit_accounts =
+                get_subset_unchecked_mut(credit_debit_accounts, &credit_debit_indexes).map_err(
+                    |err| TransactionError::InstructionError(instruction_index as u8, err),
+                )?;
             // TODO: `get_subset_unchecked_mut` panics on an index out of bounds if an executable
             // account is also included as a regular account for an instruction, because the
             // executable account is not passed in as part of the accounts slice
+
+            let program_credit_only_accounts: Vec<_> = credit_only_indexes
+                .iter()
+                .map(|i| credit_only_accounts[*i as usize])
+                .collect();
+
             self.execute_instruction(
                 message,
                 instruction,
                 executable_accounts,
-                &mut program_accounts,
+                &mut program_credit_debit_accounts,
+                &program_credit_only_accounts,
                 tick_height,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
@@ -328,5 +400,108 @@ mod tests {
             Err(InstructionError::ExternalAccountDataModified),
             "malicious Mallory should not be able to change the account data"
         );
+    }
+
+    #[test]
+    fn test_process_message_credit_only_handling() {
+        use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
+        use solana_sdk::message::Message;
+        use solana_sdk::native_loader::{create_loadable_account, id};
+
+        #[derive(Serialize, Deserialize)]
+        enum MockSystemInstruction {
+            Correct { lamports: u64 },
+            Misbehave { lamports: u64 },
+        }
+
+        fn mock_system_process_instruction(
+            _program_id: &Pubkey,
+            keyed_accounts: &mut [KeyedAccount],
+            keyed_credit_only_accounts: &mut [KeyedCreditOnlyAccount],
+            data: &[u8],
+            _tick_height: u64,
+        ) -> Result<(), InstructionError> {
+            if let Ok(instruction) = bincode::deserialize(data) {
+                match instruction {
+                    MockSystemInstruction::Correct { lamports } => {
+                        keyed_accounts[0].account.lamports -= lamports;
+                        keyed_credit_only_accounts[0].credit(lamports);
+                        Ok(())
+                    }
+                    // Credit a credit-only account for more lamports than debited
+                    MockSystemInstruction::Misbehave { lamports } => {
+                        keyed_accounts[0].account.lamports -= lamports;
+                        keyed_credit_only_accounts[0].credit(2 * lamports);
+                        Ok(())
+                    }
+                }
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
+
+        let mock_system_program_id = Pubkey::new(&[2u8; 32]);
+        let mut message_processor = MessageProcessor::default();
+        message_processor
+            .add_instruction_processor(mock_system_program_id, mock_system_process_instruction);
+
+        let mut credit_debit_accounts: Vec<Account> = Vec::new();
+        let account = Account::new(100, 1, &mock_system_program_id);
+        credit_debit_accounts.push(account);
+
+        let mut credit_only_accounts: Vec<&Arc<CreditOnlyAccount>> = Vec::new();
+        let account = Account::new(0, 1, &Pubkey::default());
+        let credit_only_account = Arc::new(CreditOnlyAccount::from(account));
+        credit_only_accounts.push(&credit_only_account);
+
+        let mut loaders: Vec<Vec<(Pubkey, Account)>> = Vec::new();
+        let account = create_loadable_account("mock_system_program");
+        loaders.push(vec![(id(), account)]);
+
+        let from_pubkey = Pubkey::new_rand();
+        let to_pubkey = Pubkey::new_rand();
+        let account_metas = vec![
+            AccountMeta::new(from_pubkey, true),
+            AccountMeta::new_credit_only(to_pubkey, false),
+        ];
+        let message = Message::new(vec![Instruction::new(
+            mock_system_program_id,
+            &MockSystemInstruction::Correct { lamports: 50 },
+            account_metas.clone(),
+        )]);
+
+        let result = message_processor.process_message(
+            &message,
+            &mut loaders,
+            &mut credit_debit_accounts,
+            &mut credit_only_accounts,
+            0,
+        );
+        assert_eq!(result, Ok(()));
+        assert_eq!(credit_debit_accounts[0].lamports, 50);
+        assert_eq!(credit_only_accounts[0].lamports.load(Ordering::Relaxed), 50);
+
+        let message = Message::new(vec![Instruction::new(
+            mock_system_program_id,
+            &MockSystemInstruction::Misbehave { lamports: 50 },
+            account_metas,
+        )]);
+
+        let result = message_processor.process_message(
+            &message,
+            &mut loaders,
+            &mut credit_debit_accounts,
+            &mut credit_only_accounts,
+            0,
+        );
+        assert_eq!(
+            result,
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::UnbalancedInstruction
+            ))
+        );
+        // Check credit-only accounts are not credited on a failed instruction
+        assert_eq!(credit_only_accounts[0].lamports.load(Ordering::Relaxed), 50);
     }
 }
