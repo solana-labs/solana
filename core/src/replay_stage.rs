@@ -14,7 +14,6 @@ use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use hashbrown::HashMap;
-use rayon::ThreadPool;
 use solana_metrics::{datapoint_warn, inc_new_counter_error, inc_new_counter_info};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
@@ -29,10 +28,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
-use sys_info;
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
-pub const NUM_THREADS: u32 = 10;
 
 // Implement a destructor for the ReplayStage thread to signal it exited
 // even on panics
@@ -109,11 +106,6 @@ impl ReplayStage {
             .spawn(move || {
                 let _exit = Finalizer::new(exit_.clone());
                 let mut progress = HashMap::new();
-                let thread_pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
-                    .build()
-                    .unwrap();
-
                 loop {
                     let now = Instant::now();
                     // Stop getting entries if we get exit signal
@@ -136,7 +128,6 @@ impl ReplayStage {
                         &mut ticks_per_slot,
                         &mut progress,
                         &slot_full_sender,
-                        &thread_pool,
                     )?;
 
                     if ticks_per_slot == 0 {
@@ -280,11 +271,10 @@ impl ReplayStage {
         bank: &Bank,
         blocktree: &Blocktree,
         progress: &mut HashMap<u64, ForkProgress>,
-        thread_pool: &ThreadPool,
     ) -> Result<()> {
         let (entries, num) = Self::load_blocktree_entries(bank, blocktree, progress)?;
         let len = entries.len();
-        let result = Self::replay_entries_into_bank(bank, entries, progress, num, &thread_pool);
+        let result = Self::replay_entries_into_bank(bank, entries, progress, num);
         if result.is_ok() {
             trace!("verified entries {}", len);
             inc_new_counter_info!("replicate-stage_process_entries", len);
@@ -390,7 +380,6 @@ impl ReplayStage {
         ticks_per_slot: &mut u64,
         progress: &mut HashMap<u64, ForkProgress>,
         slot_full_sender: &Sender<(u64, Pubkey)>,
-        thread_pool: &ThreadPool,
     ) -> Result<()> {
         let active_banks = bank_forks.read().unwrap().active_banks();
         trace!("active banks {:?}", active_banks);
@@ -399,7 +388,7 @@ impl ReplayStage {
             let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
             *ticks_per_slot = bank.ticks_per_slot();
             if bank.collector_id() != *my_pubkey {
-                Self::replay_blocktree_into_bank(&bank, &blocktree, progress, &thread_pool)?;
+                Self::replay_blocktree_into_bank(&bank, &blocktree, progress)?;
             }
             let max_tick_height = (*bank_slot + 1) * bank.ticks_per_slot() - 1;
             if bank.tick_height() == max_tick_height {
@@ -530,17 +519,11 @@ impl ReplayStage {
         entries: Vec<Entry>,
         progress: &mut HashMap<u64, ForkProgress>,
         num: usize,
-        thread_pool: &ThreadPool,
     ) -> Result<()> {
         let bank_progress = &mut progress
             .entry(bank.slot())
             .or_insert(ForkProgress::new(bank.last_blockhash()));
-        let result = Self::verify_and_process_entries(
-            &bank,
-            &entries,
-            &bank_progress.last_entry,
-            &thread_pool,
-        );
+        let result = Self::verify_and_process_entries(&bank, &entries, &bank_progress.last_entry);
         bank_progress.num_blobs += num;
         if let Some(last_entry) = entries.last() {
             bank_progress.last_entry = last_entry.hash;
@@ -552,7 +535,6 @@ impl ReplayStage {
         bank: &Bank,
         entries: &[Entry],
         last_entry: &Hash,
-        thread_pool: &ThreadPool,
     ) -> Result<()> {
         if !entries.verify(last_entry) {
             trace!(
@@ -564,7 +546,7 @@ impl ReplayStage {
             );
             return Err(Error::BlobError(BlobError::VerificationFailed));
         }
-        blocktree_processor::process_entries(bank, entries, &thread_pool)?;
+        blocktree_processor::process_entries(bank, entries)?;
 
         Ok(())
     }

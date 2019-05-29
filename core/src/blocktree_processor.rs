@@ -17,6 +17,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub const NUM_THREADS: u32 = 10;
+use std::cell::RefCell;
+
+thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
+                    .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                    .build()
+                    .unwrap()));
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
@@ -30,36 +36,37 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
 fn par_execute_entries(
     bank: &Bank,
     entries: &[(&Entry, LockedAccountsResults<Transaction>)],
-    thread_pool: &ThreadPool,
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", entries.len());
-    let results: Vec<Result<()>> = thread_pool.install(|| {
-        entries
-            .into_par_iter()
-            .map(|(e, locked_accounts)| {
-                let results = bank.load_execute_and_commit_transactions(
-                    &e.transactions,
-                    locked_accounts,
-                    MAX_RECENT_BLOCKHASHES,
-                );
-                let mut first_err = None;
-                for (r, tx) in results.iter().zip(e.transactions.iter()) {
-                    if let Err(ref e) = r {
-                        if first_err.is_none() {
-                            first_err = Some(r.clone());
-                        }
-                        if !Bank::can_commit(&r) {
-                            warn!("Unexpected validator error: {:?}, tx: {:?}", e, tx);
-                            datapoint_error!(
-                                "validator_process_entry_error",
-                                ("error", format!("error: {:?}, tx: {:?}", e, tx), String)
-                            );
+    let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
+        thread_pool.borrow().install(|| {
+            entries
+                .into_par_iter()
+                .map(|(e, locked_accounts)| {
+                    let results = bank.load_execute_and_commit_transactions(
+                        &e.transactions,
+                        locked_accounts,
+                        MAX_RECENT_BLOCKHASHES,
+                    );
+                    let mut first_err = None;
+                    for (r, tx) in results.iter().zip(e.transactions.iter()) {
+                        if let Err(ref e) = r {
+                            if first_err.is_none() {
+                                first_err = Some(r.clone());
+                            }
+                            if !Bank::can_commit(&r) {
+                                warn!("Unexpected validator error: {:?}, tx: {:?}", e, tx);
+                                datapoint_error!(
+                                    "validator_process_entry_error",
+                                    ("error", format!("error: {:?}, tx: {:?}", e, tx), String)
+                                );
+                            }
                         }
                     }
-                }
-                first_err.unwrap_or(Ok(()))
-            })
-            .collect()
+                    first_err.unwrap_or(Ok(()))
+                })
+                .collect()
+        })
     });
 
     first_err(&results)
@@ -70,13 +77,13 @@ fn par_execute_entries(
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
-pub fn process_entries(bank: &Bank, entries: &[Entry], thread_pool: &ThreadPool) -> Result<()> {
+pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut mt_group = vec![];
     for entry in entries {
         if entry.is_tick() {
             // if its a tick, execute the group and register the tick
-            par_execute_entries(bank, &mt_group, &thread_pool)?;
+            par_execute_entries(bank, &mt_group)?;
             mt_group = vec![];
             bank.register_tick(&entry.hash);
             continue;
@@ -115,12 +122,12 @@ pub fn process_entries(bank: &Bank, entries: &[Entry], thread_pool: &ThreadPool)
             } else {
                 // else we have an entry that conflicts with a prior entry
                 // execute the current queue and try to process this entry again
-                par_execute_entries(bank, &mt_group, &thread_pool)?;
+                par_execute_entries(bank, &mt_group)?;
                 mt_group = vec![];
             }
         }
     }
-    par_execute_entries(bank, &mt_group, &thread_pool)?;
+    par_execute_entries(bank, &mt_group)?;
     Ok(())
 }
 
@@ -168,10 +175,6 @@ pub fn process_blocktree(
     let mut fork_info = vec![];
     let mut last_status_report = Instant::now();
     let mut root = 0;
-    let thread_pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
-        .build()
-        .unwrap();
 
     while !pending_slots.is_empty() {
         let (slot, meta, bank, mut entry_height, mut last_entry_hash) =
@@ -214,7 +217,7 @@ pub fn process_blocktree(
                 return Err(BlocktreeProcessorError::LedgerVerificationFailed);
             }
 
-            process_entries(&bank, &entries, &thread_pool).map_err(|err| {
+            process_entries(&bank, &entries).map_err(|err| {
                 warn!("Failed to process entries for slot {}: {:?}", slot, err);
                 BlocktreeProcessorError::LedgerVerificationFailed
             })?;
@@ -667,12 +670,8 @@ pub mod tests {
             Err(TransactionError::BlockhashNotFound)
         );
 
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build()
-            .unwrap();
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        process_entries(&bank, &slot_entries, &thread_pool).unwrap();
+        process_entries(&bank, &slot_entries).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -782,14 +781,7 @@ pub mod tests {
         // ensure bank can process a tick
         assert_eq!(bank.tick_height(), 0);
         let tick = next_entry(&genesis_block.hash(), 1, vec![]);
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build()
-            .unwrap();
-        assert_eq!(
-            process_entries(&bank, &[tick.clone()], &thread_pool),
-            Ok(())
-        );
+        assert_eq!(process_entries(&bank, &[tick.clone()]), Ok(()));
         assert_eq!(bank.tick_height(), 1);
     }
 
@@ -821,14 +813,7 @@ pub mod tests {
             bank.last_blockhash(),
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build()
-            .unwrap();
-        assert_eq!(
-            process_entries(&bank, &[entry_1, entry_2], &thread_pool),
-            Ok(())
-        );
+        assert_eq!(process_entries(&bank, &[entry_1, entry_2]), Ok(()));
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
         assert_eq!(bank.get_balance(&keypair2.pubkey()), 2);
         assert_eq!(bank.last_blockhash(), blockhash);
@@ -881,17 +866,8 @@ pub mod tests {
             ],
         );
 
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build()
-            .unwrap();
-
         assert_eq!(
-            process_entries(
-                &bank,
-                &[entry_1_to_mint, entry_2_to_3_mint_to_1],
-                &thread_pool
-            ),
+            process_entries(&bank, &[entry_1_to_mint, entry_2_to_3_mint_to_1],),
             Ok(())
         );
 
@@ -957,15 +933,9 @@ pub mod tests {
             ],
         );
 
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build()
-            .unwrap();
-
         assert!(process_entries(
             &bank,
             &[entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()],
-            &thread_pool,
         )
         .is_err());
 
@@ -1068,11 +1038,6 @@ pub mod tests {
         // keypair2=3
         // keypair3=3
 
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build()
-            .unwrap();
-
         assert!(process_entries(
             &bank,
             &[
@@ -1080,7 +1045,6 @@ pub mod tests {
                 entry_2_to_3_and_1_to_mint.clone(),
                 entry_conflict_itself.clone()
             ],
-            &thread_pool
         )
         .is_err());
 
@@ -1135,14 +1099,7 @@ pub mod tests {
             bank.last_blockhash(),
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build()
-            .unwrap();
-        assert_eq!(
-            process_entries(&bank, &[entry_1, entry_2], &thread_pool),
-            Ok(())
-        );
+        assert_eq!(process_entries(&bank, &[entry_1, entry_2]), Ok(()));
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
         assert_eq!(bank.last_blockhash(), blockhash);
@@ -1194,16 +1151,8 @@ pub mod tests {
             bank.last_blockhash(),
         );
         let entry_2 = next_entry(&tick.hash, 1, vec![tx]);
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build()
-            .unwrap();
         assert_eq!(
-            process_entries(
-                &bank,
-                &[entry_1.clone(), tick.clone(), entry_2.clone()],
-                &thread_pool
-            ),
+            process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()],),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -1217,12 +1166,8 @@ pub mod tests {
             bank.last_blockhash(),
         );
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build()
-            .unwrap();
         assert_eq!(
-            process_entries(&bank, &[entry_3], &thread_pool),
+            process_entries(&bank, &[entry_3]),
             Err(TransactionError::AccountNotFound)
         );
     }
@@ -1302,12 +1247,8 @@ pub mod tests {
             ],
         );
 
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build()
-            .unwrap();
         assert_eq!(
-            process_entries(&bank, &[entry_1_to_mint], &thread_pool),
+            process_entries(&bank, &[entry_1_to_mint]),
             Err(TransactionError::AccountInUse)
         );
 
@@ -1339,10 +1280,6 @@ pub mod tests {
 
         let mut i = 0;
         let mut hash = bank.last_blockhash();
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build()
-            .unwrap();
         loop {
             let entries: Vec<_> = (0..NUM_TRANSFERS)
                 .map(|i| {
@@ -1359,7 +1296,7 @@ pub mod tests {
                 })
                 .collect();
             info!("paying iteration {}", i);
-            process_entries(&bank, &entries, &thread_pool).expect("paying failed");
+            process_entries(&bank, &entries).expect("paying failed");
 
             let entries: Vec<_> = (0..NUM_TRANSFERS)
                 .map(|i| {
@@ -1377,7 +1314,7 @@ pub mod tests {
                 .collect();
 
             info!("refunding iteration {}", i);
-            process_entries(&bank, &entries, &thread_pool).expect("refunding failed");
+            process_entries(&bank, &entries).expect("refunding failed");
 
             // advance to next block
             process_entries(
@@ -1385,7 +1322,6 @@ pub mod tests {
                 &(0..bank.ticks_per_slot())
                     .map(|_| next_entry_mut(&mut hash, 1, vec![]))
                     .collect::<Vec<_>>(),
-                &thread_pool,
             )
             .expect("process ticks failed");
 
