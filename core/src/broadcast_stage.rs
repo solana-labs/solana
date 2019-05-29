@@ -14,6 +14,7 @@ use solana_metrics::{
     datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
     inc_new_counter_warn,
 };
+use solana_runtime::accounts_db::ParThreadPool;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
@@ -40,6 +41,7 @@ struct Broadcast {
     id: Pubkey,
     coding_generator: CodingGenerator,
     stats: BroadcastStats,
+    thread_pool: ParThreadPool,
 }
 
 impl Broadcast {
@@ -96,14 +98,16 @@ impl Broadcast {
 
         let to_blobs_start = Instant::now();
 
-        let blobs: Vec<_> = ventries
-            .into_par_iter()
-            .map(|p| {
-                let entries: Vec<_> = p.into_iter().map(|e| e.0).collect();
-                entries.to_shared_blobs()
-            })
-            .flatten()
-            .collect();
+        let blobs: Vec<_> = self.thread_pool.pool.install(|| {
+            ventries
+                .into_par_iter()
+                .map(|p| {
+                    let entries: Vec<_> = p.into_iter().map(|e| e.0).collect();
+                    entries.to_shared_blobs()
+                })
+                .flatten()
+                .collect()
+        });
 
         let blob_index = blocktree
             .meta(bank.slot())
@@ -218,6 +222,7 @@ impl BroadcastStage {
             id: me.id,
             coding_generator,
             stats: BroadcastStats::default(),
+            thread_pool: ParThreadPool::default(),
         };
 
         loop {

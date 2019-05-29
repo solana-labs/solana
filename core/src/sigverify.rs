@@ -174,10 +174,16 @@ pub fn ed25519_verify_cpu(batches: &[Packets]) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
     debug!("CPU ECDSA for {}", batch_size(batches));
-    let rv = batches
-        .into_par_iter()
-        .map(|p| p.packets.par_iter().map(verify_packet).collect())
-        .collect();
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(8)
+        .build()
+        .unwrap();
+    let rv = pool.install(|| {
+        batches
+            .into_par_iter()
+            .map(|p| p.packets.par_iter().map(verify_packet).collect())
+            .collect()
+    });
     inc_new_counter_debug!("ed25519_verify_cpu", count);
     rv
 }

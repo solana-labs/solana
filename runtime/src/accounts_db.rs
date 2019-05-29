@@ -24,6 +24,7 @@ use hashbrown::{HashMap, HashSet};
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
+use rayon::ThreadPool;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::fs::{create_dir_all, remove_dir_all};
@@ -165,6 +166,21 @@ impl AccountStorageEntry {
     }
 }
 
+pub struct ParThreadPool {
+    pub pool: ThreadPool,
+}
+
+impl Default for ParThreadPool {
+    fn default() -> Self {
+        ParThreadPool {
+            pool: rayon::ThreadPoolBuilder::new()
+                .num_threads(16)
+                .build()
+                .unwrap(),
+        }
+    }
+}
+
 // This structure handles the load/store of the accounts
 #[derive(Default)]
 pub struct AccountsDB {
@@ -185,6 +201,9 @@ pub struct AccountsDB {
 
     /// Starting file size of appendvecs
     file_size: u64,
+
+    /// Thread pool used for par_iter
+    thread_pool: ParThreadPool,
 }
 
 pub fn get_paths_vec(paths: &str) -> Vec<String> {
@@ -201,6 +220,7 @@ impl AccountsDB {
             write_version: AtomicUsize::new(0),
             paths,
             file_size,
+            thread_pool: ParThreadPool::default(),
         }
     }
 
@@ -242,17 +262,19 @@ impl AccountsDB {
             .filter(|store| store.fork_id == fork_id)
             .cloned()
             .collect();
-        storage_maps
-            .into_par_iter()
-            .map(|storage| {
-                let accounts = storage.accounts.accounts(0);
-                let mut retval = B::default();
-                accounts
-                    .iter()
-                    .for_each(|stored_account| scan_func(stored_account, &mut retval));
-                retval
-            })
-            .collect()
+        self.thread_pool.pool.install(|| {
+            storage_maps
+                .into_par_iter()
+                .map(|storage| {
+                    let accounts = storage.accounts.accounts(0);
+                    let mut retval = B::default();
+                    accounts
+                        .iter()
+                        .for_each(|stored_account| scan_func(stored_account, &mut retval));
+                    retval
+                })
+                .collect()
+        })
     }
 
     pub fn load(
