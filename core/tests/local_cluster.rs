@@ -214,7 +214,7 @@ fn test_listener_startup() {
 #[test]
 #[ignore]
 fn test_repairman_catchup() {
-    run_repairman_catchup(5);
+    run_repairman_catchup(3);
 }
 
 fn run_repairman_catchup(num_repairmen: u64) {
