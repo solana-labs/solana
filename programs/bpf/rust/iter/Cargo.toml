@@ -12,11 +12,11 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-solana-sdk-bpf-utils = { path = "../../../../sdk/bpf/rust-utils", version = "0.16.0"  }
+solana-sdk-bpf-utils = { path = "../../../../sdk/bpf/rust-utils", version = "0.16.0" }
 
 [workspace]
 members = []
 
 [lib]
-name = "solana_bpf_rust_iter"
 crate-type = ["cdylib"]
+name = "solana_bpf_rust_iter"

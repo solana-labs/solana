@@ -13,9 +13,9 @@ cuda = []
 erasure = []
 
 [dependencies]
-dirs = "1.0.5"
 clap = "2.33"
-solana-sdk = { path = "../sdk", version = "0.16.0"   }
+dirs = "1.0.5"
+solana-sdk = { path = "../sdk", version = "0.16.0" }
 
 [[bin]]
 name = "solana-keygen"

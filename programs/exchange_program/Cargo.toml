@@ -10,10 +10,10 @@ edition = "2018"
 
 [dependencies]
 log = "0.4.2"
-solana-exchange-api = { path = "../exchange_api", version = "0.16.0"   }
-solana-logger = { path = "../../logger", version = "0.16.0"   }
-solana-sdk = { path = "../../sdk", version = "0.16.0"   }
+solana-exchange-api = { path = "../exchange_api", version = "0.16.0" }
+solana-logger = { path = "../../logger", version = "0.16.0" }
+solana-sdk = { path = "../../sdk", version = "0.16.0" }
 
 [lib]
+crate-type = ["lib", "cdylib"]
 name = "solana_exchange_program"
-crate-type = ["lib","cdylib"]

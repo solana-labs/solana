@@ -15,9 +15,9 @@ num-derive = "0.2"
 num-traits = "0.2"
 serde = "1.0.91"
 serde_derive = "1.0.91"
-solana-logger = { path = "../../logger", version = "0.16.0"   }
-solana-sdk = { path = "../../sdk", version = "0.16.0"   }
+solana-logger = { path = "../../logger", version = "0.16.0" }
+solana-sdk = { path = "../../sdk", version = "0.16.0" }
 
 [lib]
-name = "solana_token_api"
 crate-type = ["lib"]
+name = "solana_token_api"
