@@ -88,7 +88,7 @@ EOF
 set -e
 cd "$(dirname "$0")"/..
 export USE_INSTALL=1
-exec multinode-demo/clear-validator-config.sh "$@"
+exec multinode-demo/clear-config.sh "$@"
 EOF
   chmod +x solana-release/bin/clear-config.sh
 
