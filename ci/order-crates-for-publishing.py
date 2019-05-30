@@ -26,7 +26,7 @@ def get_packages():
     dependency_graph = dict()
     for pkg in metadata['packages']:
         manifest_path[pkg['name']] = pkg['manifest_path'];
-        dependency_graph[pkg['name']] = [x['name'] for x in pkg['dependencies'] if x['name'].startswith('solana-')];
+        dependency_graph[pkg['name']] = [x['name'] for x in pkg['dependencies'] if x['name'].startswith('solana')];
 
     # Check for direct circular dependencies
     circular_dependencies = set()
