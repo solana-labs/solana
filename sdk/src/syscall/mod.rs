@@ -2,6 +2,7 @@
 //!
 use crate::pubkey::Pubkey;
 
+pub mod fees;
 pub mod slot_hashes;
 
 /// "Sysca11111111111111111111111111111111111111"
