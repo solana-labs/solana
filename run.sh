@@ -41,22 +41,19 @@ dataDir=$PWD/target/"$(basename "$0" .sh)"
 
 set -x
 leader_keypair="$dataDir/config/leader-keypair.json"
-if [ -e "$leader_keypair" ]
-then
+if [[ -e $leader_keypair ]]; then
   echo "Use existing leader keypair"
 else
   solana-keygen -o "$leader_keypair"
 fi
 leader_vote_account_keypair="$dataDir/config/leader-vote-account-keypair.json"
-if [ -e "$leader_vote_account_keypair" ]
-then
+if [[ -e $leader_vote_account_keypair ]]; then
   echo "Use existing leader vote account keypair"
 else
   solana-keygen -o "$leader_vote_account_keypair"
 fi
 leader_stake_account_keypair="$dataDir/config/leader-stake-account-keypair.json"
-if [ -e "$leader_stake_account_keypair" ]
-then
+if [[ -e $leader_stake_account_keypair ]]; then
   echo "Use existing leader stake account keypair"
 else
   solana-keygen -o "$leader_stake_account_keypair"

@@ -224,7 +224,7 @@ impl AccountStorageEntry {
 }
 
 // This structure handles the load/store of the accounts
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct AccountsDB {
     /// Keeps tracks of index into AppendVec on a per fork basis
     pub accounts_index: RwLock<AccountsIndex<AccountInfo>>,
@@ -256,7 +256,7 @@ impl Default for AccountsDB {
     fn default() -> Self {
         AccountsDB {
             accounts_index: RwLock::new(AccountsIndex::default()),
-            storage: RwLock::new(HashMap::new()),
+            storage: RwLock::new(AccountStorage(HashMap::new())),
             next_id: AtomicUsize::new(0),
             write_version: AtomicUsize::new(0),
             paths: Vec::default(),
@@ -331,9 +331,9 @@ impl AccountsDB {
                 .map(|storage| {
                     let accounts = storage.accounts.accounts(0);
                     let mut retval = B::default();
-                    accounts
-                        .iter()
-                        .for_each(|stored_account| scan_func(stored_account, storage.id, &mut retval));
+                    accounts.iter().for_each(|stored_account| {
+                        scan_func(stored_account, storage.id, &mut retval)
+                    });
                     retval
                 })
                 .collect()
@@ -627,6 +627,10 @@ impl<'a> serde::de::Visitor<'a> for AccountsDBVisitor {
             write_version: AtomicUsize::new(write_version as usize),
             paths,
             file_size,
+            thread_pool: rayon::ThreadPoolBuilder::new()
+                .num_threads(2)
+                .build()
+                .unwrap(),
         };
         accounts_db.generate_index();
 
