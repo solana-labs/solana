@@ -1,3 +1,5 @@
+pub mod genesis_block_util;
+
 #[macro_export]
 macro_rules! solana_storage_program {
     () => {

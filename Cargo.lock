@@ -2625,7 +2625,6 @@ dependencies = [
  "solana-sdk 0.16.0",
  "solana-stake-api 0.16.0",
  "solana-stake-program 0.16.0",
- "solana-storage-api 0.16.0",
  "solana-storage-program 0.16.0",
  "solana-vote-api 0.16.0",
  "solana-vote-program 0.16.0",

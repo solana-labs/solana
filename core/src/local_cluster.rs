@@ -21,6 +21,7 @@ use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use solana_sdk::transaction::Transaction;
 use solana_stake_api::stake_instruction;
 use solana_storage_api::storage_instruction;
+use solana_storage_program::genesis_block_util::GenesisBlockUtil;
 use solana_vote_api::vote_instruction;
 use solana_vote_api::vote_state::VoteState;
 use std::collections::HashMap;
@@ -124,12 +125,13 @@ impl LocalCluster {
             mut genesis_block,
             mint_keypair,
             voting_keypair,
-            storage_keypair,
         } = create_genesis_block_with_leader(
             config.cluster_lamports,
             &leader_pubkey,
             config.node_stakes[0],
         );
+        let storage_keypair = Keypair::new();
+        genesis_block.add_storage_program(&storage_keypair.pubkey());
         genesis_block.ticks_per_slot = config.ticks_per_slot;
         genesis_block.slots_per_epoch = config.slots_per_epoch;
         genesis_block.stakers_slot_offset = config.stakers_slot_offset;
