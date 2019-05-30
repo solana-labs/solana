@@ -16,11 +16,11 @@ where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
     fn state(&self) -> Result<T, InstructionError> {
-        self.deserialize_data().map_err(|e| e.into())
+        Ok(self.deserialize_data()?)
     }
 
     fn set_state(&mut self, state: &T) -> Result<(), InstructionError> {
-        self.serialize_data(state).map_err(|e| e.into())
+        Ok(self.serialize_data(state)?)
     }
 }
 
