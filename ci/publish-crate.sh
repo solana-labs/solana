@@ -21,7 +21,7 @@ cargoCommand="cargo publish --token $CRATES_IO_TOKEN"
 
 Cargo_tomls=$(ci/order-crates-for-publishing.py)
 
-for Cargo_toml in "${Cargo_tomls[@]}"; do
+for Cargo_toml in $Cargo_tomls; do
   echo "-- $Cargo_toml"
   grep -q "^version = \"$expectedCrateVersion\"$" "$Cargo_toml" || {
     echo "Error: $Cargo_toml version is not $expectedCrateVersion"

@@ -7,6 +7,7 @@ repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 edition = "2018"
 homepage = "https://solana.com/"
+publish = false
 
 [dependencies]
 log = "0.4.2"

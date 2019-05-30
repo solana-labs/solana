@@ -6,6 +6,7 @@ version = "0.15.1"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
+publish = false
 
 [dependencies]
 bs58 = "0.2.0"
