@@ -70,7 +70,6 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
-    _tick_height: u64,
 ) -> Result<(), InstructionError> {
     if let Ok(instruction) = bincode::deserialize(data) {
         trace!("process_instruction: {:?}", instruction);
@@ -246,7 +245,7 @@ mod tests {
             program_id: another_program_owner,
         };
         let data = serialize(&instruction).unwrap();
-        let result = process_instruction(&system_program::id(), &mut keyed_accounts, &data, 0);
+        let result = process_instruction(&system_program::id(), &mut keyed_accounts, &data);
         assert_eq!(result, Err(InstructionError::IncorrectProgramId));
         assert_eq!(from_account.owner, new_program_owner);
     }

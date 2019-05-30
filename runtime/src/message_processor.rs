@@ -82,7 +82,7 @@ fn verify_instruction(
 }
 
 pub type ProcessInstruction =
-    fn(&Pubkey, &mut [KeyedAccount], &[u8], u64) -> Result<(), InstructionError>;
+    fn(&Pubkey, &mut [KeyedAccount], &[u8]) -> Result<(), InstructionError>;
 
 pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<instruction_processor_utils::Entrypoint>>>;
 
@@ -127,7 +127,6 @@ impl MessageProcessor {
         instruction: &CompiledInstruction,
         executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
-        tick_height: u64,
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
 
@@ -151,7 +150,6 @@ impl MessageProcessor {
                     &program_id,
                     &mut keyed_accounts[1..],
                     &instruction.data,
-                    tick_height,
                 );
             }
         }
@@ -160,7 +158,6 @@ impl MessageProcessor {
             &program_id,
             &mut keyed_accounts,
             &instruction.data,
-            tick_height,
             &self.symbol_cache,
         )
     }
@@ -175,7 +172,6 @@ impl MessageProcessor {
         instruction: &CompiledInstruction,
         executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
-        tick_height: u64,
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
         // TODO: the runtime should be checking read/write access to memory
@@ -186,13 +182,7 @@ impl MessageProcessor {
             .map(|a| (a.owner, a.lamports, a.data.clone()))
             .collect();
 
-        self.process_instruction(
-            message,
-            instruction,
-            executable_accounts,
-            program_accounts,
-            tick_height,
-        )?;
+        self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
 
         // Verify the instruction
         for ((pre_program_id, pre_lamports, pre_data), post_account) in
@@ -222,7 +212,6 @@ impl MessageProcessor {
         message: &Message,
         loaders: &mut [Vec<(Pubkey, Account)>],
         accounts: &mut [Account],
-        tick_height: u64,
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let executable_index = message
@@ -239,7 +228,6 @@ impl MessageProcessor {
                 instruction,
                 executable_accounts,
                 &mut program_accounts,
-                tick_height,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }

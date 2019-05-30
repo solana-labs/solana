@@ -804,21 +804,20 @@ impl Bank {
             &mut error_counters,
         );
         let mut loaded_accounts = self.load_accounts(txs, sig_results, &mut error_counters);
-        let tick_height = self.tick_height();
 
         let load_elapsed = now.elapsed();
         let now = Instant::now();
-        let executed: Vec<Result<()>> =
-            loaded_accounts
-                .iter_mut()
-                .zip(txs.iter())
-                .map(|(accs, tx)| match accs {
-                    Err(e) => Err(e.clone()),
-                    Ok((ref mut accounts, ref mut loaders)) => self
-                        .message_processor
-                        .process_message(tx.message(), loaders, accounts, tick_height),
-                })
-                .collect();
+        let executed: Vec<Result<()>> = loaded_accounts
+            .iter_mut()
+            .zip(txs.iter())
+            .map(|(accs, tx)| match accs {
+                Err(e) => Err(e.clone()),
+                Ok((ref mut accounts, ref mut loaders)) => {
+                    self.message_processor
+                        .process_message(tx.message(), loaders, accounts)
+                }
+            })
+            .collect();
 
         let execution_elapsed = now.elapsed();
 

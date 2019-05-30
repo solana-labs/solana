@@ -12,7 +12,6 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
-    tick_height: u64,
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
@@ -122,7 +121,6 @@ mod tests {
     fn test_instruction(
         ix: &Instruction,
         program_accounts: &mut [Account],
-        tick_height: u64,
     ) -> Result<(), InstructionError> {
         let mut keyed_accounts: Vec<_> = ix
             .accounts
@@ -133,7 +131,7 @@ mod tests {
             })
             .collect();
 
-        let ret = process_instruction(&id(), &mut keyed_accounts, &ix.data, tick_height);
+        let ret = process_instruction(&id(), &mut keyed_accounts, &ix.data);
         info!("ret: {:?}", ret);
         ret
     }
@@ -161,7 +159,7 @@ mod tests {
         let ticks_till_next_segment = TICKS_IN_SEGMENT * 2;
 
         assert_eq!(
-            test_instruction(&ix, &mut [account], ticks_till_next_segment),
+            test_instruction(&ix, &mut [account]),
             Ok(())
         );
     }
@@ -203,11 +201,11 @@ mod tests {
         // move tick height into segment 1
         let ticks_till_next_segment = TICKS_IN_SEGMENT + 1;
 
-        assert!(test_instruction(&ix, &mut accounts, ticks_till_next_segment).is_err());
+        assert!(test_instruction(&ix, &mut accounts).is_err());
 
         let mut accounts = [Account::default(), Account::default(), Account::default()];
 
-        assert!(test_instruction(&ix, &mut accounts, ticks_till_next_segment).is_err());
+        assert!(test_instruction(&ix, &mut accounts).is_err());
     }
 
     #[test]
@@ -222,7 +220,7 @@ mod tests {
             storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default(), 0);
 
         // submitting a proof for a slot in the past, so this should fail
-        assert!(test_instruction(&ix, &mut accounts, 0).is_err());
+        assert!(test_instruction(&ix, &mut accounts).is_err());
     }
 
     #[test]
@@ -242,7 +240,7 @@ mod tests {
         let ticks_till_next_segment = TICKS_IN_SEGMENT + 1;
 
         assert_matches!(
-            test_instruction(&ix, &mut accounts, ticks_till_next_segment),
+            test_instruction(&ix, &mut accounts),
             Ok(_)
         );
     }

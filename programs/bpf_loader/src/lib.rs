@@ -233,7 +233,6 @@ fn serialize_parameters(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
-    tick_height: u64,
 ) -> Vec<u8> {
     assert_eq!(32, mem::size_of::<Pubkey>());
 
@@ -252,7 +251,6 @@ fn serialize_parameters(
     }
     v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
     v.write_all(data).unwrap();
-    v.write_u64::<LittleEndian>(tick_height).unwrap();
     v.write_all(program_id.as_ref()).unwrap();
     v
 }
@@ -281,7 +279,6 @@ fn entrypoint(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     tx_data: &[u8],
-    tick_height: u64,
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
@@ -296,7 +293,7 @@ fn entrypoint(
                 return Err(InstructionError::GenericError);
             }
         };
-        let mut v = serialize_parameters(program_id, params, &tx_data, tick_height);
+        let mut v = serialize_parameters(program_id, params, &tx_data);
 
         match vm.execute_program(v.as_mut_slice(), &[], &[heap_region]) {
             Ok(status) => {
