@@ -9,6 +9,7 @@ use solana_runtime::loader_utils::{create_invoke_instruction, load_program};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::client::AsyncClient;
 use solana_sdk::client::SyncClient;
+use solana_sdk::credit_only_account::KeyedCreditOnlyAccount;
 use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::native_loader;
@@ -28,6 +29,7 @@ const BUILTIN_PROGRAM_ID: [u8; 32] = [
 fn process_instruction(
     _program_id: &Pubkey,
     _keyed_accounts: &mut [KeyedAccount],
+    _keyed_credit_only_accounts: &mut [KeyedCreditOnlyAccount],
     _data: &[u8],
     _tick_height: u64,
 ) -> Result<(), InstructionError> {
