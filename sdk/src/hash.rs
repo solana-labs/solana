@@ -2,10 +2,10 @@
 
 use bs58;
 use sha2::{Digest, Sha256};
+use std::convert::TryFrom;
 use std::fmt;
 use std::mem;
 use std::str::FromStr;
-use std::convert::TryFrom;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[repr(transparent)]
@@ -28,9 +28,7 @@ impl Hasher {
     pub fn result(self) -> Hash {
         // At the time of this writing, the sha2 library is stuck on an old version
         // of generic_array (0.9.0). Decouple ourselves with a clone to our version.
-        Hash(
-            <[u8; 32]>::try_from(self.hasher.result().as_slice()).unwrap(),
-        )
+        Hash(<[u8; 32]>::try_from(self.hasher.result().as_slice()).unwrap())
     }
 }
 

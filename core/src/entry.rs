@@ -201,26 +201,15 @@ where
     Ok((entries, num_ticks))
 }
 
-// stub to interface with cuda code
-#[cfg(feature = "cuda")]
-enum GpuCtx {}
-
 #[cfg(feature = "cuda")]
 #[link(name = "cuda-crypt")]
 extern "C" {
-    fn poh_start_verify_many(
+    fn poh_verify_many(
         hashes: *const Hash,
         num_hashes_arr: *const u64,
         num_elems: usize,
         use_non_default_stream: u8,
-    ) -> *mut GpuCtx;
-
-    fn poh_finish_verify_many(
-        hashes: *const Hash,
-        num_elems: usize,
-        cur_ctx: *mut GpuCtx,
-        use_non_default_stream: u8,
-    );
+    ) -> int;
 }
 
 //#[cfg(feature = "cuda")]
@@ -279,15 +268,21 @@ impl EntrySlice for [Entry] {
             .map(|entry| entry.num_hashes.saturating_sub(1))
             .collect();
 
-        let ctx;
-        unsafe {
-            ctx = poh_start_verify_many(
-                start_hashes.as_ptr(),
-                num_hashes_vec.as_ptr(),
-                self.len(),
-                1,
-            );
-        }
+        let gpu_verify_thread = thread::spawn(|| {
+            let res;
+            unsafe {
+                res = poh_start_verify_many(
+                    start_hashes.as_ptr(),
+                    num_hashes_vec.as_ptr(),
+                    self.len(),
+                    1,
+                );
+            }
+            if res != 0 {
+                error!("GPU PoH verify many failed");
+                panic!("GPU PoH verify many failed");
+            }
+        });
 
         let tx_hashes: Vec<Option<Hash>> = self
             .into_par_iter()
@@ -302,16 +297,7 @@ impl EntrySlice for [Entry] {
 
         let end_hashes: Vec<Hash> = Vec::with_capacity(self.len());
 
-        unsafe {
-            poh_finish_verify_many(end_hashes.as_ptr(), self.len(), ctx, 1);
-        }
-
-        //        let end_hashes: Vec<Hash> = (0..self.len())
-        //            .into_iter()
-        //            .map(|i| {
-        //                Hash::new(&end_hashes_raw[(i * NUM_BYTES_PER_HASH)..((i + 1) * NUM_BYTES_PER_HASH)])
-        //            })
-        //            .collect();
+        gpu_verify_thread.join().unwrap();
 
         end_hashes
             .into_par_iter()
@@ -648,7 +634,7 @@ mod tests {
         let mut bad_ticks = vec![next_entry(&zero, 0, vec![]); 2];
         bad_ticks[1].hash = one;
         assert!(!bad_ticks.verify(&zero)); // inductive step, bad
-    }
+    } //TODO: Why is this only testing verification of [0u8; 32] hashes and num_hashes=0?
 
     //TODO: Should test verify slice with txs, esp w/ cuda verification
 
