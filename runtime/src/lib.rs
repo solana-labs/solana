@@ -26,7 +26,4 @@ extern crate solana_vote_program;
 extern crate solana_stake_program;
 
 #[macro_use]
-extern crate solana_storage_program;
-
-#[macro_use]
 extern crate serde_derive;
