@@ -2584,7 +2584,6 @@ version = "0.15.1"
 dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-logger 0.15.1",
- "solana-runtime 0.15.1",
  "solana-sdk 0.15.1",
 ]
 
@@ -2623,8 +2622,6 @@ dependencies = [
  "solana-sdk 0.15.1",
  "solana-stake-api 0.15.1",
  "solana-stake-program 0.15.1",
- "solana-storage-api 0.15.1",
- "solana-storage-program 0.15.1",
  "solana-vote-api 0.15.1",
  "solana-vote-program 0.15.1",
 ]

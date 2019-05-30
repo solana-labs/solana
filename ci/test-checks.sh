@@ -14,6 +14,7 @@ _ cargo +"$rust_stable" clippy --all -- --version
 _ cargo +"$rust_stable" clippy --all -- --deny=warnings
 _ cargo +"$rust_stable" audit
 _ ci/nits.sh
+_ ci/order-crates-for-publishing.py
 _ book/build.sh
 
 echo --- ok

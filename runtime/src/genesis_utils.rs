@@ -4,7 +4,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_program;
 use solana_stake_api::stake_state;
-use solana_storage_api::storage_contract;
 use solana_vote_api::vote_state;
 
 // The default stake placed with the bootstrap leader
@@ -14,7 +13,6 @@ pub struct GenesisBlockInfo {
     pub genesis_block: GenesisBlock,
     pub mint_keypair: Keypair,
     pub voting_keypair: Keypair,
-    pub storage_keypair: Keypair,
 }
 
 pub fn create_genesis_block_with_leader(
@@ -25,7 +23,6 @@ pub fn create_genesis_block_with_leader(
     let mint_keypair = Keypair::new();
     let voting_keypair = Keypair::new();
     let staking_keypair = Keypair::new();
-    let storage_keypair = Keypair::new();
 
     // TODO: de-duplicate the stake once passive staking
     //  is fully implemented
@@ -61,23 +58,13 @@ pub fn create_genesis_block_with_leader(
                     bootstrap_leader_stake_lamports,
                 ),
             ),
-            // storage account
-            (
-                storage_keypair.pubkey(),
-                storage_contract::create_validator_storage_account(1),
-            ),
         ],
-        &[
-            solana_vote_program!(),
-            solana_stake_program!(),
-            solana_storage_program!(), // TODO: storage program is only needed by core/, move this line into core/src/genesis_utils.rs
-        ],
+        &[solana_vote_program!(), solana_stake_program!()],
     );
 
     GenesisBlockInfo {
         genesis_block,
         mint_keypair,
         voting_keypair,
-        storage_keypair,
     }
 }
