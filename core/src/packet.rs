@@ -5,7 +5,6 @@ use bincode;
 use byteorder::{ByteOrder, LittleEndian};
 use serde::Serialize;
 use solana_metrics::inc_new_counter_debug;
-use solana_sdk::hash::Hash;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use std::borrow::Borrow;
@@ -341,8 +340,7 @@ const SLOT_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
 const INDEX_RANGE: std::ops::Range<usize> = range!(SLOT_RANGE.end, u64);
 const ID_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Pubkey);
 const FORWARDED_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, bool);
-const GENESIS_RANGE: std::ops::Range<usize> = range!(FORWARDED_RANGE.end, Hash);
-const FLAGS_RANGE: std::ops::Range<usize> = range!(GENESIS_RANGE.end, u32);
+const FLAGS_RANGE: std::ops::Range<usize> = range!(FORWARDED_RANGE.end, u32);
 const SIZE_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, u64);
 
 macro_rules! align {
@@ -421,14 +419,6 @@ impl Blob {
     /// Mark this blob's forwarded status
     pub fn set_forwarded(&mut self, forward: bool) {
         self.data[FORWARDED_RANGE][0] = u8::from(forward)
-    }
-
-    pub fn set_genesis_blockhash(&mut self, blockhash: &Hash) {
-        self.data[GENESIS_RANGE].copy_from_slice(blockhash.as_ref())
-    }
-
-    pub fn genesis_blockhash(&self) -> Hash {
-        Hash::new(&self.data[GENESIS_RANGE])
     }
 
     pub fn flags(&self) -> u32 {
@@ -597,13 +587,12 @@ impl Blob {
 }
 
 pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, blob_index: u64, slot: u64, parent: u64) {
-    index_blobs_with_genesis(blobs, id, &Hash::default(), blob_index, slot, parent)
+    index_blobs_with_genesis(blobs, id, blob_index, slot, parent)
 }
 
 pub fn index_blobs_with_genesis(
     blobs: &[SharedBlob],
     id: &Pubkey,
-    genesis: &Hash,
     mut blob_index: u64,
     slot: u64,
     parent: u64,
@@ -613,7 +602,6 @@ pub fn index_blobs_with_genesis(
         let mut blob = blob.write().unwrap();
 
         blob.set_index(blob_index);
-        blob.set_genesis_blockhash(genesis);
         blob.set_slot(slot);
         blob.set_parent(parent);
         blob.set_id(id);
@@ -833,15 +821,4 @@ mod tests {
         p2.data[1] = 4;
         assert!(p1 != p2);
     }
-
-    #[test]
-    fn test_blob_genesis_blockhash() {
-        let mut blob = Blob::default();
-        assert_eq!(blob.genesis_blockhash(), Hash::default());
-
-        let hash = Hash::new(&Pubkey::new_rand().as_ref());
-        blob.set_genesis_blockhash(&hash);
-        assert_eq!(blob.genesis_blockhash(), hash);
-    }
-
 }

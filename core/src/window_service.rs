@@ -11,7 +11,6 @@ use crate::service::Service;
 use crate::streamer::{BlobReceiver, BlobSender};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_runtime::bank::Bank;
-use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -108,7 +107,6 @@ fn recv_window<F>(
     my_pubkey: &Pubkey,
     r: &BlobReceiver,
     retransmit: &BlobSender,
-    genesis_blockhash: &Hash,
     blob_filter: F,
 ) -> Result<()>
 where
@@ -123,10 +121,7 @@ where
     let now = Instant::now();
     inc_new_counter_debug!("streamer-recv_window-recv", blobs.len(), 0, 1000);
 
-    blobs.retain(|blob| {
-        blob_filter(&blob.read().unwrap())
-            && blob.read().unwrap().genesis_blockhash() == *genesis_blockhash
-    });
+    blobs.retain(|blob| blob_filter(&blob.read().unwrap()));
 
     retransmit_blobs(&blobs, retransmit, my_pubkey)?;
 
@@ -175,7 +170,6 @@ impl WindowService {
         repair_socket: Arc<UdpSocket>,
         exit: &Arc<AtomicBool>,
         repair_strategy: RepairStrategy,
-        genesis_blockhash: &Hash,
         blob_filter: F,
     ) -> WindowService
     where
@@ -198,7 +192,6 @@ impl WindowService {
             repair_strategy,
         );
         let exit = exit.clone();
-        let hash = *genesis_blockhash;
         let blob_filter = Arc::new(blob_filter);
         let bank_forks = bank_forks.clone();
         let t_window = Builder::new()
@@ -212,7 +205,7 @@ impl WindowService {
                         break;
                     }
 
-                    if let Err(e) = recv_window(&blocktree, &id, &r, &retransmit, &hash, |blob| {
+                    if let Err(e) = recv_window(&blocktree, &id, &r, &retransmit, |blob| {
                         blob_filter(
                             &id,
                             blob,
@@ -379,7 +372,6 @@ mod test {
             Arc::new(leader_node.sockets.repair),
             &exit,
             repair_strategy,
-            &Hash::default(),
             |_, _, _| true,
         );
         let t_responder = {
@@ -462,7 +454,6 @@ mod test {
             Arc::new(leader_node.sockets.repair),
             &exit,
             repair_strategy,
-            &Hash::default(),
             |_, _, _| true,
         );
         let t_responder = {

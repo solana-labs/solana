@@ -15,7 +15,6 @@ use solana_metrics::{
     datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
     inc_new_counter_warn,
 };
-use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -53,7 +52,6 @@ impl Broadcast {
         receiver: &Receiver<WorkingBankEntries>,
         sock: &UdpSocket,
         blocktree: &Arc<Blocktree>,
-        genesis_blockhash: &Hash,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let (mut bank, entries) = receiver.recv_timeout(timer)?;
@@ -120,7 +118,6 @@ impl Broadcast {
         index_blobs_with_genesis(
             &blobs,
             &self.id,
-            genesis_blockhash,
             blob_index,
             bank.slot(),
             bank.parent().map_or(0, |parent| parent.slot()),
@@ -215,7 +212,6 @@ impl BroadcastStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         receiver: &Receiver<WorkingBankEntries>,
         blocktree: &Arc<Blocktree>,
-        genesis_blockhash: &Hash,
     ) -> BroadcastStageReturnType {
         let me = cluster_info.read().unwrap().my_data().clone();
         let coding_generator = CodingGenerator::default();
@@ -231,9 +227,7 @@ impl BroadcastStage {
         };
 
         loop {
-            if let Err(e) =
-                broadcast.run(&cluster_info, receiver, sock, blocktree, genesis_blockhash)
-            {
+            if let Err(e) = broadcast.run(&cluster_info, receiver, sock, blocktree) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
                         return BroadcastStageReturnType::ChannelDisconnected;
@@ -271,22 +265,14 @@ impl BroadcastStage {
         receiver: Receiver<WorkingBankEntries>,
         exit_sender: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
-        genesis_blockhash: &Hash,
     ) -> Self {
         let blocktree = blocktree.clone();
         let exit_sender = exit_sender.clone();
-        let genesis_blockhash = *genesis_blockhash;
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _finalizer = Finalizer::new(exit_sender);
-                Self::run(
-                    &sock,
-                    &cluster_info,
-                    &receiver,
-                    &blocktree,
-                    &genesis_blockhash,
-                )
+                Self::run(&sock, &cluster_info, &receiver, &blocktree)
             })
             .unwrap();
 
@@ -357,7 +343,6 @@ mod test {
             entry_receiver,
             &exit_sender,
             &blocktree,
-            &Hash::default(),
         );
 
         MockBroadcastStage {

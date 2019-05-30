@@ -24,7 +24,6 @@ use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
-use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
@@ -71,7 +70,6 @@ impl Tvu {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
-        genesis_blockhash: &Hash,
         completed_slots_receiver: CompletedSlotsReceiver,
     ) -> Self
     where
@@ -109,7 +107,6 @@ impl Tvu {
             repair_socket,
             blob_fetch_receiver,
             &exit,
-            genesis_blockhash,
             completed_slots_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
         );
@@ -238,7 +235,6 @@ pub mod tests {
             &poh_recorder,
             &leader_schedule_cache,
             &exit,
-            &Hash::default(),
             completed_slots_receiver,
         );
         exit.store(true, Ordering::Relaxed);
