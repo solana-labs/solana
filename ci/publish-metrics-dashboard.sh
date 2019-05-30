@@ -45,7 +45,9 @@ beta)
   CHANNEL_BRANCH=$BETA_CHANNEL
   ;;
 stable)
-  CHANNEL_BRANCH=$STABLE_CHANNEL
+  # Set to whatever branch 'testnet' is on.
+  # TODO: Revert to $STABLE_CHANNEL for TdS
+  CHANNEL_BRANCH=$BETA_CHANNEL
   ;;
 *)
   echo "Error: Invalid PUBLISH_CHANNEL=$PUBLISH_CHANNEL"
