@@ -208,9 +208,9 @@ impl Bank {
             .get_account(&slot_hashes::id())
             .unwrap_or_else(|| slot_hashes::create_account(1));
 
-        let mut slot_hashes = SlotHashes::from(&account).unwrap();
-        slot_hashes.add(self.slot(), self.hash());
-        slot_hashes.to(&mut account).unwrap();
+        account
+            .with_data(|slot_hashes: &mut SlotHashes| slot_hashes.add(self.slot(), self.hash()))
+            .unwrap();
 
         self.store(&slot_hashes::id(), &account);
     }

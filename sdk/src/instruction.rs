@@ -58,6 +58,27 @@ pub enum InstructionError {
     CustomError(u32),
 }
 
+impl std::error::Error for InstructionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}
+
+impl std::fmt::Display for InstructionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl From<Box<bincode::ErrorKind>> for InstructionError {
+    fn from(e: Box<bincode::ErrorKind>) -> Self {
+        match *e {
+            bincode::ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
+            _ => InstructionError::InvalidAccountData,
+        }
+    }
+}
+
 impl InstructionError {
     pub fn new_result_with_negative_lamports() -> Self {
         InstructionError::CustomError(SystemError::ResultWithNegativeLamports as u32)

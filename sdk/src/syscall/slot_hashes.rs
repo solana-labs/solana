@@ -3,7 +3,6 @@
 //! this account carries the Bank's most recent blockhashes for some N parents
 //!
 use crate::account::Account;
-use crate::account_utils::State;
 use crate::hash::Hash;
 use crate::pubkey::Pubkey;
 use crate::syscall;
@@ -34,11 +33,15 @@ pub struct SlotHashes {
 }
 
 impl SlotHashes {
-    pub fn from(account: &Account) -> Option<Self> {
-        account.state().ok()
+    pub fn from(account: &Account) -> Result<Self, bincode::Error> {
+        account.deserialize_data()
     }
-    pub fn to(&self, account: &mut Account) -> Option<()> {
-        account.set_state(self).ok()
+
+    pub fn with<T, F>(account: &mut Account, func: F) -> Result<T, Box<std::error::Error>>
+    where
+        F: FnOnce(&mut Self) -> Result<T, Box<std::error::Error>>,
+    {
+        account.with_data(func)
     }
 
     pub fn size_of() -> usize {
@@ -79,14 +82,71 @@ mod tests {
         assert!(ids.iter().all(|(name, id)| *name == id.to_string()));
         assert!(check_id(&id()));
     }
+    #[derive(Debug, Clone)]
+    struct DummyError;
+    impl std::error::Error for DummyError {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            None
+        }
+    }
+    impl std::fmt::Display for DummyError {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "dummy")
+        }
+    }
 
     #[test]
-    fn test_create_account() {
+    fn test_from_with() {
+        // not enough space for MAX_SLOT_HASHES
+        let mut account = Account::new(0, SlotHashes::size_of() - 1, &syscall::id());
+
+        assert!(SlotHashes::from(&account).is_ok()); // slot_hashes state can vary in size
+
+        let mut bcalled = false;
+        assert!(SlotHashes::with(&mut account, |slot_hashes| {
+            bcalled = true;
+            slot_hashes.add(0, Hash::default());
+
+            Err(Box::new(DummyError))?;
+
+            Ok(())
+        })
+        .is_err());
+        // the closure should have run
+        assert!(bcalled);
+        // the account data should be untouched
+        assert_eq!(
+            SlotHashes::from(&account).unwrap(),
+            SlotHashes { inner: vec![] }
+        );
+        // try to push something back that's too large
+        let mut bcalled = false;
+        assert!(SlotHashes::with(&mut account, |slot_hashes| {
+            bcalled = true;
+            for i in 0..MAX_SLOT_HASHES {
+                slot_hashes.add(
+                    i as u64,
+                    hash(&[(i >> 24) as u8, (i >> 16) as u8, (i >> 8) as u8, i as u8]),
+                );
+            }
+            Ok(())
+        })
+        .is_err());
+        // the account data should be untouched
+        assert_eq!(
+            SlotHashes::from(&account).unwrap(),
+            SlotHashes { inner: vec![] }
+        );
+
+        assert!(bcalled);
+    }
+
+    #[test]
+    fn test_create_account_add() {
         let lamports = 42;
         let account = create_account(lamports);
-        let slot_hashes = SlotHashes::from(&account);
-        assert_eq!(slot_hashes, Some(SlotHashes { inner: vec![] }));
-        let mut slot_hashes = slot_hashes.unwrap();
+        let mut slot_hashes = SlotHashes::from(&account).unwrap();
+        assert_eq!(slot_hashes, SlotHashes { inner: vec![] });
         for i in 0..MAX_SLOT_HASHES + 1 {
             slot_hashes.add(
                 i as u64,

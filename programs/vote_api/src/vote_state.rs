@@ -232,20 +232,23 @@ pub fn authorize_voter(
     other_signers: &[KeyedAccount],
     authorized_voter_pubkey: &Pubkey,
 ) -> Result<(), InstructionError> {
-    let mut vote_state: VoteState = vote_account.state()?;
+    let signer_key = vote_account.signer_key().cloned();
+    vote_account
+        .account
+        .with_data(|vote_state: &mut VoteState| {
+            // current authorized signer must say "yay"
+            let authorized = Some(vote_state.authorized_voter_pubkey);
+            if signer_key != authorized
+                && other_signers
+                    .iter()
+                    .all(|account| account.signer_key() != authorized.as_ref())
+            {
+                Err(InstructionError::MissingRequiredSignature)?;
+            }
 
-    // current authorized signer must say "yay"
-    let authorized = Some(&vote_state.authorized_voter_pubkey);
-    if vote_account.signer_key() != authorized
-        && other_signers
-            .iter()
-            .all(|account| account.signer_key() != authorized)
-    {
-        return Err(InstructionError::MissingRequiredSignature);
-    }
-
-    vote_state.authorized_voter_pubkey = *authorized_voter_pubkey;
-    vote_account.set_state(&vote_state)
+            vote_state.authorized_voter_pubkey = *authorized_voter_pubkey;
+            Ok(())
+        })
 }
 
 /// Initialize the vote_state for a vote account

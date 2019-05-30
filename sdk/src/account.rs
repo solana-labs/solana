@@ -46,6 +46,24 @@ impl Account {
         }
     }
 
+    pub fn with_data<T, R, E, F>(&mut self, func: F) -> Result<R, E>
+    where
+        F: FnOnce(&mut T) -> Result<R, E>,
+        E: std::convert::From<Box<bincode::ErrorKind>>,
+        T: serde::de::DeserializeOwned + serde::Serialize,
+    {
+        let mut obj = self.deserialize_data()?;
+
+        let ret = func(&mut obj)?;
+
+        if bincode::serialized_size(&obj)? > self.data.len() as u64 {
+            return Err(Box::new(bincode::ErrorKind::SizeLimit))?;
+        }
+        self.serialize_data(&obj)?;
+
+        Ok(ret)
+    }
+
     pub fn deserialize_data<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
         bincode::deserialize(&self.data)
     }
