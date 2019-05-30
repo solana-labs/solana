@@ -8,32 +8,32 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
+bincode = "1.1.4"
 bs58 = "0.2.0"
 clap = "2.32.0"
-bincode = "1.1.4"
 env_logger = "0.6.0"
 itertools = "0.8.0"
 log = "0.4.6"
-num-traits = "0.2"
 num-derive = "0.2"
+num-traits = "0.2"
 rand = "0.6.5"
 rayon = "1.0.3"
 serde = "1.0.91"
 serde_derive = "1.0.91"
 serde_json = "1.0.38"
 # solana-runtime = { path = "../solana/runtime"}
-solana = { path = "../core", version = "0.16.0"   }
-solana-client = { path = "../client", version = "0.16.0"   }
-solana-drone = { path = "../drone", version = "0.16.0"   }
-solana-exchange-api = { path = "../programs/exchange_api", version = "0.16.0"   }
-solana-exchange-program = { path = "../programs/exchange_program", version = "0.16.0"   }
-solana-logger = { path = "../logger", version = "0.16.0"   }
-solana-metrics = { path = "../metrics", version = "0.16.0"   }
-solana-netutil = { path = "../netutil", version = "0.16.0"   }
-solana-runtime = { path = "../runtime", version = "0.16.0"   }
-solana-sdk = { path = "../sdk", version = "0.16.0"   }
-ws = "0.8.1"
+solana = { path = "../core", version = "0.16.0" }
+solana-client = { path = "../client", version = "0.16.0" }
+solana-drone = { path = "../drone", version = "0.16.0" }
+solana-exchange-api = { path = "../programs/exchange_api", version = "0.16.0" }
+solana-exchange-program = { path = "../programs/exchange_program", version = "0.16.0" }
+solana-logger = { path = "../logger", version = "0.16.0" }
+solana-metrics = { path = "../metrics", version = "0.16.0" }
+solana-netutil = { path = "../netutil", version = "0.16.0" }
+solana-runtime = { path = "../runtime", version = "0.16.0" }
+solana-sdk = { path = "../sdk", version = "0.16.0" }
 untrusted = "0.6.2"
+ws = "0.8.1"
 
 [features]
 cuda = ["solana/cuda"]

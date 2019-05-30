@@ -11,27 +11,27 @@ homepage = "https://solana.com/"
 [dependencies]
 bincode = "1.1.4"
 bs58 = "0.2.0"
-clap = "2.33.0"
 chrono = { version = "0.4.0", features = ["serde"] }
+clap = "2.33.0"
 dirs = "1.0.5"
 log = "0.4.2"
 num-traits = "0.2"
 serde_json = "1.0.39"
-solana-budget-api = { path = "../programs/budget_api", version = "0.16.0"   }
-solana-client = { path = "../client", version = "0.16.0"   }
-solana-drone = { path = "../drone", version = "0.16.0"   }
-solana-logger = { path = "../logger", version = "0.16.0"   }
-solana-netutil = { path = "../netutil", version = "0.16.0"   }
-solana-sdk = { path = "../sdk", version = "0.16.0"   }
-solana-stake-api = { path = "../programs/stake_api", version = "0.16.0"   }
-solana-storage-api = { path = "../programs/storage_api", version = "0.16.0"   }
-solana-vote-api = { path = "../programs/vote_api", version = "0.16.0"   }
-solana-vote-signer = { path = "../vote-signer", version = "0.16.0"   }
+solana-budget-api = { path = "../programs/budget_api", version = "0.16.0" }
+solana-client = { path = "../client", version = "0.16.0" }
+solana-drone = { path = "../drone", version = "0.16.0" }
+solana-logger = { path = "../logger", version = "0.16.0" }
+solana-netutil = { path = "../netutil", version = "0.16.0" }
+solana-sdk = { path = "../sdk", version = "0.16.0" }
+solana-stake-api = { path = "../programs/stake_api", version = "0.16.0" }
+solana-storage-api = { path = "../programs/storage_api", version = "0.16.0" }
+solana-vote-api = { path = "../programs/vote_api", version = "0.16.0" }
+solana-vote-signer = { path = "../vote-signer", version = "0.16.0" }
 url = "1.7.2"
 
 [dev-dependencies]
-solana-budget-program = { path = "../programs/budget_program", version = "0.16.0"   }
-solana = { path = "../core", version = "0.16.0"   }
+solana = { path = "../core", version = "0.16.0" }
+solana-budget-program = { path = "../programs/budget_program", version = "0.16.0" }
 
 [features]
 cuda = []

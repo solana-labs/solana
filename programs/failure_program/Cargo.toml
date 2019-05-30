@@ -9,13 +9,13 @@ homepage = "https://solana.com/"
 edition = "2018"
 
 [dependencies]
-solana-sdk = { path = "../../sdk", version = "0.16.0"   }
 log = "0.4.2"
+solana-sdk = { path = "../../sdk", version = "0.16.0" }
 
 [dev-dependencies]
-solana-runtime = { path = "../../runtime", version = "0.16.0"   }
+solana-runtime = { path = "../../runtime", version = "0.16.0" }
 
 [lib]
-name = "solana_failure_program"
 crate-type = ["cdylib"]
+name = "solana_failure_program"
 
