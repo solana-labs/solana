@@ -33,6 +33,7 @@ solana-vote-program = { path = "../programs/vote_program", version = "0.16.0"   
 solana-stake-program = { path = "../programs/stake_program", version = "0.16.0"   }
 solana-storage-program = { path = "../programs/storage_program", version = "0.16.0"   }
 solana-noop-program = { path = "../programs/noop_program", version = "0.16.0"   }
+sys-info = "0.5.7"
 
 [lib]
 name = "solana_runtime"

@@ -10,6 +10,7 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
 use rayon::prelude::*;
+use rayon::ThreadPool;
 use solana_metrics::{
     datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
     inc_new_counter_warn,
@@ -23,6 +24,8 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
+
+pub const NUM_THREADS: u32 = 10;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
@@ -40,6 +43,7 @@ struct Broadcast {
     id: Pubkey,
     coding_generator: CodingGenerator,
     stats: BroadcastStats,
+    thread_pool: ThreadPool,
 }
 
 impl Broadcast {
@@ -96,14 +100,16 @@ impl Broadcast {
 
         let to_blobs_start = Instant::now();
 
-        let blobs: Vec<_> = ventries
-            .into_par_iter()
-            .map(|p| {
-                let entries: Vec<_> = p.into_iter().map(|e| e.0).collect();
-                entries.to_shared_blobs()
-            })
-            .flatten()
-            .collect();
+        let blobs: Vec<_> = self.thread_pool.install(|| {
+            ventries
+                .into_par_iter()
+                .map(|p| {
+                    let entries: Vec<_> = p.into_iter().map(|e| e.0).collect();
+                    entries.to_shared_blobs()
+                })
+                .flatten()
+                .collect()
+        });
 
         let blob_index = blocktree
             .meta(bank.slot())
@@ -218,6 +224,10 @@ impl BroadcastStage {
             id: me.id,
             coding_generator,
             stats: BroadcastStats::default(),
+            thread_pool: rayon::ThreadPoolBuilder::new()
+                .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                .build()
+                .unwrap(),
         };
 
         loop {

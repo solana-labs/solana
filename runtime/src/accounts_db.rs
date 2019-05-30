@@ -24,15 +24,18 @@ use hashbrown::{HashMap, HashSet};
 use log::*;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
+use rayon::ThreadPool;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::fs::{create_dir_all, remove_dir_all};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
+use sys_info;
 
 const ACCOUNT_DATA_FILE_SIZE: u64 = 64 * 1024 * 1024;
 const ACCOUNT_DATA_FILE: &str = "data";
+pub const NUM_THREADS: u32 = 10;
 
 #[derive(Debug, Default)]
 pub struct ErrorCounters {
@@ -166,7 +169,6 @@ impl AccountStorageEntry {
 }
 
 // This structure handles the load/store of the accounts
-#[derive(Default)]
 pub struct AccountsDB {
     /// Keeps tracks of index into AppendVec on a per fork basis
     pub accounts_index: RwLock<AccountsIndex<AccountInfo>>,
@@ -185,10 +187,30 @@ pub struct AccountsDB {
 
     /// Starting file size of appendvecs
     file_size: u64,
+
+    /// Thread pool used for par_iter
+    thread_pool: ThreadPool,
 }
 
 pub fn get_paths_vec(paths: &str) -> Vec<String> {
     paths.split(',').map(ToString::to_string).collect()
+}
+
+impl Default for AccountsDB {
+    fn default() -> Self {
+        AccountsDB {
+            accounts_index: RwLock::new(AccountsIndex::default()),
+            storage: RwLock::new(HashMap::new()),
+            next_id: AtomicUsize::new(0),
+            write_version: AtomicUsize::new(0),
+            paths: Vec::default(),
+            file_size: u64::default(),
+            thread_pool: rayon::ThreadPoolBuilder::new()
+                .num_threads(2)
+                .build()
+                .unwrap(),
+        }
+    }
 }
 
 impl AccountsDB {
@@ -201,6 +223,10 @@ impl AccountsDB {
             write_version: AtomicUsize::new(0),
             paths,
             file_size,
+            thread_pool: rayon::ThreadPoolBuilder::new()
+                .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                .build()
+                .unwrap(),
         }
     }
 
@@ -242,17 +268,19 @@ impl AccountsDB {
             .filter(|store| store.fork_id == fork_id)
             .cloned()
             .collect();
-        storage_maps
-            .into_par_iter()
-            .map(|storage| {
-                let accounts = storage.accounts.accounts(0);
-                let mut retval = B::default();
-                accounts
-                    .iter()
-                    .for_each(|stored_account| scan_func(stored_account, &mut retval));
-                retval
-            })
-            .collect()
+        self.thread_pool.install(|| {
+            storage_maps
+                .into_par_iter()
+                .map(|storage| {
+                    let accounts = storage.accounts.accounts(0);
+                    let mut retval = B::default();
+                    accounts
+                        .iter()
+                        .for_each(|stored_account| scan_func(stored_account, &mut retval));
+                    retval
+                })
+                .collect()
+        })
     }
 
     pub fn load(

@@ -7,6 +7,7 @@
 use crate::packet::{Packet, Packets};
 use crate::result::Result;
 use bincode::serialized_size;
+use rayon::ThreadPool;
 use solana_metrics::inc_new_counter_debug;
 use solana_sdk::message::MessageHeader;
 use solana_sdk::pubkey::Pubkey;
@@ -15,6 +16,14 @@ use solana_sdk::signature::Signature;
 #[cfg(test)]
 use solana_sdk::transaction::Transaction;
 use std::mem::size_of;
+
+pub const NUM_THREADS: u32 = 10;
+use std::cell::RefCell;
+
+thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
+                    .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                    .build()
+                    .unwrap()));
 
 type TxOffsets = (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<Vec<u32>>);
 
@@ -174,10 +183,14 @@ pub fn ed25519_verify_cpu(batches: &[Packets]) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
     debug!("CPU ECDSA for {}", batch_size(batches));
-    let rv = batches
-        .into_par_iter()
-        .map(|p| p.packets.par_iter().map(verify_packet).collect())
-        .collect();
+    let rv = PAR_THREAD_POOL.with(|thread_pool| {
+        thread_pool.borrow().install(|| {
+            batches
+                .into_par_iter()
+                .map(|p| p.packets.par_iter().map(verify_packet).collect())
+                .collect()
+        })
+    });
     inc_new_counter_debug!("ed25519_verify_cpu", count);
     rv
 }
