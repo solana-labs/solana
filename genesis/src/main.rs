@@ -6,8 +6,6 @@ extern crate solana_stake_program;
 #[macro_use]
 extern crate solana_budget_program;
 #[macro_use]
-extern crate solana_storage_program;
-#[macro_use]
 extern crate solana_token_program;
 #[macro_use]
 extern crate solana_config_program;
@@ -25,7 +23,7 @@ use solana_sdk::signature::{read_keypair, KeypairUtil};
 use solana_sdk::system_program;
 use solana_sdk::timing;
 use solana_stake_api::stake_state;
-use solana_storage_api::storage_contract;
+use solana_storage_program::genesis_block_util::GenesisBlockUtil;
 use solana_vote_api::vote_state;
 use std::error;
 use std::time::{Duration, Instant};
@@ -213,22 +211,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     bootstrap_leader_stake_lamports,
                 ),
             ),
-            // storage account
-            (
-                bootstrap_storage_keypair.pubkey(),
-                storage_contract::create_validator_storage_account(1),
-            ),
         ],
         &[
             solana_vote_program!(),
             solana_stake_program!(),
             solana_budget_program!(),
-            solana_storage_program!(),
             solana_token_program!(),
             solana_config_program!(),
             solana_exchange_program!(),
         ],
     );
+    genesis_block.add_storage_program(&bootstrap_storage_keypair.pubkey());
+
     genesis_block.fee_calculator.lamports_per_signature =
         value_t_or_exit!(matches, "lamports_per_signature", u64);
     genesis_block.ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
