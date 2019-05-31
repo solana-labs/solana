@@ -294,7 +294,10 @@ flag_error() {
 }
 
 if ! $skipSetup; then
-  multinode-demo/setup.sh --hashes-per-tick auto
+  multinode-demo/setup.sh \
+    --hashes-per-tick auto \
+    --lamports-per-signature 1 \
+
 else
   verifyLedger
 fi

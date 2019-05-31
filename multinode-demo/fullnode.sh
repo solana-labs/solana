@@ -97,7 +97,8 @@ setup_validator_accounts() {
     echo "Vote and stake accounts have already been configured"
   else
     # Fund the node with enough tokens to fund its Vote, Staking, and Storage accounts
-    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop $((stake*2+2)) || return $?
+    declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
+    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop $((stake*2+fees)) || return $?
 
     # Fund the vote account from the node, with the node as the node_pubkey
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
