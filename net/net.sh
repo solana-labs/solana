@@ -476,9 +476,12 @@ start() {
   declare bootstrapLeader=true
   declare nodeType=validator
   declare loopCount=0
-  for ipAddress in "${fullnodeIpList[@]}" - "${blockstreamerIpList[@]}"; do
-    if [[ $ipAddress = - ]]; then
+  for ipAddress in "${fullnodeIpList[@]}" b "${blockstreamerIpList[@]}" r "${replicatorIpList[@]}"; do
+    if [[ $ipAddress = b ]]; then
       nodeType=blockstreamer
+      continue
+    elif [[ $ipAddress = r ]]; then
+      nodeType=replicator
       continue
     fi
     if $updateNodes; then
@@ -570,7 +573,7 @@ start() {
   echo
   echo "+++ Deployment Successful"
   echo "Bootstrap leader deployment took $bootstrapNodeDeployTime seconds"
-  echo "Additional fullnode deployment (${#fullnodeIpList[@]} full nodes, ${#blockstreamerIpList[@]} blockstreamer nodes) took $additionalNodeDeployTime seconds"
+  echo "Additional fullnode deployment (${#fullnodeIpList[@]} full nodes, ${#blockstreamerIpList[@]} blockstreamer nodes, ${#replicatorIpList[@]} replicators) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir"
 }
@@ -614,7 +617,7 @@ stop() {
 
   declare loopCount=0
   pids=()
-  for ipAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${clientIpList[@]}"; do
+  for ipAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${replicatorIpList[@]}" "${clientIpList[@]}"; do
     stopNode "$ipAddress" false
 
     # Stagger additional node stop time to avoid too many concurrent ssh
@@ -671,6 +674,9 @@ logs)
     fetchRemoteLog "$ipAddress" client
   done
   for ipAddress in "${blockstreamerIpList[@]}"; do
+    fetchRemoteLog "$ipAddress" fullnode
+  done
+  for ipAddress in "${replicatorIpList[@]}"; do
     fetchRemoteLog "$ipAddress" fullnode
   done
   ;;
