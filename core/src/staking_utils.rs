@@ -167,9 +167,10 @@ pub(crate) mod tests {
             keypairs: &[&T],
             ixs: Vec<Instruction>,
         ) {
-            bank.process_transaction(&Transaction::new_signed_instructions(
-                keypairs,
+            bank.process_transaction(&Transaction::new_signed_with_payer(
                 ixs,
+                Some(&keypairs[0].pubkey()),
+                keypairs,
                 bank.last_blockhash(),
             ))
             .unwrap();
@@ -204,7 +205,6 @@ pub(crate) mod tests {
             bank,
             &[from_account, &stake_account_keypair],
             vec![stake_instruction::delegate_stake(
-                &from_account.pubkey(),
                 &stake_account_pubkey,
                 vote_pubkey,
             )],
