@@ -2009,10 +2009,19 @@ mod tests {
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 1, genesis_block.hash());
         assert_eq!(bank.process_transaction(&tx_transfer_mint_to_1), Ok(()));
         assert_eq!(bank.is_delta.load(Ordering::Relaxed), true);
+
+        let bank1 = new_from_parent(&bank);
+        assert_eq!(bank1.is_delta.load(Ordering::Relaxed), false);
+        assert_eq!(bank1.hash(), bank.hash());
+        // ticks don't make a bank into a delta
+        bank.register_tick(&Hash::default());
+        assert_eq!(bank1.is_delta.load(Ordering::Relaxed), false);
+        assert_eq!(bank1.hash(), bank.hash());
     }
 
     #[test]
     fn test_is_votable() {
+        // test normal case
         let (genesis_block, mint_keypair) = create_genesis_block(500);
         let bank = Arc::new(Bank::new(&genesis_block));
         let key1 = Keypair::new();
@@ -2030,6 +2039,18 @@ mod tests {
         }
 
         assert_eq!(bank.is_votable(), true);
+
+        // test empty bank with ticks
+        let (genesis_block, _mint_keypair) = create_genesis_block(500);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        assert_eq!(bank.is_votable(), false);
+
+        // Register enough ticks to hit max tick height
+        for i in 0..genesis_block.ticks_per_slot - 1 {
+            bank.register_tick(&hash::hash(format!("hello world {}", i).as_bytes()));
+        }
+        // empty banks aren't votable even at max tick height
+        assert_eq!(bank.is_votable(), false);
     }
 
     #[test]
