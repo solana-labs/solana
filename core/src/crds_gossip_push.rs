@@ -179,11 +179,10 @@ impl CrdsGossipPush {
 
         let mut seed = [0; 32];
         seed[0..8].copy_from_slice(&thread_rng().next_u64().to_le_bytes());
-        let mut shuffle: WeightedShuffle<f32> = WeightedShuffle::new(
+        let mut shuffle = WeightedShuffle::new(
             options.iter().map(|weighted| weighted.0).collect_vec(),
             ChaChaRng::from_seed(seed),
-        )
-        .into_iter();
+        );
 
         while new_items.len() < need {
             match shuffle.next() {

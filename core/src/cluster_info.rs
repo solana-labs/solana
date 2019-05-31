@@ -502,15 +502,12 @@ impl ClusterInfo {
                 let stake = stakes.map_or(1, |stakes| *stakes.get(&c.id).unwrap_or(&1));
                 (stake, (stake, c.clone()))
             })
-            .into_iter()
             .unzip();
 
         let shuffle: WeightedShuffle<u64> = WeightedShuffle::new(stakes, rng);
 
-        let mut out: Vec<(u64, ContactInfo)> = shuffle
-            .into_iter()
-            .map(|x| peers_with_stakes[x].clone())
-            .collect();
+        let mut out: Vec<(u64, ContactInfo)> =
+            shuffle.map(|x| peers_with_stakes[x].clone()).collect();
 
         out.dedup();
         out
