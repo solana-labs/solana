@@ -2023,9 +2023,10 @@ mod tests {
 
         let bank1 = new_from_parent(&bank);
         assert_eq!(bank1.is_delta.load(Ordering::Relaxed), false);
+
         assert_eq!(bank1.hash_internal_state(), bank.hash());
         // ticks don't make a bank into a delta
-        bank.register_tick(&Hash::default());
+        bank1.register_tick(&Hash::default());
         assert_eq!(bank1.is_delta.load(Ordering::Relaxed), false);
         assert_eq!(bank1.hash_internal_state(), bank.hash());
     }
