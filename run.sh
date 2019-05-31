@@ -40,9 +40,24 @@ export RUST_BACKTRACE=1
 dataDir=$PWD/target/"$(basename "$0" .sh)"
 
 set -x
-solana-keygen -o "$dataDir"/config/leader-keypair.json
-solana-keygen -o "$dataDir"/config/leader-vote-account-keypair.json
-solana-keygen -o "$dataDir"/config/leader-stake-account-keypair.json
+leader_keypair="$dataDir/config/leader-keypair.json"
+if [[ -e $leader_keypair ]]; then
+  echo "Use existing leader keypair"
+else
+  solana-keygen -o "$leader_keypair"
+fi
+leader_vote_account_keypair="$dataDir/config/leader-vote-account-keypair.json"
+if [[ -e $leader_vote_account_keypair ]]; then
+  echo "Use existing leader vote account keypair"
+else
+  solana-keygen -o "$leader_vote_account_keypair"
+fi
+leader_stake_account_keypair="$dataDir/config/leader-stake-account-keypair.json"
+if [[ -e $leader_stake_account_keypair ]]; then
+  echo "Use existing leader stake account keypair"
+else
+  solana-keygen -o "$leader_stake_account_keypair"
+fi
 solana-keygen -o "$dataDir"/config/drone-keypair.json
 solana-keygen -o "$dataDir"/config/leader-storage-account-keypair.json
 
@@ -76,6 +91,8 @@ args=(
   --gossip-port 8001
   --rpc-port 8899
   --rpc-drone-address 127.0.0.1:9900
+  --accounts "$dataDir"/accounts
+  --snapshot-path "$dataDir"/snapshots
 )
 if [[ -n $blockstreamSocket ]]; then
   args+=(--blockstream "$blockstreamSocket")

@@ -1,5 +1,4 @@
 use bincode::serialized_size;
-use hashbrown::HashMap;
 use log::*;
 use rayon::prelude::*;
 use solana::contact_info::ContactInfo;
@@ -11,6 +10,7 @@ use solana::crds_value::CrdsValueLabel;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 type Node = Arc<Mutex<CrdsGossip>>;

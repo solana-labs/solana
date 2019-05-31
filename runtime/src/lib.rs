@@ -12,8 +12,9 @@ pub mod loader_utils;
 pub mod locked_accounts_results;
 pub mod message_processor;
 mod native_loader;
+mod serde_utils;
 pub mod stakes;
-mod status_cache;
+pub mod status_cache;
 mod system_instruction_processor;
 
 #[macro_use]

@@ -1,9 +1,9 @@
-use hashbrown::HashMap;
 use solana_runtime::bank::Bank;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::VoteState;
 use std::borrow::Borrow;
+use std::collections::HashMap;
 
 /// Looks through vote accounts, and finds the latest slot that has achieved
 /// supermajority lockout
@@ -47,7 +47,7 @@ pub fn vote_account_stakes_at_epoch(
 /// that have non-zero balance in any of their managed staking accounts
 pub fn staked_nodes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashMap<Pubkey, u64>> {
     bank.epoch_vote_accounts(epoch_height)
-        .map(|vote_accounts| to_staked_nodes(to_vote_states(vote_accounts.into_iter())))
+        .map(|vote_accounts| to_staked_nodes(to_vote_states(vote_accounts.iter())))
 }
 
 // input (vote_pubkey, (stake, vote_account)) => (stake, vote_state)
@@ -78,7 +78,7 @@ fn epoch_stakes_and_lockouts(bank: &Bank, epoch_height: u64) -> Vec<(u64, Option
     let node_staked_accounts = bank
         .epoch_vote_accounts(epoch_height)
         .expect("Bank state for epoch is missing")
-        .into_iter();
+        .iter();
 
     to_vote_states(node_staked_accounts)
         .map(|(stake, states)| (stake, states.root_slot))
@@ -116,13 +116,13 @@ pub(crate) mod tests {
         create_genesis_block, create_genesis_block_with_leader, GenesisBlockInfo,
         BOOTSTRAP_LEADER_LAMPORTS,
     };
-    use hashbrown::HashSet;
     use solana_sdk::instruction::Instruction;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use solana_stake_api::stake_instruction;
     use solana_vote_api::vote_instruction;
+    use std::collections::HashSet;
     use std::iter::FromIterator;
     use std::sync::Arc;
 

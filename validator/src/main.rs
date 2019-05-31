@@ -156,7 +156,14 @@ fn main() {
                 .validator(port_range_validator)
                 .help("Range to use for dynamically assigned ports"),
         )
-        .get_matches();
+        .arg(
+            clap::Arg::with_name("snapshot_path")
+                .long("snapshot-path")
+                .value_name("PATHS")
+                .takes_value(true)
+                .help("Snapshot path"),
+        )
+         .get_matches();
 
     let mut validator_config = ValidatorConfig::default();
     let keypair = if let Some(identity) = matches.value_of("identity") {
@@ -219,6 +226,11 @@ fn main() {
         validator_config.account_paths = Some(paths.to_string());
     } else {
         validator_config.account_paths = None;
+    }
+    if let Some(paths) = matches.value_of("snapshot_path") {
+        validator_config.snapshot_path = Some(paths.to_string());
+    } else {
+        validator_config.snapshot_path = None;
     }
     let cluster_entrypoint = matches.value_of("entrypoint").map(|entrypoint| {
         let entrypoint_addr = solana_netutil::parse_host_port(entrypoint)

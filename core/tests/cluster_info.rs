@@ -1,9 +1,9 @@
-use hashbrown::{HashMap, HashSet};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::prelude::*;
 use solana::cluster_info::{compute_retransmit_peers, ClusterInfo};
 use solana::contact_info::ContactInfo;
 use solana_sdk::pubkey::Pubkey;
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, Sender};

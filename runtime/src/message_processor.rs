@@ -1,5 +1,6 @@
 use crate::native_loader;
 use crate::system_instruction_processor;
+use serde::{Deserialize, Serialize};
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
@@ -85,8 +86,11 @@ pub type ProcessInstruction =
 
 pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<instruction_processor_utils::Entrypoint>>>;
 
+#[derive(Serialize, Deserialize)]
 pub struct MessageProcessor {
+    #[serde(skip)]
     instruction_processors: Vec<(Pubkey, ProcessInstruction)>,
+    #[serde(skip)]
     symbol_cache: SymbolCache,
 }
 
