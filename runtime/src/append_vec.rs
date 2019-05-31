@@ -130,6 +130,10 @@ impl AppendVec {
     fn get_slice(&self, offset: usize, size: usize) -> Option<(&[u8], usize)> {
         let len = self.len();
         if len < offset + size {
+            println!(
+                "Get slice is none, len: {}, offset: {}, size: {}",
+                len, offset, size
+            );
             return None;
         }
         let data = &self.map[offset..offset + size];
@@ -191,8 +195,16 @@ impl AppendVec {
     }
 
     pub fn get_account<'a>(&'a self, offset: usize) -> Option<(StoredAccount<'a>, usize)> {
-        let (meta, next): (&'a StorageMeta, _) = self.get_type(offset)?;
-        let (balance, next): (&'a AccountBalance, _) = self.get_type(next)?;
+        let res = self.get_type(offset);
+        if res.is_none() {
+            println!("Couldn't get offset");
+        }
+        let (meta, next): (&'a StorageMeta, _) = res?;
+        let res = self.get_type(next);
+        if res.is_none() {
+            println!("Couldn't get next");
+        }
+        let (balance, next): (&'a AccountBalance, _) = res?;
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
         Some((
             StoredAccount {

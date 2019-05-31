@@ -667,9 +667,12 @@ impl<'de> Deserialize<'de> for AccountsDB {
 mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
     use super::*;
+    use crate::append_vec::AccountBalance;
     use bincode::{deserialize_from, serialize_into, serialized_size};
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
+    use std::mem;
+    use std::thread::Builder;
 
     fn cleanup_paths(paths: &str) {
         let paths = get_paths_vec(&paths);
@@ -1221,5 +1224,49 @@ mod tests {
         let daccounts: AccountsDB = deserialize_from(&mut reader).unwrap();
         check_accounts(&daccounts, &pubkeys, 0, 100, 2);
         check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_store_account_stress() {
+        let fork_id = 42;
+        let num_threads = 2;
+        let paths = get_tmp_accounts_path!();
+
+        let min_file_bytes = mem::size_of::<StorageMeta>() + mem::size_of::<AccountBalance>();
+
+        let db = Arc::new(AccountsDB::new_with_file_size(
+            &paths.paths,
+            min_file_bytes as u64,
+        ));
+
+        db.add_root(fork_id);
+        let thread_hdls: Vec<_> = (0..num_threads)
+            .into_iter()
+            .map(|_| {
+                let db = db.clone();
+                Builder::new()
+                    .name("account-writers".to_string())
+                    .spawn(move || {
+                        let pubkey = Pubkey::new_rand();
+                        let mut account = Account::new(1, 0, &pubkey);
+                        loop {
+                            let account_bal = thread_rng().gen_range(1, 99);
+                            account.lamports = account_bal;
+                            db.store(fork_id, &[(&pubkey, &account)]);
+                            let (account, fork) = db
+                                .load_slow(&HashMap::new(), &pubkey)
+                                .expect(&format!("Could not fetch stored account {}", pubkey));
+                            assert_eq!(fork, fork_id);
+                            assert_eq!(account.lamports, account_bal);
+                        }
+                    })
+                    .unwrap()
+            })
+            .collect();
+
+        for t in thread_hdls {
+            t.join().unwrap();
+        }
     }
 }
