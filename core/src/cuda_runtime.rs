@@ -191,6 +191,11 @@ impl<T: Clone> PinnedVec<T> {
     pub fn push(&mut self, x: T) {
         let old_ptr = self.x.as_mut_ptr();
         let old_capacity = self.x.capacity();
+        // Predict realloc and unpin
+        if self.pinned && self.x.capacity() == self.x.len() {
+            unpin(old_ptr);
+            self.pinned = false;
+        }
         self.x.push(x);
         self.check_ptr(old_ptr, old_capacity, "push");
     }
@@ -198,6 +203,11 @@ impl<T: Clone> PinnedVec<T> {
     pub fn resize(&mut self, size: usize, elem: T) {
         let old_ptr = self.x.as_mut_ptr();
         let old_capacity = self.x.capacity();
+        // Predict realloc and unpin.
+        if self.pinned && self.x.capacity() < size {
+            unpin(old_ptr);
+            self.pinned = false;
+        }
         self.x.resize(size, elem);
         self.check_ptr(old_ptr, old_capacity, "resize");
     }
