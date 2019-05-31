@@ -472,18 +472,19 @@ fn process_authorize_voter(
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![vote_instruction::authorize_voter(
-        &config.keypair.pubkey(),           // from
         voting_account_pubkey,              // vote account to update
         &authorized_voter_keypair.pubkey(), // current authorized voter (often the vote account itself)
         new_authorized_voter_pubkey,        // new vote signer
     )];
 
-    let mut tx = Transaction::new_signed_instructions(
-        &[&config.keypair, &authorized_voter_keypair],
+    let mut tx = Transaction::new_signed_with_payer(
         ixs,
+        Some(&config.keypair.pubkey()),
+        &[&config.keypair, &authorized_voter_keypair],
         recent_blockhash,
     );
-    let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
+    let signature_str = rpc_client
+        .send_and_confirm_transaction(&mut tx, &[&config.keypair, &authorized_voter_keypair])?;
     Ok(signature_str.to_string())
 }
 

@@ -26,16 +26,8 @@ pub enum VoteInstruction {
     Vote(Vec<Vote>),
 }
 
-fn initialize_account(
-    from_pubkey: &Pubkey,
-    vote_pubkey: &Pubkey,
-    node_pubkey: &Pubkey,
-    commission: u32,
-) -> Instruction {
-    let account_metas = vec![
-        AccountMeta::new(*from_pubkey, true),
-        AccountMeta::new(*vote_pubkey, false),
-    ];
+fn initialize_account(vote_pubkey: &Pubkey, node_pubkey: &Pubkey, commission: u32) -> Instruction {
+    let account_metas = vec![AccountMeta::new(*vote_pubkey, false)];
     Instruction::new(
         id(),
         &VoteInstruction::InitializeAccount(*node_pubkey, commission),
@@ -53,20 +45,18 @@ pub fn create_account(
     let space = VoteState::size_of() as u64;
     let create_ix =
         system_instruction::create_account(from_pubkey, vote_pubkey, lamports, space, &id());
-    let init_ix = initialize_account(from_pubkey, vote_pubkey, node_pubkey, commission);
+    let init_ix = initialize_account(vote_pubkey, node_pubkey, commission);
     vec![create_ix, init_ix]
 }
 
 fn metas_for_authorized_signer(
-    from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
     authorized_voter_pubkey: &Pubkey, // currently authorized
 ) -> Vec<AccountMeta> {
-    let mut account_metas = vec![AccountMeta::new(*from_pubkey, true)]; // sender
-
     let is_own_signer = authorized_voter_pubkey == vote_pubkey;
 
-    account_metas.push(AccountMeta::new(*vote_pubkey, is_own_signer)); // vote account
+    // vote account
+    let mut account_metas = vec![AccountMeta::new(*vote_pubkey, is_own_signer)];
 
     if !is_own_signer {
         account_metas.push(AccountMeta::new(*authorized_voter_pubkey, true)) // signer
@@ -75,13 +65,11 @@ fn metas_for_authorized_signer(
 }
 
 pub fn authorize_voter(
-    from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
     authorized_voter_pubkey: &Pubkey, // currently authorized
     new_authorized_voter_pubkey: &Pubkey,
 ) -> Instruction {
-    let account_metas =
-        metas_for_authorized_signer(from_pubkey, vote_pubkey, authorized_voter_pubkey);
+    let account_metas = metas_for_authorized_signer(vote_pubkey, authorized_voter_pubkey);
 
     Instruction::new(
         id(),
@@ -91,16 +79,14 @@ pub fn authorize_voter(
 }
 
 pub fn vote(
-    from_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
     authorized_voter_pubkey: &Pubkey,
     recent_votes: Vec<Vote>,
 ) -> Instruction {
-    let mut account_metas =
-        metas_for_authorized_signer(from_pubkey, vote_pubkey, authorized_voter_pubkey);
+    let mut account_metas = metas_for_authorized_signer(vote_pubkey, authorized_voter_pubkey);
 
     // request slot_hashes syscall account after vote_pubkey
-    account_metas.insert(2, AccountMeta::new(slot_hashes::id(), false));
+    account_metas.insert(1, AccountMeta::new(slot_hashes::id(), false));
 
     Instruction::new(id(), &VoteInstruction::Vote(recent_votes), account_metas)
 }
@@ -116,13 +102,13 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    if keyed_accounts.len() < 2 {
+    if keyed_accounts.is_empty() {
         Err(InstructionError::InvalidInstructionData)?;
     }
 
-    // 0th index is the guy who paid for the transaction
-    let (me, rest) = &mut keyed_accounts.split_at_mut(2);
-    let me = &mut me[1];
+    // 0th index is vote account
+    let (me, rest) = &mut keyed_accounts.split_at_mut(1);
+    let me = &mut me[0];
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
@@ -193,14 +179,12 @@ mod tests {
             process_instruction(&vote(
                 &Pubkey::default(),
                 &Pubkey::default(),
-                &Pubkey::default(),
                 vec![Vote::default()]
             )),
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
             process_instruction(&authorize_voter(
-                &Pubkey::default(),
                 &Pubkey::default(),
                 &Pubkey::default(),
                 &Pubkey::default(),
