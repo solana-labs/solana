@@ -32,8 +32,6 @@ pub struct SolKeyedAccount<'a> {
 /// Information about the state of the cluster immediately before the program
 /// started executing the current instruction
 pub struct SolClusterInfo<'a> {
-    /// Current ledger tick
-    pub tick_height: u64,
     ///program_id of the currently executing program
     pub program_id: SolPubkey<'a>,
 }
@@ -142,12 +140,6 @@ pub unsafe fn deserialize<'a>(
     let data = { from_raw_parts(input.add(offset), data_length) };
     offset += data_length;
 
-    // Tick height
-
-    #[allow(clippy::cast_ptr_alignment)]
-    let tick_height = *(input.add(offset) as *const u64);
-    offset += size_of::<u64>();
-
     // Id
 
     let program_id = {
@@ -157,7 +149,6 @@ pub unsafe fn deserialize<'a>(
     };
 
     let info = SolClusterInfo {
-        tick_height,
         program_id,
     };
 

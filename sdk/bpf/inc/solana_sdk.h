@@ -199,7 +199,6 @@ typedef struct {
   uint64_t ka_num; /** Number of SolKeyedAccount entries in `ka` */
   const uint8_t *data; /** pointer to the instruction data */
   uint64_t data_len; /** Length in bytes of the instruction data */
-  uint64_t tick_height; /** Current ledger tick */
   const SolPubkey *program_id; /** program_id of the currently executing program */
 } SolParameters;
 
@@ -258,8 +257,6 @@ SOL_FN_PREFIX bool sol_deserialize(
   params->data = input;
   input += params->data_len;
 
-  params->tick_height = *(uint64_t *) input;
-  input += sizeof(uint64_t);
   params->program_id = (SolPubkey *) input;
   input += sizeof(SolPubkey);
 
@@ -299,8 +296,6 @@ SOL_FN_PREFIX void sol_log_array(const uint8_t *array, int len) {
  * @param params Pointer to a SolParameters structure
  */
 SOL_FN_PREFIX void sol_log_params(const SolParameters *params) {
-  sol_log("- Tick height:");
-  sol_log_64(params->tick_height, 0, 0, 0, 0);
   sol_log("- Program identifier:");
   sol_log_key(params->program_id);
 

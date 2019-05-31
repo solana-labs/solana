@@ -25,8 +25,6 @@ fn process_instruction(
     info: &SolClusterInfo,
     data: &[u8],
 ) -> bool {
-    sol_log("Tick height:");
-    sol_log_64(info.tick_height, 0, 0, 0, 0);
     sol_log("Program identifier:");
     sol_log_key(&info.program_id);
 
