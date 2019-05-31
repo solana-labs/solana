@@ -24,9 +24,11 @@ use crate::repair_service::RepairType;
 use crate::result::Result;
 use crate::staking_utils;
 use crate::streamer::{BlobReceiver, BlobSender};
+use crate::weighted_shuffle::WeightedShuffle;
 use bincode::{deserialize, serialize};
 use core::cmp;
 use rand::{thread_rng, Rng};
+use rand_chacha::ChaChaRng;
 use rayon::prelude::*;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_error};
 use solana_netutil::{
@@ -489,38 +491,40 @@ impl ClusterInfo {
             && !ContactInfo::is_valid_address(&contact_info.tpu)
     }
 
-    fn sort_by_stake<S: std::hash::BuildHasher>(
+    fn stake_weighted_shuffle<S: std::hash::BuildHasher>(
         peers: &[ContactInfo],
         stakes: Option<&HashMap<Pubkey, u64, S>>,
+        rng: ChaChaRng,
     ) -> Vec<(u64, ContactInfo)> {
-        let mut peers_with_stakes: Vec<_> = peers
+        let (stakes, peers_with_stakes): (Vec<_>, Vec<_>) = peers
             .iter()
             .map(|c| {
-                (
-                    stakes.map_or(0, |stakes| *stakes.get(&c.id).unwrap_or(&0)),
-                    c.clone(),
-                )
+                let stake = stakes.map_or(1, |stakes| *stakes.get(&c.id).unwrap_or(&1));
+                (stake, (stake, c.clone()))
             })
+            .into_iter()
+            .unzip();
+
+        let shuffle: WeightedShuffle<u64> = WeightedShuffle::new(stakes, rng);
+
+        let mut out: Vec<(u64, ContactInfo)> = shuffle
+            .into_iter()
+            .map(|x| peers_with_stakes[x].clone())
             .collect();
-        peers_with_stakes.sort_unstable_by(|(l_stake, l_info), (r_stake, r_info)| {
-            if r_stake == l_stake {
-                r_info.id.cmp(&l_info.id)
-            } else {
-                r_stake.cmp(&l_stake)
-            }
-        });
-        peers_with_stakes.dedup();
-        peers_with_stakes
+
+        out.dedup();
+        out
     }
 
     /// Return sorted Retransmit peers and index of `Self.id()` as if it were in that list
-    fn sorted_peers_and_index<S: std::hash::BuildHasher>(
+    fn shuffle_peers_and_index<S: std::hash::BuildHasher>(
         &self,
         stakes: Option<&HashMap<Pubkey, u64, S>>,
+        rng: ChaChaRng,
     ) -> (usize, Vec<ContactInfo>) {
         let mut peers = self.retransmit_peers();
         peers.push(self.lookup(&self.id()).unwrap().clone());
-        let contacts_and_stakes: Vec<_> = ClusterInfo::sort_by_stake(&peers, stakes);
+        let contacts_and_stakes: Vec<_> = ClusterInfo::stake_weighted_shuffle(&peers, stakes, rng);
         let mut index = 0;
         let peers: Vec<_> = contacts_and_stakes
             .into_iter()
@@ -537,9 +541,13 @@ impl ClusterInfo {
         (index, peers)
     }
 
-    pub fn sorted_tvu_peers(&self, stakes: Option<&HashMap<Pubkey, u64>>) -> Vec<ContactInfo> {
+    pub fn sorted_tvu_peers(
+        &self,
+        stakes: Option<&HashMap<Pubkey, u64>>,
+        rng: ChaChaRng,
+    ) -> Vec<ContactInfo> {
         let peers = self.tvu_peers();
-        let peers_with_stakes: Vec<_> = ClusterInfo::sort_by_stake(&peers, stakes);
+        let peers_with_stakes: Vec<_> = ClusterInfo::stake_weighted_shuffle(&peers, stakes, rng);
         peers_with_stakes
             .iter()
             .map(|(_, peer)| (*peer).clone())
@@ -1498,8 +1506,12 @@ pub fn compute_retransmit_peers<S: std::hash::BuildHasher>(
     stakes: Option<&HashMap<Pubkey, u64, S>>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     fanout: usize,
+    rng: ChaChaRng,
 ) -> (Vec<ContactInfo>, Vec<ContactInfo>) {
-    let (my_index, peers) = cluster_info.read().unwrap().sorted_peers_and_index(stakes);
+    let (my_index, peers) = cluster_info
+        .read()
+        .unwrap()
+        .shuffle_peers_and_index(stakes, rng);
     //calc num_layers and num_neighborhoods using the total number of nodes
     let (num_layers, layer_indices) = ClusterInfo::describe_data_plane(peers.len(), fanout);
 
