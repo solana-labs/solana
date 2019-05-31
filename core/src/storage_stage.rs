@@ -253,7 +253,7 @@ impl StorageStage {
         transactions_socket: &UdpSocket,
     ) -> io::Result<()> {
         let working_bank = bank_forks.read().unwrap().working_bank();
-        let blockhash = working_bank.confirmed_last_blockhash();
+        let blockhash = working_bank.confirmed_last_blockhash().0;
         let keypair_balance = working_bank.get_balance(&keypair.pubkey());
 
         if keypair_balance == 0 {

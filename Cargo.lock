@@ -2681,6 +2681,7 @@ dependencies = [
  "serde_json 1.0.39 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-ed25519-dalek 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-logger 0.16.0",
  "untrusted 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

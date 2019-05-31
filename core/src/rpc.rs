@@ -75,10 +75,8 @@ impl JsonRpcRequestProcessor {
     }
 
     fn get_recent_blockhash(&self) -> (String, FeeCalculator) {
-        (
-            self.bank().confirmed_last_blockhash().to_string(),
-            self.bank().fee_calculator.clone(),
-        )
+        let (blockhash, fee_calculator) = self.bank().confirmed_last_blockhash();
+        (blockhash.to_string(), fee_calculator)
     }
 
     pub fn get_signature_status(&self, signature: Signature) -> Option<transaction::Result<()>> {
@@ -358,7 +356,8 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .bank()
-            .confirmed_last_blockhash();
+            .confirmed_last_blockhash()
+            .0;
         let transaction = request_airdrop_transaction(&drone_addr, &pubkey, lamports, blockhash)
             .map_err(|err| {
                 info!("request_airdrop_transaction failed: {:?}", err);
@@ -493,7 +492,7 @@ mod tests {
         let bank = bank_forks.read().unwrap().working_bank();
         let exit = Arc::new(AtomicBool::new(false));
 
-        let blockhash = bank.confirmed_last_blockhash();
+        let blockhash = bank.confirmed_last_blockhash().0;
         let tx = system_transaction::transfer(&alice, pubkey, 20, blockhash);
         bank.process_transaction(&tx).expect("process transaction");
 
@@ -536,7 +535,7 @@ mod tests {
             &exit,
         );
         thread::spawn(move || {
-            let blockhash = bank.confirmed_last_blockhash();
+            let blockhash = bank.confirmed_last_blockhash().0;
             let tx = system_transaction::transfer(&alice, &bob_pubkey, 20, blockhash);
             bank.process_transaction(&tx).expect("process transaction");
         })
@@ -731,12 +730,17 @@ mod tests {
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"}}"#);
         let res = io.handle_request_sync(&req, meta);
-        let expected = format!(
-            r#"{{"jsonrpc":"2.0","result":["{}", {{"lamportsPerSignature": 0}}],"id":1}}"#,
-            blockhash
-        );
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": [ blockhash.to_string(), {
+                "lamportsPerSignature": 0,
+                "targetLamportsPerSignature": 0,
+                "targetSignaturesPerSlot": 0
+            }],
+            "id": 1
+        });
         let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
+            serde_json::from_value(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);

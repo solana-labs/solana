@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
+use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing::timestamp;
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 struct HashAge {
-    timestamp: u64,
+    fee_calculator: FeeCalculator,
     hash_height: u64,
+    timestamp: u64,
 }
 
 /// Low memory overhead, so can be cloned for every checkpoint
@@ -43,25 +45,31 @@ impl BlockhashQueue {
         self.last_hash.expect("no hash has been set")
     }
 
+    pub fn get_fee_calculator(&self, hash: &Hash) -> Option<&FeeCalculator> {
+        self.ages.get(hash).map(|hash_age| &hash_age.fee_calculator)
+    }
+
     /// Check if the age of the hash is within the max_age
     /// return false for any hashes with an age above max_age
-    pub fn check_hash_age(&self, hash: Hash, max_age: usize) -> bool {
-        let hash_age = self.ages.get(&hash);
+    pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> bool {
+        let hash_age = self.ages.get(hash);
         match hash_age {
             Some(age) => self.hash_height - age.hash_height <= max_age as u64,
             _ => false,
         }
     }
+
     /// check if hash is valid
     #[cfg(test)]
     pub fn check_hash(&self, hash: Hash) -> bool {
         self.ages.get(&hash).is_some()
     }
 
-    pub fn genesis_hash(&mut self, hash: &Hash) {
+    pub fn genesis_hash(&mut self, hash: &Hash, fee_calculator: &FeeCalculator) {
         self.ages.insert(
             *hash,
             HashAge {
+                fee_calculator: fee_calculator.clone(),
                 hash_height: 0,
                 timestamp: timestamp(),
             },
@@ -74,7 +82,7 @@ impl BlockhashQueue {
         hash_height - age.hash_height <= max_age as u64
     }
 
-    pub fn register_hash(&mut self, hash: &Hash) {
+    pub fn register_hash(&mut self, hash: &Hash, fee_calculator: &FeeCalculator) {
         self.hash_height += 1;
         let hash_height = self.hash_height;
 
@@ -88,6 +96,7 @@ impl BlockhashQueue {
         self.ages.insert(
             *hash,
             HashAge {
+                fee_calculator: fee_calculator.clone(),
                 hash_height,
                 timestamp: timestamp(),
             },
@@ -117,7 +126,7 @@ mod tests {
         let last_hash = Hash::default();
         let mut hash_queue = BlockhashQueue::new(100);
         assert!(!hash_queue.check_hash(last_hash));
-        hash_queue.register_hash(&last_hash);
+        hash_queue.register_hash(&last_hash, &FeeCalculator::default());
         assert!(hash_queue.check_hash(last_hash));
         assert_eq!(hash_queue.hash_height(), 1);
     }
@@ -127,7 +136,7 @@ mod tests {
         let last_hash = hash(&serialize(&0).unwrap());
         for i in 0..102 {
             let last_hash = hash(&serialize(&i).unwrap());
-            hash_queue.register_hash(&last_hash);
+            hash_queue.register_hash(&last_hash, &FeeCalculator::default());
         }
         // Assert we're no longer able to use the oldest hash.
         assert!(!hash_queue.check_hash(last_hash));
@@ -137,8 +146,8 @@ mod tests {
     fn test_queue_init_blockhash() {
         let last_hash = Hash::default();
         let mut hash_queue = BlockhashQueue::new(100);
-        hash_queue.register_hash(&last_hash);
+        hash_queue.register_hash(&last_hash, &FeeCalculator::default());
         assert_eq!(last_hash, hash_queue.last_hash());
-        assert!(hash_queue.check_hash_age(last_hash, 0));
+        assert!(hash_queue.check_hash_age(&last_hash, 0));
     }
 }
