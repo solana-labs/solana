@@ -32,7 +32,7 @@ traversal issues.  A cloud-hosted machine works best.  **Ensure that IP ports
 Prebuilt binaries are available for Linux x86_64 (Ubuntu 18.04 recommended).
 MacOS or WSL users may build from source.
 
-For a performance testnet with many transactions we have some preliminary recomended setups:
+For a performance testnet with many transactions we have some preliminary recommended setups:
 
 | | Low end | Medium end | High end | Notes |
 | --- | ---------|------------|----------| -- |
@@ -176,7 +176,7 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 Provide the **vote pubkey** to the `solana-wallet show-vote-account` command to view
 the recent voting activity from your validator:
 ```bash
-$ solana-wallet -n testnet.solana.com show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
+$ solana-wallet show-vote-account 2ozWvfaXQd1X6uKh8jERoRGApDqSqcEy6fF1oN13LL2G
 ```
 
 The vote pubkey for the validator can also be found by running:
