@@ -37,33 +37,34 @@ done
 
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
-dataDir=$PWD/target/"$(basename "$0" .sh)"
+dataDir=$PWD/config-local/"$(basename "$0" .sh)"
+ledgerDir=$PWD/config/ledger
 
 set -x
-leader_keypair="$dataDir/config/leader-keypair.json"
+leader_keypair="$dataDir/leader-keypair.json"
 if [[ -e $leader_keypair ]]; then
   echo "Use existing leader keypair"
 else
   solana-keygen -o "$leader_keypair"
 fi
-leader_vote_account_keypair="$dataDir/config/leader-vote-account-keypair.json"
+leader_vote_account_keypair="$dataDir/leader-vote-account-keypair.json"
 if [[ -e $leader_vote_account_keypair ]]; then
   echo "Use existing leader vote account keypair"
 else
   solana-keygen -o "$leader_vote_account_keypair"
 fi
-leader_stake_account_keypair="$dataDir/config/leader-stake-account-keypair.json"
+leader_stake_account_keypair="$dataDir/leader-stake-account-keypair.json"
 if [[ -e $leader_stake_account_keypair ]]; then
   echo "Use existing leader stake account keypair"
 else
   solana-keygen -o "$leader_stake_account_keypair"
 fi
-solana-keygen -o "$dataDir"/config/drone-keypair.json
-solana-keygen -o "$dataDir"/config/leader-storage-account-keypair.json
+solana-keygen -o "$dataDir"/drone-keypair.json
+solana-keygen -o "$dataDir"/leader-storage-account-keypair.json
 
 leaderVoteAccountPubkey=$(\
   solana-wallet \
-    --keypair "$dataDir"/config/leader-vote-account-keypair.json  \
+    --keypair "$dataDir"/leader-vote-account-keypair.json  \
     address \
 )
 
@@ -74,22 +75,28 @@ solana-genesis \
   --hashes-per-tick sleep \
   --disable-epoch-warmup \
   --slots-per-epoch 1000000 \
-  --mint "$dataDir"/config/drone-keypair.json \
-  --bootstrap-leader-keypair "$dataDir"/config/leader-keypair.json \
-  --bootstrap-vote-keypair "$dataDir"/config/leader-vote-account-keypair.json \
-  --bootstrap-stake-keypair "$dataDir"/config/leader-stake-account-keypair.json \
-  --bootstrap-storage-keypair "$dataDir"/config/leader-storage-account-keypair.json \
-  --ledger "$dataDir"/ledger
+  --mint "$dataDir"/drone-keypair.json \
+  --bootstrap-leader-keypair "$dataDir"/leader-keypair.json \
+  --bootstrap-vote-keypair "$dataDir"/leader-vote-account-keypair.json \
+  --bootstrap-stake-keypair "$dataDir"/leader-stake-account-keypair.json \
+  --bootstrap-storage-keypair "$dataDir"/leader-storage-account-keypair.json \
+  --ledger "$ledgerDir"
 
-solana-drone --keypair "$dataDir"/config/drone-keypair.json &
+abort() {
+  set +e
+  kill "$drone" "$validator"
+}
+trap abort INT TERM EXIT
+
+solana-drone --keypair "$dataDir"/drone-keypair.json &
 drone=$!
 
 args=(
-  --identity "$dataDir"/config/leader-keypair.json
-  --storage-keypair "$dataDir"/config/leader-storage-account-keypair.json
-  --voting-keypair "$dataDir"/config/leader-vote-account-keypair.json
+  --identity "$dataDir"/leader-keypair.json
+  --storage-keypair "$dataDir"/leader-storage-account-keypair.json
+  --voting-keypair "$dataDir"/leader-vote-account-keypair.json
   --vote-account "$leaderVoteAccountPubkey"
-  --ledger "$dataDir"/ledger/
+  --ledger "$ledgerDir"
   --gossip-port 8001
   --rpc-port 8899
   --rpc-drone-address 127.0.0.1:9900
@@ -101,11 +108,5 @@ if [[ -n $blockstreamSocket ]]; then
 fi
 solana-validator "${args[@]}" &
 validator=$!
-
-abort() {
-  set +e
-  kill "$drone" "$validator"
-}
-trap abort INT TERM EXIT
 
 wait "$validator"
