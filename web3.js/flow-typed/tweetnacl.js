@@ -4,9 +4,15 @@ declare module "tweetnacl" {
     secretKey: Buffer;
   };
 
+  declare type KeypairFunc = {
+    (): KeyPair,
+    fromSecretKey(secretKey: Buffer): KeyPair,
+    fromSeed(seed: Uint8Array): KeyPair,
+
+  };
   declare module.exports: {
     sign: {
-      keyPair(): KeyPair;
+      keyPair: KeypairFunc;
       detached(text: Buffer, secretKey: Buffer): Buffer;
     };
   };
