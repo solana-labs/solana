@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-bench-exchange"
-version = "0.15.1"
+version = "0.15.2"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -23,16 +23,16 @@ serde = "1.0.91"
 serde_derive = "1.0.91"
 serde_json = "1.0.38"
 # solana-runtime = { path = "../solana/runtime"}
-solana = { path = "../core", version = "0.15.1"   }
-solana-client = { path = "../client", version = "0.15.1"   }
-solana-drone = { path = "../drone", version = "0.15.1"   }
-solana-exchange-api = { path = "../programs/exchange_api", version = "0.15.1"   }
-solana-exchange-program = { path = "../programs/exchange_program", version = "0.15.1"   }
-solana-logger = { path = "../logger", version = "0.15.1"   }
-solana-metrics = { path = "../metrics", version = "0.15.1"   }
-solana-netutil = { path = "../netutil", version = "0.15.1"   }
-solana-runtime = { path = "../runtime", version = "0.15.1"   }
-solana-sdk = { path = "../sdk", version = "0.15.1"   }
+solana = { path = "../core", version = "0.15.2"    }
+solana-client = { path = "../client", version = "0.15.2"    }
+solana-drone = { path = "../drone", version = "0.15.2"    }
+solana-exchange-api = { path = "../programs/exchange_api", version = "0.15.2"    }
+solana-exchange-program = { path = "../programs/exchange_program", version = "0.15.2"    }
+solana-logger = { path = "../logger", version = "0.15.2"    }
+solana-metrics = { path = "../metrics", version = "0.15.2"    }
+solana-netutil = { path = "../netutil", version = "0.15.2"    }
+solana-runtime = { path = "../runtime", version = "0.15.2"    }
+solana-sdk = { path = "../sdk", version = "0.15.2"    }
 ws = "0.8.1"
 untrusted = "0.6.2"
 
