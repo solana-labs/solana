@@ -54,4 +54,19 @@ mod tests {
         });
         assert_eq!(count, 6);
     }
+
+    #[test]
+    fn test_weighted_shuffle_compare() {
+        let shuffle: WeightedShuffle<u64> =
+            WeightedShuffle::new(vec![50, 10, 2, 1, 1, 1], ChaChaRng::from_seed([0x5a; 32]));
+
+        let shuffle1: WeightedShuffle<u64> =
+            WeightedShuffle::new(vec![50, 10, 2, 1, 1, 1], ChaChaRng::from_seed([0x5a; 32]));
+        shuffle1
+            .into_iter()
+            .zip(shuffle.into_iter())
+            .for_each(|(x, y)| {
+                assert_eq!(x, y);
+            });
+    }
 }

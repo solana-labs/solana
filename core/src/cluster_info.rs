@@ -496,7 +496,7 @@ impl ClusterInfo {
         stakes: Option<&HashMap<Pubkey, u64, S>>,
         rng: ChaChaRng,
     ) -> Vec<(u64, ContactInfo)> {
-        let (stake_weights, peers_with_stakes): (Vec<_>, Vec<_>) = peers
+        let mut peers_with_weights_and_stakes: Vec<_> = peers
             .iter()
             .map(|c| {
                 let stake = stakes.map_or(0, |stakes| *stakes.get(&c.id).unwrap_or(&0));
@@ -504,7 +504,20 @@ impl ClusterInfo {
                 // assumed to be missing entry. So let's make sure stake weights are atleast 1
                 (cmp::max(1, stake), (stake, c.clone()))
             })
-            .unzip();
+            .collect();
+
+        peers_with_weights_and_stakes.sort_unstable_by(
+            |(_, (l_stake, l_info)), (_, (r_stake, r_info))| {
+                if r_stake == l_stake {
+                    r_info.id.cmp(&l_info.id)
+                } else {
+                    r_stake.cmp(&l_stake)
+                }
+            },
+        );
+
+        let (stake_weights, peers_with_stakes): (Vec<_>, Vec<_>) =
+            peers_with_weights_and_stakes.into_iter().unzip();
 
         let shuffle: WeightedShuffle<u64> = WeightedShuffle::new(stake_weights, rng);
 
