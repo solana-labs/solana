@@ -18,6 +18,7 @@ gce)
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType="--custom-cpu 16 --custom-memory 20GB"
   blockstreamerMachineType="--machine-type n1-standard-8"
+  replicatorMachineType="--custom-cpu 4 --custom-memory 16GB"
   ;;
 ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
@@ -33,6 +34,7 @@ ec2)
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType=c5.2xlarge
   blockstreamerMachineType=c5.2xlarge
+  replicatorMachineType=c5.xlarge
   ;;
 azure)
   # shellcheck source=net/scripts/azure-provider.sh
@@ -45,6 +47,7 @@ azure)
   fullNodeMachineType=$cpuBootstrapLeaderMachineType
   clientMachineType=Standard_D16s_v3
   blockstreamerMachineType=Standard_D16s_v3
+  replicatorMachineType=Standard_D4s_v3
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
@@ -55,9 +58,11 @@ esac
 prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
 additionalFullNodeCount=5
 clientNodeCount=1
+replicatorNodeCount=0
 blockstreamer=false
 fullNodeBootDiskSizeInGb=1000
 clientBootDiskSizeInGb=75
+replicatorBootDiskSizeInGb=1000
 externalNodes=false
 failOnValidatorBootupFailure=true
 
@@ -104,6 +109,7 @@ Manage testnet instances
  create-specific options:
    -n [number]      - Number of additional fullnodes (default: $additionalFullNodeCount)
    -c [number]      - Number of client nodes (default: $clientNodeCount)
+   -r [number]      - Number of replicator nodes (default: $replicatorNodeCount)
    -u               - Include a Blockstreamer (default: $blockstreamer)
    -P               - Use public network IP addresses (default: $publicNetwork)
    -g               - Enable GPU (default: $enableGpu)
@@ -137,7 +143,7 @@ shift
 [[ $command = create || $command = config || $command = info || $command = delete ]] ||
   usage "Invalid command: $command"
 
-while getopts "h?p:Pn:c:z:gG:a:d:uxf" opt; do
+while getopts "h?p:Pn:c:r:z:gG:a:d:uxf" opt; do
   case $opt in
   h | \?)
     usage
@@ -154,6 +160,9 @@ while getopts "h?p:Pn:c:z:gG:a:d:uxf" opt; do
     ;;
   c)
     clientNodeCount=$OPTARG
+    ;;
+  r)
+    replicatorNodeCount=$OPTARG
     ;;
   z)
     containsZone "$OPTARG" "${zones[@]}" || zones+=("$OPTARG")
@@ -449,9 +458,7 @@ EOF
     done
   fi
 
-  if $externalNodes; then
-    echo "Let's not reset the current client configuration"
-  else
+  if ! $externalNodes; then
     echo "clientIpList=()" >> "$configFile"
     echo "clientIpListPrivate=()" >> "$configFile"
   fi
@@ -461,9 +468,7 @@ EOF
     cloud_ForEachInstance recordInstanceIp true clientIpList
   }
 
-  if $externalNodes; then
-    echo "Let's not reset the current blockstream configuration"
-  else
+  if ! $externalNodes; then
     echo "blockstreamerIpList=()" >> "$configFile"
     echo "blockstreamerIpListPrivate=()" >> "$configFile"
   fi
@@ -471,6 +476,16 @@ EOF
   cloud_FindInstances "$prefix-blockstreamer"
   [[ ${#instances[@]} -eq 0 ]] || {
     cloud_ForEachInstance recordInstanceIp true blockstreamerIpList
+  }
+
+  if ! $externalNodes; then
+    echo "replicatorIpList=()" >> "$configFile"
+    echo "replicatorIpListPrivate=()" >> "$configFile"
+  fi
+  echo "Looking for replicator instances..."
+  cloud_FindInstances "$prefix-replicator"
+  [[ ${#instances[@]} -eq 0 ]] || {
+    cloud_ForEachInstance recordInstanceIp true replicatorIpList
   }
 
   echo "Wrote $configFile"
@@ -526,6 +541,7 @@ create)
   Bootstrap leader = $bootstrapLeaderMachineType (GPU=$enableGpu)
   Additional fullnodes = $additionalFullNodeCount x $fullNodeMachineType
   Client(s) = $clientNodeCount x $clientMachineType
+  Replicators(s) = $replicatorNodeCount x $replicatorMachineType
   Blockstreamer = $blockstreamer
 ========================================================================================
 
@@ -657,6 +673,12 @@ EOF
     cloud_CreateInstances "$prefix" "$prefix-blockstreamer" "1" \
       "$enableGpu" "$blockstreamerMachineType" "${zones[0]}" "$fullNodeBootDiskSizeInGb" \
       "$startupScript" "$blockstreamerAddress" "$bootDiskType"
+  fi
+
+  if [[ $replicatorNodeCount -gt 0 ]]; then
+    cloud_CreateInstances "$prefix" "$prefix-replicator" "$replicatorNodeCount" \
+      false "$replicatorMachineType" "${zones[0]}" "$replicatorBootDiskSizeInGb" \
+      "$startupScript" "" ""
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"

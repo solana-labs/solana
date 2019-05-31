@@ -148,6 +148,16 @@ local|tar)
     nohup ./multinode-demo/validator.sh "${args[@]}" > fullnode.log 2>&1 &
     sleep 1
     ;;
+  replicator)
+    args=(
+      "$entrypointIp":~/solana "$entrypointIp:8001"
+    )
+    if [[ $skipSetup != true ]]; then
+      ./multinode-demo/clear-config.sh
+    fi
+    nohup ./multinode-demo/replicator.sh "${args[@]}" > fullnode.log 2>&1 &
+    sleep 1
+    ;;
   *)
     echo "Error: unknown node type: $nodeType"
     exit 1
