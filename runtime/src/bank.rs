@@ -29,6 +29,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::syscall::fees::{self, Fees};
 use solana_sdk::syscall::slot_hashes::{self, SlotHashes};
+use solana_sdk::syscall::tick_height::{self, TickHeight};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
@@ -365,6 +366,16 @@ impl Bank {
         self.store(&fees::id(), &account);
     }
 
+    fn update_tick_height(&self) {
+        let mut account = self
+            .get_account(&tick_height::id())
+            .unwrap_or_else(|| tick_height::create_account(1));
+
+        TickHeight::to(self.tick_height(), &mut account).unwrap();
+
+        self.store(&tick_height::id(), &account);
+    }
+
     fn set_hash(&self) -> bool {
         let mut hash = self.hash.write().unwrap();
 
@@ -565,6 +576,8 @@ impl Bank {
             self.tick_height.load(Ordering::SeqCst) as u64
         };
         inc_new_counter_debug!("bank-register_tick-registered", 1);
+
+        self.update_tick_height();
 
         // Register a new block hash if at the last tick in the slot
         if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
@@ -2169,6 +2182,21 @@ mod tests {
             fees.fee_calculator.lamports_per_signature
         );
         assert_eq!(fees.fee_calculator.lamports_per_signature, 12345);
+    }
+
+    #[test]
+    fn test_bank_tick_height_account() {
+        let (genesis_block, _) = create_genesis_block(1);
+        let bank = Bank::new(&genesis_block);
+
+        for i in 0..10 {
+            bank.register_tick(&hash::hash(format!("hashing {}", i).as_bytes()));
+        }
+
+        let tick_account = bank.get_account(&tick_height::id()).unwrap();
+        let tick_height = TickHeight::from(&tick_account).unwrap();
+        assert_eq!(bank.tick_height(), tick_height);
+        assert_eq!(tick_height, 10);
     }
 
     #[test]

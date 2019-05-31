@@ -5,6 +5,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
+use solana_sdk::syscall::tick_height;
 use solana_sdk::system_instruction;
 use std::collections::HashMap;
 
@@ -118,7 +119,10 @@ pub fn mining_proof(
         signature,
         proof_index,
     };
-    let account_metas = vec![AccountMeta::new(*storage_pubkey, true)];
+    let account_metas = vec![
+        AccountMeta::new(*storage_pubkey, true),
+        AccountMeta::new(tick_height::id(), false),
+    ];
     Instruction::new(id(), &storage_instruction, account_metas)
 }
 
@@ -131,7 +135,10 @@ pub fn advertise_recent_blockhash(
         hash: storage_hash,
         slot,
     };
-    let account_metas = vec![AccountMeta::new(*storage_pubkey, true)];
+    let account_metas = vec![
+        AccountMeta::new(*storage_pubkey, true),
+        AccountMeta::new(tick_height::id(), false),
+    ];
     Instruction::new(id(), &storage_instruction, account_metas)
 }
 
@@ -159,6 +166,7 @@ pub fn claim_reward(
     let account_metas = vec![
         AccountMeta::new(*storage_pubkey, false),
         AccountMeta::new(*mining_pool_pubkey, false),
+        AccountMeta::new(tick_height::id(), false),
     ];
     Instruction::new(id(), &storage_instruction, account_metas)
 }

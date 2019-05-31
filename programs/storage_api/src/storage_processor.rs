@@ -6,6 +6,7 @@ use crate::storage_instruction::StorageInstruction;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::syscall::tick_height::TickHeight;
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 
 pub fn process_instruction(
@@ -44,10 +45,11 @@ pub fn process_instruction(
             signature,
             ..
         } => {
-            if me_unsigned || !rest.is_empty() {
+            if me_unsigned || rest.len() != 1 {
                 // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
+            let tick_height = TickHeight::from(&rest[0].account).unwrap();
             storage_account.submit_mining_proof(
                 sha_state,
                 slot,
@@ -56,10 +58,11 @@ pub fn process_instruction(
             )
         }
         StorageInstruction::AdvertiseStorageRecentBlockhash { hash, slot } => {
-            if me_unsigned || !rest.is_empty() {
+            if me_unsigned || rest.len() != 1 {
                 // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
+            let tick_height = TickHeight::from(&rest[0].account).unwrap();
             storage_account.advertise_storage_recent_blockhash(
                 hash,
                 slot,
@@ -67,9 +70,10 @@ pub fn process_instruction(
             )
         }
         StorageInstruction::ClaimStorageReward { slot } => {
-            if rest.len() != 1 {
+            if rest.len() != 2 {
                 Err(InstructionError::InvalidArgument)?;
             }
+            let tick_height = TickHeight::from(&rest[1].account).unwrap();
             storage_account.claim_storage_reward(
                 &mut rest[0],
                 slot,
@@ -113,6 +117,7 @@ mod tests {
     use solana_sdk::message::Message;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+    use solana_sdk::syscall::tick_height;
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -157,11 +162,10 @@ mod tests {
         );
         // the proof is for slot 16, which is in segment 0, need to move the tick height into segment 2
         let ticks_till_next_segment = TICKS_IN_SEGMENT * 2;
+        let mut tick_account = tick_height::create_account(1);
+        TickHeight::to(ticks_till_next_segment, &mut tick_account);
 
-        assert_eq!(
-            test_instruction(&ix, &mut [account]),
-            Ok(())
-        );
+        assert_eq!(test_instruction(&ix, &mut [account, tick_account]), Ok(()));
     }
 
     #[test]
@@ -169,15 +173,18 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let mut accounts = [(pubkey, Account::default())];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
-        assert!(process_instruction(&id(), &mut keyed_accounts, &[], 42).is_err());
+        assert!(process_instruction(&id(), &mut keyed_accounts, &[]).is_err());
     }
 
     #[test]
     fn test_serialize_overflow() {
         let pubkey = Pubkey::new_rand();
+        let tick_pubkey = Pubkey::new_rand();
         let mut keyed_accounts = Vec::new();
         let mut user_account = Account::default();
+        let mut tick_account = tick_height::create_account(1);
         keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
+        keyed_accounts.push(KeyedAccount::new(&tick_pubkey, false, &mut tick_account));
 
         let ix = storage_instruction::advertise_recent_blockhash(
             &pubkey,
@@ -186,7 +193,7 @@ mod tests {
         );
 
         assert_eq!(
-            process_instruction(&id(), &mut keyed_accounts, &ix.data, 42),
+            process_instruction(&id(), &mut keyed_accounts, &ix.data),
             Err(InstructionError::InvalidAccountData)
         );
     }
@@ -200,10 +207,12 @@ mod tests {
             storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default(), 0);
         // move tick height into segment 1
         let ticks_till_next_segment = TICKS_IN_SEGMENT + 1;
+        let mut tick_account = tick_height::create_account(1);
+        TickHeight::to(ticks_till_next_segment, &mut tick_account);
 
         assert!(test_instruction(&ix, &mut accounts).is_err());
 
-        let mut accounts = [Account::default(), Account::default(), Account::default()];
+        let mut accounts = [Account::default(), tick_account, Account::default()];
 
         assert!(test_instruction(&ix, &mut accounts).is_err());
     }
@@ -227,10 +236,10 @@ mod tests {
     fn test_submit_mining_ok() {
         solana_logger::setup();
         let pubkey = Pubkey::new_rand();
-        let mut accounts = [Account::default(), Account::default()];
-        accounts[0].data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
+        let mut account = Account::default();
+        account.data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
         {
-            let mut storage_account = StorageAccount::new(&mut accounts[0]);
+            let mut storage_account = StorageAccount::new(&mut account);
             storage_account.initialize_replicator_storage().unwrap();
         }
 
@@ -238,11 +247,10 @@ mod tests {
             storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default(), 0);
         // move tick height into segment 1
         let ticks_till_next_segment = TICKS_IN_SEGMENT + 1;
+        let mut tick_account = tick_height::create_account(1);
+        TickHeight::to(ticks_till_next_segment, &mut tick_account);
 
-        assert_matches!(
-            test_instruction(&ix, &mut accounts),
-            Ok(_)
-        );
+        assert_matches!(test_instruction(&ix, &mut [account, tick_account]), Ok(_));
     }
 
     #[test]
