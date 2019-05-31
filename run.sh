@@ -72,6 +72,8 @@ solana-genesis \
   --bootstrap-leader-lamports 10000000 \
   --lamports-per-signature 1 \
   --hashes-per-tick sleep \
+  --disable-epoch-warmup \
+  --slots-per-epoch 1000000 \
   --mint "$dataDir"/config/drone-keypair.json \
   --bootstrap-leader-keypair "$dataDir"/config/leader-keypair.json \
   --bootstrap-vote-keypair "$dataDir"/config/leader-vote-account-keypair.json \

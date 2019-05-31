@@ -158,6 +158,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .default_value(default_slots_per_epoch)
                 .help("The number of slots in an epoch"),
         )
+        .arg(
+            Arg::with_name("disable_epoch_warmup")
+                .long("--disable-epoch-warmup")
+                .hidden(true),
+        )
         .get_matches();
 
     let bootstrap_leader_keypair_file = matches.value_of("bootstrap_leader_keypair_file").unwrap();
@@ -227,6 +232,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         value_t_or_exit!(matches, "lamports_per_signature", u64);
     genesis_block.ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
     genesis_block.slots_per_epoch = value_t_or_exit!(matches, "slots_per_epoch", u64);
+    genesis_block.epoch_warmup = !matches.is_present("disable_epoch_warmup");
     genesis_block.poh_config.target_tick_duration =
         Duration::from_millis(value_t_or_exit!(matches, "target_tick_duration", u64));
 
