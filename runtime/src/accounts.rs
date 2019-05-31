@@ -15,6 +15,7 @@ use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::syscall;
 use solana_sdk::system_program;
 use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
@@ -450,11 +451,13 @@ impl Accounts {
             |stored_account: &StoredAccount,
              _id: AppendVecId,
              accum: &mut Vec<(Pubkey, u64, Hash)>| {
-                accum.push((
-                    stored_account.meta.pubkey,
-                    stored_account.meta.write_version,
-                    Self::hash_account(stored_account),
-                ));
+                if !syscall::check_id(&stored_account.balance.owner) {
+                    accum.push((
+                        stored_account.meta.pubkey,
+                        stored_account.meta.write_version,
+                        Self::hash_account(stored_account),
+                    ));
+                }
             },
         );
         let mut account_hashes: Vec<_> = accumulator.into_iter().flat_map(|x| x).collect();
@@ -600,6 +603,7 @@ mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::CompiledInstruction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::syscall;
     use solana_sdk::transaction::Transaction;
     use std::io::Cursor;
     use std::thread::{sleep, Builder};
@@ -1086,6 +1090,8 @@ mod tests {
     #[test]
     fn test_accounts_empty_hash_internal_state() {
         let accounts = Accounts::new(None);
+        assert_eq!(accounts.hash_internal_state(0), None);
+        accounts.store_slow(0, &Pubkey::default(), &Account::new(1, 0, &syscall::id()));
         assert_eq!(accounts.hash_internal_state(0), None);
     }
 
