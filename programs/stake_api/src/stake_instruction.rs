@@ -122,7 +122,6 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
-    _tick_height: u64,
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
@@ -190,12 +189,7 @@ mod tests {
                 .zip(accounts.iter_mut())
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
-            super::process_instruction(
-                &Pubkey::default(),
-                &mut keyed_accounts,
-                &instruction.data,
-                0,
-            )
+            super::process_instruction(&Pubkey::default(), &mut keyed_accounts, &instruction.data)
         }
     }
 
@@ -234,7 +228,6 @@ mod tests {
                     &mut Account::default(),
                 )],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
-                0,
             ),
             Err(InstructionError::InvalidInstructionData),
         );
@@ -248,7 +241,6 @@ mod tests {
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                 ],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
-                0,
             ),
             Err(InstructionError::InvalidInstructionData),
         );
@@ -262,7 +254,6 @@ mod tests {
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                 ],
                 &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
-                0,
             ),
             Err(InstructionError::InvalidInstructionData),
         );
@@ -277,7 +268,6 @@ mod tests {
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                 ],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
-                0,
             ),
             Err(InstructionError::InvalidAccountData),
         );
@@ -293,7 +283,6 @@ mod tests {
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                 ],
                 &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
-                0,
             ),
             Err(InstructionError::InvalidAccountData),
         );

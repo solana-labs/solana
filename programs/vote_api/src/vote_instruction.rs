@@ -95,7 +95,6 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
-    _tick_height: u64,
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
@@ -136,7 +135,7 @@ mod tests {
     #[test]
     fn test_vote_process_instruction_decode_bail() {
         assert_eq!(
-            super::process_instruction(&Pubkey::default(), &mut [], &[], 0,),
+            super::process_instruction(&Pubkey::default(), &mut [], &[],),
             Err(InstructionError::InvalidInstructionData),
         );
     }
@@ -153,12 +152,7 @@ mod tests {
                 .zip(accounts.iter_mut())
                 .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
-            super::process_instruction(
-                &Pubkey::default(),
-                &mut keyed_accounts,
-                &instruction.data,
-                0,
-            )
+            super::process_instruction(&Pubkey::default(), &mut keyed_accounts, &instruction.data)
         }
     }
 

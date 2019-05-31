@@ -4,6 +4,7 @@ use crate::pubkey::Pubkey;
 
 pub mod fees;
 pub mod slot_hashes;
+pub mod tick_height;
 
 /// "Sysca11111111111111111111111111111111111111"
 ///   owner pubkey for syscall accounts

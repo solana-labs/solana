@@ -9,7 +9,6 @@ pub fn process_instruction(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
-    _tick_height: u64,
 ) -> Result<(), InstructionError> {
     if keyed_accounts[0].signer_key().is_none() {
         error!("account[0].signer_key().is_none()");
