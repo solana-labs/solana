@@ -15,7 +15,7 @@ chrono = "0.4.0"
 crc = "1.8.1"
 memmap = "0.7.0"
 rand = "0.6.5"
-serde = "1.0.91"
+serde = "1.0.92"
 serde_derive = "1.0.91"
 
 [dev-dependencies]
