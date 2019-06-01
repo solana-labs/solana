@@ -171,9 +171,11 @@ impl AccountStorageEntry {
         }
     }
 
-    pub fn set_status(&self, mut status: AccountStorageStatus) {
-        let mut count_and_status = self.count_and_status.write().unwrap();
-
+    pub fn set_status(
+        &self,
+        mut status: AccountStorageStatus,
+        count_and_status: &mut (usize, AccountStorageStatus),
+    ) {
         let count = count_and_status.0;
 
         if status == AccountStorageStatus::StorageFull && count == 0 {
@@ -200,8 +202,7 @@ impl AccountStorageEntry {
         self.count_and_status.read().unwrap().0
     }
 
-    fn add_account(&self) {
-        let mut count_and_status = self.count_and_status.write().unwrap();
+    fn add_account(&self, count_and_status: &mut (usize, AccountStorageStatus)) {
         *count_and_status = (count_and_status.0 + 1, count_and_status.1);
     }
 
@@ -438,12 +439,13 @@ impl AccountsDB {
         let mut infos: Vec<AccountInfo> = vec![];
         while infos.len() < with_meta.len() {
             let storage = self.fork_storage(fork_id);
+            let mut count_and_status = storage.count_and_status.write().unwrap();
             let rvs = storage.accounts.append_accounts(&with_meta[infos.len()..]);
             if rvs.is_empty() {
-                storage.set_status(AccountStorageStatus::StorageFull);
+                storage.set_status(AccountStorageStatus::StorageFull, &mut count_and_status);
             }
             for (offset, (_, account)) in rvs.iter().zip(&with_meta[infos.len()..]) {
-                storage.add_account();
+                storage.add_account(&mut count_and_status);
                 infos.push(AccountInfo {
                     id: storage.id,
                     offset: *offset,
