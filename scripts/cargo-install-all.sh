@@ -39,6 +39,7 @@ BIN_CRATES=(
   install
   keygen
   ledger-tool
+  replicator
   validator
   wallet
 )

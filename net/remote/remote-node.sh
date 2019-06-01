@@ -153,6 +153,8 @@ local|tar)
     sleep 1
     ;;
   replicator)
+    net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
+
     args=(
       "$entrypointIp":~/solana "$entrypointIp:8001"
     )

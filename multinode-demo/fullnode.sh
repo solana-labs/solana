@@ -270,6 +270,7 @@ EOF
   default_arg --storage-keypair "$storage_keypair_path"
   default_arg --ledger "$ledger_config_dir"
 
+  rsync_entrypoint_url=$(rsync_url "$entrypoint")
 elif [[ $node_type = bootstrap_leader ]]; then
   if [[ ${#positional_args[@]} -ne 0 ]]; then
     fullnode_usage "Unknown argument: ${positional_args[0]}"
