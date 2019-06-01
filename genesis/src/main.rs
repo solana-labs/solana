@@ -114,6 +114,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Number of lamports to assign to the bootstrap leader"),
         )
         .arg(
+            Arg::with_name("bootstrap_leader_stake_lamports")
+                .long("bootstrap-leader-stake-lamports")
+                .value_name("LAMPORTS")
+                .takes_value(true)
+                .default_value(default_bootstrap_leader_lamports)
+                .required(true)
+                .help("Number of lamports to assign to the bootstrap leader's stake account"),
+        )
+        .arg(
             Arg::with_name("lamports_per_signature")
                 .long("lamports-per-signature")
                 .value_name("LAMPORTS")
@@ -168,8 +177,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mint_keypair_file = matches.value_of("mint_keypair_file").unwrap();
     let ledger_path = matches.value_of("ledger_path").unwrap();
     let lamports = value_t_or_exit!(matches, "lamports", u64);
+    let bootstrap_leader_lamports = value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
     let bootstrap_leader_stake_lamports =
-        value_t_or_exit!(matches, "bootstrap_leader_lamports", u64);
+        value_t_or_exit!(matches, "bootstrap_leader_stake_lamports", u64);
 
     let bootstrap_leader_keypair = read_keypair(bootstrap_leader_keypair_file)?;
     let bootstrap_vote_keypair = read_keypair(bootstrap_vote_keypair_file)?;
@@ -198,7 +208,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             // node needs an account to issue votes from
             (
                 bootstrap_leader_keypair.pubkey(),
-                Account::new(1, 0, &system_program::id()),
+                Account::new(bootstrap_leader_lamports, 0, &system_program::id()),
             ),
             // where votes go to
             (bootstrap_vote_keypair.pubkey(), vote_account),
