@@ -178,15 +178,8 @@ impl AccountStorageEntry {
     ) {
         let count = count_and_status.0;
 
-        if status == AccountStorageStatus::StorageFull && count == 0 {
-            // this case arises when the append_vec is full (store_ptrs fails),
-            //  but all accounts have already been removed from the storage
-            //
-            // the only time it's safe to call reset() on an append_vec is when
-            //  every account has been removed
-            //          **and**
-            //  the append_vec has previously been completely full
-            //
+        if count == 0 {
+            // This case arises when all accounts have already been removed from the storage
             self.accounts.reset();
             status = AccountStorageStatus::StorageAvailable;
         }
@@ -210,18 +203,8 @@ impl AccountStorageEntry {
         let mut count_and_status = self.count_and_status.write().unwrap();
         let (count, mut status) = *count_and_status;
 
-        if count == 1 && status == AccountStorageStatus::StorageFull {
-            // this case arises when we remove the last account from the
-            //  storage, but we've learned from previous write attempts that
-            //  the storage is full
-            //
-            // the only time it's safe to call reset() on an append_vec is when
-            //  every account has been removed
-            //          **and**
-            //  the append_vec has previously been completely full
-            //
-            // otherwise, the storage may be in flight with a store()
-            //   call
+        if count == 1 {
+            // This case arises when when every account has been removed
             self.accounts.reset();
             status = AccountStorageStatus::StorageAvailable;
         }
