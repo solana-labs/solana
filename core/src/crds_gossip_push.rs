@@ -14,7 +14,7 @@ use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_BLOOM_SIZE};
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use crate::packet::BLOB_DATA_SIZE;
-use crate::weighted_shuffle::WeightedShuffle;
+use crate::weighted_shuffle::weighted_shuffle;
 use bincode::serialized_size;
 use indexmap::map::IndexMap;
 use itertools::Itertools;
@@ -179,10 +179,11 @@ impl CrdsGossipPush {
 
         let mut seed = [0; 32];
         seed[0..8].copy_from_slice(&thread_rng().next_u64().to_le_bytes());
-        let mut shuffle = WeightedShuffle::new(
+        let mut shuffle = weighted_shuffle(
             options.iter().map(|weighted| weighted.0).collect_vec(),
             ChaChaRng::from_seed(seed),
-        );
+        )
+        .into_iter();
 
         while new_items.len() < need {
             match shuffle.next() {

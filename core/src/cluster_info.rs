@@ -24,9 +24,10 @@ use crate::repair_service::RepairType;
 use crate::result::Result;
 use crate::staking_utils;
 use crate::streamer::{BlobReceiver, BlobSender};
-use crate::weighted_shuffle::WeightedShuffle;
+use crate::weighted_shuffle::weighted_shuffle;
 use bincode::{deserialize, serialize};
 use core::cmp;
+use itertools::Itertools;
 use rand::{thread_rng, Rng};
 use rand_chacha::ChaChaRng;
 use rayon::prelude::*;
@@ -496,33 +497,30 @@ impl ClusterInfo {
         stakes: Option<&HashMap<Pubkey, u64, S>>,
         rng: ChaChaRng,
     ) -> Vec<(u64, ContactInfo)> {
-        let mut peers_with_weights_and_stakes: Vec<_> = peers
-            .iter()
+        let (stake_weights, peers_with_stakes): (Vec<_>, Vec<_>) = peers
+            .into_iter()
             .map(|c| {
                 let stake = stakes.map_or(0, |stakes| *stakes.get(&c.id).unwrap_or(&0));
                 // For stake weighted shuffle a valid weight is atleast 1. Weight 0 is
                 // assumed to be missing entry. So let's make sure stake weights are atleast 1
                 (cmp::max(1, stake), (stake, c.clone()))
             })
-            .collect();
-
-        peers_with_weights_and_stakes.sort_unstable_by(
-            |(_, (l_stake, l_info)), (_, (r_stake, r_info))| {
+            .sorted_by(|(_, (l_stake, l_info)), (_, (r_stake, r_info))| {
                 if r_stake == l_stake {
                     r_info.id.cmp(&l_info.id)
                 } else {
                     r_stake.cmp(&l_stake)
                 }
-            },
-        );
+            })
+            .into_iter()
+            .unzip();
 
-        let (stake_weights, peers_with_stakes): (Vec<_>, Vec<_>) =
-            peers_with_weights_and_stakes.into_iter().unzip();
+        let shuffle = weighted_shuffle(stake_weights, rng);
 
-        let shuffle: WeightedShuffle<u64> = WeightedShuffle::new(stake_weights, rng);
-
-        let mut out: Vec<(u64, ContactInfo)> =
-            shuffle.map(|x| peers_with_stakes[x].clone()).collect();
+        let mut out: Vec<(u64, ContactInfo)> = shuffle
+            .iter()
+            .map(|x| peers_with_stakes[*x].clone())
+            .collect();
 
         out.dedup();
         out
