@@ -68,6 +68,7 @@ pub mod test_tx;
 pub mod tpu;
 pub mod tvu;
 pub mod validator;
+pub mod weighted_shuffle;
 pub mod window_service;
 
 #[macro_use]

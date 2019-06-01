@@ -9,6 +9,8 @@ use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
 use rayon::prelude::*;
 use rayon::ThreadPool;
 use solana_metrics::{
@@ -85,10 +87,12 @@ impl Broadcast {
         }
 
         let bank_epoch = bank.get_stakers_epoch(bank.slot());
-        let mut broadcast_table = cluster_info
-            .read()
-            .unwrap()
-            .sorted_tvu_peers(staking_utils::staked_nodes_at_epoch(&bank, bank_epoch).as_ref());
+        let mut seed = [0; 32];
+        seed[0..8].copy_from_slice(&bank.slot().to_le_bytes());
+        let mut broadcast_table = cluster_info.read().unwrap().sorted_tvu_peers(
+            staking_utils::staked_nodes_at_epoch(&bank, bank_epoch).as_ref(),
+            ChaChaRng::from_seed(seed),
+        );
 
         inc_new_counter_warn!("broadcast_service-num_peers", broadcast_table.len() + 1);
         // Layer 1, leader nodes are limited to the fanout size.

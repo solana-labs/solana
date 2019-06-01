@@ -1,3 +1,5 @@
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::prelude::*;
 use solana::cluster_info::{compute_retransmit_peers, ClusterInfo};
@@ -72,7 +74,8 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
     let blobs: Vec<(_, _)> = (0..100).into_par_iter().map(|i| (i as i32, true)).collect();
 
     // pretend to broadcast from leader - cluster_info::create_broadcast_orders
-    let mut broadcast_table = cluster_info.sorted_tvu_peers(Some(&staked_nodes));
+    let mut broadcast_table =
+        cluster_info.sorted_tvu_peers(Some(&staked_nodes), ChaChaRng::from_seed([0x5a; 32]));
     broadcast_table.truncate(fanout);
     let orders = ClusterInfo::create_broadcast_orders(false, &blobs, &broadcast_table);
 
@@ -109,6 +112,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
                         Some(&staked_nodes),
                         &Arc::new(RwLock::new(cluster.clone())),
                         fanout,
+                        ChaChaRng::from_seed([0x5a; 32]),
                     );
                     let vec_children: Vec<_> = children
                         .iter()
