@@ -58,7 +58,6 @@ mod tests {
         let mut count = 0;
         let shuffle = weighted_shuffle(test_weights, ChaChaRng::from_seed([0xa5; 32]));
         shuffle.into_iter().for_each(|x| {
-            println!("{}", x);
             assert_eq!(test_set[x], 0);
             test_set[x] = 1;
             count += 1;
