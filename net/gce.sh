@@ -723,6 +723,13 @@ info)
     zone=${blockstreamerIpListZone[$i]}
     printNode blockstreamer "$ipAddress" "$ipAddressPrivate" "$zone"
   done
+
+  for i in $(seq 0 $(( ${#replicatorIpList[@]} - 1)) ); do
+    ipAddress=${replicatorIpList[$i]}
+    ipAddressPrivate=${replicatorIpListPrivate[$i]}
+    zone=${replicatorIpListZone[$i]}
+    printNode replicator "$ipAddress" "$ipAddressPrivate" "$zone"
+  done
   ;;
 *)
   usage "Unknown command: $command"

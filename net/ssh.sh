@@ -77,7 +77,7 @@ if [[ ${#replicatorIpList[@]} -eq 0 ]]; then
   echo "  None"
 else
   for ipAddress in "${replicatorIpList[@]}"; do
-    printNode replicator "$ipAddress"
+    printNode fullnode "$ipAddress"
   done
 fi
 echo
