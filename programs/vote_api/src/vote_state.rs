@@ -323,11 +323,11 @@ pub fn create_bootstrap_leader_account(
     vote_pubkey: &Pubkey,
     node_pubkey: &Pubkey,
     commission: u32,
-    lamports: u64,
+    vote_lamports: u64,
 ) -> (Account, VoteState) {
     // Construct a vote account for the bootstrap_leader such that the leader_scheduler
     // will be forced to select it as the leader for height 0
-    let mut vote_account = create_account(&vote_pubkey, &node_pubkey, commission, lamports);
+    let mut vote_account = create_account(&vote_pubkey, &node_pubkey, commission, vote_lamports);
 
     let mut vote_state: VoteState = vote_account.state().unwrap();
     // TODO: get a hash for slot 0?

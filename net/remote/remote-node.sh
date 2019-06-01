@@ -77,7 +77,10 @@ local|tar)
     fi
     set -x
     if [[ $skipSetup != true ]]; then
-      args=(--bootstrap-leader-lamports "$stake")
+      args=(
+        --bootstrap-leader-lamports "$stake"
+        --bootstrap-leader-stake-lamports "$stake"
+      )
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
       ./multinode-demo/setup.sh "${args[@]}"
