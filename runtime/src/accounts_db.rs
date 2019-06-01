@@ -199,8 +199,7 @@ impl AccountStorageEntry {
         *count_and_status = (count_and_status.0 + 1, count_and_status.1);
     }
 
-    fn remove_account(&self) -> usize {
-        let mut count_and_status = self.count_and_status.write().unwrap();
+    fn remove_account(&self, count_and_status: &mut (usize, AccountStorageStatus)) -> usize {
         let (count, mut status) = *count_and_status;
 
         if count == 1 {
@@ -464,7 +463,8 @@ impl AccountsDB {
                         fork_id, store.fork_id,
                         "AccountDB::accounts_index corrupted. Storage should only point to one fork"
                     );
-                    let count = store.remove_account();
+                    let mut count_and_status = store.count_and_status.write().unwrap();
+                    let count = store.remove_account(&mut count_and_status);
                     if count == 0 {
                         dead_forks.insert(fork_id);
                     }
