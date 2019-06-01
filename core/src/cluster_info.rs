@@ -498,7 +498,7 @@ impl ClusterInfo {
         rng: ChaChaRng,
     ) -> Vec<(u64, ContactInfo)> {
         let (stake_weights, peers_with_stakes): (Vec<_>, Vec<_>) = peers
-            .into_iter()
+            .iter()
             .map(|c| {
                 let stake = stakes.map_or(0, |stakes| *stakes.get(&c.id).unwrap_or(&0));
                 // For stake weighted shuffle a valid weight is atleast 1. Weight 0 is
@@ -512,7 +512,6 @@ impl ClusterInfo {
                     r_stake.cmp(&l_stake)
                 }
             })
-            .into_iter()
             .unzip();
 
         let shuffle = weighted_shuffle(stake_weights, rng);

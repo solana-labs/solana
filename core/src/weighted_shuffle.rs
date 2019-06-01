@@ -9,7 +9,7 @@ use std::ops::Div;
 
 pub fn weighted_shuffle<T>(weights: Vec<T>, rng: ChaChaRng) -> Vec<usize>
 where
-    T: Copy + PartialOrd + iter::Sum + Div<T, Output = T> + FromPrimitive + ToPrimitive + Default,
+    T: Copy + PartialOrd + iter::Sum + Div<T, Output = T> + FromPrimitive + ToPrimitive,
 {
     let mut rng = rng;
     let total_weight: T = weights.clone().into_iter().sum();
@@ -21,8 +21,8 @@ where
             (
                 i,
                 (&mut rng)
-                    .gen_range(1, std::u16::MAX as u32)
-                    .saturating_mul(x),
+                    .gen_range(1, u32::from(std::u16::MAX))
+                    .saturating_mul(x) as u64,
             )
         })
         .sorted_by(|(_, l_val), (_, r_val)| l_val.cmp(r_val))
@@ -50,12 +50,15 @@ mod tests {
 
     #[test]
     fn test_weighted_shuffle_iterator_large() {
-        let mut test_set = vec![0; 100];
-        (0..100).for_each(|i| test_set[i] = (i + 1) as u64);
+        let mut test_set = [0; 100];
+        let mut test_weights = vec![0; 100];
+        (0..100).for_each(|i| test_weights[i] = (i + 1) as u64);
         let mut count = 0;
-        let shuffle = weighted_shuffle(test_set, ChaChaRng::from_seed([0xa5; 32]));
+        let shuffle = weighted_shuffle(test_weights, ChaChaRng::from_seed([0xa5; 32]));
         shuffle.into_iter().for_each(|x| {
             println!("{}", x);
+            assert_eq!(test_set[x], 0);
+            test_set[x] = 1;
             count += 1;
         });
         assert_eq!(count, 100);
