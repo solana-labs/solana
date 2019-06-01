@@ -20,9 +20,11 @@ where
             let x = (total_weight / v).to_u32().unwrap();
             (
                 i,
-                (&mut rng)
-                    .gen_range(1, u32::from(std::u16::MAX))
-                    .saturating_mul(x) as u64,
+                u64::from(
+                    (&mut rng)
+                        .gen_range(1, u32::from(std::u16::MAX))
+                        .saturating_mul(x),
+                ),
             )
         })
         .sorted_by(|(_, l_val), (_, r_val)| l_val.cmp(r_val))
