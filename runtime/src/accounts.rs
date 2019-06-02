@@ -190,6 +190,7 @@ impl Accounts {
                 Some(program) => program,
                 None => {
                     error_counters.account_not_found += 1;
+                    info!("ancestors {:?}, accouts index {:?}, id {:?}", ancestors, accounts_index, program_id);
                     return Err(TransactionError::ProgramAccountNotFound);
                 }
             };

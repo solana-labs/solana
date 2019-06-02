@@ -3,6 +3,7 @@
 use bincode::{deserialize_from, serialize_into};
 use solana_metrics::inc_new_counter_info;
 use solana_runtime::bank::{Bank, BankRc, StatusCacheRc};
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::timing;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -224,6 +225,7 @@ impl BankForks {
     }
 
     fn load_snapshots(
+        genesis_block: &GenesisBlock,
         names: &[u64],
         bank_maps: &mut Vec<(u64, u64, Bank)>,
         status_cache_rc: &StatusCacheRc,
@@ -232,9 +234,11 @@ impl BankForks {
         let path = BankForks::get_snapshot_path(snapshot_path);
         let mut bank_rc: Option<(BankRc, u64)> = None;
 
+        println!("names: {:?}", names);
         for bank_slot in names.iter().rev() {
             let bank_path = format!("{}", bank_slot);
             let bank_file_path = path.join(bank_path.clone());
+            println!("Load from {:?}", bank_file_path);
             info!("Load from {:?}", bank_file_path);
             let file = File::open(bank_file_path);
             if file.is_err() {
@@ -274,6 +278,9 @@ impl BankForks {
                 warn!("Load snapshot rc failed for {}", bank_slot);
             }
         }
+        let bank0 = Bank::new(&genesis_block);
+        bank0.freeze();
+        bank_maps.push((0, 0, bank0));
         bank_rc
     }
 
@@ -310,7 +317,7 @@ impl BankForks {
         (banks, slots, last_slot)
     }
 
-    pub fn load_from_snapshot(snapshot_path: &Option<String>) -> Result<Self, Error> {
+    pub fn load_from_snapshot(genesis_block: &GenesisBlock, snapshot_path: &Option<String>) -> Result<Self, Error> {
         let path = BankForks::get_snapshot_path(snapshot_path);
         let paths = fs::read_dir(path)?;
         let mut names = paths
@@ -323,10 +330,13 @@ impl BankForks {
             })
             .collect::<Vec<u64>>();
 
+        println!("names before: {:?}", names);
+        // names.retain(|&x| x != 0);
+        println!("names after : {:?}", names);
         names.sort();
         let mut bank_maps = vec![];
         let status_cache_rc = StatusCacheRc::default();
-        let rc = BankForks::load_snapshots(&names, &mut bank_maps, &status_cache_rc, snapshot_path);
+        let rc = BankForks::load_snapshots(&genesis_block, &names, &mut bank_maps, &status_cache_rc, snapshot_path);
         if bank_maps.is_empty() || rc.is_none() {
             BankForks::remove_snapshot(0, snapshot_path);
             return Err(Error::new(ErrorKind::Other, "no snapshots loaded"));
@@ -476,12 +486,14 @@ mod tests {
         }
     }
 
-    fn restore_from_snapshot(bank_forks: BankForks, last_slot: u64) {
-        let new = BankForks::load_from_snapshot(&bank_forks.snapshot_path).unwrap();
+    fn restore_from_snapshot(genesis_block: &GenesisBlock, bank_forks: BankForks, last_slot: u64) {
+        let new = BankForks::load_from_snapshot(&genesis_block, &bank_forks.snapshot_path).unwrap();
         for (slot, _) in new.banks.iter() {
-            let bank = bank_forks.banks.get(slot).unwrap().clone();
-            let new_bank = new.banks.get(slot).unwrap();
-            bank.compare_bank(&new_bank);
+            if *slot > 0 {
+                let bank = bank_forks.banks.get(slot).unwrap().clone();
+                let new_bank = new.banks.get(slot).unwrap();
+                bank.compare_bank(&new_bank);
+            }
         }
         assert_eq!(new.working_bank().slot(), last_slot);
         for (slot, _) in new.banks.iter() {
@@ -519,9 +531,10 @@ mod tests {
                 bank.freeze();
                 let slot = bank.slot();
                 bank_forks.insert(bank);
+                println!("add snapshot {}", slot);
                 bank_forks.add_snapshot(slot, 0).unwrap();
             }
-            restore_from_snapshot(bank_forks, index);
+            restore_from_snapshot(&genesis_block, bank_forks, index);
         }
     }
 }

@@ -316,7 +316,11 @@ elif [[ $node_type = bootstrap_leader ]]; then
   ledger_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
   accounts_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts
   storage_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-storage-keypair.json
+<<<<<<< HEAD
   configured_flag=$SOLANA_CONFIG_DIR/bootstrap-leader.configured
+=======
+  snapshot_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-snapshots
+>>>>>>> validator restart
 
   default_arg --rpc-port 8899
   if ((airdrops_enabled)); then
@@ -338,7 +342,11 @@ elif [[ $node_type = validator ]]; then
   storage_keypair_path=$SOLANA_CONFIG_DIR/validator-storage-keypair$label.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/validator-ledger$label
   accounts_config_dir=$SOLANA_CONFIG_DIR/validator-accounts$label
+<<<<<<< HEAD
   configured_flag=$SOLANA_CONFIG_DIR/validator$label.configured
+=======
+  snapshot_config_dir="$SOLANA_CONFIG_DIR"/validator-snapshots$label
+>>>>>>> validator restart
 
   mkdir -p "$SOLANA_CONFIG_DIR"
   [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
@@ -370,6 +378,7 @@ vote pubkey: $vote_pubkey
 storage pubkey: $storage_pubkey
 ledger: $ledger_config_dir
 accounts: $accounts_config_dir
+snapshots: $snapshot_config_dir
 ========================================================================
 EOF
 
@@ -379,6 +388,7 @@ EOF
   default_arg --storage-keypair "$storage_keypair_path"
   default_arg --ledger "$ledger_config_dir"
   default_arg --accounts "$accounts_config_dir"
+  default_arg --snapshot-path "$snapshot_config_dir"
 
   if [[ -n $SOLANA_CUDA ]]; then
     program=$solana_validator_cuda
@@ -403,7 +413,12 @@ while true; do
     if [[ $node_type = bootstrap_leader ]]; then
       ledger_not_setup "$SOLANA_RSYNC_CONFIG_DIR/ledger does not exist"
     fi
-    $rsync -vPr "${rsync_entrypoint_url:?}"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
+    (
+      set -x
+      $rsync -qvPr "${rsync_entrypoint_url:?}"/config/ledger "$SOLANA_RSYNC_CONFIG_DIR"
+      $rsync -vqPr "${rsync_entrypoint_url:?}"/config/snapshots "$SOLANA_RSYNC_CONFIG_DIR"
+      $rsync -vqPr "${rsync_entrypoint_url:?}"/config/accounts "$SOLANA_RSYNC_CONFIG_DIR"
+    ) || true
   fi
 
   if new_gensis_block; then
@@ -411,14 +426,23 @@ while true; do
     # keypair for the node and start all over again
     (
       set -x
-      rm -rf "$ledger_config_dir" "$accounts_config_dir" "$configured_flag"
+      rm -rf "$ledger_config_dir" "$accounts_config_dir" "$snapshot_config_dir" "$configured_flag"
     )
   fi
 
-  if [[ ! -d "$ledger_config_dir" ]]; then
-    cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"
-    $solana_ledger_tool --ledger "$ledger_config_dir" verify
-  fi
+  (
+    set -x
+    if [[ -d "$SOLANA_RSYNC_CONFIG_DIR"/snapshots ]]; then
+      if [[ ! -d $snapshot_config_dir ]]; then
+        cp -a "$SOLANA_RSYNC_CONFIG_DIR"/snapshots/ "$snapshot_config_dir"
+        cp -a "$SOLANA_RSYNC_CONFIG_DIR"/accounts/ "$accounts_config_dir"
+      fi
+    fi
+    if [[ ! -d "$ledger_config_dir" ]]; then
+      cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"
+      $solana_ledger_tool --ledger "$ledger_config_dir" verify
+    fi
+  )
 
   trap '[[ -n $pid ]] && kill "$pid" >/dev/null 2>&1 && wait "$pid"' INT TERM ERR
 
@@ -450,9 +474,25 @@ while true; do
   fi
 
   if [[ $node_type = bootstrap_leader ]]; then
-    wait "$pid" || true
-    echo "############## $node_type exited, restarting ##############"
-    sleep 1
+    secs_to_next_sync_poll=30
+    while true; do
+      if ! kill -0 "$pid"; then
+        wait "$pid"
+        exit 0
+      fi
+
+      sleep 1
+
+      ((secs_to_next_sync_poll--)) && continue
+      (
+        if [[ -d $snapshot_config_dir ]]; then
+          $rsync -qrt --delete-after "$snapshot_config_dir"/ "$SOLANA_RSYNC_CONFIG_DIR"/snapshots
+          $rsync -qrt --delete-after "$accounts_config_dir"/ "$SOLANA_RSYNC_CONFIG_DIR"/accounts
+#          $rsync -qrt --delete-after "$ledger_config_dir"/ "$SOLANA_RSYNC_CONFIG_DIR"/ledger
+	fi
+      ) || true
+      secs_to_next_sync_poll=30
+    done
   else
     secs_to_next_genesis_poll=1
     while true; do
