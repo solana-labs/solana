@@ -187,14 +187,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_storage_keypair = read_keypair(bootstrap_storage_keypair_file)?;
     let mint_keypair = read_keypair(mint_keypair_file)?;
 
-    // TODO: de-duplicate the stake once passive staking
-    //  is fully implemented
-    //  https://github.com/solana-labs/solana/issues/4213
     let (vote_account, vote_state) = vote_state::create_bootstrap_leader_account(
         &bootstrap_vote_keypair.pubkey(),
         &bootstrap_leader_keypair.pubkey(),
         0,
-        bootstrap_leader_stake_lamports,
+        1,
     );
 
     let mut genesis_block = GenesisBlock::new(
@@ -212,7 +209,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             ),
             // where votes go to
             (bootstrap_vote_keypair.pubkey(), vote_account),
-            // passive bootstrap leader stake, duplicates above temporarily
+            // passive bootstrap leader stake
             (
                 bootstrap_stake_keypair.pubkey(),
                 stake_state::create_delegate_stake_account(
