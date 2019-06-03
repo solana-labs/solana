@@ -206,15 +206,16 @@ impl AccountStorageEntry {
         *count_and_status = (count_and_status.0 + 1, count_and_status.1);
     }
 
-    fn try_available(&self) {
+    fn try_available(&self) -> bool {
         let mut count_and_status = self.count_and_status.write().unwrap();
-        let (count, _status) = *count_and_status;
+        let (count, status) = *count_and_status;
 
         if status == AccountStorageStatus::StorageAvailable {
             *count_and_status = (count, AccountStorageStatus::StorageCandidate);
             true
+        } else {
+            false
         }
-        false
     }
 
     fn remove_account(&self) -> usize {
@@ -390,35 +391,33 @@ impl AccountsDB {
         Self::load(&storage, ancestors, &accounts_index, pubkey)
     }
 
-    fn fork_storage(&self, fork_id: Fork) -> Arc<AccountStorageEntry> {
-        let mut candidates: Vec<Arc<AccountStorageEntry>> = {
-            let stores = self.storage.read().unwrap();
-            let fork_stores = stores.0.get(&fork_id);
-            if let Some(fork_stores) = fork_stores {
-                fork_stores
-                    .values()
-                    .filter_map(|x| {
-                        if x.try_available() {
-                            Some(x.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            } else {
-                vec![]
+    fn find_storage_candidate(&self, fork_id: Fork) -> Arc<AccountStorageEntry> {
+        let stores = self.storage.read().unwrap();
+
+        if let Some(fork_stores) = stores.0.get(&fork_id) {
+            if !fork_stores.is_empty() {
+                let to_skip = thread_rng().gen_range(0, stores.0.len());
+
+                for (i, store) in fork_stores.values().cycle().skip(to_skip).enumerate() {
+                    if store.try_available() {
+                        return store.clone();
+                    }
+                    // looked at every store, bail...
+                    if i == fork_stores.0.len() {
+                        break;
+                    }
+                }
             }
-        };
-        if candidates.is_empty() {
-            let mut stores = self.storage.write().unwrap();
-            let path_index = thread_rng().gen_range(0, self.paths.len());
-            let storage = Arc::new(self.new_storage_entry(fork_id, &self.paths[path_index]));
-            let fork_storage = stores.0.entry(fork_id).or_insert_with(HashMap::new);
-            fork_storage.insert(storage.id, storage.clone());
-            candidates.push(storage);
         }
-        let rv = thread_rng().gen_range(0, candidates.len());
-        candidates[rv].clone()
+        drop(stores);
+
+        let mut stores = self.storage.write().unwrap();
+        let path_index = thread_rng().gen_range(0, self.paths.len());
+        let storage = Arc::new(self.new_storage_entry(fork_id, &self.paths[path_index]));
+        let fork_storage = stores.0.entry(fork_id).or_insert_with(HashMap::new);
+        storage.try_available();
+        fork_storage.insert(storage.id, storage.clone());
+        return storage;
     }
 
     pub fn purge_fork(&self, fork: Fork) {
@@ -449,10 +448,11 @@ impl AccountsDB {
             .collect();
         let mut infos: Vec<AccountInfo> = vec![];
         while infos.len() < with_meta.len() {
-            let storage = self.fork_storage(fork_id);
+            let storage = self.find_storage_candidate(fork_id);
             let rvs = storage.accounts.append_accounts(&with_meta[infos.len()..]);
             if rvs.is_empty() {
                 storage.set_status(AccountStorageStatus::StorageFull);
+                continue;
             }
             for (offset, (_, account)) in rvs.iter().zip(&with_meta[infos.len()..]) {
                 storage.add_account();
