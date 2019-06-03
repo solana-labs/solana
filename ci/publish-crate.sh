@@ -3,12 +3,12 @@ set -e
 cd "$(dirname "$0")/.."
 source ci/semver_bash/semver.sh
 
+# shellcheck disable=SC2086
 is_crate_version_uploaded() {
   name=$1
   version=$2
   curl https://crates.io/api/v1/crates/${name}/${version} | \
   python3 -c "import sys,json; print('version' in json.load(sys.stdin));"
-
 }
 
 # Only package/publish if this is a tagged release
@@ -47,17 +47,14 @@ for Cargo_toml in $Cargo_tomls; do
 
   crate_name=$(grep -m 1 '^name = ' $Cargo_toml | cut -f 3 -d ' ' | tr -d \")
   numRetries=30
-  sleepTime=2
-  for ((i = 1 ; i <= $numRetries ; i++)); do
+  for ((i = 1 ; i <= numRetries ; i++)); do
     echo "Attempt ${i} of ${numRetries}"
-    if $(is_crate_version_uploaded $crate_name $expectedCrateVersion) = "True"
-    then
+    if [[ $(is_crate_version_uploaded $crate_name $expectedCrateVersion) = True ]] ; then
       echo "Found ${crate_name} version ${expectedCrateVersion} on crates.io"
       break
-    else
-      echo "Did not find ${crate_name} version ${expectedCrateVersion} on crates.io.  Sleeping for ${sleepTime}."
-      sleep ${sleepTime}
     fi
+    echo "Did not find ${crate_name} version ${expectedCrateVersion} on crates.io.  Sleeping for 2 seconds."
+    sleep 2
   done
 done
 
