@@ -80,7 +80,6 @@ local|tar)
       args=(
         --bootstrap-leader-lamports "$stake"
         --bootstrap-leader-stake-lamports "$stake"
-        --lamports-per-signature 1
       )
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
