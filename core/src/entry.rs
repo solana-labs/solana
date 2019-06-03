@@ -14,7 +14,13 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use std::borrow::Borrow;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::Mutex;
 use std::sync::{Arc, RwLock};
+
+#[cfg(feature = "cuda")]
+use crate::sigverify::poh_verify_many;
+#[cfg(feature = "cuda")]
+use std::thread;
 
 pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
@@ -201,20 +207,6 @@ where
     Ok((entries, num_ticks))
 }
 
-#[cfg(feature = "cuda")]
-#[link(name = "cuda-crypt")]
-extern "C" {
-    fn poh_verify_many(
-        hashes: *const Hash,
-        num_hashes_arr: *const u64,
-        num_elems: usize,
-        use_non_default_stream: u8,
-    ) -> int;
-}
-
-//#[cfg(feature = "cuda")]
-//const NUM_BYTES_PER_HASH: usize = 32; //TODO: Is there a place to get this?
-
 // an EntrySlice is a slice of Entries
 pub trait EntrySlice {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
@@ -256,7 +248,7 @@ impl EntrySlice for [Entry] {
             transactions: vec![],
         }];
 
-        let start_hashes: Vec<Hash> = genesis
+        let hashes: Vec<Hash> = genesis
             .par_iter()
             .chain(self)
             .map(|entry| entry.hash)
@@ -268,13 +260,18 @@ impl EntrySlice for [Entry] {
             .map(|entry| entry.num_hashes.saturating_sub(1))
             .collect();
 
-        let gpu_verify_thread = thread::spawn(|| {
+        let length = self.len();
+        let hashes = Arc::new(Mutex::new(hashes));
+        let hashes_clone = hashes.clone();
+
+        let gpu_verify_thread = thread::spawn(move || {
+            let hashes = hashes_clone.lock().unwrap();
             let res;
             unsafe {
-                res = poh_start_verify_many(
-                    start_hashes.as_ptr(),
+                res = poh_verify_many(
+                    hashes.as_ptr() as *const u8,
                     num_hashes_vec.as_ptr(),
-                    self.len(),
+                    length,
                     1,
                 );
             }
@@ -295,20 +292,23 @@ impl EntrySlice for [Entry] {
             })
             .collect();
 
-        let end_hashes: Vec<Hash> = Vec::with_capacity(self.len());
-
         gpu_verify_thread.join().unwrap();
 
-        end_hashes
+        let hashes = Arc::try_unwrap(hashes).unwrap().into_inner().unwrap();
+        hashes
             .into_par_iter()
             .zip(tx_hashes)
             .zip(self)
             .all(|((hash, tx_hash), answer)| {
-                let mut poh = Poh::new(hash, None);
-                if let Some(mixin) = tx_hash {
-                    poh.record(mixin).unwrap().hash == answer.hash
+                if answer.num_hashes == 0 {
+                    hash == answer.hash
                 } else {
-                    poh.tick().unwrap().hash == answer.hash
+                    let mut poh = Poh::new(hash, None);
+                    if let Some(mixin) = tx_hash {
+                        poh.record(mixin).unwrap().hash == answer.hash
+                    } else {
+                        poh.tick().unwrap().hash == answer.hash
+                    }
                 }
             })
     }
@@ -634,7 +634,54 @@ mod tests {
         let mut bad_ticks = vec![next_entry(&zero, 0, vec![]); 2];
         bad_ticks[1].hash = one;
         assert!(!bad_ticks.verify(&zero)); // inductive step, bad
-    } //TODO: Why is this only testing verification of [0u8; 32] hashes and num_hashes=0?
+    }
+
+    #[test]
+    fn test_verify_slice_with_hashes() {
+        solana_logger::setup();
+        let zero = Hash::default();
+        let one = hash(&zero.as_ref());
+        let two = hash(&one.as_ref());
+        assert!(vec![][..].verify(&one)); // base case
+        assert!(vec![Entry::new_tick(1, &two)][..].verify(&one)); // singleton case 1
+        assert!(!vec![Entry::new_tick(1, &two)][..].verify(&two)); // singleton case 2, bad
+
+        let mut ticks = vec![next_entry(&one, 1, vec![])];
+        ticks.push(next_entry(&ticks.last().unwrap().hash, 1, vec![]));
+        assert!(ticks.verify(&one)); // inductive step
+
+        let mut bad_ticks = vec![next_entry(&one, 1, vec![])];
+        bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![]));
+        bad_ticks[1].hash = one;
+        assert!(!bad_ticks.verify(&one)); // inductive step, bad
+    }
+
+    #[test]
+    fn test_verify_slice_with_hashes_and_transactions() {
+        solana_logger::setup();
+        let zero = Hash::default();
+        let one = hash(&zero.as_ref());
+        let two = hash(&one.as_ref());
+        let alice_pubkey = Keypair::default();
+        let tx0 = create_sample_payment(&alice_pubkey, one);
+        let tx1 = create_sample_timestamp(&alice_pubkey, one);
+        assert!(vec![][..].verify(&one)); // base case
+        assert!(vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&one)); // singleton case 1
+        assert!(!vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&two)); // singleton case 2, bad
+
+        let mut ticks = vec![next_entry(&one, 1, vec![tx0.clone()])];
+        ticks.push(next_entry(
+            &ticks.last().unwrap().hash,
+            1,
+            vec![tx1.clone()],
+        ));
+        assert!(ticks.verify(&one)); // inductive step
+
+        let mut bad_ticks = vec![next_entry(&one, 1, vec![tx0])];
+        bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![tx1]));
+        bad_ticks[1].hash = one;
+        assert!(!bad_ticks.verify(&one)); // inductive step, bad
+    }
 
     //TODO: Should test verify slice with txs, esp w/ cuda verification
 
