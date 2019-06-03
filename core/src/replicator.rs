@@ -516,7 +516,7 @@ impl Replicator {
     /// Poll for a different blockhash and associated max_slot than `previous_blockhash`
     fn poll_for_blockhash_and_slot(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        previous_blockhash: &String,
+        previous_blockhash: &str,
     ) -> Result<(String, u64)> {
         for _ in 0..10 {
             let rpc_client = {
