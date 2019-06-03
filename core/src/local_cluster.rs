@@ -444,13 +444,13 @@ impl LocalCluster {
                 .wait_for_balance(&stake_account_pubkey, Some(amount))
                 .expect("get balance");
 
-            let mut transaction = Transaction::new_signed_instructions(
-                &[from_account.as_ref(), &stake_account_keypair],
+            let mut transaction = Transaction::new_signed_with_payer(
                 vec![stake_instruction::delegate_stake(
-                    &from_account.pubkey(),
                     &stake_account_pubkey,
                     &vote_account_pubkey,
                 )],
+                Some(&from_account.pubkey()),
+                &[from_account.as_ref(), &stake_account_keypair],
                 client.get_recent_blockhash().unwrap().0,
             );
             client

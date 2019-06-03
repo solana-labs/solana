@@ -544,7 +544,12 @@ fn process_create_stake_account(
         staking_account_pubkey,
         lamports,
     );
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let mut tx = Transaction::new_signed_with_payer(
+        ixs,
+        Some(&config.keypair.pubkey()),
+        &[&config.keypair],
+        recent_blockhash,
+    );
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
@@ -561,7 +566,12 @@ fn process_create_mining_pool_account(
         mining_pool_account_pubkey,
         lamports,
     );
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let mut tx = Transaction::new_signed_with_payer(
+        ixs,
+        Some(&config.keypair.pubkey()),
+        &[&config.keypair],
+        recent_blockhash,
+    );
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }
@@ -574,15 +584,17 @@ fn process_delegate_stake(
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::delegate_stake(
-        &config.keypair.pubkey(),
         &staking_account_keypair.pubkey(),
         voting_account_pubkey,
     )];
-    let mut tx = Transaction::new_signed_instructions(
-        &[&config.keypair, &staking_account_keypair],
+
+    let mut tx = Transaction::new_signed_with_payer(
         ixs,
+        Some(&config.keypair.pubkey()),
+        &[&config.keypair, &staking_account_keypair],
         recent_blockhash,
     );
+
     let signature_str = rpc_client
         .send_and_confirm_transaction(&mut tx, &[&config.keypair, &staking_account_keypair])?;
     Ok(signature_str.to_string())
@@ -597,12 +609,16 @@ fn process_redeem_vote_credits(
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = vec![stake_instruction::redeem_vote_credits(
-        &config.keypair.pubkey(),
         mining_pool_account_pubkey,
         staking_account_pubkey,
         voting_account_pubkey,
     )];
-    let mut tx = Transaction::new_signed_instructions(&[&config.keypair], ixs, recent_blockhash);
+    let mut tx = Transaction::new_signed_with_payer(
+        ixs,
+        Some(&config.keypair.pubkey()),
+        &[&config.keypair],
+        recent_blockhash,
+    );
     let signature_str = rpc_client.send_and_confirm_transaction(&mut tx, &[&config.keypair])?;
     Ok(signature_str.to_string())
 }

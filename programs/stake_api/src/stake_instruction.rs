@@ -58,10 +58,7 @@ pub fn create_delegate_account(
         Instruction::new(
             id(),
             &StakeInstruction::InitializeDelegate,
-            vec![
-                AccountMeta::new(*from_pubkey, true),
-                AccountMeta::new(*staker_pubkey, false),
-            ],
+            vec![AccountMeta::new(*staker_pubkey, false)],
         ),
     ]
 }
@@ -82,22 +79,17 @@ pub fn create_mining_pool_account(
         Instruction::new(
             id(),
             &StakeInstruction::InitializeMiningPool,
-            vec![
-                AccountMeta::new(*from_pubkey, true),
-                AccountMeta::new(*staker_pubkey, false),
-            ],
+            vec![AccountMeta::new(*staker_pubkey, false)],
         ),
     ]
 }
 
 pub fn redeem_vote_credits(
-    from_pubkey: &Pubkey,
     mining_pool_pubkey: &Pubkey,
     stake_pubkey: &Pubkey,
     vote_pubkey: &Pubkey,
 ) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*mining_pool_pubkey, false),
         AccountMeta::new(*stake_pubkey, false),
         AccountMeta::new(*vote_pubkey, false),
@@ -105,13 +97,8 @@ pub fn redeem_vote_credits(
     Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
 }
 
-pub fn delegate_stake(
-    from_pubkey: &Pubkey,
-    stake_pubkey: &Pubkey,
-    vote_pubkey: &Pubkey,
-) -> Instruction {
+pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
     let account_metas = vec![
-        AccountMeta::new(*from_pubkey, true),
         AccountMeta::new(*stake_pubkey, true),
         AccountMeta::new(*vote_pubkey, false),
     ];
@@ -128,14 +115,12 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    if keyed_accounts.len() < 2 {
+    if keyed_accounts.is_empty() {
         Err(InstructionError::InvalidInstructionData)?;
     }
 
-    // 0th index is the account who paid for the transaction
-    // TODO: Remove the 0th index from the instruction. The stake program doesn't care who paid.
-    let (me, rest) = &mut keyed_accounts.split_at_mut(2);
-    let me = &mut me[1];
+    let (me, rest) = &mut keyed_accounts.split_at_mut(1);
+    let me = &mut me[0];
 
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
@@ -199,17 +184,12 @@ mod tests {
             process_instruction(&redeem_vote_credits(
                 &Pubkey::default(),
                 &Pubkey::default(),
-                &Pubkey::default(),
                 &Pubkey::default()
             )),
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&delegate_stake(
-                &Pubkey::default(),
-                &Pubkey::default(),
-                &Pubkey::default()
-            )),
+            process_instruction(&delegate_stake(&Pubkey::default(), &Pubkey::default())),
             Err(InstructionError::InvalidAccountData),
         );
     }
@@ -236,10 +216,11 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [
-                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default()),
-                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
-                ],
+                &mut [KeyedAccount::new(
+                    &Pubkey::default(),
+                    false,
+                    &mut Account::default()
+                ),],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
@@ -249,7 +230,6 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [
-                    KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                 ],
@@ -263,7 +243,6 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [
-                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default()), // from
                     KeyedAccount::new(&Pubkey::default(), true, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                 ],
@@ -277,7 +256,6 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [
-                    KeyedAccount::new(&Pubkey::default(), true, &mut Account::default()), // from
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
