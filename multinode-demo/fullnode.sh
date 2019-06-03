@@ -79,7 +79,8 @@ setup_validator_accounts() {
   declare vote_keypair_path=$3
   declare stake_keypair_path=$4
   declare storage_keypair_path=$5
-  declare stake=$6
+  declare node_lamports=$6
+  declare stake_lamports=$7
 
   declare node_pubkey
   node_pubkey=$($solana_keygen pubkey "$node_keypair_path")
@@ -98,7 +99,7 @@ setup_validator_accounts() {
   else
     # Fund the node with enough tokens to fund its Vote, Staking, and Storage accounts
     declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
-    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop $((stake*2+fees)) || return $?
+    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop $((node_lamports+stake_lamports+fees)) || return $?
 
     # Fund the vote account from the node, with the node as the node_pubkey
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
@@ -106,7 +107,7 @@ setup_validator_accounts() {
 
     # Fund the stake account from the node, with the node as the node_pubkey
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-      create-stake-account "$stake_pubkey" "$stake" || return $?
+      create-stake-account "$stake_pubkey" "$stake_lamports" || return $?
 
     # Delegate the stake.  The transaction fee is paid by the node but the
     #  transaction must be signed by the stake_keypair
@@ -127,6 +128,9 @@ setup_validator_accounts() {
   $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
     show-storage-account "$storage_pubkey"
 
+  echo "Identity account balance:"
+  $solana_wallet --keypair "$identity_keypair_path" --url "http://$entrypoint_ip:8899" balance
+  echo "========================================================================"
   return 0
 }
 
@@ -134,7 +138,7 @@ setup_replicator_account() {
   declare entrypoint_ip=$1
   declare node_keypair_path=$2
   declare storage_keypair_path=$3
-  declare stake=$4
+  declare node_lamports=$4
 
   declare storage_pubkey
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
@@ -142,7 +146,7 @@ setup_replicator_account() {
   if [[ -f "$node_keypair_path".configured ]]; then
     echo "Replicator account has already been configured"
   else
-    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop "$stake" || return $?
+    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop "$node_lamports" || return $?
 
     # Setup replicator storage account
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
@@ -166,7 +170,8 @@ ledger_not_setup() {
 
 args=()
 node_type=validator
-stake=42 # number of lamports to assign as stake
+node_lamports=424242  # number of lamports to assign the node for transaction fees
+stake_lamports=42     # number of lamports to assign as stake
 poll_for_new_genesis_block=0
 label=
 identity_keypair_path=
@@ -194,7 +199,7 @@ while [[ -n $1 ]]; do
       poll_for_new_genesis_block=1
       shift
     elif [[ $1 = --blockstream ]]; then
-      stake=0
+      stake_lamports=0
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --identity ]]; then
@@ -208,7 +213,7 @@ while [[ -n $1 ]]; do
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --stake ]]; then
-      stake="$2"
+      stake_lamports="$2"
       shift 2
     elif [[ $1 = --no-voting ]]; then
       args+=("$1")
@@ -387,19 +392,20 @@ while true; do
 
   trap '[[ -n $pid ]] && kill "$pid" >/dev/null 2>&1 && wait "$pid"' INT TERM ERR
 
-  if ((stake)); then
+  if ((stake_lamports)); then
     if [[ $node_type = validator ]]; then
       setup_validator_accounts "${entrypoint_address%:*}" \
         "$identity_keypair_path" \
         "$vote_keypair_path" \
         "$stake_keypair_path" \
         "$storage_keypair_path" \
-        "$stake"
+        "$node_lamports" \
+        "$stake_lamports"
     elif [[ $node_type = replicator ]]; then
       setup_replicator_account "${entrypoint_address%:*}" \
         "$identity_keypair_path" \
         "$storage_keypair_path" \
-        "$stake"
+        "$node_lamports"
     fi
   fi
 
