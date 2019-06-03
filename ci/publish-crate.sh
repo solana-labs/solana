@@ -45,10 +45,12 @@ for Cargo_toml in $Cargo_tomls; do
     ci/docker-run.sh "$rust_stable_docker_image" bash -exc "cd $crate; $cargoCommand"
   ) || true # <-- Don't fail.  We want to be able to retry the job in cases when a publish fails halfway due to network/cloud issues
 
+  # shellcheck disable=SC2086
   crate_name=$(grep -m 1 '^name = ' $Cargo_toml | cut -f 3 -d ' ' | tr -d \")
   numRetries=30
   for ((i = 1 ; i <= numRetries ; i++)); do
     echo "Attempt ${i} of ${numRetries}"
+    # shellcheck disable=SC2086
     if [[ $(is_crate_version_uploaded $crate_name $expectedCrateVersion) = True ]] ; then
       echo "Found ${crate_name} version ${expectedCrateVersion} on crates.io"
       break
