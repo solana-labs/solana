@@ -399,6 +399,13 @@ impl Blob {
         LittleEndian::write_u64(&mut self.data[INDEX_RANGE], ix);
     }
 
+    pub fn seed(&self) -> [u8; 32] {
+        let mut seed = [0; 32];
+        seed[0..8].copy_from_slice(&self.index().to_le_bytes());
+        seed[8..16].copy_from_slice(&self.slot().to_le_bytes());
+        seed
+    }
+
     /// sender id, we use this for identifying if its a blob from the leader that we should
     /// retransmit.  eventually blobs should have a signature that we can use for spam filtering
     pub fn id(&self) -> Pubkey {

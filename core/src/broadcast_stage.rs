@@ -1,7 +1,7 @@
 //! A stage to broadcast data from a leader node to validators
 //!
 use crate::blocktree::Blocktree;
-use crate::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT};
+use crate::cluster_info::{ClusterInfo, ClusterInfoError};
 use crate::entry::EntrySlice;
 use crate::erasure::CodingGenerator;
 use crate::packet::index_blobs_with_genesis;
@@ -9,13 +9,10 @@ use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::staking_utils;
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
 use rayon::prelude::*;
 use rayon::ThreadPool;
 use solana_metrics::{
     datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
-    inc_new_counter_warn,
 };
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
@@ -86,18 +83,6 @@ impl Broadcast {
             }
         }
 
-        let bank_epoch = bank.get_stakers_epoch(bank.slot());
-        let mut seed = [0; 32];
-        seed[0..8].copy_from_slice(&bank.slot().to_le_bytes());
-        let mut broadcast_table = cluster_info.read().unwrap().sorted_tvu_peers(
-            staking_utils::staked_nodes_at_epoch(&bank, bank_epoch).as_ref(),
-            ChaChaRng::from_seed(seed),
-        );
-
-        inc_new_counter_warn!("broadcast_service-num_peers", broadcast_table.len() + 1);
-        // Layer 1, leader nodes are limited to the fanout size.
-        broadcast_table.truncate(DATA_PLANE_FANOUT);
-
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
 
         let to_blobs_start = Instant::now();
@@ -127,9 +112,7 @@ impl Broadcast {
             bank.parent().map_or(0, |parent| parent.slot()),
         );
 
-        let contains_last_tick = last_tick == max_tick_height;
-
-        if contains_last_tick {
+        if last_tick == max_tick_height {
             blobs.last().unwrap().write().unwrap().set_is_last_in_slot();
         }
 
@@ -141,13 +124,26 @@ impl Broadcast {
 
         let broadcast_start = Instant::now();
 
-        // Send out data
-        ClusterInfo::broadcast(&self.id, contains_last_tick, &broadcast_table, sock, &blobs)?;
+        let bank_epoch = bank.get_stakers_epoch(bank.slot());
+        let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        inc_new_counter_debug!("streamer-broadcast-sent", blobs.len());
+        if let Some(nodes) = stakes.as_ref() {
+            if nodes.len() > 1 {
+                // Send out data
+                cluster_info
+                    .read()
+                    .unwrap()
+                    .broadcast(sock, &blobs, stakes.as_ref())?;
 
-        // send out erasures
-        ClusterInfo::broadcast(&self.id, false, &broadcast_table, sock, &coding)?;
+                inc_new_counter_debug!("streamer-broadcast-sent", blobs.len());
+
+                // send out erasures
+                cluster_info
+                    .read()
+                    .unwrap()
+                    .broadcast(sock, &coding, stakes.as_ref())?;
+            }
+        }
 
         self.update_broadcast_stats(
             duration_as_ms(&broadcast_start.elapsed()),
