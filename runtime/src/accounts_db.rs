@@ -135,6 +135,7 @@ impl<'de> Deserialize<'de> for AccountStorage {
 pub enum AccountStorageStatus {
     StorageAvailable = 0,
     StorageFull = 1,
+    StorageCandidate = 2,
 }
 
 /// Persistent storage structure holding the accounts
@@ -203,6 +204,17 @@ impl AccountStorageEntry {
     fn add_account(&self) {
         let mut count_and_status = self.count_and_status.write().unwrap();
         *count_and_status = (count_and_status.0 + 1, count_and_status.1);
+    }
+
+    fn try_available(&self) {
+        let mut count_and_status = self.count_and_status.write().unwrap();
+        let (count, _status) = *count_and_status;
+
+        if status == AccountStorageStatus::StorageAvailable {
+            *count_and_status = (count, AccountStorageStatus::StorageCandidate);
+            true
+        }
+        false
     }
 
     fn remove_account(&self) -> usize {
@@ -386,7 +398,7 @@ impl AccountsDB {
                 fork_stores
                     .values()
                     .filter_map(|x| {
-                        if x.status() == AccountStorageStatus::StorageAvailable {
+                        if x.try_available() {
                             Some(x.clone())
                         } else {
                             None
@@ -450,6 +462,8 @@ impl AccountsDB {
                     lamports: account.lamports,
                 });
             }
+            // restore the state to available
+            storage.set_status(AccountStorageStatus::StorageAvailable);
         }
         infos
     }
