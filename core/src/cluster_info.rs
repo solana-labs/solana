@@ -719,19 +719,22 @@ impl ClusterInfo {
         blobs.iter().for_each(|b| {
             let blob = b.read().unwrap();
             let broadcast_table = self.sorted_tvu_peers(stakes, ChaChaRng::from_seed(blob.seed()));
-            broadcast_table_len = broadcast_table.len();
+            broadcast_table_len = cmp::max(broadcast_table_len, broadcast_table.len());
 
-            if let Err(e) = s.send_to(&blob.data[..blob.meta.size], &broadcast_table[0].tvu) {
-                trace!("{}: broadcast result {:?}", self.id(), e);
-                last_err = Err(e);
+            if !broadcast_table.is_empty() {
+                if let Err(e) = s.send_to(&blob.data[..blob.meta.size], &broadcast_table[0].tvu) {
+                    trace!("{}: broadcast result {:?}", self.id(), e);
+                    last_err = Err(e);
+                }
             }
         });
 
         last_err?;
 
         inc_new_counter_debug!("cluster_info-broadcast-max_idx", blobs.len());
-        inc_new_counter_warn!("broadcast_service-num_peers", broadcast_table_len + 1);
-
+        if broadcast_table_len != 0 {
+            inc_new_counter_warn!("broadcast_service-num_peers", broadcast_table_len + 1);
+        }
         Ok(())
     }
 
