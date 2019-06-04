@@ -44,18 +44,15 @@ fn retransmit(
     let r_bank = bank_forks.read().unwrap().working_bank();
     let bank_epoch = r_bank.get_stakers_epoch(r_bank.slot());
     for blob in &blobs {
-        let slot = blob.read().unwrap().slot();
-        let mut seed = [0; 32];
-        seed[0..8].copy_from_slice(&slot.to_le_bytes());
-        let (neighbors, children) = avalanche_topology_cache.entry(slot).or_insert_with(|| {
-            cache_history.push(slot);
-            compute_retransmit_peers(
-                staking_utils::staked_nodes_at_epoch(&r_bank, bank_epoch).as_ref(),
-                cluster_info,
-                DATA_PLANE_FANOUT,
-                ChaChaRng::from_seed(seed),
-            )
-        });
+        let (my_index, mut peers) = cluster_info.read().unwrap().shuffle_peers_and_index(
+            staking_utils::staked_nodes_at_epoch(&r_bank, bank_epoch).as_ref(),
+            ChaChaRng::from_seed(blob.read().unwrap().seed()),
+        );
+
+        peers.remove(my_index);
+
+        let (neighbors, children) = compute_retransmit_peers(DATA_PLANE_FANOUT, my_index, peers);
+
         let leader = leader_schedule_cache
             .slot_leader_at(blob.read().unwrap().slot(), Some(r_bank.as_ref()));
         if blob.read().unwrap().meta.forward {
