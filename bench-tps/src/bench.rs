@@ -25,8 +25,8 @@ use std::thread::Builder;
 use std::time::Duration;
 use std::time::Instant;
 
-pub const MAX_SPENDS_PER_TX: usize = 4;
-pub const NUM_LAMPORTS_PER_ACCOUNT: u64 = 20;
+pub const MAX_SPENDS_PER_TX: u64 = 4;
+pub const NUM_LAMPORTS_PER_ACCOUNT: u64 = 128;
 
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
 
@@ -335,8 +335,13 @@ fn verify_funding_transfer<T: Client>(client: &T, tx: &Transaction, amount: u64)
 /// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
 /// on every iteration.  This allows us to replay the transfers because the source is either empty,
 /// or full
-pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Keypair], lamports: u64) {
-    let total = lamports * dests.len() as u64;
+pub fn fund_keys<T: Client>(
+    client: &T,
+    source: &Keypair,
+    dests: &[Keypair],
+    total: u64,
+    lamports_per_signature: u64,
+) {
     let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
     let mut notfunded: Vec<&Keypair> = dests.iter().collect();
 
@@ -346,12 +351,12 @@ pub fn fund_keys<T: Client>(client: &T, source: &Keypair, dests: &[Keypair], lam
         let mut to_fund = vec![];
         println!("creating from... {}", funded.len());
         for f in &mut funded {
-            let max_units = cmp::min(notfunded.len(), MAX_SPENDS_PER_TX);
+            let max_units = cmp::min(notfunded.len() as u64, MAX_SPENDS_PER_TX);
             if max_units == 0 {
                 break;
             }
-            let start = notfunded.len() - max_units;
-            let per_unit = f.1 / (max_units as u64);
+            let start = notfunded.len() - max_units as usize;
+            let per_unit = (f.1 - max_units * lamports_per_signature) / max_units;
             let moves: Vec<_> = notfunded[start..]
                 .iter()
                 .map(|k| (k.pubkey(), per_unit))
@@ -570,7 +575,7 @@ fn should_switch_directions(num_lamports_per_account: u64, i: u64) -> bool {
     i % (num_lamports_per_account / 4) == 0 && (i >= (3 * num_lamports_per_account) / 4)
 }
 
-pub fn generate_keypairs(seed_keypair: &Keypair, count: usize) -> Vec<Keypair> {
+pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> Vec<Keypair> {
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
     let mut rnd = GenKeys::new(seed);
@@ -582,7 +587,7 @@ pub fn generate_keypairs(seed_keypair: &Keypair, count: usize) -> Vec<Keypair> {
         // Use the upper bound for this division otherwise it may not generate enough keys
         target = (target + MAX_SPENDS_PER_TX - 1) / MAX_SPENDS_PER_TX;
     }
-    rnd.gen_n_keypairs(total_keys as u64)
+    rnd.gen_n_keypairs(total_keys)
 }
 
 pub fn generate_and_fund_keypairs<T: Client>(
@@ -593,7 +598,7 @@ pub fn generate_and_fund_keypairs<T: Client>(
     lamports_per_account: u64,
 ) -> (Vec<Keypair>, u64) {
     info!("Creating {} keypairs...", tx_count * 2);
-    let mut keypairs = generate_keypairs(funding_pubkey, tx_count * 2);
+    let mut keypairs = generate_keypairs(funding_pubkey, tx_count as u64 * 2);
 
     info!("Get lamports...");
 
@@ -604,13 +609,21 @@ pub fn generate_and_fund_keypairs<T: Client>(
         .unwrap_or(0);
 
     if lamports_per_account > last_keypair_balance {
-        let extra = lamports_per_account - last_keypair_balance;
+        let (_, fee_calculator) = client.get_recent_blockhash().unwrap();
+        let extra =
+            lamports_per_account - last_keypair_balance + fee_calculator.lamports_per_signature;
         let total = extra * (keypairs.len() as u64);
         if client.get_balance(&funding_pubkey.pubkey()).unwrap_or(0) < total {
             airdrop_lamports(client, &drone_addr.unwrap(), funding_pubkey, total);
         }
         info!("adding more lamports {}", extra);
-        fund_keys(client, funding_pubkey, &keypairs, extra);
+        fund_keys(
+            client,
+            funding_pubkey,
+            &keypairs,
+            total,
+            fee_calculator.lamports_per_signature,
+        );
     }
 
     // 'generate_keypairs' generates extra keys to be able to have size-aligned funding batches for fund_keys.
