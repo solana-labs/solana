@@ -115,7 +115,7 @@ setup_validator_accounts() {
 
     # Setup validator storage account
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-      create-validator-storage-account "$storage_pubkey" || return $?
+      create-validator-storage-account "$node_pubkey" "$storage_pubkey" || return $?
 
     touch "$node_keypair_path".configured
   fi
@@ -136,6 +136,9 @@ setup_replicator_account() {
   declare storage_keypair_path=$3
   declare stake=$4
 
+  declare node_pubkey
+  node_pubkey=$($solana_keygen pubkey "$node_keypair_path")
+
   declare storage_pubkey
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
 
@@ -146,7 +149,7 @@ setup_replicator_account() {
 
     # Setup replicator storage account
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-      create-replicator-storage-account "$storage_pubkey" || return $?
+      create-replicator-storage-account "$node_pubkey" "$storage_pubkey" || return $?
 
     touch "$node_keypair_path".configured
   fi

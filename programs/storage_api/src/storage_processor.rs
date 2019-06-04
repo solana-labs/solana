@@ -27,17 +27,17 @@ pub fn process_instruction(
             }
             storage_account.initialize_mining_pool()
         }
-        StorageInstruction::InitializeReplicatorStorage => {
+        StorageInstruction::InitializeReplicatorStorage { owner } => {
             if !rest.is_empty() {
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.initialize_replicator_storage()
+            storage_account.initialize_replicator_storage(owner)
         }
-        StorageInstruction::InitializeValidatorStorage => {
+        StorageInstruction::InitializeValidatorStorage { owner } => {
             if !rest.is_empty() {
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.initialize_validator_storage()
+            storage_account.initialize_validator_storage(owner)
         }
         StorageInstruction::SubmitMiningProof {
             sha_state,
