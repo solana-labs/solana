@@ -7,6 +7,8 @@ use serde::Serialize;
 use solana_metrics::inc_new_counter_debug;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Signable;
+use solana_sdk::signature::Signature;
 use std::borrow::Borrow;
 use std::cmp;
 use std::fmt;
@@ -335,7 +337,8 @@ macro_rules! range {
     };
 }
 
-const PARENT_RANGE: std::ops::Range<usize> = range!(0, u64);
+const SIGNATURE_RANGE: std::ops::Range<usize> = range!(0, Signature);
+const PARENT_RANGE: std::ops::Range<usize> = range!(SIGNATURE_RANGE.end, u64);
 const SLOT_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
 const INDEX_RANGE: std::ops::Range<usize> = range!(SLOT_RANGE.end, u64);
 const ID_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Pubkey);
@@ -590,6 +593,24 @@ impl Blob {
             }
         }
         Ok(())
+    }
+}
+
+impl Signable for Blob {
+    fn pubkey(&self) -> Pubkey {
+        self.id()
+    }
+
+    fn signable_data(&self) -> Vec<u8> {
+        &self.data[SIGNATURE_RANGE.end..self.size() as usize]
+    }
+
+    fn get_signature(&self) -> Signature {
+        Signature::new(&self.data[SIGNATURE_RANGE])
+    }
+
+    fn set_signature(&mut self, signature: Signature) {
+        self.data[SIGNATURE_RANGE].copy_from_slice(signature.as_ref())
     }
 }
 
