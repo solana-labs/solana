@@ -456,6 +456,7 @@ mod tests {
         }
 
         contract = StorageContract::ValidatorStorage {
+            owner: Pubkey::default(),
             slot: 0,
             hash: Hash::default(),
             lockout_validations: HashMap::new(),
@@ -466,6 +467,7 @@ mod tests {
             panic!("Wrong contract type");
         }
         contract = StorageContract::ReplicatorStorage {
+            owner: Pubkey::default(),
             proofs: HashMap::new(),
             reward_validations: HashMap::new(),
         };
@@ -509,6 +511,7 @@ mod tests {
             let mut proofs = HashMap::new();
             proofs.insert(0, proof_map);
             *storage_contract = StorageContract::ReplicatorStorage {
+                owner: Pubkey::default(),
                 proofs,
                 reward_validations: HashMap::new(),
             };
