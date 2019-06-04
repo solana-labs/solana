@@ -21,6 +21,7 @@ use solana_runtime::bank::Bank;
 use solana_runtime::locked_accounts_results::LockedAccountsResults;
 use solana_sdk::poh_config::PohConfig;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::system_config::NUM_BANKING_THREADS;
 use solana_sdk::timing::{
     self, duration_as_us, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES,
     MAX_TRANSACTION_FORWARDING_DELAY,
@@ -37,9 +38,6 @@ use sys_info;
 
 type PacketsAndOffsets = (Packets, Vec<usize>);
 pub type UnprocessedPackets = Vec<PacketsAndOffsets>;
-
-// number of threads is 1 until mt bank is ready
-pub const NUM_THREADS: u32 = 10;
 
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
@@ -359,7 +357,7 @@ impl BankingStage {
     }
 
     pub fn num_threads() -> u32 {
-        sys_info::cpu_num().unwrap_or(NUM_THREADS)
+        sys_info::cpu_num().unwrap_or(NUM_BANKING_THREADS)
     }
 
     /// Convert the transactions from a blob of binary data to a vector of transactions

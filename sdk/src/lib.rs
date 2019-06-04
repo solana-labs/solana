@@ -17,12 +17,12 @@ pub mod rpc_port;
 pub mod short_vec;
 pub mod signature;
 pub mod syscall;
+pub mod system_config;
 pub mod system_instruction;
 pub mod system_program;
 pub mod system_transaction;
 pub mod timing;
 pub mod transaction;
 pub mod transport;
-
 #[macro_use]
 extern crate serde_derive;
