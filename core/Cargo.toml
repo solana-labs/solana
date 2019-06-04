@@ -46,7 +46,7 @@ reed-solomon-erasure = "3.1.1"
 reqwest = "0.9.17"
 rocksdb = "0.11.0"
 serde = "1.0.92"
-serde_derive = "1.0.91"
+serde_derive = "1.0.92"
 serde_json = "1.0.39"
 solana-budget-api = { path = "../programs/budget_api", version = "0.16.0" }
 solana-budget-program = { path = "../programs/budget_program", version = "0.16.0" }
