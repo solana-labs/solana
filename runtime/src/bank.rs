@@ -218,6 +218,11 @@ pub struct Bank {
     /// The pubkey to send transactions fees to.
     collector_id: Pubkey,
 
+    /// Fees that have been collected
+    #[serde(serialize_with = "serialize_atomicusize")]
+    #[serde(deserialize_with = "deserialize_atomicusize")]
+    collector_fees: AtomicUsize, // TODO: Use AtomicU64 if/when available
+
     /// An object to calculate transaction fees.
     pub fee_calculator: FeeCalculator,
 
@@ -380,6 +385,11 @@ impl Bank {
         let mut hash = self.hash.write().unwrap();
 
         if *hash == Hash::default() {
+            let collector_fees = self.collector_fees.load(Ordering::SeqCst) as u64;
+            if collector_fees != 0 {
+                self.deposit(&self.collector_id, collector_fees);
+            }
+
             //  freeze is a one-way trip, idempotent
             *hash = self.hash_internal_state();
             true
@@ -899,7 +909,9 @@ impl Bank {
                 }
             })
             .collect();
-        self.deposit(&self.collector_id, fees);
+
+        self.collector_fees
+            .fetch_add(fees as usize, Ordering::Relaxed);
         results
     }
 
@@ -1482,22 +1494,29 @@ mod tests {
 
         let tx =
             system_transaction::transfer(&mint_keypair, &key1.pubkey(), 2, genesis_block.hash());
+
         let initial_balance = bank.get_balance(&leader);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&leader), initial_balance + 3);
+        assert_eq!(bank.get_balance(&leader), initial_balance);
         assert_eq!(bank.get_balance(&key1.pubkey()), 2);
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5);
+        bank.freeze();
+        assert_eq!(bank.get_balance(&leader), initial_balance + 3); // leader collects fee after the bank is frozen
 
+        let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
         bank.fee_calculator.lamports_per_signature = 1;
         let tx = system_transaction::transfer(&key1, &key2.pubkey(), 1, genesis_block.hash());
 
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&leader), initial_balance + 4);
+        assert_eq!(bank.get_balance(&leader), initial_balance + 3);
         assert_eq!(bank.get_balance(&key1.pubkey()), 0);
         assert_eq!(bank.get_balance(&key2.pubkey()), 1);
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5);
+        bank.freeze();
+        assert_eq!(bank.get_balance(&leader), initial_balance + 4); // leader collects fee after the bank is frozen
 
         // verify that an InstructionError collects fees, too
+        let bank = Bank::new_from_parent(&Arc::new(bank), &leader, 2);
         let mut tx =
             system_transaction::transfer(&mint_keypair, &key2.pubkey(), 1, genesis_block.hash());
         // send a bogus instruction to system_program, cause an instruction error
@@ -1505,9 +1524,10 @@ mod tests {
 
         bank.process_transaction(&tx)
             .expect_err("instruction error"); // fails with an instruction error
-        assert_eq!(bank.get_balance(&leader), initial_balance + 5); // gots our bucks
         assert_eq!(bank.get_balance(&key2.pubkey()), 1); //  our fee --V
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5 - 1);
+        bank.freeze();
+        assert_eq!(bank.get_balance(&leader), initial_balance + 5); // gots our bucks
     }
 
     #[test]
@@ -1537,6 +1557,7 @@ mod tests {
         bank.fee_calculator.lamports_per_signature = 2;
         let initial_balance = bank.get_balance(&leader);
         let results = bank.filter_program_errors_and_collect_fee(&vec![tx1, tx2], &results);
+        bank.freeze();
         assert_eq!(bank.get_balance(&leader), initial_balance + 2 + 2);
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Ok(()));
