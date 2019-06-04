@@ -45,6 +45,7 @@ pub enum StorageContract {
     Uninitialized, // Must be first (aka, 0)
 
     ValidatorStorage {
+        owner: Pubkey,
         // Most recently advertised slot
         slot: u64,
         // Most recently advertised blockhash
@@ -53,6 +54,7 @@ pub enum StorageContract {
         reward_validations: HashMap<usize, HashMap<Hash, ProofStatus>>,
     },
     ReplicatorStorage {
+        owner: Pubkey,
         /// Map of Proofs per segment, in a HashMap based on the sha_state
         proofs: HashMap<usize, HashMap<Hash, Proof>>,
         /// Map of Rewards per segment, in a HashMap based on the sha_state
@@ -64,11 +66,12 @@ pub enum StorageContract {
 }
 
 // utility function, used by Bank, tests, genesis
-pub fn create_validator_storage_account(lamports: u64) -> Account {
+pub fn create_validator_storage_account(owner: Pubkey, lamports: u64) -> Account {
     let mut storage_account = Account::new(lamports, STORAGE_ACCOUNT_SPACE as usize, &crate::id());
 
     storage_account
         .set_state(&StorageContract::ValidatorStorage {
+            owner,
             slot: 0,
             hash: Hash::default(),
             lockout_validations: HashMap::new(),
@@ -98,10 +101,11 @@ impl<'a> StorageAccount<'a> {
         }
     }
 
-    pub fn initialize_replicator_storage(&mut self) -> Result<(), InstructionError> {
+    pub fn initialize_replicator_storage(&mut self, owner: Pubkey) -> Result<(), InstructionError> {
         let storage_contract = &mut self.account.state()?;
         if let StorageContract::Uninitialized = storage_contract {
             *storage_contract = StorageContract::ReplicatorStorage {
+                owner,
                 proofs: HashMap::new(),
                 reward_validations: HashMap::new(),
             };
@@ -111,10 +115,11 @@ impl<'a> StorageAccount<'a> {
         }
     }
 
-    pub fn initialize_validator_storage(&mut self) -> Result<(), InstructionError> {
+    pub fn initialize_validator_storage(&mut self, owner: Pubkey) -> Result<(), InstructionError> {
         let storage_contract = &mut self.account.state()?;
         if let StorageContract::Uninitialized = storage_contract {
             *storage_contract = StorageContract::ValidatorStorage {
+                owner,
                 slot: 0,
                 hash: Hash::default(),
                 lockout_validations: HashMap::new(),
@@ -179,6 +184,7 @@ impl<'a> StorageAccount<'a> {
             hash: state_hash,
             reward_validations,
             lockout_validations,
+            ..
         } = &mut storage_contract
         {
             let current_segment = get_segment_from_slot(current_slot);
@@ -315,6 +321,7 @@ impl<'a> StorageAccount<'a> {
         } else if let StorageContract::ReplicatorStorage {
             proofs,
             reward_validations,
+            ..
         } = &mut storage_contract
         {
             // if current tick height is a full segment away, allow reward collection
@@ -449,6 +456,7 @@ mod tests {
         }
 
         contract = StorageContract::ValidatorStorage {
+            owner: Pubkey::default(),
             slot: 0,
             hash: Hash::default(),
             lockout_validations: HashMap::new(),
@@ -459,6 +467,7 @@ mod tests {
             panic!("Wrong contract type");
         }
         contract = StorageContract::ReplicatorStorage {
+            owner: Pubkey::default(),
             proofs: HashMap::new(),
             reward_validations: HashMap::new(),
         };
@@ -502,6 +511,7 @@ mod tests {
             let mut proofs = HashMap::new();
             proofs.insert(0, proof_map);
             *storage_contract = StorageContract::ReplicatorStorage {
+                owner: Pubkey::default(),
                 proofs,
                 reward_validations: HashMap::new(),
             };

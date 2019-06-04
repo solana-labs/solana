@@ -445,6 +445,7 @@ impl Replicator {
 
             let ix = storage_instruction::create_replicator_storage_account(
                 &keypair.pubkey(),
+                &keypair.pubkey(),
                 &storage_keypair.pubkey(),
                 1,
             );

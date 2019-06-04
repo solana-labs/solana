@@ -55,8 +55,8 @@ pub enum WalletCommand {
     RedeemVoteCredits(Pubkey, Pubkey, Pubkey),
     ShowStakeAccount(Pubkey),
     CreateStorageMiningPoolAccount(Pubkey, u64),
-    CreateReplicatorStorageAccount(Pubkey),
-    CreateValidatorStorageAccount(Pubkey),
+    CreateReplicatorStorageAccount(Pubkey, Pubkey),
+    CreateValidatorStorageAccount(Pubkey, Pubkey),
     ClaimStorageReward(Pubkey, Pubkey, u64),
     ShowStorageAccount(Pubkey),
     Deploy(String),
@@ -269,14 +269,18 @@ pub fn parse_command(
             ))
         }
         ("create-replicator-storage-account", Some(matches)) => {
+            let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
             let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::CreateReplicatorStorageAccount(
+                account_owner,
                 storage_account_pubkey,
             ))
         }
         ("create-validator-storage-account", Some(matches)) => {
+            let account_owner = pubkey_of(matches, "storage_account_owner").unwrap();
             let storage_account_pubkey = pubkey_of(matches, "storage_account_pubkey").unwrap();
             Ok(WalletCommand::CreateValidatorStorageAccount(
+                account_owner,
                 storage_account_pubkey,
             ))
         }
@@ -670,11 +674,13 @@ fn process_create_storage_mining_pool_account(
 fn process_create_replicator_storage_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
+    account_owner: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_replicator_storage_account(
         &config.keypair.pubkey(),
+        &account_owner,
         storage_account_pubkey,
         1,
     );
@@ -686,11 +692,13 @@ fn process_create_replicator_storage_account(
 fn process_create_validator_storage_account(
     rpc_client: &RpcClient,
     config: &WalletConfig,
+    account_owner: &Pubkey,
     storage_account_pubkey: &Pubkey,
 ) -> ProcessResult {
     let (recent_blockhash, _fee_calculator) = rpc_client.get_recent_blockhash()?;
     let ixs = storage_instruction::create_validator_storage_account(
         &config.keypair.pubkey(),
+        account_owner,
         storage_account_pubkey,
         1,
     );
@@ -1073,12 +1081,23 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
             )
         }
 
-        WalletCommand::CreateReplicatorStorageAccount(storage_account_pubkey) => {
-            process_create_replicator_storage_account(&rpc_client, config, &storage_account_pubkey)
-        }
+        WalletCommand::CreateReplicatorStorageAccount(
+            storage_account_owner,
+            storage_account_pubkey,
+        ) => process_create_replicator_storage_account(
+            &rpc_client,
+            config,
+            &storage_account_owner,
+            &storage_account_pubkey,
+        ),
 
-        WalletCommand::CreateValidatorStorageAccount(storage_account_pubkey) => {
-            process_create_validator_storage_account(&rpc_client, config, &storage_account_pubkey)
+        WalletCommand::CreateValidatorStorageAccount(account_owner, storage_account_pubkey) => {
+            process_create_validator_storage_account(
+                &rpc_client,
+                config,
+                &account_owner,
+                &storage_account_pubkey,
+            )
         }
 
         WalletCommand::ClaimStorageReward(
@@ -1500,8 +1519,16 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("create-replicator-storage-account")
                 .about("Create a replicator storage account")
                 .arg(
-                    Arg::with_name("storage_account_pubkey")
+                    Arg::with_name("storage_account_owner")
                         .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                )
+                .arg(
+                    Arg::with_name("storage_account_pubkey")
+                        .index(2)
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)
@@ -1512,8 +1539,16 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
             SubCommand::with_name("create-validator-storage-account")
                 .about("Create a validator storage account")
                 .arg(
-                    Arg::with_name("storage_account_pubkey")
+                    Arg::with_name("storage_account_owner")
                         .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_pubkey)
+                )
+                .arg(
+                    Arg::with_name("storage_account_pubkey")
+                        .index(2)
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .required(true)

@@ -131,7 +131,7 @@ impl LocalCluster {
             config.node_stakes[0],
         );
         let storage_keypair = Keypair::new();
-        genesis_block.add_storage_program(&storage_keypair.pubkey());
+        genesis_block.add_storage_program(&leader_pubkey, &storage_keypair.pubkey());
         genesis_block.ticks_per_slot = config.ticks_per_slot;
         genesis_block.slots_per_epoch = config.slots_per_epoch;
         genesis_block.stakers_slot_offset = config.stakers_slot_offset;
@@ -479,6 +479,7 @@ impl LocalCluster {
         ))
     }
 
+    /// Sets up the storage account for validators/replicators and assumes the funder is the owner
     fn setup_storage_account(
         client: &ThinClient,
         storage_keypair: &Keypair,
@@ -489,11 +490,13 @@ impl LocalCluster {
             if replicator {
                 storage_instruction::create_replicator_storage_account(
                     &from_keypair.pubkey(),
+                    &from_keypair.pubkey(),
                     &storage_keypair.pubkey(),
                     1,
                 )
             } else {
                 storage_instruction::create_validator_storage_account(
+                    &from_keypair.pubkey(),
                     &from_keypair.pubkey(),
                     &storage_keypair.pubkey(),
                     1,

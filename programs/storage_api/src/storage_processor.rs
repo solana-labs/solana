@@ -27,17 +27,17 @@ pub fn process_instruction(
             }
             storage_account.initialize_mining_pool()
         }
-        StorageInstruction::InitializeReplicatorStorage => {
+        StorageInstruction::InitializeReplicatorStorage { owner } => {
             if !rest.is_empty() {
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.initialize_replicator_storage()
+            storage_account.initialize_replicator_storage(owner)
         }
-        StorageInstruction::InitializeValidatorStorage => {
+        StorageInstruction::InitializeValidatorStorage { owner } => {
             if !rest.is_empty() {
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.initialize_validator_storage()
+            storage_account.initialize_validator_storage(owner)
         }
         StorageInstruction::SubmitMiningProof {
             sha_state,
@@ -109,6 +109,7 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::account::{create_keyed_accounts, Account};
+    use solana_sdk::account_utils::State;
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::hash::{hash, Hash};
@@ -141,7 +142,60 @@ mod tests {
     }
 
     #[test]
+    fn test_account_owner() {
+        let account_owner = Pubkey::new_rand();
+        let validator_storage_pubkey = Pubkey::new_rand();
+        let replicator_storage_pubkey = Pubkey::new_rand();
+
+        let (genesis_block, mint_keypair) = create_genesis_block(1000);
+        let mut bank = Bank::new(&genesis_block);
+        let mint_pubkey = mint_keypair.pubkey();
+        bank.add_instruction_processor(id(), process_instruction);
+        let bank = Arc::new(bank);
+        let bank_client = BankClient::new_shared(&bank);
+
+        let message = Message::new(storage_instruction::create_validator_storage_account(
+            &mint_pubkey,
+            &account_owner,
+            &validator_storage_pubkey,
+            1,
+        ));
+        bank_client
+            .send_message(&[&mint_keypair], message)
+            .expect("failed to create account");
+        let account = bank
+            .get_account(&validator_storage_pubkey)
+            .expect("account not found");
+        let storage_contract = account.state().expect("couldn't unpack account data");
+        if let StorageContract::ValidatorStorage { owner, .. } = storage_contract {
+            assert_eq!(owner, account_owner);
+        } else {
+            assert!(false, "wrong account type found")
+        }
+
+        let message = Message::new(storage_instruction::create_replicator_storage_account(
+            &mint_pubkey,
+            &account_owner,
+            &replicator_storage_pubkey,
+            1,
+        ));
+        bank_client
+            .send_message(&[&mint_keypair], message)
+            .expect("failed to create account");
+        let account = bank
+            .get_account(&replicator_storage_pubkey)
+            .expect("account not found");
+        let storage_contract = account.state().expect("couldn't unpack account data");
+        if let StorageContract::ReplicatorStorage { owner, .. } = storage_contract {
+            assert_eq!(owner, account_owner);
+        } else {
+            assert!(false, "wrong account type found")
+        }
+    }
+
+    #[test]
     fn test_proof_bounds() {
+        let account_owner = Pubkey::new_rand();
         let pubkey = Pubkey::new_rand();
         let mut account = Account {
             data: vec![0; STORAGE_ACCOUNT_SPACE as usize],
@@ -149,7 +203,9 @@ mod tests {
         };
         {
             let mut storage_account = StorageAccount::new(&mut account);
-            storage_account.initialize_replicator_storage().unwrap();
+            storage_account
+                .initialize_replicator_storage(account_owner)
+                .unwrap();
         }
 
         let ix = storage_instruction::mining_proof(
@@ -233,12 +289,15 @@ mod tests {
     #[test]
     fn test_submit_mining_ok() {
         solana_logger::setup();
+        let account_owner = Pubkey::new_rand();
         let pubkey = Pubkey::new_rand();
         let mut account = Account::default();
         account.data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
         {
             let mut storage_account = StorageAccount::new(&mut account);
-            storage_account.initialize_replicator_storage().unwrap();
+            storage_account
+                .initialize_replicator_storage(account_owner)
+                .unwrap();
         }
 
         let ix =
@@ -448,6 +507,7 @@ mod tests {
             .flat_map(|account| {
                 storage_instruction::create_validator_storage_account(
                     &mint.pubkey(),
+                    &Pubkey::default(),
                     account,
                     lamports,
                 )
@@ -458,6 +518,7 @@ mod tests {
             .for_each(|account| {
                 ixs.append(&mut storage_instruction::create_replicator_storage_account(
                     &mint.pubkey(),
+                    &Pubkey::default(),
                     account,
                     lamports,
                 ))
@@ -559,6 +620,7 @@ mod tests {
 
         let message = Message::new(storage_instruction::create_replicator_storage_account(
             &mint_pubkey,
+            &Pubkey::default(),
             &replicator_pubkey,
             1,
         ));
@@ -566,6 +628,7 @@ mod tests {
 
         let message = Message::new(storage_instruction::create_validator_storage_account(
             &mint_pubkey,
+            &Pubkey::default(),
             &validator_pubkey,
             1,
         ));

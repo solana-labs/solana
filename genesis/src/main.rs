@@ -228,7 +228,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             solana_exchange_program!(),
         ],
     );
-    genesis_block.add_storage_program(&bootstrap_storage_keypair.pubkey());
+    genesis_block.add_storage_program(
+        &bootstrap_leader_keypair.pubkey(),
+        &bootstrap_storage_keypair.pubkey(),
+    );
 
     genesis_block.fee_calculator.lamports_per_signature =
         value_t_or_exit!(matches, "lamports_per_signature", u64);
