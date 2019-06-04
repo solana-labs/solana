@@ -15,7 +15,7 @@ genesisOptions="$8"
 set +x
 export RUST_LOG
 
-# Use a very large stake (relative to the default multinode-demo/ stake of 43)
+# Use a very large stake (relative to the default multinode-demo/ stake of 42)
 # for the testnet validators setup by net/.  This make it less likely that
 # low-staked ephemeral validator a random user may attach to testnet will cause
 # trouble
@@ -78,7 +78,6 @@ local|tar)
     set -x
     if [[ $skipSetup != true ]]; then
       args=(
-        --bootstrap-leader-lamports "$stake"
         --bootstrap-leader-stake-lamports "$stake"
       )
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions

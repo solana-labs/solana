@@ -22,8 +22,9 @@ default_arg --bootstrap-storage-keypair "$SOLANA_CONFIG_DIR"/bootstrap-leader-st
 default_arg --ledger "$SOLANA_RSYNC_CONFIG_DIR"/ledger
 default_arg --mint "$SOLANA_CONFIG_DIR"/mint-keypair.json
 default_arg --lamports 100000000000000
+default_arg --bootstrap-leader-lamports 424242
+default_arg --lamports-per-signature 1
 default_arg --hashes-per-tick sleep
-
 $solana_genesis "${args[@]}"
 
 test -d "$SOLANA_RSYNC_CONFIG_DIR"/ledger
