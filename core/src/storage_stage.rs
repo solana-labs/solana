@@ -483,51 +483,61 @@ impl StorageStage {
                             slot,
                             instruction_sender,
                         )?;
-                        // bundle up mining submissions from replicators
-                        // and submit them in a tx to the leader to get rewarded.
-                        let mut w_state = storage_state.write().unwrap();
-                        let instructions: Vec<_> = w_state
-                            .replicator_map
-                            .iter_mut()
-                            .enumerate()
-                            .flat_map(|(segment, proof_map)| {
-                                let checked_proofs = proof_map
-                                    .iter_mut()
-                                    .map(|(id, proofs)| {
-                                        (
-                                            *id,
-                                            proofs
-                                                .drain(..)
-                                                .map(|proof| CheckedProof {
-                                                    proof,
-                                                    status: ProofStatus::Valid,
-                                                })
-                                                .collect::<Vec<_>>(),
-                                        )
-                                    })
-                                    .collect::<HashMap<_, _>>();
-                                if !checked_proofs.is_empty() {
-                                    let ix = proof_validation(
-                                        &storage_keypair.pubkey(),
-                                        segment as u64,
-                                        checked_proofs,
-                                    );
-                                    Some(ix)
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
-                        // TODO Avoid AccountInUse errors in this loop
-                        let res: std::result::Result<_, _> = instructions
-                            .into_iter()
-                            .map(|ix| instruction_sender.send(ix))
-                            .collect();
-                        res?
+                        Self::submit_verifications(
+                            &storage_state,
+                            &storage_keypair,
+                            instruction_sender,
+                        )?
                     }
                 }
             }
         }
+        Ok(())
+    }
+
+    fn submit_verifications(
+        storage_state: &Arc<RwLock<StorageStateInner>>,
+        storage_keypair: &Arc<Keypair>,
+        ix_sender: &Sender<Instruction>,
+    ) -> Result<()> {
+        // bundle up mining submissions from replicators
+        // and submit them in a tx to the leader to get rewarded.
+        let mut w_state = storage_state.write().unwrap();
+        let instructions: Vec<_> = w_state
+            .replicator_map
+            .iter_mut()
+            .enumerate()
+            .flat_map(|(segment, proof_map)| {
+                let checked_proofs = proof_map
+                    .iter_mut()
+                    .map(|(id, proofs)| {
+                        (
+                            *id,
+                            proofs
+                                .drain(..)
+                                .map(|proof| CheckedProof {
+                                    proof,
+                                    status: ProofStatus::Valid,
+                                })
+                                .collect::<Vec<_>>(),
+                        )
+                    })
+                    .collect::<HashMap<_, _>>();
+                if !checked_proofs.is_empty() {
+                    let ix =
+                        proof_validation(&storage_keypair.pubkey(), segment as u64, checked_proofs);
+                    Some(ix)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        // TODO Avoid AccountInUse errors in this loop
+        let res: std::result::Result<_, _> = instructions
+            .into_iter()
+            .map(|ix| ix_sender.send(ix))
+            .collect();
+        res?;
         Ok(())
     }
 }
