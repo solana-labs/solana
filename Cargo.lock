@@ -2305,7 +2305,7 @@ dependencies = [
  "solana-logger 0.16.0",
  "solana-runtime 0.16.0",
  "solana-sdk 0.16.0",
- "solana_rbpf 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana_rbpf 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "walkdir 2.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2320,7 +2320,7 @@ dependencies = [
  "serde 1.0.92 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-logger 0.16.0",
  "solana-sdk 0.16.0",
- "solana_rbpf 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana_rbpf 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2839,7 +2839,7 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.1.12"
+version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3686,7 +3686,7 @@ dependencies = [
 "checksum smallvec 0.6.9 (registry+https://github.com/rust-lang/crates.io-index)" = "c4488ae950c49d403731982257768f48fada354a5203fe81f9bb6f43ca9002be"
 "checksum socket2 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)" = "4e626972d3593207547f14bf5fc9efa4d0e7283deb73fef1dff313dae9ab8878"
 "checksum solana-ed25519-dalek 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1c21f9d5aa62959872194dfd086feb4e8efec1c2589d27e6a0339904759e99fc"
-"checksum solana_rbpf 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)" = "2b57f7d1bae8d902a3819f66aecb4006b6d8b181388a1580593979952f12df80"
+"checksum solana_rbpf 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)" = "b6145a3a0104925b0be63e817f7b5814fac6aa29a328bbc1d637ffd33022d748"
 "checksum stable_deref_trait 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
 "checksum string 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "b639411d0b9c738748b5397d5ceba08e648f4f1992231aa859af1a017f31f60b"
 "checksum strsim 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
