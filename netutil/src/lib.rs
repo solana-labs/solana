@@ -1,12 +1,9 @@
 //! The `netutil` module assists with networking
-use nix::sys::socket::setsockopt;
-use nix::sys::socket::sockopt::{ReuseAddr, ReusePort};
 use rand::{thread_rng, Rng};
 use socket2::{Domain, SockAddr, Socket, Type};
 use std::io;
 use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket};
-use std::os::unix::io::AsRawFd;
 use std::time::Duration;
 
 mod ip_echo_server;
@@ -106,7 +103,18 @@ pub fn parse_host_port(host_port: &str) -> Result<SocketAddr, String> {
     }
 }
 
+#[cfg(windows)]
+fn udp_socket(_reuseaddr: bool) -> io::Result<Socket> {
+    let sock = Socket::new(Domain::ipv4(), Type::dgram(), None)?;
+    Ok(sock)
+}
+
+#[cfg(not(windows))]
 fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
+    use nix::sys::socket::setsockopt;
+    use nix::sys::socket::sockopt::{ReuseAddr, ReusePort};
+    use std::os::unix::io::AsRawFd;
+
     let sock = Socket::new(Domain::ipv4(), Type::dgram(), None)?;
     let sock_fd = sock.as_raw_fd();
 
