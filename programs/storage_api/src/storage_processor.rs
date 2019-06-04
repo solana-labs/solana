@@ -43,7 +43,6 @@ pub fn process_instruction(
             sha_state,
             slot,
             signature,
-            ..
         } => {
             if me_unsigned || rest.len() != 1 {
                 // This instruction must be signed by `me`
@@ -158,7 +157,6 @@ mod tests {
             Hash::default(),
             SLOTS_PER_SEGMENT,
             Signature::default(),
-            0,
         );
         // the proof is for slot 16, which is in segment 0, need to move the tick height into segment 2
         let ticks_till_next_segment = TICKS_IN_SEGMENT * 2;
@@ -204,7 +202,7 @@ mod tests {
         let mut accounts = [Account::default()];
 
         let ix =
-            storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default(), 0);
+            storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
         // move tick height into segment 1
         let ticks_till_next_segment = TICKS_IN_SEGMENT + 1;
         let mut tick_account = tick_height::create_account(1);
@@ -226,7 +224,7 @@ mod tests {
         accounts[1].data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
 
         let ix =
-            storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default(), 0);
+            storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
 
         // submitting a proof for a slot in the past, so this should fail
         assert!(test_instruction(&ix, &mut accounts).is_err());
@@ -244,7 +242,7 @@ mod tests {
         }
 
         let ix =
-            storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default(), 0);
+            storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
         // move tick height into segment 1
         let ticks_till_next_segment = TICKS_IN_SEGMENT + 1;
         let mut tick_account = tick_height::create_account(1);
@@ -501,7 +499,6 @@ mod tests {
                 sha_state,
                 slot,
                 Signature::default(),
-                0,
             )],
             Some(&mint_keypair.pubkey()),
         );
@@ -595,7 +592,6 @@ mod tests {
                 Hash::default(),
                 slot,
                 Signature::default(),
-                0,
             )],
             Some(&mint_pubkey),
         );

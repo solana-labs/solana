@@ -23,7 +23,6 @@ pub enum StorageInstruction {
         sha_state: Hash,
         slot: u64,
         signature: Signature,
-        proof_index: u64,
     },
     AdvertiseStorageRecentBlockhash {
         hash: Hash,
@@ -111,13 +110,11 @@ pub fn mining_proof(
     sha_state: Hash,
     slot: u64,
     signature: Signature,
-    proof_index: u64,
 ) -> Instruction {
     let storage_instruction = StorageInstruction::SubmitMiningProof {
         sha_state,
         slot,
         signature,
-        proof_index,
     };
     let account_metas = vec![
         AccountMeta::new(*storage_pubkey, true),

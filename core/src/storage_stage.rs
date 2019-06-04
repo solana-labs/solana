@@ -290,16 +290,16 @@ impl StorageStage {
         storage_keypair: &Arc<Keypair>,
         state: &Arc<RwLock<StorageStateInner>>,
         _blocktree: &Arc<Blocktree>,
-        entry_id: Hash,
+        blockhash: Hash,
         slot: u64,
         instruction_sender: &InstructionSender,
     ) -> Result<()> {
         let mut seed = [0u8; 32];
-        let signature = storage_keypair.sign(&entry_id.as_ref());
+        let signature = storage_keypair.sign(&blockhash.as_ref());
 
         let ix = storage_instruction::advertise_recent_blockhash(
             &storage_keypair.pubkey(),
-            entry_id,
+            blockhash,
             slot,
         );
         instruction_sender.send(ix)?;
@@ -308,7 +308,11 @@ impl StorageStage {
 
         let mut rng = ChaChaRng::from_seed(seed);
 
-        state.write().unwrap().slot = slot;
+        {
+            let mut w_state = state.write().unwrap();
+            w_state.slot = slot;
+            w_state.storage_blockhash = blockhash;
+        }
 
         // Regenerate the answers
         let num_segments = get_segment_from_slot(slot) as usize;
@@ -372,7 +376,6 @@ impl StorageStage {
                 slot: proof_slot,
                 signature,
                 sha_state,
-                ..
             }) => {
                 if proof_slot < slot {
                     {
@@ -476,7 +479,7 @@ impl StorageStage {
                             &storage_keypair,
                             &storage_state,
                             &blocktree,
-                            entries.last().unwrap().hash,
+                            entry_hash,
                             slot,
                             instruction_sender,
                         )?;
@@ -711,7 +714,6 @@ mod tests {
             Hash::default(),
             0,
             keypair.sign_message(b"test"),
-            0,
         );
         let mining_proof_tx = Transaction::new_unsigned_instructions(vec![mining_proof_ix]);
         let mining_txs = vec![mining_proof_tx];
