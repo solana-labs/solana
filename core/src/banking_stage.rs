@@ -67,8 +67,7 @@ impl BankingStage {
             poh_recorder,
             verified_receiver,
             verified_vote_receiver,
-            2, // 1 for voting, 1 for banking.
-               // More than 2 threads is slower in testnet testing.
+            4,
         )
     }
 
