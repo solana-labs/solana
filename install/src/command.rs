@@ -513,6 +513,15 @@ pub fn deploy(
     Ok(())
 }
 
+#[cfg(windows)]
+fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dst: Q) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_dir(src, dst)
+}
+#[cfg(not(windows))]
+fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dst: Q) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(src, dst)
+}
+
 pub fn update(config_file: &str) -> Result<bool, String> {
     let update_manifest = info(config_file, false)?;
     if update_manifest.is_none() {
@@ -565,7 +574,7 @@ pub fn update(config_file: &str) -> Result<bool, String> {
     }
 
     let _ = fs::remove_dir_all(config.active_release_dir());
-    std::os::unix::fs::symlink(
+    symlink_dir(
         release_dir.join("solana-release"),
         config.active_release_dir(),
     )
