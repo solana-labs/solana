@@ -540,11 +540,11 @@ impl ClusterInfo {
         let peers: Vec<_> = contacts_and_stakes
             .into_iter()
             .enumerate()
-            .filter_map(|(i, (_, peer))| {
+            .map(|(i, (_, peer))| {
                 if peer.id == self.id() {
                     index = i;
                 }
-                Some(peer)
+                peer
             })
             .collect();
         (index, peers)
@@ -716,7 +716,7 @@ impl ClusterInfo {
     ) -> Result<()> {
         let mut last_err = Ok(());
         let mut broadcast_table_len = 0;
-        blobs.into_iter().for_each(|b| {
+        blobs.iter().for_each(|b| {
             let blob = b.read().unwrap();
             let broadcast_table = self.sorted_tvu_peers(stakes, ChaChaRng::from_seed(blob.seed()));
             broadcast_table_len = broadcast_table.len();
@@ -782,46 +782,6 @@ impl ClusterInfo {
             e?;
         }
         Ok(())
-    }
-
-    pub fn create_broadcast_orders<'a, T>(
-        contains_last_tick: bool,
-        blobs: &[T],
-        broadcast_table: &'a [ContactInfo],
-    ) -> Vec<(T, Vec<&'a ContactInfo>)>
-    where
-        T: Clone,
-    {
-        // enumerate all the blobs in the window, those are the indices
-        // transmit them to nodes, starting from a different node.
-        if blobs.is_empty() {
-            return vec![];
-        }
-        let mut orders = Vec::with_capacity(blobs.len());
-
-        let x = thread_rng().gen_range(0, broadcast_table.len());
-        for (i, blob) in blobs.iter().enumerate() {
-            let br_idx = (x + i) % broadcast_table.len();
-
-            trace!("broadcast order data br_idx {}", br_idx);
-
-            orders.push((blob.clone(), vec![&broadcast_table[br_idx]]));
-        }
-
-        if contains_last_tick {
-            // Broadcast the last tick to everyone on the network so it doesn't get dropped
-            // (Need to maximize probability the next leader in line sees this handoff tick
-            // despite packet drops)
-            // If we had a tick at max_tick_height, then we know it must be the last
-            // Blob in the broadcast, There cannot be an entry that got sent after the
-            // last tick, guaranteed by the PohService).
-            orders.push((
-                blobs.last().unwrap().clone(),
-                broadcast_table.iter().collect(),
-            ));
-        }
-
-        orders
     }
 
     pub fn window_index_request_bytes(&self, slot: u64, blob_index: u64) -> Result<Vec<u8>> {
