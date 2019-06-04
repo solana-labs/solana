@@ -9,8 +9,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 type Nodes = HashMap<Pubkey, (bool, HashSet<i32>, Receiver<(i32, bool)>)>;
