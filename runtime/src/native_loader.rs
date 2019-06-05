@@ -55,6 +55,17 @@ fn create_path(name: &str) -> PathBuf {
     }
 }
 
+#[cfg(windows)]
+fn library_open(path: &PathBuf) -> std::io::Result<Library> {
+    Library::new(path)
+}
+
+#[cfg(not(windows))]
+fn library_open(path: &PathBuf) -> std::io::Result<Library> {
+    // TODO linux tls bug can cause crash on dlclose(), workaround by never unloading
+    Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
+}
+
 pub fn entrypoint(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
@@ -79,8 +90,7 @@ pub fn entrypoint(
         };
         trace!("Call native {:?}", name);
         let path = create_path(&name);
-        // TODO linux tls bug can cause crash on dlclose(), workaround by never unloading
-        match Library::open(Some(&path), libc::RTLD_NODELETE | libc::RTLD_NOW) {
+        match library_open(&path) {
             Ok(library) => unsafe {
                 let entrypoint: Symbol<instruction_processor_utils::Entrypoint> =
                     match library.get(instruction_processor_utils::ENTRYPOINT.as_bytes()) {
