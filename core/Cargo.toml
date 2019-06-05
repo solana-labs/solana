@@ -42,7 +42,6 @@ num-traits = "0.2"
 rand = "0.6.5"
 rand_chacha = "0.1.1"
 rayon = "1.0.0"
-reed-solomon-erasure = "3.1.1"
 reqwest = "0.9.17"
 rocksdb = "0.11.0"
 serde = "1.0.92"
@@ -73,10 +72,15 @@ tokio = "0.1"
 tokio-codec = "0.1"
 untrusted = "0.6.2"
 
+# reed-solomon-erasure's simd_c feature fails to build for x86_64-pc-windows-msvc, use pure-rust
+[target.'cfg(windows)'.dependencies]
+reed-solomon-erasure = { version = "3.1.1", features = ["pure-rust"] }
+[target.'cfg(not(windows))'.dependencies]
+reed-solomon-erasure = "3.1.1"
+
 [dev-dependencies]
 hex-literal = "0.2.0"
 matches = "0.1.6"
-
 
 [[bench]]
 name = "banking_stage"
