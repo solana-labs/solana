@@ -6,6 +6,8 @@ set -e
 
 cd "$(dirname "$0")"/../..
 
+sanityTargetIp="$1"
+
 deployMethod=
 entrypointIp=
 numNodes=
@@ -23,6 +25,7 @@ missing() {
   exit 1
 }
 
+[[ -n $sanityTargetIp ]] || missing sanityTargetIp
 [[ -n $deployMethod ]]   || missing deployMethod
 [[ -n $entrypointIp ]]   || missing entrypointIp
 [[ -n $numNodes ]]       || missing numNodes
@@ -66,7 +69,7 @@ local|tar)
     source target/perf-libs/env.sh
   fi
 
-  entrypointRsyncUrl="$entrypointIp:~/solana"
+  entrypointRsyncUrl="$sanityTargetIp:~/solana"
 
   solana_gossip=solana-gossip
   solana_install=solana-install
@@ -91,7 +94,7 @@ else
   fi
 fi
 
-echo "+++ $entrypointIp: node count ($numSanityNodes expected)"
+echo "+++ $sanityTargetIp: node count ($numSanityNodes expected)"
 (
   set -x
   $solana_keygen -o "$client_id"
@@ -101,26 +104,26 @@ echo "+++ $entrypointIp: node count ($numSanityNodes expected)"
     nodeArg="num-nodes-exactly"
   fi
 
-  timeout 2m $solana_gossip --entrypoint "$entrypointIp:8001" \
+  timeout 2m $solana_gossip --entrypoint "$sanityTargetIp:8001" \
     spy --$nodeArg "$numSanityNodes" \
 )
 
-echo "--- RPC API: getTransactionCount"
+echo "--- $sanityTargetIp: RPC API: getTransactionCount"
 (
   set -x
   curl --retry 5 --retry-delay 2 --retry-connrefused \
     -X POST -H 'Content-Type: application/json' \
     -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
-    http://"$entrypointIp":8899
+    http://"$sanityTargetIp":8899
 )
 
-echo "--- $entrypointIp: wallet sanity"
+echo "--- $sanityTargetIp: wallet sanity"
 (
   set -x
-  scripts/wallet-sanity.sh --url http://"$entrypointIp":8899
+  scripts/wallet-sanity.sh --url http://"$sanityTargetIp":8899
 )
 
-echo "--- $entrypointIp: verify ledger"
+echo "--- $sanityTargetIp: verify ledger"
 if $ledgerVerify; then
   if [[ -d $ledger ]]; then
     (
@@ -140,13 +143,13 @@ else
 fi
 
 
-echo "--- $entrypointIp: validator sanity"
+echo "--- $sanityTargetIp: validator sanity"
 if $validatorSanity; then
   (
     set -x -o pipefail
     timeout 10s ./multinode-demo/validator-x.sh --stake 0 \
       "$entrypointRsyncUrl" \
-      "$entrypointIp:8001" 2>&1 | tee validator-sanity.log
+      "$sanityTargetIp:8001" 2>&1 | tee validator-sanity.log
   ) || {
     exitcode=$?
     [[ $exitcode -eq 124 ]] || exit $exitcode
@@ -165,7 +168,7 @@ else
 fi
 
 if [[ -r update_manifest_keypair.json ]]; then
-  echo "--- $entrypointIp: solana-install test"
+  echo "--- $sanityTargetIp: solana-install test"
 
   (
     set -x
@@ -174,7 +177,7 @@ if [[ -r update_manifest_keypair.json ]]; then
     $solana_install init \
       --no-modify-path \
       --data-dir install-data-dir \
-      --url http://"$entrypointIp":8899 \
+      --url http://"$sanityTargetIp":8899 \
       --pubkey "$update_manifest_pubkey"
 
     $solana_install info
