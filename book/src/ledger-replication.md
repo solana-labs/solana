@@ -8,7 +8,7 @@ provide storage capacity for pieces of the data.
 The basic idea to Proof of Replication is encrypting a dataset with a public
 symmetric key using CBC encryption, then hash the encrypted dataset. The main
 problem with the naive approach is that a dishonest storage node can stream the
-encryption and delete the data as its hashed. The simple solution is to periodically
+encryption and delete the data as it's hashed. The simple solution is to periodically
 regenerate the hash based on a signed PoH value. This ensures that all the data is present
 during the generation of the proof and it also requires validators to have the
 entirety of the encrypted data present for verification of every proof of every identity.
@@ -54,9 +54,8 @@ changes to determine what rate it can validate storage proofs.
 
 1. SLOTS\_PER\_SEGMENT: Number of slots in a segment of ledger data. The
 unit of storage for a replicator.
-2. NUM\_KEY\_ROTATION\_SEGMENTS: Number of segments to save a PoH value and
-cause a key generation for the section of ledger just generated and the rotation of
-another key in the set.
+2. NUM\_KEY\_ROTATION\_SEGMENTS: Number of segments after which replicators
+regenerate their encryption keys and select a new dataset to store.
 3. NUM\_STORAGE\_PROOFS: Number of storage proofs required for a storage proof
 claim to be successfully rewarded.
 4. RATIO\_OF\_FAKE\_PROOFS: Ratio of fake proofs to real proofs that a storage
