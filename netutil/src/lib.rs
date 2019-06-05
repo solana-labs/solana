@@ -1,4 +1,5 @@
 //! The `netutil` module assists with networking
+use log::*;
 use rand::{thread_rng, Rng};
 use socket2::{Domain, SockAddr, Socket, Type};
 use std::io;
@@ -156,7 +157,15 @@ pub fn bind_in_range(range: PortRange) -> io::Result<(u16, UdpSocket)> {
 }
 
 // binds many sockets to the same port in a range
-pub fn multi_bind_in_range(range: PortRange, num: usize) -> io::Result<(u16, Vec<UdpSocket>)> {
+pub fn multi_bind_in_range(range: PortRange, mut num: usize) -> io::Result<(u16, Vec<UdpSocket>)> {
+    if cfg!(windows) && num != 1 {
+        // TODO: Can we do better for windows?
+        warn!(
+            "multi_bind_in_range() only supports 1 socket in windows ({} requested)",
+            num
+        );
+        num = 1;
+    }
     let mut sockets = Vec::with_capacity(num);
 
     let port = {
