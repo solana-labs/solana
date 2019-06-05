@@ -46,6 +46,7 @@ test-stable-perf)
   }
 
   pushd programs/bpf/rust
+  cargo install rustfilt
   ./dump.sh alloc
   cat ./alloc/target/dump.txt
   popd
