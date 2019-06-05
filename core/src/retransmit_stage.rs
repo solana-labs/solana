@@ -3,7 +3,6 @@
 use crate::bank_forks::BankForks;
 use crate::blocktree::{Blocktree, CompletedSlotsReceiver};
 use crate::cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT};
-use crate::contact_info::ContactInfo;
 use crate::leader_schedule_cache::LeaderScheduleCache;
 use crate::repair_service::RepairStrategy;
 use crate::result::{Error, Result};
@@ -11,7 +10,6 @@ use crate::service::Service;
 use crate::staking_utils;
 use crate::streamer::BlobReceiver;
 use crate::window_service::{should_retransmit_and_persist, WindowService};
-use hashbrown::HashMap;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use solana_metrics::{datapoint_info, inc_new_counter_error};
@@ -30,8 +28,6 @@ fn retransmit(
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     r: &BlobReceiver,
     sock: &UdpSocket,
-    avalanche_topology_cache: &mut HashMap<u64, (Vec<ContactInfo>, Vec<ContactInfo>)>,
-    cache_history: &mut Vec<u64>,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let mut blobs = r.recv_timeout(timer)?;
@@ -62,10 +58,6 @@ fn retransmit(
             ClusterInfo::retransmit_to(&cluster_info, &children, blob, leader, sock, true)?;
         }
     }
-
-    while cache_history.len() > 5 {
-        avalanche_topology_cache.remove(&cache_history.pop().unwrap());
-    }
     Ok(())
 }
 
@@ -90,8 +82,6 @@ fn retransmitter(
         .name("solana-retransmitter".to_string())
         .spawn(move || {
             trace!("retransmitter started");
-            let mut avalanche_topology_cache = HashMap::new();
-            let mut cache_history = vec![];
             loop {
                 if let Err(e) = retransmit(
                     &bank_forks,
@@ -99,8 +89,6 @@ fn retransmitter(
                     &cluster_info,
                     &r,
                     &sock,
-                    &mut avalanche_topology_cache,
-                    &mut cache_history,
                 ) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
