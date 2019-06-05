@@ -28,9 +28,8 @@ core. The total space required for verification is `1_ledger_segment +
 ## Network
 
 Validators for PoRep are the same validators that are verifying transactions.
-They have some stake that they have put up as collateral that ensures that
-their work is honest. If a replicator can prove that a validator verified a fake
-PoRep, then the validator will not receive a reward for that storage epoch.
+If a replicator can prove that a validator verified a fake PoRep, then the
+validator will not receive a reward for that storage epoch.
 
 Replicators are specialized *light clients*. They download a part of the
 ledger (a.k.a Segment) and store it, and provide PoReps of storing the ledger.
@@ -187,8 +186,7 @@ the network can reward long lived client identities more than new ones.
   showing the initial state for the hash.
 - If a validator marks real proofs as fake, no on-chain computation can be done
   to distinguish who is correct. Rewards would have to rely on the results from
-multiple validators in a stake-weighted fashion to catch bad actors and
-replicators from being locked out of the network.
+  multiple validators to catch bad actors and replicators from being denied rewards.
 - Validator stealing mining proof results for itself. The proofs are derived
   from a signature from a replicator, since the validator does not know the
 private key used to generate the encryption key, it cannot be the generator of
