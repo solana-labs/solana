@@ -14,11 +14,12 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use std::borrow::Borrow;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::Mutex;
 use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "cuda")]
 use crate::sigverify::poh_verify_many;
+#[cfg(feature = "cuda")]
+use std::sync::Mutex;
 #[cfg(feature = "cuda")]
 use std::thread;
 
@@ -265,18 +266,17 @@ impl EntrySlice for [Entry] {
         let hashes_clone = hashes.clone();
 
         let gpu_verify_thread = thread::spawn(move || {
-            let hashes = hashes_clone.lock().unwrap();
+            let mut hashes = hashes_clone.lock().unwrap();
             let res;
             unsafe {
                 res = poh_verify_many(
-                    hashes.as_ptr() as *const u8,
+                    hashes.as_mut_ptr() as *mut u8,
                     num_hashes_vec.as_ptr(),
                     length,
                     1,
                 );
             }
             if res != 0 {
-                error!("GPU PoH verify many failed");
                 panic!("GPU PoH verify many failed");
             }
         });
@@ -682,8 +682,6 @@ mod tests {
         bad_ticks[1].hash = one;
         assert!(!bad_ticks.verify(&one)); // inductive step, bad
     }
-
-    //TODO: Should test verify slice with txs, esp w/ cuda verification
 
     fn blob_sized_entries(num_entries: usize) -> Vec<Entry> {
         // rough guess

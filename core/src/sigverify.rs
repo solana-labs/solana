@@ -73,7 +73,7 @@ extern "C" {
     pub fn chacha_end_sha_state(sha_state_in: *const u8, out: *mut u8, num_keys: u32);
 
     pub fn poh_verify_many(
-        hashes: *const u8,
+        hashes: *mut u8,
         num_hashes_arr: *const u64,
         num_elems: usize,
         use_non_default_stream: u8,
