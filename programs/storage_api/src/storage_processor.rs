@@ -3,7 +3,7 @@
 //!  and give reward for good proofs.
 use crate::storage_contract::StorageAccount;
 use crate::storage_instruction::StorageInstruction;
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account_api::{AccountApi, AccountWrapper};
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::syscall::tick_height::TickHeight;
@@ -11,14 +11,14 @@ use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &mut [AccountWrapper],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
     let (me, rest) = keyed_accounts.split_at_mut(1);
     let me_unsigned = me[0].signer_key().is_none();
-    let mut storage_account = StorageAccount::new(&mut me[0].account);
+    let storage_account = &mut me[0];
 
     match bincode::deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         StorageInstruction::InitializeMiningPool => {
@@ -48,7 +48,7 @@ pub fn process_instruction(
                 // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
-            let tick_height = TickHeight::from(&rest[0].account).unwrap();
+            let tick_height = TickHeight::from_wrapped(&rest[0]).unwrap();
             storage_account.submit_mining_proof(
                 sha_state,
                 slot,
@@ -61,7 +61,7 @@ pub fn process_instruction(
                 // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
-            let tick_height = TickHeight::from(&rest[0].account).unwrap();
+            let tick_height = TickHeight::from_wrapped(&rest[0]).unwrap();
             storage_account.advertise_storage_recent_blockhash(
                 hash,
                 slot,
@@ -72,7 +72,7 @@ pub fn process_instruction(
             if rest.len() != 2 {
                 Err(InstructionError::InvalidArgument)?;
             }
-            let tick_height = TickHeight::from(&rest[1].account).unwrap();
+            let tick_height = TickHeight::from_wrapped(&rest[1]).unwrap();
             storage_account.claim_storage_reward(
                 &mut rest[0],
                 slot,
@@ -84,11 +84,7 @@ pub fn process_instruction(
                 // This instruction must be signed by `me` and `rest` cannot be empty
                 Err(InstructionError::InvalidArgument)?;
             }
-            let mut rest: Vec<_> = rest
-                .iter_mut()
-                .map(|keyed_account| StorageAccount::new(&mut keyed_account.account))
-                .collect();
-            storage_account.proof_validation(segment, proofs, &mut rest)
+            storage_account.proof_validation(segment, proofs, rest)
         }
     }
 }
@@ -108,7 +104,7 @@ mod tests {
     use log::*;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
-    use solana_sdk::account::{create_keyed_accounts, Account};
+    use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
     use solana_sdk::account_utils::State;
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_block::create_genesis_block;
@@ -132,7 +128,11 @@ mod tests {
             .iter()
             .zip(program_accounts.iter_mut())
             .map(|(account_meta, account)| {
-                KeyedAccount::new(&account_meta.pubkey, account_meta.is_signer, account)
+                AccountWrapper::CreditDebit(KeyedAccount::new(
+                    &account_meta.pubkey,
+                    account_meta.is_signer,
+                    account,
+                ))
             })
             .collect();
 
@@ -202,7 +202,8 @@ mod tests {
             ..Account::default()
         };
         {
-            let mut storage_account = StorageAccount::new(&mut account);
+            let mut storage_account =
+                AccountWrapper::CreditDebit(KeyedAccount::new(&pubkey, false, &mut account));
             storage_account
                 .initialize_replicator_storage(account_owner)
                 .unwrap();
@@ -226,7 +227,11 @@ mod tests {
     fn test_storage_tx() {
         let pubkey = Pubkey::new_rand();
         let mut accounts = [(pubkey, Account::default())];
-        let mut keyed_accounts = create_keyed_accounts(&mut accounts);
+        let keyed_accounts = create_keyed_accounts(&mut accounts);
+        let mut keyed_accounts: Vec<AccountWrapper> = keyed_accounts
+            .into_iter()
+            .map(|keyed_account| AccountWrapper::CreditDebit(keyed_account))
+            .collect();
         assert!(process_instruction(&id(), &mut keyed_accounts, &[]).is_err());
     }
 
@@ -237,8 +242,16 @@ mod tests {
         let mut keyed_accounts = Vec::new();
         let mut user_account = Account::default();
         let mut tick_account = tick_height::create_account(1);
-        keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
-        keyed_accounts.push(KeyedAccount::new(&tick_pubkey, false, &mut tick_account));
+        keyed_accounts.push(AccountWrapper::CreditDebit(KeyedAccount::new(
+            &pubkey,
+            true,
+            &mut user_account,
+        )));
+        keyed_accounts.push(AccountWrapper::CreditDebit(KeyedAccount::new(
+            &tick_pubkey,
+            false,
+            &mut tick_account,
+        )));
 
         let ix = storage_instruction::advertise_recent_blockhash(
             &pubkey,
@@ -294,7 +307,8 @@ mod tests {
         let mut account = Account::default();
         account.data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
         {
-            let mut storage_account = StorageAccount::new(&mut account);
+            let mut storage_account =
+                AccountWrapper::CreditDebit(KeyedAccount::new(&pubkey, false, &mut account));
             storage_account
                 .initialize_replicator_storage(account_owner)
                 .unwrap();
