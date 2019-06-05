@@ -212,6 +212,7 @@ sanity() {
   testnet-edge)
     (
       set -x
+      NO_INSTALL_CHECK=1 \
       NO_LEDGER_VERIFY=1 \
         ci/testnet-sanity.sh edge-testnet-solana-com ec2 us-west-1a
     )
@@ -228,6 +229,7 @@ sanity() {
   testnet-beta)
     (
       set -x
+      NO_INSTALL_CHECK=1 \
       NO_LEDGER_VERIFY=1 \
         ci/testnet-sanity.sh beta-testnet-solana-com ec2 us-west-1a
     )

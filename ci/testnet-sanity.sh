@@ -64,6 +64,7 @@ for zone in "$@"; do
     ${NO_LEDGER_VERIFY:+-o noLedgerVerify} \
     ${NO_VALIDATOR_SANITY:+-o noValidatorSanity} \
     ${REJECT_EXTRA_NODES:+-o rejectExtraNodes} \
+    ${NO_INSTALL_CHECK:+-o noInstallCheck} \
     $zone || ok=false
 
   net/net.sh logs
