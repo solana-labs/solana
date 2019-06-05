@@ -8,7 +8,7 @@ use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use libc::c_char;
 use log::*;
 use solana_rbpf::{EbpfVmRaw, MemoryRegion};
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account_api::{AccountApi, AccountWrapper};
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
@@ -231,7 +231,7 @@ pub fn create_vm(prog: &[u8]) -> Result<(EbpfVmRaw, MemoryRegion), Error> {
 
 fn serialize_parameters(
     program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &mut [AccountWrapper],
     data: &[u8],
 ) -> Vec<u8> {
     assert_eq!(32, mem::size_of::<Pubkey>());
@@ -243,11 +243,11 @@ fn serialize_parameters(
         v.write_u64::<LittleEndian>(info.signer_key().is_some() as u64)
             .unwrap();
         v.write_all(info.unsigned_key().as_ref()).unwrap();
-        v.write_u64::<LittleEndian>(info.account.lamports).unwrap();
-        v.write_u64::<LittleEndian>(info.account.data.len() as u64)
+        v.write_u64::<LittleEndian>(info.lamports()).unwrap();
+        v.write_u64::<LittleEndian>(info.get_data().len() as u64)
             .unwrap();
-        v.write_all(&info.account.data).unwrap();
-        v.write_all(info.account.owner.as_ref()).unwrap();
+        v.write_all(&info.get_data()).unwrap();
+        v.write_all(info.owner().as_ref()).unwrap();
     }
     v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
     v.write_all(data).unwrap();
@@ -255,21 +255,24 @@ fn serialize_parameters(
     v
 }
 
-fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
+fn deserialize_parameters(keyed_accounts: &mut [AccountWrapper], buffer: &[u8]) {
     assert_eq!(32, mem::size_of::<Pubkey>());
 
     let mut start = mem::size_of::<u64>();
     for info in keyed_accounts.iter_mut() {
         start += mem::size_of::<u64>(); // skip signer_key boolean
         start += mem::size_of::<Pubkey>(); // skip pubkey
-        info.account.lamports = LittleEndian::read_u64(&buffer[start..]);
+                                           // TODO: the following will currently panic on CreditOnly accounts. Rework.
+        info.set_lamports(LittleEndian::read_u64(&buffer[start..]))
+            .unwrap();
 
         start += mem::size_of::<u64>() // skip lamports
                   + mem::size_of::<u64>(); // skip length tag
-        let end = start + info.account.data.len();
-        info.account.data.clone_from_slice(&buffer[start..end]);
+        let end = start + info.get_data().len();
+        // TODO: the following will currently panic on CreditOnly accounts. Rework.
+        info.account_writer().unwrap()[..].clone_from_slice(&buffer[start..end]);
 
-        start += info.account.data.len() // skip data
+        start += info.get_data().len() // skip data
                   + mem::size_of::<Pubkey>(); // skip owner
     }
 }
@@ -277,14 +280,14 @@ fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
 solana_entrypoint!(entrypoint);
 fn entrypoint(
     program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &mut [AccountWrapper],
     tx_data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
 
-    if keyed_accounts[0].account.executable {
+    if keyed_accounts[0].is_executable() {
         let (progs, params) = keyed_accounts.split_at_mut(1);
-        let prog = &progs[0].account.data;
+        let prog = &progs[0].get_data();
         info!("Call BPF program");
         let (mut vm, heap_region) = match create_vm(prog) {
             Ok(info) => info,
@@ -322,18 +325,18 @@ fn entrypoint(
                 let offset = offset as usize;
                 let len = bytes.len();
                 debug!("Write: offset={} length={}", offset, len);
-                if keyed_accounts[0].account.data.len() < offset + len {
+                if keyed_accounts[0].get_data().len() < offset + len {
                     warn!(
                         "Write overflow: {} < {}",
-                        keyed_accounts[0].account.data.len(),
+                        keyed_accounts[0].get_data().len(),
                         offset + len
                     );
                     return Err(InstructionError::GenericError);
                 }
-                keyed_accounts[0].account.data[offset..offset + len].copy_from_slice(&bytes);
+                keyed_accounts[0].account_writer()?[offset..offset + len].copy_from_slice(&bytes);
             }
             LoaderInstruction::Finalize => {
-                keyed_accounts[0].account.executable = true;
+                keyed_accounts[0].set_executable(true)?;
                 info!(
                     "Finalize: account {:?}",
                     keyed_accounts[0].signer_key().unwrap()
