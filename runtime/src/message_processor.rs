@@ -2,6 +2,7 @@ use crate::native_loader;
 use crate::system_instruction_processor;
 use serde::{Deserialize, Serialize};
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
+use solana_sdk::account_api::AccountWrapper;
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::message::Message;
@@ -82,7 +83,7 @@ fn verify_instruction(
 }
 
 pub type ProcessInstruction =
-    fn(&Pubkey, &mut [KeyedAccount], &[u8]) -> Result<(), InstructionError>;
+    fn(&Pubkey, &mut [AccountWrapper], &[u8]) -> Result<(), InstructionError>;
 
 pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<instruction_processor_utils::Entrypoint>>>;
 
@@ -143,6 +144,11 @@ impl MessageProcessor {
             .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
             .collect();
         keyed_accounts.append(&mut keyed_accounts2);
+
+        let mut keyed_accounts: Vec<AccountWrapper> = keyed_accounts
+            .into_iter()
+            .map(|keyed_account| AccountWrapper::CreditDebit(keyed_account))
+            .collect();
 
         for (id, process_instruction) in &self.instruction_processors {
             if id == program_id {

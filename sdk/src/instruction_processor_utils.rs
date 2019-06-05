@@ -1,4 +1,4 @@
-use crate::account::KeyedAccount;
+use crate::account_api::AccountWrapper;
 use crate::instruction::InstructionError;
 use crate::pubkey::Pubkey;
 use num_traits::FromPrimitive;
@@ -9,7 +9,7 @@ pub const ENTRYPOINT: &str = "process";
 // Native program ENTRYPOINT prototype
 pub type Entrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &mut [AccountWrapper],
     data: &[u8],
 ) -> Result<(), InstructionError>;
 
@@ -21,7 +21,7 @@ macro_rules! solana_entrypoint(
         #[no_mangle]
         pub extern "C" fn process(
             program_id: &solana_sdk::pubkey::Pubkey,
-            keyed_accounts: &mut [solana_sdk::account::KeyedAccount],
+            keyed_accounts: &mut [solana_sdk::account_api::AccountWrapper],
             data: &[u8],
         ) -> Result<(), solana_sdk::instruction::InstructionError> {
             $entrypoint(program_id, keyed_accounts, data)

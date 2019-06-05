@@ -6,7 +6,7 @@ use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
 use log::*;
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account_api::{AccountApi, AccountWrapper};
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::loader_instruction::LoaderInstruction;
@@ -68,15 +68,15 @@ fn library_open(path: &PathBuf) -> std::io::Result<Library> {
 
 pub fn entrypoint(
     program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &mut [AccountWrapper],
     ix_data: &[u8],
     symbol_cache: &SymbolCache,
 ) -> Result<(), InstructionError> {
-    if keyed_accounts[0].account.executable {
+    if keyed_accounts[0].is_executable() {
         // dispatch it
         let (names, params) = keyed_accounts.split_at_mut(1);
-        let name_vec = &names[0].account.data;
-        if let Some(entrypoint) = symbol_cache.read().unwrap().get(name_vec) {
+        let name_vec = &names[0].get_data();
+        if let Some(entrypoint) = symbol_cache.read().unwrap().get(*name_vec) {
             unsafe {
                 return entrypoint(program_id, params, ix_data);
             }
@@ -125,20 +125,20 @@ pub fn entrypoint(
             LoaderInstruction::Write { offset, bytes } => {
                 trace!("NativeLoader::Write offset {} bytes {:?}", offset, bytes);
                 let offset = offset as usize;
-                if keyed_accounts[0].account.data.len() < offset + bytes.len() {
+                if keyed_accounts[0].get_data().len() < offset + bytes.len() {
                     warn!(
                         "Error: Overflow, {} < {}",
-                        keyed_accounts[0].account.data.len(),
+                        keyed_accounts[0].get_data().len(),
                         offset + bytes.len()
                     );
                     return Err(InstructionError::GenericError);
                 }
                 // native loader takes a name and we assume it all comes in at once
-                keyed_accounts[0].account.data = bytes;
+                keyed_accounts[0].account_writer()?[..].copy_from_slice(&bytes)
             }
 
             LoaderInstruction::Finalize => {
-                keyed_accounts[0].account.executable = true;
+                keyed_accounts[0].set_executable(true)?;
                 trace!(
                     "NativeLoader::Finalize prog: {:?}",
                     keyed_accounts[0].signer_key().unwrap()

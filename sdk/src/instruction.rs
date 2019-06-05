@@ -55,8 +55,11 @@ pub enum InstructionError {
     /// Instruction attempted to debit lamports
     CreditOnlyDebit,
 
-    /// Instruction attempted to debit lamports
+    /// Instruction attempted to modify data
     CreditOnlyDataModification,
+
+    /// Instruction attempted to modify the account owner
+    CreditOnlyOwnerModification,
 
     /// CustomError allows on-chain programs to implement program-specific error types and see
     /// them returned by the Solana runtime. A CustomError may be any type that is represented
