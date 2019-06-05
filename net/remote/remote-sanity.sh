@@ -7,6 +7,7 @@ set -e
 cd "$(dirname "$0")"/../..
 
 sanityTargetIp="$1"
+shift
 
 deployMethod=
 entrypointIp=
