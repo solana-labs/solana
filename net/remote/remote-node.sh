@@ -61,6 +61,7 @@ local|tar)
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
   source ./target/perf-libs/env.sh
+  SUDO_OK=1 source scripts/tune-system.sh
 
   (
     sudo scripts/oom-monitor.sh

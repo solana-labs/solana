@@ -6,35 +6,46 @@
 # shellcheck source=scripts/ulimit-n.sh
 source "$(dirname "${BASH_SOURCE[0]}")"/ulimit-n.sh
 
-# Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
-if [[ $(uname) = Linux ]]; then
-  (
-    set -x +e
-    # test the existence of the sysctls before trying to set them
-    # go ahead and return true and don't exit if these calls fail
-    sysctl net.core.rmem_max 2>/dev/null 1>/dev/null &&
-        sudo sysctl -w net.core.rmem_max=161061273 1>/dev/null 2>/dev/null
+sysctl_write() {
+  declare name=$1
+  declare new_value=$2
 
-    sysctl net.core.rmem_default 2>/dev/null 1>/dev/null &&
-        sudo sysctl -w net.core.rmem_default=161061273 1>/dev/null 2>/dev/null
+  # Test the existence of the sysctl before trying to set it
+  sysctl "$name" 2>/dev/null 1>/dev/null || return
 
-    sysctl net.core.wmem_max 2>/dev/null 1>/dev/null &&
-        sudo sysctl -w net.core.wmem_max=161061273 1>/dev/null 2>/dev/null
+  declare current_value
+  current_value=$(sysctl -n "$name")
+  [[ $current_value != "$new_value" ]] || return
 
-    sysctl net.core.wmem_default 2>/dev/null 1>/dev/null &&
-        sudo sysctl -w net.core.wmem_default=161061273 1>/dev/null 2>/dev/null
-  ) || true
-fi
+  declare cmd="sysctl -w $name=$new_value"
+  if [[ -n $SUDO_OK ]]; then
+    cmd="sudo $cmd"
+  fi
 
-if [[ $(uname) = Darwin ]]; then
-  (
-    if [[ $(sysctl net.inet.udp.maxdgram | cut -d\  -f2) != 65535 ]]; then
-      echo "Adjusting maxdgram to allow for large UDP packets, see BLOB_SIZE in src/packet.rs:"
-      set -x
-      sudo sysctl net.inet.udp.maxdgram=65535
-    fi
-  )
+  echo "$ $cmd"
+  $cmd
 
-fi
+  # Some versions of sysctl exit with 0 on permission denied errors
+  current_value=$(sysctl -n "$name")
+  if [[ $current_value != "$new_value" ]]; then
+    echo "==> Failed to set $name.  Try running: \"SUDO_OK=1 source ${BASH_SOURCE[0]}\""
+  fi
+}
 
+case $(uname) in
+Linux)
+  # Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
+  sysctl_write net.core.rmem_max 161061273
+  sysctl_write net.core.rmem_default 161061273
+  sysctl_write net.core.wmem_max 161061273
+  sysctl_write net.core.wmem_default 161061273
+  ;;
+
+Darwin)
+  # Adjusting maxdgram to allow for large UDP packets, see BLOB_SIZE in core/src/packet.rs
+  sysctl_write net.inet.udp.maxdgram 65535
+  ;;
+*)
+  ;;
+esac
 
