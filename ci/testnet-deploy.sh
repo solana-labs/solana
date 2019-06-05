@@ -311,6 +311,9 @@ if ! $skipStart; then
     if [[ -n $NO_LEDGER_VERIFY ]]; then
       args+=(-o noLedgerVerify)
     fi
+    if [[ -n $NO_INSTALL_CHECK ]]; then
+      args+=(-o noInstallCheck)
+    fi
     if [[ -n $maybeHashesPerTick ]]; then
       # shellcheck disable=SC2206 # Do not want to quote $maybeHashesPerTick
       args+=($maybeHashesPerTick)

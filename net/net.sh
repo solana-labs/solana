@@ -58,6 +58,7 @@ Operate a configured testnet
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noLedgerVerify    - Skip ledger verification
    -o noValidatorSanity - Skip fullnode sanity
+   -o noInstallCheck    - Skip solana-install sanity
    -o rejectExtraNodes  - Require the exact number of nodes
 
  stop-specific options:
@@ -150,7 +151,7 @@ while getopts "h?T:t:o:f:rD:i:c:Fn:" opt "${shortArgs[@]}"; do
     ;;
   o)
     case $OPTARG in
-    noLedgerVerify|noValidatorSanity|rejectExtraNodes)
+    noLedgerVerify|noValidatorSanity|rejectExtraNodes|noInstallCheck)
       sanityExtraArgs="$sanityExtraArgs -o $OPTARG"
       ;;
     *)
