@@ -125,6 +125,30 @@ transaction will define the rewards for both replicators and validators.
 turn N will be counted towards their rewards.
 
 
+### The PoRep Game
+
+The Proof of Replication game has 4 primary stages. For each "turn" multiple PoRep
+games can be in progress but each in a different stage.
+
+The 4 stages of the PoRep Game are as follows:
+
+1. Proof submission stage
+    - Replicators: submit as many proofs as possible during this stage
+    - Validators: No-op
+2. Proof verification stage
+    - Replicators: No-op
+    - Validators: Select replicators and verify their proofs from the previous turn
+3. Proof challenge stage
+    - Replicators: Submit the proof mask with justifications (for fake proofs submitted 2 turns ago)
+    - Validators: No-op
+4. Reward collection stage
+    - Replicators: Collect rewards for 3 turns ago
+    - Validators:  Collect rewards for 3 turns ago
+
+
+For each turn of the PoRep game, both Validators and Replicators evaluate each
+stage.
+
 ### Finding who has a given block of ledger
 
 1. Validators monitor the turns in the PoRep game and look at the rooted bank
