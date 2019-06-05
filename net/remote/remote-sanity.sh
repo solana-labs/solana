@@ -34,6 +34,7 @@ missing() {
 
 ledgerVerify=true
 validatorSanity=true
+installCheck=true
 rejectExtraNodes=false
 while [[ $1 = -o ]]; do
   opt="$2"
@@ -44,6 +45,9 @@ while [[ $1 = -o ]]; do
     ;;
   noValidatorSanity)
     validatorSanity=false
+    ;;
+  noInstallCheck)
+    installCheck=false
     ;;
   rejectExtraNodes)
     rejectExtraNodes=true
@@ -168,7 +172,7 @@ else
   echo "Note: validator sanity disabled"
 fi
 
-if [[ -r update_manifest_keypair.json ]]; then
+if $installCheck && [[ -r update_manifest_keypair.json ]]; then
   echo "--- $sanityTargetIp: solana-install test"
 
   (
