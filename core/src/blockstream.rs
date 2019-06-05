@@ -10,10 +10,6 @@ use serde_json::json;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::cell::RefCell;
-use std::io::prelude::*;
-use std::net::Shutdown;
-use std::os::unix::net::UnixStream;
-use std::path::Path;
 
 pub trait EntryWriter: std::fmt::Debug {
     fn write(&self, payload: String) -> Result<()>;
@@ -48,15 +44,28 @@ pub struct EntrySocket {
     socket: String,
 }
 
-const MESSAGE_TERMINATOR: &str = "\n";
-
 impl EntryWriter for EntrySocket {
+    #[cfg(not(windows))]
     fn write(&self, payload: String) -> Result<()> {
+        use std::io::prelude::*;
+        use std::net::Shutdown;
+        use std::os::unix::net::UnixStream;
+        use std::path::Path;
+
+        const MESSAGE_TERMINATOR: &str = "\n";
+
         let mut socket = UnixStream::connect(Path::new(&self.socket))?;
         socket.write_all(payload.as_bytes())?;
         socket.write_all(MESSAGE_TERMINATOR.as_bytes())?;
         socket.shutdown(Shutdown::Write)?;
         Ok(())
+    }
+    #[cfg(windows)]
+    fn write(&self, _payload: String) -> Result<()> {
+        Err(crate::result::Error::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "EntryWriter::write() not implemented for windows",
+        )))
     }
 }
 
