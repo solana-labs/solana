@@ -3,6 +3,7 @@ use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signable, Signature};
 use solana_sdk::transaction::Transaction;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt;
 
@@ -43,7 +44,7 @@ impl Signable for EpochSlots {
         self.from
     }
 
-    fn signable_data(&self) -> Vec<u8> {
+    fn signable_data(&self) -> Cow<[u8]> {
         #[derive(Serialize)]
         struct SignData<'a> {
             root: u64,
@@ -55,7 +56,7 @@ impl Signable for EpochSlots {
             slots: &self.slots,
             wallclock: self.wallclock,
         };
-        serialize(&data).expect("unable to serialize EpochSlots")
+        Cow::Owned(serialize(&data).expect("unable to serialize EpochSlots"))
     }
 
     fn get_signature(&self) -> Signature {
@@ -91,7 +92,7 @@ impl Signable for Vote {
         self.from
     }
 
-    fn signable_data(&self) -> Vec<u8> {
+    fn signable_data(&self) -> Cow<[u8]> {
         #[derive(Serialize)]
         struct SignData<'a> {
             transaction: &'a Transaction,
@@ -101,7 +102,7 @@ impl Signable for Vote {
             transaction: &self.transaction,
             wallclock: self.wallclock,
         };
-        serialize(&data).expect("unable to serialize Vote")
+        Cow::Owned(serialize(&data).expect("unable to serialize Vote"))
     }
 
     fn get_signature(&self) -> Signature {
@@ -215,7 +216,7 @@ impl Signable for CrdsValue {
         }
     }
 
-    fn signable_data(&self) -> Vec<u8> {
+    fn signable_data(&self) -> Cow<[u8]> {
         unimplemented!()
     }
 

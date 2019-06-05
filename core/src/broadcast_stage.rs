@@ -4,7 +4,7 @@ use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError};
 use crate::entry::EntrySlice;
 use crate::erasure::CodingGenerator;
-use crate::packet::index_blobs_with_genesis;
+use crate::packet::index_blobs;
 use crate::poh_recorder::WorkingBankEntries;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -104,7 +104,7 @@ impl Broadcast {
             .map(|meta| meta.consumed)
             .unwrap_or(0);
 
-        index_blobs_with_genesis(
+        index_blobs(
             &blobs,
             &self.id,
             blob_index,

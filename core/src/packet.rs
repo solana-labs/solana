@@ -10,6 +10,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signable;
 use solana_sdk::signature::Signature;
 use std::borrow::Borrow;
+use std::borrow::Cow;
 use std::cmp;
 use std::fmt;
 use std::io;
@@ -601,8 +602,8 @@ impl Signable for Blob {
         self.id()
     }
 
-    fn signable_data(&self) -> Vec<u8> {
-        &self.data[SIGNATURE_RANGE.end..self.size() as usize]
+    fn signable_data(&self) -> Cow<[u8]> {
+        Cow::Borrowed(&self.data[SIGNATURE_RANGE.end..self.size() as usize])
     }
 
     fn get_signature(&self) -> Signature {
@@ -614,21 +615,10 @@ impl Signable for Blob {
     }
 }
 
-pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, blob_index: u64, slot: u64, parent: u64) {
-    index_blobs_with_genesis(blobs, id, blob_index, slot, parent)
-}
-
-pub fn index_blobs_with_genesis(
-    blobs: &[SharedBlob],
-    id: &Pubkey,
-    mut blob_index: u64,
-    slot: u64,
-    parent: u64,
-) {
+pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, mut blob_index: u64, slot: u64, parent: u64) {
     // enumerate all the blobs, those are the indices
     for blob in blobs.iter() {
         let mut blob = blob.write().unwrap();
-
         blob.set_index(blob_index);
         blob.set_slot(slot);
         blob.set_parent(parent);

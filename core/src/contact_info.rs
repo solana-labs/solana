@@ -6,6 +6,7 @@ use solana_sdk::rpc_port;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::signature::{Signable, Signature};
 use solana_sdk::timing::timestamp;
+use std::borrow::Cow;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::net::{IpAddr, SocketAddr};
 
@@ -225,7 +226,7 @@ impl Signable for ContactInfo {
         self.id
     }
 
-    fn signable_data(&self) -> Vec<u8> {
+    fn signable_data(&self) -> Cow<[u8]> {
         #[derive(Serialize)]
         struct SignData {
             id: Pubkey,
@@ -251,7 +252,7 @@ impl Signable for ContactInfo {
             rpc_pubsub: me.rpc_pubsub,
             wallclock: me.wallclock,
         };
-        serialize(&data).expect("failed to serialize ContactInfo")
+        Cow::Owned(serialize(&data).expect("failed to serialize ContactInfo"))
     }
 
     fn get_signature(&self) -> Signature {
