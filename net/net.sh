@@ -392,7 +392,7 @@ sanity() {
     set -x
     # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
     ssh "${sshOptions[@]}" "$bootstrapLeader" \
-      "./solana/net/remote/remote-sanity.sh $sanityExtraArgs \"$RUST_LOG\""
+      "./solana/net/remote/remote-sanity.sh $bootstrapLeader $sanityExtraArgs \"$RUST_LOG\""
   ) || ok=false
   $ok || exit 1
 
@@ -403,7 +403,7 @@ sanity() {
       set -x
       # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
       ssh "${sshOptions[@]}" "$blockstreamer" \
-        "./solana/net/remote/remote-sanity.sh $sanityExtraArgs -o noLedgerVerify -o noValidatorSanity \"$RUST_LOG\""
+        "./solana/net/remote/remote-sanity.sh $blockstreamer $sanityExtraArgs -o noLedgerVerify -o noValidatorSanity \"$RUST_LOG\""
     ) || ok=false
     $ok || exit 1
   fi
