@@ -147,7 +147,7 @@ impl MessageProcessor {
 
         let mut keyed_accounts: Vec<AccountWrapper> = keyed_accounts
             .into_iter()
-            .map(|keyed_account| AccountWrapper::CreditDebit(keyed_account))
+            .map(AccountWrapper::CreditDebit)
             .collect();
 
         for (id, process_instruction) in &self.instruction_processors {

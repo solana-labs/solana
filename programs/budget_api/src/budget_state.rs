@@ -8,6 +8,8 @@ use solana_sdk::instruction_processor_utils::DecodeError;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, FromPrimitive)]
 pub enum BudgetError {
+    AccountCreditFailure,
+    AccountDebitFailure,
     DestinationMissing,
 }
 

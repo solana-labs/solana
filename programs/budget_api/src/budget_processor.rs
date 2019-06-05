@@ -5,7 +5,7 @@ use crate::budget_state::{BudgetError, BudgetState};
 use bincode::deserialize;
 use chrono::prelude::{DateTime, Utc};
 use log::*;
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 
@@ -13,7 +13,7 @@ use solana_sdk::pubkey::Pubkey;
 /// will progress one step.
 fn apply_signature(
     budget_state: &mut BudgetState,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &mut [&mut AccountApi],
 ) -> Result<(), BudgetError> {
     let mut final_payment = None;
     if let Some(ref mut expr) = budget_state.pending_budget {
@@ -26,8 +26,12 @@ fn apply_signature(
         if let Some(key) = keyed_accounts[0].signer_key() {
             if &payment.to == key {
                 budget_state.pending_budget = None;
-                keyed_accounts[1].account.lamports -= payment.lamports;
-                keyed_accounts[0].account.lamports += payment.lamports;
+                keyed_accounts[1]
+                    .debit(payment.lamports)
+                    .map_err(|_| BudgetError::AccountDebitFailure)?;
+                keyed_accounts[0]
+                    .credit(payment.lamports)
+                    .map_err(|_| BudgetError::AccountCreditFailure)?;
                 return Ok(());
             }
         }
@@ -36,8 +40,12 @@ fn apply_signature(
             return Err(BudgetError::DestinationMissing);
         }
         budget_state.pending_budget = None;
-        keyed_accounts[1].account.lamports -= payment.lamports;
-        keyed_accounts[2].account.lamports += payment.lamports;
+        keyed_accounts[1]
+            .debit(payment.lamports)
+            .map_err(|_| BudgetError::AccountDebitFailure)?;
+        keyed_accounts[2]
+            .credit(payment.lamports)
+            .map_err(|_| BudgetError::AccountCreditFailure)?;
     }
     Ok(())
 }
@@ -46,7 +54,7 @@ fn apply_signature(
 /// will progress one step.
 fn apply_timestamp(
     budget_state: &mut BudgetState,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &mut [&mut AccountApi],
     dt: DateTime<Utc>,
 ) -> Result<(), BudgetError> {
     // Check to see if any timelocked transactions can be completed.
@@ -64,15 +72,19 @@ fn apply_timestamp(
             return Err(BudgetError::DestinationMissing);
         }
         budget_state.pending_budget = None;
-        keyed_accounts[1].account.lamports -= payment.lamports;
-        keyed_accounts[2].account.lamports += payment.lamports;
+        keyed_accounts[1]
+            .debit(payment.lamports)
+            .map_err(|_| BudgetError::AccountDebitFailure)?;
+        keyed_accounts[2]
+            .credit(payment.lamports)
+            .map_err(|_| BudgetError::AccountCreditFailure)?;
     }
     Ok(())
 }
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &mut [&mut AccountApi],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     let instruction = deserialize(data).map_err(|err| {
@@ -86,11 +98,11 @@ pub fn process_instruction(
         BudgetInstruction::InitializeAccount(expr) => {
             let expr = expr.clone();
             if let Some(payment) = expr.final_payment() {
-                keyed_accounts[1].account.lamports = 0;
-                keyed_accounts[0].account.lamports += payment.lamports;
+                keyed_accounts[1].debit(payment.lamports)?;
+                keyed_accounts[0].credit(payment.lamports)?;
                 return Ok(());
             }
-            let existing = BudgetState::deserialize(&keyed_accounts[0].account.data).ok();
+            let existing = BudgetState::deserialize(&keyed_accounts[0].get_data()).ok();
             if Some(true) == existing.map(|x| x.initialized) {
                 trace!("contract already exists");
                 return Err(InstructionError::AccountAlreadyInitialized);
@@ -98,10 +110,10 @@ pub fn process_instruction(
             let mut budget_state = BudgetState::default();
             budget_state.pending_budget = Some(expr);
             budget_state.initialized = true;
-            budget_state.serialize(&mut keyed_accounts[0].account.data)
+            budget_state.serialize(&mut keyed_accounts[0].account_writer()?)
         }
         BudgetInstruction::ApplyTimestamp(dt) => {
-            let mut budget_state = BudgetState::deserialize(&keyed_accounts[1].account.data)?;
+            let mut budget_state = BudgetState::deserialize(&keyed_accounts[1].get_data())?;
             if !budget_state.is_pending() {
                 return Ok(()); // Nothing to do here.
             }
@@ -116,10 +128,10 @@ pub fn process_instruction(
             apply_timestamp(&mut budget_state, keyed_accounts, dt)
                 .map_err(|e| InstructionError::CustomError(e as u32))?;
             trace!("apply timestamp committed");
-            budget_state.serialize(&mut keyed_accounts[1].account.data)
+            budget_state.serialize(&mut keyed_accounts[1].account_writer()?)
         }
         BudgetInstruction::ApplySignature => {
-            let mut budget_state = BudgetState::deserialize(&keyed_accounts[1].account.data)?;
+            let mut budget_state = BudgetState::deserialize(&keyed_accounts[1].get_data())?;
             if !budget_state.is_pending() {
                 return Ok(()); // Nothing to do here.
             }
@@ -134,7 +146,7 @@ pub fn process_instruction(
             apply_signature(&mut budget_state, keyed_accounts)
                 .map_err(|e| InstructionError::CustomError(e as u32))?;
             trace!("apply signature committed");
-            budget_state.serialize(&mut keyed_accounts[1].account.data)
+            budget_state.serialize(&mut keyed_accounts[1].account_writer()?)
         }
     }
 }

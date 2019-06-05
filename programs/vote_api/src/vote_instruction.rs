@@ -7,7 +7,7 @@ use bincode::deserialize;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics::datapoint_warn;
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account_api::AccountWrapper;
 use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::syscall::slot_hashes;
@@ -93,7 +93,7 @@ pub fn vote(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &mut [AccountWrapper],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
@@ -129,7 +129,7 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::account::Account;
+    use solana_sdk::account::{Account, KeyedAccount};
 
     // these are for 100% coverage in this file
     #[test]
@@ -150,7 +150,13 @@ mod tests {
                 .accounts
                 .iter()
                 .zip(accounts.iter_mut())
-                .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
+                .map(|(meta, account)| {
+                    AccountWrapper::CreditDebit(KeyedAccount::new(
+                        &meta.pubkey,
+                        meta.is_signer,
+                        account,
+                    ))
+                })
                 .collect();
             super::process_instruction(&Pubkey::default(), &mut keyed_accounts, &instruction.data)
         }

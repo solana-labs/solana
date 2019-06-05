@@ -1,5 +1,5 @@
 use log::*;
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account_api::AccountWrapper;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
@@ -7,7 +7,7 @@ use solana_sdk::solana_entrypoint;
 solana_entrypoint!(entrypoint);
 fn entrypoint(
     program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &mut [AccountWrapper],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();

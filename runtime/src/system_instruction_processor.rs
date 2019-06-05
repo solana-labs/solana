@@ -14,11 +14,12 @@ fn create_system_account(
     space: u64,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
-    let mut e = None;
-    if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].owner()) {
+    let mut e = if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].owner()) {
         debug!("CreateAccount: invalid account[from] owner");
-        e = Some(SystemError::SourceNotSystemAccount);
-    }
+        Some(SystemError::SourceNotSystemAccount)
+    } else {
+        None
+    };
 
     if !keyed_accounts[TO_ACCOUNT_INDEX].get_data().is_empty()
         || !system_program::check_id(&keyed_accounts[TO_ACCOUNT_INDEX].owner())
