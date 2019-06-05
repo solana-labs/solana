@@ -15,6 +15,7 @@ use solana_metrics::{
     datapoint, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Signable;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -112,6 +113,12 @@ impl Broadcast {
             bank.parent().map_or(0, |parent| parent.slot()),
         );
 
+        for b in &blobs {
+            b.write()
+                .unwrap()
+                .sign(&cluster_info.read().unwrap().keypair);
+        }
+
         if last_tick == max_tick_height {
             blobs.last().unwrap().write().unwrap().set_is_last_in_slot();
         }
@@ -119,6 +126,12 @@ impl Broadcast {
         blocktree.write_shared_blobs(&blobs)?;
 
         let coding = self.coding_generator.next(&blobs);
+
+        for c in &coding {
+            c.write()
+                .unwrap()
+                .sign(&cluster_info.read().unwrap().keypair);
+        }
 
         let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 
