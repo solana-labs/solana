@@ -108,8 +108,13 @@ mod bpf {
 
             let programs = [
                 "solana_bpf_rust_alloc",
+<<<<<<< Updated upstream
                 // Disable due to #4271 "solana_bpf_rust_iter",
                 "solana_bpf_rust_noop",
+=======
+                // "solana_bpf_rust_iter",
+                // "solana_bpf_rust_noop",
+>>>>>>> Stashed changes
             ];
             for program in programs.iter() {
                 let filename = create_bpf_path(program);
