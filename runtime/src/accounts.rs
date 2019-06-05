@@ -282,7 +282,7 @@ impl Accounts {
             .collect()
     }
 
-    fn load_accounts_internal(
+    pub fn load_accounts(
         &self,
         ancestors: &HashMap<Fork, usize>,
         txs: &[Transaction],
@@ -545,17 +545,6 @@ impl Accounts {
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
         self.accounts_db.has_accounts(fork)
-    }
-
-    pub fn load_accounts(
-        &self,
-        ancestors: &HashMap<Fork, usize>,
-        txs: &[Transaction],
-        results: Vec<Result<()>>,
-        fee_calculator: &FeeCalculator,
-        error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        self.load_accounts_internal(ancestors, txs, results, fee_calculator, error_counters)
     }
 
     /// Store the accounts into the DB
