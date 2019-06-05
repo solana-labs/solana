@@ -78,7 +78,7 @@ This signed value is also submitted to the validator's storage account and will 
 replicators at a later stage to cross-verify.
 3. Every `NUM_SLOTS_PER_TURN` slots the validator advertises the PoH value. This is value
 is also served to Replicators via RPC interfaces.
-4. For a given turn N, all validations get locked out until turn N+2 (a gap of 1 turn/epoch).
+4. For a given turn N, all validations get locked out until turn N+3 (a gap of 2 turn/epoch).
 At which point all validations during that turn are available for reward collection.
 5. Any incorrect validations will be marked during the turn in between.
 
@@ -121,7 +121,7 @@ and based on the `RATIO_OF_FAKE_PROOFS` some of those proofs must be fake.
 10. As the PoRep game enters the next turn, the replicator must submit a
 transaction with the mask of which proofs were fake during the last turn. This
 transaction will define the rewards for both replicators and validators.
-11. Finally for a turn N, as the PoRep game enters turn N+2, replicator's proofs for
+11. Finally for a turn N, as the PoRep game enters turn N + 3, replicator's proofs for
 turn N will be counted towards their rewards.
 
 
