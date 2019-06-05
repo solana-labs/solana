@@ -147,7 +147,7 @@ The 4 stages of the PoRep Game are as follows:
 
 
 For each turn of the PoRep game, both Validators and Replicators evaluate each
-stage.
+stage. The stages are run as separate transactions on the storage program.
 
 ### Finding who has a given block of ledger
 
