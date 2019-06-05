@@ -109,7 +109,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
         let ones = vec![1_u64; ITERS];
         let mut sum: u64 = 0;
 
-        for (i, v) in ones.iter().enumerate() {
+        for (i, _v) in ones.iter().enumerate() {
             sol_log_64(i as u64, 0, 0, 0, 0);
             sum += ones[i as usize];
         }
