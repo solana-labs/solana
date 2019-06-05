@@ -46,7 +46,7 @@ test-stable-perf)
   }
 
   pushd programs/bpf
-  export RUST_LOG=solana_bpf_loader=info,solana_rbpf=trace; cargo test --features="bpf_rust"
+  export RUST_LOG=solana_bpf_loader=info,solana_rbpf=trace; cargo test --features="bpf_rust" -- --nocapture
   popd
 
   # BPF program tests
