@@ -5,7 +5,7 @@ use crate::exchange_state::*;
 use crate::faucet_id;
 use log::*;
 use solana_metrics::inc_new_counter_info;
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account_api::{AccountApi, AccountWrapper};
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
@@ -155,7 +155,7 @@ impl ExchangeProcessor {
         Ok(())
     }
 
-    fn do_account_request(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+    fn do_account_request(keyed_accounts: &mut [AccountWrapper]) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
         const NEW_ACCOUNT_INDEX: usize = 1;
 
@@ -164,19 +164,19 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        Self::is_account_unallocated(&keyed_accounts[NEW_ACCOUNT_INDEX].account.data)?;
+        Self::is_account_unallocated(&keyed_accounts[NEW_ACCOUNT_INDEX].get_data())?;
         Self::serialize(
             &ExchangeState::Account(
                 TokenAccountInfo::default()
                     .owner(&keyed_accounts[OWNER_INDEX].unsigned_key())
                     .tokens(100_000, 100_000, 100_000, 100_000),
             ),
-            &mut keyed_accounts[NEW_ACCOUNT_INDEX].account.data,
+            &mut keyed_accounts[NEW_ACCOUNT_INDEX].account_writer()?,
         )
     }
 
     fn do_transfer_request(
-        keyed_accounts: &mut [KeyedAccount],
+        keyed_accounts: &mut [AccountWrapper],
         token: Token,
         tokens: u64,
     ) -> Result<(), InstructionError> {
@@ -190,13 +190,13 @@ impl ExchangeProcessor {
         }
 
         let mut to_account =
-            Self::deserialize_account(&keyed_accounts[TO_ACCOUNT_INDEX].account.data)?;
+            Self::deserialize_account(&keyed_accounts[TO_ACCOUNT_INDEX].get_data())?;
 
         if &faucet_id() == keyed_accounts[FROM_ACCOUNT_INDEX].unsigned_key() {
             to_account.tokens[token] += tokens;
         } else {
             let state: ExchangeState =
-                bincode::deserialize(&keyed_accounts[FROM_ACCOUNT_INDEX].account.data)
+                bincode::deserialize(&keyed_accounts[FROM_ACCOUNT_INDEX].get_data())
                     .map_err(Self::map_to_invalid_arg)?;
             match state {
                 ExchangeState::Account(mut from_account) => {
@@ -215,7 +215,7 @@ impl ExchangeProcessor {
 
                     Self::serialize(
                         &ExchangeState::Account(from_account),
-                        &mut keyed_accounts[FROM_ACCOUNT_INDEX].account.data,
+                        &mut keyed_accounts[FROM_ACCOUNT_INDEX].account_writer()?,
                     )?;
                 }
                 ExchangeState::Trade(mut from_trade) => {
@@ -243,7 +243,7 @@ impl ExchangeProcessor {
 
                     Self::serialize(
                         &ExchangeState::Trade(from_trade),
-                        &mut keyed_accounts[FROM_ACCOUNT_INDEX].account.data,
+                        &mut keyed_accounts[FROM_ACCOUNT_INDEX].account_writer()?,
                     )?;
                 }
                 _ => {
@@ -255,12 +255,12 @@ impl ExchangeProcessor {
 
         Self::serialize(
             &ExchangeState::Account(to_account),
-            &mut keyed_accounts[TO_ACCOUNT_INDEX].account.data,
+            &mut keyed_accounts[TO_ACCOUNT_INDEX].account_writer()?,
         )
     }
 
     fn do_trade_request(
-        keyed_accounts: &mut [KeyedAccount],
+        keyed_accounts: &mut [AccountWrapper],
         info: &TradeRequestInfo,
     ) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
@@ -272,9 +272,9 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        Self::is_account_unallocated(&keyed_accounts[TRADE_INDEX].account.data)?;
+        Self::is_account_unallocated(&keyed_accounts[TRADE_INDEX].get_data())?;
 
-        let mut account = Self::deserialize_account(&keyed_accounts[ACCOUNT_INDEX].account.data)?;
+        let mut account = Self::deserialize_account(&keyed_accounts[ACCOUNT_INDEX].get_data())?;
 
         if &account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own account");
@@ -307,15 +307,17 @@ impl ExchangeProcessor {
                 price: info.price,
                 tokens_settled: 0,
             }),
-            &mut keyed_accounts[TRADE_INDEX].account.data,
+            &mut keyed_accounts[TRADE_INDEX].account_writer()?,
         )?;
         Self::serialize(
             &ExchangeState::Account(account),
-            &mut keyed_accounts[ACCOUNT_INDEX].account.data,
+            &mut keyed_accounts[ACCOUNT_INDEX].account_writer()?,
         )
     }
 
-    fn do_trade_cancellation(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+    fn do_trade_cancellation(
+        keyed_accounts: &mut [AccountWrapper],
+    ) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
         const TRADE_INDEX: usize = 1;
 
@@ -324,7 +326,7 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        let trade = Self::deserialize_trade(&keyed_accounts[TRADE_INDEX].account.data)?;
+        let trade = Self::deserialize_trade(&keyed_accounts[TRADE_INDEX].get_data())?;
 
         if &trade.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own trade");
@@ -343,11 +345,11 @@ impl ExchangeProcessor {
         // Turn trade order into a token account
         Self::serialize(
             &ExchangeState::Account(account),
-            &mut keyed_accounts[TRADE_INDEX].account.data,
+            &mut keyed_accounts[TRADE_INDEX].account_writer()?,
         )
     }
 
-    fn do_swap_request(keyed_accounts: &mut [KeyedAccount]) -> Result<(), InstructionError> {
+    fn do_swap_request(keyed_accounts: &mut [AccountWrapper]) -> Result<(), InstructionError> {
         const TO_TRADE_INDEX: usize = 1;
         const FROM_TRADE_INDEX: usize = 2;
         const PROFIT_ACCOUNT_INDEX: usize = 3;
@@ -357,11 +359,10 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        let mut to_trade = Self::deserialize_trade(&keyed_accounts[TO_TRADE_INDEX].account.data)?;
-        let mut from_trade =
-            Self::deserialize_trade(&keyed_accounts[FROM_TRADE_INDEX].account.data)?;
+        let mut to_trade = Self::deserialize_trade(&keyed_accounts[TO_TRADE_INDEX].get_data())?;
+        let mut from_trade = Self::deserialize_trade(&keyed_accounts[FROM_TRADE_INDEX].get_data())?;
         let mut profit_account =
-            Self::deserialize_account(&keyed_accounts[PROFIT_ACCOUNT_INDEX].account.data)?;
+            Self::deserialize_account(&keyed_accounts[PROFIT_ACCOUNT_INDEX].get_data())?;
 
         if to_trade.direction != Direction::To {
             error!("To trade is not a To");
@@ -396,12 +397,12 @@ impl ExchangeProcessor {
             // Turn into token account
             Self::serialize(
                 &ExchangeState::Account(Self::trade_to_token_account(&from_trade)),
-                &mut keyed_accounts[TO_TRADE_INDEX].account.data,
+                &mut keyed_accounts[TO_TRADE_INDEX].account_writer()?,
             )?;
         } else {
             Self::serialize(
                 &ExchangeState::Trade(to_trade),
-                &mut keyed_accounts[TO_TRADE_INDEX].account.data,
+                &mut keyed_accounts[TO_TRADE_INDEX].account_writer()?,
             )?;
         }
 
@@ -409,25 +410,25 @@ impl ExchangeProcessor {
             // Turn into token account
             Self::serialize(
                 &ExchangeState::Account(Self::trade_to_token_account(&from_trade)),
-                &mut keyed_accounts[FROM_TRADE_INDEX].account.data,
+                &mut keyed_accounts[FROM_TRADE_INDEX].account_writer()?,
             )?;
         } else {
             Self::serialize(
                 &ExchangeState::Trade(from_trade),
-                &mut keyed_accounts[FROM_TRADE_INDEX].account.data,
+                &mut keyed_accounts[FROM_TRADE_INDEX].account_writer()?,
             )?;
         }
 
         Self::serialize(
             &ExchangeState::Account(profit_account),
-            &mut keyed_accounts[PROFIT_ACCOUNT_INDEX].account.data,
+            &mut keyed_accounts[PROFIT_ACCOUNT_INDEX].account_writer()?,
         )
     }
 }
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &mut [AccountWrapper],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();

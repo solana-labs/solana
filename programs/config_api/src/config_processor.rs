@@ -1,13 +1,13 @@
 //! Config program
 
 use log::*;
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account_api::{AccountApi, AccountWrapper};
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [KeyedAccount],
+    keyed_accounts: &mut [AccountWrapper],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     if keyed_accounts[0].signer_key().is_none() {
@@ -15,12 +15,12 @@ pub fn process_instruction(
         Err(InstructionError::MissingRequiredSignature)?;
     }
 
-    if keyed_accounts[0].account.data.len() < data.len() {
+    if keyed_accounts[0].get_data().len() < data.len() {
         error!("instruction data too large");
         Err(InstructionError::InvalidInstructionData)?;
     }
 
-    keyed_accounts[0].account.data[0..data.len()].copy_from_slice(data);
+    keyed_accounts[0].account_writer()?.copy_from_slice(data);
     Ok(())
 }
 

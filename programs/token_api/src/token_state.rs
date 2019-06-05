@@ -1,7 +1,7 @@
 use log::*;
 use num_derive::FromPrimitive;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account_api::{AccountApi, AccountWrapper};
 use solana_sdk::instruction_processor_utils::DecodeError;
 use solana_sdk::pubkey::Pubkey;
 
@@ -156,7 +156,7 @@ impl TokenState {
     }
 
     pub fn process_newtoken(
-        info: &mut [KeyedAccount],
+        info: &mut [AccountWrapper],
         token_info: TokenInfo,
         input_accounts: &[TokenState],
         output_accounts: &mut Vec<(usize, TokenState)>,
@@ -194,7 +194,7 @@ impl TokenState {
     }
 
     pub fn process_newaccount(
-        info: &mut [KeyedAccount],
+        info: &mut [AccountWrapper],
         input_accounts: &[TokenState],
         output_accounts: &mut Vec<(usize, TokenState)>,
     ) -> Result<()> {
@@ -227,7 +227,7 @@ impl TokenState {
     }
 
     pub fn process_transfer(
-        info: &mut [KeyedAccount],
+        info: &mut [AccountWrapper],
         amount: u64,
         input_accounts: &[TokenState],
         output_accounts: &mut Vec<(usize, TokenState)>,
@@ -304,7 +304,7 @@ impl TokenState {
     }
 
     pub fn process_approve(
-        info: &mut [KeyedAccount],
+        info: &mut [AccountWrapper],
         amount: u64,
         input_accounts: &[TokenState],
         output_accounts: &mut Vec<(usize, TokenState)>,
@@ -360,7 +360,7 @@ impl TokenState {
     }
 
     pub fn process_setowner(
-        info: &mut [KeyedAccount],
+        info: &mut [AccountWrapper],
         input_accounts: &[TokenState],
         output_accounts: &mut Vec<(usize, TokenState)>,
     ) -> Result<()> {
@@ -385,7 +385,7 @@ impl TokenState {
         Ok(())
     }
 
-    pub fn process(program_id: &Pubkey, info: &mut [KeyedAccount], input: &[u8]) -> Result<()> {
+    pub fn process(program_id: &Pubkey, info: &mut [AccountWrapper], input: &[u8]) -> Result<()> {
         let command =
             bincode::deserialize::<TokenInstruction>(input).map_err(Self::map_to_invalid_args)?;
         info!("process_transaction: command={:?}", command);
@@ -397,9 +397,8 @@ impl TokenState {
         let input_accounts: Vec<TokenState> = info
             .iter()
             .map(|keyed_account| {
-                let account = &keyed_account.account;
-                if account.owner == *program_id {
-                    match Self::deserialize(&account.data) {
+                if keyed_account.owner() == program_id {
+                    match Self::deserialize(&keyed_account.get_data()) {
                         Ok(token_state) => token_state,
                         Err(err) => {
                             error!("deserialize failed: {:?}", err);
@@ -441,7 +440,12 @@ impl TokenState {
 
         for (index, account) in &output_accounts {
             info!("output_account: index={} data={:?}", index, account);
-            Self::serialize(account, &mut info[*index].account.data)?;
+            Self::serialize(
+                account,
+                &mut info[*index]
+                    .account_writer()
+                    .map_err(|_| TokenError::InvalidArgument)?,
+            )?;
         }
         Ok(())
     }
