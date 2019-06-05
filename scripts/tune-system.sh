@@ -11,11 +11,11 @@ sysctl_write() {
   declare new_value=$2
 
   # Test the existence of the sysctl before trying to set it
-  sysctl "$name" 2>/dev/null 1>/dev/null || return
+  sysctl "$name" 2>/dev/null 1>/dev/null || return 0
 
   declare current_value
   current_value=$(sysctl -n "$name")
-  [[ $current_value != "$new_value" ]] || return
+  [[ $current_value != "$new_value" ]] || return 0
 
   declare cmd="sysctl -w $name=$new_value"
   if [[ -n $SUDO_OK ]]; then
