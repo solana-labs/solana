@@ -29,6 +29,7 @@ use solana_sdk::hash::{extend_and_hash, Hash};
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::syscall::current::{self, Current};
 use solana_sdk::syscall::fees::{self, Fees};
 use solana_sdk::syscall::slot_hashes::{self, SlotHashes};
 use solana_sdk::syscall::tick_height::{self, TickHeight};
@@ -275,6 +276,7 @@ impl Bank {
                 bank.epoch_stakes.insert(i, stakes.clone());
             }
         }
+        bank.update_current();
         bank
     }
 
@@ -331,6 +333,7 @@ impl Bank {
         bank.parents().iter().enumerate().for_each(|(i, p)| {
             bank.ancestors.insert(p.slot(), i + 1);
         });
+        bank.update_current();
 
         bank
     }
@@ -353,6 +356,18 @@ impl Bank {
 
     pub fn is_frozen(&self) -> bool {
         *self.hash.read().unwrap() != Hash::default()
+    }
+
+    fn update_current(&self) {
+        let mut account = current::create_account(1);
+        let current = Current {
+            slot: self.slot,
+            epoch: self.epoch_schedule.get_epoch(self.slot),
+            stakers_epoch: self.epoch_schedule.get_stakers_epoch(self.slot),
+        };
+        current.to(&mut account).unwrap();
+
+        self.store(&current::id(), &account);
     }
 
     fn update_slot_hashes(&self) {

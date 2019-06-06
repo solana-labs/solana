@@ -14,10 +14,9 @@ const ID: [u8; 32] = [
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 pub struct Current {
-    slot: u64,
-    block: u64,
-    epoch: u64,
-    stakers_epoch: u64,
+    pub slot: u64,
+    pub epoch: u64,
+    pub stakers_epoch: u64,
 }
 
 impl Current {
