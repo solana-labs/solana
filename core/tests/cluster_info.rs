@@ -86,7 +86,7 @@ fn run_simulation(stakes: &[u64], fanout: usize, hood_size: usize) {
     });
     assert!(!batches.is_empty());
 
-    // start cloudbreak simulation
+    // start turbine simulation
     let now = Instant::now();
     batches.par_iter_mut().for_each(|batch| {
         let mut cluster = c_info.clone();
