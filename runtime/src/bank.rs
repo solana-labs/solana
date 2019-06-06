@@ -14,6 +14,8 @@ use crate::serde_utils::{
 };
 use crate::stakes::Stakes;
 use crate::status_cache::StatusCache;
+use crate::storage_utils;
+use crate::storage_utils::StorageAccounts;
 use bincode::{deserialize_from, serialize, serialize_into, serialized_size};
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -232,6 +234,9 @@ pub struct Bank {
     /// cache of vote_account and stake_account state for this fork
     stakes: RwLock<Stakes>,
 
+    /// cache of validator and replicator storage accounts for this fork
+    storage_accounts: RwLock<StorageAccounts>,
+
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule calculation boundary
     epoch_stakes: HashMap<u64, Stakes>,
@@ -287,6 +292,7 @@ impl Bank {
         bank.transaction_count
             .store(parent.transaction_count() as usize, Ordering::Relaxed);
         bank.stakes = RwLock::new(parent.stakes.read().unwrap().clone());
+        bank.storage_accounts = RwLock::new(parent.storage_accounts.read().unwrap().clone());
 
         bank.tick_height
             .store(parent.tick_height.load(Ordering::SeqCst), Ordering::SeqCst);
@@ -936,7 +942,7 @@ impl Bank {
             .accounts
             .store_accounts(self.slot(), txs, executed, loaded_accounts);
 
-        self.store_stakes(txs, executed, loaded_accounts);
+        self.update_cached_accounts(txs, executed, loaded_accounts);
 
         // once committed there is no way to unroll
         let write_elapsed = now.elapsed();
@@ -1005,6 +1011,11 @@ impl Bank {
 
         if Stakes::is_stake(account) {
             self.stakes.write().unwrap().store(pubkey, account);
+        } else if storage_utils::is_storage(account) {
+            self.storage_accounts
+                .write()
+                .unwrap()
+                .store(pubkey, account);
         }
     }
 
@@ -1129,7 +1140,7 @@ impl Bank {
     }
 
     /// a bank-level cache of vote accounts
-    fn store_stakes(
+    fn update_cached_accounts(
         &self,
         txs: &[Transaction],
         res: &[Result<()>],
@@ -1143,15 +1154,29 @@ impl Bank {
             let message = &txs[i].message();
             let acc = raccs.as_ref().unwrap();
 
-            for (pubkey, account) in message
-                .account_keys
-                .iter()
-                .zip(acc.0.iter())
-                .filter(|(_, account)| Stakes::is_stake(account))
+            for (pubkey, account) in
+                message
+                    .account_keys
+                    .iter()
+                    .zip(acc.0.iter())
+                    .filter(|(_, account)| {
+                        (Stakes::is_stake(account)) || storage_utils::is_storage(account)
+                    })
             {
-                self.stakes.write().unwrap().store(pubkey, account);
+                if Stakes::is_stake(account) {
+                    self.stakes.write().unwrap().store(pubkey, account);
+                } else if storage_utils::is_storage(account) {
+                    self.storage_accounts
+                        .write()
+                        .unwrap()
+                        .store(pubkey, account);
+                }
             }
         }
+    }
+
+    pub fn storage_accounts(&self) -> StorageAccounts {
+        self.storage_accounts.read().unwrap().clone()
     }
 
     /// current vote accounts for this bank along with the stake
