@@ -1,12 +1,12 @@
-# Turbine - Block Propagation
+# Turbine Block Propagation
 
 A Solana cluster uses a multi-layer block propagation mechanism called *Turbine*
 to broadcast transaction blobs to all nodes with minimal amount of duplicate
-messages.  In order to establish the fanout, the cluster divides itself into
-small collections of nodes, called *neighborhoods*. Each node is responsible for
-sharing any data it receives with the other nodes in its neighborhood, as well
-as propagating the data on to a small set of nodes in other neighborhoods.  This
-way each node only has to communicate with a small number of nodes.
+messages.  The cluster divides itself into small collections of nodes, called
+*neighborhoods*. Each node is responsible for sharing any data it receives with
+the other nodes in its neighborhood, as well as propagating the data on to a
+small set of nodes in other neighborhoods.  This way each node only has to
+communicate with a small number of nodes.
 
 During its slot, the leader node distributes blobs between the validator nodes
 in the first neighborhood (layer 0). Each validator shares its data within its
