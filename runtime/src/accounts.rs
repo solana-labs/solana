@@ -8,7 +8,6 @@ use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
 use bincode::serialize;
 use log::*;
-use serde::{Deserialize, Serialize};
 use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::{Account, LamportCredit};
 use solana_sdk::hash::{Hash, Hasher};
@@ -22,6 +21,8 @@ use solana_sdk::transaction::{Transaction, TransactionError};
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::remove_dir_all;
+use std::io::{BufReader, Read};
+use std::iter::once;
 use std::ops::Neg;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -31,17 +32,16 @@ const ACCOUNTSDB_DIR: &str = "accountsdb";
 const NUM_ACCOUNT_DIRS: usize = 4;
 
 /// This structure handles synchronization for db
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Debug)]
 pub struct Accounts {
     /// Single global AccountsDB
-    #[serde(skip)]
     pub accounts_db: Arc<AccountsDB>,
 
     /// set of accounts which are currently in the pipeline
     account_locks: Mutex<HashSet<Pubkey>>,
 
     /// List of persistent stores
-    paths: String,
+    pub paths: String,
 
     /// set to true if object created the directories in paths
     /// when true, delete parents of 'paths' on drop
@@ -111,6 +111,13 @@ impl Accounts {
             paths: parent.paths.clone(),
             own_paths: parent.own_paths,
         }
+    }
+
+    pub fn update_from_stream<R: Read>(
+        &self,
+        stream: &mut BufReader<R>,
+    ) -> std::result::Result<(), std::io::Error> {
+        self.accounts_db.update_from_stream(stream)
     }
 
     fn load_tx_accounts(
@@ -190,7 +197,6 @@ impl Accounts {
                 Some(program) => program,
                 None => {
                     error_counters.account_not_found += 1;
-                    info!("ancestors {:?}, accouts index {:?}, id {:?}", ancestors, accounts_index, program_id);
                     return Err(TransactionError::ProgramAccountNotFound);
                 }
             };
@@ -486,7 +492,7 @@ mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
 
     use super::*;
-    use bincode::{deserialize_from, serialize_into, serialized_size};
+    use bincode::{serialize_into, serialized_size};
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
     use solana_sdk::fee_calculator::FeeCalculator;
@@ -1013,17 +1019,14 @@ mod tests {
         check_accounts(&accounts, &pubkeys, 100);
         accounts.add_root(0);
 
-        let sz =
-            serialized_size(&accounts).unwrap() + serialized_size(&*accounts.accounts_db).unwrap();
+        let sz = serialized_size(&*accounts.accounts_db).unwrap();
         let mut buf = vec![0u8; sz as usize];
         let mut writer = Cursor::new(&mut buf[..]);
-        serialize_into(&mut writer, &accounts).unwrap();
         serialize_into(&mut writer, &*accounts.accounts_db).unwrap();
 
-        let mut reader = Cursor::new(&mut buf[..]);
-        let mut daccounts: Accounts = deserialize_from(&mut reader).unwrap();
-        let accounts_db: AccountsDB = deserialize_from(&mut reader).unwrap();
-        daccounts.accounts_db = Arc::new(accounts_db);
+        let mut reader = BufReader::new(&buf[..]);
+        let daccounts = Accounts::new(Some("serialize_accounts".to_string()));
+        assert!(daccounts.update_from_stream(&mut reader).is_ok());
         check_accounts(&daccounts, &pubkeys, 100);
         assert_eq!(
             accounts.hash_internal_state(0),

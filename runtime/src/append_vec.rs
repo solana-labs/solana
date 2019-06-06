@@ -1,4 +1,6 @@
 use bincode::{deserialize_from, serialize_into, serialized_size};
+use lazy_static::lazy_static;
+use log::warn;
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
 use solana_sdk::account::Account;
@@ -59,6 +61,10 @@ impl<'a> StoredAccount<'a> {
             data: self.data.to_vec(),
         }
     }
+}
+
+lazy_static! {
+    static ref ACCOUNT_PATHS: Mutex<Vec<String>> = Mutex::new(vec![]);
 }
 
 #[derive(Debug)]
@@ -256,6 +262,10 @@ impl AppendVec {
     pub fn append_account_test(&self, data: &(StorageMeta, Account)) -> Option<usize> {
         self.append_account(data.0.clone(), &data.1)
     }
+
+    pub fn set_account_paths(paths: &[String]) {
+        ACCOUNT_PATHS.lock().unwrap().extend_from_slice(paths);
+    }
 }
 
 pub mod test_utils {
@@ -347,20 +357,34 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
         let file_size: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
         let offset: usize = deserialize_from(&mut rd).map_err(Error::custom)?;
 
+        let split_path: Vec<&str> = path.to_str().unwrap().rsplit('/').collect();
+        let account_paths = ACCOUNT_PATHS.lock().unwrap().clone();
+        let mut account_path = path.clone();
+        for dir_path in account_paths.iter() {
+            let fullpath = format!("{}/{}/{}", dir_path, split_path[1], split_path[0]);
+            let file_path = Path::new(&fullpath);
+            if file_path.exists() {
+                account_path = file_path.to_path_buf();
+                break;
+            }
+        }
+
         let data = OpenOptions::new()
             .read(true)
             .write(true)
             .create(false)
-            .open(path.as_path());
+            .open(account_path.as_path());
 
         if data.is_err() {
-            std::fs::create_dir_all(&path.parent().unwrap()).expect("Create directory failed");
-            return Ok(AppendVec::new(&path, true, file_size as usize));
+            warn!("account open {:?} failed, create empty", account_path);
+            std::fs::create_dir_all(&account_path.parent().unwrap())
+                .expect("Create directory failed");
+            return Ok(AppendVec::new(&account_path, true, file_size as usize));
         }
 
         let map = unsafe { MmapMut::map_mut(&data.unwrap()).expect("failed to map the data file") };
         Ok(AppendVec {
-            path,
+            path: account_path,
             map,
             append_offset: Mutex::new(offset),
             current_len: AtomicUsize::new(current_len as usize),
