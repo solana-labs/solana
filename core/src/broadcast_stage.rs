@@ -113,25 +113,30 @@ impl Broadcast {
             bank.parent().map_or(0, |parent| parent.slot()),
         );
 
-        for b in &blobs {
-            b.write()
-                .unwrap()
-                .sign(&cluster_info.read().unwrap().keypair);
-        }
-
         if last_tick == max_tick_height {
             blobs.last().unwrap().write().unwrap().set_is_last_in_slot();
         }
+
+        // Make sure not to modify the blob header or data after signing it here
+        self.thread_pool.install(|| {
+            blobs.par_iter().for_each(|b| {
+                b.write()
+                    .unwrap()
+                    .sign(&cluster_info.read().unwrap().keypair);
+            })
+        });
 
         blocktree.write_shared_blobs(&blobs)?;
 
         let coding = self.coding_generator.next(&blobs);
 
-        for c in &coding {
-            c.write()
-                .unwrap()
-                .sign(&cluster_info.read().unwrap().keypair);
-        }
+        self.thread_pool.install(|| {
+            coding.par_iter().for_each(|c| {
+                c.write()
+                    .unwrap()
+                    .sign(&cluster_info.read().unwrap().keypair);
+            })
+        });
 
         let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 

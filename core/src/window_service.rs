@@ -9,6 +9,8 @@ use crate::repair_service::{RepairService, RepairStrategy};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{BlobReceiver, BlobSender};
+use rayon::prelude::*;
+use rayon::ThreadPool;
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
@@ -20,6 +22,8 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
+
+pub const NUM_THREADS: u32 = 10;
 
 fn retransmit_blobs(blobs: &[SharedBlob], retransmit: &BlobSender, id: &Pubkey) -> Result<()> {
     let mut retransmit_queue: Vec<SharedBlob> = Vec::new();
@@ -112,9 +116,11 @@ fn recv_window<F>(
     r: &BlobReceiver,
     retransmit: &BlobSender,
     blob_filter: F,
+    thread_pool: &ThreadPool,
 ) -> Result<()>
 where
     F: Fn(&Blob) -> bool,
+    F: Sync,
 {
     let timer = Duration::from_millis(200);
     let mut blobs = r.recv_timeout(timer)?;
@@ -125,7 +131,12 @@ where
     let now = Instant::now();
     inc_new_counter_debug!("streamer-recv_window-recv", blobs.len(), 0, 1000);
 
-    blobs.retain(|blob| blob_filter(&blob.read().unwrap()));
+    let blobs: Vec<_> = thread_pool.install(|| {
+        blobs
+            .into_par_iter()
+            .filter(|b| blob_filter(&b.read().unwrap()))
+            .collect()
+    });
 
     retransmit_blobs(&blobs, retransmit, my_pubkey)?;
 
@@ -204,20 +215,31 @@ impl WindowService {
                 let _exit = Finalizer::new(exit.clone());
                 let id = cluster_info.read().unwrap().id();
                 trace!("{}: RECV_WINDOW started", id);
+                let thread_pool = rayon::ThreadPoolBuilder::new()
+                    .num_threads(sys_info::cpu_num().unwrap_or(NUM_THREADS) as usize)
+                    .build()
+                    .unwrap();
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
 
-                    if let Err(e) = recv_window(&blocktree, &id, &r, &retransmit, |blob| {
-                        blob_filter(
-                            &id,
-                            blob,
-                            bank_forks
-                                .as_ref()
-                                .map(|bank_forks| bank_forks.read().unwrap().working_bank()),
-                        )
-                    }) {
+                    if let Err(e) = recv_window(
+                        &blocktree,
+                        &id,
+                        &r,
+                        &retransmit,
+                        |blob| {
+                            blob_filter(
+                                &id,
+                                blob,
+                                bank_forks
+                                    .as_ref()
+                                    .map(|bank_forks| bank_forks.read().unwrap().working_bank()),
+                            )
+                        },
+                        &thread_pool,
+                    ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                             Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
