@@ -34,7 +34,7 @@ impl TickHeight {
         account.set_state(&TickHeight(tick_height)).ok()
     }
     pub fn from_account(account: &mut AccountApi) -> Option<u64> {
-        deserialize(account.get_data()).ok().map(|res: Self| res.0)
+        deserialize(account.data()).ok().map(|res: Self| res.0)
     }
     pub fn to_account(&self, account: &mut AccountApi) -> Option<()> {
         serialize_into(account.account_writer().unwrap(), self).ok()

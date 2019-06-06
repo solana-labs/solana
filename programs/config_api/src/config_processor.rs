@@ -15,7 +15,7 @@ pub fn process_instruction(
         Err(InstructionError::MissingRequiredSignature)?;
     }
 
-    if keyed_accounts[0].get_data().len() < data.len() {
+    if keyed_accounts[0].data().len() < data.len() {
         error!("instruction data too large");
         Err(InstructionError::InvalidInstructionData)?;
     }

@@ -233,7 +233,7 @@ pub fn authorize_voter(
     other_signers: &[&mut AccountApi],
     authorized_voter_pubkey: &Pubkey,
 ) -> Result<(), InstructionError> {
-    let mut vote_state = VoteState::deserialize(vote_account.get_data())?;
+    let mut vote_state = VoteState::deserialize(vote_account.data())?;
 
     // current authorized signer must say "yay"
     let authorized = Some(&vote_state.authorized_voter_pubkey);
@@ -257,7 +257,7 @@ pub fn initialize_account(
     node_pubkey: &Pubkey,
     commission: u32,
 ) -> Result<(), InstructionError> {
-    let vote_state = VoteState::deserialize(vote_account.get_data())?;
+    let vote_state = VoteState::deserialize(vote_account.data())?;
 
     if vote_state.authorized_voter_pubkey != Pubkey::default() {
         return Err(InstructionError::AccountAlreadyInitialized);
@@ -272,7 +272,7 @@ pub fn process_votes(
     other_signers: &[&mut AccountApi],
     votes: &[Vote],
 ) -> Result<(), InstructionError> {
-    let mut vote_state = VoteState::deserialize(vote_account.get_data())?;
+    let mut vote_state = VoteState::deserialize(vote_account.data())?;
 
     if vote_state.authorized_voter_pubkey == Pubkey::default() {
         return Err(InstructionError::UninitializedAccount);

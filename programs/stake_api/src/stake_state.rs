@@ -113,14 +113,14 @@ impl StakeState {
 
 // impl StakeAccount for AccountApi {
 pub fn initialize_mining_pool(state_account: &mut AccountApi) -> Result<(), InstructionError> {
-    if let StakeState::Uninitialized = StakeState::deserialize(state_account.get_data())? {
+    if let StakeState::Uninitialized = StakeState::deserialize(state_account.data())? {
         StakeState::MiningPool.serialize(&mut state_account.account_writer()?)
     } else {
         Err(InstructionError::InvalidAccountData)
     }
 }
 pub fn initialize_delegate(state_account: &mut AccountApi) -> Result<(), InstructionError> {
-    if let StakeState::Uninitialized = StakeState::deserialize(state_account.get_data())? {
+    if let StakeState::Uninitialized = StakeState::deserialize(state_account.data())? {
         let state = StakeState::Delegate {
             voter_pubkey: Pubkey::default(),
             credits_observed: 0,
@@ -138,8 +138,8 @@ pub fn delegate_stake(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    if let StakeState::Delegate { .. } = StakeState::deserialize(state_account.get_data())? {
-        let vote_state: VoteState = VoteState::deserialize(vote_account.get_data())?;
+    if let StakeState::Delegate { .. } = StakeState::deserialize(state_account.data())? {
+        let vote_state: VoteState = VoteState::deserialize(vote_account.data())?;
         let state = StakeState::Delegate {
             voter_pubkey: *vote_account.unsigned_key(),
             credits_observed: vote_state.credits(),
@@ -162,10 +162,10 @@ pub fn redeem_vote_credits(
             credits_observed,
         },
     ) = (
-        StakeState::deserialize(state_account.get_data())?,
-        StakeState::deserialize(stake_account.get_data())?,
+        StakeState::deserialize(state_account.data())?,
+        StakeState::deserialize(stake_account.data())?,
     ) {
-        let vote_state: VoteState = VoteState::deserialize(vote_account.get_data())?;
+        let vote_state: VoteState = VoteState::deserialize(vote_account.data())?;
 
         if voter_pubkey != *vote_account.unsigned_key() {
             return Err(InstructionError::InvalidArgument);

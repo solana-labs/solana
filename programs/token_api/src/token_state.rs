@@ -398,7 +398,7 @@ impl TokenState {
             .iter()
             .map(|keyed_account| {
                 if keyed_account.owner() == program_id {
-                    match Self::deserialize(&keyed_account.get_data()) {
+                    match Self::deserialize(&keyed_account.data()) {
                         Ok(token_state) => token_state,
                         Err(err) => {
                             error!("deserialize failed: {:?}", err);

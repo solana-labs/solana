@@ -164,7 +164,7 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        Self::is_account_unallocated(&keyed_accounts[NEW_ACCOUNT_INDEX].get_data())?;
+        Self::is_account_unallocated(&keyed_accounts[NEW_ACCOUNT_INDEX].data())?;
         Self::serialize(
             &ExchangeState::Account(
                 TokenAccountInfo::default()
@@ -189,14 +189,13 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        let mut to_account =
-            Self::deserialize_account(&keyed_accounts[TO_ACCOUNT_INDEX].get_data())?;
+        let mut to_account = Self::deserialize_account(&keyed_accounts[TO_ACCOUNT_INDEX].data())?;
 
         if &faucet_id() == keyed_accounts[FROM_ACCOUNT_INDEX].unsigned_key() {
             to_account.tokens[token] += tokens;
         } else {
             let state: ExchangeState =
-                bincode::deserialize(&keyed_accounts[FROM_ACCOUNT_INDEX].get_data())
+                bincode::deserialize(&keyed_accounts[FROM_ACCOUNT_INDEX].data())
                     .map_err(Self::map_to_invalid_arg)?;
             match state {
                 ExchangeState::Account(mut from_account) => {
@@ -272,9 +271,9 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        Self::is_account_unallocated(&keyed_accounts[TRADE_INDEX].get_data())?;
+        Self::is_account_unallocated(&keyed_accounts[TRADE_INDEX].data())?;
 
-        let mut account = Self::deserialize_account(&keyed_accounts[ACCOUNT_INDEX].get_data())?;
+        let mut account = Self::deserialize_account(&keyed_accounts[ACCOUNT_INDEX].data())?;
 
         if &account.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own account");
@@ -326,7 +325,7 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        let trade = Self::deserialize_trade(&keyed_accounts[TRADE_INDEX].get_data())?;
+        let trade = Self::deserialize_trade(&keyed_accounts[TRADE_INDEX].data())?;
 
         if &trade.owner != keyed_accounts[OWNER_INDEX].unsigned_key() {
             error!("Signer does not own trade");
@@ -359,10 +358,10 @@ impl ExchangeProcessor {
             Err(InstructionError::InvalidArgument)?
         }
 
-        let mut to_trade = Self::deserialize_trade(&keyed_accounts[TO_TRADE_INDEX].get_data())?;
-        let mut from_trade = Self::deserialize_trade(&keyed_accounts[FROM_TRADE_INDEX].get_data())?;
+        let mut to_trade = Self::deserialize_trade(&keyed_accounts[TO_TRADE_INDEX].data())?;
+        let mut from_trade = Self::deserialize_trade(&keyed_accounts[FROM_TRADE_INDEX].data())?;
         let mut profit_account =
-            Self::deserialize_account(&keyed_accounts[PROFIT_ACCOUNT_INDEX].get_data())?;
+            Self::deserialize_account(&keyed_accounts[PROFIT_ACCOUNT_INDEX].data())?;
 
         if to_trade.direction != Direction::To {
             error!("To trade is not a To");

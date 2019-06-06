@@ -75,7 +75,7 @@ pub fn entrypoint(
     if keyed_accounts[0].is_executable() {
         // dispatch it
         let (names, params) = keyed_accounts.split_at_mut(1);
-        let name_vec = &names[0].get_data();
+        let name_vec = &names[0].data();
         if let Some(entrypoint) = symbol_cache.read().unwrap().get(*name_vec) {
             unsafe {
                 return entrypoint(program_id, params, ix_data);
@@ -125,10 +125,10 @@ pub fn entrypoint(
             LoaderInstruction::Write { offset, bytes } => {
                 trace!("NativeLoader::Write offset {} bytes {:?}", offset, bytes);
                 let offset = offset as usize;
-                if keyed_accounts[0].get_data().len() < offset + bytes.len() {
+                if keyed_accounts[0].data().len() < offset + bytes.len() {
                     warn!(
                         "Error: Overflow, {} < {}",
-                        keyed_accounts[0].get_data().len(),
+                        keyed_accounts[0].data().len(),
                         offset + bytes.len()
                     );
                     return Err(InstructionError::GenericError);

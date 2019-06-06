@@ -17,7 +17,7 @@ fn create_system_account(
     let e = if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].owner()) {
         debug!("CreateAccount: invalid account[from] owner");
         Some(SystemError::SourceNotSystemAccount)
-    } else if !keyed_accounts[TO_ACCOUNT_INDEX].get_data().is_empty()
+    } else if !keyed_accounts[TO_ACCOUNT_INDEX].data().is_empty()
         || !system_program::check_id(&keyed_accounts[TO_ACCOUNT_INDEX].owner())
     {
         debug!(

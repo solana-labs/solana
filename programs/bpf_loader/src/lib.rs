@@ -244,9 +244,9 @@ fn serialize_parameters(
             .unwrap();
         v.write_all(info.unsigned_key().as_ref()).unwrap();
         v.write_u64::<LittleEndian>(info.lamports()).unwrap();
-        v.write_u64::<LittleEndian>(info.get_data().len() as u64)
+        v.write_u64::<LittleEndian>(info.data().len() as u64)
             .unwrap();
-        v.write_all(&info.get_data()).unwrap();
+        v.write_all(&info.data()).unwrap();
         v.write_all(info.owner().as_ref()).unwrap();
     }
     v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
@@ -268,11 +268,11 @@ fn deserialize_parameters(keyed_accounts: &mut [&mut AccountApi], buffer: &[u8])
 
         start += mem::size_of::<u64>() // skip lamports
                   + mem::size_of::<u64>(); // skip length tag
-        let end = start + info.get_data().len();
+        let end = start + info.data().len();
         // TODO: the following will currently panic on CreditOnly accounts. Rework.
         info.account_writer().unwrap()[..].clone_from_slice(&buffer[start..end]);
 
-        start += info.get_data().len() // skip data
+        start += info.data().len() // skip data
                   + mem::size_of::<Pubkey>(); // skip owner
     }
 }
@@ -287,7 +287,7 @@ fn entrypoint(
 
     if keyed_accounts[0].is_executable() {
         let (progs, params) = keyed_accounts.split_at_mut(1);
-        let prog = &progs[0].get_data();
+        let prog = &progs[0].data();
         info!("Call BPF program");
         let (mut vm, heap_region) = match create_vm(prog) {
             Ok(info) => info,
@@ -325,10 +325,10 @@ fn entrypoint(
                 let offset = offset as usize;
                 let len = bytes.len();
                 debug!("Write: offset={} length={}", offset, len);
-                if keyed_accounts[0].get_data().len() < offset + len {
+                if keyed_accounts[0].data().len() < offset + len {
                     warn!(
                         "Write overflow: {} < {}",
-                        keyed_accounts[0].get_data().len(),
+                        keyed_accounts[0].data().len(),
                         offset + len
                     );
                     return Err(InstructionError::GenericError);

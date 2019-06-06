@@ -102,7 +102,7 @@ pub fn process_instruction(
                 keyed_accounts[0].credit(payment.lamports)?;
                 return Ok(());
             }
-            let existing = BudgetState::deserialize(&keyed_accounts[0].get_data()).ok();
+            let existing = BudgetState::deserialize(&keyed_accounts[0].data()).ok();
             if Some(true) == existing.map(|x| x.initialized) {
                 trace!("contract already exists");
                 return Err(InstructionError::AccountAlreadyInitialized);
@@ -113,7 +113,7 @@ pub fn process_instruction(
             budget_state.serialize(&mut keyed_accounts[0].account_writer()?)
         }
         BudgetInstruction::ApplyTimestamp(dt) => {
-            let mut budget_state = BudgetState::deserialize(&keyed_accounts[1].get_data())?;
+            let mut budget_state = BudgetState::deserialize(&keyed_accounts[1].data())?;
             if !budget_state.is_pending() {
                 return Ok(()); // Nothing to do here.
             }
@@ -131,7 +131,7 @@ pub fn process_instruction(
             budget_state.serialize(&mut keyed_accounts[1].account_writer()?)
         }
         BudgetInstruction::ApplySignature => {
-            let mut budget_state = BudgetState::deserialize(&keyed_accounts[1].get_data())?;
+            let mut budget_state = BudgetState::deserialize(&keyed_accounts[1].data())?;
             if !budget_state.is_pending() {
                 return Ok(()); // Nothing to do here.
             }

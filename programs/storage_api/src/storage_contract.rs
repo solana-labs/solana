@@ -97,7 +97,7 @@ pub fn create_validator_storage_account(owner: Pubkey, lamports: u64) -> Account
 }
 
 pub fn initialize_mining_pool(storage_account: &mut AccountApi) -> Result<(), InstructionError> {
-    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    let mut storage_contract = StorageContract::deserialize(storage_account.data())?;
     if let StorageContract::Uninitialized = storage_contract {
         storage_contract = StorageContract::MiningPool;
         storage_contract.serialize(&mut storage_account.account_writer()?)
@@ -110,7 +110,7 @@ pub fn initialize_replicator_storage(
     storage_account: &mut AccountApi,
     owner: Pubkey,
 ) -> Result<(), InstructionError> {
-    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    let mut storage_contract = StorageContract::deserialize(storage_account.data())?;
     if let StorageContract::Uninitialized = storage_contract {
         storage_contract = StorageContract::ReplicatorStorage {
             owner,
@@ -127,7 +127,7 @@ pub fn initialize_validator_storage(
     storage_account: &mut AccountApi,
     owner: Pubkey,
 ) -> Result<(), InstructionError> {
-    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    let mut storage_contract = StorageContract::deserialize(storage_account.data())?;
     if let StorageContract::Uninitialized = storage_contract {
         storage_contract = StorageContract::ValidatorStorage {
             owner,
@@ -149,7 +149,7 @@ pub fn submit_mining_proof(
     signature: Signature,
     current_slot: u64,
 ) -> Result<(), InstructionError> {
-    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    let mut storage_contract = StorageContract::deserialize(storage_account.data())?;
     if let StorageContract::ReplicatorStorage { proofs, .. } = &mut storage_contract {
         let segment_index = get_segment_from_slot(slot);
         let current_segment = get_segment_from_slot(current_slot);
@@ -189,7 +189,7 @@ pub fn advertise_storage_recent_blockhash(
     slot: u64,
     current_slot: u64,
 ) -> Result<(), InstructionError> {
-    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    let mut storage_contract = StorageContract::deserialize(storage_account.data())?;
     if let StorageContract::ValidatorStorage {
         slot: state_slot,
         hash: state_hash,
@@ -226,7 +226,7 @@ pub fn proof_validation(
     proofs: Vec<(Pubkey, Vec<CheckedProof>)>,
     replicator_accounts: &mut [&mut AccountApi],
 ) -> Result<(), InstructionError> {
-    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    let mut storage_contract = StorageContract::deserialize(storage_account.data())?;
     if let StorageContract::ValidatorStorage {
         slot: state_slot,
         lockout_validations,
@@ -243,9 +243,8 @@ pub fn proof_validation(
         let accounts_and_proofs = replicator_accounts
             .iter_mut()
             .filter_map(|account| {
-                StorageContract::deserialize(account.get_data())
-                    .ok()
-                    .map(move |contract| match contract {
+                StorageContract::deserialize(account.data()).ok().map(
+                    move |contract| match contract {
                         StorageContract::ReplicatorStorage { proofs, .. } => {
                             if let Some(proofs) = proofs.get(&segment_index).cloned() {
                                 Some((account, proofs))
@@ -254,7 +253,8 @@ pub fn proof_validation(
                             }
                         }
                         _ => None,
-                    })
+                    },
+                )
             })
             .flatten()
             .collect::<Vec<_>>();
@@ -298,7 +298,7 @@ pub fn claim_storage_reward(
     slot: u64,
     current_slot: u64,
 ) -> Result<(), InstructionError> {
-    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    let mut storage_contract = StorageContract::deserialize(storage_account.data())?;
 
     if let StorageContract::ValidatorStorage {
         reward_validations,
@@ -386,7 +386,7 @@ fn store_validation_result(
     segment: usize,
     checked_proof: CheckedProof,
 ) -> Result<(), InstructionError> {
-    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    let mut storage_contract = StorageContract::deserialize(storage_account.data())?;
     match &mut storage_contract {
         StorageContract::ReplicatorStorage {
             proofs,

@@ -42,7 +42,7 @@ impl SlotHashes {
         account.set_state(self).ok()
     }
     pub fn from_account(account: &mut AccountApi) -> Option<Self> {
-        deserialize(account.get_data()).ok()
+        deserialize(account.data()).ok()
     }
     pub fn to_account(&self, account: &mut AccountApi) -> Option<()> {
         serialize_into(account.account_writer().unwrap(), self).ok()

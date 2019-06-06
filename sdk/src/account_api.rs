@@ -14,7 +14,7 @@ pub trait AccountApi: Debug {
     fn set_lamports(&mut self, lamports: u64) -> Result<(), InstructionError>;
     fn credit(&mut self, lamports: u64) -> Result<(), InstructionError>;
     fn debit(&mut self, lamports: u64) -> Result<(), InstructionError>;
-    fn get_data(&self) -> &[u8];
+    fn data(&self) -> &[u8];
     fn account_writer(&mut self) -> Result<&mut [u8], InstructionError>;
     fn initialize_data(&mut self, space: u64) -> Result<(), InstructionError>;
     fn owner(&self) -> &Pubkey;
@@ -49,7 +49,7 @@ impl<'a> AccountApi for KeyedAccount<'a> {
             Ok(())
         }
     }
-    fn get_data(&self) -> &[u8] {
+    fn data(&self) -> &[u8] {
         &self.account.data
     }
     fn account_writer(&mut self) -> Result<&mut [u8], InstructionError> {
@@ -102,7 +102,7 @@ impl<'a> AccountApi for KeyedCreditOnlyAccount<'a> {
     fn debit(&mut self, _lamports: u64) -> Result<(), InstructionError> {
         Err(InstructionError::CreditOnlyDebit)
     }
-    fn get_data(&self) -> &[u8] {
+    fn data(&self) -> &[u8] {
         &self.account.data
     }
     fn account_writer(&mut self) -> Result<&mut [u8], InstructionError> {
@@ -174,12 +174,12 @@ mod tests {
         assert_eq!(collection[1].lamports(), 21);
 
         assert!(collection[0].initialize_data(4).is_ok());
-        assert_eq!(collection[0].get_data(), &[0; 4]);
+        assert_eq!(collection[0].data(), &[0; 4]);
         assert!(collection[1].initialize_data(8).is_err());
-        assert_eq!(collection[1].get_data(), &[0; 4]);
+        assert_eq!(collection[1].data(), &[0; 4]);
 
         assert!(serialize_into(collection[0].account_writer().unwrap(), &42u32).is_ok());
-        assert_eq!(collection[0].get_data(), &[42, 0, 0, 0]);
+        assert_eq!(collection[0].data(), &[42, 0, 0, 0]);
         assert!(collection[1].account_writer().is_err());
 
         let new_pubkey = Pubkey::new_rand();
