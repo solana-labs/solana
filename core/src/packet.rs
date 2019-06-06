@@ -339,12 +339,12 @@ macro_rules! range {
 }
 
 const SIGNATURE_RANGE: std::ops::Range<usize> = range!(0, Signature);
-const PARENT_RANGE: std::ops::Range<usize> = range!(SIGNATURE_RANGE.end, u64);
+const FORWARDED_RANGE: std::ops::Range<usize> = range!(SIGNATURE_RANGE.end, bool);
+const PARENT_RANGE: std::ops::Range<usize> = range!(FORWARDED_RANGE.end, u64);
 const SLOT_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
 const INDEX_RANGE: std::ops::Range<usize> = range!(SLOT_RANGE.end, u64);
 const ID_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Pubkey);
-const FORWARDED_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, bool);
-const FLAGS_RANGE: std::ops::Range<usize> = range!(FORWARDED_RANGE.end, u32);
+const FLAGS_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, u32);
 const SIZE_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, u64);
 
 macro_rules! align {
@@ -354,6 +354,7 @@ macro_rules! align {
 }
 
 pub const BLOB_HEADER_SIZE: usize = align!(SIZE_RANGE.end, BLOB_DATA_ALIGN); // make sure data() is safe for erasure
+pub const SIGNABLE_START: usize = PARENT_RANGE.start;
 
 pub const BLOB_FLAG_IS_LAST_IN_SLOT: u32 = 0x2;
 
@@ -603,8 +604,8 @@ impl Signable for Blob {
     }
 
     fn signable_data(&self) -> Cow<[u8]> {
-        let end = cmp::max(SIGNATURE_RANGE.end, self.data_size() as usize);
-        Cow::Borrowed(&self.data[SIGNATURE_RANGE.end..end])
+        let end = cmp::max(SIGNABLE_START, self.data_size() as usize);
+        Cow::Borrowed(&self.data[SIGNABLE_START..end])
     }
 
     fn get_signature(&self) -> Signature {
