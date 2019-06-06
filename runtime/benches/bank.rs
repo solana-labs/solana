@@ -6,7 +6,7 @@ use log::*;
 use solana_runtime::bank::*;
 use solana_runtime::bank_client::BankClient;
 use solana_runtime::loader_utils::{create_invoke_instruction, load_program};
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account_api::AccountWrapper;
 use solana_sdk::client::AsyncClient;
 use solana_sdk::client::SyncClient;
 use solana_sdk::genesis_block::create_genesis_block;
@@ -27,7 +27,7 @@ const BUILTIN_PROGRAM_ID: [u8; 32] = [
 
 fn process_instruction(
     _program_id: &Pubkey,
-    _keyed_accounts: &mut [KeyedAccount],
+    _keyed_accounts: &mut [AccountWrapper],
     _data: &[u8],
 ) -> Result<(), InstructionError> {
     Ok(())
