@@ -1,8 +1,8 @@
 //! This account contains the current cluster tick height
 //!
-use crate::account::Account;
 use crate::account_api::AccountWrapper;
 use crate::account_utils::State;
+use crate::credit_debit_account::CreditDebitAccount;
 use crate::pubkey::Pubkey;
 use crate::syscall;
 use bincode::serialized_size;
@@ -27,13 +27,13 @@ pub fn check_id(pubkey: &Pubkey) -> bool {
 pub struct TickHeight(u64);
 
 impl TickHeight {
-    pub fn from(account: &Account) -> Option<u64> {
+    pub fn from(account: &CreditDebitAccount) -> Option<u64> {
         account.state().ok().map(|res: Self| res.0)
     }
     pub fn from_wrapped(account: &AccountWrapper) -> Option<u64> {
         account.state().ok().map(|res: Self| res.0)
     }
-    pub fn to(tick_height: u64, account: &mut Account) -> Option<()> {
+    pub fn to(tick_height: u64, account: &mut CreditDebitAccount) -> Option<()> {
         account.set_state(&TickHeight(tick_height)).ok()
     }
 
@@ -42,8 +42,8 @@ impl TickHeight {
     }
 }
 
-pub fn create_account(lamports: u64) -> Account {
-    Account::new(lamports, TickHeight::size_of(), &syscall::id())
+pub fn create_account(lamports: u64) -> CreditDebitAccount {
+    CreditDebitAccount::new(lamports, TickHeight::size_of(), &syscall::id())
 }
 
 #[cfg(test)]

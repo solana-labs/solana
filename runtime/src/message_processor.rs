@@ -1,8 +1,10 @@
 use crate::native_loader;
 use crate::system_instruction_processor;
 use serde::{Deserialize, Serialize};
-use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::account_api::AccountWrapper;
+use solana_sdk::credit_debit_account::{
+    create_keyed_accounts, CreditDebitAccount, KeyedCreditDebitAccount,
+};
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::message::Message;
@@ -60,7 +62,7 @@ fn verify_instruction(
     pre_program_id: &Pubkey,
     pre_lamports: u64,
     pre_data: &[u8],
-    account: &Account,
+    account: &CreditDebitAccount,
 ) -> Result<(), InstructionError> {
     // Verify the transaction
 
@@ -126,8 +128,8 @@ impl MessageProcessor {
         &self,
         message: &Message,
         instruction: &CompiledInstruction,
-        executable_accounts: &mut [(Pubkey, Account)],
-        program_accounts: &mut [&mut Account],
+        executable_accounts: &mut [(Pubkey, CreditDebitAccount)],
+        program_accounts: &mut [&mut CreditDebitAccount],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
 
@@ -141,7 +143,9 @@ impl MessageProcessor {
                 (key, index < message.header.num_required_signatures as usize)
             })
             .zip(program_accounts.iter_mut())
-            .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
+            .map(|((key, is_signer), account)| {
+                KeyedCreditDebitAccount::new(key, is_signer, account)
+            })
             .collect();
         keyed_accounts.append(&mut keyed_accounts2);
 
@@ -176,8 +180,8 @@ impl MessageProcessor {
         &self,
         message: &Message,
         instruction: &CompiledInstruction,
-        executable_accounts: &mut [(Pubkey, Account)],
-        program_accounts: &mut [&mut Account],
+        executable_accounts: &mut [(Pubkey, CreditDebitAccount)],
+        program_accounts: &mut [&mut CreditDebitAccount],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
         // TODO: the runtime should be checking read/write access to memory
@@ -216,8 +220,8 @@ impl MessageProcessor {
     pub fn process_message(
         &self,
         message: &Message,
-        loaders: &mut [Vec<(Pubkey, Account)>],
-        accounts: &mut [Account],
+        loaders: &mut [Vec<(Pubkey, CreditDebitAccount)>],
+        accounts: &mut [CreditDebitAccount],
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let executable_index = message
@@ -286,7 +290,7 @@ mod tests {
             pre: &Pubkey,
             post: &Pubkey,
         ) -> Result<(), InstructionError> {
-            verify_instruction(&ix, &pre, 0, &[], &Account::new(0, 0, post))
+            verify_instruction(&ix, &pre, 0, &[], &CreditDebitAccount::new(0, 0, post))
         }
 
         let system_program_id = system_program::id();
@@ -309,7 +313,7 @@ mod tests {
     fn test_verify_instruction_change_data() {
         fn change_data(program_id: &Pubkey) -> Result<(), InstructionError> {
             let alice_program_id = Pubkey::new_rand();
-            let account = Account::new(0, 0, &alice_program_id);
+            let account = CreditDebitAccount::new(0, 0, &alice_program_id);
             verify_instruction(&program_id, &alice_program_id, 0, &[42], &account)
         }
 

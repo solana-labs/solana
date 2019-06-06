@@ -10,7 +10,7 @@ use jsonrpc_core::{Error, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_runtime::bank::Bank;
-use solana_sdk::account::Account;
+use solana_sdk::credit_debit_account::CreditDebitAccount;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
@@ -64,7 +64,7 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    pub fn get_account_info(&self, pubkey: &Pubkey) -> Result<Account> {
+    pub fn get_account_info(&self, pubkey: &Pubkey) -> Result<CreditDebitAccount> {
         self.bank()
             .get_account(&pubkey)
             .ok_or_else(Error::invalid_request)
@@ -176,7 +176,7 @@ pub trait RpcSol {
     fn confirm_transaction(&self, _: Self::Metadata, _: String) -> Result<bool>;
 
     #[rpc(meta, name = "getAccountInfo")]
-    fn get_account_info(&self, _: Self::Metadata, _: String) -> Result<Account>;
+    fn get_account_info(&self, _: Self::Metadata, _: String) -> Result<CreditDebitAccount>;
 
     #[rpc(meta, name = "getBalance")]
     fn get_balance(&self, _: Self::Metadata, _: String) -> Result<u64>;
@@ -250,7 +250,7 @@ impl RpcSol for RpcSolImpl {
         })
     }
 
-    fn get_account_info(&self, meta: Self::Metadata, id: String) -> Result<Account> {
+    fn get_account_info(&self, meta: Self::Metadata, id: String) -> Result<CreditDebitAccount> {
         debug!("get_account_info rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
         meta.request_processor

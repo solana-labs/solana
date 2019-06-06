@@ -2,7 +2,7 @@ use crate::bank_forks::BankForks;
 use crate::staking_utils;
 use solana_metrics::datapoint_info;
 use solana_runtime::bank::Bank;
-use solana_sdk::account::Account;
+use solana_sdk::credit_debit_account::CreditDebitAccount;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::{Lockout, Vote, VoteState, MAX_LOCKOUT_HISTORY};
@@ -56,7 +56,7 @@ impl EpochStakes {
             &Pubkey::default(),
         )
     }
-    pub fn new_from_stakes(epoch: u64, accounts: &[(Pubkey, (u64, Account))]) -> Self {
+    pub fn new_from_stakes(epoch: u64, accounts: &[(Pubkey, (u64, CreditDebitAccount))]) -> Self {
         let stakes = accounts.iter().map(|(k, (v, _))| (*k, *v)).collect();
         Self::new(epoch, stakes, &accounts[0].0)
     }
@@ -109,7 +109,7 @@ impl Locktower {
         ancestors: &HashMap<u64, HashSet<u64>>,
     ) -> HashMap<u64, StakeLockout>
     where
-        F: Iterator<Item = (Pubkey, (u64, Account))>,
+        F: Iterator<Item = (Pubkey, (u64, CreditDebitAccount))>,
     {
         let mut stake_lockouts = HashMap::new();
         for (key, (_, account)) in vote_accounts {
@@ -407,10 +407,10 @@ impl Locktower {
 mod test {
     use super::*;
 
-    fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, Account))> {
+    fn gen_stakes(stake_votes: &[(u64, &[u64])]) -> Vec<(Pubkey, (u64, CreditDebitAccount))> {
         let mut stakes = vec![];
         for (lamports, votes) in stake_votes {
-            let mut account = Account::default();
+            let mut account = CreditDebitAccount::default();
             account.data = vec![0; 1024];
             account.lamports = *lamports;
             let mut vote_state = VoteState::default();
@@ -756,7 +756,7 @@ mod test {
     #[test]
     fn test_stake_is_updated_for_entire_branch() {
         let mut stake_lockouts = HashMap::new();
-        let mut account = Account::default();
+        let mut account = CreditDebitAccount::default();
         account.lamports = 1;
         let set: HashSet<u64> = vec![0u64, 1u64].into_iter().collect();
         let ancestors: HashMap<u64, HashSet<u64>> = [(2u64, set)].into_iter().cloned().collect();

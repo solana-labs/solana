@@ -1,6 +1,6 @@
 //! useful extras for Account state
-use crate::account::{Account, KeyedAccount};
 use crate::account_api::{AccountApi, AccountWrapper};
+use crate::credit_debit_account::{CreditDebitAccount, KeyedCreditDebitAccount};
 use crate::instruction::InstructionError;
 use bincode::{deserialize, serialize_into, ErrorKind};
 
@@ -10,7 +10,7 @@ pub trait State<T> {
     fn set_state(&mut self, state: &T) -> Result<(), InstructionError>;
 }
 
-impl<T> State<T> for Account
+impl<T> State<T> for CreditDebitAccount
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -26,7 +26,7 @@ where
     }
 }
 
-impl<'a, T> State<T> for KeyedAccount<'a>
+impl<'a, T> State<T> for KeyedCreditDebitAccount<'a>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -72,7 +72,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::account::Account;
+    use crate::credit_debit_account::CreditDebitAccount;
     use crate::credit_only_account::{CreditOnlyAccount, KeyedCreditOnlyAccount};
     use crate::pubkey::Pubkey;
     use std::sync::Arc;
@@ -81,11 +81,12 @@ mod tests {
     fn test_account_state() {
         let state = 42u64;
 
-        assert!(Account::default().set_state(&state).is_err());
-        let res = Account::default().state() as Result<u64, InstructionError>;
+        assert!(CreditDebitAccount::default().set_state(&state).is_err());
+        let res = CreditDebitAccount::default().state() as Result<u64, InstructionError>;
         assert!(res.is_err());
 
-        let mut account = Account::new(0, std::mem::size_of::<u64>(), &Pubkey::default());
+        let mut account =
+            CreditDebitAccount::new(0, std::mem::size_of::<u64>(), &Pubkey::default());
 
         assert!(account.set_state(&state).is_ok());
         let stored_state: u64 = account.state().unwrap();
@@ -97,8 +98,9 @@ mod tests {
         let state = 42u64;
         let key0 = Pubkey::new_rand();
 
-        let mut account = Account::new(0, std::mem::size_of::<u64>(), &Pubkey::default());
-        let mut keyed_account = KeyedAccount::new(&key0, false, &mut account);
+        let mut account =
+            CreditDebitAccount::new(0, std::mem::size_of::<u64>(), &Pubkey::default());
+        let mut keyed_account = KeyedCreditDebitAccount::new(&key0, false, &mut account);
 
         assert!(keyed_account.set_state(&state).is_ok());
         let stored_state: u64 = keyed_account.state().unwrap();
@@ -113,10 +115,11 @@ mod tests {
         let key0 = Pubkey::new_rand();
         let key1 = Pubkey::new_rand();
 
-        let mut account = Account::new(0, std::mem::size_of::<u64>(), &Pubkey::default());
-        let keyed_account = KeyedAccount::new(&key0, false, &mut account);
+        let mut account =
+            CreditDebitAccount::new(0, std::mem::size_of::<u64>(), &Pubkey::default());
+        let keyed_account = KeyedCreditDebitAccount::new(&key0, false, &mut account);
 
-        let account = Account::new(1, std::mem::size_of::<u64>(), &Pubkey::default());
+        let account = CreditDebitAccount::new(1, std::mem::size_of::<u64>(), &Pubkey::default());
         let credit_account = Arc::new(CreditOnlyAccount::from(account));
         let keyed_credit_account = KeyedCreditOnlyAccount::new(&key1, false, &credit_account);
 

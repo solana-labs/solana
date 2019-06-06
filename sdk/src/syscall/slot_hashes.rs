@@ -2,8 +2,8 @@
 //!
 //! this account carries the Bank's most recent blockhashes for some N parents
 //!
-use crate::account::Account;
 use crate::account_utils::State;
+use crate::credit_debit_account::CreditDebitAccount;
 use crate::hash::Hash;
 use crate::pubkey::Pubkey;
 use crate::syscall;
@@ -34,10 +34,10 @@ pub struct SlotHashes {
 }
 
 impl SlotHashes {
-    pub fn from(account: &Account) -> Option<Self> {
+    pub fn from(account: &CreditDebitAccount) -> Option<Self> {
         account.state().ok()
     }
-    pub fn to(&self, account: &mut Account) -> Option<()> {
+    pub fn to(&self, account: &mut CreditDebitAccount) -> Option<()> {
         account.set_state(self).ok()
     }
 
@@ -60,8 +60,8 @@ impl Deref for SlotHashes {
     }
 }
 
-pub fn create_account(lamports: u64) -> Account {
-    Account::new(lamports, SlotHashes::size_of(), &syscall::id())
+pub fn create_account(lamports: u64) -> CreditDebitAccount {
+    CreditDebitAccount::new(lamports, SlotHashes::size_of(), &syscall::id())
 }
 
 #[cfg(test)]

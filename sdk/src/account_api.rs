@@ -1,6 +1,6 @@
 //! Defines account apis for use in Solana programs.
 
-use crate::account::KeyedAccount;
+use crate::credit_debit_account::KeyedCreditDebitAccount;
 use crate::credit_only_account::KeyedCreditOnlyAccount;
 use crate::instruction::InstructionError;
 use crate::pubkey::Pubkey;
@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering;
 
 #[derive(Debug)]
 pub enum AccountWrapper<'a> {
-    CreditDebit(KeyedAccount<'a>),
+    CreditDebit(KeyedCreditDebitAccount<'a>),
     CreditOnly(KeyedCreditOnlyAccount<'a>),
 }
 
@@ -110,7 +110,7 @@ impl<'a> AccountApi for AccountWrapper<'a> {
     }
 }
 
-impl<'a> AccountApi for KeyedAccount<'a> {
+impl<'a> AccountApi for KeyedCreditDebitAccount<'a> {
     fn signer_key(&self) -> Option<&Pubkey> {
         self.signer_key()
     }
@@ -215,7 +215,7 @@ impl<'a> AccountApi for KeyedCreditOnlyAccount<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::account::Account;
+    use crate::credit_debit_account::CreditDebitAccount;
     use crate::credit_only_account::CreditOnlyAccount;
     use bincode::serialize_into;
     use std::sync::Arc;
@@ -223,11 +223,11 @@ mod tests {
     #[test]
     fn test_account_api() {
         let pubkey0 = Pubkey::new_rand();
-        let mut account0 = Account::new(1, 0, &Pubkey::default());
-        let keyed_account = KeyedAccount::new(&pubkey0, false, &mut account0);
+        let mut account0 = CreditDebitAccount::new(1, 0, &Pubkey::default());
+        let keyed_account = KeyedCreditDebitAccount::new(&pubkey0, false, &mut account0);
 
         let pubkey1 = Pubkey::new_rand();
-        let account1 = Account::new(2, std::mem::size_of::<u32>(), &Pubkey::default());
+        let account1 = CreditDebitAccount::new(2, std::mem::size_of::<u32>(), &Pubkey::default());
         let credit_account = Arc::new(CreditOnlyAccount::from(account1));
         let keyed_credit_account = KeyedCreditOnlyAccount::new(&pubkey1, true, &credit_account);
 
@@ -284,7 +284,7 @@ mod tests {
 
         assert_eq!(
             account0,
-            Account {
+            CreditDebitAccount {
                 lamports: 10,
                 data: vec![42, 0, 0, 0],
                 owner: new_pubkey,

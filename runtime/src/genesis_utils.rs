@@ -1,4 +1,4 @@
-use solana_sdk::account::Account;
+use solana_sdk::credit_debit_account::CreditDebitAccount;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -40,13 +40,13 @@ pub fn create_genesis_block_with_leader(
             // the mint
             (
                 mint_keypair.pubkey(),
-                Account::new(mint_lamports, 0, &system_program::id()),
+                CreditDebitAccount::new(mint_lamports, 0, &system_program::id()),
             ),
             // node needs an account to issue votes and storage proofs from, this will require
             //  airdrops at some point to cover fees...
             (
                 *bootstrap_leader_pubkey,
-                Account::new(bootstrap_leader_lamports, 0, &system_program::id()),
+                CreditDebitAccount::new(bootstrap_leader_lamports, 0, &system_program::id()),
             ),
             // where votes go to
             (voting_keypair.pubkey(), vote_account),

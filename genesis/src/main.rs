@@ -14,7 +14,7 @@ extern crate solana_exchange_program;
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana::blocktree::create_new_ledger;
-use solana_sdk::account::Account;
+use solana_sdk::credit_debit_account::CreditDebitAccount;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{hash, Hash};
@@ -200,12 +200,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             // the mint
             (
                 mint_keypair.pubkey(),
-                Account::new(lamports, 0, &system_program::id()),
+                CreditDebitAccount::new(lamports, 0, &system_program::id()),
             ),
             // node needs an account to issue votes from
             (
                 bootstrap_leader_keypair.pubkey(),
-                Account::new(bootstrap_leader_lamports, 0, &system_program::id()),
+                CreditDebitAccount::new(bootstrap_leader_lamports, 0, &system_program::id()),
             ),
             // where votes go to
             (bootstrap_vote_keypair.pubkey(), vote_account),

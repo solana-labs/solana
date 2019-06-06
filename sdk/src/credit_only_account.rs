@@ -1,4 +1,4 @@
-use crate::account::Account;
+use crate::credit_debit_account::CreditDebitAccount;
 use crate::pubkey::Pubkey;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -36,8 +36,8 @@ impl fmt::Debug for CreditOnlyAccount {
     }
 }
 
-impl From<Account> for CreditOnlyAccount {
-    fn from(account: Account) -> Self {
+impl From<CreditDebitAccount> for CreditOnlyAccount {
+    fn from(account: CreditDebitAccount) -> Self {
         CreditOnlyAccount {
             lamports: AtomicU64::from(account.lamports),
             data: account.data,
