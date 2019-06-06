@@ -423,14 +423,16 @@ while true; do
   fi
 
   if [[ $node_type = bootstrap_leader ]]; then
-    wait "$pid"
+    wait "$pid" || true
+    echo "############## $node_type exited, restarting ##############"
     sleep 1
   else
     secs_to_next_genesis_poll=1
     while true; do
       if ! kill -0 "$pid"; then
-        wait "$pid"
-        exit 0
+        wait "$pid" || true
+        echo "############## $node_type exited, restarting ##############"
+        break
       fi
 
       sleep 1
