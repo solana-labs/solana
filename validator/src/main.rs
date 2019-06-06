@@ -235,7 +235,10 @@ fn main() {
     let cluster_entrypoint = matches.value_of("entrypoint").map(|entrypoint| {
         let entrypoint_addr = solana_netutil::parse_host_port(entrypoint)
             .expect("failed to parse entrypoint address");
-        gossip_addr.set_ip(solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap());
+        let ip_addr = solana_netutil::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
+            panic!("Unable to contact entrypoint {}: {}", entrypoint_addr, err)
+        });
+        gossip_addr.set_ip(ip_addr);
 
         ContactInfo::new_gossip_entry_point(&entrypoint_addr)
     });
