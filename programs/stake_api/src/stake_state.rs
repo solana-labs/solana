@@ -8,7 +8,6 @@ use bincode::{deserialize, serialize_into, ErrorKind};
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::Account;
 use solana_sdk::account_api::AccountApi;
-use solana_sdk::account_utils::State;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::VoteState;
@@ -44,7 +43,7 @@ const STAKE_GETS_PAID_EVERY_VOTE: u64 = 200_000_000; // if numbers above (TICKS_
 impl StakeState {
     // utility function, used by Stakes, tests
     pub fn from(account: &Account) -> Option<StakeState> {
-        account.state().ok()
+        account.deserialize_data().ok()
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
@@ -209,7 +208,7 @@ pub fn create_delegate_stake_account(
     let mut stake_account = Account::new(lamports, std::mem::size_of::<StakeState>(), &id());
 
     stake_account
-        .set_state(&StakeState::Delegate {
+        .serialize_data(&StakeState::Delegate {
             voter_pubkey: *voter_pubkey,
             credits_observed: vote_state.credits(),
         })
@@ -249,7 +248,7 @@ mod tests {
         let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
 
         {
-            let stake_state: StakeState = stake_keyed_account.state().unwrap();
+            let stake_state: StakeState = deserialize(stake_keyed_account.data()).unwrap();
             assert_eq!(stake_state, StakeState::default());
         }
 
@@ -269,7 +268,7 @@ mod tests {
             *stake_keyed_account.account,
         );
 
-        let stake_state: StakeState = stake_keyed_account.state().unwrap();
+        let stake_state: StakeState = deserialize(stake_keyed_account.data()).unwrap();
         assert_eq!(
             stake_state,
             StakeState::Delegate {
@@ -279,7 +278,7 @@ mod tests {
         );
 
         let stake_state = StakeState::MiningPool;
-        stake_keyed_account.set_state(&stake_state).unwrap();
+        serialize_into(stake_keyed_account.account_writer().unwrap(), &stake_state).unwrap();
         assert!(delegate_stake(&mut stake_keyed_account, &mut vote_keyed_account).is_err());
     }
     #[test]
@@ -388,7 +387,7 @@ mod tests {
 
         // move the vote account forward
         vote_state.process_slot_vote_unchecked(1000);
-        vote_keyed_account.set_state(&vote_state).unwrap();
+        serialize_into(vote_keyed_account.account_writer().unwrap(), &vote_state).unwrap();
 
         // now, no lamports in the pool!
         assert_eq!(

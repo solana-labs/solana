@@ -1,7 +1,6 @@
 //! This account contains the current cluster fees
 //!
 use crate::account::Account;
-use crate::account_utils::State;
 use crate::fee_calculator::FeeCalculator;
 use crate::pubkey::Pubkey;
 use crate::syscall;
@@ -30,10 +29,10 @@ pub struct Fees {
 
 impl Fees {
     pub fn from(account: &Account) -> Option<Self> {
-        account.state().ok()
+        account.deserialize_data().ok()
     }
     pub fn to(&self, account: &mut Account) -> Option<()> {
-        account.set_state(self).ok()
+        account.serialize_data(self).ok()
     }
 
     pub fn size_of() -> usize {

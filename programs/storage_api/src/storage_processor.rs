@@ -108,7 +108,6 @@ mod tests {
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
     use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
-    use solana_sdk::account_utils::State;
     use solana_sdk::client::SyncClient;
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::hash::{hash, Hash};
@@ -169,7 +168,9 @@ mod tests {
         let account = bank
             .get_account(&validator_storage_pubkey)
             .expect("account not found");
-        let storage_contract = account.state().expect("couldn't unpack account data");
+        let storage_contract = account
+            .deserialize_data()
+            .expect("couldn't unpack account data");
         if let StorageContract::ValidatorStorage { owner, .. } = storage_contract {
             assert_eq!(owner, account_owner);
         } else {
@@ -188,7 +189,9 @@ mod tests {
         let account = bank
             .get_account(&replicator_storage_pubkey)
             .expect("account not found");
-        let storage_contract = account.state().expect("couldn't unpack account data");
+        let storage_contract = account
+            .deserialize_data()
+            .expect("couldn't unpack account data");
         if let StorageContract::ReplicatorStorage { owner, .. } = storage_contract {
             assert_eq!(owner, account_owner);
         } else {

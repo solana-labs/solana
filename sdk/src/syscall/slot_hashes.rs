@@ -4,7 +4,6 @@
 //!
 use crate::account::Account;
 use crate::account_api::AccountApi;
-use crate::account_utils::State;
 use crate::hash::Hash;
 use crate::pubkey::Pubkey;
 use crate::syscall;
@@ -36,10 +35,10 @@ pub struct SlotHashes {
 
 impl SlotHashes {
     pub fn from(account: &Account) -> Option<Self> {
-        account.state().ok()
+        account.deserialize_data().ok()
     }
     pub fn to(&self, account: &mut Account) -> Option<()> {
-        account.set_state(self).ok()
+        account.serialize_data(self).ok()
     }
     pub fn from_account(account: &mut AccountApi) -> Option<Self> {
         deserialize(account.data()).ok()

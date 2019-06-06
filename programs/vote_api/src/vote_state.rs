@@ -6,7 +6,6 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::{Account, KeyedAccount};
 use solana_sdk::account_api::AccountApi;
-use solana_sdk::account_utils::State;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
@@ -98,7 +97,7 @@ impl VoteState {
 
     // utility function, used by Stakes, tests
     pub fn from(account: &Account) -> Option<VoteState> {
-        account.state().ok()
+        account.deserialize_data().ok()
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
@@ -330,11 +329,11 @@ pub fn create_bootstrap_leader_account(
     // will be forced to select it as the leader for height 0
     let mut vote_account = create_account(&vote_pubkey, &node_pubkey, commission, vote_lamports);
 
-    let mut vote_state: VoteState = vote_account.state().unwrap();
+    let mut vote_state: VoteState = vote_account.deserialize_data().unwrap();
     // TODO: get a hash for slot 0?
     vote_state.process_slot_vote_unchecked(0);
 
-    vote_account.set_state(&vote_state).unwrap();
+    vote_account.serialize_data(&vote_state).unwrap();
     (vote_account, vote_state)
 }
 
@@ -344,7 +343,6 @@ mod tests {
     use crate::vote_state;
     use bincode::serialized_size;
     use solana_sdk::account::Account;
-    use solana_sdk::account_utils::State;
     use solana_sdk::hash::hash;
     use solana_sdk::syscall;
     use solana_sdk::syscall::slot_hashes;
@@ -383,7 +381,7 @@ mod tests {
             &syscall::id(),
         );
         slot_hashes_account
-            .set_state(&slot_hashes.to_vec())
+            .serialize_data(&slot_hashes.to_vec())
             .unwrap();
         (slot_hashes::id(), slot_hashes_account)
     }
@@ -403,7 +401,9 @@ mod tests {
             &[],
             &[vote.clone()],
         )?;
-        vote_account.state()
+        vote_account
+            .deserialize_data()
+            .map_err(|_| InstructionError::InvalidAccountData)
     }
 
     /// exercises all the keyed accounts stuff
@@ -441,7 +441,7 @@ mod tests {
     fn test_voter_registration() {
         let (vote_pubkey, vote_account) = create_test_account();
 
-        let vote_state: VoteState = vote_account.state().unwrap();
+        let vote_state: VoteState = vote_account.deserialize_data().unwrap();
         assert_eq!(vote_state.authorized_voter_pubkey, vote_pubkey);
         assert!(vote_state.votes.is_empty());
     }
@@ -596,7 +596,7 @@ mod tests {
     fn test_vote_lockout() {
         let (_vote_pubkey, vote_account) = create_test_account();
 
-        let mut vote_state: VoteState = vote_account.state().unwrap();
+        let mut vote_state: VoteState = vote_account.deserialize_data().unwrap();
 
         for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
             vote_state.process_slot_vote_unchecked((INITIAL_LOCKOUT as usize * i) as u64);

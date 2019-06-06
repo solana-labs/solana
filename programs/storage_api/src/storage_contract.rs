@@ -4,7 +4,6 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::Account;
 use solana_sdk::account_api::AccountApi;
-use solana_sdk::account_utils::State;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
@@ -84,7 +83,7 @@ pub fn create_validator_storage_account(owner: Pubkey, lamports: u64) -> Account
     let mut storage_account = Account::new(lamports, STORAGE_ACCOUNT_SPACE as usize, &crate::id());
 
     storage_account
-        .set_state(&StorageContract::ValidatorStorage {
+        .serialize_data(&StorageContract::ValidatorStorage {
             owner,
             slot: 0,
             hash: Hash::default(),
@@ -455,7 +454,7 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let mut storage_account = KeyedAccount::new(&pubkey, false, &mut account);
         // pretend it's a validator op code
-        let mut contract = storage_account.state().unwrap();
+        let mut contract = deserialize(storage_account.data()).unwrap();
         if let StorageContract::ValidatorStorage { .. } = contract {
             assert!(true)
         }
@@ -470,7 +469,7 @@ mod tests {
             lockout_validations: HashMap::new(),
             reward_validations: HashMap::new(),
         };
-        storage_account.set_state(&contract).unwrap();
+        serialize_into(storage_account.account_writer().unwrap(), &contract).unwrap();
         if let StorageContract::ReplicatorStorage { .. } = contract {
             panic!("Wrong contract type");
         }
@@ -479,7 +478,7 @@ mod tests {
             proofs: HashMap::new(),
             reward_validations: HashMap::new(),
         };
-        storage_account.set_state(&contract).unwrap();
+        serialize_into(storage_account.account_writer().unwrap(), &contract).unwrap();
         if let StorageContract::ValidatorStorage { .. } = contract {
             panic!("Wrong contract type");
         }
@@ -504,19 +503,19 @@ mod tests {
         process_validation(&mut account, segment_index, &proof, &checked_proof).unwrap_err();
 
         account.initialize_data(STORAGE_ACCOUNT_SPACE).unwrap();
-        let storage_contract = &mut account.state().unwrap();
+        let mut storage_contract = deserialize(account.data()).unwrap();
         if let StorageContract::Uninitialized = storage_contract {
             let mut proof_map = HashMap::new();
             proof_map.insert(proof.sha_state, proof.clone());
             let mut proofs = HashMap::new();
             proofs.insert(0, proof_map);
-            *storage_contract = StorageContract::ReplicatorStorage {
+            storage_contract = StorageContract::ReplicatorStorage {
                 owner: Pubkey::default(),
                 proofs,
                 reward_validations: HashMap::new(),
             };
         };
-        account.set_state(storage_contract).unwrap();
+        serialize_into(account.account_writer().unwrap(), &storage_contract).unwrap();
 
         // proof is valid
         process_validation(&mut account, segment_index, &proof, &checked_proof).unwrap();

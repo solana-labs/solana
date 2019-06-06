@@ -14,7 +14,6 @@ use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone::DRONE_PORT;
 #[cfg(test)]
 use solana_drone::drone_mock::request_airdrop_transaction;
-use solana_sdk::account_utils::State;
 use solana_sdk::bpf_loader;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
@@ -634,7 +633,7 @@ fn process_show_stake_account(
 ) -> ProcessResult {
     use solana_stake_api::stake_state::StakeState;
     let stake_account = rpc_client.get_account(staking_account_pubkey)?;
-    match stake_account.state() {
+    match stake_account.deserialize_data() {
         Ok(StakeState::Delegate {
             voter_pubkey,
             credits_observed,
@@ -736,7 +735,7 @@ fn process_show_storage_account(
 ) -> ProcessResult {
     use solana_storage_api::storage_contract::StorageContract;
     let account = rpc_client.get_account(storage_account_pubkey)?;
-    let storage_contract: StorageContract = account.state().map_err(|err| {
+    let storage_contract: StorageContract = account.deserialize_data().map_err(|err| {
         WalletError::RpcRequestError(
             format!("Unable to deserialize storage account: {:?}", err).to_string(),
         )
