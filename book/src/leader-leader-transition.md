@@ -45,7 +45,7 @@ The upsides compared to guards:
 * The timeout is not fixed.
 
 * The timeout is local to the leader, and therefore can be clever.  The leader's
-heuristic can take into account avalanche performance.
+heuristic can take into account turbine performance.
 
 * This design doesn't require a ledger hard fork to update.
 

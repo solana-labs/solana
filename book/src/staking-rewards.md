@@ -48,7 +48,7 @@ specific parameters will be necessary:
 
 Solana's trustless sense of time and ordering provided by its PoH data
 structure, along with its
-[avalanche](https://www.youtube.com/watch?v=qt_gDRXHrHQ&t=1s) data broadcast
+[turbine](https://www.youtube.com/watch?v=qt_gDRXHrHQ&t=1s) data broadcast
 and transmission design, should provide sub-second transaction confirmation times that scale
 with the log of the number of nodes in the cluster. This means we shouldn't
 have to restrict the number of validating nodes with a prohibitive 'minimum

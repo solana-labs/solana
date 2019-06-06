@@ -87,7 +87,7 @@ pub struct ClusterInfo {
 pub struct Locality {
     /// The bounds of the neighborhood represented by this locality
     pub neighbor_bounds: (usize, usize),
-    /// The `avalanche` layer this locality is in
+    /// The `turbine` layer this locality is in
     pub layer_ix: usize,
     /// The bounds of the current layer
     pub layer_bounds: (usize, usize),
@@ -1414,7 +1414,7 @@ impl ClusterInfo {
     }
 }
 
-/// Avalanche logic
+/// Turbine logic
 /// 1 - For the current node find out if it is in layer 1
 /// 1.1 - If yes, then broadcast to all layer 1 nodes
 ///      1 - using the layer 1 index, broadcast to all layer 2 nodes assuming you know neighborhood size

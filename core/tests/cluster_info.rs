@@ -126,7 +126,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
 
     assert!(!batches.is_empty());
 
-    // start avalanche simulation
+    // start turbine simulation
     let now = Instant::now();
     batches.par_iter_mut().for_each(|batch| {
         let mut cluster = c_info.clone();
