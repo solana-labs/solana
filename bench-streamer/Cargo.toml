@@ -2,16 +2,16 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-bench-streamer"
-version = "0.15.2"
+version = "0.15.3"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.33.0"
-solana = { path = "../core", version = "0.15.2"    }
-solana-logger = { path = "../logger", version = "0.15.2"    }
-solana-netutil = { path = "../netutil", version = "0.15.2"    }
+solana = { path = "../core", version = "0.15.3"     }
+solana-logger = { path = "../logger", version = "0.15.3"     }
+solana-netutil = { path = "../netutil", version = "0.15.3"     }
 
 [features]
 cuda = ["solana/cuda"]
