@@ -1,19 +1,18 @@
 # Ledger Replication
 
 At full capacity on a 1gbps network solana will generate 4 petabytes of data
-per year.  To prevent the network from centralizing around full nodes that have
+per year.  To prevent the network from centralizing around validators that have
 to store the full data set this protocol proposes a way for mining nodes to
-provide storage capacity for pieces of the network.
+provide storage capacity for pieces of the data.
 
 The basic idea to Proof of Replication is encrypting a dataset with a public
 symmetric key using CBC encryption, then hash the encrypted dataset. The main
 problem with the naive approach is that a dishonest storage node can stream the
-encryption and delete the data as its hashed. The simple solution is to force
-the hash to be done on the reverse of the encryption, or perhaps with a random
-order. This ensures that all the data is present during the generation of the
-proof and it also requires the validator to have the entirety of the encrypted
-data present for verification of every proof of every identity. So the space
-required to validate is `number_of_proofs * data_size`
+encryption and delete the data as it's hashed. The simple solution is to periodically
+regenerate the hash based on a signed PoH value. This ensures that all the data is present
+during the generation of the proof and it also requires validators to have the
+entirety of the encrypted data present for verification of every proof of every identity.
+So the space required to validate is `number_of_proofs * data_size`
 
 ## Optimization with PoH
 
@@ -29,13 +28,12 @@ core. The total space required for verification is `1_ledger_segment +
 ## Network
 
 Validators for PoRep are the same validators that are verifying transactions.
-They have some stake that they have put up as collateral that ensures that
-their work is honest. If you can prove that a validator verified a fake PoRep,
-then the validator will not receive a reward for that storage epoch.
+If a replicator can prove that a validator verified a fake PoRep, then the
+validator will not receive a reward for that storage epoch.
 
-Replicators are specialized *light clients*. They download a part of the ledger
-and store it, and provide PoReps of storing the ledger. For each verified PoRep
-replicators earn a reward of sol from the mining pool.
+Replicators are specialized *light clients*. They download a part of the
+ledger (a.k.a Segment) and store it, and provide PoReps of storing the ledger.
+For each verified PoRep replicators earn a reward of sol from the mining pool.
 
 ## Constraints
 
@@ -55,9 +53,8 @@ changes to determine what rate it can validate storage proofs.
 
 1. SLOTS\_PER\_SEGMENT: Number of slots in a segment of ledger data. The
 unit of storage for a replicator.
-2. NUM\_KEY\_ROTATION\_TICKS: Number of ticks to save a PoH value and cause a
-key generation for the section of ledger just generated and the rotation of
-another key in the set.
+2. NUM\_KEY\_ROTATION\_SEGMENTS: Number of segments after which replicators
+regenerate their encryption keys and select a new dataset to store.
 3. NUM\_STORAGE\_PROOFS: Number of storage proofs required for a storage proof
 claim to be successfully rewarded.
 4. RATIO\_OF\_FAKE\_PROOFS: Ratio of fake proofs to real proofs that a storage
@@ -66,36 +63,40 @@ mining proof claim has to contain to be valid for a reward.
 proof.
 6. NUM\_CHACHA\_ROUNDS: Number of encryption rounds performed to generate
 encrypted state.
+7. NUM\_SLOTS\_PER\_TURN: Number of slots that define a single storage epoch or
+a "turn" of the PoRep game.
 
 ### Validator behavior
 
-1. Validator joins the network and submits a storage validation capacity
-transaction which tells the network how many proofs it can process in a given
-period defined by NUM\_KEY\_ROTATION\_TICKS.
-2. Every NUM\_KEY\_ROTATION\_TICKS the validator stores the PoH value at that
-height.
-3. Validator generates a storage proof confirmation transaction.
-4. The storage proof confirmation transaction is integrated into the ledger.
-6. Validator responds to RPC interfaces for what the last storage epoch PoH
-value is and its slot.
+1. Validators join the network and begin looking for replicator accounts at each
+storage epoch/turn boundary.
+2. Every turn, Validators sign the PoH value at the boundary and use that signature
+to randomly pick proofs to verify from each storage account found in the turn boundary.
+This signed value is also submitted to the validator's storage account and will be used by
+replicators at a later stage to cross-verify.
+3. Every `NUM_SLOTS_PER_TURN` slots the validator advertises the PoH value. This is value
+is also served to Replicators via RPC interfaces.
+4. For a given turn N, all validations get locked out until turn N+3 (a gap of 2 turn/epoch).
+At which point all validations during that turn are available for reward collection.
+5. Any incorrect validations will be marked during the turn in between.
+
 
 ### Replicator behavior
 
 1. Since a replicator is somewhat of a light client and not downloading all the
-ledger data, they have to rely on other full nodes (validators) for
-information. Any given validator may or may not be malicious and give incorrect
-information, although there are not any obvious attack vectors that this could
-accomplish besides having the replicator do extra wasted work.  For many of the
-operations there are a number of options depending on how paranoid a replicator
-is:
+ledger data, they have to rely on other validators and replicators for information.
+Any given validator may or may not be malicious and give incorrect information, although
+there are not any obvious attack vectors that this could accomplish besides having the
+replicator do extra wasted work.  For many of the operations there are a number of options
+depending on how paranoid a replicator is:
     - (a) replicator can ask a validator
     - (b) replicator can ask multiple validators
-    - (c) replicator can subscribe to the full transaction stream and generate
-      the information itself
-    - (d) replicator can subscribe to an abbreviated transaction stream to
-      generate the information itself
-2. A replicator obtains the PoH hash corresponding to the last key rotation
-along with its slot.
+    - (c) replicator can ask other replicators
+    - (d) replicator can subscribe to the full transaction stream and generate
+      the information itself (assuming the slot is recent enough)
+    - (e) replicator can subscribe to an abbreviated transaction stream to
+      generate the information itself (assuming the slot is recent enough)
+2. A replicator obtains the PoH hash corresponding to the last turn with its slot.
 3. The replicator signs the PoH hash with its keypair. That signature is the
 seed used to pick the segment to replicate and also the encryption key. The
 replicator mods the signature with the slot to get which segment to
@@ -103,38 +104,67 @@ replicate.
 4. The replicator retrives the ledger by asking peer validators and
 replicators. See 6.5.
 5. The replicator then encrypts that segment with the key with chacha algorithm
-in CBC mode with NUM\_CHACHA\_ROUNDS of encryption.
-6. The replicator initializes a chacha rng with the signature from step 2 as
+in CBC mode with `NUM_CHACHA_ROUNDS` of encryption.
+6. The replicator initializes a chacha rng with the a signed recent PoH value as
 the seed.
-7. The replicator generates NUM\_STORAGE\_SAMPLES samples in the range of the
+7. The replicator generates `NUM_STORAGE_SAMPLES` samples in the range of the
 entry size and samples the encrypted segment with sha256 for 32-bytes at each
 offset value. Sampling the state should be faster than generating the encrypted
 segment.
 8. The replicator sends a PoRep proof transaction which contains its sha state
 at the end of the sampling operation, its seed and the samples it used to the
 current leader and it is put onto the ledger.
+9. During a given turn the replicator should submit many proofs for the same segment
+and based on the `RATIO_OF_FAKE_PROOFS` some of those proofs must be fake.
+10. As the PoRep game enters the next turn, the replicator must submit a
+transaction with the mask of which proofs were fake during the last turn. This
+transaction will define the rewards for both replicators and validators.
+11. Finally for a turn N, as the PoRep game enters turn N + 3, replicator's proofs for
+turn N will be counted towards their rewards.
 
+
+### The PoRep Game
+
+The Proof of Replication game has 4 primary stages. For each "turn" multiple PoRep
+games can be in progress but each in a different stage.
+
+The 4 stages of the PoRep Game are as follows:
+
+1. Proof submission stage
+    - Replicators: submit as many proofs as possible during this stage
+    - Validators: No-op
+2. Proof verification stage
+    - Replicators: No-op
+    - Validators: Select replicators and verify their proofs from the previous turn
+3. Proof challenge stage
+    - Replicators: Submit the proof mask with justifications (for fake proofs submitted 2 turns ago)
+    - Validators: No-op
+4. Reward collection stage
+    - Replicators: Collect rewards for 3 turns ago
+    - Validators:  Collect rewards for 3 turns ago
+
+
+For each turn of the PoRep game, both Validators and Replicators evaluate each
+stage. The stages are run as separate transactions on the storage program.
 
 ### Finding who has a given block of ledger
 
-1. Validators monitor the transaction stream for storage mining proofs, and
-keep a mapping of ledger segments by slot to public keys. When it sees
-a storage mining proof it updates this mapping and provides an RPC interface
-which takes a slot and hands back a list of public keys.  The client
-then looks up in their cluster\_info table to see which network address that
-corresponds to and sends a repair request to retrieve the necessary blocks of
-ledger.
-2. Validators would need to prune this list which it could do by periodically
-looking at the oldest entries in its mappings and doing a network query to see
-if the storage host is still serving the first entry.
+1. Validators monitor the turns in the PoRep game and look at the rooted bank
+at turn boundaries for any proofs.
+2. Validators maintain a map of ledger segments and corresponding replicator public keys.
+The map is updated when a Validator processes a replicator's proofs for a segment.
+The validator provides an RPC interface to access the this map. Using this API, clients
+can map a segment to a replicator's network address (correlating it via cluster_info table).
+The clients can then send repair requests to the replicator to retrieve segments.
+3. Validators would need to invalidate this list every N turns.
 
 ## Sybil attacks
 
 For any random seed, we force everyone to use a signature that is derived from
-a PoH hash. Everyone must use the same count, so the same PoH hash is signed by
-every participant. The signatures are then each cryptographically tied to the
-keypair, which prevents a leader from grinding on the resulting value for more
-than 1 identity.
+a PoH hash at the turn boundary. Everyone uses the same count, so the same PoH
+hash is signed by every participant. The signatures are then each cryptographically
+tied to the keypair, which prevents a leader from grinding on the resulting
+value for more than 1 identity.
 
 Since there are many more client identities then encryption identities, we need
 to split the reward for multiple clients, and prevent Sybil attacks from
@@ -155,8 +185,7 @@ the network can reward long lived client identities more than new ones.
   showing the initial state for the hash.
 - If a validator marks real proofs as fake, no on-chain computation can be done
   to distinguish who is correct. Rewards would have to rely on the results from
-multiple validators in a stake-weighted fashion to catch bad actors and
-replicators from being locked out of the network.
+  multiple validators to catch bad actors and replicators from being denied rewards.
 - Validator stealing mining proof results for itself. The proofs are derived
   from a signature from a replicator, since the validator does not know the
 private key used to generate the encryption key, it cannot be the generator of
