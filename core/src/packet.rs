@@ -603,7 +603,8 @@ impl Signable for Blob {
     }
 
     fn signable_data(&self) -> Cow<[u8]> {
-        Cow::Borrowed(&self.data[SIGNATURE_RANGE.end..self.size() as usize])
+        let end = cmp::max(SIGNATURE_RANGE.end, self.data_size());
+        Cow::Borrowed(&self.data[SIGNATURE_RANGE.end..end])
     }
 
     fn get_signature(&self) -> Signature {

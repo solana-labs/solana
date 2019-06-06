@@ -12,6 +12,7 @@ use crate::streamer::{BlobReceiver, BlobSender};
 use solana_metrics::{inc_new_counter_debug, inc_new_counter_error};
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Signable;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -86,7 +87,10 @@ pub fn should_retransmit_and_persist(
         Some(bank) => leader_schedule_cache.slot_leader_at(blob.slot(), Some(&bank)),
     };
 
-    if blob.id() == *my_pubkey {
+    if !blob.verify() {
+        inc_new_counter_debug!("streamer-recv_window-invalid_signature", 1);
+        false
+    } else if blob.id() == *my_pubkey {
         inc_new_counter_debug!("streamer-recv_window-circular_transmission", 1);
         false
     } else if slot_leader_pubkey == None {
@@ -249,13 +253,14 @@ mod test {
     use crate::bank_forks::BankForks;
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::entry::{make_consecutive_blobs, make_tiny_test_entries, EntrySlice};
+    use crate::entry::{make_consecutive_blobs, make_tiny_test_entries, Entry, EntrySlice};
     use crate::genesis_utils::create_genesis_block_with_leader;
-    use crate::packet::{index_blobs, Blob};
+    use crate::packet::index_blobs;
     use crate::service::Service;
     use crate::streamer::{blob_receiver, responder};
     use solana_runtime::epoch_schedule::MINIMUM_SLOT_LENGTH;
     use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -289,14 +294,17 @@ mod test {
     #[test]
     fn test_should_retransmit_and_persist() {
         let me_id = Pubkey::new_rand();
-        let leader_pubkey = Pubkey::new_rand();
+        let leader_keypair = Keypair::new();
+        let leader_pubkey = leader_keypair.pubkey();
         let bank = Arc::new(Bank::new(
             &create_genesis_block_with_leader(100, &leader_pubkey, 10).genesis_block,
         ));
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
-        let mut blob = Blob::default();
+        let entry = Entry::default();
+        let mut blob = entry.to_blob();
         blob.set_id(&leader_pubkey);
+        blob.sign(&leader_keypair);
 
         // without a Bank and blobs not from me, blob gets thrown out
         assert_eq!(
