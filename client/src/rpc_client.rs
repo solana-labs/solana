@@ -6,7 +6,7 @@ use crate::rpc_request::RpcRequest;
 use bincode::serialize;
 use log::*;
 use serde_json::{json, Value};
-use solana_sdk::credit_debit_account::CreditDebitAccount;
+use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -223,7 +223,7 @@ impl RpcClient {
         Ok(res)
     }
 
-    pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<CreditDebitAccount> {
+    pub fn get_account(&self, pubkey: &Pubkey) -> io::Result<Account> {
         let params = json!([format!("{}", pubkey)]);
         let response = self
             .client
@@ -231,7 +231,7 @@ impl RpcClient {
 
         response
             .and_then(|account_json| {
-                let account: CreditDebitAccount =
+                let account: Account =
                     serde_json::from_value(account_json).expect("deserialize account");
                 trace!("Response account {:?} {:?}", pubkey, account);
                 Ok(account)

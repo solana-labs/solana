@@ -112,8 +112,8 @@ mod tests {
     use crate::bank::Bank;
     use crate::bank_client::BankClient;
     use bincode::serialize;
+    use solana_sdk::account::{Account, KeyedAccount};
     use solana_sdk::client::SyncClient;
-    use solana_sdk::credit_debit_account::{CreditDebitAccount, KeyedCreditDebitAccount};
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -124,14 +124,14 @@ mod tests {
     fn test_create_system_account() {
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = CreditDebitAccount::new(100, 0, &system_program::id());
+        let mut from_account = Account::new(100, 0, &system_program::id());
 
         let to = Pubkey::new_rand();
-        let mut to_account = CreditDebitAccount::new(0, 0, &Pubkey::default());
+        let mut to_account = Account::new(0, 0, &Pubkey::default());
 
         let mut keyed_accounts = [
-            KeyedCreditDebitAccount::new(&from, true, &mut from_account),
-            KeyedCreditDebitAccount::new(&to, false, &mut to_account),
+            KeyedAccount::new(&from, true, &mut from_account),
+            KeyedAccount::new(&to, false, &mut to_account),
         ];
         let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
             .iter_mut()
@@ -153,15 +153,15 @@ mod tests {
         // Attempt to create account with more lamports than remaining in from_account
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = CreditDebitAccount::new(100, 0, &system_program::id());
+        let mut from_account = Account::new(100, 0, &system_program::id());
 
         let to = Pubkey::new_rand();
-        let mut to_account = CreditDebitAccount::new(0, 0, &Pubkey::default());
+        let mut to_account = Account::new(0, 0, &Pubkey::default());
         let unchanged_account = to_account.clone();
 
         let mut keyed_accounts = [
-            KeyedCreditDebitAccount::new(&from, true, &mut from_account),
-            KeyedCreditDebitAccount::new(&to, false, &mut to_account),
+            KeyedAccount::new(&from, true, &mut from_account),
+            KeyedAccount::new(&to, false, &mut to_account),
         ];
         let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
             .iter_mut()
@@ -184,16 +184,16 @@ mod tests {
         // Attempt to create system account in account already owned by another program
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = CreditDebitAccount::new(100, 0, &system_program::id());
+        let mut from_account = Account::new(100, 0, &system_program::id());
 
         let original_program_owner = Pubkey::new(&[5; 32]);
         let owned_key = Pubkey::new_rand();
-        let mut owned_account = CreditDebitAccount::new(0, 0, &original_program_owner);
+        let mut owned_account = Account::new(0, 0, &original_program_owner);
         let unchanged_account = owned_account.clone();
 
         let mut keyed_accounts = [
-            KeyedCreditDebitAccount::new(&from, true, &mut from_account),
-            KeyedCreditDebitAccount::new(&owned_key, false, &mut owned_account),
+            KeyedAccount::new(&from, true, &mut from_account),
+            KeyedAccount::new(&owned_key, false, &mut owned_account),
         ];
         let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
             .iter_mut()
@@ -216,10 +216,10 @@ mod tests {
         // Attempt to create system account in account with populated data
         let new_program_owner = Pubkey::new(&[9; 32]);
         let from = Pubkey::new_rand();
-        let mut from_account = CreditDebitAccount::new(100, 0, &system_program::id());
+        let mut from_account = Account::new(100, 0, &system_program::id());
 
         let populated_key = Pubkey::new_rand();
-        let mut populated_account = CreditDebitAccount {
+        let mut populated_account = Account {
             lamports: 0,
             data: vec![0, 1, 2, 3],
             owner: Pubkey::default(),
@@ -228,8 +228,8 @@ mod tests {
         let unchanged_account = populated_account.clone();
 
         let mut keyed_accounts = [
-            KeyedCreditDebitAccount::new(&from, true, &mut from_account),
-            KeyedCreditDebitAccount::new(&populated_key, false, &mut populated_account),
+            KeyedAccount::new(&from, true, &mut from_account),
+            KeyedAccount::new(&populated_key, false, &mut populated_account),
         ];
         let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
             .iter_mut()
@@ -251,12 +251,12 @@ mod tests {
         let other_program = Pubkey::new(&[9; 32]);
 
         let from = Pubkey::new_rand();
-        let mut from_account = CreditDebitAccount::new(100, 0, &other_program);
+        let mut from_account = Account::new(100, 0, &other_program);
         let to = Pubkey::new_rand();
-        let mut to_account = CreditDebitAccount::new(0, 0, &Pubkey::default());
+        let mut to_account = Account::new(0, 0, &Pubkey::default());
         let mut keyed_accounts = [
-            KeyedCreditDebitAccount::new(&from, true, &mut from_account),
-            KeyedCreditDebitAccount::new(&to, false, &mut to_account),
+            KeyedAccount::new(&from, true, &mut from_account),
+            KeyedAccount::new(&to, false, &mut to_account),
         ];
         let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
             .iter_mut()
@@ -276,8 +276,8 @@ mod tests {
         let new_program_owner = Pubkey::new(&[9; 32]);
 
         let from = Pubkey::new_rand();
-        let mut from_account = CreditDebitAccount::new(100, 0, &system_program::id());
-        let mut keyed_account = KeyedCreditDebitAccount::new(&from, true, &mut from_account);
+        let mut from_account = Account::new(100, 0, &system_program::id());
+        let mut keyed_account = KeyedAccount::new(&from, true, &mut from_account);
         let mut keyed_accounts: Vec<&mut AccountApi> = vec![&mut keyed_account];
         assign_account_to_program(&mut keyed_accounts, &new_program_owner).unwrap();
         let from_owner = keyed_accounts[0].owner();
@@ -297,12 +297,12 @@ mod tests {
     #[test]
     fn test_transfer_lamports() {
         let from = Pubkey::new_rand();
-        let mut from_account = CreditDebitAccount::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
+        let mut from_account = Account::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
         let to = Pubkey::new_rand();
-        let mut to_account = CreditDebitAccount::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
+        let mut to_account = Account::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
         let mut keyed_accounts = [
-            KeyedCreditDebitAccount::new(&from, true, &mut from_account),
-            KeyedCreditDebitAccount::new(&to, false, &mut to_account),
+            KeyedAccount::new(&from, true, &mut from_account),
+            KeyedAccount::new(&to, false, &mut to_account),
         ];
         let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
             .iter_mut()

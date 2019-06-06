@@ -1,6 +1,6 @@
 //! Defines account apis for use in Solana programs.
 
-use crate::credit_debit_account::KeyedCreditDebitAccount;
+use crate::account::KeyedAccount;
 use crate::credit_only_account::KeyedCreditOnlyAccount;
 use crate::instruction::InstructionError;
 use crate::pubkey::Pubkey;
@@ -23,7 +23,7 @@ pub trait AccountApi: Debug {
     fn set_executable(&mut self, value: bool) -> Result<(), InstructionError>;
 }
 
-impl<'a> AccountApi for KeyedCreditDebitAccount<'a> {
+impl<'a> AccountApi for KeyedAccount<'a> {
     fn signer_key(&self) -> Option<&Pubkey> {
         self.signer_key()
     }
@@ -128,7 +128,7 @@ impl<'a> AccountApi for KeyedCreditOnlyAccount<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::credit_debit_account::CreditDebitAccount;
+    use crate::account::Account;
     use crate::credit_only_account::CreditOnlyAccount;
     use bincode::serialize_into;
     use std::sync::Arc;
@@ -136,11 +136,11 @@ mod tests {
     #[test]
     fn test_account_api() {
         let pubkey0 = Pubkey::new_rand();
-        let mut account0 = CreditDebitAccount::new(1, 0, &Pubkey::default());
-        let mut keyed_account = KeyedCreditDebitAccount::new(&pubkey0, false, &mut account0);
+        let mut account0 = Account::new(1, 0, &Pubkey::default());
+        let mut keyed_account = KeyedAccount::new(&pubkey0, false, &mut account0);
 
         let pubkey1 = Pubkey::new_rand();
-        let account1 = CreditDebitAccount::new(2, std::mem::size_of::<u32>(), &Pubkey::default());
+        let account1 = Account::new(2, std::mem::size_of::<u32>(), &Pubkey::default());
         let credit_account = Arc::new(CreditOnlyAccount::from(account1));
         let mut keyed_credit_account = KeyedCreditOnlyAccount::new(&pubkey1, true, &credit_account);
 
@@ -195,7 +195,7 @@ mod tests {
 
         assert_eq!(
             account0,
-            CreditDebitAccount {
+            Account {
                 lamports: 10,
                 data: vec![42, 0, 0, 0],
                 owner: new_pubkey,

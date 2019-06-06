@@ -1,7 +1,7 @@
 use bincode::{deserialize_from, serialize_into, serialized_size};
 use memmap::MmapMut;
 use serde::{Deserialize, Serialize};
-use solana_sdk::credit_debit_account::CreditDebitAccount;
+use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::fmt;
 use std::fs::OpenOptions;
@@ -51,8 +51,8 @@ pub struct StoredAccount<'a> {
 }
 
 impl<'a> StoredAccount<'a> {
-    pub fn clone_account(&self) -> CreditDebitAccount {
-        CreditDebitAccount {
+    pub fn clone_account(&self) -> Account {
+        Account {
             lamports: self.balance.lamports,
             owner: self.balance.owner,
             executable: self.balance.executable,
@@ -204,7 +204,7 @@ impl AppendVec {
             next,
         ))
     }
-    pub fn get_account_test(&self, offset: usize) -> Option<(StorageMeta, CreditDebitAccount)> {
+    pub fn get_account_test(&self, offset: usize) -> Option<(StorageMeta, Account)> {
         let stored = self.get_account(offset)?;
         let meta = stored.0.meta.clone();
         Some((meta, stored.0.clone_account()))
@@ -220,7 +220,7 @@ impl AppendVec {
     }
 
     #[allow(clippy::mutex_atomic)]
-    pub fn append_accounts(&self, accounts: &[(StorageMeta, &CreditDebitAccount)]) -> Vec<usize> {
+    pub fn append_accounts(&self, accounts: &[(StorageMeta, &Account)]) -> Vec<usize> {
         let mut offset = self.append_offset.lock().unwrap();
         let mut rv = vec![];
         for (storage_meta, account) in accounts {
@@ -247,17 +247,13 @@ impl AppendVec {
         rv
     }
 
-    pub fn append_account(
-        &self,
-        storage_meta: StorageMeta,
-        account: &CreditDebitAccount,
-    ) -> Option<usize> {
+    pub fn append_account(&self, storage_meta: StorageMeta, account: &Account) -> Option<usize> {
         self.append_accounts(&[(storage_meta, account)])
             .first()
             .cloned()
     }
 
-    pub fn append_account_test(&self, data: &(StorageMeta, CreditDebitAccount)) -> Option<usize> {
+    pub fn append_account_test(&self, data: &(StorageMeta, Account)) -> Option<usize> {
         self.append_account(data.0.clone(), &data.1)
     }
 }
@@ -266,7 +262,7 @@ pub mod test_utils {
     use super::StorageMeta;
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
-    use solana_sdk::credit_debit_account::CreditDebitAccount;
+    use solana_sdk::account::Account;
     use solana_sdk::pubkey::Pubkey;
     use std::fs::create_dir_all;
     use std::path::PathBuf;
@@ -293,9 +289,9 @@ pub mod test_utils {
         TempFile { path: buf }
     }
 
-    pub fn create_test_account(sample: usize) -> (StorageMeta, CreditDebitAccount) {
+    pub fn create_test_account(sample: usize) -> (StorageMeta, Account) {
         let data_len = sample % 256;
-        let mut account = CreditDebitAccount::new(sample as u64, 0, &Pubkey::default());
+        let mut account = Account::new(sample as u64, 0, &Pubkey::default());
         account.data = (0..data_len).map(|_| data_len as u8).collect();
         let storage_meta = StorageMeta {
             write_version: 0,

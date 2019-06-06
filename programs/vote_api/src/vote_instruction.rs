@@ -129,7 +129,7 @@ pub fn process_instruction(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::credit_debit_account::{CreditDebitAccount, KeyedCreditDebitAccount};
+    use solana_sdk::account::{Account, KeyedAccount};
 
     // these are for 100% coverage in this file
     #[test]
@@ -143,16 +143,14 @@ mod tests {
     fn process_instruction(instruction: &Instruction) -> Result<(), InstructionError> {
         let mut accounts = vec![];
         for _ in 0..instruction.accounts.len() {
-            accounts.push(CreditDebitAccount::default());
+            accounts.push(Account::default());
         }
         {
             let mut keyed_accounts: Vec<_> = instruction
                 .accounts
                 .iter()
                 .zip(accounts.iter_mut())
-                .map(|(meta, account)| {
-                    KeyedCreditDebitAccount::new(&meta.pubkey, meta.is_signer, account)
-                })
+                .map(|(meta, account)| KeyedAccount::new(&meta.pubkey, meta.is_signer, account))
                 .collect();
             let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
                 .iter_mut()

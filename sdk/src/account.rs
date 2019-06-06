@@ -1,10 +1,10 @@
 use crate::pubkey::Pubkey;
 use std::{cmp, fmt};
 
-/// An credit-debit account with data that is stored on chain, the default account type
+/// An Account with data that is stored on chain
 #[repr(C)]
 #[derive(Serialize, Deserialize, Clone, Default, Eq, PartialEq)]
-pub struct CreditDebitAccount {
+pub struct Account {
     /// lamports in the account
     pub lamports: u64,
     /// data held in this account
@@ -15,7 +15,7 @@ pub struct CreditDebitAccount {
     pub executable: bool,
 }
 
-impl fmt::Debug for CreditDebitAccount {
+impl fmt::Debug for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let data_len = cmp::min(64, self.data.len());
         let data_str = if data_len > 0 {
@@ -25,7 +25,7 @@ impl fmt::Debug for CreditDebitAccount {
         };
         write!(
             f,
-            "CreditDebitAccount {{ lamports: {} data.len: {} owner: {} executable: {}{} }}",
+            "Account {{ lamports: {} data.len: {} owner: {} executable: {}{} }}",
             self.lamports,
             self.data.len(),
             self.owner,
@@ -35,10 +35,10 @@ impl fmt::Debug for CreditDebitAccount {
     }
 }
 
-impl CreditDebitAccount {
+impl Account {
     // TODO do we want to add executable and leader_owner even though they should always be false/default?
-    pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> CreditDebitAccount {
-        CreditDebitAccount {
+    pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> Account {
+        Account {
             lamports,
             data: vec![0u8; space],
             owner: *owner,
@@ -57,13 +57,13 @@ impl CreditDebitAccount {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct KeyedCreditDebitAccount<'a> {
+pub struct KeyedAccount<'a> {
     is_signer: bool, // Transaction was signed by this account's key
     key: &'a Pubkey,
-    pub account: &'a mut CreditDebitAccount,
+    pub account: &'a mut Account,
 }
 
-impl<'a> KeyedCreditDebitAccount<'a> {
+impl<'a> KeyedAccount<'a> {
     pub fn signer_key(&self) -> Option<&Pubkey> {
         if self.is_signer {
             Some(self.key)
@@ -76,12 +76,8 @@ impl<'a> KeyedCreditDebitAccount<'a> {
         self.key
     }
 
-    pub fn new(
-        key: &'a Pubkey,
-        is_signer: bool,
-        account: &'a mut CreditDebitAccount,
-    ) -> KeyedCreditDebitAccount<'a> {
-        KeyedCreditDebitAccount {
+    pub fn new(key: &'a Pubkey, is_signer: bool, account: &'a mut Account) -> KeyedAccount<'a> {
+        KeyedAccount {
             key,
             is_signer,
             account,
@@ -89,9 +85,9 @@ impl<'a> KeyedCreditDebitAccount<'a> {
     }
 }
 
-impl<'a> From<(&'a Pubkey, &'a mut CreditDebitAccount)> for KeyedCreditDebitAccount<'a> {
-    fn from((key, account): (&'a Pubkey, &'a mut CreditDebitAccount)) -> Self {
-        KeyedCreditDebitAccount {
+impl<'a> From<(&'a Pubkey, &'a mut Account)> for KeyedAccount<'a> {
+    fn from((key, account): (&'a Pubkey, &'a mut Account)) -> Self {
+        KeyedAccount {
             is_signer: false,
             key,
             account,
@@ -99,9 +95,9 @@ impl<'a> From<(&'a Pubkey, &'a mut CreditDebitAccount)> for KeyedCreditDebitAcco
     }
 }
 
-impl<'a> From<&'a mut (Pubkey, CreditDebitAccount)> for KeyedCreditDebitAccount<'a> {
-    fn from((key, account): &'a mut (Pubkey, CreditDebitAccount)) -> Self {
-        KeyedCreditDebitAccount {
+impl<'a> From<&'a mut (Pubkey, Account)> for KeyedAccount<'a> {
+    fn from((key, account): &'a mut (Pubkey, Account)) -> Self {
+        KeyedAccount {
             is_signer: false,
             key,
             account,
@@ -109,8 +105,6 @@ impl<'a> From<&'a mut (Pubkey, CreditDebitAccount)> for KeyedCreditDebitAccount<
     }
 }
 
-pub fn create_keyed_accounts(
-    accounts: &mut [(Pubkey, CreditDebitAccount)],
-) -> Vec<KeyedCreditDebitAccount> {
+pub fn create_keyed_accounts(accounts: &mut [(Pubkey, Account)]) -> Vec<KeyedAccount> {
     accounts.iter_mut().map(Into::into).collect()
 }

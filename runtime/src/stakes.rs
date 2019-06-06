@@ -1,6 +1,6 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
-use solana_sdk::credit_debit_account::CreditDebitAccount;
+use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_stake_api::stake_state::StakeState;
 use std::collections::HashMap;
@@ -8,10 +8,10 @@ use std::collections::HashMap;
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct Stakes {
     /// vote accounts
-    vote_accounts: HashMap<Pubkey, (u64, CreditDebitAccount)>,
+    vote_accounts: HashMap<Pubkey, (u64, Account)>,
 
     /// stake_accounts
-    stake_accounts: HashMap<Pubkey, CreditDebitAccount>,
+    stake_accounts: HashMap<Pubkey, Account>,
 }
 
 impl Stakes {
@@ -26,11 +26,11 @@ impl Stakes {
             .sum()
     }
 
-    pub fn is_stake(account: &CreditDebitAccount) -> bool {
+    pub fn is_stake(account: &Account) -> bool {
         solana_vote_api::check_id(&account.owner) || solana_stake_api::check_id(&account.owner)
     }
 
-    pub fn store(&mut self, pubkey: &Pubkey, account: &CreditDebitAccount) {
+    pub fn store(&mut self, pubkey: &Pubkey, account: &Account) {
         if solana_vote_api::check_id(&account.owner) {
             if account.lamports == 0 {
                 self.vote_accounts.remove(pubkey);
@@ -74,7 +74,7 @@ impl Stakes {
             }
         }
     }
-    pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, CreditDebitAccount)> {
+    pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, Account)> {
         &self.vote_accounts
     }
 }
@@ -86,10 +86,8 @@ mod tests {
     use solana_stake_api::stake_state;
     use solana_vote_api::vote_state::{self, VoteState};
 
-    //  set up some dummies  for a staked node    ((           vote           )  (           stake          ))
-    fn create_staked_node_accounts(
-        stake: u64,
-    ) -> ((Pubkey, CreditDebitAccount), (Pubkey, CreditDebitAccount)) {
+    //  set up some dummies  for a staked node    ((     vote      )  (     stake     ))
+    fn create_staked_node_accounts(stake: u64) -> ((Pubkey, Account), (Pubkey, Account)) {
         let vote_pubkey = Pubkey::new_rand();
         let vote_account = vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 1);
         (
@@ -99,7 +97,7 @@ mod tests {
     }
 
     //   add stake to a vote_pubkey                               (   stake    )
-    fn create_stake_account(stake: u64, vote_pubkey: &Pubkey) -> (Pubkey, CreditDebitAccount) {
+    fn create_stake_account(stake: u64, vote_pubkey: &Pubkey) -> (Pubkey, Account) {
         (
             Pubkey::new_rand(),
             stake_state::create_delegate_stake_account(&vote_pubkey, &VoteState::default(), stake),
@@ -246,10 +244,7 @@ mod tests {
         }
 
         // not a stake account, and whacks above entry
-        stakes.store(
-            &stake_pubkey,
-            &CreditDebitAccount::new(1, 0, &solana_stake_api::id()),
-        );
+        stakes.store(&stake_pubkey, &Account::new(1, 0, &solana_stake_api::id()));
         {
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());

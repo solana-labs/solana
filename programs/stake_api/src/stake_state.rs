@@ -6,9 +6,9 @@
 use crate::id;
 use bincode::{deserialize, serialize_into, ErrorKind};
 use serde_derive::{Deserialize, Serialize};
+use solana_sdk::account::Account;
 use solana_sdk::account_api::AccountApi;
 use solana_sdk::account_utils::State;
-use solana_sdk::credit_debit_account::CreditDebitAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::VoteState;
@@ -43,7 +43,7 @@ const STAKE_GETS_PAID_EVERY_VOTE: u64 = 200_000_000; // if numbers above (TICKS_
 
 impl StakeState {
     // utility function, used by Stakes, tests
-    pub fn from(account: &CreditDebitAccount) -> Option<StakeState> {
+    pub fn from(account: &Account) -> Option<StakeState> {
         account.state().ok()
     }
 
@@ -59,7 +59,7 @@ impl StakeState {
     }
 
     // utility function, used by Stakes, tests
-    pub fn voter_pubkey_from(account: &CreditDebitAccount) -> Option<Pubkey> {
+    pub fn voter_pubkey_from(account: &Account) -> Option<Pubkey> {
         Self::from(account).and_then(|state: Self| state.voter_pubkey())
     }
 
@@ -205,9 +205,8 @@ pub fn create_delegate_stake_account(
     voter_pubkey: &Pubkey,
     vote_state: &VoteState,
     lamports: u64,
-) -> CreditDebitAccount {
-    let mut stake_account =
-        CreditDebitAccount::new(lamports, std::mem::size_of::<StakeState>(), &id());
+) -> Account {
+    let mut stake_account = Account::new(lamports, std::mem::size_of::<StakeState>(), &id());
 
     stake_account
         .set_state(&StakeState::Delegate {
@@ -223,7 +222,7 @@ pub fn create_delegate_stake_account(
 mod tests {
     use super::*;
     use crate::id;
-    use solana_sdk::credit_debit_account::KeyedCreditDebitAccount;
+    use solana_sdk::account::{Account, KeyedAccount};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_vote_api::vote_state;
@@ -239,18 +238,15 @@ mod tests {
         let vote_pubkey = vote_keypair.pubkey();
         let mut vote_account =
             vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
-        let mut vote_keyed_account =
-            KeyedCreditDebitAccount::new(&vote_pubkey, false, &mut vote_account);
+        let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_state
             .serialize(&mut vote_keyed_account.account_writer().unwrap())
             .unwrap();
 
         let stake_pubkey = Pubkey::default();
-        let mut stake_account =
-            CreditDebitAccount::new(0, std::mem::size_of::<StakeState>(), &id());
+        let mut stake_account = Account::new(0, std::mem::size_of::<StakeState>(), &id());
 
-        let mut stake_keyed_account =
-            KeyedCreditDebitAccount::new(&stake_pubkey, false, &mut stake_account);
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, false, &mut stake_account);
 
         {
             let stake_state: StakeState = stake_keyed_account.state().unwrap();
@@ -263,8 +259,7 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature)
         );
 
-        let mut stake_keyed_account =
-            KeyedCreditDebitAccount::new(&stake_pubkey, true, &mut stake_account);
+        let mut stake_keyed_account = KeyedAccount::new(&stake_pubkey, true, &mut stake_account);
         assert!(delegate_stake(&mut stake_keyed_account, &mut vote_keyed_account).is_ok());
 
         // verify that create_delegate_stake_account() matches the
@@ -346,29 +341,26 @@ mod tests {
         let vote_pubkey = vote_keypair.pubkey();
         let mut vote_account =
             vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
-        let mut vote_keyed_account =
-            KeyedCreditDebitAccount::new(&vote_pubkey, false, &mut vote_account);
+        let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_state
             .serialize(&mut vote_keyed_account.account_writer().unwrap())
             .unwrap();
 
         let pubkey = Pubkey::default();
-        let mut stake_account = CreditDebitAccount::new(
+        let mut stake_account = Account::new(
             STAKE_GETS_PAID_EVERY_VOTE,
             std::mem::size_of::<StakeState>(),
             &id(),
         );
-        let mut stake_keyed_account =
-            KeyedCreditDebitAccount::new(&pubkey, true, &mut stake_account);
+        let mut stake_keyed_account = KeyedAccount::new(&pubkey, true, &mut stake_account);
         initialize_delegate(&mut stake_keyed_account).unwrap();
 
         // delegate the stake
         assert!(delegate_stake(&mut stake_keyed_account, &mut vote_keyed_account).is_ok());
 
-        let mut mining_pool_account =
-            CreditDebitAccount::new(0, std::mem::size_of::<StakeState>(), &id());
+        let mut mining_pool_account = Account::new(0, std::mem::size_of::<StakeState>(), &id());
         let mut mining_pool_keyed_account =
-            KeyedCreditDebitAccount::new(&pubkey, true, &mut mining_pool_account);
+            KeyedAccount::new(&pubkey, true, &mut mining_pool_account);
 
         // not a mining pool yet...
         assert_eq!(
@@ -435,26 +427,22 @@ mod tests {
         let vote_pubkey = vote_keypair.pubkey();
         let mut vote_account =
             vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
-        let mut vote_keyed_account =
-            KeyedCreditDebitAccount::new(&vote_pubkey, false, &mut vote_account);
+        let mut vote_keyed_account = KeyedAccount::new(&vote_pubkey, false, &mut vote_account);
         vote_state
             .serialize(&mut vote_keyed_account.account_writer().unwrap())
             .unwrap();
 
         let pubkey = Pubkey::default();
-        let mut stake_account =
-            CreditDebitAccount::new(0, std::mem::size_of::<StakeState>(), &id());
-        let mut stake_keyed_account =
-            KeyedCreditDebitAccount::new(&pubkey, true, &mut stake_account);
+        let mut stake_account = Account::new(0, std::mem::size_of::<StakeState>(), &id());
+        let mut stake_keyed_account = KeyedAccount::new(&pubkey, true, &mut stake_account);
         initialize_delegate(&mut stake_keyed_account).unwrap();
 
         // delegate the stake
         assert!(delegate_stake(&mut stake_keyed_account, &mut vote_keyed_account).is_ok());
 
-        let mut mining_pool_account =
-            CreditDebitAccount::new(0, std::mem::size_of::<StakeState>(), &id());
+        let mut mining_pool_account = Account::new(0, std::mem::size_of::<StakeState>(), &id());
         let mut mining_pool_keyed_account =
-            KeyedCreditDebitAccount::new(&pubkey, true, &mut mining_pool_account);
+            KeyedAccount::new(&pubkey, true, &mut mining_pool_account);
 
         StakeState::MiningPool
             .serialize(&mut mining_pool_keyed_account.account_writer().unwrap())
@@ -482,8 +470,7 @@ mod tests {
         let vote1_pubkey = vote1_keypair.pubkey();
         let mut vote1_account =
             vote_state::create_account(&vote1_pubkey, &Pubkey::new_rand(), 0, 100);
-        let mut vote1_keyed_account =
-            KeyedCreditDebitAccount::new(&vote1_pubkey, false, &mut vote1_account);
+        let mut vote1_keyed_account = KeyedAccount::new(&vote1_pubkey, false, &mut vote1_account);
         vote_state
             .serialize(&mut vote1_keyed_account.account_writer().unwrap())
             .unwrap();

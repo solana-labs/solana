@@ -1,5 +1,5 @@
 //! useful extras for Account state
-use crate::credit_debit_account::{CreditDebitAccount, KeyedCreditDebitAccount};
+use crate::account::{Account, KeyedAccount};
 use crate::instruction::InstructionError;
 use bincode::ErrorKind;
 
@@ -9,7 +9,7 @@ pub trait State<T> {
     fn set_state(&mut self, state: &T) -> Result<(), InstructionError>;
 }
 
-impl<T> State<T> for CreditDebitAccount
+impl<T> State<T> for Account
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -25,7 +25,7 @@ where
     }
 }
 
-impl<'a, T> State<T> for KeyedCreditDebitAccount<'a>
+impl<'a, T> State<T> for KeyedAccount<'a>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -40,19 +40,18 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::credit_debit_account::CreditDebitAccount;
+    use crate::account::Account;
     use crate::pubkey::Pubkey;
 
     #[test]
     fn test_account_state() {
         let state = 42u64;
 
-        assert!(CreditDebitAccount::default().set_state(&state).is_err());
-        let res = CreditDebitAccount::default().state() as Result<u64, InstructionError>;
+        assert!(Account::default().set_state(&state).is_err());
+        let res = Account::default().state() as Result<u64, InstructionError>;
         assert!(res.is_err());
 
-        let mut account =
-            CreditDebitAccount::new(0, std::mem::size_of::<u64>(), &Pubkey::default());
+        let mut account = Account::new(0, std::mem::size_of::<u64>(), &Pubkey::default());
 
         assert!(account.set_state(&state).is_ok());
         let stored_state: u64 = account.state().unwrap();
@@ -64,9 +63,8 @@ mod tests {
         let state = 42u64;
         let key0 = Pubkey::new_rand();
 
-        let mut account =
-            CreditDebitAccount::new(0, std::mem::size_of::<u64>(), &Pubkey::default());
-        let mut keyed_account = KeyedCreditDebitAccount::new(&key0, false, &mut account);
+        let mut account = Account::new(0, std::mem::size_of::<u64>(), &Pubkey::default());
+        let mut keyed_account = KeyedAccount::new(&key0, false, &mut account);
 
         assert!(keyed_account.set_state(&state).is_ok());
         let stored_state: u64 = keyed_account.state().unwrap();

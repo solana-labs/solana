@@ -7,7 +7,7 @@ use jsonrpc_pubsub::typed::Sink;
 use jsonrpc_pubsub::SubscriptionId;
 use serde::Serialize;
 use solana_runtime::bank::Bank;
-use solana_sdk::credit_debit_account::CreditDebitAccount;
+use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction;
@@ -18,10 +18,9 @@ use std::sync::{Arc, RwLock};
 pub type Confirmations = usize;
 
 type RpcAccountSubscriptions =
-    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<CreditDebitAccount>, Confirmations)>>>;
-type RpcProgramSubscriptions = RwLock<
-    HashMap<Pubkey, HashMap<SubscriptionId, (Sink<(String, CreditDebitAccount)>, Confirmations)>>,
->;
+    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<Account>, Confirmations)>>>;
+type RpcProgramSubscriptions =
+    RwLock<HashMap<Pubkey, HashMap<SubscriptionId, (Sink<(String, Account)>, Confirmations)>>>;
 type RpcSignatureSubscriptions = RwLock<
     HashMap<Signature, HashMap<SubscriptionId, (Sink<transaction::Result<()>>, Confirmations)>>,
 >;
@@ -142,11 +141,7 @@ where
     }
 }
 
-fn notify_program(
-    accounts: Vec<(Pubkey, CreditDebitAccount)>,
-    sink: &Sink<(String, CreditDebitAccount)>,
-    _root: u64,
-) {
+fn notify_program(accounts: Vec<(Pubkey, Account)>, sink: &Sink<(String, Account)>, _root: u64) {
     for (pubkey, account) in accounts.iter() {
         sink.notify(Ok((pubkey.to_string(), account.clone())))
             .wait()
@@ -228,7 +223,7 @@ impl RpcSubscriptions {
         pubkey: &Pubkey,
         confirmations: Option<Confirmations>,
         sub_id: &SubscriptionId,
-        sink: &Sink<CreditDebitAccount>,
+        sink: &Sink<Account>,
     ) {
         let mut subscriptions = self.account_subscriptions.write().unwrap();
         add_subscription(&mut subscriptions, pubkey, confirmations, sub_id, sink);
@@ -244,7 +239,7 @@ impl RpcSubscriptions {
         program_id: &Pubkey,
         confirmations: Option<Confirmations>,
         sub_id: &SubscriptionId,
-        sink: &Sink<(String, CreditDebitAccount)>,
+        sink: &Sink<(String, Account)>,
     ) {
         let mut subscriptions = self.program_subscriptions.write().unwrap();
         add_subscription(&mut subscriptions, program_id, confirmations, sub_id, sink);

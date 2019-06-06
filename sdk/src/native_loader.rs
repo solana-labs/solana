@@ -1,4 +1,4 @@
-use crate::credit_debit_account::CreditDebitAccount;
+use crate::account::Account;
 use crate::pubkey::Pubkey;
 
 const NATIVE_LOADER_PROGRAM_ID: [u8; 32] = [
@@ -15,8 +15,8 @@ pub fn check_id(program_id: &Pubkey) -> bool {
 }
 
 /// Create an executable account with the given shared object name.
-pub fn create_loadable_account(name: &str) -> CreditDebitAccount {
-    CreditDebitAccount {
+pub fn create_loadable_account(name: &str) -> Account {
+    Account {
         lamports: 1,
         owner: id(),
         data: name.as_bytes().to_vec(),

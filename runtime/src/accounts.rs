@@ -9,7 +9,7 @@ use bincode::serialize;
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_metrics::inc_new_counter_error;
-use solana_sdk::credit_debit_account::CreditDebitAccount;
+use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::native_loader;
@@ -170,7 +170,7 @@ impl Accounts {
         tx: &Transaction,
         fee: u64,
         error_counters: &mut ErrorCounters,
-    ) -> Result<Vec<CreditDebitAccount>> {
+    ) -> Result<Vec<Account>> {
         // Copy all the accounts
         let message = tx.message();
         if tx.signatures.is_empty() && fee != 0 {
@@ -184,7 +184,7 @@ impl Accounts {
 
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
-            let mut called_accounts: Vec<CreditDebitAccount> = vec![];
+            let mut called_accounts: Vec<Account> = vec![];
             for key in &message.account_keys {
                 if !message.program_ids().contains(&key) {
                     called_accounts.push(
@@ -216,7 +216,7 @@ impl Accounts {
         accounts_index: &AccountsIndex<AccountInfo>,
         program_id: &Pubkey,
         error_counters: &mut ErrorCounters,
-    ) -> Result<Vec<(Pubkey, CreditDebitAccount)>> {
+    ) -> Result<Vec<(Pubkey, Account)>> {
         let mut accounts = Vec::new();
         let mut depth = 0;
         let mut program_id = *program_id;
@@ -260,7 +260,7 @@ impl Accounts {
         accounts_index: &AccountsIndex<AccountInfo>,
         tx: &Transaction,
         error_counters: &mut ErrorCounters,
-    ) -> Result<Vec<Vec<(Pubkey, CreditDebitAccount)>>> {
+    ) -> Result<Vec<Vec<(Pubkey, Account)>>> {
         let message = tx.message();
         message
             .instructions
@@ -326,34 +326,29 @@ impl Accounts {
         &self,
         ancestors: &HashMap<Fork, usize>,
         pubkey: &Pubkey,
-    ) -> Option<(CreditDebitAccount, Fork)> {
+    ) -> Option<(Account, Fork)> {
         self.accounts_db
             .load_slow(ancestors, pubkey)
             .filter(|(acc, _)| acc.lamports != 0)
     }
 
-    pub fn load_by_program(
-        &self,
-        fork: Fork,
-        program_id: &Pubkey,
-    ) -> Vec<(Pubkey, CreditDebitAccount)> {
-        let accumulator: Vec<Vec<(Pubkey, u64, CreditDebitAccount)>> =
-            self.accounts_db.scan_account_storage(
-                fork,
-                |stored_account: &StoredAccount,
-                 _id: AppendVecId,
-                 accum: &mut Vec<(Pubkey, u64, CreditDebitAccount)>| {
-                    if stored_account.balance.owner == *program_id {
-                        let val = (
-                            stored_account.meta.pubkey,
-                            stored_account.meta.write_version,
-                            stored_account.clone_account(),
-                        );
-                        accum.push(val)
-                    }
-                },
-            );
-        let mut versions: Vec<(Pubkey, u64, CreditDebitAccount)> =
+    pub fn load_by_program(&self, fork: Fork, program_id: &Pubkey) -> Vec<(Pubkey, Account)> {
+        let accumulator: Vec<Vec<(Pubkey, u64, Account)>> = self.accounts_db.scan_account_storage(
+            fork,
+            |stored_account: &StoredAccount,
+             _id: AppendVecId,
+             accum: &mut Vec<(Pubkey, u64, Account)>| {
+                if stored_account.balance.owner == *program_id {
+                    let val = (
+                        stored_account.meta.pubkey,
+                        stored_account.meta.write_version,
+                        stored_account.clone_account(),
+                    );
+                    accum.push(val)
+                }
+            },
+        );
+        let mut versions: Vec<(Pubkey, u64, Account)> =
             accumulator.into_iter().flat_map(|x| x).collect();
         versions.sort_by_key(|s| (s.0, (s.1 as i64).neg()));
         versions.dedup_by_key(|s| s.0);
@@ -361,7 +356,7 @@ impl Accounts {
     }
 
     /// Slow because lock is held for 1 operation instead of many
-    pub fn store_slow(&self, fork: Fork, pubkey: &Pubkey, account: &CreditDebitAccount) {
+    pub fn store_slow(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
         self.accounts_db.store(fork, &[(pubkey, account)]);
     }
 
@@ -560,7 +555,7 @@ impl Accounts {
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
     ) {
-        let mut accounts: Vec<(&Pubkey, &CreditDebitAccount)> = vec![];
+        let mut accounts: Vec<(&Pubkey, &Account)> = vec![];
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {
                 continue;
@@ -593,6 +588,7 @@ mod tests {
     use super::*;
     use bincode::{deserialize_from, serialize_into, serialized_size};
     use rand::{thread_rng, Rng};
+    use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::CompiledInstruction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -604,7 +600,7 @@ mod tests {
 
     fn load_accounts_with_fee(
         tx: Transaction,
-        ka: &Vec<(Pubkey, CreditDebitAccount)>,
+        ka: &Vec<(Pubkey, Account)>,
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
@@ -626,7 +622,7 @@ mod tests {
 
     fn load_accounts(
         tx: Transaction,
-        ka: &Vec<(Pubkey, CreditDebitAccount)>,
+        ka: &Vec<(Pubkey, Account)>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         let fee_calculator = FeeCalculator::default();
@@ -635,7 +631,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_no_key() {
-        let accounts: Vec<(Pubkey, CreditDebitAccount)> = Vec::new();
+        let accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let instructions = vec![CompiledInstruction::new(0, &(), vec![0])];
@@ -656,7 +652,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_no_account_0_exists() {
-        let accounts: Vec<(Pubkey, CreditDebitAccount)> = Vec::new();
+        let accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -679,17 +675,17 @@ mod tests {
 
     #[test]
     fn test_load_accounts_unknown_program_id() {
-        let mut accounts: Vec<(Pubkey, CreditDebitAccount)> = Vec::new();
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let account = CreditDebitAccount::new(1, 1, &Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let account = CreditDebitAccount::new(2, 1, &Pubkey::default());
+        let account = Account::new(2, 1, &Pubkey::default());
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -713,13 +709,13 @@ mod tests {
 
     #[test]
     fn test_load_accounts_insufficient_funds() {
-        let mut accounts: Vec<(Pubkey, CreditDebitAccount)> = Vec::new();
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
 
-        let account = CreditDebitAccount::new(1, 1, &Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -747,13 +743,13 @@ mod tests {
 
     #[test]
     fn test_load_accounts_invalid_account_for_fee() {
-        let mut accounts: Vec<(Pubkey, CreditDebitAccount)> = Vec::new();
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
 
-        let account = CreditDebitAccount::new(1, 1, &Pubkey::new_rand()); // <-- owner is not the system program
+        let account = Account::new(1, 1, &Pubkey::new_rand()); // <-- owner is not the system program
         accounts.push((key0, account));
 
         let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
@@ -777,17 +773,17 @@ mod tests {
 
     #[test]
     fn test_load_accounts_no_loaders() {
-        let mut accounts: Vec<(Pubkey, CreditDebitAccount)> = Vec::new();
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let account = CreditDebitAccount::new(1, 1, &Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let account = CreditDebitAccount::new(2, 1, &Pubkey::default());
+        let account = Account::new(2, 1, &Pubkey::default());
         accounts.push((key1, account));
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
@@ -816,7 +812,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_max_call_depth() {
-        let mut accounts: Vec<(Pubkey, CreditDebitAccount)> = Vec::new();
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -828,35 +824,35 @@ mod tests {
         let key5 = Pubkey::new(&[9u8; 32]);
         let key6 = Pubkey::new(&[10u8; 32]);
 
-        let account = CreditDebitAccount::new(1, 1, &Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let mut account = CreditDebitAccount::new(40, 1, &Pubkey::default());
+        let mut account = Account::new(40, 1, &Pubkey::default());
         account.executable = true;
         account.owner = native_loader::id();
         accounts.push((key1, account));
 
-        let mut account = CreditDebitAccount::new(41, 1, &Pubkey::default());
+        let mut account = Account::new(41, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key1;
         accounts.push((key2, account));
 
-        let mut account = CreditDebitAccount::new(42, 1, &Pubkey::default());
+        let mut account = Account::new(42, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key2;
         accounts.push((key3, account));
 
-        let mut account = CreditDebitAccount::new(43, 1, &Pubkey::default());
+        let mut account = Account::new(43, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key3;
         accounts.push((key4, account));
 
-        let mut account = CreditDebitAccount::new(44, 1, &Pubkey::default());
+        let mut account = Account::new(44, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key4;
         accounts.push((key5, account));
 
-        let mut account = CreditDebitAccount::new(45, 1, &Pubkey::default());
+        let mut account = Account::new(45, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key5;
         accounts.push((key6, account));
@@ -879,17 +875,17 @@ mod tests {
 
     #[test]
     fn test_load_accounts_bad_program_id() {
-        let mut accounts: Vec<(Pubkey, CreditDebitAccount)> = Vec::new();
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let account = CreditDebitAccount::new(1, 1, &Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let mut account = CreditDebitAccount::new(40, 1, &Pubkey::default());
+        let mut account = Account::new(40, 1, &Pubkey::default());
         account.executable = true;
         account.owner = Pubkey::default();
         accounts.push((key1, account));
@@ -912,17 +908,17 @@ mod tests {
 
     #[test]
     fn test_load_accounts_not_executable() {
-        let mut accounts: Vec<(Pubkey, CreditDebitAccount)> = Vec::new();
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
         let key1 = Pubkey::new(&[5u8; 32]);
 
-        let account = CreditDebitAccount::new(1, 1, &Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let mut account = CreditDebitAccount::new(40, 1, &Pubkey::default());
+        let mut account = Account::new(40, 1, &Pubkey::default());
         account.owner = native_loader::id();
         accounts.push((key1, account));
 
@@ -944,7 +940,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_multiple_loaders() {
-        let mut accounts: Vec<(Pubkey, CreditDebitAccount)> = Vec::new();
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
@@ -953,20 +949,20 @@ mod tests {
         let key2 = Pubkey::new(&[6u8; 32]);
         let key3 = Pubkey::new(&[7u8; 32]);
 
-        let account = CreditDebitAccount::new(1, 1, &Pubkey::default());
+        let account = Account::new(1, 1, &Pubkey::default());
         accounts.push((key0, account));
 
-        let mut account = CreditDebitAccount::new(40, 1, &Pubkey::default());
+        let mut account = Account::new(40, 1, &Pubkey::default());
         account.executable = true;
         account.owner = native_loader::id();
         accounts.push((key1, account));
 
-        let mut account = CreditDebitAccount::new(41, 1, &Pubkey::default());
+        let mut account = Account::new(41, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key1;
         accounts.push((key2, account));
 
-        let mut account = CreditDebitAccount::new(42, 1, &Pubkey::default());
+        let mut account = Account::new(42, 1, &Pubkey::default());
         account.executable = true;
         account.owner = key2;
         accounts.push((key3, account));
@@ -1007,13 +1003,13 @@ mod tests {
 
     #[test]
     fn test_load_account_pay_to_self() {
-        let mut accounts: Vec<(Pubkey, CreditDebitAccount)> = Vec::new();
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey();
 
-        let account = CreditDebitAccount::new(10, 1, &Pubkey::default());
+        let account = Account::new(10, 1, &Pubkey::default());
         accounts.push((pubkey, account));
 
         let instructions = vec![CompiledInstruction::new(0, &(), vec![0, 1])];
@@ -1042,13 +1038,13 @@ mod tests {
 
         // Load accounts owned by various programs into AccountsDB
         let pubkey0 = Pubkey::new_rand();
-        let account0 = CreditDebitAccount::new(1, 0, &Pubkey::new(&[2; 32]));
+        let account0 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts.store_slow(0, &pubkey0, &account0);
         let pubkey1 = Pubkey::new_rand();
-        let account1 = CreditDebitAccount::new(1, 0, &Pubkey::new(&[2; 32]));
+        let account1 = Account::new(1, 0, &Pubkey::new(&[2; 32]));
         accounts.store_slow(0, &pubkey1, &account1);
         let pubkey2 = Pubkey::new_rand();
-        let account2 = CreditDebitAccount::new(1, 0, &Pubkey::new(&[3; 32]));
+        let account2 = Account::new(1, 0, &Pubkey::new(&[3; 32]));
         accounts.store_slow(0, &pubkey2, &account2);
 
         let loaded = accounts.load_by_program(0, &Pubkey::new(&[2; 32]));
@@ -1084,11 +1080,7 @@ mod tests {
     fn test_accounts_empty_hash_internal_state() {
         let accounts = Accounts::new(None);
         assert_eq!(accounts.hash_internal_state(0), None);
-        accounts.store_slow(
-            0,
-            &Pubkey::default(),
-            &CreditDebitAccount::new(1, 0, &syscall::id()),
-        );
+        accounts.store_slow(0, &Pubkey::default(), &Account::new(1, 0, &syscall::id()));
         assert_eq!(accounts.hash_internal_state(0), None);
     }
 
@@ -1174,8 +1166,7 @@ mod tests {
     fn create_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize) {
         for t in 0..num {
             let pubkey = Pubkey::new_rand();
-            let account =
-                CreditDebitAccount::new((t + 1) as u64, 0, &CreditDebitAccount::default().owner);
+            let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
             accounts.store_slow(0, &pubkey, &account);
             pubkeys.push(pubkey.clone());
         }
@@ -1186,8 +1177,7 @@ mod tests {
             let idx = thread_rng().gen_range(0, num - 1);
             let ancestors = vec![(0, 0)].into_iter().collect();
             let account = accounts.load_slow(&ancestors, &pubkeys[idx]).unwrap();
-            let account1 =
-                CreditDebitAccount::new((idx + 1) as u64, 0, &CreditDebitAccount::default().owner);
+            let account1 = Account::new((idx + 1) as u64, 0, &Account::default().owner);
             assert_eq!(account, (account1, 0));
         }
     }

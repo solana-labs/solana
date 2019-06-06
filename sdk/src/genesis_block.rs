@@ -1,6 +1,6 @@
 //! The `genesis_block` module is a library for generating the chain's genesis block.
 
-use crate::credit_debit_account::CreditDebitAccount;
+use crate::account::Account;
 use crate::fee_calculator::FeeCalculator;
 use crate::hash::{hash, Hash};
 use crate::poh_config::PohConfig;
@@ -14,7 +14,7 @@ use std::path::Path;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GenesisBlock {
-    pub accounts: Vec<(Pubkey, CreditDebitAccount)>,
+    pub accounts: Vec<(Pubkey, Account)>,
     pub bootstrap_leader_pubkey: Pubkey,
     pub epoch_warmup: bool,
     pub fee_calculator: FeeCalculator,
@@ -33,7 +33,7 @@ pub fn create_genesis_block(lamports: u64) -> (GenesisBlock, Keypair) {
             &Pubkey::default(),
             &[(
                 mint_keypair.pubkey(),
-                CreditDebitAccount::new(lamports, 0, &system_program::id()),
+                Account::new(lamports, 0, &system_program::id()),
             )],
             &[],
         ),
@@ -44,7 +44,7 @@ pub fn create_genesis_block(lamports: u64) -> (GenesisBlock, Keypair) {
 impl GenesisBlock {
     pub fn new(
         bootstrap_leader_pubkey: &Pubkey,
-        accounts: &[(Pubkey, CreditDebitAccount)],
+        accounts: &[(Pubkey, Account)],
         native_instruction_processors: &[(String, Pubkey)],
     ) -> Self {
         Self {
@@ -109,12 +109,9 @@ mod tests {
             &[
                 (
                     mint_keypair.pubkey(),
-                    CreditDebitAccount::new(10_000, 0, &Pubkey::default()),
+                    Account::new(10_000, 0, &Pubkey::default()),
                 ),
-                (
-                    Pubkey::new_rand(),
-                    CreditDebitAccount::new(1, 0, &Pubkey::default()),
-                ),
+                (Pubkey::new_rand(), Account::new(1, 0, &Pubkey::default())),
             ],
             &[("hi".to_string(), Pubkey::new_rand())],
         );

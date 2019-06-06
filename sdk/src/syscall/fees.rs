@@ -1,7 +1,7 @@
 //! This account contains the current cluster fees
 //!
+use crate::account::Account;
 use crate::account_utils::State;
-use crate::credit_debit_account::CreditDebitAccount;
 use crate::fee_calculator::FeeCalculator;
 use crate::pubkey::Pubkey;
 use crate::syscall;
@@ -29,10 +29,10 @@ pub struct Fees {
 }
 
 impl Fees {
-    pub fn from(account: &CreditDebitAccount) -> Option<Self> {
+    pub fn from(account: &Account) -> Option<Self> {
         account.state().ok()
     }
-    pub fn to(&self, account: &mut CreditDebitAccount) -> Option<()> {
+    pub fn to(&self, account: &mut Account) -> Option<()> {
         account.set_state(self).ok()
     }
 
@@ -41,8 +41,8 @@ impl Fees {
     }
 }
 
-pub fn create_account(lamports: u64) -> CreditDebitAccount {
-    CreditDebitAccount::new(lamports, Fees::size_of(), &syscall::id())
+pub fn create_account(lamports: u64) -> Account {
+    Account::new(lamports, Fees::size_of(), &syscall::id())
 }
 
 #[cfg(test)]

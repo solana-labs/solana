@@ -107,11 +107,9 @@ mod tests {
     use log::*;
     use solana_runtime::bank::Bank;
     use solana_runtime::bank_client::BankClient;
+    use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
     use solana_sdk::account_utils::State;
     use solana_sdk::client::SyncClient;
-    use solana_sdk::credit_debit_account::{
-        create_keyed_accounts, CreditDebitAccount, KeyedCreditDebitAccount,
-    };
     use solana_sdk::genesis_block::create_genesis_block;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::instruction::Instruction;
@@ -126,14 +124,14 @@ mod tests {
 
     fn test_instruction(
         ix: &Instruction,
-        program_accounts: &mut [CreditDebitAccount],
+        program_accounts: &mut [Account],
     ) -> Result<(), InstructionError> {
         let mut keyed_accounts: Vec<_> = ix
             .accounts
             .iter()
             .zip(program_accounts.iter_mut())
             .map(|(account_meta, account)| {
-                KeyedCreditDebitAccount::new(&account_meta.pubkey, account_meta.is_signer, account)
+                KeyedAccount::new(&account_meta.pubkey, account_meta.is_signer, account)
             })
             .collect();
         let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
@@ -202,12 +200,12 @@ mod tests {
     fn test_proof_bounds() {
         let account_owner = Pubkey::new_rand();
         let pubkey = Pubkey::new_rand();
-        let mut account = CreditDebitAccount {
+        let mut account = Account {
             data: vec![0; STORAGE_ACCOUNT_SPACE as usize],
-            ..CreditDebitAccount::default()
+            ..Account::default()
         };
         {
-            let mut storage_account = KeyedCreditDebitAccount::new(&pubkey, false, &mut account);
+            let mut storage_account = KeyedAccount::new(&pubkey, false, &mut account);
             storage_contract::initialize_replicator_storage(&mut storage_account, account_owner)
                 .unwrap();
         }
@@ -229,7 +227,7 @@ mod tests {
     #[test]
     fn test_storage_tx() {
         let pubkey = Pubkey::new_rand();
-        let mut accounts = [(pubkey, CreditDebitAccount::default())];
+        let mut accounts = [(pubkey, Account::default())];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
         let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
             .iter_mut()
@@ -243,18 +241,10 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let tick_pubkey = Pubkey::new_rand();
         let mut keyed_accounts = Vec::new();
-        let mut user_account = CreditDebitAccount::default();
+        let mut user_account = Account::default();
         let mut tick_account = tick_height::create_account(1);
-        keyed_accounts.push(KeyedCreditDebitAccount::new(
-            &pubkey,
-            true,
-            &mut user_account,
-        ));
-        keyed_accounts.push(KeyedCreditDebitAccount::new(
-            &tick_pubkey,
-            false,
-            &mut tick_account,
-        ));
+        keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
+        keyed_accounts.push(KeyedAccount::new(&tick_pubkey, false, &mut tick_account));
         let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
             .iter_mut()
             .map(|account| account as &mut AccountApi)
@@ -275,7 +265,7 @@ mod tests {
     #[test]
     fn test_invalid_accounts_len() {
         let pubkey = Pubkey::new_rand();
-        let mut accounts = [CreditDebitAccount::default()];
+        let mut accounts = [Account::default()];
 
         let ix =
             storage_instruction::mining_proof(&pubkey, Hash::default(), 0, Signature::default());
@@ -286,11 +276,7 @@ mod tests {
 
         assert!(test_instruction(&ix, &mut accounts).is_err());
 
-        let mut accounts = [
-            CreditDebitAccount::default(),
-            tick_account,
-            CreditDebitAccount::default(),
-        ];
+        let mut accounts = [Account::default(), tick_account, Account::default()];
 
         assert!(test_instruction(&ix, &mut accounts).is_err());
     }
@@ -299,7 +285,7 @@ mod tests {
     fn test_submit_mining_invalid_slot() {
         solana_logger::setup();
         let pubkey = Pubkey::new_rand();
-        let mut accounts = [CreditDebitAccount::default(), CreditDebitAccount::default()];
+        let mut accounts = [Account::default(), Account::default()];
         accounts[0].data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
         accounts[1].data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
 
@@ -315,10 +301,10 @@ mod tests {
         solana_logger::setup();
         let account_owner = Pubkey::new_rand();
         let pubkey = Pubkey::new_rand();
-        let mut account = CreditDebitAccount::default();
+        let mut account = Account::default();
         account.data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
         {
-            let mut storage_account = KeyedCreditDebitAccount::new(&pubkey, false, &mut account);
+            let mut storage_account = KeyedAccount::new(&pubkey, false, &mut account);
             storage_contract::initialize_replicator_storage(&mut storage_account, account_owner)
                 .unwrap();
         }

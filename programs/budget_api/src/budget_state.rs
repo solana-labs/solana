@@ -57,11 +57,11 @@ impl BudgetState {
 mod test {
     use super::*;
     use crate::id;
-    use solana_sdk::credit_debit_account::CreditDebitAccount;
+    use solana_sdk::account::Account;
 
     #[test]
     fn test_serializer() {
-        let mut a = CreditDebitAccount::new(0, 512, &id());
+        let mut a = Account::new(0, 512, &id());
         let b = BudgetState::default();
         b.serialize(&mut a.data).unwrap();
         let c = BudgetState::deserialize(&a.data).unwrap();
@@ -70,7 +70,7 @@ mod test {
 
     #[test]
     fn test_serializer_data_too_small() {
-        let mut a = CreditDebitAccount::new(0, 1, &id());
+        let mut a = Account::new(0, 1, &id());
         let b = BudgetState::default();
         assert_eq!(
             b.serialize(&mut a.data),

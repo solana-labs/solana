@@ -4,9 +4,9 @@ use crate::id;
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
+use solana_sdk::account::{Account, KeyedAccount};
 use solana_sdk::account_api::AccountApi;
 use solana_sdk::account_utils::State;
-use solana_sdk::credit_debit_account::{CreditDebitAccount, KeyedCreditDebitAccount};
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
@@ -97,7 +97,7 @@ impl VoteState {
     }
 
     // utility function, used by Stakes, tests
-    pub fn from(account: &CreditDebitAccount) -> Option<VoteState> {
+    pub fn from(account: &Account) -> Option<VoteState> {
         account.state().ok()
     }
 
@@ -307,11 +307,11 @@ pub fn create_account(
     node_pubkey: &Pubkey,
     commission: u32,
     lamports: u64,
-) -> CreditDebitAccount {
-    let mut vote_account = CreditDebitAccount::new(lamports, VoteState::size_of(), &id());
+) -> Account {
+    let mut vote_account = Account::new(lamports, VoteState::size_of(), &id());
 
     initialize_account(
-        &mut KeyedCreditDebitAccount::new(vote_pubkey, false, &mut vote_account),
+        &mut KeyedAccount::new(vote_pubkey, false, &mut vote_account),
         node_pubkey,
         commission,
     )
@@ -325,7 +325,7 @@ pub fn create_bootstrap_leader_account(
     node_pubkey: &Pubkey,
     commission: u32,
     vote_lamports: u64,
-) -> (CreditDebitAccount, VoteState) {
+) -> (Account, VoteState) {
     // Construct a vote account for the bootstrap_leader such that the leader_scheduler
     // will be forced to select it as the leader for height 0
     let mut vote_account = create_account(&vote_pubkey, &node_pubkey, commission, vote_lamports);
@@ -343,6 +343,7 @@ mod tests {
     use super::*;
     use crate::vote_state;
     use bincode::serialized_size;
+    use solana_sdk::account::Account;
     use solana_sdk::account_utils::State;
     use solana_sdk::hash::hash;
     use solana_sdk::syscall;
@@ -353,13 +354,12 @@ mod tests {
     #[test]
     fn test_initialize_vote_account() {
         let vote_account_pubkey = Pubkey::new_rand();
-        let mut vote_account = CreditDebitAccount::new(100, VoteState::size_of(), &id());
+        let mut vote_account = Account::new(100, VoteState::size_of(), &id());
 
         let node_pubkey = Pubkey::new_rand();
 
         //init should pass
-        let mut vote_account =
-            KeyedCreditDebitAccount::new(&vote_account_pubkey, false, &mut vote_account);
+        let mut vote_account = KeyedAccount::new(&vote_account_pubkey, false, &mut vote_account);
         let res = initialize_account(&mut vote_account, &node_pubkey, 0);
         assert_eq!(res, Ok(()));
 
@@ -368,7 +368,7 @@ mod tests {
         assert_eq!(res, Err(InstructionError::AccountAlreadyInitialized));
     }
 
-    fn create_test_account() -> (Pubkey, CreditDebitAccount) {
+    fn create_test_account() -> (Pubkey, Account) {
         let vote_pubkey = Pubkey::new_rand();
         (
             vote_pubkey,
@@ -376,10 +376,8 @@ mod tests {
         )
     }
 
-    fn create_test_slot_hashes_account(
-        slot_hashes: &[(u64, Hash)],
-    ) -> (Pubkey, CreditDebitAccount) {
-        let mut slot_hashes_account = CreditDebitAccount::new(
+    fn create_test_slot_hashes_account(slot_hashes: &[(u64, Hash)]) -> (Pubkey, Account) {
+        let mut slot_hashes_account = Account::new(
             0,
             serialized_size(&slot_hashes).unwrap() as usize,
             &syscall::id(),
@@ -392,7 +390,7 @@ mod tests {
 
     fn simulate_process_vote(
         vote_pubkey: &Pubkey,
-        vote_account: &mut CreditDebitAccount,
+        vote_account: &mut Account,
         vote: &Vote,
         slot_hashes: &[(u64, Hash)],
     ) -> Result<VoteState, InstructionError> {
@@ -400,8 +398,8 @@ mod tests {
             create_test_slot_hashes_account(slot_hashes);
 
         process_votes(
-            &mut KeyedCreditDebitAccount::new(vote_pubkey, true, vote_account),
-            &mut KeyedCreditDebitAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
+            &mut KeyedAccount::new(vote_pubkey, true, vote_account),
+            &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
             &[],
             &[vote.clone()],
         )?;
@@ -411,7 +409,7 @@ mod tests {
     /// exercises all the keyed accounts stuff
     fn simulate_process_vote_unchecked(
         vote_pubkey: &Pubkey,
-        vote_account: &mut CreditDebitAccount,
+        vote_account: &mut Account,
         vote: &Vote,
     ) -> Result<VoteState, InstructionError> {
         simulate_process_vote(vote_pubkey, vote_account, vote, &[(vote.slot, vote.hash)])
@@ -491,12 +489,8 @@ mod tests {
             create_test_slot_hashes_account(&[(vote.slot, vote.hash)]);
         assert_eq!(
             process_votes(
-                &mut KeyedCreditDebitAccount::new(&vote_pubkey, true, &mut vote_account),
-                &mut KeyedCreditDebitAccount::new(
-                    &Pubkey::default(),
-                    false,
-                    &mut slot_hashes_account
-                ),
+                &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
+                &mut KeyedAccount::new(&Pubkey::default(), false, &mut slot_hashes_account),
                 &[],
                 &[vote.clone()],
             ),
@@ -515,8 +509,8 @@ mod tests {
 
         // unsigned
         let res = process_votes(
-            &mut KeyedCreditDebitAccount::new(&vote_pubkey, false, &mut vote_account),
-            &mut KeyedCreditDebitAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
+            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
+            &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
             &[],
             &vote,
         );
@@ -524,8 +518,8 @@ mod tests {
 
         // unsigned
         let res = process_votes(
-            &mut KeyedCreditDebitAccount::new(&vote_pubkey, true, &mut vote_account),
-            &mut KeyedCreditDebitAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
+            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
+            &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
             &[],
             &vote,
         );
@@ -534,25 +528,25 @@ mod tests {
         // another voter
         let authorized_voter_pubkey = Pubkey::new_rand();
         let res = authorize_voter(
-            &mut KeyedCreditDebitAccount::new(&vote_pubkey, false, &mut vote_account),
+            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
             &[],
             &authorized_voter_pubkey,
         );
         assert_eq!(res, Err(InstructionError::MissingRequiredSignature));
 
         let res = authorize_voter(
-            &mut KeyedCreditDebitAccount::new(&vote_pubkey, true, &mut vote_account),
+            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
             &[],
             &authorized_voter_pubkey,
         );
         assert_eq!(res, Ok(()));
         // verify authorized_voter_pubkey can authorize authorized_voter_pubkey ;)
         let res = authorize_voter(
-            &mut KeyedCreditDebitAccount::new(&vote_pubkey, false, &mut vote_account),
-            &[&mut KeyedCreditDebitAccount::new(
+            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
+            &[&mut KeyedAccount::new(
                 &authorized_voter_pubkey,
                 true,
-                &mut CreditDebitAccount::default(),
+                &mut Account::default(),
             )],
             &authorized_voter_pubkey,
         );
@@ -563,8 +557,8 @@ mod tests {
         let (slot_hashes_id, mut slot_hashes_account) =
             create_test_slot_hashes_account(&[(2, Hash::default())]);
         let res = process_votes(
-            &mut KeyedCreditDebitAccount::new(&vote_pubkey, true, &mut vote_account),
-            &mut KeyedCreditDebitAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
+            &mut KeyedAccount::new(&vote_pubkey, true, &mut vote_account),
+            &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
             &[],
             &vote,
         );
@@ -573,12 +567,12 @@ mod tests {
         // signed by authorized voter
         let vote = vec![Vote::new(2, Hash::default())];
         let res = process_votes(
-            &mut KeyedCreditDebitAccount::new(&vote_pubkey, false, &mut vote_account),
-            &mut KeyedCreditDebitAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
-            &[&mut KeyedCreditDebitAccount::new(
+            &mut KeyedAccount::new(&vote_pubkey, false, &mut vote_account),
+            &mut KeyedAccount::new(&slot_hashes_id, false, &mut slot_hashes_account),
+            &[&mut KeyedAccount::new(
                 &authorized_voter_pubkey,
                 true,
-                &mut CreditDebitAccount::default(),
+                &mut Account::default(),
             )],
             &vote,
         );
@@ -588,7 +582,7 @@ mod tests {
     #[test]
     fn test_vote_without_initialization() {
         let vote_pubkey = Pubkey::new_rand();
-        let mut vote_account = CreditDebitAccount::new(100, VoteState::size_of(), &id());
+        let mut vote_account = Account::new(100, VoteState::size_of(), &id());
 
         let res = simulate_process_vote_unchecked(
             &vote_pubkey,

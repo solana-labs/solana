@@ -3,7 +3,7 @@
 extern crate test;
 
 use solana_runtime::bank::*;
-use solana_sdk::credit_debit_account::CreditDebitAccount;
+use solana_sdk::account::Account;
 use solana_sdk::genesis_block::create_genesis_block;
 use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
@@ -12,8 +12,7 @@ use test::Bencher;
 fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) {
     for t in 0..num {
         let pubkey = Pubkey::new_rand();
-        let account =
-            CreditDebitAccount::new((t + 1) as u64, 0, &CreditDebitAccount::default().owner);
+        let account = Account::new((t + 1) as u64, 0, &Account::default().owner);
         pubkeys.push(pubkey.clone());
         assert!(bank.get_account(&pubkey).is_none());
         bank.deposit(&pubkey, (t + 1) as u64);

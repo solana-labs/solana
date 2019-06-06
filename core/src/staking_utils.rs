@@ -1,5 +1,5 @@
 use solana_runtime::bank::Bank;
-use solana_sdk::credit_debit_account::CreditDebitAccount;
+use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_vote_api::vote_state::VoteState;
 use std::borrow::Borrow;
@@ -52,9 +52,7 @@ pub fn staked_nodes_at_epoch(bank: &Bank, epoch_height: u64) -> Option<HashMap<P
 
 // input (vote_pubkey, (stake, vote_account)) => (stake, vote_state)
 fn to_vote_states(
-    node_staked_accounts: impl Iterator<
-        Item = (impl Borrow<Pubkey>, impl Borrow<(u64, CreditDebitAccount)>),
-    >,
+    node_staked_accounts: impl Iterator<Item = (impl Borrow<Pubkey>, impl Borrow<(u64, Account)>)>,
 ) -> impl Iterator<Item = (u64, VoteState)> {
     node_staked_accounts.filter_map(|(_, stake_account)| {
         VoteState::deserialize(&stake_account.borrow().1.data)

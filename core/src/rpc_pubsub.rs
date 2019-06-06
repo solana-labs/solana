@@ -5,7 +5,7 @@ use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::typed::Subscriber;
 use jsonrpc_pubsub::{Session, SubscriptionId};
-use solana_sdk::credit_debit_account::CreditDebitAccount;
+use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction;
@@ -25,7 +25,7 @@ pub trait RpcSolPubSub {
     fn account_subscribe(
         &self,
         _: Self::Metadata,
-        _: Subscriber<CreditDebitAccount>,
+        _: Subscriber<Account>,
         _: String,
         _: Option<Confirmations>,
     );
@@ -48,7 +48,7 @@ pub trait RpcSolPubSub {
     fn program_subscribe(
         &self,
         _: Self::Metadata,
-        _: Subscriber<(String, CreditDebitAccount)>,
+        _: Subscriber<(String, Account)>,
         _: String,
         _: Option<Confirmations>,
     );
@@ -114,7 +114,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn account_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: Subscriber<CreditDebitAccount>,
+        subscriber: Subscriber<Account>,
         pubkey_str: String,
         confirmations: Option<Confirmations>,
     ) {
@@ -152,7 +152,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn program_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: Subscriber<(String, CreditDebitAccount)>,
+        subscriber: Subscriber<(String, Account)>,
         pubkey_str: String,
         confirmations: Option<Confirmations>,
     ) {

@@ -2,9 +2,9 @@ use crate::get_segment_from_slot;
 use bincode::{deserialize, serialize_into, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
+use solana_sdk::account::Account;
 use solana_sdk::account_api::AccountApi;
 use solana_sdk::account_utils::State;
-use solana_sdk::credit_debit_account::CreditDebitAccount;
 use solana_sdk::hash::Hash;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
@@ -80,9 +80,8 @@ impl StorageContract {
 }
 
 // utility function, used by Bank, tests, genesis
-pub fn create_validator_storage_account(owner: Pubkey, lamports: u64) -> CreditDebitAccount {
-    let mut storage_account =
-        CreditDebitAccount::new(lamports, STORAGE_ACCOUNT_SPACE as usize, &crate::id());
+pub fn create_validator_storage_account(owner: Pubkey, lamports: u64) -> Account {
+    let mut storage_account = Account::new(lamports, STORAGE_ACCOUNT_SPACE as usize, &crate::id());
 
     storage_account
         .set_state(&StorageContract::ValidatorStorage {
@@ -446,15 +445,15 @@ fn process_validation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::credit_debit_account::KeyedCreditDebitAccount;
+    use solana_sdk::account::KeyedAccount;
 
     #[test]
     fn test_account_data() {
         solana_logger::setup();
-        let mut account = CreditDebitAccount::default();
+        let mut account = Account::default();
         account.data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
         let pubkey = Pubkey::new_rand();
-        let mut storage_account = KeyedCreditDebitAccount::new(&pubkey, false, &mut account);
+        let mut storage_account = KeyedAccount::new(&pubkey, false, &mut account);
         // pretend it's a validator op code
         let mut contract = storage_account.state().unwrap();
         if let StorageContract::ValidatorStorage { .. } = contract {
@@ -489,8 +488,8 @@ mod tests {
     #[test]
     fn test_process_validation() {
         let pubkey = Pubkey::new_rand();
-        let mut account = CreditDebitAccount::default();
-        let mut account = KeyedCreditDebitAccount::new(&pubkey, false, &mut account);
+        let mut account = Account::default();
+        let mut account = KeyedAccount::new(&pubkey, false, &mut account);
         let segment_index = 0_usize;
         let proof = Proof {
             signature: Signature::default(),

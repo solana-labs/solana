@@ -28,7 +28,7 @@ use rayon::ThreadPool;
 use serde::de::{MapAccess, Visitor};
 use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
-use solana_sdk::credit_debit_account::CreditDebitAccount;
+use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -73,8 +73,8 @@ pub struct AccountInfo {
 }
 /// An offset into the AccountsDB::storage vector
 pub type AppendVecId = usize;
-pub type InstructionAccounts = Vec<CreditDebitAccount>;
-pub type InstructionLoaders = Vec<Vec<(Pubkey, CreditDebitAccount)>>;
+pub type InstructionAccounts = Vec<Account>;
+pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
 #[derive(Default, Debug)]
 pub struct AccountStorage(HashMap<Fork, HashMap<usize, Arc<AccountStorageEntry>>>);
@@ -368,7 +368,7 @@ impl AccountsDB {
         ancestors: &HashMap<Fork, usize>,
         accounts_index: &AccountsIndex<AccountInfo>,
         pubkey: &Pubkey,
-    ) -> Option<(CreditDebitAccount, Fork)> {
+    ) -> Option<(Account, Fork)> {
         let (info, fork) = accounts_index.get(pubkey, ancestors)?;
         //TODO: thread this as a ref
         if let Some(fork_storage) = storage.0.get(&fork) {
@@ -385,7 +385,7 @@ impl AccountsDB {
         &self,
         ancestors: &HashMap<Fork, usize>,
         pubkey: &Pubkey,
-    ) -> Option<(CreditDebitAccount, Fork)> {
+    ) -> Option<(Account, Fork)> {
         let accounts_index = self.accounts_index.read().unwrap();
         let storage = self.storage.read().unwrap();
         Self::load(&storage, ancestors, &accounts_index, pubkey)
@@ -429,12 +429,8 @@ impl AccountsDB {
         }
     }
 
-    fn store_accounts(
-        &self,
-        fork_id: Fork,
-        accounts: &[(&Pubkey, &CreditDebitAccount)],
-    ) -> Vec<AccountInfo> {
-        let with_meta: Vec<(StorageMeta, &CreditDebitAccount)> = accounts
+    fn store_accounts(&self, fork_id: Fork, accounts: &[(&Pubkey, &Account)]) -> Vec<AccountInfo> {
+        let with_meta: Vec<(StorageMeta, &Account)> = accounts
             .iter()
             .map(|(pubkey, account)| {
                 let write_version = self.write_version.fetch_add(1, Ordering::Relaxed) as u64;
@@ -477,7 +473,7 @@ impl AccountsDB {
         &self,
         fork_id: Fork,
         infos: Vec<AccountInfo>,
-        accounts: &[(&Pubkey, &CreditDebitAccount)],
+        accounts: &[(&Pubkey, &Account)],
     ) -> Vec<(Fork, AccountInfo)> {
         let mut index = self.accounts_index.write().unwrap();
         let mut reclaims = vec![];
@@ -530,7 +526,7 @@ impl AccountsDB {
     }
 
     /// Store the account update.
-    pub fn store(&self, fork_id: Fork, accounts: &[(&Pubkey, &CreditDebitAccount)]) {
+    pub fn store(&self, fork_id: Fork, accounts: &[(&Pubkey, &Account)]) {
         let infos = self.store_accounts(fork_id, accounts);
         let reclaims = self.update_index(fork_id, infos, accounts);
         trace!("reclaim: {}", reclaims.len());
@@ -688,6 +684,7 @@ mod tests {
     use super::*;
     use bincode::{deserialize_from, serialize_into, serialized_size};
     use rand::{thread_rng, Rng};
+    use solana_sdk::account::Account;
 
     fn cleanup_paths(paths: &str) {
         let paths = get_paths_vec(&paths);
@@ -738,7 +735,7 @@ mod tests {
         let paths = get_tmp_accounts_path!();
         let db = AccountsDB::new(&paths.paths);
         let key = Pubkey::default();
-        let account0 = CreditDebitAccount::new(1, 0, &key);
+        let account0 = Account::new(1, 0, &key);
 
         db.store(0, &[(&key, &account0)]);
         db.add_root(0);
@@ -752,11 +749,11 @@ mod tests {
         let paths = get_tmp_accounts_path!();
         let db = AccountsDB::new(&paths.paths);
         let key = Pubkey::default();
-        let account0 = CreditDebitAccount::new(1, 0, &key);
+        let account0 = Account::new(1, 0, &key);
 
         db.store(0, &[(&key, &account0)]);
 
-        let account1 = CreditDebitAccount::new(0, 0, &key);
+        let account1 = Account::new(0, 0, &key);
         db.store(1, &[(&key, &account1)]);
 
         let ancestors = vec![(1, 1)].into_iter().collect();
@@ -772,11 +769,11 @@ mod tests {
         let paths = get_tmp_accounts_path!();
         let db = AccountsDB::new(&paths.paths);
         let key = Pubkey::default();
-        let account0 = CreditDebitAccount::new(1, 0, &key);
+        let account0 = Account::new(1, 0, &key);
 
         db.store(0, &[(&key, &account0)]);
 
-        let account1 = CreditDebitAccount::new(0, 0, &key);
+        let account1 = Account::new(0, 0, &key);
         db.store(1, &[(&key, &account1)]);
         db.add_root(0);
 
@@ -793,7 +790,7 @@ mod tests {
         let paths = get_tmp_accounts_path!();
         let db = AccountsDB::new(&paths.paths);
         let key = Pubkey::default();
-        let account0 = CreditDebitAccount::new(1, 0, &key);
+        let account0 = Account::new(1, 0, &key);
 
         // store value 1 in the "root", i.e. db zero
         db.store(0, &[(&key, &account0)]);
@@ -808,7 +805,7 @@ mod tests {
         //                                       (via root0)
 
         // store value 0 in one child
-        let account1 = CreditDebitAccount::new(0, 0, &key);
+        let account1 = Account::new(0, 0, &key);
         db.store(1, &[(&key, &account1)]);
 
         // masking accounts is done at the Accounts level, at accountsDB we see
@@ -840,7 +837,7 @@ mod tests {
             let idx = thread_rng().gen_range(0, 99);
             let ancestors = vec![(0, 0)].into_iter().collect();
             let account = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
-            let mut default_account = CreditDebitAccount::default();
+            let mut default_account = Account::default();
             default_account.lamports = (idx + 1) as u64;
             assert_eq!((default_account, 0), account);
         }
@@ -854,7 +851,7 @@ mod tests {
             let account0 = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
             let ancestors = vec![(1, 1)].into_iter().collect();
             let account1 = db.load_slow(&ancestors, &pubkeys[idx]).unwrap();
-            let mut default_account = CreditDebitAccount::default();
+            let mut default_account = Account::default();
             default_account.lamports = (idx + 1) as u64;
             assert_eq!(&default_account, &account0.0);
             assert_eq!(&default_account, &account1.0);
@@ -879,7 +876,7 @@ mod tests {
         assert!(check_storage(&db, 2));
 
         let pubkey = Pubkey::new_rand();
-        let account = CreditDebitAccount::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 3, &pubkey);
+        let account = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 3, &pubkey);
         db.store(1, &[(&pubkey, &account)]);
         db.store(1, &[(&pubkeys[0], &account)]);
         {
@@ -910,11 +907,11 @@ mod tests {
         // 1 token in the "root", i.e. db zero
         let paths = get_tmp_accounts_path!();
         let db0 = AccountsDB::new(&paths.paths);
-        let account0 = CreditDebitAccount::new(1, 0, &key);
+        let account0 = Account::new(1, 0, &key);
         db0.store(0, &[(&key, &account0)]);
 
         // 0 lamports in the child
-        let account1 = CreditDebitAccount::new(0, 0, &key);
+        let account1 = Account::new(0, 0, &key);
         db0.store(1, &[(&key, &account1)]);
 
         // masking accounts is done at the Accounts level, at accountsDB we see
@@ -935,11 +932,7 @@ mod tests {
     ) {
         for t in 0..num {
             let pubkey = Pubkey::new_rand();
-            let account = CreditDebitAccount::new(
-                (t + 1) as u64,
-                space,
-                &CreditDebitAccount::default().owner,
-            );
+            let account = Account::new((t + 1) as u64, space, &Account::default().owner);
             pubkeys.push(pubkey.clone());
             let ancestors = vec![(fork, 0)].into_iter().collect();
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
@@ -947,8 +940,7 @@ mod tests {
         }
         for t in 0..num_vote {
             let pubkey = Pubkey::new_rand();
-            let account =
-                CreditDebitAccount::new((num + t + 1) as u64, space, &solana_vote_api::id());
+            let account = Account::new((num + t + 1) as u64, space, &solana_vote_api::id());
             pubkeys.push(pubkey.clone());
             let ancestors = vec![(fork, 0)].into_iter().collect();
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
@@ -967,7 +959,7 @@ mod tests {
                     let ancestors = vec![(fork, 0)].into_iter().collect();
                     assert!(accounts.load_slow(&ancestors, &pubkeys[idx]).is_none());
                 } else {
-                    let mut default_account = CreditDebitAccount::default();
+                    let mut default_account = Account::default();
                     default_account.lamports = account.lamports;
                     assert_eq!(default_account, account);
                 }
@@ -993,11 +985,7 @@ mod tests {
             let idx = thread_rng().gen_range(0, num - 1);
             let ancestors = vec![(fork, 0)].into_iter().collect();
             let account = accounts.load_slow(&ancestors, &pubkeys[idx]).unwrap();
-            let account1 = CreditDebitAccount::new(
-                (idx + count) as u64,
-                0,
-                &CreditDebitAccount::default().owner,
-            );
+            let account1 = Account::new((idx + count) as u64, 0, &Account::default().owner);
             assert_eq!(account, (account1, fork));
         }
     }
@@ -1010,11 +998,7 @@ mod tests {
         count: usize,
     ) {
         for idx in 0..num {
-            let account = CreditDebitAccount::new(
-                (idx + count) as u64,
-                0,
-                &CreditDebitAccount::default().owner,
-            );
+            let account = Account::new((idx + count) as u64, 0, &Account::default().owner);
             accounts.store(fork, &[(&pubkeys[idx], &account)]);
         }
     }
@@ -1027,7 +1011,7 @@ mod tests {
         create_account(&accounts, &mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
         let account = accounts.load_slow(&ancestors, &pubkeys[0]).unwrap();
-        let mut default_account = CreditDebitAccount::default();
+        let mut default_account = Account::default();
         default_account.lamports = 1;
         assert_eq!((default_account, 0), account);
     }
@@ -1059,7 +1043,7 @@ mod tests {
         let mut keys = vec![];
         for i in 0..9 {
             let key = Pubkey::new_rand();
-            let account = CreditDebitAccount::new(i + 1, size as usize / 4, &key);
+            let account = Account::new(i + 1, size as usize / 4, &key);
             accounts.store(0, &[(&key, &account)]);
             keys.push(key);
         }
@@ -1094,7 +1078,7 @@ mod tests {
         let count = [0, 1];
         let status = [AccountStorageStatus::Available, AccountStorageStatus::Full];
         let pubkey1 = Pubkey::new_rand();
-        let account1 = CreditDebitAccount::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, &pubkey1);
+        let account1 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, &pubkey1);
         accounts.store(0, &[(&pubkey1, &account1)]);
         {
             let stores = accounts.storage.read().unwrap();
@@ -1104,7 +1088,7 @@ mod tests {
         }
 
         let pubkey2 = Pubkey::new_rand();
-        let account2 = CreditDebitAccount::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, &pubkey2);
+        let account2 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, &pubkey2);
         accounts.store(0, &[(&pubkey2, &account2)]);
         {
             let stores = accounts.storage.read().unwrap();
@@ -1184,7 +1168,7 @@ mod tests {
         let paths = get_tmp_accounts_path!();
         let accounts = AccountsDB::new(&paths.paths);
         let pubkey = Pubkey::new_rand();
-        let account = CreditDebitAccount::new(1, 0, &CreditDebitAccount::default().owner);
+        let account = Account::new(1, 0, &Account::default().owner);
         //store an account
         accounts.store(0, &[(&pubkey, &account)]);
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -1266,7 +1250,7 @@ mod tests {
                     .name("account-writers".to_string())
                     .spawn(move || {
                         let pubkey = Pubkey::new_rand();
-                        let mut account = CreditDebitAccount::new(1, 0, &pubkey);
+                        let mut account = Account::new(1, 0, &pubkey);
                         let mut i = 0;
                         loop {
                             let account_bal = thread_rng().gen_range(1, 99);

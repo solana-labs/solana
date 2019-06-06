@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use solana_metrics::{
     datapoint_info, inc_new_counter_debug, inc_new_counter_error, inc_new_counter_info,
 };
-use solana_sdk::credit_debit_account::CreditDebitAccount;
+use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{extend_and_hash, Hash};
@@ -978,7 +978,7 @@ impl Bank {
         self.process_transaction(&tx).map(|_| signature)
     }
 
-    pub fn read_balance(account: &CreditDebitAccount) -> u64 {
+    pub fn read_balance(account: &Account) -> u64 {
         account.lamports
     }
     /// Each program would need to be able to introspect its own state
@@ -1000,7 +1000,7 @@ impl Bank {
         parents
     }
 
-    fn store(&self, pubkey: &Pubkey, account: &CreditDebitAccount) {
+    fn store(&self, pubkey: &Pubkey, account: &Account) {
         self.rc.accounts.store_slow(self.slot(), pubkey, account);
 
         if Stakes::is_stake(account) {
@@ -1043,7 +1043,7 @@ impl Bank {
         self.rc.parent = RwLock::new(Some(parent.clone()));
     }
 
-    pub fn get_account(&self, pubkey: &Pubkey) -> Option<CreditDebitAccount> {
+    pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
         self.rc
             .accounts
             .load_slow(&self.ancestors, pubkey)
@@ -1053,14 +1053,11 @@ impl Bank {
     pub fn get_program_accounts_modified_since_parent(
         &self,
         program_id: &Pubkey,
-    ) -> Vec<(Pubkey, CreditDebitAccount)> {
+    ) -> Vec<(Pubkey, Account)> {
         self.rc.accounts.load_by_program(self.slot(), program_id)
     }
 
-    pub fn get_account_modified_since_parent(
-        &self,
-        pubkey: &Pubkey,
-    ) -> Option<(CreditDebitAccount, Fork)> {
+    pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<(Account, Fork)> {
         let just_self: HashMap<u64, usize> = vec![(self.slot(), 0)].into_iter().collect();
         self.rc.accounts.load_slow(&just_self, pubkey)
     }
@@ -1159,16 +1156,13 @@ impl Bank {
 
     /// current vote accounts for this bank along with the stake
     ///   attributed to each account
-    pub fn vote_accounts(&self) -> HashMap<Pubkey, (u64, CreditDebitAccount)> {
+    pub fn vote_accounts(&self) -> HashMap<Pubkey, (u64, Account)> {
         self.stakes.read().unwrap().vote_accounts().clone()
     }
 
     /// vote accounts for the specific epoch along with the stake
     ///   attributed to each account
-    pub fn epoch_vote_accounts(
-        &self,
-        epoch: u64,
-    ) -> Option<&HashMap<Pubkey, (u64, CreditDebitAccount)>> {
+    pub fn epoch_vote_accounts(&self, epoch: u64) -> Option<&HashMap<Pubkey, (u64, Account)>> {
         self.epoch_stakes.get(&epoch).map(Stakes::vote_accounts)
     }
 
