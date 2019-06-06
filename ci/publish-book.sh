@@ -13,7 +13,7 @@ echo --- create book repo
   git config user.email "maintainers@solana.com"
   git config user.name "$(basename "$0")"
   git add ./* ./.nojekyll
-  git commit -m "${BUILDKITE_COMMIT:-local}"
+  git commit -m "${CI_COMMIT:-local}"
 )
 
 eval "$(ci/channel-info.sh)"

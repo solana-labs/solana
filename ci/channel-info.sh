@@ -89,11 +89,11 @@ BETA_CHANNEL_LATEST_TAG=${beta_tag:+v$beta_tag}
 STABLE_CHANNEL_LATEST_TAG=${stable_tag:+v$stable_tag}
 
 
-if [[ $BUILDKITE_BRANCH = "$STABLE_CHANNEL" ]]; then
+if [[ $CI_BRANCH = "$STABLE_CHANNEL" ]]; then
   CHANNEL=stable
-elif [[ $BUILDKITE_BRANCH = "$EDGE_CHANNEL" ]]; then
+elif [[ $CI_BRANCH = "$EDGE_CHANNEL" ]]; then
   CHANNEL=edge
-elif [[ $BUILDKITE_BRANCH = "$BETA_CHANNEL" ]]; then
+elif [[ $CI_BRANCH = "$BETA_CHANNEL" ]]; then
   CHANNEL=beta
 fi
 

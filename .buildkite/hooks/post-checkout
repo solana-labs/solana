@@ -1,6 +1,8 @@
 CI_BUILD_START=$(date +%s)
 export CI_BUILD_START
 
+source ci/env.sh
+
 #
 # Kill any running docker containers, which are potentially left over from the
 # previous CI job

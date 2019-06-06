@@ -12,12 +12,12 @@ is_crate_version_uploaded() {
 }
 
 # Only package/publish if this is a tagged release
-[[ -n $TRIGGERED_BUILDKITE_TAG ]] || {
-  echo TRIGGERED_BUILDKITE_TAG unset, skipped
+[[ -n $CI_TAG ]] || {
+  echo CI_TAG unset, skipped
   exit 0
 }
 
-semverParseInto "$TRIGGERED_BUILDKITE_TAG" MAJOR MINOR PATCH SPECIAL
+semverParseInto "$CI_TAG" MAJOR MINOR PATCH SPECIAL
 expectedCrateVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
 
 [[ -n "$CRATES_IO_TOKEN" ]] || {
