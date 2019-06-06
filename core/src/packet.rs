@@ -603,7 +603,7 @@ impl Signable for Blob {
     }
 
     fn signable_data(&self) -> Cow<[u8]> {
-        let end = cmp::max(SIGNATURE_RANGE.end, self.data_size());
+        let end = cmp::max(SIGNATURE_RANGE.end, self.data_size() as usize);
         Cow::Borrowed(&self.data[SIGNATURE_RANGE.end..end])
     }
 
@@ -839,5 +839,20 @@ mod tests {
         assert!(p1 == p2);
         p2.data[1] = 4;
         assert!(p1 != p2);
+    }
+
+    #[test]
+    fn test_sign_blob() {
+        let mut b = Blob::default();
+        let k = Keypair::new();
+        let p = k.pubkey();
+        b.set_id(&p);
+        b.sign(&k);
+        assert!(b.verify());
+
+        // Set a bigger chunk of data to sign
+        b.set_size(80);
+        b.sign(&k);
+        assert!(b.verify());
     }
 }
