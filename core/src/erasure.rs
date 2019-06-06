@@ -281,6 +281,7 @@ pub mod test {
     use crate::blocktree::Blocktree;
     use crate::packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::Signable;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::borrow::Borrow;
 
@@ -739,6 +740,7 @@ pub mod test {
                 let mut blob = Blob::default();
                 blob.data_mut()[..data.len()].copy_from_slice(&data);
                 blob.set_size(data.len());
+                blob.sign(&Keypair::new());
                 Arc::new(RwLock::new(blob))
             })
             .collect();
