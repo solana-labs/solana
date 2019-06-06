@@ -85,7 +85,7 @@ impl Service for ClusterInfoVoteListener {
 
 #[cfg(test)]
 mod tests {
-    use crate::locktower::MAX_RECENT_VOTES;
+    use crate::consensus::MAX_RECENT_VOTES;
     use crate::packet;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};

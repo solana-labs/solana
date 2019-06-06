@@ -77,7 +77,7 @@ count as stakes.
 ### VoteInstruction::Vote(Vec<Vote>)
 
 * `account[0]` - RW - The VoteState
-  `VoteState::lockouts` and `VoteState::credits` are updated according to voting lockout rules see [Fork Selection](fork-selection.md)
+  `VoteState::lockouts` and `VoteState::credits` are updated according to voting lockout rules see [Tower BFT](tower-bft.md)
 
 
 * `account[1]` - RO - A list of some N most recent slots and their hashes for the vote to be verified against.
