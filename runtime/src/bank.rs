@@ -288,8 +288,10 @@ impl Bank {
             .store(parent.transaction_count() as usize, Ordering::Relaxed);
         bank.stakes = RwLock::new(parent.stakes.read().unwrap().clone());
 
-        bank.tick_height
-            .store(parent.tick_height.load(Ordering::SeqCst), Ordering::SeqCst);
+        bank.tick_height.store(
+            parent.tick_height.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
         bank.ticks_per_slot = parent.ticks_per_slot;
         bank.epoch_schedule = parent.epoch_schedule;
 
@@ -385,7 +387,7 @@ impl Bank {
         let mut hash = self.hash.write().unwrap();
 
         if *hash == Hash::default() {
-            let collector_fees = self.collector_fees.load(Ordering::SeqCst) as u64;
+            let collector_fees = self.collector_fees.load(Ordering::Relaxed) as u64;
             if collector_fees != 0 {
                 self.deposit(&self.collector_id, collector_fees);
             }
@@ -582,8 +584,8 @@ impl Bank {
         // assert!(!self.is_frozen());
 
         let current_tick_height = {
-            self.tick_height.fetch_add(1, Ordering::SeqCst);
-            self.tick_height.load(Ordering::SeqCst) as u64
+            self.tick_height.fetch_add(1, Ordering::Relaxed);
+            self.tick_height.load(Ordering::Relaxed) as u64
         };
         inc_new_counter_debug!("bank-register_tick-registered", 1);
 
@@ -1109,7 +1111,7 @@ impl Bank {
         // tick_height is using an AtomicUSize because AtomicU64 is not yet a stable API.
         // Until we can switch to AtomicU64, fail if usize is not the same as u64
         assert_eq!(std::usize::MAX, 0xFFFF_FFFF_FFFF_FFFF);
-        self.tick_height.load(Ordering::SeqCst) as u64
+        self.tick_height.load(Ordering::Relaxed) as u64
     }
 
     /// Return this bank's max_tick_height
@@ -1200,12 +1202,12 @@ impl Bank {
         assert_eq!(self.ticks_per_slot, dbank.ticks_per_slot);
         assert_eq!(self.parent_hash, dbank.parent_hash);
         assert_eq!(
-            self.tick_height.load(Ordering::SeqCst),
-            dbank.tick_height.load(Ordering::SeqCst)
+            self.tick_height.load(Ordering::Relaxed),
+            dbank.tick_height.load(Ordering::Relaxed)
         );
         assert_eq!(
-            self.is_delta.load(Ordering::SeqCst),
-            dbank.is_delta.load(Ordering::SeqCst)
+            self.is_delta.load(Ordering::Relaxed),
+            dbank.is_delta.load(Ordering::Relaxed)
         );
 
         let st = self.stakes.read().unwrap();

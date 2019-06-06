@@ -460,7 +460,7 @@ mod test {
         }
 
         fn points_written(&self) -> usize {
-            return self.points_written.load(Ordering::SeqCst);
+            return self.points_written.load(Ordering::Relaxed);
         }
     }
 
@@ -469,12 +469,12 @@ mod test {
             assert!(!points.is_empty());
 
             self.points_written
-                .fetch_add(points.len(), Ordering::SeqCst);
+                .fetch_add(points.len(), Ordering::Relaxed);
 
             info!(
                 "Writing {} points ({} total)",
                 points.len(),
-                self.points_written.load(Ordering::SeqCst)
+                self.points_written.load(Ordering::Relaxed)
             );
         }
     }
