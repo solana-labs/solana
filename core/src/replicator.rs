@@ -406,7 +406,7 @@ impl Replicator {
         #[cfg(feature = "chacha")]
         {
             use crate::storage_stage::NUM_STORAGE_SAMPLES;
-            use rand::{Rng, SeedableRng};
+            use rand::SeedableRng;
             use rand_chacha::ChaChaRng;
 
             let mut rng_seed = [0u8; 32];
