@@ -42,7 +42,7 @@ use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
-use std::io::Cursor;
+use std::io::{BufReader, Cursor, Read};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 use std::time::Instant;
@@ -60,56 +60,42 @@ pub struct BankRc {
     parent: RwLock<Option<Arc<Bank>>>,
 }
 
+impl BankRc {
+    pub fn new(account_paths: Option<String>) -> Self {
+        let accounts = Accounts::new(account_paths);
+        BankRc {
+            accounts: Arc::new(accounts),
+            parent: RwLock::new(None),
+        }
+    }
+
+    pub fn update_from_stream<R: Read>(
+        &self,
+        mut stream: &mut BufReader<R>,
+    ) -> std::result::Result<(), std::io::Error> {
+        let _len: usize = deserialize_from(&mut stream)
+            .map_err(|_| BankRc::get_io_error("len deserialize error"))?;
+        self.accounts.update_from_stream(stream)
+    }
+
+    fn get_io_error(error: &str) -> std::io::Error {
+        warn!("BankRc error: {:?}", error);
+        std::io::Error::new(std::io::ErrorKind::Other, error)
+    }
+}
+
 impl Serialize for BankRc {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
         use serde::ser::Error;
-        let len = serialized_size(&*self.accounts.accounts_db).unwrap()
-            + serialized_size(&*self.accounts).unwrap();
+        let len = serialized_size(&*self.accounts.accounts_db).unwrap();
         let mut buf = vec![0u8; len as usize];
         let mut wr = Cursor::new(&mut buf[..]);
-        serialize_into(&mut wr, &*self.accounts).map_err(Error::custom)?;
         serialize_into(&mut wr, &*self.accounts.accounts_db).map_err(Error::custom)?;
         let len = wr.position() as usize;
         serializer.serialize_bytes(&wr.into_inner()[..len])
-    }
-}
-
-struct BankRcVisitor;
-
-impl<'a> serde::de::Visitor<'a> for BankRcVisitor {
-    type Value = BankRc;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("Expecting BankRc")
-    }
-
-    #[allow(clippy::mutex_atomic)]
-    fn visit_bytes<E>(self, data: &[u8]) -> std::result::Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        use serde::de::Error;
-        let mut rd = Cursor::new(&data[..]);
-        let mut accounts: Accounts = deserialize_from(&mut rd).map_err(Error::custom)?;
-        let accounts_db: AccountsDB = deserialize_from(&mut rd).map_err(Error::custom)?;
-
-        accounts.accounts_db = Arc::new(accounts_db);
-        Ok(BankRc {
-            accounts: Arc::new(accounts),
-            parent: RwLock::new(None),
-        })
-    }
-}
-
-impl<'de> Deserialize<'de> for BankRc {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
-    {
-        deserializer.deserialize_bytes(BankRcVisitor)
     }
 }
 
@@ -379,6 +365,18 @@ impl Bank {
 
     pub fn collector_id(&self) -> &Pubkey {
         &self.collector_id
+    }
+
+    pub fn create_with_genesis(
+        genesis_block: &GenesisBlock,
+        account_paths: Option<String>,
+        status_cache_rc: &StatusCacheRc,
+    ) -> Self {
+        let mut bank = Self::default();
+        bank.set_bank_rc(&BankRc::new(account_paths), &status_cache_rc);
+        bank.process_genesis_block(genesis_block);
+        bank.ancestors.insert(0, 0);
+        bank
     }
 
     pub fn slot(&self) -> u64 {
@@ -2582,10 +2580,14 @@ mod tests {
         serialize_into(&mut writer, &bank).unwrap();
         serialize_into(&mut writer, &bank.rc).unwrap();
 
-        let mut reader = Cursor::new(&mut buf[..]);
-        let mut dbank: Bank = deserialize_from(&mut reader).unwrap();
-        let dbank_rc: BankRc = deserialize_from(&mut reader).unwrap();
-        dbank.rc = dbank_rc;
+        let mut rdr = Cursor::new(&buf[..]);
+        let mut dbank: Bank = deserialize_from(&mut rdr).unwrap();
+        let mut reader = BufReader::new(&buf[rdr.position() as usize..]);
+        dbank.set_bank_rc(
+            &BankRc::new(Some(bank0.accounts().paths.clone())),
+            &StatusCacheRc::default(),
+        );
+        assert!(dbank.rc.update_from_stream(&mut reader).is_ok());
         assert_eq!(dbank.get_balance(&key.pubkey()), 10);
         bank.compare_bank(&dbank);
     }

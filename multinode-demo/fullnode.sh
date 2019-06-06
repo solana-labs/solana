@@ -315,12 +315,9 @@ elif [[ $node_type = bootstrap_leader ]]; then
   vote_keypair_path="$SOLANA_CONFIG_DIR"/bootstrap-leader-vote-keypair.json
   ledger_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
   accounts_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts
-  storage_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-storage-keypair.json
-<<<<<<< HEAD
-  configured_flag=$SOLANA_CONFIG_DIR/bootstrap-leader.configured
-=======
   snapshot_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-snapshots
->>>>>>> validator restart
+  storage_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-storage-keypair.json
+  configured_flag=$SOLANA_CONFIG_DIR/bootstrap-leader.configured
 
   default_arg --rpc-port 8899
   if ((airdrops_enabled)); then
@@ -342,11 +339,8 @@ elif [[ $node_type = validator ]]; then
   storage_keypair_path=$SOLANA_CONFIG_DIR/validator-storage-keypair$label.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/validator-ledger$label
   accounts_config_dir=$SOLANA_CONFIG_DIR/validator-accounts$label
-<<<<<<< HEAD
-  configured_flag=$SOLANA_CONFIG_DIR/validator$label.configured
-=======
   snapshot_config_dir="$SOLANA_CONFIG_DIR"/validator-snapshots$label
->>>>>>> validator restart
+  configured_flag=$SOLANA_CONFIG_DIR/validator$label.configured
 
   mkdir -p "$SOLANA_CONFIG_DIR"
   [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
@@ -432,11 +426,13 @@ while true; do
 
   (
     set -x
-    if [[ -d "$SOLANA_RSYNC_CONFIG_DIR"/snapshots ]]; then
-      if [[ ! -d $snapshot_config_dir ]]; then
-        cp -a "$SOLANA_RSYNC_CONFIG_DIR"/snapshots/ "$snapshot_config_dir"
-        cp -a "$SOLANA_RSYNC_CONFIG_DIR"/accounts/ "$accounts_config_dir"
-      fi
+    if [[ $node_type = validator ]]; then
+	rm -rf "$ledger_config_dir"
+        if [[ -d "$SOLANA_RSYNC_CONFIG_DIR"/snapshots ]]; then
+          rm -rf "$snapshot_config_dir" "$accounts_config_dir"
+          cp -a "$SOLANA_RSYNC_CONFIG_DIR"/snapshots/ "$snapshot_config_dir"
+          cp -a "$SOLANA_RSYNC_CONFIG_DIR"/accounts/ "$accounts_config_dir"
+        fi
     fi
     if [[ ! -d "$ledger_config_dir" ]]; then
       cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger/ "$ledger_config_dir"

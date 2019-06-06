@@ -298,7 +298,8 @@ fn get_bank_forks(
     snapshot_path: Option<String>,
 ) -> (BankForks, Vec<BankForksInfo>, LeaderScheduleCache) {
     if snapshot_path.is_some() {
-        let bank_forks = BankForks::load_from_snapshot(&genesis_block, &snapshot_path);
+        let bank_forks =
+            BankForks::load_from_snapshot(&genesis_block, account_paths.clone(), &snapshot_path);
         match bank_forks {
             Ok(v) => {
                 let bank = &v.working_bank();

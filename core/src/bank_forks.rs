@@ -225,20 +225,18 @@ impl BankForks {
     }
 
     fn load_snapshots(
-        genesis_block: &GenesisBlock,
         names: &[u64],
+        bank0: &mut Bank,
         bank_maps: &mut Vec<(u64, u64, Bank)>,
         status_cache_rc: &StatusCacheRc,
         snapshot_path: &Option<String>,
-    ) -> Option<(BankRc, u64)> {
+    ) -> Option<u64> {
         let path = BankForks::get_snapshot_path(snapshot_path);
-        let mut bank_rc: Option<(BankRc, u64)> = None;
+        let mut bank_root: Option<u64> = None;
 
-        println!("names: {:?}", names);
         for bank_slot in names.iter().rev() {
             let bank_path = format!("{}", bank_slot);
             let bank_file_path = path.join(bank_path.clone());
-            println!("Load from {:?}", bank_file_path);
             info!("Load from {:?}", bank_file_path);
             let file = File::open(bank_file_path);
             if file.is_err() {
@@ -256,14 +254,10 @@ impl BankForks {
                 .map_err(|_| BankForks::get_io_error("deserialize root error"));
             let status_cache: Result<StatusCacheRc, std::io::Error> = deserialize_from(&mut stream)
                 .map_err(|_| BankForks::get_io_error("deserialize bank status cache error"));
-            if bank_rc.is_none() {
-                let rc: Result<BankRc, std::io::Error> = deserialize_from(&mut stream)
-                    .map_err(|_| BankForks::get_io_error("deserialize bank accounts error"));
-                if rc.is_ok() {
-                    bank_rc = Some((rc.unwrap(), root.unwrap()));
-                }
+            if bank_root.is_none() && bank0.rc.update_from_stream(&mut stream).is_ok() {
+                bank_root = Some(root.unwrap());
             }
-            if bank_rc.is_some() {
+            if bank_root.is_some() {
                 match bank {
                     Ok(v) => {
                         if status_cache.is_ok() {
@@ -278,10 +272,8 @@ impl BankForks {
                 warn!("Load snapshot rc failed for {}", bank_slot);
             }
         }
-        let bank0 = Bank::new(&genesis_block);
-        bank0.freeze();
-        bank_maps.push((0, 0, bank0));
-        bank_rc
+
+        bank_root
     }
 
     fn setup_banks(
@@ -317,7 +309,11 @@ impl BankForks {
         (banks, slots, last_slot)
     }
 
-    pub fn load_from_snapshot(genesis_block: &GenesisBlock, snapshot_path: &Option<String>) -> Result<Self, Error> {
+    pub fn load_from_snapshot(
+        genesis_block: &GenesisBlock,
+        account_paths: Option<String>,
+        snapshot_path: &Option<String>,
+    ) -> Result<Self, Error> {
         let path = BankForks::get_snapshot_path(snapshot_path);
         let paths = fs::read_dir(path)?;
         let mut names = paths
@@ -330,21 +326,27 @@ impl BankForks {
             })
             .collect::<Vec<u64>>();
 
-        println!("names before: {:?}", names);
-        // names.retain(|&x| x != 0);
-        println!("names after : {:?}", names);
         names.sort();
         let mut bank_maps = vec![];
         let status_cache_rc = StatusCacheRc::default();
-        let rc = BankForks::load_snapshots(&genesis_block, &names, &mut bank_maps, &status_cache_rc, snapshot_path);
-        if bank_maps.is_empty() || rc.is_none() {
+        let mut bank0 =
+            Bank::create_with_genesis(&genesis_block, account_paths.clone(), &status_cache_rc);
+        bank0.freeze();
+        let bank_root = BankForks::load_snapshots(
+            &names,
+            &mut bank0,
+            &mut bank_maps,
+            &status_cache_rc,
+            snapshot_path,
+        );
+        if bank_maps.is_empty() || bank_root.is_none() {
             BankForks::remove_snapshot(0, snapshot_path);
             return Err(Error::new(ErrorKind::Other, "no snapshots loaded"));
         }
 
-        let (bank_rc, root) = rc.unwrap();
+        let root = bank_root.unwrap();
         let (banks, slots, last_slot) =
-            BankForks::setup_banks(&mut bank_maps, &bank_rc, &status_cache_rc);
+            BankForks::setup_banks(&mut bank_maps, &bank0.rc, &status_cache_rc);
         let working_bank = banks[&last_slot].clone();
         Ok(BankForks {
             banks,
@@ -486,8 +488,15 @@ mod tests {
         }
     }
 
-    fn restore_from_snapshot(genesis_block: &GenesisBlock, bank_forks: BankForks, last_slot: u64) {
-        let new = BankForks::load_from_snapshot(&genesis_block, &bank_forks.snapshot_path).unwrap();
+    fn restore_from_snapshot(
+        genesis_block: &GenesisBlock,
+        bank_forks: BankForks,
+        account_paths: Option<String>,
+        last_slot: u64,
+    ) {
+        let new =
+            BankForks::load_from_snapshot(&genesis_block, account_paths, &bank_forks.snapshot_path)
+                .unwrap();
         for (slot, _) in new.banks.iter() {
             if *slot > 0 {
                 let bank = bank_forks.banks.get(slot).unwrap().clone();
@@ -531,10 +540,9 @@ mod tests {
                 bank.freeze();
                 let slot = bank.slot();
                 bank_forks.insert(bank);
-                println!("add snapshot {}", slot);
                 bank_forks.add_snapshot(slot, 0).unwrap();
             }
-            restore_from_snapshot(&genesis_block, bank_forks, index);
+            restore_from_snapshot(&genesis_block, bank_forks, Some(path.paths.clone()), index);
         }
     }
 }
