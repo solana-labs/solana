@@ -29,26 +29,26 @@ SECONDS=0
   cargo $rust_version build --all --release --features="$cargoFeatures"
 )
 
-BIN_CRATES=(
-  bench-exchange
-  bench-streamer
-  bench-tps
-  drone
-  genesis
-  gossip
-  install
-  keygen
-  ledger-tool
-  replicator
-  validator
-  wallet
+PROGRAMS=(
+  solana-drone
+  solana-genesis
+  solana-gossip
+  solana-install
+  solana-keygen
+  solana-ledger-tool
+  solana-replicator
+  solana-validator
+  solana-wallet
+  solana-bench-exchange
+  solana-bench-streamer
+  solana-bench-tps
 )
 
-for crate in "${BIN_CRATES[@]}"; do
+for program in "${PROGRAMS[@]}"; do
   (
     set -x
-    # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-    cargo $rust_version install --force --path "$crate" --root "$installDir" --features="$cargoFeatures"
+    mkdir -p "$installDir"/bin
+    cp target/release/"$program" "$installDir"/bin
   )
 done
 

@@ -24,12 +24,17 @@ if [[ -z $CHANNEL_OR_TAG ]]; then
   exit 1
 fi
 
-case "$(uname)" in
-Darwin)
+PERF_LIBS=false
+case "$CI_OS_NAME" in
+osx)
   TARGET=x86_64-apple-darwin
   ;;
-Linux)
+linux)
   TARGET=x86_64-unknown-linux-gnu
+  PERF_LIBS=true
+  ;;
+windows)
+  TARGET=x86_64-pc-windows-msvc
   ;;
 *)
   TARGET=unknown-unknown-unknown
@@ -53,18 +58,21 @@ echo --- Creating tarball
   source ci/rust-version.sh stable
   scripts/cargo-install-all.sh +"$rust_stable" solana-release
 
-  rm -rf target/perf-libs
-  ./fetch-perf-libs.sh
-  mkdir solana-release/target
-  cp -a target/perf-libs solana-release/target/
+  if $PERF_LIBS; then
+    rm -rf target/perf-libs
+    ./fetch-perf-libs.sh
+    mkdir solana-release/target
+    cp -a target/perf-libs solana-release/target/
 
-  # shellcheck source=/dev/null
-  source ./target/perf-libs/env.sh
-  (
-    cd validator
-    cargo +"$rust_stable" install --path . --features=cuda --root ../solana-release-cuda
-  )
-  cp solana-release-cuda/bin/solana-validator solana-release/bin/solana-validator-cuda
+    # shellcheck source=/dev/null
+    source ./target/perf-libs/env.sh
+    (
+      cd validator
+      cargo +"$rust_stable" install --path . --features=cuda --root ../solana-release-cuda
+    )
+    cp solana-release-cuda/bin/solana-validator solana-release/bin/solana-validator-cuda
+  fi
+
   cp -a scripts multinode-demo solana-release/
 
   # Add a wrapper script for validator.sh
@@ -103,23 +111,36 @@ if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
 fi
 
 for file in solana-release-$TARGET.tar.bz2 solana-install-$TARGET; do
-  echo --- AWS S3 Store: $file
-  (
-    set -x
-    $DRYRUN docker run \
-      --rm \
-      --env AWS_ACCESS_KEY_ID \
-      --env AWS_SECRET_ACCESS_KEY \
-      --volume "$PWD:/solana" \
-      eremite/aws-cli:2018.12.18 \
-      /usr/bin/s3cmd --acl-public put /solana/"$file" s3://release.solana.com/"$CHANNEL_OR_TAG"/"$file"
+  if [[ -n $BUILDKITE ]]; then
+    echo --- AWS S3 Store: $file
+    (
+      set -x
+      $DRYRUN docker run \
+        --rm \
+        --env AWS_ACCESS_KEY_ID \
+        --env AWS_SECRET_ACCESS_KEY \
+        --volume "$PWD:/solana" \
+        eremite/aws-cli:2018.12.18 \
+        /usr/bin/s3cmd --acl-public put /solana/"$file" s3://release.solana.com/"$CHANNEL_OR_TAG"/$file
 
-    echo Published to:
-    $DRYRUN ci/format-url.sh http://release.solana.com/"$CHANNEL_OR_TAG"/"$file"
-  )
+      echo Published to:
+      $DRYRUN ci/format-url.sh http://release.solana.com/"$CHANNEL_OR_TAG"/$file
+    )
 
-  if [[ -n $TAG ]]; then
-    ci/upload-github-release-asset.sh $file
+    if [[ -n $TAG ]]; then
+      ci/upload-github-release-asset.sh $file
+    fi
+  elif [[ -n $TRAVIS ]]; then
+    # .travis.yaml uploads everything in the travis-s3-upload/ directory to release.solana.com
+    mkdir -p travis-s3-upload/"$CHANNEL_OR_TAG"
+    cp -v $file travis-s3-upload/"$CHANNEL_OR_TAG"/
+
+    if [[ -n $TAG ]]; then
+      # .travis.yaml uploads everything in the travis-$TAG-upload/ directory to
+      # the associated Github Release
+      mkdir -p travis-"$TAG"-upload/
+      cp -v $file travis-"$TAG"-upload/
+    fi
   fi
 done
 

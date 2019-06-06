@@ -15,6 +15,7 @@ if ${CI:-false}; then
     else
       export CI_PULL_REQUEST=
     fi
+    export CI_OS_NAME=$TRAVIS_OS_NAME
     export CI_TAG=$TRAVIS_TAG
   fi
   if ${BUILDKITE:-false}; then
@@ -30,6 +31,7 @@ if ${CI:-false}; then
     else
       export CI_PULL_REQUEST=
     fi
+    export CI_OS_NAME=linux
     # TRIGGERED_BUILDKITE_TAG is a workaround to propagate BUILDKITE_TAG into
     # the solana-secondary builder
     if [[ -n $TRIGGERED_BUILDKITE_TAG ]]; then
@@ -44,6 +46,7 @@ else
   export CI_BUILD_ID=
   export CI_COMMIT=
   export CI_JOB_ID=
+  export CI_OS_NAME=
   export CI_PULL_REQUEST=
   export CI_TAG=
 fi
@@ -54,6 +57,7 @@ CI_BRANCH=$CI_BRANCH
 CI_BUILD_ID=$CI_BUILD_ID
 CI_COMMIT=$CI_COMMIT
 CI_JOB_ID=$CI_JOB_ID
+CI_OS_NAME=$CI_OS_NAME
 CI_PULL_REQUEST=$CI_PULL_REQUEST
 CI_TAG=$CI_TAG
 EOF
