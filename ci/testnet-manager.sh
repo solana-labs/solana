@@ -325,8 +325,7 @@ deploy() {
         ${skipCreate:+-e} \
         ${skipStart:+-s} \
         ${maybeStop:+-S} \
-        ${maybeDelete:+-D} \
-        --hashes-per-tick auto
+        ${maybeDelete:+-D}
     )
     ;;
   testnet-edge-perf)
@@ -340,8 +339,7 @@ deploy() {
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D} \
-          --hashes-per-tick auto
+          ${maybeDelete:+-D}
     )
     ;;
   testnet-beta)
@@ -353,8 +351,7 @@ deploy() {
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D} \
-          --hashes-per-tick auto
+          ${maybeDelete:+-D}
     )
     ;;
   testnet-beta-perf)
@@ -368,8 +365,7 @@ deploy() {
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D} \
-          --hashes-per-tick auto
+          ${maybeDelete:+-D}
     )
     ;;
   testnet)
@@ -386,7 +382,8 @@ deploy() {
         ${skipCreate:+-e} \
         ${maybeSkipStart:+-s} \
         ${maybeStop:+-S} \
-        ${maybeDelete:+-D}
+        ${maybeDelete:+-D} \
+        --hashes-per-tick sleep
 
       if [[ -n $GCE_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
@@ -396,7 +393,8 @@ deploy() {
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
           ${maybeDelete:+-D} \
-          -x
+          -x \
+          --hashes-per-tick sleep
       fi
     )
     ;;
@@ -413,8 +411,7 @@ deploy() {
           ${skipCreate:+-e} \
           ${skipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D} \
-          --hashes-per-tick auto
+          ${maybeDelete:+-D}
     )
     ;;
   testnet-demo)
@@ -434,8 +431,7 @@ deploy() {
           ${skipCreate:+-e} \
           ${maybeSkipStart:+-s} \
           ${maybeStop:+-S} \
-          ${maybeDelete:+-D} \
-          --hashes-per-tick auto
+          ${maybeDelete:+-D}
 
       if [[ -n $GCE_LOW_QUOTA_NODE_COUNT ]]; then
         # shellcheck disable=SC2068
@@ -446,8 +442,7 @@ deploy() {
             ${skipCreate:+-e} \
             ${skipStart:+-s} \
             ${maybeStop:+-S} \
-            ${maybeDelete:+-D} \
-            --hashes-per-tick auto
+            ${maybeDelete:+-D}
       fi
     )
     ;;
