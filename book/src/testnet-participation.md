@@ -119,7 +119,8 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 
 Now configure a key pair for your validator by running:
 ```bash
-$ solana-keygen -o validator-keypair.json
+$ solana-keygen -o ~/validator-keypair.json
+$ solana-keygen pubkey ~/validator-keypair.json
 ```
 
 Then use one of the following commands, depending on your installation
@@ -128,20 +129,20 @@ choice, to start the node:
 If this is a `solana-install`-installation:
 ```bash
 $ clear-config.sh
-$ validator.sh --identity validator-keypair.json --poll-for-new-genesis-block testnet.solana.com
+$ validator.sh --identity ~/validator-keypair.json --poll-for-new-genesis-block testnet.solana.com
 ```
 
 Alternatively, the `solana-install run` command can be used to run the validator
 node while periodically checking for and applying software updates:
 ```bash
 $ clear-config.sh
-$ solana-install run validator.sh -- --identity validator-keypair.json --poll-for-new-genesis-block testnet.solana.com
+$ solana-install run validator.sh -- --identity ~/validator-keypair.json --poll-for-new-genesis-block testnet.solana.com
 ```
 
 If you built from source:
 ```bash
 $ USE_INSTALL=1 ./multinode-demo/clear-config.sh
-$ USE_INSTALL=1 ./multinode-demo/validator.sh --identity validator-keypair.json --poll-for-new-genesis-block testnet.solana.com
+$ USE_INSTALL=1 ./multinode-demo/validator.sh --identity ~/validator-keypair.json --poll-for-new-genesis-block testnet.solana.com
 ```
 
 #### Controlling local network port allocation
@@ -164,7 +165,7 @@ accounts: ...
 
 The **identity pubkey** for your validator can also be found by running:
 ```bash
-$ solana-keygen pubkey validator-keypair.json
+$ solana-keygen pubkey ~/validator-keypair.json
 ```
 
 From another console, confirm the IP address and **identity pubkey** of your validator is visible in the

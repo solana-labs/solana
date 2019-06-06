@@ -93,7 +93,7 @@ setup_validator_accounts() {
   declare storage_pubkey
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
 
-  if [[ -f "$node_keypair_path".configured ]]; then
+  if [[ -f $configured_flag ]]; then
     echo "Vote and stake accounts have already been configured"
   else
     # Fund the node with enough tokens to fund its Vote, Staking, and Storage accounts
@@ -116,7 +116,7 @@ setup_validator_accounts() {
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
       create-validator-storage-account "$storage_pubkey" || return $?
 
-    touch "$node_keypair_path".configured
+    touch "$configured_flag"
   fi
 
   $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
@@ -138,7 +138,7 @@ setup_replicator_account() {
   declare storage_pubkey
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
 
-  if [[ -f "$node_keypair_path".configured ]]; then
+  if [[ -f $configured_flag ]]; then
     echo "Replicator account has already been configured"
   else
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop "$stake" || return $?
@@ -147,7 +147,7 @@ setup_replicator_account() {
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
       create-replicator-storage-account "$storage_pubkey" || return $?
 
-    touch "$node_keypair_path".configured
+    touch "$configured_flag"
   fi
 
   $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
@@ -248,6 +248,7 @@ if [[ $node_type = replicator ]]; then
   : "${identity_keypair_path:=$SOLANA_CONFIG_DIR/replicator-keypair$label.json}"
   storage_keypair_path="$SOLANA_CONFIG_DIR"/replicator-storage-keypair$label.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/replicator-ledger$label
+  configured_flag=$SOLANA_CONFIG_DIR/replicator$label.configured
 
   mkdir -p "$SOLANA_CONFIG_DIR"
   [[ -r "$identity_keypair_path" ]] || $solana_keygen -o "$identity_keypair_path"
@@ -284,6 +285,7 @@ elif [[ $node_type = bootstrap_leader ]]; then
   ledger_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
   accounts_config_dir="$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts
   storage_keypair_path=$SOLANA_CONFIG_DIR/bootstrap-leader-storage-keypair.json
+  configured_flag=$SOLANA_CONFIG_DIR/bootstrap-leader.configured
 
   default_arg --rpc-port 8899
   default_arg --rpc-drone-address 127.0.0.1:9900
@@ -303,6 +305,7 @@ elif [[ $node_type = validator ]]; then
   storage_keypair_path=$SOLANA_CONFIG_DIR/validator-storage-keypair$label.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/validator-ledger$label
   accounts_config_dir=$SOLANA_CONFIG_DIR/validator-accounts$label
+  configured_flag=$SOLANA_CONFIG_DIR/validator$label.configured
 
   mkdir -p "$SOLANA_CONFIG_DIR"
   [[ -r "$identity_keypair_path" ]] || $solana_keygen -o "$identity_keypair_path"
@@ -373,8 +376,7 @@ while true; do
     # keypair for the node and start all over again
     (
       set -x
-      rm -rf "$ledger_config_dir" "$accounts_config_dir" \
-        "$vote_keypair_path".configured "$storage_keypair_path".configured
+      rm -rf "$ledger_config_dir" "$accounts_config_dir" "$configured_flag"
     )
   fi
 
