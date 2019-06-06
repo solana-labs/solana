@@ -14,30 +14,27 @@ fn create_system_account(
     space: u64,
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
-    let mut e = if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].owner()) {
+    let e = if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].owner()) {
         debug!("CreateAccount: invalid account[from] owner");
         Some(SystemError::SourceNotSystemAccount)
-    } else {
-        None
-    };
-
-    if !keyed_accounts[TO_ACCOUNT_INDEX].get_data().is_empty()
+    } else if !keyed_accounts[TO_ACCOUNT_INDEX].get_data().is_empty()
         || !system_program::check_id(&keyed_accounts[TO_ACCOUNT_INDEX].owner())
     {
         debug!(
             "CreateAccount: invalid argument; account {} already in use",
             keyed_accounts[TO_ACCOUNT_INDEX].unsigned_key()
         );
-        e = Some(SystemError::AccountAlreadyInUse);
-    }
-    if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].lamports() {
+        Some(SystemError::AccountAlreadyInUse)
+    } else if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].lamports() {
         debug!(
             "CreateAccount: insufficient lamports ({}, need {})",
             keyed_accounts[FROM_ACCOUNT_INDEX].lamports(),
             lamports
         );
-        e = Some(SystemError::ResultWithNegativeLamports);
-    }
+        Some(SystemError::ResultWithNegativeLamports)
+    } else {
+        None
+    };
     if e.is_some() {
         Err(InstructionError::CustomError(e.unwrap() as u32))?;
     }
