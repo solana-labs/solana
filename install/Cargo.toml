@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-install"
 description = "The solana cluster software installer"
-version = "0.15.2"
+version = "0.15.3"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -28,10 +28,10 @@ ring = "0.13.2"
 serde = "1.0.91"
 serde_derive = "1.0.91"
 serde_yaml = "0.8.9"
-solana-client = { path = "../client", version = "0.15.2"    }
-solana-config-api = { path = "../programs/config_api", version = "0.15.2"    }
-solana-logger = { path = "../logger", version = "0.15.2"    }
-solana-sdk = { path = "../sdk", version = "0.15.2"    }
+solana-client = { path = "../client", version = "0.15.3"     }
+solana-config-api = { path = "../programs/config_api", version = "0.15.3"     }
+solana-logger = { path = "../logger", version = "0.15.3"     }
+solana-sdk = { path = "../sdk", version = "0.15.3"     }
 tar = "0.4.26"
 tempdir = "0.3.7"
 url = "1.7.2"

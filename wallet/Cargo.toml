@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-wallet"
 description = "Blockchain, Rebuilt for Scale"
-version = "0.15.2"
+version = "0.15.3"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -17,21 +17,21 @@ dirs = "1.0.5"
 log = "0.4.2"
 num-traits = "0.2"
 serde_json = "1.0.39"
-solana-budget-api = { path = "../programs/budget_api", version = "0.15.2"    }
-solana-client = { path = "../client", version = "0.15.2"    }
-solana-drone = { path = "../drone", version = "0.15.2"    }
-solana-logger = { path = "../logger", version = "0.15.2"    }
-solana-netutil = { path = "../netutil", version = "0.15.2"    }
-solana-sdk = { path = "../sdk", version = "0.15.2"    }
-solana-stake-api = { path = "../programs/stake_api", version = "0.15.2"    }
-solana-storage-api = { path = "../programs/storage_api", version = "0.15.2"    }
-solana-vote-api = { path = "../programs/vote_api", version = "0.15.2"    }
-solana-vote-signer = { path = "../vote-signer", version = "0.15.2"    }
+solana-budget-api = { path = "../programs/budget_api", version = "0.15.3"     }
+solana-client = { path = "../client", version = "0.15.3"     }
+solana-drone = { path = "../drone", version = "0.15.3"     }
+solana-logger = { path = "../logger", version = "0.15.3"     }
+solana-netutil = { path = "../netutil", version = "0.15.3"     }
+solana-sdk = { path = "../sdk", version = "0.15.3"     }
+solana-stake-api = { path = "../programs/stake_api", version = "0.15.3"     }
+solana-storage-api = { path = "../programs/storage_api", version = "0.15.3"     }
+solana-vote-api = { path = "../programs/vote_api", version = "0.15.3"     }
+solana-vote-signer = { path = "../vote-signer", version = "0.15.3"     }
 url = "1.7.2"
 
 [dev-dependencies]
-solana-budget-program = { path = "../programs/budget_program", version = "0.15.2"    }
-solana = { path = "../core", version = "0.15.2"    }
+solana-budget-program = { path = "../programs/budget_program", version = "0.15.3"     }
+solana = { path = "../core", version = "0.15.3"     }
 
 [features]
 cuda = []
