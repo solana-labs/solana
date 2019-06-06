@@ -151,13 +151,12 @@ stage. The stages are run as separate transactions on the storage program.
 
 1. Validators monitor the turns in the PoRep game and look at the rooted bank
 at turn boundaries for any proofs.
-2. Validators keep a mapping of ledger segments by slot to public keys of
-replicator storage accounts. When it processes proofs for a segment in a given
-turn it updates this mapping and provides an RPC interface which takes a slot
-and hands back a list of public keys. The client then looks up in their
-cluster\_info table to see which network address that corresponds to and sends
-a repair request to retrieve the necessary blocks of ledger.
-2. Validators would need to invalidate this list every N turns.
+2. Validators maintain a map of ledger segments and corresponding replicator public keys.
+The map is updated when a Validator processes a replicator's proofs for a segment.
+The validator provides an RPC interface to access the this map. Using this API, clients
+can map a segment to a replicator's network address (correlating it via cluster_info table).
+The clients can then send repair requests to the replicator to retrieve segments.
+3. Validators would need to invalidate this list every N turns.
 
 ## Sybil attacks
 
