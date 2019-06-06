@@ -64,11 +64,14 @@ fi
 ARGS+=(
   --env BUILDKITE
   --env BUILDKITE_AGENT_ACCESS_TOKEN
-  --env BUILDKITE_BRANCH
-  --env BUILDKITE_COMMIT
   --env BUILDKITE_JOB_ID
-  --env BUILDKITE_TAG
   --env CI
+  --env CI_BRANCH
+  --env CI_BUILD_ID
+  --env CI_COMMIT
+  --env CI_JOB_ID
+  --env CI_PULL_REQUEST
+  --env CI_REPO_SLUG
   --env CODECOV_TOKEN
   --env CRATES_IO_TOKEN
 )

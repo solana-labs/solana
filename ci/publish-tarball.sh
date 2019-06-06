@@ -4,7 +4,7 @@ set -e
 cd "$(dirname "$0")/.."
 
 DRYRUN=
-if [[ -z $BUILDKITE_BRANCH ]]; then
+if [[ -z $CI_BRANCH ]]; then
   DRYRUN="echo"
   CHANNEL=unknown
 fi
@@ -12,12 +12,9 @@ fi
 eval "$(ci/channel-info.sh)"
 
 TAG=
-if [[ -n "$BUILDKITE_TAG" ]]; then
-  CHANNEL_OR_TAG=$BUILDKITE_TAG
-  TAG="$BUILDKITE_TAG"
-elif [[ -n "$TRIGGERED_BUILDKITE_TAG" ]]; then
-  CHANNEL_OR_TAG=$TRIGGERED_BUILDKITE_TAG
-  TAG="$TRIGGERED_BUILDKITE_TAG"
+if [[ -n "$CI_TAG" ]]; then
+  CHANNEL_OR_TAG=$CI_TAG
+  TAG="$CI_TAG"
 else
   CHANNEL_OR_TAG=$CHANNEL
 fi

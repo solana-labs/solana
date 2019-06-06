@@ -12,7 +12,7 @@
 set -e
 cd "$(dirname "$0")"/..
 
-if ci/is-pr.sh; then
+if [[ -n $CI_PULL_REQUEST ]]; then
   affectedFiles="$(buildkite-agent meta-data get affected_files)"
   echo "Affected files in this PR: $affectedFiles"
 

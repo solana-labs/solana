@@ -9,8 +9,8 @@ set -e
 cd "$(dirname "$0")/.."
 source ci/_
 
-: "${BUILDKITE_COMMIT:=local}"
-reportName="lcov-${BUILDKITE_COMMIT:0:9}"
+: "${CI_COMMIT:=local}"
+reportName="lcov-${CI_COMMIT:0:9}"
 
 if [[ -n $1 ]]; then
   crate=--manifest-path=$1/Cargo.toml

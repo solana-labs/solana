@@ -30,8 +30,8 @@ set -o pipefail
 export RUST_BACKTRACE=1
 
 UPLOAD_METRICS=""
-TARGET_BRANCH=$BUILDKITE_BRANCH
-if [[ -z $BUILDKITE_BRANCH ]] || ./ci/is-pr.sh; then
+TARGET_BRANCH=$CI_BRANCH
+if [[ -z $CI_BRANCH ]] || [[ -n $CI_PULL_REQUEST ]]; then
   TARGET_BRANCH=$EDGE_CHANNEL
 else
   UPLOAD_METRICS="upload"

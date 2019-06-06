@@ -184,7 +184,7 @@ if [[ -n $TESTNET_TAG ]]; then
   CHANNEL_OR_TAG=$TESTNET_TAG
 else
 
-  if [[ $BUILDKITE_BRANCH != "$CHANNEL_BRANCH" ]]; then
+  if [[ $CI_BRANCH != "$CHANNEL_BRANCH" ]]; then
     (
       cat <<EOF
 steps:

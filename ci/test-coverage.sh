@@ -25,7 +25,7 @@ source scripts/ulimit-n.sh
 
 scripts/coverage.sh
 
-report=coverage-"${BUILDKITE_COMMIT:0:9}".tar.gz
+report=coverage-"${CI_COMMIT:0:9}".tar.gz
 mv target/cov/report.tar.gz "$report"
 upload-ci-artifact "$report"
 annotate --style success --context lcov-report \
@@ -39,5 +39,5 @@ else
   bash <(curl -s https://codecov.io/bash) -X gcov -f target/cov/lcov.info
 
   annotate --style success --context codecov.io \
-    "CodeCov report: https://codecov.io/github/solana-labs/solana/commit/${BUILDKITE_COMMIT:0:9}"
+    "CodeCov report: https://codecov.io/github/solana-labs/solana/commit/${CI_COMMIT:0:9}"
 fi

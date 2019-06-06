@@ -55,7 +55,7 @@ stable)
   ;;
 esac
 
-if [[ $BUILDKITE_BRANCH != "$CHANNEL_BRANCH" ]]; then
+if [[ $CI_BRANCH != "$CHANNEL_BRANCH" ]]; then
   (
     cat <<EOF
 steps:
