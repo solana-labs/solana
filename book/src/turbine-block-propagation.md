@@ -26,13 +26,13 @@ make up layer 0. These will automatically be the highest stake holders, allowing
 the heaviest votes to come back to the leader first. Layer-0 and lower-layer
 nodes use the same logic to find their neighbors and next layer peers.
 
-To reduce the possiblity of attack vectors, each blob is transmitted over a
-random tree of neighboorhoods.  Each node uses the same set of nodes represeting
-the cluster.  A random tree is generated for each blob using randomness derived
-from the blob itself.  Since the random seed is not known in advance, attacks
-that try to eclipse neighboorhoods from certain leaders or blocks become very
-difficult, and should require almost complete control of the stake in the
-cluster.
+To reduce the possibility of attack vectors, each blob is transmitted over a
+random tree of neighborhoods.  Each node uses the same set of nodes representing
+the cluster.  A random tree is generated from the set for each blob using
+randomness derived from the blob itself.  Since the random seed is not known in
+advance, attacks that try to eclipse neighborhoods from certain leaders or
+blocks become very difficult, and should require almost complete control of the
+stake in the cluster.
 
 ## Layer and Neighborhood Structure
 
