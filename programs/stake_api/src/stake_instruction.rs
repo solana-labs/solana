@@ -1,9 +1,9 @@
 use crate::id;
-use crate::stake_state::{StakeAccount, StakeState};
+use crate::stake_state::{self, StakeState};
 use bincode::deserialize;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::account_api::AccountWrapper;
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction;
@@ -107,7 +107,7 @@ pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instructio
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
@@ -128,20 +128,20 @@ pub fn process_instruction(
             if !rest.is_empty() {
                 Err(InstructionError::InvalidInstructionData)?;
             }
-            me.initialize_mining_pool()
+            stake_state::initialize_mining_pool(*me)
         }
         StakeInstruction::InitializeDelegate => {
             if !rest.is_empty() {
                 Err(InstructionError::InvalidInstructionData)?;
             }
-            me.initialize_delegate()
+            stake_state::initialize_delegate(*me)
         }
         StakeInstruction::DelegateStake => {
             if rest.len() != 1 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
-            let vote = &rest[0];
-            me.delegate_stake(vote)
+            let vote = &mut rest[0];
+            stake_state::delegate_stake(*me, *vote)
         }
         StakeInstruction::RedeemVoteCredits => {
             if rest.len() != 2 {
@@ -151,7 +151,7 @@ pub fn process_instruction(
             let stake = &mut stake[0];
             let vote = &mut vote[0];
 
-            me.redeem_vote_credits(stake, vote)
+            stake_state::redeem_vote_credits(*me, *stake, *vote)
         }
     }
 }
@@ -173,12 +173,12 @@ mod tests {
                 .iter()
                 .zip(accounts.iter_mut())
                 .map(|(meta, account)| {
-                    AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                        &meta.pubkey,
-                        meta.is_signer,
-                        account,
-                    ))
+                    KeyedCreditDebitAccount::new(&meta.pubkey, meta.is_signer, account)
                 })
+                .collect();
+            let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
+                .iter_mut()
+                .map(|account| account as &mut AccountApi)
                 .collect();
             super::process_instruction(&Pubkey::default(), &mut keyed_accounts, &instruction.data)
         }
@@ -208,11 +208,11 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
+                &mut [&mut KeyedCreditDebitAccount::new(
                     &Pubkey::default(),
                     false,
                     &mut CreditDebitAccount::default(),
-                ))],
+                )],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
@@ -222,11 +222,11 @@ mod tests {
         assert_eq!(
             super::process_instruction(
                 &Pubkey::default(),
-                &mut [AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
+                &mut [&mut KeyedCreditDebitAccount::new(
                     &Pubkey::default(),
                     false,
                     &mut CreditDebitAccount::default()
-                ))],
+                )],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
@@ -236,16 +236,16 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [
-                    AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
+                    &mut KeyedCreditDebitAccount::new(
                         &Pubkey::default(),
                         false,
                         &mut CreditDebitAccount::default()
-                    )),
-                    AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
+                    ),
+                    &mut KeyedCreditDebitAccount::new(
                         &Pubkey::default(),
                         false,
                         &mut CreditDebitAccount::default()
-                    )),
+                    ),
                 ],
                 &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
             ),
@@ -257,16 +257,16 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [
-                    AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
+                    &mut KeyedCreditDebitAccount::new(
                         &Pubkey::default(),
                         true,
                         &mut CreditDebitAccount::default()
-                    )),
-                    AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
+                    ),
+                    &mut KeyedCreditDebitAccount::new(
                         &Pubkey::default(),
                         false,
                         &mut CreditDebitAccount::default()
-                    )),
+                    ),
                 ],
                 &serialize(&StakeInstruction::DelegateStake).unwrap(),
             ),
@@ -278,21 +278,21 @@ mod tests {
             super::process_instruction(
                 &Pubkey::default(),
                 &mut [
-                    AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
+                    &mut KeyedCreditDebitAccount::new(
                         &Pubkey::default(),
                         false,
                         &mut CreditDebitAccount::default()
-                    )),
-                    AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
+                    ),
+                    &mut KeyedCreditDebitAccount::new(
                         &Pubkey::default(),
                         false,
                         &mut CreditDebitAccount::default()
-                    )),
-                    AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
+                    ),
+                    &mut KeyedCreditDebitAccount::new(
                         &Pubkey::default(),
                         false,
                         &mut CreditDebitAccount::default()
-                    )),
+                    ),
                 ],
                 &serialize(&StakeInstruction::RedeemVoteCredits).unwrap(),
             ),

@@ -5,7 +5,7 @@ use crate::exchange_state::*;
 use crate::faucet_id;
 use log::*;
 use solana_metrics::inc_new_counter_info;
-use solana_sdk::account_api::{AccountApi, AccountWrapper};
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
@@ -155,7 +155,7 @@ impl ExchangeProcessor {
         Ok(())
     }
 
-    fn do_account_request(keyed_accounts: &mut [AccountWrapper]) -> Result<(), InstructionError> {
+    fn do_account_request(keyed_accounts: &mut [&mut AccountApi]) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
         const NEW_ACCOUNT_INDEX: usize = 1;
 
@@ -176,7 +176,7 @@ impl ExchangeProcessor {
     }
 
     fn do_transfer_request(
-        keyed_accounts: &mut [AccountWrapper],
+        keyed_accounts: &mut [&mut AccountApi],
         token: Token,
         tokens: u64,
     ) -> Result<(), InstructionError> {
@@ -260,7 +260,7 @@ impl ExchangeProcessor {
     }
 
     fn do_trade_request(
-        keyed_accounts: &mut [AccountWrapper],
+        keyed_accounts: &mut [&mut AccountApi],
         info: &TradeRequestInfo,
     ) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
@@ -316,7 +316,7 @@ impl ExchangeProcessor {
     }
 
     fn do_trade_cancellation(
-        keyed_accounts: &mut [AccountWrapper],
+        keyed_accounts: &mut [&mut AccountApi],
     ) -> Result<(), InstructionError> {
         const OWNER_INDEX: usize = 0;
         const TRADE_INDEX: usize = 1;
@@ -349,7 +349,7 @@ impl ExchangeProcessor {
         )
     }
 
-    fn do_swap_request(keyed_accounts: &mut [AccountWrapper]) -> Result<(), InstructionError> {
+    fn do_swap_request(keyed_accounts: &mut [&mut AccountApi]) -> Result<(), InstructionError> {
         const TO_TRADE_INDEX: usize = 1;
         const FROM_TRADE_INDEX: usize = 2;
         const PROFIT_ACCOUNT_INDEX: usize = 3;
@@ -428,7 +428,7 @@ impl ExchangeProcessor {
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();

@@ -5,7 +5,7 @@ use crate::budget_state::{BudgetError, BudgetState};
 use bincode::deserialize;
 use chrono::prelude::{DateTime, Utc};
 use log::*;
-use solana_sdk::account_api::{AccountApi, AccountWrapper};
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 
@@ -13,7 +13,7 @@ use solana_sdk::pubkey::Pubkey;
 /// will progress one step.
 fn apply_signature(
     budget_state: &mut BudgetState,
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
 ) -> Result<(), BudgetError> {
     let mut final_payment = None;
     if let Some(ref mut expr) = budget_state.pending_budget {
@@ -54,7 +54,7 @@ fn apply_signature(
 /// will progress one step.
 fn apply_timestamp(
     budget_state: &mut BudgetState,
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     dt: DateTime<Utc>,
 ) -> Result<(), BudgetError> {
     // Check to see if any timelocked transactions can be completed.
@@ -84,7 +84,7 @@ fn apply_timestamp(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     let instruction = deserialize(data).map_err(|err| {

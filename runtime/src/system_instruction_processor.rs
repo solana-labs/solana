@@ -1,5 +1,5 @@
 use log::*;
-use solana_sdk::account_api::{AccountApi, AccountWrapper};
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::{SystemError, SystemInstruction};
@@ -9,7 +9,7 @@ const FROM_ACCOUNT_INDEX: usize = 0;
 const TO_ACCOUNT_INDEX: usize = 1;
 
 fn create_system_account(
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     lamports: u64,
     space: u64,
     program_id: &Pubkey,
@@ -47,14 +47,14 @@ fn create_system_account(
 }
 
 fn assign_account_to_program(
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     program_id: &Pubkey,
 ) -> Result<(), InstructionError> {
     keyed_accounts[FROM_ACCOUNT_INDEX].set_owner(program_id)?;
     Ok(())
 }
 fn transfer_lamports(
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     lamports: u64,
 ) -> Result<(), InstructionError> {
     if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].lamports() {
@@ -73,7 +73,7 @@ fn transfer_lamports(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     if let Ok(instruction) = bincode::deserialize(data) {
@@ -130,13 +130,13 @@ mod tests {
         let mut to_account = CreditDebitAccount::new(0, 0, &Pubkey::default());
 
         let mut keyed_accounts = [
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                &from,
-                true,
-                &mut from_account,
-            )),
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(&to, false, &mut to_account)),
+            KeyedCreditDebitAccount::new(&from, true, &mut from_account),
+            KeyedCreditDebitAccount::new(&to, false, &mut to_account),
         ];
+        let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
+            .iter_mut()
+            .map(|account| account as &mut AccountApi)
+            .collect();
         create_system_account(&mut keyed_accounts, 50, 2, &new_program_owner).unwrap();
         let from_lamports = from_account.lamports;
         let to_lamports = to_account.lamports;
@@ -160,13 +160,13 @@ mod tests {
         let unchanged_account = to_account.clone();
 
         let mut keyed_accounts = [
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                &from,
-                true,
-                &mut from_account,
-            )),
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(&to, false, &mut to_account)),
+            KeyedCreditDebitAccount::new(&from, true, &mut from_account),
+            KeyedCreditDebitAccount::new(&to, false, &mut to_account),
         ];
+        let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
+            .iter_mut()
+            .map(|account| account as &mut AccountApi)
+            .collect();
         let result = create_system_account(&mut keyed_accounts, 150, 2, &new_program_owner);
         assert_eq!(
             result,
@@ -192,17 +192,13 @@ mod tests {
         let unchanged_account = owned_account.clone();
 
         let mut keyed_accounts = [
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                &from,
-                true,
-                &mut from_account,
-            )),
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                &owned_key,
-                false,
-                &mut owned_account,
-            )),
+            KeyedCreditDebitAccount::new(&from, true, &mut from_account),
+            KeyedCreditDebitAccount::new(&owned_key, false, &mut owned_account),
         ];
+        let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
+            .iter_mut()
+            .map(|account| account as &mut AccountApi)
+            .collect();
         let result = create_system_account(&mut keyed_accounts, 50, 2, &new_program_owner);
         assert_eq!(
             result,
@@ -232,17 +228,13 @@ mod tests {
         let unchanged_account = populated_account.clone();
 
         let mut keyed_accounts = [
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                &from,
-                true,
-                &mut from_account,
-            )),
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                &populated_key,
-                false,
-                &mut populated_account,
-            )),
+            KeyedCreditDebitAccount::new(&from, true, &mut from_account),
+            KeyedCreditDebitAccount::new(&populated_key, false, &mut populated_account),
         ];
+        let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
+            .iter_mut()
+            .map(|account| account as &mut AccountApi)
+            .collect();
         let result = create_system_account(&mut keyed_accounts, 50, 2, &new_program_owner);
         assert_eq!(
             result,
@@ -263,13 +255,13 @@ mod tests {
         let to = Pubkey::new_rand();
         let mut to_account = CreditDebitAccount::new(0, 0, &Pubkey::default());
         let mut keyed_accounts = [
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                &from,
-                true,
-                &mut from_account,
-            )),
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(&to, false, &mut to_account)),
+            KeyedCreditDebitAccount::new(&from, true, &mut from_account),
+            KeyedCreditDebitAccount::new(&to, false, &mut to_account),
         ];
+        let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
+            .iter_mut()
+            .map(|account| account as &mut AccountApi)
+            .collect();
         let result = create_system_account(&mut keyed_accounts, 50, 2, &other_program);
         assert_eq!(
             result,
@@ -285,22 +277,14 @@ mod tests {
 
         let from = Pubkey::new_rand();
         let mut from_account = CreditDebitAccount::new(100, 0, &system_program::id());
-        let mut keyed_accounts = [AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-            &from,
-            true,
-            &mut from_account,
-        ))];
+        let mut keyed_account = KeyedCreditDebitAccount::new(&from, true, &mut from_account);
+        let mut keyed_accounts: Vec<&mut AccountApi> = vec![&mut keyed_account];
         assign_account_to_program(&mut keyed_accounts, &new_program_owner).unwrap();
-        let from_owner = from_account.owner;
-        assert_eq!(from_owner, new_program_owner);
+        let from_owner = keyed_accounts[0].owner();
+        assert_eq!(from_owner, &new_program_owner);
 
         // Attempt to assign account not owned by system program
         let another_program_owner = Pubkey::new(&[8; 32]);
-        keyed_accounts = [AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-            &from,
-            true,
-            &mut from_account,
-        ))];
         let instruction = SystemInstruction::Assign {
             program_id: another_program_owner,
         };
@@ -317,28 +301,19 @@ mod tests {
         let to = Pubkey::new_rand();
         let mut to_account = CreditDebitAccount::new(1, 0, &Pubkey::new(&[3; 32])); // account owner should not matter
         let mut keyed_accounts = [
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                &from,
-                true,
-                &mut from_account,
-            )),
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(&to, false, &mut to_account)),
+            KeyedCreditDebitAccount::new(&from, true, &mut from_account),
+            KeyedCreditDebitAccount::new(&to, false, &mut to_account),
         ];
+        let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
+            .iter_mut()
+            .map(|account| account as &mut AccountApi)
+            .collect();
         transfer_lamports(&mut keyed_accounts, 50).unwrap();
-        let from_lamports = from_account.lamports;
-        let to_lamports = to_account.lamports;
+        let from_lamports = keyed_accounts[0].lamports();
+        let to_lamports = keyed_accounts[1].lamports();
         assert_eq!(from_lamports, 50);
         assert_eq!(to_lamports, 51);
 
-        // Attempt to move more lamports than remaining in from_account
-        keyed_accounts = [
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                &from,
-                true,
-                &mut from_account,
-            )),
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(&to, false, &mut to_account)),
-        ];
         let result = transfer_lamports(&mut keyed_accounts, 100);
         assert_eq!(
             result,

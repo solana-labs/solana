@@ -1,7 +1,7 @@
 use crate::native_loader;
 use crate::system_instruction_processor;
 use serde::{Deserialize, Serialize};
-use solana_sdk::account_api::AccountWrapper;
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::credit_debit_account::{
     create_keyed_accounts, CreditDebitAccount, KeyedCreditDebitAccount,
 };
@@ -85,7 +85,7 @@ fn verify_instruction(
 }
 
 pub type ProcessInstruction =
-    fn(&Pubkey, &mut [AccountWrapper], &[u8]) -> Result<(), InstructionError>;
+    fn(&Pubkey, &mut [&mut AccountApi], &[u8]) -> Result<(), InstructionError>;
 
 pub type SymbolCache = RwLock<HashMap<Vec<u8>, Symbol<instruction_processor_utils::Entrypoint>>>;
 
@@ -133,8 +133,8 @@ impl MessageProcessor {
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
 
-        let mut keyed_accounts = create_keyed_accounts(executable_accounts);
-        let mut keyed_accounts2: Vec<_> = instruction
+        let mut credit_debit_accounts = create_keyed_accounts(executable_accounts);
+        let mut credit_debit_accounts2: Vec<_> = instruction
             .accounts
             .iter()
             .map(|&index| {
@@ -147,12 +147,12 @@ impl MessageProcessor {
                 KeyedCreditDebitAccount::new(key, is_signer, account)
             })
             .collect();
-        keyed_accounts.append(&mut keyed_accounts2);
+        credit_debit_accounts.append(&mut credit_debit_accounts2);
 
-        let mut keyed_accounts: Vec<AccountWrapper> = keyed_accounts
-            .into_iter()
-            .map(AccountWrapper::CreditDebit)
-            .collect();
+        let mut keyed_accounts: Vec<&mut AccountApi> = vec![];
+        for account in credit_debit_accounts.iter_mut() {
+            keyed_accounts.push(account as &mut AccountApi);
+        }
 
         for (id, process_instruction) in &self.instruction_processors {
             if id == program_id {

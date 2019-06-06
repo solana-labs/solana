@@ -6,7 +6,7 @@ use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
 use log::*;
-use solana_sdk::account_api::{AccountApi, AccountWrapper};
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::loader_instruction::LoaderInstruction;
@@ -68,7 +68,7 @@ fn library_open(path: &PathBuf) -> std::io::Result<Library> {
 
 pub fn entrypoint(
     program_id: &Pubkey,
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     ix_data: &[u8],
     symbol_cache: &SymbolCache,
 ) -> Result<(), InstructionError> {

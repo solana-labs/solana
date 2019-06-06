@@ -7,7 +7,7 @@ use bincode::deserialize;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics::datapoint_warn;
-use solana_sdk::account_api::AccountWrapper;
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::syscall::slot_hashes;
@@ -93,7 +93,7 @@ pub fn vote(
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
@@ -112,16 +112,16 @@ pub fn process_instruction(
     // TODO: data-driven unpack and dispatch of KeyedAccounts
     match deserialize(data).map_err(|_| InstructionError::InvalidInstructionData)? {
         VoteInstruction::InitializeAccount(node_pubkey, commission) => {
-            vote_state::initialize_account(me, &node_pubkey, commission)
+            vote_state::initialize_account(*me, &node_pubkey, commission)
         }
         VoteInstruction::AuthorizeVoter(voter_pubkey) => {
-            vote_state::authorize_voter(me, rest, &voter_pubkey)
+            vote_state::authorize_voter(*me, rest, &voter_pubkey)
         }
         VoteInstruction::Vote(votes) => {
             datapoint_warn!("vote-native", ("count", 1, i64));
             let (slot_hashes, other_signers) = rest.split_at_mut(1);
             let slot_hashes = &mut slot_hashes[0];
-            vote_state::process_votes(me, slot_hashes, other_signers, &votes)
+            vote_state::process_votes(*me, *slot_hashes, other_signers, &votes)
         }
     }
 }
@@ -151,12 +151,12 @@ mod tests {
                 .iter()
                 .zip(accounts.iter_mut())
                 .map(|(meta, account)| {
-                    AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                        &meta.pubkey,
-                        meta.is_signer,
-                        account,
-                    ))
+                    KeyedCreditDebitAccount::new(&meta.pubkey, meta.is_signer, account)
                 })
+                .collect();
+            let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
+                .iter_mut()
+                .map(|account| account as &mut AccountApi)
                 .collect();
             super::process_instruction(&Pubkey::default(), &mut keyed_accounts, &instruction.data)
         }

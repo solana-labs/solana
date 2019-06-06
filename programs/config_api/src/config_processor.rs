@@ -1,13 +1,13 @@
 //! Config program
 
 use log::*;
-use solana_sdk::account_api::{AccountApi, AccountWrapper};
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     if keyed_accounts[0].signer_key().is_none() {

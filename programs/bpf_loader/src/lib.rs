@@ -8,7 +8,7 @@ use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use libc::c_char;
 use log::*;
 use solana_rbpf::{EbpfVmRaw, MemoryRegion};
-use solana_sdk::account_api::{AccountApi, AccountWrapper};
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
@@ -231,7 +231,7 @@ pub fn create_vm(prog: &[u8]) -> Result<(EbpfVmRaw, MemoryRegion), Error> {
 
 fn serialize_parameters(
     program_id: &Pubkey,
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     data: &[u8],
 ) -> Vec<u8> {
     assert_eq!(32, mem::size_of::<Pubkey>());
@@ -255,7 +255,7 @@ fn serialize_parameters(
     v
 }
 
-fn deserialize_parameters(keyed_accounts: &mut [AccountWrapper], buffer: &[u8]) {
+fn deserialize_parameters(keyed_accounts: &mut [&mut AccountApi], buffer: &[u8]) {
     assert_eq!(32, mem::size_of::<Pubkey>());
 
     let mut start = mem::size_of::<u64>();
@@ -280,7 +280,7 @@ fn deserialize_parameters(keyed_accounts: &mut [AccountWrapper], buffer: &[u8]) 
 solana_entrypoint!(entrypoint);
 fn entrypoint(
     program_id: &Pubkey,
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     tx_data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();

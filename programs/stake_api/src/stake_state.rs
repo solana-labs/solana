@@ -4,8 +4,9 @@
 //! * own mining pools
 
 use crate::id;
+use bincode::{deserialize, serialize_into, ErrorKind};
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::account_api::{AccountApi, AccountWrapper};
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::account_utils::State;
 use solana_sdk::credit_debit_account::CreditDebitAccount;
 use solana_sdk::instruction::InstructionError;
@@ -44,6 +45,17 @@ impl StakeState {
     // utility function, used by Stakes, tests
     pub fn from(account: &CreditDebitAccount) -> Option<StakeState> {
         account.state().ok()
+    }
+
+    pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
+        deserialize(input).map_err(|_| InstructionError::InvalidAccountData)
+    }
+
+    pub fn serialize(&self, output: &mut [u8]) -> Result<(), InstructionError> {
+        serialize_into(output, self).map_err(|err| match *err {
+            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
+            _ => InstructionError::GenericError,
+        })
     }
 
     // utility function, used by Stakes, tests
@@ -88,99 +100,105 @@ impl StakeState {
     }
 }
 
-pub trait StakeAccount {
-    fn initialize_mining_pool(&mut self) -> Result<(), InstructionError>;
-    fn initialize_delegate(&mut self) -> Result<(), InstructionError>;
-    fn delegate_stake(&mut self, vote_account: &AccountWrapper) -> Result<(), InstructionError>;
-    fn redeem_vote_credits(
-        &mut self,
-        stake_account: &mut AccountWrapper,
-        vote_account: &mut AccountWrapper,
-    ) -> Result<(), InstructionError>;
+// pub trait StakeAccount {
+//     fn initialize_mining_pool(&mut self) -> Result<(), InstructionError>;
+//     fn initialize_delegate(&mut self) -> Result<(), InstructionError>;
+//     fn delegate_stake(&mut self, vote_account: &mut AccountApi) -> Result<(), InstructionError>;
+//     fn redeem_vote_credits(
+//         &mut self,
+//         stake_account: &mut AccountApi,
+//         vote_account: &mut AccountApi,
+//     ) -> Result<(), InstructionError>;
+// }
+
+// impl StakeAccount for AccountApi {
+pub fn initialize_mining_pool(state_account: &mut AccountApi) -> Result<(), InstructionError> {
+    if let StakeState::Uninitialized = StakeState::deserialize(state_account.get_data())? {
+        StakeState::MiningPool.serialize(&mut state_account.account_writer()?)
+    } else {
+        Err(InstructionError::InvalidAccountData)
+    }
+}
+pub fn initialize_delegate(state_account: &mut AccountApi) -> Result<(), InstructionError> {
+    if let StakeState::Uninitialized = StakeState::deserialize(state_account.get_data())? {
+        let state = StakeState::Delegate {
+            voter_pubkey: Pubkey::default(),
+            credits_observed: 0,
+        };
+        state.serialize(&mut state_account.account_writer()?)
+    } else {
+        Err(InstructionError::InvalidAccountData)
+    }
+}
+pub fn delegate_stake(
+    state_account: &mut AccountApi,
+    vote_account: &mut AccountApi,
+) -> Result<(), InstructionError> {
+    if state_account.signer_key().is_none() {
+        return Err(InstructionError::MissingRequiredSignature);
+    }
+
+    if let StakeState::Delegate { .. } = StakeState::deserialize(state_account.get_data())? {
+        let vote_state: VoteState = VoteState::deserialize(vote_account.get_data())?;
+        let state = StakeState::Delegate {
+            voter_pubkey: *vote_account.unsigned_key(),
+            credits_observed: vote_state.credits(),
+        };
+        state.serialize(&mut state_account.account_writer()?)
+    } else {
+        Err(InstructionError::InvalidAccountData)
+    }
 }
 
-impl<'a> StakeAccount for AccountWrapper<'a> {
-    fn initialize_mining_pool(&mut self) -> Result<(), InstructionError> {
-        if let StakeState::Uninitialized = self.state()? {
-            self.set_state(&StakeState::MiningPool)
-        } else {
-            Err(InstructionError::InvalidAccountData)
-        }
-    }
-    fn initialize_delegate(&mut self) -> Result<(), InstructionError> {
-        if let StakeState::Uninitialized = self.state()? {
-            self.set_state(&StakeState::Delegate {
-                voter_pubkey: Pubkey::default(),
-                credits_observed: 0,
-            })
-        } else {
-            Err(InstructionError::InvalidAccountData)
-        }
-    }
-    fn delegate_stake(&mut self, vote_account: &AccountWrapper) -> Result<(), InstructionError> {
-        if self.signer_key().is_none() {
-            return Err(InstructionError::MissingRequiredSignature);
+pub fn redeem_vote_credits(
+    state_account: &mut AccountApi,
+    stake_account: &mut AccountApi,
+    vote_account: &mut AccountApi,
+) -> Result<(), InstructionError> {
+    if let (
+        StakeState::MiningPool,
+        StakeState::Delegate {
+            voter_pubkey,
+            credits_observed,
+        },
+    ) = (
+        StakeState::deserialize(state_account.get_data())?,
+        StakeState::deserialize(stake_account.get_data())?,
+    ) {
+        let vote_state: VoteState = VoteState::deserialize(vote_account.get_data())?;
+
+        if voter_pubkey != *vote_account.unsigned_key() {
+            return Err(InstructionError::InvalidArgument);
         }
 
-        if let StakeState::Delegate { .. } = self.state()? {
-            let vote_state: VoteState = vote_account.state()?;
-            self.set_state(&StakeState::Delegate {
-                voter_pubkey: *vote_account.unsigned_key(),
-                credits_observed: vote_state.credits(),
-            })
-        } else {
-            Err(InstructionError::InvalidAccountData)
+        if credits_observed > vote_state.credits() {
+            return Err(InstructionError::InvalidAccountData);
         }
-    }
 
-    fn redeem_vote_credits(
-        &mut self,
-        stake_account: &mut AccountWrapper,
-        vote_account: &mut AccountWrapper,
-    ) -> Result<(), InstructionError> {
-        if let (
-            StakeState::MiningPool,
-            StakeState::Delegate {
-                voter_pubkey,
-                credits_observed,
-            },
-        ) = (self.state()?, stake_account.state()?)
+        if let Some((stakers_reward, voters_reward)) =
+            StakeState::calculate_rewards(credits_observed, stake_account.lamports(), &vote_state)
         {
-            let vote_state: VoteState = vote_account.state()?;
-
-            if voter_pubkey != *vote_account.unsigned_key() {
-                return Err(InstructionError::InvalidArgument);
+            if state_account.lamports() < (stakers_reward + voters_reward) {
+                return Err(InstructionError::UnbalancedInstruction);
             }
+            state_account.debit(stakers_reward + voters_reward)?;
+            stake_account.credit(stakers_reward)?;
+            vote_account.credit(voters_reward)?;
 
-            if credits_observed > vote_state.credits() {
-                return Err(InstructionError::InvalidAccountData);
-            }
-
-            if let Some((stakers_reward, voters_reward)) = StakeState::calculate_rewards(
-                credits_observed,
-                stake_account.lamports(),
-                &vote_state,
-            ) {
-                if self.lamports() < (stakers_reward + voters_reward) {
-                    return Err(InstructionError::UnbalancedInstruction);
-                }
-                self.debit(stakers_reward + voters_reward)?;
-                stake_account.credit(stakers_reward)?;
-                vote_account.credit(voters_reward)?;
-
-                stake_account.set_state(&StakeState::Delegate {
-                    voter_pubkey,
-                    credits_observed: vote_state.credits(),
-                })
-            } else {
-                // not worth collecting
-                Err(InstructionError::CustomError(1))
-            }
+            let state = StakeState::Delegate {
+                voter_pubkey,
+                credits_observed: vote_state.credits(),
+            };
+            state.serialize(&mut state_account.account_writer()?)
         } else {
-            Err(InstructionError::InvalidAccountData)
+            // not worth collecting
+            Err(InstructionError::CustomError(1))
         }
+    } else {
+        Err(InstructionError::InvalidAccountData)
     }
 }
+// }
 
 // utility function, used by Bank, tests, genesis
 pub fn create_delegate_stake_account(
@@ -221,51 +239,40 @@ mod tests {
         let vote_pubkey = vote_keypair.pubkey();
         let mut vote_account =
             vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
-        let mut vote_keyed_account = AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-            &vote_pubkey,
-            false,
-            &mut vote_account,
-        ));
-        vote_keyed_account.set_state(&vote_state).unwrap();
+        let mut vote_keyed_account =
+            KeyedCreditDebitAccount::new(&vote_pubkey, false, &mut vote_account);
+        vote_state
+            .serialize(&mut vote_keyed_account.account_writer().unwrap())
+            .unwrap();
 
         let stake_pubkey = Pubkey::default();
         let mut stake_account =
             CreditDebitAccount::new(0, std::mem::size_of::<StakeState>(), &id());
 
-        let mut stake_keyed_account = AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-            &stake_pubkey,
-            false,
-            &mut stake_account,
-        ));
+        let mut stake_keyed_account =
+            KeyedCreditDebitAccount::new(&stake_pubkey, false, &mut stake_account);
 
         {
             let stake_state: StakeState = stake_keyed_account.state().unwrap();
             assert_eq!(stake_state, StakeState::default());
         }
 
-        stake_keyed_account.initialize_delegate().unwrap();
+        initialize_delegate(&mut stake_keyed_account).unwrap();
         assert_eq!(
-            stake_keyed_account.delegate_stake(&vote_keyed_account),
+            delegate_stake(&mut stake_keyed_account, &mut vote_keyed_account),
             Err(InstructionError::MissingRequiredSignature)
         );
 
-        let mut stake_keyed_account = AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-            &stake_pubkey,
-            true,
-            &mut stake_account,
-        ));
-        assert!(stake_keyed_account
-            .delegate_stake(&vote_keyed_account)
-            .is_ok());
+        let mut stake_keyed_account =
+            KeyedCreditDebitAccount::new(&stake_pubkey, true, &mut stake_account);
+        assert!(delegate_stake(&mut stake_keyed_account, &mut vote_keyed_account).is_ok());
 
         // verify that create_delegate_stake_account() matches the
         //   resulting account from delegate_stake()
-        if let AccountWrapper::CreditDebit(account) = &stake_keyed_account {
-            assert_eq!(
-                create_delegate_stake_account(&vote_pubkey, &vote_state, 0),
-                *account.account,
-            );
-        }
+        assert_eq!(
+            create_delegate_stake_account(&vote_pubkey, &vote_state, 0),
+            *stake_keyed_account.account,
+        );
 
         let stake_state: StakeState = stake_keyed_account.state().unwrap();
         assert_eq!(
@@ -278,9 +285,7 @@ mod tests {
 
         let stake_state = StakeState::MiningPool;
         stake_keyed_account.set_state(&stake_state).unwrap();
-        assert!(stake_keyed_account
-            .delegate_stake(&vote_keyed_account)
-            .is_err());
+        assert!(delegate_stake(&mut stake_keyed_account, &mut vote_keyed_account).is_err());
     }
     #[test]
     fn test_stake_state_calculate_rewards() {
@@ -341,12 +346,11 @@ mod tests {
         let vote_pubkey = vote_keypair.pubkey();
         let mut vote_account =
             vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
-        let mut vote_keyed_account = AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-            &vote_pubkey,
-            false,
-            &mut vote_account,
-        ));
-        vote_keyed_account.set_state(&vote_state).unwrap();
+        let mut vote_keyed_account =
+            KeyedCreditDebitAccount::new(&vote_pubkey, false, &mut vote_account);
+        vote_state
+            .serialize(&mut vote_keyed_account.account_writer().unwrap())
+            .unwrap();
 
         let pubkey = Pubkey::default();
         let mut stake_account = CreditDebitAccount::new(
@@ -354,39 +358,39 @@ mod tests {
             std::mem::size_of::<StakeState>(),
             &id(),
         );
-        let mut stake_keyed_account = AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-            &pubkey,
-            true,
-            &mut stake_account,
-        ));
-        stake_keyed_account.initialize_delegate().unwrap();
+        let mut stake_keyed_account =
+            KeyedCreditDebitAccount::new(&pubkey, true, &mut stake_account);
+        initialize_delegate(&mut stake_keyed_account).unwrap();
 
         // delegate the stake
-        assert!(stake_keyed_account
-            .delegate_stake(&vote_keyed_account)
-            .is_ok());
+        assert!(delegate_stake(&mut stake_keyed_account, &mut vote_keyed_account).is_ok());
 
         let mut mining_pool_account =
             CreditDebitAccount::new(0, std::mem::size_of::<StakeState>(), &id());
-        let mut mining_pool_keyed_account = AccountWrapper::CreditDebit(
-            KeyedCreditDebitAccount::new(&pubkey, true, &mut mining_pool_account),
-        );
+        let mut mining_pool_keyed_account =
+            KeyedCreditDebitAccount::new(&pubkey, true, &mut mining_pool_account);
 
         // not a mining pool yet...
         assert_eq!(
-            mining_pool_keyed_account
-                .redeem_vote_credits(&mut stake_keyed_account, &mut vote_keyed_account),
+            redeem_vote_credits(
+                &mut mining_pool_keyed_account,
+                &mut stake_keyed_account,
+                &mut vote_keyed_account
+            ),
             Err(InstructionError::InvalidAccountData)
         );
 
-        mining_pool_keyed_account
-            .set_state(&StakeState::MiningPool)
+        StakeState::MiningPool
+            .serialize(&mut mining_pool_keyed_account.account_writer().unwrap())
             .unwrap();
 
         // no movement in vote account, so no redemption needed
         assert_eq!(
-            mining_pool_keyed_account
-                .redeem_vote_credits(&mut stake_keyed_account, &mut vote_keyed_account),
+            redeem_vote_credits(
+                &mut mining_pool_keyed_account,
+                &mut stake_keyed_account,
+                &mut vote_keyed_account
+            ),
             Err(InstructionError::CustomError(1))
         );
 
@@ -396,16 +400,22 @@ mod tests {
 
         // now, no lamports in the pool!
         assert_eq!(
-            mining_pool_keyed_account
-                .redeem_vote_credits(&mut stake_keyed_account, &mut vote_keyed_account),
+            redeem_vote_credits(
+                &mut mining_pool_keyed_account,
+                &mut stake_keyed_account,
+                &mut vote_keyed_account
+            ),
             Err(InstructionError::UnbalancedInstruction)
         );
 
         // add a lamport to pool
         mining_pool_keyed_account.set_lamports(2).unwrap();
-        assert!(mining_pool_keyed_account
-            .redeem_vote_credits(&mut stake_keyed_account, &mut vote_keyed_account)
-            .is_ok()); // yay
+        assert!(redeem_vote_credits(
+            &mut mining_pool_keyed_account,
+            &mut stake_keyed_account,
+            &mut vote_keyed_account
+        )
+        .is_ok()); // yay
 
         // lamports only shifted around, none made or lost
         assert_eq!(
@@ -425,35 +435,29 @@ mod tests {
         let vote_pubkey = vote_keypair.pubkey();
         let mut vote_account =
             vote_state::create_account(&vote_pubkey, &Pubkey::new_rand(), 0, 100);
-        let mut vote_keyed_account = AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-            &vote_pubkey,
-            false,
-            &mut vote_account,
-        ));
-        vote_keyed_account.set_state(&vote_state).unwrap();
+        let mut vote_keyed_account =
+            KeyedCreditDebitAccount::new(&vote_pubkey, false, &mut vote_account);
+        vote_state
+            .serialize(&mut vote_keyed_account.account_writer().unwrap())
+            .unwrap();
 
         let pubkey = Pubkey::default();
         let mut stake_account =
             CreditDebitAccount::new(0, std::mem::size_of::<StakeState>(), &id());
-        let mut stake_keyed_account = AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-            &pubkey,
-            true,
-            &mut stake_account,
-        ));
-        stake_keyed_account.initialize_delegate().unwrap();
+        let mut stake_keyed_account =
+            KeyedCreditDebitAccount::new(&pubkey, true, &mut stake_account);
+        initialize_delegate(&mut stake_keyed_account).unwrap();
 
         // delegate the stake
-        assert!(stake_keyed_account
-            .delegate_stake(&vote_keyed_account)
-            .is_ok());
+        assert!(delegate_stake(&mut stake_keyed_account, &mut vote_keyed_account).is_ok());
 
         let mut mining_pool_account =
             CreditDebitAccount::new(0, std::mem::size_of::<StakeState>(), &id());
-        let mut mining_pool_keyed_account = AccountWrapper::CreditDebit(
-            KeyedCreditDebitAccount::new(&pubkey, true, &mut mining_pool_account),
-        );
-        mining_pool_keyed_account
-            .set_state(&StakeState::MiningPool)
+        let mut mining_pool_keyed_account =
+            KeyedCreditDebitAccount::new(&pubkey, true, &mut mining_pool_account);
+
+        StakeState::MiningPool
+            .serialize(&mut mining_pool_keyed_account.account_writer().unwrap())
             .unwrap();
 
         let mut vote_state = VoteState::default();
@@ -461,11 +465,16 @@ mod tests {
             // go back in time, previous state had 1000 votes
             vote_state.process_slot_vote_unchecked(i);
         }
-        vote_keyed_account.set_state(&vote_state).unwrap();
+        vote_state
+            .serialize(&mut vote_keyed_account.account_writer().unwrap())
+            .unwrap();
         // voter credits lower than stake_delegate credits...  TODO: is this an error?
         assert_eq!(
-            mining_pool_keyed_account
-                .redeem_vote_credits(&mut stake_keyed_account, &mut vote_keyed_account),
+            redeem_vote_credits(
+                &mut mining_pool_keyed_account,
+                &mut stake_keyed_account,
+                &mut vote_keyed_account
+            ),
             Err(InstructionError::InvalidAccountData)
         );
 
@@ -473,17 +482,19 @@ mod tests {
         let vote1_pubkey = vote1_keypair.pubkey();
         let mut vote1_account =
             vote_state::create_account(&vote1_pubkey, &Pubkey::new_rand(), 0, 100);
-        let mut vote1_keyed_account = AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-            &vote1_pubkey,
-            false,
-            &mut vote1_account,
-        ));
-        vote1_keyed_account.set_state(&vote_state).unwrap();
+        let mut vote1_keyed_account =
+            KeyedCreditDebitAccount::new(&vote1_pubkey, false, &mut vote1_account);
+        vote_state
+            .serialize(&mut vote1_keyed_account.account_writer().unwrap())
+            .unwrap();
 
         // wrong voter_pubkey...
         assert_eq!(
-            mining_pool_keyed_account
-                .redeem_vote_credits(&mut stake_keyed_account, &mut vote1_keyed_account),
+            redeem_vote_credits(
+                &mut mining_pool_keyed_account,
+                &mut stake_keyed_account,
+                &mut vote1_keyed_account
+            ),
             Err(InstructionError::InvalidArgument)
         );
     }

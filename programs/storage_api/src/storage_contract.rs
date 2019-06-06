@@ -1,7 +1,8 @@
 use crate::get_segment_from_slot;
+use bincode::{deserialize, serialize_into, ErrorKind};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
-use solana_sdk::account_api::{AccountApi, AccountWrapper};
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::account_utils::State;
 use solana_sdk::credit_debit_account::CreditDebitAccount;
 use solana_sdk::hash::Hash;
@@ -65,6 +66,19 @@ pub enum StorageContract {
     MiningPool,
 }
 
+impl StorageContract {
+    pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
+        deserialize(input).map_err(|_| InstructionError::InvalidAccountData)
+    }
+
+    pub fn serialize(&self, output: &mut [u8]) -> Result<(), InstructionError> {
+        serialize_into(output, self).map_err(|err| match *err {
+            ErrorKind::SizeLimit => InstructionError::AccountDataTooSmall,
+            _ => InstructionError::GenericError,
+        })
+    }
+}
+
 // utility function, used by Bank, tests, genesis
 pub fn create_validator_storage_account(owner: Pubkey, lamports: u64) -> CreditDebitAccount {
     let mut storage_account =
@@ -83,180 +97,156 @@ pub fn create_validator_storage_account(owner: Pubkey, lamports: u64) -> CreditD
     storage_account
 }
 
-pub trait StorageAccount {
-    fn initialize_mining_pool(&mut self) -> Result<(), InstructionError>;
-    fn initialize_replicator_storage(&mut self, owner: Pubkey) -> Result<(), InstructionError>;
-    fn initialize_validator_storage(&mut self, owner: Pubkey) -> Result<(), InstructionError>;
-    fn submit_mining_proof(
-        &mut self,
-        sha_state: Hash,
-        slot: u64,
-        signature: Signature,
-        current_slot: u64,
-    ) -> Result<(), InstructionError>;
-    fn advertise_storage_recent_blockhash(
-        &mut self,
-        hash: Hash,
-        slot: u64,
-        current_slot: u64,
-    ) -> Result<(), InstructionError>;
-    fn proof_validation(
-        &mut self,
-        segment: u64,
-        proofs: Vec<(Pubkey, Vec<CheckedProof>)>,
-        replicator_accounts: &mut [AccountWrapper],
-    ) -> Result<(), InstructionError>;
-    fn claim_storage_reward(
-        &mut self,
-        mining_pool: &mut AccountWrapper,
-        slot: u64,
-        current_slot: u64,
-    ) -> Result<(), InstructionError>;
+pub fn initialize_mining_pool(storage_account: &mut AccountApi) -> Result<(), InstructionError> {
+    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    if let StorageContract::Uninitialized = storage_contract {
+        storage_contract = StorageContract::MiningPool;
+        storage_contract.serialize(&mut storage_account.account_writer()?)
+    } else {
+        Err(InstructionError::AccountAlreadyInitialized)?
+    }
 }
 
-impl<'a> StorageAccount for AccountWrapper<'a> {
-    fn initialize_mining_pool(&mut self) -> Result<(), InstructionError> {
-        let storage_contract = &mut self.state()?;
-        if let StorageContract::Uninitialized = storage_contract {
-            *storage_contract = StorageContract::MiningPool;
-            self.set_state(storage_contract)
-        } else {
-            Err(InstructionError::AccountAlreadyInitialized)?
-        }
+pub fn initialize_replicator_storage(
+    storage_account: &mut AccountApi,
+    owner: Pubkey,
+) -> Result<(), InstructionError> {
+    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    if let StorageContract::Uninitialized = storage_contract {
+        storage_contract = StorageContract::ReplicatorStorage {
+            owner,
+            proofs: HashMap::new(),
+            reward_validations: HashMap::new(),
+        };
+        storage_contract.serialize(&mut storage_account.account_writer()?)
+    } else {
+        Err(InstructionError::AccountAlreadyInitialized)?
     }
+}
 
-    fn initialize_replicator_storage(&mut self, owner: Pubkey) -> Result<(), InstructionError> {
-        let storage_contract = &mut self.state()?;
-        if let StorageContract::Uninitialized = storage_contract {
-            *storage_contract = StorageContract::ReplicatorStorage {
-                owner,
-                proofs: HashMap::new(),
-                reward_validations: HashMap::new(),
-            };
-            self.set_state(storage_contract)
-        } else {
-            Err(InstructionError::AccountAlreadyInitialized)?
-        }
+pub fn initialize_validator_storage(
+    storage_account: &mut AccountApi,
+    owner: Pubkey,
+) -> Result<(), InstructionError> {
+    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    if let StorageContract::Uninitialized = storage_contract {
+        storage_contract = StorageContract::ValidatorStorage {
+            owner,
+            slot: 0,
+            hash: Hash::default(),
+            lockout_validations: HashMap::new(),
+            reward_validations: HashMap::new(),
+        };
+        storage_contract.serialize(&mut storage_account.account_writer()?)
+    } else {
+        Err(InstructionError::AccountAlreadyInitialized)?
     }
+}
 
-    fn initialize_validator_storage(&mut self, owner: Pubkey) -> Result<(), InstructionError> {
-        let storage_contract = &mut self.state()?;
-        if let StorageContract::Uninitialized = storage_contract {
-            *storage_contract = StorageContract::ValidatorStorage {
-                owner,
-                slot: 0,
-                hash: Hash::default(),
-                lockout_validations: HashMap::new(),
-                reward_validations: HashMap::new(),
-            };
-            self.set_state(storage_contract)
-        } else {
-            Err(InstructionError::AccountAlreadyInitialized)?
+pub fn submit_mining_proof(
+    storage_account: &mut AccountApi,
+    sha_state: Hash,
+    slot: u64,
+    signature: Signature,
+    current_slot: u64,
+) -> Result<(), InstructionError> {
+    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    if let StorageContract::ReplicatorStorage { proofs, .. } = &mut storage_contract {
+        let segment_index = get_segment_from_slot(slot);
+        let current_segment = get_segment_from_slot(current_slot);
+
+        if segment_index >= current_segment {
+            // attempt to submit proof for unconfirmed segment
+            return Err(InstructionError::InvalidArgument);
         }
-    }
 
-    fn submit_mining_proof(
-        &mut self,
-        sha_state: Hash,
-        slot: u64,
-        signature: Signature,
-        current_slot: u64,
-    ) -> Result<(), InstructionError> {
-        let mut storage_contract = &mut self.state()?;
-        if let StorageContract::ReplicatorStorage { proofs, .. } = &mut storage_contract {
-            let segment_index = get_segment_from_slot(slot);
-            let current_segment = get_segment_from_slot(current_slot);
+        debug!(
+            "Mining proof submitted with contract {:?} slot: {}",
+            sha_state, slot
+        );
 
-            if segment_index >= current_segment {
-                // attempt to submit proof for unconfirmed segment
-                return Err(InstructionError::InvalidArgument);
-            }
-
-            debug!(
-                "Mining proof submitted with contract {:?} slot: {}",
-                sha_state, slot
-            );
-
-            let segment_proofs = proofs.entry(segment_index).or_default();
-            if segment_proofs.contains_key(&sha_state) {
-                // do not accept duplicate proofs
-                return Err(InstructionError::InvalidArgument);
-            }
-            segment_proofs.insert(
+        let segment_proofs = proofs.entry(segment_index).or_default();
+        if segment_proofs.contains_key(&sha_state) {
+            // do not accept duplicate proofs
+            return Err(InstructionError::InvalidArgument);
+        }
+        segment_proofs.insert(
+            sha_state,
+            Proof {
                 sha_state,
-                Proof {
-                    sha_state,
-                    signature,
-                },
-            );
+                signature,
+            },
+        );
 
-            self.set_state(storage_contract)
-        } else {
-            Err(InstructionError::InvalidArgument)?
-        }
+        storage_contract.serialize(&mut storage_account.account_writer()?)
+    } else {
+        Err(InstructionError::InvalidArgument)?
     }
+}
 
-    fn advertise_storage_recent_blockhash(
-        &mut self,
-        hash: Hash,
-        slot: u64,
-        current_slot: u64,
-    ) -> Result<(), InstructionError> {
-        let mut storage_contract = &mut self.state()?;
-        if let StorageContract::ValidatorStorage {
-            slot: state_slot,
-            hash: state_hash,
-            reward_validations,
-            lockout_validations,
-            ..
-        } = &mut storage_contract
-        {
-            let current_segment = get_segment_from_slot(current_slot);
-            let original_segment = get_segment_from_slot(*state_slot);
-            let segment = get_segment_from_slot(slot);
-            debug!(
-                "advertise new segment: {} orig: {}",
-                segment, current_segment
-            );
-            if segment < original_segment || segment >= current_segment {
-                return Err(InstructionError::InvalidArgument);
-            }
-
-            *state_slot = slot;
-            *state_hash = hash;
-
-            // move storage epoch updated, move the lockout_validations to reward_validations
-            reward_validations.extend(lockout_validations.drain());
-            self.set_state(storage_contract)
-        } else {
-            Err(InstructionError::InvalidArgument)?
+pub fn advertise_storage_recent_blockhash(
+    storage_account: &mut AccountApi,
+    hash: Hash,
+    slot: u64,
+    current_slot: u64,
+) -> Result<(), InstructionError> {
+    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    if let StorageContract::ValidatorStorage {
+        slot: state_slot,
+        hash: state_hash,
+        reward_validations,
+        lockout_validations,
+        ..
+    } = &mut storage_contract
+    {
+        let current_segment = get_segment_from_slot(current_slot);
+        let original_segment = get_segment_from_slot(*state_slot);
+        let segment = get_segment_from_slot(slot);
+        debug!(
+            "advertise new segment: {} orig: {}",
+            segment, current_segment
+        );
+        if segment < original_segment || segment >= current_segment {
+            return Err(InstructionError::InvalidArgument);
         }
+
+        *state_slot = slot;
+        *state_hash = hash;
+
+        // move storage epoch updated, move the lockout_validations to reward_validations
+        reward_validations.extend(lockout_validations.drain());
+        storage_contract.serialize(&mut storage_account.account_writer()?)
+    } else {
+        Err(InstructionError::InvalidArgument)?
     }
+}
 
-    fn proof_validation(
-        &mut self,
-        segment: u64,
-        proofs: Vec<(Pubkey, Vec<CheckedProof>)>,
-        replicator_accounts: &mut [AccountWrapper],
-    ) -> Result<(), InstructionError> {
-        let mut storage_contract = &mut self.state()?;
-        if let StorageContract::ValidatorStorage {
-            slot: state_slot,
-            lockout_validations,
-            ..
-        } = &mut storage_contract
-        {
-            let segment_index = segment as usize;
-            let state_segment = get_segment_from_slot(*state_slot);
+pub fn proof_validation(
+    storage_account: &mut AccountApi,
+    segment: u64,
+    proofs: Vec<(Pubkey, Vec<CheckedProof>)>,
+    replicator_accounts: &mut [&mut AccountApi],
+) -> Result<(), InstructionError> {
+    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
+    if let StorageContract::ValidatorStorage {
+        slot: state_slot,
+        lockout_validations,
+        ..
+    } = &mut storage_contract
+    {
+        let segment_index = segment as usize;
+        let state_segment = get_segment_from_slot(*state_slot);
 
-            if segment_index > state_segment {
-                return Err(InstructionError::InvalidArgument);
-            }
+        if segment_index > state_segment {
+            return Err(InstructionError::InvalidArgument);
+        }
 
-            let accounts_and_proofs = replicator_accounts
-                .iter_mut()
-                .filter_map(|account| {
-                    account.state().ok().map(move |contract| match contract {
+        let accounts_and_proofs = replicator_accounts
+            .iter_mut()
+            .filter_map(|account| {
+                StorageContract::deserialize(account.get_data())
+                    .ok()
+                    .map(move |contract| match contract {
                         StorageContract::ReplicatorStorage { proofs, .. } => {
                             if let Some(proofs) = proofs.get(&segment_index).cloned() {
                                 Some((account, proofs))
@@ -266,140 +256,138 @@ impl<'a> StorageAccount for AccountWrapper<'a> {
                         }
                         _ => None,
                     })
-                })
-                .flatten()
-                .collect::<Vec<_>>();
+            })
+            .flatten()
+            .collect::<Vec<_>>();
 
-            if accounts_and_proofs.len() != proofs.len() {
-                // don't have all the accounts to validate the proofs against
-                return Err(InstructionError::InvalidArgument);
-            }
+        if accounts_and_proofs.len() != proofs.len() {
+            // don't have all the accounts to validate the proofs against
+            return Err(InstructionError::InvalidArgument);
+        }
 
-            let valid_proofs: Vec<_> = proofs
-                .into_iter()
-                .zip(accounts_and_proofs.into_iter())
-                .flat_map(|((_id, checked_proofs), (account, proofs))| {
-                    checked_proofs.into_iter().filter_map(move |checked_proof| {
-                        proofs.get(&checked_proof.proof.sha_state).map(|proof| {
-                            process_validation(account, segment_index, &proof, &checked_proof)
-                                .map(|_| checked_proof)
-                        })
+        let valid_proofs: Vec<_> = proofs
+            .into_iter()
+            .zip(accounts_and_proofs.into_iter())
+            .flat_map(|((_id, checked_proofs), (account, proofs))| {
+                checked_proofs.into_iter().filter_map(move |checked_proof| {
+                    proofs.get(&checked_proof.proof.sha_state).map(|proof| {
+                        process_validation(*account, segment_index, &proof, &checked_proof)
+                            .map(|_| checked_proof)
                     })
                 })
-                .flatten()
-                .collect();
+            })
+            .flatten()
+            .collect();
 
-            // allow validators to store successful validations
-            valid_proofs.into_iter().for_each(|proof| {
-                lockout_validations
-                    .entry(segment_index)
-                    .or_default()
-                    .insert(proof.proof.sha_state, proof.status);
-            });
+        // allow validators to store successful validations
+        valid_proofs.into_iter().for_each(|proof| {
+            lockout_validations
+                .entry(segment_index)
+                .or_default()
+                .insert(proof.proof.sha_state, proof.status);
+        });
 
-            self.set_state(storage_contract)
-        } else {
-            Err(InstructionError::InvalidArgument)?
-        }
+        storage_contract.serialize(&mut storage_account.account_writer()?)
+    } else {
+        Err(InstructionError::InvalidArgument)?
     }
+}
 
-    fn claim_storage_reward(
-        &mut self,
-        mining_pool: &mut AccountWrapper,
-        slot: u64,
-        current_slot: u64,
-    ) -> Result<(), InstructionError> {
-        let mut storage_contract = &mut self.state()?;
+pub fn claim_storage_reward(
+    storage_account: &mut AccountApi,
+    mining_pool: &mut AccountApi,
+    slot: u64,
+    current_slot: u64,
+) -> Result<(), InstructionError> {
+    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
 
-        if let StorageContract::ValidatorStorage {
-            reward_validations,
-            slot: state_slot,
-            ..
-        } = &mut storage_contract
-        {
-            let state_segment = get_segment_from_slot(*state_slot);
-            let claim_segment = get_segment_from_slot(slot);
-            if state_segment <= claim_segment || !reward_validations.contains_key(&claim_segment) {
-                debug!(
-                    "current {:?}, claim {:?}, have rewards for {:?} segments",
-                    state_segment,
-                    claim_segment,
-                    reward_validations.len()
-                );
-                return Err(InstructionError::InvalidArgument);
-            }
-            let num_validations = count_valid_proofs(
-                &reward_validations
-                    .remove(&claim_segment)
-                    .map(|mut proofs| proofs.drain().map(|(_, proof)| proof).collect::<Vec<_>>())
-                    .unwrap_or_default(),
+    if let StorageContract::ValidatorStorage {
+        reward_validations,
+        slot: state_slot,
+        ..
+    } = &mut storage_contract
+    {
+        let state_segment = get_segment_from_slot(*state_slot);
+        let claim_segment = get_segment_from_slot(slot);
+        if state_segment <= claim_segment || !reward_validations.contains_key(&claim_segment) {
+            debug!(
+                "current {:?}, claim {:?}, have rewards for {:?} segments",
+                state_segment,
+                claim_segment,
+                reward_validations.len()
             );
-            let reward = TOTAL_VALIDATOR_REWARDS * num_validations;
-            mining_pool.debit(reward)?;
-            self.credit(reward)?;
-            self.set_state(storage_contract)
-        } else if let StorageContract::ReplicatorStorage {
-            proofs,
-            reward_validations,
-            ..
-        } = &mut storage_contract
-        {
-            // if current tick height is a full segment away, allow reward collection
-            let claim_index = get_segment_from_slot(current_slot);
-            let claim_segment = get_segment_from_slot(slot);
-            // Todo this might might always be true
-            if claim_index <= claim_segment
-                || !reward_validations.contains_key(&claim_segment)
-                || !proofs.contains_key(&claim_segment)
-            {
-                info!(
-                    "current {:?}, claim {:?}, have rewards for {:?} segments",
-                    claim_index,
-                    claim_segment,
-                    reward_validations.len()
-                );
-                return Err(InstructionError::InvalidArgument);
-            }
-            // remove proofs for which rewards have already been collected
-            let segment_proofs = proofs.get_mut(&claim_segment).unwrap();
-            let checked_proofs = reward_validations
-                .remove(&claim_segment)
-                .map(|mut proofs| {
-                    proofs
-                        .drain()
-                        .map(|(sha_state, proof)| {
-                            proof
-                                .into_iter()
-                                .map(|proof| {
-                                    segment_proofs.remove(&sha_state);
-                                    proof
-                                })
-                                .collect::<Vec<_>>()
-                        })
-                        .flatten()
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-            let total_proofs = checked_proofs.len() as u64;
-            let num_validations = count_valid_proofs(&checked_proofs);
-            let reward =
-                num_validations * TOTAL_REPLICATOR_REWARDS * (num_validations / total_proofs);
-            mining_pool.debit(reward)?;
-            self.credit(reward)?;
-            self.set_state(storage_contract)
-        } else {
-            Err(InstructionError::InvalidArgument)?
+            return Err(InstructionError::InvalidArgument);
         }
+        let num_validations = count_valid_proofs(
+            &reward_validations
+                .remove(&claim_segment)
+                .map(|mut proofs| proofs.drain().map(|(_, proof)| proof).collect::<Vec<_>>())
+                .unwrap_or_default(),
+        );
+        let reward = TOTAL_VALIDATOR_REWARDS * num_validations;
+        mining_pool.debit(reward)?;
+        storage_account.credit(reward)?;
+        storage_contract.serialize(&mut storage_account.account_writer()?)
+    } else if let StorageContract::ReplicatorStorage {
+        proofs,
+        reward_validations,
+        ..
+    } = &mut storage_contract
+    {
+        // if current tick height is a full segment away, allow reward collection
+        let claim_index = get_segment_from_slot(current_slot);
+        let claim_segment = get_segment_from_slot(slot);
+        // Todo this might might always be true
+        if claim_index <= claim_segment
+            || !reward_validations.contains_key(&claim_segment)
+            || !proofs.contains_key(&claim_segment)
+        {
+            info!(
+                "current {:?}, claim {:?}, have rewards for {:?} segments",
+                claim_index,
+                claim_segment,
+                reward_validations.len()
+            );
+            return Err(InstructionError::InvalidArgument);
+        }
+        // remove proofs for which rewards have already been collected
+        let segment_proofs = proofs.get_mut(&claim_segment).unwrap();
+        let checked_proofs = reward_validations
+            .remove(&claim_segment)
+            .map(|mut proofs| {
+                proofs
+                    .drain()
+                    .map(|(sha_state, proof)| {
+                        proof
+                            .into_iter()
+                            .map(|proof| {
+                                segment_proofs.remove(&sha_state);
+                                proof
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let total_proofs = checked_proofs.len() as u64;
+        let num_validations = count_valid_proofs(&checked_proofs);
+        let reward = num_validations * TOTAL_REPLICATOR_REWARDS * (num_validations / total_proofs);
+        mining_pool.debit(reward)?;
+        storage_account.credit(reward)?;
+        storage_contract.serialize(&mut storage_account.account_writer()?)
+    } else {
+        Err(InstructionError::InvalidArgument)?
     }
 }
 
 /// Store the result of a proof validation into the replicator account
 fn store_validation_result(
-    storage_account: &mut AccountWrapper,
+    storage_account: &mut AccountApi,
     segment: usize,
     checked_proof: CheckedProof,
 ) -> Result<(), InstructionError> {
-    let mut storage_contract = storage_account.state()?;
+    let mut storage_contract = StorageContract::deserialize(storage_account.get_data())?;
     match &mut storage_contract {
         StorageContract::ReplicatorStorage {
             proofs,
@@ -427,7 +415,7 @@ fn store_validation_result(
         }
         _ => return Err(InstructionError::InvalidAccountData),
     }
-    storage_account.set_state(&storage_contract)
+    storage_contract.serialize(&mut storage_account.account_writer()?)
 }
 
 fn count_valid_proofs(proofs: &[ProofStatus]) -> u64 {
@@ -441,7 +429,7 @@ fn count_valid_proofs(proofs: &[ProofStatus]) -> u64 {
 }
 
 fn process_validation(
-    account: &mut AccountWrapper,
+    account: &mut AccountApi,
     segment_index: usize,
     proof: &Proof,
     checked_proof: &CheckedProof,
@@ -466,8 +454,7 @@ mod tests {
         let mut account = CreditDebitAccount::default();
         account.data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
         let pubkey = Pubkey::new_rand();
-        let mut storage_account =
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(&pubkey, false, &mut account));
+        let mut storage_account = KeyedCreditDebitAccount::new(&pubkey, false, &mut account);
         // pretend it's a validator op code
         let mut contract = storage_account.state().unwrap();
         if let StorageContract::ValidatorStorage { .. } = contract {
@@ -503,8 +490,7 @@ mod tests {
     fn test_process_validation() {
         let pubkey = Pubkey::new_rand();
         let mut account = CreditDebitAccount::default();
-        let mut account =
-            AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(&pubkey, false, &mut account));
+        let mut account = KeyedCreditDebitAccount::new(&pubkey, false, &mut account);
         let segment_index = 0_usize;
         let proof = Proof {
             signature: Signature::default(),

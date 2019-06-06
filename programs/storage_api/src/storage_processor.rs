@@ -1,9 +1,9 @@
 //! storage program
 //!  Receive mining proofs from miners, validate the answers
 //!  and give reward for good proofs.
-use crate::storage_contract::StorageAccount;
+use crate::storage_contract;
 use crate::storage_instruction::StorageInstruction;
-use solana_sdk::account_api::{AccountApi, AccountWrapper};
+use solana_sdk::account_api::AccountApi;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::syscall::tick_height::TickHeight;
@@ -11,7 +11,7 @@ use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 
 pub fn process_instruction(
     _program_id: &Pubkey,
-    keyed_accounts: &mut [AccountWrapper],
+    keyed_accounts: &mut [&mut AccountApi],
     data: &[u8],
 ) -> Result<(), InstructionError> {
     solana_logger::setup();
@@ -25,19 +25,19 @@ pub fn process_instruction(
             if !rest.is_empty() {
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.initialize_mining_pool()
+            storage_contract::initialize_mining_pool(*storage_account)
         }
         StorageInstruction::InitializeReplicatorStorage { owner } => {
             if !rest.is_empty() {
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.initialize_replicator_storage(owner)
+            storage_contract::initialize_replicator_storage(*storage_account, owner)
         }
         StorageInstruction::InitializeValidatorStorage { owner } => {
             if !rest.is_empty() {
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.initialize_validator_storage(owner)
+            storage_contract::initialize_validator_storage(*storage_account, owner)
         }
         StorageInstruction::SubmitMiningProof {
             sha_state,
@@ -48,8 +48,9 @@ pub fn process_instruction(
                 // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
-            let tick_height = TickHeight::from_wrapped(&rest[0]).unwrap();
-            storage_account.submit_mining_proof(
+            let tick_height = TickHeight::from_account(rest[0]).unwrap();
+            storage_contract::submit_mining_proof(
+                *storage_account,
                 sha_state,
                 slot,
                 signature,
@@ -61,8 +62,9 @@ pub fn process_instruction(
                 // This instruction must be signed by `me`
                 Err(InstructionError::InvalidArgument)?;
             }
-            let tick_height = TickHeight::from_wrapped(&rest[0]).unwrap();
-            storage_account.advertise_storage_recent_blockhash(
+            let tick_height = TickHeight::from_account(rest[0]).unwrap();
+            storage_contract::advertise_storage_recent_blockhash(
+                *storage_account,
                 hash,
                 slot,
                 tick_height / DEFAULT_TICKS_PER_SLOT,
@@ -72,9 +74,10 @@ pub fn process_instruction(
             if rest.len() != 2 {
                 Err(InstructionError::InvalidArgument)?;
             }
-            let tick_height = TickHeight::from_wrapped(&rest[1]).unwrap();
-            storage_account.claim_storage_reward(
-                &mut rest[0],
+            let tick_height = TickHeight::from_account(rest[1]).unwrap();
+            storage_contract::claim_storage_reward(
+                *storage_account,
+                rest[0],
                 slot,
                 tick_height / DEFAULT_TICKS_PER_SLOT,
             )
@@ -84,7 +87,7 @@ pub fn process_instruction(
                 // This instruction must be signed by `me` and `rest` cannot be empty
                 Err(InstructionError::InvalidArgument)?;
             }
-            storage_account.proof_validation(segment, proofs, rest)
+            storage_contract::proof_validation(*storage_account, segment, proofs, rest)
         }
     }
 }
@@ -130,12 +133,12 @@ mod tests {
             .iter()
             .zip(program_accounts.iter_mut())
             .map(|(account_meta, account)| {
-                AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                    &account_meta.pubkey,
-                    account_meta.is_signer,
-                    account,
-                ))
+                KeyedCreditDebitAccount::new(&account_meta.pubkey, account_meta.is_signer, account)
             })
+            .collect();
+        let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
+            .iter_mut()
+            .map(|account| account as &mut AccountApi)
             .collect();
 
         let ret = process_instruction(&id(), &mut keyed_accounts, &ix.data);
@@ -204,13 +207,8 @@ mod tests {
             ..CreditDebitAccount::default()
         };
         {
-            let mut storage_account = AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                &pubkey,
-                false,
-                &mut account,
-            ));
-            storage_account
-                .initialize_replicator_storage(account_owner)
+            let mut storage_account = KeyedCreditDebitAccount::new(&pubkey, false, &mut account);
+            storage_contract::initialize_replicator_storage(&mut storage_account, account_owner)
                 .unwrap();
         }
 
@@ -232,10 +230,10 @@ mod tests {
     fn test_storage_tx() {
         let pubkey = Pubkey::new_rand();
         let mut accounts = [(pubkey, CreditDebitAccount::default())];
-        let keyed_accounts = create_keyed_accounts(&mut accounts);
-        let mut keyed_accounts: Vec<AccountWrapper> = keyed_accounts
-            .into_iter()
-            .map(|keyed_account| AccountWrapper::CreditDebit(keyed_account))
+        let mut keyed_accounts = create_keyed_accounts(&mut accounts);
+        let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
+            .iter_mut()
+            .map(|account| account as &mut AccountApi)
             .collect();
         assert!(process_instruction(&id(), &mut keyed_accounts, &[]).is_err());
     }
@@ -247,16 +245,20 @@ mod tests {
         let mut keyed_accounts = Vec::new();
         let mut user_account = CreditDebitAccount::default();
         let mut tick_account = tick_height::create_account(1);
-        keyed_accounts.push(AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
+        keyed_accounts.push(KeyedCreditDebitAccount::new(
             &pubkey,
             true,
             &mut user_account,
-        )));
-        keyed_accounts.push(AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
+        ));
+        keyed_accounts.push(KeyedCreditDebitAccount::new(
             &tick_pubkey,
             false,
             &mut tick_account,
-        )));
+        ));
+        let mut keyed_accounts: Vec<&mut AccountApi> = keyed_accounts
+            .iter_mut()
+            .map(|account| account as &mut AccountApi)
+            .collect();
 
         let ix = storage_instruction::advertise_recent_blockhash(
             &pubkey,
@@ -316,13 +318,8 @@ mod tests {
         let mut account = CreditDebitAccount::default();
         account.data.resize(STORAGE_ACCOUNT_SPACE as usize, 0);
         {
-            let mut storage_account = AccountWrapper::CreditDebit(KeyedCreditDebitAccount::new(
-                &pubkey,
-                false,
-                &mut account,
-            ));
-            storage_account
-                .initialize_replicator_storage(account_owner)
+            let mut storage_account = KeyedCreditDebitAccount::new(&pubkey, false, &mut account);
+            storage_contract::initialize_replicator_storage(&mut storage_account, account_owner)
                 .unwrap();
         }
 

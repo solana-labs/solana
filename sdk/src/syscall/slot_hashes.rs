@@ -2,12 +2,13 @@
 //!
 //! this account carries the Bank's most recent blockhashes for some N parents
 //!
+use crate::account_api::AccountApi;
 use crate::account_utils::State;
 use crate::credit_debit_account::CreditDebitAccount;
 use crate::hash::Hash;
 use crate::pubkey::Pubkey;
 use crate::syscall;
-use bincode::serialized_size;
+use bincode::{deserialize, serialize_into, serialized_size};
 use std::ops::Deref;
 
 /// "Sysca11SlotHashes11111111111111111111111111"
@@ -39,6 +40,12 @@ impl SlotHashes {
     }
     pub fn to(&self, account: &mut CreditDebitAccount) -> Option<()> {
         account.set_state(self).ok()
+    }
+    pub fn from_account(account: &mut AccountApi) -> Option<Self> {
+        deserialize(account.get_data()).ok()
+    }
+    pub fn to_account(&self, account: &mut AccountApi) -> Option<()> {
+        serialize_into(account.account_writer().unwrap(), self).ok()
     }
 
     pub fn size_of() -> usize {
