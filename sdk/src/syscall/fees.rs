@@ -3,24 +3,16 @@
 use crate::account::Account;
 use crate::account_utils::State;
 use crate::fee_calculator::FeeCalculator;
-use crate::pubkey::Pubkey;
 use crate::syscall;
 use bincode::serialized_size;
 
-/// "Sysca11Fees11111111111111111111111111"
 ///  fees account pubkey
 const ID: [u8; 32] = [
     6, 167, 211, 138, 69, 218, 104, 33, 3, 92, 89, 173, 16, 89, 109, 253, 49, 97, 98, 165, 87, 222,
     119, 112, 253, 90, 76, 184, 0, 0, 0, 0,
 ];
 
-pub fn id() -> Pubkey {
-    Pubkey::new(&ID)
-}
-
-pub fn check_id(pubkey: &Pubkey) -> bool {
-    pubkey.as_ref() == ID
-}
+crate::solana_name_id!(ID, "Sysca11Fees11111111111111111111111111111111");
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -48,15 +40,6 @@ pub fn create_account(lamports: u64) -> Account {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_fees_id() {
-        let name = "Sysca11Fees11111111111111111111111111111111";
-        // To get the bytes above:
-        // dbg!((name, bs58::decode(name).into_vec().unwrap()));
-        assert_eq!(name, id().to_string());
-        assert!(check_id(&id()));
-    }
 
     #[test]
     fn test_fees_create_account() {

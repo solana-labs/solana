@@ -8,7 +8,10 @@ const CONFIG_PROGRAM_ID: [u8; 32] = [
     64, 25, 163, 35, 239, 160, 0, 0, 0, 0,
 ];
 
-solana_sdk::solana_program_id!(CONFIG_PROGRAM_ID);
+solana_sdk::solana_name_id!(
+    CONFIG_PROGRAM_ID,
+    "Config1111111111111111111111111111111111111"
+);
 
 pub trait ConfigState: Serialize {
     /// Maximum space that the serialized representation will require

@@ -8,4 +8,7 @@ const BUDGET_PROGRAM_ID: [u8; 32] = [
     198, 115, 123, 98, 188, 19, 160, 0, 0, 0, 0,
 ];
 
-solana_sdk::solana_program_id!(BUDGET_PROGRAM_ID);
+solana_sdk::solana_name_id!(
+    BUDGET_PROGRAM_ID,
+    "Budget1111111111111111111111111111111111111"
+);

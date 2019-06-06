@@ -88,6 +88,41 @@ pub fn read_pubkey(infile: &str) -> Result<Pubkey, Box<error::Error>> {
     Ok(Pubkey::from_str(&printable)?)
 }
 
+#[macro_export]
+macro_rules! solana_id(
+    ($id:ident) => (
+
+        pub fn check_id(id: &$crate::pubkey::Pubkey) -> bool {
+            id.as_ref() == $id
+        }
+
+        pub fn id() -> $crate::pubkey::Pubkey {
+            $crate::pubkey::Pubkey::new(&$id)
+        }
+
+        #[cfg(test)]
+        #[test]
+        fn test_id() {
+            assert!(check_id(&id()));
+        }
+
+    )
+);
+
+#[macro_export]
+macro_rules! solana_name_id(
+    ($id:ident, $name:expr) => (
+
+        $crate::solana_id!($id);
+
+        #[cfg(test)]
+        #[test]
+        fn test_name_id() {
+            assert_eq!(id().to_string(), $name);
+        }
+    )
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -20,31 +20,11 @@ macro_rules! solana_entrypoint(
     ($entrypoint:ident) => (
         #[no_mangle]
         pub extern "C" fn process(
-            program_id: &solana_sdk::pubkey::Pubkey,
-            keyed_accounts: &mut [solana_sdk::account::KeyedAccount],
+            program_id: &$crate::pubkey::Pubkey,
+            keyed_accounts: &mut [$crate::account::KeyedAccount],
             data: &[u8],
-        ) -> Result<(), solana_sdk::instruction::InstructionError> {
+        ) -> Result<(), $crate::instruction::InstructionError> {
             $entrypoint(program_id, keyed_accounts, data)
-        }
-    )
-);
-
-#[macro_export]
-macro_rules! solana_program_id(
-    ($program_id:ident) => (
-
-        pub fn check_id(program_id: &solana_sdk::pubkey::Pubkey) -> bool {
-            program_id.as_ref() == $program_id
-        }
-
-        pub fn id() -> solana_sdk::pubkey::Pubkey {
-            solana_sdk::pubkey::Pubkey::new(&$program_id)
-        }
-
-        #[cfg(test)]
-        #[test]
-        fn test_program_id() {
-            assert!(check_id(&id()));
         }
     )
 );

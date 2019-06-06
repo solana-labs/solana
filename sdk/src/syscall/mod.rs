@@ -2,9 +2,17 @@
 //!
 use crate::pubkey::Pubkey;
 
+pub mod current;
 pub mod fees;
 pub mod slot_hashes;
 pub mod tick_height;
+
+pub fn is_syscall_id(id: &Pubkey) -> bool {
+    current::check_id(id)
+        || fees::check_id(id)
+        || slot_hashes::check_id(id)
+        || tick_height::check_id(id)
+}
 
 /// "Sysca11111111111111111111111111111111111111"
 ///   owner pubkey for syscall accounts
@@ -13,25 +21,4 @@ const ID: [u8; 32] = [
     253, 202, 87, 144, 232, 16, 195, 192, 0, 0, 0, 0,
 ];
 
-pub fn id() -> Pubkey {
-    Pubkey::new(&ID)
-}
-
-pub fn check_id(id: &Pubkey) -> bool {
-    id.as_ref() == ID
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_syscall_ids() {
-        let ids = [("Sysca11111111111111111111111111111111111111", id())];
-        // to get the bytes above:
-        //        ids.iter().for_each(|(name, _)| {
-        //            dbg!((name, bs58::decode(name).into_vec().unwrap()));
-        //        });
-        assert!(ids.iter().all(|(name, id)| *name == id.to_string()));
-        assert!(check_id(&id()));
-    }
-}
+crate::solana_name_id!(ID, "Sysca11111111111111111111111111111111111111");
