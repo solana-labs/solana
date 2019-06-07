@@ -45,6 +45,8 @@ test-stable-perf)
     exit 0
   }
 
+  ls target
+  rm -rf target/xargo
   pushd programs/bpf/rust
   cargo install rustfilt
   ./dump.sh alloc
