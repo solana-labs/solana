@@ -120,7 +120,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     ) {
         match param::<Pubkey>(&pubkey_str, "pubkey") {
             Ok(pubkey) => {
-                let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
+                let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
                 let sub_id = SubscriptionId::Number(id as u64);
                 info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
                 let sink = subscriber.assign_id(sub_id.clone()).unwrap();
@@ -158,7 +158,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     ) {
         match param::<Pubkey>(&pubkey_str, "pubkey") {
             Ok(pubkey) => {
-                let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
+                let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
                 let sub_id = SubscriptionId::Number(id as u64);
                 info!("program_subscribe: account={:?} id={:?}", pubkey, sub_id);
                 let sink = subscriber.assign_id(sub_id.clone()).unwrap();
@@ -197,7 +197,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         info!("signature_subscribe");
         match param::<Signature>(&signature_str, "signature") {
             Ok(signature) => {
-                let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
+                let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
                 let sub_id = SubscriptionId::Number(id as u64);
                 info!(
                     "signature_subscribe: signature={:?} id={:?}",

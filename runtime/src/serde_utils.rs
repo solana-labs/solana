@@ -28,7 +28,7 @@ pub fn serialize_atomicusize<S>(x: &AtomicUsize, s: S) -> Result<S::Ok, S::Error
 where
     S: serde::Serializer,
 {
-    s.serialize_u64(x.load(Ordering::SeqCst) as u64)
+    s.serialize_u64(x.load(Ordering::Relaxed) as u64)
 }
 
 struct BoolVisitor;
@@ -58,5 +58,5 @@ pub fn serialize_atomicbool<S>(x: &AtomicBool, s: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
-    s.serialize_bool(x.load(Ordering::SeqCst))
+    s.serialize_bool(x.load(Ordering::Relaxed))
 }
