@@ -193,21 +193,13 @@ pub(crate) mod tests {
 
         process_instructions(
             bank,
-            &[from_account],
-            stake_instruction::create_delegate_account(
+            &[from_account, &stake_account_keypair],
+            stake_instruction::create_stake_account_and_delegate_stake(
                 &from_account.pubkey(),
                 &stake_account_pubkey,
+                vote_pubkey,
                 amount,
             ),
-        );
-
-        process_instructions(
-            bank,
-            &[from_account, &stake_account_keypair],
-            vec![stake_instruction::delegate_stake(
-                &stake_account_pubkey,
-                vote_pubkey,
-            )],
         );
     }
 

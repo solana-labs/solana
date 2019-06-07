@@ -112,7 +112,7 @@ setup_validator_accounts() {
     # Delegate the stake.  The transaction fee is paid by the node but the
     #  transaction must be signed by the stake_keypair
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
-      delegate-stake "$stake_keypair_path" "$vote_pubkey" || return $?
+      delegate-stake "$stake_keypair_path" "$vote_pubkey" "$stake_lamports" || return $?
 
     # Setup validator storage account
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \

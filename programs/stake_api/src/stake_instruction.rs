@@ -10,39 +10,40 @@ use solana_sdk::system_instruction;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum StakeInstruction {
-    /// Initialize the stake account as a Delegate account.
+    /// Initialize the stake account as a Stake account.
     ///
-    /// Expects 2 Accounts:
-    ///    0 - payer (TODO unused/remove)
-    ///    1 - Delegate StakeAccount to be initialized
-    InitializeDelegate,
+    /// Expects 1 Accounts:
+    ///    0 - StakeAccount to be initialized
+    InitializeStake,
 
     // Initialize the stake account as a MiningPool account
     ///
-    /// Expects 2 Accounts:
-    ///    0 - payer (TODO unused/remove)
-    ///    1 - MiningPool StakeAccount to be initialized
+    /// Expects 1 Accounts:
+    ///    0 - MiningPool StakeAccount to be initialized
     InitializeMiningPool,
 
-    /// `Delegate` or `Assign` a stake account to a particular node
+    /// `Delegate` a stake to a particular node
     ///
-    /// Expects 3 Accounts:
-    ///    0 - payer (TODO unused/remove)
-    ///    1 - Delegate StakeAccount to be updated
-    ///    2 - VoteAccount to which this Stake will be delegated
-    DelegateStake,
+    /// Expects 2 Accounts:
+    ///    0 - Delegate StakeAccount to be updated <= must have this signature
+    ///    1 - VoteAccount to which this Stake will be delegated
+    ///
+    /// The u64 is the portion of the Stake account balance to be activated,
+    ///    must be less than StakeAccount.lamports
+    ///
+    /// This instruction resets rewards, so issue
+    DelegateStake(u64),
 
     /// Redeem credits in the stake account
     ///
-    /// Expects 4 Accounts:
-    ///    0 - payer (TODO unused/remove)
-    ///    1 - MiningPool Stake Account to redeem credits from
-    ///    2 - Delegate StakeAccount to be updated
-    ///    3 - VoteAccount to which the Stake is delegated
+    /// Expects 3 Accounts:
+    ///    0 - MiningPool Stake Account to redeem credits from
+    ///    1 - Delegate StakeAccount to be updated
+    ///    2 - VoteAccount to which the Stake is delegated,
     RedeemVoteCredits,
 }
 
-pub fn create_delegate_account(
+pub fn create_stake_account(
     from_pubkey: &Pubkey,
     staker_pubkey: &Pubkey,
     lamports: u64,
@@ -57,10 +58,21 @@ pub fn create_delegate_account(
         ),
         Instruction::new(
             id(),
-            &StakeInstruction::InitializeDelegate,
+            &StakeInstruction::InitializeStake,
             vec![AccountMeta::new(*staker_pubkey, false)],
         ),
     ]
+}
+
+pub fn create_stake_account_and_delegate_stake(
+    from_pubkey: &Pubkey,
+    staker_pubkey: &Pubkey,
+    vote_pubkey: &Pubkey,
+    lamports: u64,
+) -> Vec<Instruction> {
+    let mut instructions = create_stake_account(from_pubkey, staker_pubkey, lamports);
+    instructions.push(delegate_stake(staker_pubkey, vote_pubkey, lamports));
+    instructions
 }
 
 pub fn create_mining_pool_account(
@@ -97,12 +109,12 @@ pub fn redeem_vote_credits(
     Instruction::new(id(), &StakeInstruction::RedeemVoteCredits, account_metas)
 }
 
-pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey) -> Instruction {
+pub fn delegate_stake(stake_pubkey: &Pubkey, vote_pubkey: &Pubkey, stake: u64) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*stake_pubkey, true),
         AccountMeta::new(*vote_pubkey, false),
     ];
-    Instruction::new(id(), &StakeInstruction::DelegateStake, account_metas)
+    Instruction::new(id(), &StakeInstruction::DelegateStake(stake), account_metas)
 }
 
 pub fn process_instruction(
@@ -130,18 +142,18 @@ pub fn process_instruction(
             }
             me.initialize_mining_pool()
         }
-        StakeInstruction::InitializeDelegate => {
+        StakeInstruction::InitializeStake => {
             if !rest.is_empty() {
                 Err(InstructionError::InvalidInstructionData)?;
             }
-            me.initialize_delegate()
+            me.initialize_stake()
         }
-        StakeInstruction::DelegateStake => {
+        StakeInstruction::DelegateStake(stake) => {
             if rest.len() != 1 {
                 Err(InstructionError::InvalidInstructionData)?;
             }
             let vote = &rest[0];
-            me.delegate_stake(vote)
+            me.delegate_stake(vote, stake)
         }
         StakeInstruction::RedeemVoteCredits => {
             if rest.len() != 2 {
@@ -189,7 +201,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         assert_eq!(
-            process_instruction(&delegate_stake(&Pubkey::default(), &Pubkey::default())),
+            process_instruction(&delegate_stake(&Pubkey::default(), &Pubkey::default(), 0)),
             Err(InstructionError::InvalidAccountData),
         );
     }
@@ -207,7 +219,7 @@ mod tests {
                     false,
                     &mut Account::default(),
                 )],
-                &serialize(&StakeInstruction::DelegateStake).unwrap(),
+                &serialize(&StakeInstruction::DelegateStake(0)).unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
         );
@@ -221,7 +233,7 @@ mod tests {
                     false,
                     &mut Account::default()
                 ),],
-                &serialize(&StakeInstruction::DelegateStake).unwrap(),
+                &serialize(&StakeInstruction::DelegateStake(0)).unwrap(),
             ),
             Err(InstructionError::InvalidInstructionData),
         );
@@ -246,7 +258,7 @@ mod tests {
                     KeyedAccount::new(&Pubkey::default(), true, &mut Account::default()),
                     KeyedAccount::new(&Pubkey::default(), false, &mut Account::default()),
                 ],
-                &serialize(&StakeInstruction::DelegateStake).unwrap(),
+                &serialize(&StakeInstruction::DelegateStake(0)).unwrap(),
             ),
             Err(InstructionError::InvalidAccountData),
         );

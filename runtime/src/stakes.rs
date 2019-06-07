@@ -100,7 +100,7 @@ mod tests {
     fn create_stake_account(stake: u64, vote_pubkey: &Pubkey) -> (Pubkey, Account) {
         (
             Pubkey::new_rand(),
-            stake_state::create_delegate_stake_account(&vote_pubkey, &VoteState::default(), stake),
+            stake_state::create_stake_account(&vote_pubkey, &VoteState::default(), stake),
         )
     }
 

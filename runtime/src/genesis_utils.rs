@@ -53,7 +53,7 @@ pub fn create_genesis_block_with_leader(
             // passive bootstrap leader stake, duplicates above temporarily
             (
                 staking_keypair.pubkey(),
-                stake_state::create_delegate_stake_account(
+                stake_state::create_stake_account(
                     &voting_keypair.pubkey(),
                     &vote_state,
                     bootstrap_leader_stake_lamports,

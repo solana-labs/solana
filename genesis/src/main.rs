@@ -245,7 +245,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             // passive bootstrap leader stake
             (
                 bootstrap_stake_keypair.pubkey(),
-                stake_state::create_delegate_stake_account(
+                stake_state::create_stake_account(
                     &bootstrap_vote_keypair.pubkey(),
                     &vote_state,
                     bootstrap_leader_stake_lamports,
