@@ -2,13 +2,14 @@
 
 #![no_std]
 
-#[macro_use]
+// #[macro_use]
 extern crate alloc;
 extern crate solana_sdk_bpf_utils;
 
 use solana_sdk_bpf_utils::log::*;
 
 use core::alloc::Layout;
+// use alloc::vec::Vec;
 use core::mem;
 
 #[no_mangle]
@@ -82,15 +83,28 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     //     // Test allocated vector
 
     //     const ITERS: usize = 100;
-    //     let ones = vec![1_u64; ITERS];
-    //     let mut sum: u64 = 0;
+    //     let ones = vec![1_usize; ITERS];
+    //     let mut sum: usize = 0;
 
-    //     for (i, v) in ones.iter().enumerate() {
-    //         sol_log_64(i as u64, 0, 0, 0, 0);
-    //         sum += ones[i as usize];
+    //     for v in ones.iter() {
+    //         sum += ones[*v];
     //     }
-    //     sol_log_64(0x4, 0, 0, 0, sum);
-    //     assert_eq!(sum, ITERS as u64);
+    //     sol_log_64(0x0, 0, 0, 0, sum as u64);
+    //     assert_eq!(sum, ITERS);
+    // }
+
+    // {
+    //     // TODO test Vec::new()
+
+    //     const ITERS: usize = 100;
+    //     let mut v = Vec::new();
+
+    //     for i in 0..ITERS {
+    //         sol_log_64(i as u64, 0, 0, 0, 0);
+    //         v.push(i);
+    //     }
+    //     sol_log_64(0x4, 0, 0, 0, v.len() as u64);
+    //     assert_eq!(v.len(), ITERS);
     // }
 
     sol_log("Success");

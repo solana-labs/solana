@@ -48,7 +48,7 @@ if [[ ! -r criterion-$machine-$version.md ]]; then
 fi
 
 # Install LLVM
-version=v0.0.9
+version=v0.0.10
 if [[ ! -f llvm-native-$machine-$version.md ]]; then
   (
     filename=solana-llvm-$machine.tar.bz2
@@ -108,7 +108,7 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
 fi
 
 # Install Rust-BPF Sysroot sources
-version=v0.2
+version=v0.3
 if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
   (
     set -ex
