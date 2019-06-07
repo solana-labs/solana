@@ -67,8 +67,8 @@ The `solana-install` tool can be used to easily install and upgrade the cluster
 software on Linux x86_64 systems.
 
 ```bash
-$ export SOLANA_RELEASE=v0.15.2  # skip this line to install the latest release
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.15.2/install/solana-install-init.sh | sh -s
+$ export SOLANA_RELEASE=v0.15.3  # skip this line to install the latest release
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.15.3/install/solana-install-init.sh | sh -s
 ```
 
 Alternatively build the `solana-install` program from source and run the
