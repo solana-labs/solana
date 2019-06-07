@@ -85,6 +85,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
 }
 
 #[bench]
+#[ignore]
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     solana_logger::setup();
     let num_threads = BankingStage::num_threads() as usize;
