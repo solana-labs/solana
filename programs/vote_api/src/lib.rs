@@ -6,4 +6,7 @@ const VOTE_PROGRAM_ID: [u8; 32] = [
     16, 67, 252, 13, 163, 83, 128, 0, 0, 0, 0,
 ];
 
-solana_sdk::solana_program_id!(VOTE_PROGRAM_ID);
+solana_sdk::solana_name_id!(
+    VOTE_PROGRAM_ID,
+    "Vote111111111111111111111111111111111111111"
+);

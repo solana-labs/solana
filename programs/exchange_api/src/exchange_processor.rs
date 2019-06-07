@@ -2,7 +2,7 @@
 
 use crate::exchange_instruction::*;
 use crate::exchange_state::*;
-use crate::faucet_id;
+use crate::faucet;
 use log::*;
 use solana_metrics::inc_new_counter_info;
 use solana_sdk::account::KeyedAccount;
@@ -192,7 +192,7 @@ impl ExchangeProcessor {
         let mut to_account =
             Self::deserialize_account(&keyed_accounts[TO_ACCOUNT_INDEX].account.data)?;
 
-        if &faucet_id() == keyed_accounts[FROM_ACCOUNT_INDEX].unsigned_key() {
+        if &faucet::id() == keyed_accounts[FROM_ACCOUNT_INDEX].unsigned_key() {
             to_account.tokens[token] += tokens;
         } else {
             let state: ExchangeState =
@@ -590,7 +590,7 @@ mod test {
         let instruction = exchange_instruction::transfer_request(
             &owner.pubkey(),
             to,
-            &faucet_id(),
+            &faucet::id(),
             token,
             tokens,
         );
@@ -671,7 +671,7 @@ mod test {
         let instruction = exchange_instruction::transfer_request(
             &owner.pubkey(),
             &new,
-            &faucet_id(),
+            &faucet::id(),
             Token::A,
             42,
         );

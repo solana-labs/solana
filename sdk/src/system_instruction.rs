@@ -9,6 +9,8 @@ pub enum SystemError {
     AccountAlreadyInUse,
     ResultWithNegativeLamports,
     SourceNotSystemAccount,
+    InvalidProgramId,
+    InvalidAccountId,
 }
 
 impl<T> DecodeError<T> for SystemError {

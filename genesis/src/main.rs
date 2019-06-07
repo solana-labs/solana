@@ -319,57 +319,6 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn test_program_ids() {
-        let ids = [
-            (
-                "11111111111111111111111111111111",
-                solana_sdk::system_program::id(),
-            ),
-            (
-                "NativeLoader1111111111111111111111111111111",
-                solana_sdk::native_loader::id(),
-            ),
-            (
-                "BPFLoader1111111111111111111111111111111111",
-                solana_sdk::bpf_loader::id(),
-            ),
-            (
-                "Budget1111111111111111111111111111111111111",
-                solana_budget_api::id(),
-            ),
-            (
-                "Stake11111111111111111111111111111111111111",
-                solana_stake_api::id(),
-            ),
-            (
-                "Storage111111111111111111111111111111111111",
-                solana_storage_api::id(),
-            ),
-            (
-                "Token11111111111111111111111111111111111111",
-                solana_token_api::id(),
-            ),
-            (
-                "Vote111111111111111111111111111111111111111",
-                solana_vote_api::id(),
-            ),
-            (
-                "Stake11111111111111111111111111111111111111",
-                solana_stake_api::id(),
-            ),
-            (
-                "Config1111111111111111111111111111111111111",
-                solana_config_api::id(),
-            ),
-            (
-                "Exchange11111111111111111111111111111111111",
-                solana_exchange_api::id(),
-            ),
-        ];
-        assert!(ids.iter().all(|(name, id)| *name == id.to_string()));
-    }
-
-    #[test]
     fn test_program_id_uniqueness() {
         let mut unique = HashSet::new();
         let ids = vec![

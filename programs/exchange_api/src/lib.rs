@@ -10,23 +10,20 @@ pub const EXCHANGE_PROGRAM_ID: [u8; 32] = [
     33, 70, 185, 192, 42, 31, 141, 152, 0, 0, 0, 0,
 ];
 
-solana_sdk::solana_program_id!(EXCHANGE_PROGRAM_ID);
+solana_sdk::solana_name_id!(
+    EXCHANGE_PROGRAM_ID,
+    "Exchange11111111111111111111111111111111111"
+);
 
-pub const EXCHANGE_FAUCET_ID: [u8; 32] = [
-    3, 147, 111, 103, 210, 47, 23, 11, 176, 29, 147, 89, 237, 155, 21, 62, 107, 105, 157, 1, 98,
-    204, 206, 211, 54, 212, 79, 15, 160, 0, 0, 0,
-];
+pub mod faucet {
+    pub const EXCHANGE_FAUCET_ID: [u8; 32] = [
+        3, 147, 111, 103, 210, 47, 23, 11, 176, 29, 147, 89, 237, 155, 21, 62, 107, 105, 157, 1,
+        98, 204, 206, 211, 54, 212, 79, 15, 160, 0, 0, 0,
+    ];
 
-pub fn faucet_id() -> solana_sdk::pubkey::Pubkey {
-    solana_sdk::pubkey::Pubkey::new(&EXCHANGE_FAUCET_ID)
-}
+    solana_sdk::solana_name_id!(
+        EXCHANGE_FAUCET_ID,
+        "ExchangeFaucet11111111111111111111111111111"
+    );
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn exchange_faucet_id() {
-        let ids = [("ExchangeFaucet11111111111111111111111111111", faucet_id())];
-        assert!(ids.iter().all(|(name, id)| *name == id.to_string()));
-    }
 }

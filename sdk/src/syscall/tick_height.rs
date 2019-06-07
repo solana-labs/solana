@@ -2,7 +2,6 @@
 //!
 use crate::account::Account;
 use crate::account_utils::State;
-use crate::pubkey::Pubkey;
 use crate::syscall;
 use bincode::serialized_size;
 
@@ -13,13 +12,7 @@ const ID: [u8; 32] = [
     208, 229, 34, 163, 11, 168, 45, 109, 60, 0, 0, 0,
 ];
 
-pub fn id() -> Pubkey {
-    Pubkey::new(&ID)
-}
-
-pub fn check_id(pubkey: &Pubkey) -> bool {
-    pubkey.as_ref() == ID
-}
+crate::solana_name_id!(ID, "Sysca11TickHeight11111111111111111111111111");
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -45,15 +38,6 @@ pub fn create_account(lamports: u64) -> Account {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_tick_height_id() {
-        let name = "Sysca11TickHeight11111111111111111111111111";
-        // To get the bytes above:
-        // dbg!((name, bs58::decode(name).into_vec().unwrap()));
-        assert_eq!(name, id().to_string());
-        assert!(check_id(&id()));
-    }
 
     #[test]
     fn test_tick_height_create_account() {

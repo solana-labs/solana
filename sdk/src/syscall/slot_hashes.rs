@@ -70,17 +70,6 @@ mod tests {
     use crate::hash::hash;
 
     #[test]
-    fn test_id() {
-        let ids = [("Sysca11S1otHashes11111111111111111111111111", id())];
-        // to get the bytes above:
-        //        ids.iter().for_each(|(name, _)| {
-        //            dbg!((name, bs58::decode(name).into_vec().unwrap()));
-        //        });
-        assert!(ids.iter().all(|(name, id)| *name == id.to_string()));
-        assert!(check_id(&id()));
-    }
-
-    #[test]
     fn test_create_account() {
         let lamports = 42;
         let account = create_account(lamports);

@@ -2,6 +2,7 @@ use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::syscall;
 use solana_sdk::system_instruction::{SystemError, SystemInstruction};
 use solana_sdk::system_program;
 
@@ -15,7 +16,10 @@ fn create_system_account(
     program_id: &Pubkey,
 ) -> Result<(), SystemError> {
     if !system_program::check_id(&keyed_accounts[FROM_ACCOUNT_INDEX].account.owner) {
-        debug!("CreateAccount: invalid account[from] owner");
+        debug!(
+            "CreateAccount: invalid account[from] owner {} ",
+            &keyed_accounts[FROM_ACCOUNT_INDEX].account.owner
+        );
         Err(SystemError::SourceNotSystemAccount)?;
     }
 
@@ -28,6 +32,23 @@ fn create_system_account(
         );
         Err(SystemError::AccountAlreadyInUse)?;
     }
+
+    if syscall::check_id(&program_id) {
+        debug!(
+            "CreateAccount: invalid argument; program id {} invalid",
+            program_id
+        );
+        Err(SystemError::InvalidProgramId)?;
+    }
+
+    if syscall::is_syscall_id(&keyed_accounts[TO_ACCOUNT_INDEX].unsigned_key()) {
+        debug!(
+            "CreateAccount: invalid argument; account id {} invalid",
+            program_id
+        );
+        Err(SystemError::InvalidAccountId)?;
+    }
+
     if lamports > keyed_accounts[FROM_ACCOUNT_INDEX].account.lamports {
         debug!(
             "CreateAccount: insufficient lamports ({}, need {})",
@@ -183,6 +204,38 @@ mod tests {
         let from_lamports = from_account.lamports;
         assert_eq!(from_lamports, 100);
         assert_eq!(owned_account, unchanged_account);
+    }
+
+    #[test]
+    fn test_create_syscall_invalid_id() {
+        // Attempt to create system account in account already owned by another program
+        let from = Pubkey::new_rand();
+        let mut from_account = Account::new(100, 0, &system_program::id());
+
+        let to = Pubkey::new_rand();
+        let mut to_account = Account::default();
+
+        let mut keyed_accounts = [
+            KeyedAccount::new(&from, true, &mut from_account),
+            KeyedAccount::new(&to, false, &mut to_account),
+        ];
+        // fail to create a syscall::id() owned account
+        let result = create_system_account(&mut keyed_accounts, 50, 2, &syscall::id());
+        assert_eq!(result, Err(SystemError::InvalidProgramId));
+
+        let to = syscall::fees::id();
+        let mut to_account = Account::default();
+
+        let mut keyed_accounts = [
+            KeyedAccount::new(&from, true, &mut from_account),
+            KeyedAccount::new(&to, false, &mut to_account),
+        ];
+        // fail to create an account with a syscall id
+        let result = create_system_account(&mut keyed_accounts, 50, 2, &system_program::id());
+        assert_eq!(result, Err(SystemError::InvalidAccountId));
+
+        let from_lamports = from_account.lamports;
+        assert_eq!(from_lamports, 100);
     }
 
     #[test]
