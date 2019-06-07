@@ -19,6 +19,9 @@ source scripts/ulimit-n.sh
 # Clear cached json keypair files
 rm -rf "$HOME/.config/solana"
 
+# Clear the BPF sysroot files, they are not automatically rebuilt
+rm -rf target/xargo # Issue #3105
+
 # Run tbe appropriate test based on entrypoint
 testName=$(basename "$0" .sh)
 case $testName in
@@ -44,21 +47,6 @@ test-stable-perf)
       "Skipped test-stable-perf as no relevant files were modified"
     exit 0
   }
-
-  ls target
-  rm -rf target/xargo # Issue #3105
-  pushd programs/bpf/rust
-  # cargo install rustfilt
-  ./dump.sh alloc
-  cat ./alloc/target/dump.txt
-  popd
-
-  pushd programs/bpf
-  export RUST_LOG=solana_bpf_loader=info,solana_rbpf=trace; cargo test --features="bpf_rust" -- --nocapture
-  popd
-
-  exit
-
 
   # BPF program tests
   _ make -C programs/bpf/c tests
