@@ -1,0 +1,40 @@
+os:
+  - osx
+  - windows
+
+language: rust
+cache: cargo
+rust:
+  - 1.35.0
+
+install:
+  - source ci/rust-version.sh
+  - test $rust_stable = $TRAVIS_RUST_VERSION # Update .travis.yml rust version above when this fails
+
+script:
+  - source ci/env.sh
+  - ci/publish-tarball.sh
+
+notifications:
+  email:
+    recipients:
+      - mvines@solana.com
+
+deploy:
+  - provider: s3
+    access_key_id: $AWS_ACCESS_KEY_ID
+    secret_access_key: $AWS_SECRET_ACCESS_KEY
+    bucket: release.solana.com
+    region: us-west-1
+    skip_cleanup: true
+    acl: public_read
+    local_dir: travis-s3-upload
+    on:
+      all_branches: true
+  - provider: releases
+    api_key: $GITHUB_TOKEN
+    skip_cleanup: true
+    file_glob: true
+    file: travis-$TRAVIS_TAG-upload/*
+    on:
+      tags: true
