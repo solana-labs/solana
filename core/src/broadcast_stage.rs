@@ -127,23 +127,19 @@ impl Broadcast {
         let bank_epoch = bank.get_stakers_epoch(bank.slot());
         let stakes = staking_utils::staked_nodes_at_epoch(&bank, bank_epoch);
 
-        if let Some(nodes) = stakes.as_ref() {
-            if nodes.len() > 1 {
-                // Send out data
-                cluster_info
-                    .read()
-                    .unwrap()
-                    .broadcast(sock, &blobs, stakes.as_ref())?;
+        // Send out data
+        cluster_info
+            .read()
+            .unwrap()
+            .broadcast(sock, &blobs, stakes.as_ref())?;
 
-                inc_new_counter_debug!("streamer-broadcast-sent", blobs.len());
+        inc_new_counter_debug!("streamer-broadcast-sent", blobs.len());
 
-                // send out erasures
-                cluster_info
-                    .read()
-                    .unwrap()
-                    .broadcast(sock, &coding, stakes.as_ref())?;
-            }
-        }
+        // send out erasures
+        cluster_info
+            .read()
+            .unwrap()
+            .broadcast(sock, &coding, stakes.as_ref())?;
 
         self.update_broadcast_stats(
             duration_as_ms(&broadcast_start.elapsed()),
