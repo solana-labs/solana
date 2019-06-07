@@ -503,14 +503,6 @@ impl Bank {
             "solana_system_program",
             &solana_sdk::system_program::id(),
         );
-        self.register_native_instruction_processor(
-            "solana_bpf_loader",
-            &solana_sdk::bpf_loader::id(),
-        );
-        self.register_native_instruction_processor(
-            &solana_vote_program!().0,
-            &solana_vote_program!().1,
-        );
 
         // Add additional native programs specified in the genesis block
         for (name, program_id) in &genesis_block.native_instruction_processors {

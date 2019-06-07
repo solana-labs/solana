@@ -60,7 +60,11 @@ pub fn create_genesis_block_with_leader(
                 ),
             ),
         ],
-        &[solana_vote_program!(), solana_stake_program!()],
+        &[
+            solana_bpf_loader!(),
+            solana_vote_program!(),
+            solana_stake_program!(),
+        ],
     );
 
     GenesisBlockInfo {
