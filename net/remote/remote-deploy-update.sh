@@ -6,7 +6,8 @@ set -e
 
 cd "$(dirname "$0")"/../..
 
-updateDownloadUrl=$1
+releaseChannel=$1
+updatePlatform=$2
 
 [[ -r deployConfig ]] || {
   echo deployConfig missing
@@ -20,7 +21,9 @@ missing() {
   exit 1
 }
 
-[[ -n $updateDownloadUrl ]] || missing updateDownloadUrl
+[[ -n $releaseChannel ]] || missing releaseChannel
+[[ -n $updatePlatform ]] || missing updatePlatform
+[[ -f update_manifest_keypair.json ]] || missing update_manifest_keypair.json
 
 RUST_LOG="$2"
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
@@ -31,6 +34,4 @@ loadConfigFile
 PATH="$HOME"/.cargo/bin:"$PATH"
 
 set -x
-solana-wallet --url http://127.0.0.1:8899 airdrop 42
-solana-install deploy "$updateDownloadUrl" update_manifest_keypair.json \
-  --url http://127.0.0.1:8899
+scripts/solana-install-deploy.sh localhost "$releaseChannel" "$updatePlatform"

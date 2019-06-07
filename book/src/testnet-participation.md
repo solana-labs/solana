@@ -64,11 +64,11 @@ for more detail on cluster activity.
 ##### Bootstrap with `solana-install`
 
 The `solana-install` tool can be used to easily install and upgrade the cluster
-software on Linux x86_64 systems.
+software on Linux x86_64 and mac OS systems.
 
 ```bash
-$ export SOLANA_RELEASE=v0.14.2  # skip this line to install the latest release
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.14.0/install/solana-install-init.sh | sh -s
+$ export SOLANA_RELEASE=v0.16.0  # skip this line to install the latest release
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.0/install/solana-install-init.sh | sh -s
 ```
 
 Alternatively build the `solana-install` program from source and run the
@@ -81,8 +81,9 @@ After a successful install, `solana-install update` may be used to easily update
 software to a newer version.
 
 ##### Download Prebuilt Binaries
-Binaries are available for Linux x86_64 systems.
+Binaries are available for Linux x86_64 and mac OS systems.
 
+###### Linux
 Download the binaries by navigating to
 [https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
 download **solana-release-x86_64-unknown-linux-gnu.tar.bz2**, then extract the
@@ -92,6 +93,17 @@ $ tar jxf solana-release-x86_64-unknown-linux-gnu.tar.bz2
 $ cd solana-release/
 $ export PATH=$PWD/bin:$PATH
 ```
+###### mac OS
+Download the binaries by navigating to
+[https://github.com/solana-labs/solana/releases/latest](https://github.com/solana-labs/solana/releases/latest),
+download **solana-release-x86_64-apple-darwin.tar.bz2**, then extract the
+archive:
+```bash
+$ tar jxf solana-release-x86_64-apple-darwin.tar.bz2
+$ cd solana-release/
+$ export PATH=$PWD/bin:$PATH
+```
+
 ##### Build From Source
 If you are unable to use the prebuilt binaries or prefer to build it yourself
 from source, navigate to

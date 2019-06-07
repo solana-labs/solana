@@ -327,10 +327,11 @@ if ! $skipStart; then
       args+=(-F)
     fi
 
-    # shellcheck disable=SC2154 # SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu comes from .buildkite/env/
-    if $deployUpdateManifest && [[ -n $SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu ]]; then
-      echo "$SOLANA_INSTALL_UPDATE_MANIFEST_KEYPAIR_x86_64_unknown_linux_gnu" > update_manifest_keypair.json
-      args+=(-i update_manifest_keypair.json)
+    if $deployUpdateManifest; then
+      rm -f update_manifest_keypair.json
+      args+=(--deploy-update linux)
+      args+=(--deploy-update osx)
+      #args+=(--deploy-update windows)
     fi
 
     # shellcheck disable=SC2086 # Don't want to double quote the $maybeXYZ variables
