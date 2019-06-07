@@ -2,7 +2,7 @@
 
 #![no_std]
 
-// #[macro_use]
+#[macro_use]
 extern crate alloc;
 extern crate solana_sdk_bpf_utils;
 
@@ -78,8 +78,9 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     //     alloc::alloc::dealloc(ptr, layout);
     // }
 
-    {
-    // Test allocated vector
+    // {
+    //     // Test allocated vector
+
     //     const ITERS: usize = 100;
     //     let ones = vec![1_usize; ITERS];
     //     let mut sum: usize = 0;
@@ -105,6 +106,8 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     //     assert_eq!(v.len(), ITERS);
     // }
 
+    {
+        // Test allocated vector
         const ITERS: usize = 100;
         let ones = vec![1_u64; ITERS];
         let mut sum: u64 = 0;
