@@ -6,14 +6,21 @@ use std::time::{SystemTime, UNIX_EPOCH};
 // rate at any given time should be expected to drift
 pub const DEFAULT_NUM_TICKS_PER_SECOND: u64 = 10;
 
-// At 10 ticks/s, 8 ticks per slot implies that leader rotation and voting will happen
-// every 800 ms. A fast voting cadence ensures faster finality and convergence
+// At 10 ticks/s, N ticks per slot implies that leader rotation and voting will happen
+// every N * 100 ms. A fast voting cadence ensures faster finality and convergence
+#[cfg(not(feature = "quick_rotation"))]
 pub const DEFAULT_TICKS_PER_SLOT: u64 = 8;
+#[cfg(feature = "quick_rotation")]
+pub const DEFAULT_TICKS_PER_SLOT: u64 = 4;
 
-// 1 Epoch = 800 * 4096 ms ~= 55 minutes
-pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 4096;
+// 1 Epoch = 32K ticks * 100ms per tick ~= 55 minutes
+// Slots in 1 Epoch = 32K ticks / N tick per slot
+pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 0x8000 / DEFAULT_TICKS_PER_SLOT;
 
+#[cfg(not(feature = "quick_rotation"))]
 pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 8;
+#[cfg(feature = "quick_rotation")]
+pub const NUM_CONSECUTIVE_LEADER_SLOTS: u64 = 4;
 
 /// The time window of recent block hash values that the bank will track the signatures
 /// of over. Once the bank discards a block hash, it will reject any transactions that use
