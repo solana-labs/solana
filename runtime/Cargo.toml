@@ -26,6 +26,7 @@ serde_derive = "1.0.92"
 serde_json = "1.0.38"
 solana-logger = { path = "../logger", version = "0.16.0" }
 solana-metrics = { path = "../metrics", version = "0.16.0" }
+solana-bpfloader = { path = "../programs/bpf_loader", version = "0.16.0" }
 solana-noop-program = { path = "../programs/noop_program", version = "0.16.0" }
 solana-sdk = { path = "../sdk", version = "0.16.0" }
 solana-stake-api = { path = "../programs/stake_api", version = "0.16.0" }
