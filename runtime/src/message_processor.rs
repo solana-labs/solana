@@ -55,6 +55,7 @@ fn get_subset_unchecked_mut<'a, T>(
 }
 
 fn verify_instruction(
+    is_credit_debit: bool,
     program_id: &Pubkey,
     pre_program_id: &Pubkey,
     pre_lamports: u64,
@@ -68,12 +69,12 @@ fn verify_instruction(
         return Err(InstructionError::ModifiedProgramId);
     }
     // For accounts unassigned to the program, the individual balance of each accounts cannot decrease.
-    if *program_id != account.owner && pre_lamports > account.lamports {
+    if (*program_id != account.owner || !is_credit_debit) && pre_lamports > account.lamports {
         return Err(InstructionError::ExternalAccountLamportSpend);
     }
     // For accounts unassigned to the program, the data may not change.
-    if *program_id != account.owner
-        && !system_program::check_id(&program_id)
+    if ((*program_id != account.owner && !system_program::check_id(&program_id))
+        || !is_credit_debit)
         && pre_data != &account.data[..]
     {
         return Err(InstructionError::ExternalAccountDataModified);
@@ -185,10 +186,16 @@ impl MessageProcessor {
         self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
 
         // Verify the instruction
-        for ((pre_program_id, pre_lamports, pre_data), post_account) in
-            pre_data.iter().zip(program_accounts.iter())
+        for ((pre_program_id, pre_lamports, pre_data), (post_account, is_credit_debit)) in
+            pre_data.iter().zip(
+                program_accounts
+                    .iter()
+                    .enumerate()
+                    .map(|(i, program_account)| (program_account, message.is_credit_debit(i))),
+            )
         {
             verify_instruction(
+                is_credit_debit,
                 &program_id,
                 pre_program_id,
                 *pre_lamports,
@@ -280,7 +287,7 @@ mod tests {
             pre: &Pubkey,
             post: &Pubkey,
         ) -> Result<(), InstructionError> {
-            verify_instruction(&ix, &pre, 0, &[], &Account::new(0, 0, post))
+            verify_instruction(true, &ix, &pre, 0, &[], &Account::new(0, 0, post))
         }
 
         let system_program_id = system_program::id();
@@ -301,24 +308,55 @@ mod tests {
 
     #[test]
     fn test_verify_instruction_change_data() {
-        fn change_data(program_id: &Pubkey) -> Result<(), InstructionError> {
+        fn change_data(program_id: &Pubkey, is_credit_debit: bool) -> Result<(), InstructionError> {
             let alice_program_id = Pubkey::new_rand();
             let account = Account::new(0, 0, &alice_program_id);
-            verify_instruction(&program_id, &alice_program_id, 0, &[42], &account)
+            verify_instruction(
+                is_credit_debit,
+                &program_id,
+                &alice_program_id,
+                0,
+                &[42],
+                &account,
+            )
         }
 
         let system_program_id = system_program::id();
         let mallory_program_id = Pubkey::new_rand();
 
         assert_eq!(
-            change_data(&system_program_id),
+            change_data(&system_program_id, true),
             Ok(()),
             "system program should be able to change the data"
         );
         assert_eq!(
-            change_data(&mallory_program_id),
+            change_data(&mallory_program_id, true),
             Err(InstructionError::ExternalAccountDataModified),
             "malicious Mallory should not be able to change the account data"
+        );
+
+        assert_eq!(
+            change_data(&system_program_id, false),
+            Err(InstructionError::ExternalAccountDataModified),
+            "system program should not be able to change the data if credit-only"
+        );
+    }
+
+    #[test]
+    fn test_verify_instruction_credit_only() {
+        let alice_program_id = Pubkey::new_rand();
+        let account = Account::new(0, 0, &alice_program_id);
+        assert_eq!(
+            verify_instruction(
+                false,
+                &system_program::id(),
+                &alice_program_id,
+                42,
+                &[],
+                &account
+            ),
+            Err(InstructionError::ExternalAccountLamportSpend),
+            "debit should fail, even if system program"
         );
     }
 }

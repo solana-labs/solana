@@ -216,7 +216,7 @@ impl Message {
             .position(|&&pubkey| pubkey == self.account_keys[index])
     }
 
-    fn is_credit_debit(&self, i: usize) -> bool {
+    pub fn is_credit_debit(&self, i: usize) -> bool {
         i < (self.header.num_required_signatures - self.header.num_credit_only_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
