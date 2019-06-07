@@ -15,6 +15,7 @@ mod native_loader;
 mod serde_utils;
 pub mod stakes;
 pub mod status_cache;
+pub mod storage_utils;
 mod system_instruction_processor;
 
 #[macro_use]
