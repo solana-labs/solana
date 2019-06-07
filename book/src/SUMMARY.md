@@ -16,7 +16,7 @@
   - [Leader Rotation](leader-rotation.md)
   - [Fork Generation](fork-generation.md)
   - [Managing Forks](managing-forks.md)
-  - [Data Plane Fanout](data-plane-fanout.md)
+  - [Turbine Block Propagation](turbine-block-propagation.md)
   - [Ledger Replication](ledger-replication.md)
   - [Secure Vote Signing](vote-signing.md)
   - [Stake Delegation and Rewards](stake-delegation-and-rewards.md)
