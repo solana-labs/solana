@@ -1,7 +1,7 @@
 use crate::native_loader;
 use crate::system_instruction_processor;
 use serde::{Deserialize, Serialize};
-use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
+use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount, LamportCredit};
 use solana_sdk::instruction::{CompiledInstruction, InstructionError};
 use solana_sdk::instruction_processor_utils;
 use solana_sdk::message::Message;
@@ -173,6 +173,7 @@ impl MessageProcessor {
         instruction: &CompiledInstruction,
         executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
+        credits: &mut [&mut LamportCredit],
     ) -> Result<(), InstructionError> {
         let program_id = instruction.program_id(&message.account_keys);
         // TODO: the runtime should be checking read/write access to memory
@@ -184,14 +185,13 @@ impl MessageProcessor {
             .collect();
 
         self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
-
         // Verify the instruction
-        for ((pre_program_id, pre_lamports, pre_data), (post_account, is_credit_debit)) in
+        for ((pre_program_id, pre_lamports, pre_data), (i, post_account, is_credit_debit)) in
             pre_data.iter().zip(
                 program_accounts
                     .iter()
                     .enumerate()
-                    .map(|(i, program_account)| (program_account, message.is_credit_debit(i))),
+                    .map(|(i, program_account)| (i, program_account, message.is_credit_debit(i))),
             )
         {
             verify_instruction(
@@ -202,6 +202,9 @@ impl MessageProcessor {
                 pre_data,
                 post_account,
             )?;
+            if !is_credit_debit {
+                *credits[i] += post_account.lamports - *pre_lamports;
+            }
         }
         // The total sum of all the lamports in all the accounts cannot change.
         let post_total: u64 = program_accounts.iter().map(|a| a.lamports).sum();
@@ -219,6 +222,7 @@ impl MessageProcessor {
         message: &Message,
         loaders: &mut [Vec<(Pubkey, Account)>],
         accounts: &mut [Account],
+        credits: &mut [LamportCredit],
     ) -> Result<(), TransactionError> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let executable_index = message
@@ -230,11 +234,14 @@ impl MessageProcessor {
             // TODO: `get_subset_unchecked_mut` panics on an index out of bounds if an executable
             // account is also included as a regular account for an instruction, because the
             // executable account is not passed in as part of the accounts slice
+            let mut instruction_credits =
+                get_subset_unchecked_mut(credits, &instruction.accounts).expect("subset_mut");
             self.execute_instruction(
                 message,
                 instruction,
                 executable_accounts,
                 &mut program_accounts,
+                &mut instruction_credits,
             )
             .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }

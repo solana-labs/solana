@@ -3,7 +3,9 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 use crate::accounts::{AccountLockType, Accounts};
-use crate::accounts_db::{AccountsDB, ErrorCounters, InstructionAccounts, InstructionLoaders};
+use crate::accounts_db::{
+    AccountsDB, ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
+};
 use crate::accounts_index::Fork;
 use crate::blockhash_queue::BlockhashQueue;
 use crate::epoch_schedule::EpochSchedule;
@@ -679,7 +681,7 @@ impl Bank {
         txs: &[Transaction],
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         self.rc.accounts.load_accounts(
             &self.ancestors,
             txs,
@@ -837,7 +839,7 @@ impl Bank {
         lock_results: &LockedAccountsResults<Transaction>,
         max_age: usize,
     ) -> (
-        Vec<Result<(InstructionAccounts, InstructionLoaders)>>,
+        Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>>,
         Vec<Result<()>>,
     ) {
         debug!("processing transactions: {}", txs.len());
@@ -858,10 +860,9 @@ impl Bank {
             .zip(txs.iter())
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
-                Ok((ref mut accounts, ref mut loaders)) => {
-                    self.message_processor
-                        .process_message(tx.message(), loaders, accounts)
-                }
+                Ok((ref mut accounts, ref mut loaders, ref mut credits)) => self
+                    .message_processor
+                    .process_message(tx.message(), loaders, accounts, credits),
             })
             .collect();
 
@@ -941,7 +942,7 @@ impl Bank {
     pub fn commit_transactions(
         &self,
         txs: &[Transaction],
-        loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders)>],
+        loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
         executed: &[Result<()>],
     ) -> Vec<Result<()>> {
         if self.is_frozen() {
@@ -1161,7 +1162,7 @@ impl Bank {
         &self,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
+        loaded: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {

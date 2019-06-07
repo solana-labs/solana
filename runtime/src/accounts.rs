@@ -1,6 +1,6 @@
 use crate::accounts_db::{
     get_paths_vec, AccountInfo, AccountStorage, AccountsDB, AppendVecId, ErrorCounters,
-    InstructionAccounts, InstructionLoaders,
+    InstructionAccounts, InstructionCredits, InstructionLoaders,
 };
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::StoredAccount;
@@ -9,7 +9,7 @@ use bincode::serialize;
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_metrics::inc_new_counter_error;
-use solana_sdk::account::Account;
+use solana_sdk::account::{Account, LamportCredit};
 use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::native_loader;
@@ -170,7 +170,7 @@ impl Accounts {
         tx: &Transaction,
         fee: u64,
         error_counters: &mut ErrorCounters,
-    ) -> Result<Vec<Account>> {
+    ) -> Result<(Vec<Account>, InstructionCredits)> {
         // Copy all the accounts
         let message = tx.message();
         if tx.signatures.is_empty() && fee != 0 {
@@ -185,6 +185,7 @@ impl Accounts {
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let mut called_accounts: Vec<Account> = vec![];
+            let mut credits: InstructionCredits = vec![];
             for key in &message.account_keys {
                 if !message.program_ids().contains(&key) {
                     called_accounts.push(
@@ -192,6 +193,7 @@ impl Accounts {
                             .map(|(account, _)| account)
                             .unwrap_or_default(),
                     );
+                    credits.push(0);
                 }
             }
             if called_accounts.is_empty() || called_accounts[0].lamports == 0 {
@@ -205,7 +207,7 @@ impl Accounts {
                 Err(TransactionError::InsufficientFundsForFee)
             } else {
                 called_accounts[0].lamports -= fee;
-                Ok(called_accounts)
+                Ok((called_accounts, credits))
             }
         }
     }
@@ -289,7 +291,7 @@ impl Accounts {
         lock_results: Vec<Result<()>>,
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         //PERF: hold the lock to scan for the references, but not to clone the accounts
         //TODO: two locks usually leads to deadlocks, should this be one structure?
         let accounts_index = self.accounts_db.accounts_index.read().unwrap();
@@ -299,7 +301,7 @@ impl Accounts {
             .map(|etx| match etx {
                 (tx, Ok(())) => {
                     let fee = fee_calculator.calculate_fee(tx.message());
-                    let accounts = Self::load_tx_accounts(
+                    let (accounts, credits) = Self::load_tx_accounts(
                         &storage,
                         ancestors,
                         &accounts_index,
@@ -314,7 +316,7 @@ impl Accounts {
                         tx,
                         error_counters,
                     )?;
-                    Ok((accounts, loaders))
+                    Ok((accounts, loaders, credits))
                 }
                 (_, Err(e)) => Err(e),
             })
@@ -357,7 +359,7 @@ impl Accounts {
 
     /// Slow because lock is held for 1 operation instead of many
     pub fn store_slow(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
-        self.accounts_db.store(fork, &[(pubkey, account)]);
+        self.accounts_db.store(fork, &[(pubkey, account, 0)]);
     }
 
     fn lock_account(
@@ -553,9 +555,9 @@ impl Accounts {
         fork: Fork,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
+        loaded: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
-        let mut accounts: Vec<(&Pubkey, &Account)> = vec![];
+        let mut accounts: Vec<(&Pubkey, &Account, LamportCredit)> = vec![];
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {
                 continue;
@@ -563,8 +565,13 @@ impl Accounts {
 
             let message = &txs[i].message();
             let acc = raccs.as_ref().unwrap();
-            for (key, account) in message.account_keys.iter().zip(acc.0.iter()) {
-                accounts.push((key, account));
+            for ((key, account), credit) in message
+                .account_keys
+                .iter()
+                .zip(acc.0.iter())
+                .zip(acc.2.iter())
+            {
+                accounts.push((key, account, *credit));
             }
         }
         self.accounts_db.store(fork, &accounts);
@@ -603,7 +610,7 @@ mod tests {
         ka: &Vec<(Pubkey, Account)>,
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         let accounts = Accounts::new(None);
         for ka in ka.iter() {
             accounts.store_slow(0, &ka.0, &ka.1);
@@ -624,7 +631,7 @@ mod tests {
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         let fee_calculator = FeeCalculator::default();
         load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
     }
@@ -800,11 +807,13 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok((a, l)) => {
+            Ok((a, l, d)) => {
                 assert_eq!(a.len(), 2);
                 assert_eq!(a[0], accounts[0].1);
                 assert_eq!(l.len(), 1);
                 assert_eq!(l[0].len(), 0);
+                assert_eq!(d.len(), 2);
+                assert_eq!(d, &vec![0, 0]);
             }
             Err(e) => Err(e).unwrap(),
         }
@@ -984,12 +993,14 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok((a, l)) => {
+            Ok((a, l, d)) => {
                 assert_eq!(a.len(), 1);
                 assert_eq!(a[0], accounts[0].1);
                 assert_eq!(l.len(), 2);
                 assert_eq!(l[0].len(), 1);
                 assert_eq!(l[1].len(), 2);
+                assert_eq!(d.len(), 1);
+                assert_eq!(d, &vec![0]);
                 for instruction_loaders in l.iter() {
                     for (i, a) in instruction_loaders.iter().enumerate() {
                         // +1 to skip first not loader account
