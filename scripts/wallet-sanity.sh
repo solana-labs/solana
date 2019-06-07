@@ -43,7 +43,7 @@ pay_and_confirm() {
   $solana_wallet "${entrypoint[@]}" confirm "$signature"
 }
 
-$solana_keygen
+$solana_keygen new
 
 node_readiness=false
 timeout=60

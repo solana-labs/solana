@@ -45,22 +45,22 @@ leader_keypair="$dataDir/leader-keypair.json"
 if [[ -e $leader_keypair ]]; then
   echo "Use existing leader keypair"
 else
-  solana-keygen -o "$leader_keypair"
+  solana-keygen new -o "$leader_keypair"
 fi
 leader_vote_account_keypair="$dataDir/leader-vote-account-keypair.json"
 if [[ -e $leader_vote_account_keypair ]]; then
   echo "Use existing leader vote account keypair"
 else
-  solana-keygen -o "$leader_vote_account_keypair"
+  solana-keygen new -o "$leader_vote_account_keypair"
 fi
 leader_stake_account_keypair="$dataDir/leader-stake-account-keypair.json"
 if [[ -e $leader_stake_account_keypair ]]; then
   echo "Use existing leader stake account keypair"
 else
-  solana-keygen -o "$leader_stake_account_keypair"
+  solana-keygen new -o "$leader_stake_account_keypair"
 fi
-solana-keygen -o "$dataDir"/drone-keypair.json
-solana-keygen -o "$dataDir"/leader-storage-account-keypair.json
+solana-keygen new -o "$dataDir"/drone-keypair.json
+solana-keygen new -o "$dataDir"/leader-storage-account-keypair.json
 
 leaderVoteAccountPubkey=$(\
   solana-wallet \

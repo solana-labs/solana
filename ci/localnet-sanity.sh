@@ -307,7 +307,7 @@ while [[ $iteration -le $iterations ]]; do
     source multinode-demo/common.sh
     set -x
     client_keypair=/tmp/client-id.json-$$
-    $solana_keygen -o $client_keypair || exit $?
+    $solana_keygen new -o $client_keypair || exit $?
     $solana_gossip spy --num-nodes-exactly $numNodes || exit $?
     rm -rf $client_keypair
   ) || flag_error
