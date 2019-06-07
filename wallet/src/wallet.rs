@@ -42,6 +42,7 @@ const USERDATA_CHUNK_SIZE: usize = 229; // Keep program chunks under PACKET_DATA
 #[allow(clippy::large_enum_variant)]
 pub enum WalletCommand {
     Address,
+    Fees,
     Airdrop(u64),
     Balance(Pubkey),
     Cancel(Pubkey),
@@ -164,6 +165,7 @@ pub fn parse_command(
 ) -> Result<WalletCommand, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
         ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
+        ("fees", Some(_fees_matches)) => Ok(WalletCommand::Fees),
         ("airdrop", Some(airdrop_matches)) => {
             let lamports = airdrop_matches.value_of("lamports").unwrap().parse()?;
             Ok(WalletCommand::Airdrop(lamports))
@@ -375,6 +377,14 @@ pub fn parse_command(
 
 type ProcessResult = Result<String, Box<dyn error::Error>>;
 
+fn process_fees(rpc_client: &RpcClient) -> ProcessResult {
+    let (recent_blockhash, fee_calculator) = rpc_client.get_recent_blockhash()?;
+
+    Ok(format!(
+        "blockhash: {}\nlamports per signature: {}",
+        recent_blockhash, fee_calculator.lamports_per_signature
+    ))
+}
 fn process_airdrop(
     rpc_client: &RpcClient,
     config: &WalletConfig,
@@ -988,6 +998,8 @@ pub fn process_command(config: &WalletConfig) -> ProcessResult {
         // Get address of this client
         WalletCommand::Address => unreachable!(),
 
+        WalletCommand::Fees => process_fees(&rpc_client),
+
         // Request an airdrop from Solana Drone;
         WalletCommand::Airdrop(lamports) => {
             process_airdrop(&rpc_client, config, drone_addr, *lamports)
@@ -1258,6 +1270,7 @@ pub fn app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> App<'ab, '
         .version(version)
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(SubCommand::with_name("address").about("Get your public key"))
+        .subcommand(SubCommand::with_name("fees").about("Display current cluster fees"))
         .subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request a batch of lamports")

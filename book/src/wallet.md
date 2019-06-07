@@ -285,6 +285,18 @@ ARGS:
 ```
 
 ```manpage
+solana-wallet-fees
+Display current cluster fees
+
+USAGE:
+    solana-wallet fees
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+```
+
+```manpage
 solana-wallet-get-transaction-count
 Get current transaction count
 
