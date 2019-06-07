@@ -2,7 +2,7 @@
 
 #![no_std]
 
-// #[macro_use]
+#[macro_use]
 extern crate alloc;
 extern crate solana_sdk_bpf_utils;
 
@@ -78,7 +78,6 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     //     alloc::alloc::dealloc(ptr, layout);
     // }
 
-    // TODO gremlin causes crash only on CI
     // {
     //     // Test allocated vector
 
@@ -106,6 +105,20 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> bool {
     //     sol_log_64(0x4, 0, 0, 0, v.len() as u64);
     //     assert_eq!(v.len(), ITERS);
     // }
+
+    {
+        // Test allocated vector
+        const ITERS: usize = 100;
+        let ones = vec![1_u64; ITERS];
+        let mut sum: u64 = 0;
+
+        for (i, _v) in ones.iter().enumerate() {
+            sol_log_64(i as u64, 0, 0, 0, 0);
+            sum += ones[i as usize];
+        }
+        sol_log_64(0x4, 0, 0, 0, sum);
+        assert_eq!(sum, ITERS as u64);
+    }
 
     sol_log("Success");
     true
