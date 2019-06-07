@@ -946,6 +946,28 @@ mod tests {
         assert_eq!(db0.load_slow(&ancestors, &key), Some((account0, 0)));
     }
 
+    #[test]
+    fn test_credit_check() {
+        let paths = get_tmp_accounts_path!();
+        let db = AccountsDB::new(&paths.paths);
+        let pubkey = Pubkey::default();
+        let account = Account::new(1, 0, &pubkey);
+        db.store(0, &[(&pubkey, &account, 0)]);
+
+        // Modify account lamport balance
+        let ancestors = vec![(0, 0)].into_iter().collect();
+        let (mut account_load, _) = db.load_slow(&ancestors, &pubkey).unwrap();
+        account_load.lamports = 5;
+        db.store(0, &[(&pubkey, &account_load, 0)]);
+
+        // Load 5-1 = 4 lamport credit
+        let account_new = Account::new(5, 0, &pubkey);
+        db.store(0, &[(&pubkey, &account_new, 4)]);
+
+        let (account_load, _) = db.load_slow(&ancestors, &pubkey).unwrap();
+        assert_eq!(account_load.lamports, 9);
+    }
+
     fn create_account(
         accounts: &AccountsDB,
         pubkeys: &mut Vec<Pubkey>,

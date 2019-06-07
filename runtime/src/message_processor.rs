@@ -69,15 +69,23 @@ fn verify_instruction(
         return Err(InstructionError::ModifiedProgramId);
     }
     // For accounts unassigned to the program, the individual balance of each accounts cannot decrease.
-    if (*program_id != account.owner || !is_credit_debit) && pre_lamports > account.lamports {
+    if *program_id != account.owner && pre_lamports > account.lamports {
         return Err(InstructionError::ExternalAccountLamportSpend);
     }
+    // The balance of credit-only accounts may only increase
+    if !is_credit_debit && pre_lamports > account.lamports {
+        return Err(InstructionError::CreditOnlyLamportSpend);
+    }
     // For accounts unassigned to the program, the data may not change.
-    if ((*program_id != account.owner && !system_program::check_id(&program_id))
-        || !is_credit_debit)
+    if *program_id != account.owner
+        && !system_program::check_id(&program_id)
         && pre_data != &account.data[..]
     {
         return Err(InstructionError::ExternalAccountDataModified);
+    }
+    // Credit-only account data may not change.
+    if !is_credit_debit && pre_data != &account.data[..] {
+        return Err(InstructionError::CreditOnlyDataModified);
     }
     Ok(())
 }
@@ -344,7 +352,7 @@ mod tests {
 
         assert_eq!(
             change_data(&system_program_id, false),
-            Err(InstructionError::ExternalAccountDataModified),
+            Err(InstructionError::CreditOnlyDataModified),
             "system program should not be able to change the data if credit-only"
         );
     }
@@ -364,6 +372,118 @@ mod tests {
             ),
             Err(InstructionError::ExternalAccountLamportSpend),
             "debit should fail, even if system program"
+        );
+    }
+
+    #[test]
+    fn test_process_message_credit_only_handling() {
+        use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
+        use solana_sdk::message::Message;
+        use solana_sdk::native_loader::{create_loadable_account, id};
+
+        #[derive(Serialize, Deserialize)]
+        enum MockSystemInstruction {
+            Correct { lamports: u64 },
+            AttemptDebit { lamports: u64 },
+            Misbehave { lamports: u64 },
+        }
+
+        fn mock_system_process_instruction(
+            _program_id: &Pubkey,
+            keyed_accounts: &mut [KeyedAccount],
+            data: &[u8],
+        ) -> Result<(), InstructionError> {
+            if let Ok(instruction) = bincode::deserialize(data) {
+                match instruction {
+                    MockSystemInstruction::Correct { lamports } => {
+                        keyed_accounts[0].account.lamports -= lamports;
+                        keyed_accounts[1].account.lamports += lamports;
+                        Ok(())
+                    }
+                    MockSystemInstruction::AttemptDebit { lamports } => {
+                        keyed_accounts[0].account.lamports += lamports;
+                        keyed_accounts[1].account.lamports -= lamports;
+                        Ok(())
+                    }
+                    // Credit a credit-only account for more lamports than debited
+                    MockSystemInstruction::Misbehave { lamports } => {
+                        keyed_accounts[0].account.lamports -= lamports;
+                        keyed_accounts[1].account.lamports = 2 * lamports;
+                        Ok(())
+                    }
+                }
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
+
+        let mock_system_program_id = Pubkey::new(&[2u8; 32]);
+        let mut message_processor = MessageProcessor::default();
+        message_processor
+            .add_instruction_processor(mock_system_program_id, mock_system_process_instruction);
+
+        let mut accounts: Vec<Account> = Vec::new();
+        let account = Account::new(100, 1, &mock_system_program_id);
+        accounts.push(account);
+        let account = Account::new(0, 1, &mock_system_program_id);
+        accounts.push(account);
+
+        let mut loaders: Vec<Vec<(Pubkey, Account)>> = Vec::new();
+        let account = create_loadable_account("mock_system_program");
+        loaders.push(vec![(id(), account)]);
+
+        let from_pubkey = Pubkey::new_rand();
+        let to_pubkey = Pubkey::new_rand();
+        let account_metas = vec![
+            AccountMeta::new(from_pubkey, true),
+            AccountMeta::new_credit_only(to_pubkey, false),
+        ];
+        let message = Message::new(vec![Instruction::new(
+            mock_system_program_id,
+            &MockSystemInstruction::Correct { lamports: 50 },
+            account_metas.clone(),
+        )]);
+        let mut deltas = vec![0, 0];
+
+        let result =
+            message_processor.process_message(&message, &mut loaders, &mut accounts, &mut deltas);
+        assert_eq!(result, Ok(()));
+        assert_eq!(accounts[0].lamports, 50);
+        assert_eq!(accounts[1].lamports, 50);
+        assert_eq!(deltas, vec![0, 50]);
+
+        let message = Message::new(vec![Instruction::new(
+            mock_system_program_id,
+            &MockSystemInstruction::AttemptDebit { lamports: 50 },
+            account_metas.clone(),
+        )]);
+        let mut deltas = vec![0, 0];
+
+        let result =
+            message_processor.process_message(&message, &mut loaders, &mut accounts, &mut deltas);
+        assert_eq!(
+            result,
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::CreditOnlyLamportSpend
+            ))
+        );
+
+        let message = Message::new(vec![Instruction::new(
+            mock_system_program_id,
+            &MockSystemInstruction::Misbehave { lamports: 50 },
+            account_metas,
+        )]);
+        let mut deltas = vec![0, 0];
+
+        let result =
+            message_processor.process_message(&message, &mut loaders, &mut accounts, &mut deltas);
+        assert_eq!(
+            result,
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::UnbalancedInstruction
+            ))
         );
     }
 }
