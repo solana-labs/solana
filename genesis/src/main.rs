@@ -196,9 +196,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .arg(
             Arg::with_name("primordial_accounts_file")
                 .long("primordial-accounts-file")
-                .value_name("LIST OF PRIMORDIAL ACCOUNTS AND BALANCE")
+                .value_name("FILENAME")
                 .takes_value(true)
-                .help("The location of pubkey for primordial accounts"),
+                .help("The location of pubkey for primordial accounts and balance"),
         )
         .get_matches();
 
