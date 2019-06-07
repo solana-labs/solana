@@ -30,7 +30,8 @@ Operate a configured testnet
    -t edge|beta|stable|vX.Y.Z         - Deploy the latest tarball release for the
                                         specified release channel (edge|beta|stable) or release tag
                                         (vX.Y.Z)
-   -i update_manifest_keypair         - Deploy the tarball using 'solana-install deploy ...'
+   --deploy-update linux|osx|windows  - Deploy the tarball using 'solana-install deploy ...' for the
+                                        given platform (multiple platforms may be specified)
                                         (-t option must be supplied as well)
    -f [cargoFeatures]                 - List of |cargo --feaures=| to activate
                                         (ignored if -s or -S is specified)
@@ -80,8 +81,7 @@ cargoFeatures=
 skipSetup=false
 updateNodes=false
 customPrograms=
-updateManifestKeypairFile=
-updateDownloadUrl=
+updatePlatforms=
 numBenchTpsClients=0
 numBenchExchangeClients=0
 benchTpsExtraArgs=
@@ -100,6 +100,9 @@ while [[ -n $1 ]]; do
     if [[ $1 = --hashes-per-tick ]]; then
       genesisOptions="$genesisOptions $1 $2"
       shift 2
+    elif [[ $1 = --deploy-update ]]; then
+      updatePlatforms="$updatePlatforms $2"
+      shift 2
     else
       usage "Unknown long option: $1"
     fi
@@ -109,7 +112,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?T:t:o:f:rD:i:c:Fn:" opt "${shortArgs[@]}"; do
+while getopts "h?T:t:o:f:rD:c:Fn:" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -135,13 +138,6 @@ while getopts "h?T:t:o:f:rD:i:c:Fn:" opt "${shortArgs[@]}"; do
     ;;
   n)
     numFullnodesRequested=$OPTARG
-    ;;
-  i)
-    updateManifestKeypairFile=$OPTARG
-    if [[ ! -r $updateManifestKeypairFile ]]; then
-      echo "Error: unable to read the file $updateManifestKeypairFile"
-      exit 1
-    fi
     ;;
   r)
     skipSetup=true
@@ -413,26 +409,31 @@ sanity() {
 }
 
 deployUpdate() {
-  if [[ -z $updateManifestKeypairFile ]]; then
+  if [[ -z $updatePlatforms ]]; then
     return
   fi
   [[ $deployMethod = tar ]] || exit 1
-  [[ -n $updateDownloadUrl ]] || exit 1
 
   declare ok=true
   declare bootstrapLeader=${fullnodeIpList[0]}
 
-  echo "--- Deploying solana-install update: $updateDownloadUrl"
-  (
-    set -x
-    timeout 30s scp "${sshOptions[@]}" \
-      "$updateManifestKeypairFile" "$bootstrapLeader:solana/update_manifest_keypair.json"
+  for updatePlatform in $updatePlatforms; do
+    echo "--- Deploying solana-install update: $updatePlatform"
+    (
+      set -x
 
-    # shellcheck disable=SC2029 # remote-deploy-update.sh args are expanded on client side intentionally
-    ssh "${sshOptions[@]}" "$bootstrapLeader" \
-      "./solana/net/remote/remote-deploy-update.sh $updateDownloadUrl \"$RUST_LOG\""
-  ) || ok=false
-  $ok || exit 1
+      scripts/solana-install-update-manifest-keypair.sh "$updatePlatform"
+
+      timeout 30s scp "${sshOptions[@]}" \
+        update_manifest_keypair.json "$bootstrapLeader:solana/update_manifest_keypair.json"
+
+      # shellcheck disable=SC2029 # remote-deploy-update.sh args are expanded on client side intentionally
+      ssh "${sshOptions[@]}" "$bootstrapLeader" \
+        "./solana/net/remote/remote-deploy-update.sh $releaseChannel $updatePlatform"
+    ) || ok=false
+    $ok || exit 1
+  done
+
 }
 
 start() {
@@ -440,15 +441,15 @@ start() {
   tar)
     if [[ -n $releaseChannel ]]; then
       rm -f "$SOLANA_ROOT"/solana-release.tar.bz2
-      updateDownloadUrl=http://release.solana.com/"$releaseChannel"/solana-release-x86_64-unknown-linux-gnu.tar.bz2
+      declare updateDownloadUrl=http://release.solana.com/"$releaseChannel"/solana-release-x86_64-unknown-linux-gnu.tar.bz2
       (
         set -x
         curl -o "$SOLANA_ROOT"/solana-release.tar.bz2 "$updateDownloadUrl"
       )
       tarballFilename="$SOLANA_ROOT"/solana-release.tar.bz2
     else
-      if [[ -n $updateManifestKeypairFile ]]; then
-        echo "Error: -i argument was provided but -t was not"
+      if [[ -n $updatePlatforms ]]; then
+        echo "Error: --deploy-update argument was provided but -t was not"
         exit 1
       fi
     fi
