@@ -46,9 +46,9 @@ test-stable-perf)
   }
 
   ls target
-  rm -rf target/xargo
+  rm -rf target/xargo # Issue #3105
   pushd programs/bpf/rust
-  cargo install rustfilt
+  # cargo install rustfilt
   ./dump.sh alloc
   cat ./alloc/target/dump.txt
   popd
