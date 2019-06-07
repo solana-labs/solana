@@ -1,6 +1,5 @@
 os:
   - osx
-  - windows
 
 language: rust
 cache: cargo
