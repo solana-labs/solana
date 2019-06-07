@@ -34,6 +34,6 @@ deploy:
     api_key: $GITHUB_TOKEN
     skip_cleanup: true
     file_glob: true
-    file: travis-$TRAVIS_TAG-upload/*
+    file: travis-release-upload/*
     on:
       tags: true

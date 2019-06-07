@@ -1,0 +1,37 @@
+os: Visual Studio 2017
+version: '{build}'
+
+branches:
+  only:
+  - master
+  - /v[0-9.]+/
+
+build_script:
+  - bash ci/publish-tarball.sh
+
+notifications:
+  - provider: Slack
+    incoming_webhook:
+      secure: 6HTXVh+FBz29LGJb+taFOo9dqoADfo9xyAszeyXZF5Ub9t5NERytKAR35B2wb+uIOOCBF8+JhmH4437Cgf/ti4IqvURzW1QReXK7eQhn1EI=
+    channel: ci-status
+    on_build_success: false
+    on_build_failure: true
+    on_build_status_changed: true
+
+deploy:
+  - provider: S3
+    access_key_id:
+      secure: ptvqM/yvgeTeA12XOzybH1KYNh95AdfEvqoH9mvP2ic=
+    secret_access_key:
+      secure: IkrgBlz5hdxvwcJdMXyyHUrpWhKa6fXLOD/8rm/rjKqYCdrba9B8V1nLZVrzXGGy
+    bucket: release.solana.com
+    region: us-west-1
+    set_public: true
+
+  - provider: GitHub
+    auth_token:
+      secure: vQ3jMl5LQrit6+TQONA3ZgQjZ/Ej62BN2ReVb2NSOwjITHMu1131hjc3dOrMEZL6
+    draft: false
+    prerelease: false
+    on:
+      appveyor_repo_tag: true

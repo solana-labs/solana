@@ -4,8 +4,9 @@
 # |source| me
 #
 
-if ${CI:-false}; then
-  if ${TRAVIS:-false}; then
+if [[ -n $CI ]]; then
+  export CI=1
+  if [[ -n $TRAVIS ]]; then
     export CI_BRANCH=$TRAVIS_BRANCH
     export CI_BUILD_ID=$TRAVIS_BUILD_ID
     export CI_COMMIT=$TRAVIS_COMMIT
@@ -17,8 +18,7 @@ if ${CI:-false}; then
     fi
     export CI_OS_NAME=$TRAVIS_OS_NAME
     export CI_TAG=$TRAVIS_TAG
-  fi
-  if ${BUILDKITE:-false}; then
+  elif [[ -n $BUILDKITE ]]; then
     export CI_BRANCH=$BUILDKITE_BRANCH
     export CI_BUILD_ID=$BUILDKITE_BUILD_ID
     export CI_COMMIT=$BUILDKITE_COMMIT
@@ -39,6 +39,22 @@ if ${CI:-false}; then
     else
       export CI_TAG=$BUILDKITE_TAG
     fi
+  elif [[ -n $APPVEYOR ]]; then
+    export CI_BRANCH=$APPVEYOR_REPO_BRANCH
+    export CI_BUILD_ID=$APPVEYOR_BUILD_ID
+    export CI_COMMIT=$APPVEYOR_REPO_COMMIT
+    export CI_JOB_ID=$APPVEYOR_JOB_ID
+    if [[ -n $APPVEYOR_PULL_REQUEST_NUMBER ]]; then
+      export CI_PULL_REQUEST=true
+    else
+      export CI_PULL_REQUEST=
+    fi
+    if [[ $CI_LINUX = True ]]; then
+      export CI_OS_NAME=linux
+    elif [[ $CI_WINDOWS = True ]]; then
+      export CI_OS_NAME=windows
+    fi
+    export CI_TAG=$APPVEYOR_REPO_TAG_NAME
   fi
 else
   export CI=

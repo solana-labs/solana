@@ -3,6 +3,18 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+if [[ -n $APPVEYOR ]]; then
+  # Bootstrap rust build environment
+  source ci/env.sh
+  source ci/rust-version.sh
+
+  appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
+  ./rustup-init -yv --default-toolchain $rust_stable --default-host x86_64-pc-windows-msvc
+  export PATH="$PATH:$USERPROFILE/.cargo/bin"
+  rustc -vV
+  cargo -vV
+fi
+
 DRYRUN=
 if [[ -z $CI_BRANCH ]]; then
   DRYRUN="echo"
@@ -131,16 +143,19 @@ for file in solana-release-$TARGET.tar.bz2 solana-install-$TARGET; do
       ci/upload-github-release-asset.sh $file
     fi
   elif [[ -n $TRAVIS ]]; then
-    # .travis.yaml uploads everything in the travis-s3-upload/ directory to release.solana.com
+    # .travis.yml uploads everything in the s3-upload/ directory to release.solana.com
     mkdir -p travis-s3-upload/"$CHANNEL_OR_TAG"
     cp -v $file travis-s3-upload/"$CHANNEL_OR_TAG"/
 
     if [[ -n $TAG ]]; then
-      # .travis.yaml uploads everything in the travis-$TAG-upload/ directory to
+      # .travis.yaml uploads everything in the release-upload/ directory to
       # the associated Github Release
-      mkdir -p travis-"$TAG"-upload/
-      cp -v $file travis-"$TAG"-upload/
+      mkdir -p travis-release-upload/
+      cp -v $file travis-release-upload/
     fi
+  elif [[ -n $APPVEYOR ]]; then
+    # Add artifacts for .appveyor.yml to upload
+    appveyor PushArtifact $file -FileName "$CHANNEL_OR_TAG"/$file
   fi
 done
 
