@@ -11,7 +11,7 @@ solana-wallet --help
 echo "\`\`\`"
 echo ""
 
-commands=(address airdrop balance cancel confirm deploy get-transaction-count pay send-signature send-timestamp)
+commands=(address airdrop balance cancel confirm deploy fees get-transaction-count pay send-signature send-timestamp)
 
 for x in "${commands[@]}"; do
     echo "\`\`\`manpage"
