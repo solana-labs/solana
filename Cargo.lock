@@ -2477,6 +2477,7 @@ dependencies = [
  "serde_json 1.0.39 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_yaml 0.8.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana 0.16.0",
+ "solana-bpfloader 0.16.0",
  "solana-budget-api 0.16.0",
  "solana-budget-program 0.16.0",
  "solana-config-api 0.16.0",

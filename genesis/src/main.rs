@@ -1,5 +1,7 @@
 //! A command-line executable for generating the chain's genesis block.
 #[macro_use]
+extern crate solana_bpf_loader;
+#[macro_use]
 extern crate solana_vote_program;
 #[macro_use]
 extern crate solana_stake_program;
@@ -268,6 +270,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             ),
         ],
         &[
+            solana_bpf_loader!(),
             solana_vote_program!(),
             solana_stake_program!(),
             solana_budget_program!(),
