@@ -62,6 +62,11 @@ impl EpochSchedule {
         }
     }
 
+    /// get epoch for the given slot
+    pub fn get_epoch(&self, slot: u64) -> u64 {
+        self.get_epoch_and_slot_index(slot).0
+    }
+
     /// get epoch and offset into the epoch for the given slot
     pub fn get_epoch_and_slot_index(&self, slot: u64) -> (u64, u64) {
         if slot < self.first_normal_slot {
