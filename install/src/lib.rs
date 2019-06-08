@@ -236,7 +236,6 @@ pub fn main_init() -> Result<(), String> {
     let matches = App::new("solana-install-init")
         .about("initializes a new installation")
         .version(crate_version!())
-        .setting(AppSettings::SubcommandRequiredElseHelp)
         .arg({
             let arg = Arg::with_name("config_file")
                 .short("c")
