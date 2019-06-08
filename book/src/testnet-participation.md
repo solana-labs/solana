@@ -131,7 +131,7 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 
 Now configure a key pair for your validator by running:
 ```bash
-$ solana-keygen -o ~/validator-keypair.json
+$ solana-keygen new -o ~/validator-keypair.json
 $ solana-keygen pubkey ~/validator-keypair.json
 ```
 

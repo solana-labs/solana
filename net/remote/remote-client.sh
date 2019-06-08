@@ -65,7 +65,7 @@ solana-bench-tps)
   "
   ;;
 solana-bench-exchange)
-  solana-keygen -o bench.keypair
+  solana-keygen new -o bench.keypair
   clientCommand="\
     solana-bench-exchange \
       --entrypoint $entrypointIp:8001 \

@@ -260,8 +260,8 @@ if [[ $node_type = replicator ]]; then
   configured_flag=$SOLANA_CONFIG_DIR/replicator$label.configured
 
   mkdir -p "$SOLANA_CONFIG_DIR"
-  [[ -r "$identity_keypair_path" ]] || $solana_keygen -o "$identity_keypair_path"
-  [[ -r "$storage_keypair_path" ]] || $solana_keygen -o "$storage_keypair_path"
+  [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
+  [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
 
   identity_pubkey=$($solana_keygen pubkey "$identity_keypair_path")
   storage_pubkey=$($solana_keygen pubkey "$storage_keypair_path")
@@ -318,10 +318,10 @@ elif [[ $node_type = validator ]]; then
   configured_flag=$SOLANA_CONFIG_DIR/validator$label.configured
 
   mkdir -p "$SOLANA_CONFIG_DIR"
-  [[ -r "$identity_keypair_path" ]] || $solana_keygen -o "$identity_keypair_path"
-  [[ -r "$vote_keypair_path" ]] || $solana_keygen -o "$vote_keypair_path"
-  [[ -r "$stake_keypair_path" ]] || $solana_keygen -o "$stake_keypair_path"
-  [[ -r "$storage_keypair_path" ]] || $solana_keygen -o "$storage_keypair_path"
+  [[ -r "$identity_keypair_path" ]] || $solana_keygen new -o "$identity_keypair_path"
+  [[ -r "$vote_keypair_path" ]] || $solana_keygen new -o "$vote_keypair_path"
+  [[ -r "$stake_keypair_path" ]] || $solana_keygen new -o "$stake_keypair_path"
+  [[ -r "$storage_keypair_path" ]] || $solana_keygen new -o "$storage_keypair_path"
 
   default_arg --entrypoint "$entrypoint_address"
   default_arg --rpc-drone-address "${entrypoint_address%:*}:9900"
