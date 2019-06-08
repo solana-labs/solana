@@ -34,6 +34,7 @@ PROGRAMS=(
   solana-genesis
   solana-gossip
   solana-install
+  solana-install-init
   solana-keygen
   solana-ledger-tool
   solana-replicator

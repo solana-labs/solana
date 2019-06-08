@@ -74,7 +74,7 @@ main() {
       ;;
     esac
 
-    temp_dir="$(mktemp -d 2>/dev/null || ensure mktemp -d -t solana-install)"
+    temp_dir="$(mktemp -d 2>/dev/null || ensure mktemp -d -t solana-install-init)"
     ensure mkdir -p "$temp_dir"
 
     # Check for SOLANA_RELEASE environment variable override.  Otherwise fetch
@@ -94,24 +94,24 @@ main() {
       fi
     fi
 
-    download_url="$SOLANA_DOWNLOAD_ROOT/$release/solana-install-$TARGET"
-    solana_install="$temp_dir/solana-install-init"
+    download_url="$SOLANA_DOWNLOAD_ROOT/$release/solana-install-init-$TARGET"
+    solana_install_init="$temp_dir/solana-install-init"
 
     printf 'downloading %s installer\n' "$release" 1>&2
 
     ensure mkdir -p "$temp_dir"
-    ensure downloader "$download_url" "$solana_install"
-    ensure chmod u+x "$solana_install"
-    if [ ! -x "$solana_install" ]; then
-        printf '%s\n' "Cannot execute $solana_install (likely because of mounting /tmp as noexec)." 1>&2
+    ensure downloader "$download_url" "$solana_install_init"
+    ensure chmod u+x "$solana_install_init"
+    if [ ! -x "$solana_install_init" ]; then
+        printf '%s\n' "Cannot execute $solana_install_init (likely because of mounting /tmp as noexec)." 1>&2
         printf '%s\n' "Please copy the file to a location where you can execute binaries and run ./solana-install-init." 1>&2
         exit 1
     fi
 
-    ignore "$solana_install" init "$@"
+    ignore "$solana_install_init" "$@"
     retval=$?
 
-    ignore rm "$solana_install"
+    ignore rm "$solana_install_init"
     ignore rm -rf "$temp_dir"
 
     return "$retval"
