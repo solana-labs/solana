@@ -331,7 +331,7 @@ if ! $skipStart; then
       rm -f update_manifest_keypair.json
       args+=(--deploy-update linux)
       args+=(--deploy-update osx)
-      #args+=(--deploy-update windows)
+      args+=(--deploy-update windows)
     fi
 
     # shellcheck disable=SC2086 # Don't want to double quote the $maybeXYZ variables
