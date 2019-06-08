@@ -102,7 +102,7 @@ fi
 echo "+++ $sanityTargetIp: node count ($numSanityNodes expected)"
 (
   set -x
-  $solana_keygen new -o "$client_id"
+  $solana_keygen new -f -o "$client_id"
 
   nodeArg="num-nodes"
   if $rejectExtraNodes; then

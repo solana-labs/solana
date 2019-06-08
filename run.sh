@@ -59,8 +59,8 @@ if [[ -e $leader_stake_account_keypair ]]; then
 else
   solana-keygen new -o "$leader_stake_account_keypair"
 fi
-solana-keygen new -o "$dataDir"/drone-keypair.json
-solana-keygen new -o "$dataDir"/leader-storage-account-keypair.json
+solana-keygen new -f -o "$dataDir"/drone-keypair.json
+solana-keygen new -f -o "$dataDir"/leader-storage-account-keypair.json
 
 leaderVoteAccountPubkey=$(\
   solana-wallet \
