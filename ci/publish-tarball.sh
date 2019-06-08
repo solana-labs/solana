@@ -122,7 +122,7 @@ if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
   exit 0
 fi
 
-for file in solana-release-$TARGET.tar.bz2 solana-install-$TARGET; do
+for file in solana-release-$TARGET.tar.bz2 solana-install-$TARGET*; do
   if [[ -n $BUILDKITE ]]; then
     echo --- AWS S3 Store: $file
     (
