@@ -122,9 +122,9 @@ if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
   exit 0
 fi
 
-for file in solana-release-$TARGET.tar.bz2 solana-install-$TARGET*; do
+for file in solana-release-$TARGET.tar.bz2 solana-install-"$TARGET"*; do
   if [[ -n $BUILDKITE ]]; then
-    echo --- AWS S3 Store: $file
+    echo --- AWS S3 Store: "$file"
     (
       set -x
       $DRYRUN docker run \
@@ -133,29 +133,29 @@ for file in solana-release-$TARGET.tar.bz2 solana-install-$TARGET*; do
         --env AWS_SECRET_ACCESS_KEY \
         --volume "$PWD:/solana" \
         eremite/aws-cli:2018.12.18 \
-        /usr/bin/s3cmd --acl-public put /solana/"$file" s3://release.solana.com/"$CHANNEL_OR_TAG"/$file
+        /usr/bin/s3cmd --acl-public put /solana/"$file" s3://release.solana.com/"$CHANNEL_OR_TAG"/"$file"
 
       echo Published to:
-      $DRYRUN ci/format-url.sh http://release.solana.com/"$CHANNEL_OR_TAG"/$file
+      $DRYRUN ci/format-url.sh http://release.solana.com/"$CHANNEL_OR_TAG"/"$file"
     )
 
     if [[ -n $TAG ]]; then
-      ci/upload-github-release-asset.sh $file
+      ci/upload-github-release-asset.sh "$file"
     fi
   elif [[ -n $TRAVIS ]]; then
     # .travis.yml uploads everything in the travis-s3-upload/ directory to release.solana.com
     mkdir -p travis-s3-upload/"$CHANNEL_OR_TAG"
-    cp -v $file travis-s3-upload/"$CHANNEL_OR_TAG"/
+    cp -v "$file" travis-s3-upload/"$CHANNEL_OR_TAG"/
 
     if [[ -n $TAG ]]; then
       # .travis.yaml uploads everything in the travis-release-upload/ directory to
       # the associated Github Release
       mkdir -p travis-release-upload/
-      cp -v $file travis-release-upload/
+      cp -v "$file" travis-release-upload/
     fi
   elif [[ -n $APPVEYOR ]]; then
     # Add artifacts for .appveyor.yml to upload
-    appveyor PushArtifact $file -FileName "$CHANNEL_OR_TAG"/$file
+    appveyor PushArtifact "$file" -FileName "$CHANNEL_OR_TAG"/"$file"
   fi
 done
 
