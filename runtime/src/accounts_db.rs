@@ -433,11 +433,11 @@ impl AccountsDB {
     fn store_accounts(
         &self,
         fork_id: Fork,
-        accounts: &[(&Pubkey, &Account, LamportCredit)],
+        accounts: &HashMap<&Pubkey, (&Account, LamportCredit)>,
     ) -> Vec<AccountInfo> {
         let with_meta: Vec<(StorageMeta, &Pubkey, &Account, u64)> = accounts
             .iter()
-            .map(|(pubkey, account, credit)| {
+            .map(|(pubkey, (account, credit))| {
                 let write_version = self.write_version.fetch_add(1, Ordering::Relaxed) as u64;
                 let data_len = if account.lamports == 0 {
                     0
@@ -452,14 +452,9 @@ impl AccountsDB {
 
                 let mut lamports: u64 = account.lamports;
                 if *credit > 0 {
-                    // Only credit-only accounts will have credit values greater than 0
-                    let accounts_index = self.accounts_index.read().unwrap();
-                    let result =
-                        accounts_index.get(pubkey, &vec![(fork_id, 0usize)].into_iter().collect());
-                    if result.is_some() {
-                        let current_lamports = result.unwrap().0.lamports;
-                        lamports = current_lamports + credit;
-                    }
+                    // Only credit-only accounts with multiple transaction credits will have credit
+                    // values greater than 0. Update lamports to collect all credits.
+                    lamports += credit;
                 }
 
                 (meta, *pubkey, *account, lamports)
@@ -491,12 +486,13 @@ impl AccountsDB {
         &self,
         fork_id: Fork,
         infos: Vec<AccountInfo>,
-        accounts: &[(&Pubkey, &Account, LamportCredit)],
+        accounts: &HashMap<&Pubkey, (&Account, LamportCredit)>,
     ) -> Vec<(Fork, AccountInfo)> {
         let mut reclaims = Vec::with_capacity(infos.len() * 2);
         let mut index = self.accounts_index.write().unwrap();
-        for (i, info) in infos.into_iter().enumerate() {
-            let key = &accounts[i].0;
+        let mut reclaims = vec![];
+        for (info, account) in infos.into_iter().zip(accounts.iter()) {
+            let key = &account.0;
             index.insert(fork_id, key, info, &mut reclaims);
         }
         (reclaims, index.last_root)
@@ -546,7 +542,7 @@ impl AccountsDB {
     }
 
     /// Store the account update.
-    pub fn store(&self, fork_id: Fork, accounts: &[(&Pubkey, &Account, LamportCredit)]) {
+    pub fn store(&self, fork_id: Fork, accounts: &HashMap<&Pubkey, (&Account, LamportCredit)>) {
         let infos = self.store_accounts(fork_id, accounts);
 
         let (reclaims, last_root) = self.update_index(fork_id, infos, accounts);
@@ -753,6 +749,15 @@ mod tests {
         };
     }
 
+    #[macro_export]
+    macro_rules! hashmap {
+        ($( $key: expr, $val: expr ),*) => {{
+             let mut map = ::std::collections::HashMap::new();
+             $( map.insert($key, $val); )*
+             map
+        }}
+    }
+
     #[test]
     fn test_accountsdb_add_root() {
         solana_logger::setup();
@@ -761,7 +766,7 @@ mod tests {
         let key = Pubkey::default();
         let account0 = Account::new(1, 0, &key);
 
-        db.store(0, &[(&key, &account0, 0)]);
+        db.store(0, &hashmap!(&key, (&account0, 0)));
         db.add_root(0);
         let ancestors = vec![(1, 1)].into_iter().collect();
         assert_eq!(db.load_slow(&ancestors, &key), Some((account0, 0)));
@@ -775,10 +780,10 @@ mod tests {
         let key = Pubkey::default();
         let account0 = Account::new(1, 0, &key);
 
-        db.store(0, &[(&key, &account0, 0)]);
+        db.store(0, &hashmap!(&key, (&account0, 0)));
 
         let account1 = Account::new(0, 0, &key);
-        db.store(1, &[(&key, &account1, 0)]);
+        db.store(1, &hashmap!(&key, (&account1, 0)));
 
         let ancestors = vec![(1, 1)].into_iter().collect();
         assert_eq!(&db.load_slow(&ancestors, &key).unwrap().0, &account1);
@@ -795,10 +800,10 @@ mod tests {
         let key = Pubkey::default();
         let account0 = Account::new(1, 0, &key);
 
-        db.store(0, &[(&key, &account0, 0)]);
+        db.store(0, &hashmap!(&key, (&account0, 0)));
 
         let account1 = Account::new(0, 0, &key);
-        db.store(1, &[(&key, &account1, 0)]);
+        db.store(1, &hashmap!(&key, (&account1, 0)));
         db.add_root(0);
 
         let ancestors = vec![(1, 1)].into_iter().collect();
@@ -817,7 +822,7 @@ mod tests {
         let account0 = Account::new(1, 0, &key);
 
         // store value 1 in the "root", i.e. db zero
-        db.store(0, &[(&key, &account0, 0)]);
+        db.store(0, &hashmap!(&key, (&account0, 0)));
 
         // now we have:
         //
@@ -830,7 +835,7 @@ mod tests {
 
         // store value 0 in one child
         let account1 = Account::new(0, 0, &key);
-        db.store(1, &[(&key, &account1, 0)]);
+        db.store(1, &hashmap!(&key, (&account1, 0)));
 
         // masking accounts is done at the Accounts level, at accountsDB we see
         // original account (but could also accept "None", which is implemented
@@ -901,8 +906,8 @@ mod tests {
 
         let pubkey = Pubkey::new_rand();
         let account = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 3, &pubkey);
-        db.store(1, &[(&pubkey, &account, 0)]);
-        db.store(1, &[(&pubkeys[0], &account, 0)]);
+        db.store(1, &hashmap!(&pubkey, (&account, 0)));
+        db.store(1, &hashmap!(&pubkeys[0], (&account, 0)));
         {
             let stores = db.storage.read().unwrap();
             let fork_0_stores = &stores.0.get(&0).unwrap();
@@ -932,11 +937,11 @@ mod tests {
         let paths = get_tmp_accounts_path!();
         let db0 = AccountsDB::new(&paths.paths);
         let account0 = Account::new(1, 0, &key);
-        db0.store(0, &[(&key, &account0, 0)]);
+        db0.store(0, &hashmap!(&key, (&account0, 0)));
 
         // 0 lamports in the child
         let account1 = Account::new(0, 0, &key);
-        db0.store(1, &[(&key, &account1, 0)]);
+        db0.store(1, &hashmap!(&key, (&account1, 0)));
 
         // masking accounts is done at the Accounts level, at accountsDB we see
         // original account
@@ -952,17 +957,17 @@ mod tests {
         let db = AccountsDB::new(&paths.paths);
         let pubkey = Pubkey::default();
         let account = Account::new(1, 0, &pubkey);
-        db.store(0, &[(&pubkey, &account, 0)]);
+        db.store(0, &hashmap!(&pubkey, (&account, 0)));
 
         // Modify account lamport balance
         let ancestors = vec![(0, 0)].into_iter().collect();
         let (mut account_load, _) = db.load_slow(&ancestors, &pubkey).unwrap();
         account_load.lamports = 5;
-        db.store(0, &[(&pubkey, &account_load, 0)]);
+        db.store(0, &hashmap!(&pubkey, (&account_load, 0)));
 
         // Load 5-1 = 4 lamport credit
         let account_new = Account::new(5, 0, &pubkey);
-        db.store(0, &[(&pubkey, &account_new, 4)]);
+        db.store(0, &hashmap!(&pubkey, (&account_new, 4)));
 
         let (account_load, _) = db.load_slow(&ancestors, &pubkey).unwrap();
         assert_eq!(account_load.lamports, 9);
@@ -982,7 +987,7 @@ mod tests {
             pubkeys.push(pubkey.clone());
             let ancestors = vec![(fork, 0)].into_iter().collect();
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
-            accounts.store(fork, &[(&pubkey, &account, 0)]);
+            accounts.store(fork, &hashmap!(&pubkey, (&account, 0)));
         }
         for t in 0..num_vote {
             let pubkey = Pubkey::new_rand();
@@ -990,7 +995,7 @@ mod tests {
             pubkeys.push(pubkey.clone());
             let ancestors = vec![(fork, 0)].into_iter().collect();
             assert!(accounts.load_slow(&ancestors, &pubkey).is_none());
-            accounts.store(fork, &[(&pubkey, &account, 0)]);
+            accounts.store(fork, &hashmap!(&pubkey, (&account, 0)));
         }
     }
 
@@ -1000,7 +1005,7 @@ mod tests {
             let ancestors = vec![(fork, 0)].into_iter().collect();
             if let Some((mut account, _)) = accounts.load_slow(&ancestors, &pubkeys[idx]) {
                 account.lamports = account.lamports + 1;
-                accounts.store(fork, &[(&pubkeys[idx], &account, 0)]);
+                accounts.store(fork, &hashmap!(&pubkeys[idx], (&account, 0)));
                 if account.lamports == 0 {
                     let ancestors = vec![(fork, 0)].into_iter().collect();
                     assert!(accounts.load_slow(&ancestors, &pubkeys[idx]).is_none());
@@ -1045,7 +1050,7 @@ mod tests {
     ) {
         for idx in 0..num {
             let account = Account::new((idx + count) as u64, 0, &Account::default().owner);
-            accounts.store(fork, &[(&pubkeys[idx], &account, 0)]);
+            accounts.store(fork, &hashmap!(&pubkeys[idx], (&account, 0)));
         }
     }
 
@@ -1090,7 +1095,7 @@ mod tests {
         for i in 0..9 {
             let key = Pubkey::new_rand();
             let account = Account::new(i + 1, size as usize / 4, &key);
-            accounts.store(0, &[(&key, &account, 0)]);
+            accounts.store(0, &hashmap!(&key, (&account, 0)));
             keys.push(key);
         }
         for (i, key) in keys.iter().enumerate() {
@@ -1125,7 +1130,7 @@ mod tests {
         let status = [AccountStorageStatus::Available, AccountStorageStatus::Full];
         let pubkey1 = Pubkey::new_rand();
         let account1 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, &pubkey1);
-        accounts.store(0, &[(&pubkey1, &account1, 0)]);
+        accounts.store(0, &hashmap!(&pubkey1, (&account1, 0)));
         {
             let stores = accounts.storage.read().unwrap();
             assert_eq!(stores.0.len(), 1);
@@ -1135,7 +1140,7 @@ mod tests {
 
         let pubkey2 = Pubkey::new_rand();
         let account2 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, &pubkey2);
-        accounts.store(0, &[(&pubkey2, &account2, 0)]);
+        accounts.store(0, &hashmap!(&pubkey2, (&account2, 0)));
         {
             let stores = accounts.storage.read().unwrap();
             assert_eq!(stores.0.len(), 1);
@@ -1158,7 +1163,7 @@ mod tests {
         // lots of stores, but 3 storages should be enough for everything
         for i in 0..25 {
             let index = i % 2;
-            accounts.store(0, &[(&pubkey1, &account1, 0)]);
+            accounts.store(0, &hashmap!(&pubkey1, (&account1, 0)));
             {
                 let stores = accounts.storage.read().unwrap();
                 assert_eq!(stores.0.len(), 1);
@@ -1216,7 +1221,7 @@ mod tests {
         let pubkey = Pubkey::new_rand();
         let account = Account::new(1, 0, &Account::default().owner);
         //store an account
-        accounts.store(0, &[(&pubkey, &account, 0)]);
+        accounts.store(0, &hashmap!(&pubkey, (&account, 0)));
         let ancestors = vec![(0, 0)].into_iter().collect();
         let info = accounts
             .accounts_index
@@ -1243,7 +1248,7 @@ mod tests {
             .is_some());
 
         //store causes cleanup
-        accounts.store(1, &[(&pubkey, &account, 0)]);
+        accounts.store(1, &hashmap!(&pubkey, (&account, 0)));
 
         //fork is gone
         assert!(accounts.storage.read().unwrap().0.get(&0).is_none());
@@ -1308,7 +1313,7 @@ mod tests {
                         loop {
                             let account_bal = thread_rng().gen_range(1, 99);
                             account.lamports = account_bal;
-                            db.store(fork_id, &[(&pubkey, &account, 0)]);
+                            db.store(fork_id, &hashmap!(&pubkey, (&account, 0)));
                             let (account, fork) = db.load_slow(&HashMap::new(), &pubkey).expect(
                                 &format!("Could not fetch stored account {}, iter {}", pubkey, i),
                             );

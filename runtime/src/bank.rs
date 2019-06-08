@@ -1659,6 +1659,7 @@ mod tests {
         // assert_eq!(results[0], Ok(()));
         // assert_eq!(results[1], Ok(()));
         // assert_eq!(results[2], Ok(()));
+        // assert_eq!(bank.get_balance(&recipient), 3);
     }
 
     #[test]
@@ -1699,6 +1700,41 @@ mod tests {
         drop(lock_result);
 
         assert!(bank.transfer(2, &mint_keypair, &bob.pubkey()).is_ok());
+    }
+
+    #[test]
+    fn test_credit_only_relaxed_locks() {
+        use solana_sdk::message::{Message, MessageHeader};
+
+        let (genesis_block, mint_keypair) = create_genesis_block(3);
+        let bank = Bank::new(&genesis_block);
+        let key0 = Keypair::new();
+        let key1 = Pubkey::new_rand();
+        let key2 = Pubkey::new_rand();
+
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_credit_only_signed_accounts: 0,
+                num_credit_only_unsigned_accounts: 1,
+            },
+            account_keys: vec![key0.pubkey(), key1, key2],
+            recent_blockhash: Hash::default(),
+            instructions: vec![],
+        };
+        let tx0 = Transaction::new(&[&key0], message, genesis_block.hash());
+        let txs = vec![tx0];
+
+        let lock_result = bank.lock_accounts(&txs);
+        assert_eq!(lock_result.locked_accounts_results(), &vec![Ok(())]);
+
+        // Try executing a tx loading a credit-only account from tx0
+        assert!(bank.transfer(1, &mint_keypair, &key2).is_ok());
+        // Try executing a tx loading a account locked as credit-debit in tx0
+        assert_eq!(
+            bank.transfer(1, &mint_keypair, &key1),
+            Err(TransactionError::AccountInUse)
+        );
     }
 
     #[test]

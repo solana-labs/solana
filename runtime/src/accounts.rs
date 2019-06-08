@@ -359,7 +359,9 @@ impl Accounts {
 
     /// Slow because lock is held for 1 operation instead of many
     pub fn store_slow(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
-        self.accounts_db.store(fork, &[(pubkey, account, 0)]);
+        let mut accounts = HashMap::new();
+        accounts.insert(pubkey, (account, 0));
+        self.accounts_db.store(fork, &accounts);
     }
 
     fn lock_account(
@@ -552,7 +554,7 @@ impl Accounts {
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
-        let mut accounts: Vec<(&Pubkey, &Account, LamportCredit)> = vec![];
+        let mut accounts: HashMap<&Pubkey, (&Account, LamportCredit)> = HashMap::new();
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {
                 continue;
@@ -566,7 +568,15 @@ impl Accounts {
                 .zip(acc.0.iter())
                 .zip(acc.2.iter())
             {
-                accounts.push((key, account, *credit));
+                if !accounts.contains_key(key) {
+                    accounts.insert(key, (account, 0));
+                } else if *credit > 0 {
+                    // Credit-only accounts may be referenced by multiple transactions
+                    // Collect credits to update account lamport balance before store.
+                    if let Some((_, c)) = accounts.get_mut(key) {
+                        *c += credit;
+                    }
+                }
             }
         }
         self.accounts_db.store(fork, &accounts);
