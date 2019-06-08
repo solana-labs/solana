@@ -959,16 +959,11 @@ mod tests {
         let account = Account::new(1, 0, &pubkey);
         db.store(0, &hashmap!(&pubkey, (&account, 0)));
 
-        // Modify account lamport balance
-        let ancestors = vec![(0, 0)].into_iter().collect();
-        let (mut account_load, _) = db.load_slow(&ancestors, &pubkey).unwrap();
-        account_load.lamports = 5;
-        db.store(0, &hashmap!(&pubkey, (&account_load, 0)));
-
-        // Load 5-1 = 4 lamport credit
+        // Load account with lamport credit
         let account_new = Account::new(5, 0, &pubkey);
         db.store(0, &hashmap!(&pubkey, (&account_new, 4)));
 
+        let ancestors = vec![(0, 0)].into_iter().collect();
         let (account_load, _) = db.load_slow(&ancestors, &pubkey).unwrap();
         assert_eq!(account_load.lamports, 9);
     }
