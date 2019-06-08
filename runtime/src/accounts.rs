@@ -364,7 +364,7 @@ impl Accounts {
 
     fn lock_account(
         (fork_locks, parent_locks): (&mut HashSet<Pubkey>, &mut Vec<Arc<AccountLocks>>),
-        keys: &[Pubkey],
+        keys: &[&Pubkey],
         error_counters: &mut ErrorCounters,
     ) -> Result<()> {
         // Copy all the accounts
@@ -404,19 +404,19 @@ impl Accounts {
             }
         }
         for k in keys {
-            fork_locks.insert(*k);
+            fork_locks.insert(**k);
         }
         Ok(())
     }
 
-    fn lock_record_account(record_locks: &AccountLocks, keys: &[Pubkey]) {
+    fn lock_record_account(record_locks: &AccountLocks, keys: &[&Pubkey]) {
         let mut fork_locks = record_locks.lock().unwrap();
         for k in keys {
             // The fork locks should always be a subset of the account locks, so
             // the account locks should prevent record locks from ever touching the
             // same accounts
             assert!(!fork_locks.contains(k));
-            fork_locks.insert(*k);
+            fork_locks.insert(**k);
         }
     }
 
@@ -491,8 +491,7 @@ impl Accounts {
                 let message = tx.borrow().message();
                 Self::lock_account(
                     (&mut self.account_locks.lock().unwrap(), parent_record_locks),
-                    &message.account_keys[..(message.account_keys.len()
-                        - message.header.num_credit_only_unsigned_accounts as usize)],
+                    &message.get_account_keys_by_lock_type().0,
                     &mut error_counters,
                 )
             })
@@ -515,11 +514,7 @@ impl Accounts {
         let record_locks = self.record_locks.lock().unwrap();
         for tx in txs {
             let message = tx.borrow().message();
-            Self::lock_record_account(
-                &record_locks.0,
-                &message.account_keys[..(message.account_keys.len()
-                    - message.header.num_credit_only_unsigned_accounts as usize)],
-            );
+            Self::lock_record_account(&record_locks.0, &message.get_account_keys_by_lock_type().0);
         }
     }
 
@@ -1132,7 +1127,7 @@ mod tests {
                     &mut child.account_locks.lock().unwrap(),
                     &mut child.record_locks.lock().unwrap().1
                 ),
-                &vec![locked_pubkey],
+                &vec![&locked_pubkey],
                 &mut ErrorCounters::default()
             ),
             Ok(())
