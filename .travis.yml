@@ -15,9 +15,8 @@ script:
   - ci/publish-tarball.sh
 
 notifications:
-  email:
-    recipients:
-      - mvines@solana.com
+  slack:
+    secure: F4IjOE05MyaMOdPRL+r8qhs7jBvv4yDM3RmFKE1zNXnfUOqV4X38oQM1EI+YVsgpMQLj/pxnEB7wcTE4Bf86N6moLssEULCpvAuMVoXj4QbWdomLX+01WbFa6fLVeNQIg45NHrz2XzVBhoKOrMNnl+QI5mbR2AlS5oqsudHsXDnyLzZtd4Y5SDMdYG1zVWM01+oNNjgNfjcCGmOE/K0CnOMl6GPi3X9C34tJ19P2XT7MTDsz1/IfEF7fro2Q8DHEYL9dchJMoisXSkem5z7IDQkGzXsWdWT4NnndUvmd1MlTCE9qgoXDqRf95Qh8sB1Dz08HtvgfaosP2XjtNTfDI9BBYS15Ibw9y7PchAJE1luteNjF35EOy6OgmCLw/YpnweqfuNViBZz+yOPWXVC0kxnPIXKZ1wyH9ibeH6E4hr7a8o9SV/6SiWIlbYF+IR9jPXyTCLP/cc3sYljPWxDnhWFwFdRVIi3PbVAhVu7uWtVUO17Oc9gtGPgs/GrhOMkJfwQPXaudRJDpVZowxTX4x9kefNotlMAMRgq+Drbmgt4eEBiCNp0ITWgh17BiE1U09WS3myuduhoct85+FoVeaUkp1sxzHVtGsNQH0hcz7WcpZyOM+AwistJA/qzeEDQao5zi1eKWPbO2xAhi2rV1bDH6bPf/4lDBwLRqSiwvlWU=
 
 deploy:
   - provider: s3
