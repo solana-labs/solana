@@ -283,8 +283,17 @@ pub fn init(
     update_manifest_pubkey: &Pubkey,
     no_modify_path: bool,
 ) -> Result<(), String> {
-    let config = Config::new(data_dir, json_rpc_url, update_manifest_pubkey);
-    config.save(config_file)?;
+    let config = {
+        // Write new config file only if different, so that running |solana-install init|
+        // repeatedly doesn't unnecessarily re-download
+        let mut current_config = Config::load(config_file).unwrap_or_default();
+        current_config.current_update_manifest = None;
+        let config = Config::new(data_dir, json_rpc_url, update_manifest_pubkey);
+        if current_config != config {
+            config.save(config_file)?;
+        }
+        config
+    };
     update(config_file)?;
 
     let mut modified_rcfiles = false;
