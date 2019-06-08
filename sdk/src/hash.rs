@@ -1,15 +1,15 @@
 //! The `hash` module provides functions for creating SHA-256 hashes.
 
 use bs58;
-use generic_array::typenum::U32;
-use generic_array::GenericArray;
 use sha2::{Digest, Sha256};
+use std::convert::TryFrom;
 use std::fmt;
 use std::mem;
 use std::str::FromStr;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct Hash(GenericArray<u8, U32>);
+#[repr(transparent)]
+pub struct Hash([u8; 32]);
 
 #[derive(Clone, Default)]
 pub struct Hasher {
@@ -28,9 +28,7 @@ impl Hasher {
     pub fn result(self) -> Hash {
         // At the time of this writing, the sha2 library is stuck on an old version
         // of generic_array (0.9.0). Decouple ourselves with a clone to our version.
-        Hash(GenericArray::clone_from_slice(
-            self.hasher.result().as_slice(),
-        ))
+        Hash(<[u8; 32]>::try_from(self.hasher.result().as_slice()).unwrap())
     }
 }
 
@@ -75,7 +73,7 @@ impl FromStr for Hash {
 
 impl Hash {
     pub fn new(hash_slice: &[u8]) -> Self {
-        Hash(GenericArray::clone_from_slice(&hash_slice))
+        Hash(<[u8; 32]>::try_from(hash_slice).unwrap())
     }
 }
 

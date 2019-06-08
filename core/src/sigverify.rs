@@ -17,6 +17,9 @@ use solana_sdk::signature::Signature;
 use solana_sdk::transaction::Transaction;
 use std::mem::size_of;
 
+#[cfg(feature = "cuda")]
+use std::os::raw::c_int;
+
 pub const NUM_THREADS: u32 = 10;
 use std::cell::RefCell;
 
@@ -68,6 +71,13 @@ extern "C" {
 
     pub fn chacha_init_sha_state(sha_state: *mut u8, num_keys: u32);
     pub fn chacha_end_sha_state(sha_state_in: *const u8, out: *mut u8, num_keys: u32);
+
+    pub fn poh_verify_many(
+        hashes: *mut u8,
+        num_hashes_arr: *const u64,
+        num_elems: usize,
+        use_non_default_stream: u8,
+    ) -> c_int;
 }
 
 #[cfg(not(feature = "cuda"))]

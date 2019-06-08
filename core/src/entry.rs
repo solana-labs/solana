@@ -16,6 +16,13 @@ use std::borrow::Borrow;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 
+#[cfg(feature = "cuda")]
+use crate::sigverify::poh_verify_many;
+#[cfg(feature = "cuda")]
+use std::sync::Mutex;
+#[cfg(feature = "cuda")]
+use std::thread;
+
 pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
 
@@ -212,6 +219,7 @@ pub trait EntrySlice {
 }
 
 impl EntrySlice for [Entry] {
+    #[cfg(not(feature = "cuda"))]
     fn verify(&self, start_hash: &Hash) -> bool {
         let genesis = [Entry {
             num_hashes: 0,
@@ -231,6 +239,78 @@ impl EntrySlice for [Entry] {
             }
             r
         })
+    }
+
+    #[cfg(feature = "cuda")]
+    fn verify(&self, start_hash: &Hash) -> bool {
+        let genesis = [Entry {
+            num_hashes: 0,
+            hash: *start_hash,
+            transactions: vec![],
+        }];
+
+        let hashes: Vec<Hash> = genesis
+            .par_iter()
+            .chain(self)
+            .map(|entry| entry.hash)
+            .take(self.len())
+            .collect();
+
+        let num_hashes_vec: Vec<u64> = self
+            .into_iter()
+            .map(|entry| entry.num_hashes.saturating_sub(1))
+            .collect();
+
+        let length = self.len();
+        let hashes = Arc::new(Mutex::new(hashes));
+        let hashes_clone = hashes.clone();
+
+        let gpu_verify_thread = thread::spawn(move || {
+            let mut hashes = hashes_clone.lock().unwrap();
+            let res;
+            unsafe {
+                res = poh_verify_many(
+                    hashes.as_mut_ptr() as *mut u8,
+                    num_hashes_vec.as_ptr(),
+                    length,
+                    1,
+                );
+            }
+            if res != 0 {
+                panic!("GPU PoH verify many failed");
+            }
+        });
+
+        let tx_hashes: Vec<Option<Hash>> = self
+            .into_par_iter()
+            .map(|entry| {
+                if entry.transactions.is_empty() {
+                    None
+                } else {
+                    Some(hash_transactions(&entry.transactions))
+                }
+            })
+            .collect();
+
+        gpu_verify_thread.join().unwrap();
+
+        let hashes = Arc::try_unwrap(hashes).unwrap().into_inner().unwrap();
+        hashes
+            .into_par_iter()
+            .zip(tx_hashes)
+            .zip(self)
+            .all(|((hash, tx_hash), answer)| {
+                if answer.num_hashes == 0 {
+                    hash == answer.hash
+                } else {
+                    let mut poh = Poh::new(hash, None);
+                    if let Some(mixin) = tx_hash {
+                        poh.record(mixin).unwrap().hash == answer.hash
+                    } else {
+                        poh.tick().unwrap().hash == answer.hash
+                    }
+                }
+            })
     }
 
     fn to_blobs(&self) -> Vec<Blob> {
@@ -554,6 +634,53 @@ mod tests {
         let mut bad_ticks = vec![next_entry(&zero, 0, vec![]); 2];
         bad_ticks[1].hash = one;
         assert!(!bad_ticks.verify(&zero)); // inductive step, bad
+    }
+
+    #[test]
+    fn test_verify_slice_with_hashes() {
+        solana_logger::setup();
+        let zero = Hash::default();
+        let one = hash(&zero.as_ref());
+        let two = hash(&one.as_ref());
+        assert!(vec![][..].verify(&one)); // base case
+        assert!(vec![Entry::new_tick(1, &two)][..].verify(&one)); // singleton case 1
+        assert!(!vec![Entry::new_tick(1, &two)][..].verify(&two)); // singleton case 2, bad
+
+        let mut ticks = vec![next_entry(&one, 1, vec![])];
+        ticks.push(next_entry(&ticks.last().unwrap().hash, 1, vec![]));
+        assert!(ticks.verify(&one)); // inductive step
+
+        let mut bad_ticks = vec![next_entry(&one, 1, vec![])];
+        bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![]));
+        bad_ticks[1].hash = one;
+        assert!(!bad_ticks.verify(&one)); // inductive step, bad
+    }
+
+    #[test]
+    fn test_verify_slice_with_hashes_and_transactions() {
+        solana_logger::setup();
+        let zero = Hash::default();
+        let one = hash(&zero.as_ref());
+        let two = hash(&one.as_ref());
+        let alice_pubkey = Keypair::default();
+        let tx0 = create_sample_payment(&alice_pubkey, one);
+        let tx1 = create_sample_timestamp(&alice_pubkey, one);
+        assert!(vec![][..].verify(&one)); // base case
+        assert!(vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&one)); // singleton case 1
+        assert!(!vec![next_entry(&one, 1, vec![tx0.clone()])][..].verify(&two)); // singleton case 2, bad
+
+        let mut ticks = vec![next_entry(&one, 1, vec![tx0.clone()])];
+        ticks.push(next_entry(
+            &ticks.last().unwrap().hash,
+            1,
+            vec![tx1.clone()],
+        ));
+        assert!(ticks.verify(&one)); // inductive step
+
+        let mut bad_ticks = vec![next_entry(&one, 1, vec![tx0])];
+        bad_ticks.push(next_entry(&bad_ticks.last().unwrap().hash, 1, vec![tx1]));
+        bad_ticks[1].hash = one;
+        assert!(!bad_ticks.verify(&one)); // inductive step, bad
     }
 
     fn blob_sized_entries(num_entries: usize) -> Vec<Entry> {

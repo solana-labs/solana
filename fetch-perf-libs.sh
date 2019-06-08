@@ -17,7 +17,7 @@ if [[ ! -d target/perf-libs ]]; then
   (
     set -x
     cd target/perf-libs
-    curl https://solana-perf.s3.amazonaws.com/v0.12.1/x86_64-unknown-linux-gnu/solana-perf.tgz | tar zxvf -
+    curl https://solana-perf.s3.amazonaws.com/v0.13.2/x86_64-unknown-linux-gnu/solana-perf.tgz | tar zxvf -
   )
 fi
 
