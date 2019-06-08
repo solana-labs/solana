@@ -474,14 +474,14 @@ impl AccountsDB {
         fork_id: Fork,
         infos: Vec<AccountInfo>,
         accounts: &[(&Pubkey, &Account)],
-    ) -> Vec<(Fork, AccountInfo)> {
+    ) -> (Vec<(Fork, AccountInfo)>, u64) {
         let mut index = self.accounts_index.write().unwrap();
         let mut reclaims = vec![];
         for (i, info) in infos.into_iter().enumerate() {
             let key = &accounts[i].0;
             reclaims.extend(index.insert(fork_id, key, info).into_iter())
         }
-        reclaims
+        (reclaims, index.last_root)
     }
 
     fn remove_dead_accounts(&self, reclaims: Vec<(Fork, AccountInfo)>) -> HashSet<Fork> {
@@ -516,24 +516,30 @@ impl AccountsDB {
         dead_forks
     }
 
-    fn cleanup_dead_forks(&self, dead_forks: &mut HashSet<Fork>) {
-        let mut index = self.accounts_index.write().unwrap();
+    fn cleanup_dead_forks(&self, dead_forks: &mut HashSet<Fork>, last_root: u64) {
         // a fork is not totally dead until it is older than the root
-        dead_forks.retain(|fork| *fork < index.last_root);
-        for fork in dead_forks.iter() {
-            index.cleanup_dead_fork(*fork);
+        dead_forks.retain(|fork| *fork < last_root);
+        if !dead_forks.is_empty() {
+            let mut index = self.accounts_index.write().unwrap();
+            for fork in dead_forks.iter() {
+                index.cleanup_dead_fork(*fork);
+            }
         }
     }
 
     /// Store the account update.
     pub fn store(&self, fork_id: Fork, accounts: &[(&Pubkey, &Account)]) {
         let infos = self.store_accounts(fork_id, accounts);
-        let reclaims = self.update_index(fork_id, infos, accounts);
+
+        let (reclaims, last_root) = self.update_index(fork_id, infos, accounts);
         trace!("reclaim: {}", reclaims.len());
+
         let mut dead_forks = self.remove_dead_accounts(reclaims);
         trace!("dead_forks: {}", dead_forks.len());
-        self.cleanup_dead_forks(&mut dead_forks);
+
+        self.cleanup_dead_forks(&mut dead_forks, last_root);
         trace!("purge_forks: {}", dead_forks.len());
+
         for fork in dead_forks {
             self.purge_fork(fork);
         }
