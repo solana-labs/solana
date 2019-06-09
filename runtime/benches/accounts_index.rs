@@ -18,10 +18,11 @@ fn bench_accounts_index(bencher: &mut Bencher) {
 
     const NUM_FORKS: u64 = 16;
 
+    let mut reclaims = vec![];
     let mut index = AccountsIndex::<AccountInfo>::default();
     for f in 0..NUM_FORKS {
         for _p in 0..NUM_PUBKEYS {
-            index.insert(f, &pubkeys[_p], AccountInfo::default());
+            index.insert(f, &pubkeys[_p], AccountInfo::default(), &mut reclaims);
         }
     }
 
@@ -30,7 +31,13 @@ fn bench_accounts_index(bencher: &mut Bencher) {
     bencher.iter(|| {
         for _p in 0..NUM_PUBKEYS {
             let pubkey = thread_rng().gen_range(0, NUM_PUBKEYS);
-            index.insert(fork, &pubkeys[pubkey], AccountInfo::default());
+            index.insert(
+                fork,
+                &pubkeys[pubkey],
+                AccountInfo::default(),
+                &mut reclaims,
+            );
+            reclaims.clear();
         }
         index.add_root(root);
         root += 1;

@@ -475,11 +475,11 @@ impl AccountsDB {
         infos: Vec<AccountInfo>,
         accounts: &[(&Pubkey, &Account)],
     ) -> (Vec<(Fork, AccountInfo)>, u64) {
+        let mut reclaims = Vec::with_capacity(infos.len() * 2);
         let mut index = self.accounts_index.write().unwrap();
-        let mut reclaims = vec![];
         for (i, info) in infos.into_iter().enumerate() {
             let key = &accounts[i].0;
-            reclaims.extend(index.insert(fork_id, key, info).into_iter())
+            index.insert(fork_id, key, info, &mut reclaims);
         }
         (reclaims, index.last_root)
     }
@@ -1188,7 +1188,14 @@ mod tests {
             .clone();
         //fork 0 is behind root, but it is not root, therefore it is purged
         accounts.add_root(1);
-        assert!(accounts.accounts_index.read().unwrap().is_purged(0));
+        {
+            let accounts_index = accounts.accounts_index.read().unwrap();
+            assert!(AccountsIndex::<AccountInfo>::is_purged(
+                &accounts_index.roots,
+                accounts_index.last_root,
+                0
+            ));
+        }
 
         //fork is still there, since gc is lazy
         assert!(accounts.storage.read().unwrap().0[&0]

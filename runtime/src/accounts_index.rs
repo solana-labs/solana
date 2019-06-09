@@ -33,35 +33,34 @@ impl<T: Clone> AccountsIndex<T> {
         rv
     }
 
-    /// Insert a new fork.
-    /// @retval - The return value contains any squashed accounts that can freed from storage.
-    pub fn insert(&mut self, fork: Fork, pubkey: &Pubkey, account_info: T) -> Vec<(Fork, T)> {
-        let mut rv = vec![];
-        let mut fork_vec: Vec<(Fork, T)> = vec![];
-        {
-            let entry = self.account_maps.entry(*pubkey).or_insert_with(|| vec![]);
-            std::mem::swap(entry, &mut fork_vec);
-        };
+    pub fn insert(
+        &mut self,
+        fork: Fork,
+        pubkey: &Pubkey,
+        account_info: T,
+        reclaims: &mut Vec<(Fork, T)>,
+    ) {
+        let last_root = self.last_root;
+        let roots = &self.roots;
+        let fork_vec = self
+            .account_maps
+            .entry(*pubkey)
+            .or_insert_with(|| (Vec::with_capacity(32)));
 
         // filter out old entries
-        rv.extend(fork_vec.iter().filter(|(f, _)| *f == fork).cloned());
+        reclaims.extend(fork_vec.iter().filter(|(f, _)| *f == fork).cloned());
         fork_vec.retain(|(f, _)| *f != fork);
 
         // add the new entry
         fork_vec.push((fork, account_info));
 
-        rv.extend(
+        reclaims.extend(
             fork_vec
                 .iter()
-                .filter(|(fork, _)| self.is_purged(*fork))
+                .filter(|(fork, _)| Self::is_purged(roots, last_root, *fork))
                 .cloned(),
         );
-        fork_vec.retain(|(fork, _)| !self.is_purged(*fork));
-        {
-            let entry = self.account_maps.entry(*pubkey).or_insert_with(|| vec![]);
-            std::mem::swap(entry, &mut fork_vec);
-        };
-        rv
+        fork_vec.retain(|(fork, _)| !Self::is_purged(roots, last_root, *fork));
     }
 
     pub fn add_index(&mut self, fork: Fork, pubkey: &Pubkey, account_info: T) {
@@ -69,12 +68,14 @@ impl<T: Clone> AccountsIndex<T> {
         entry.push((fork, account_info));
     }
 
-    pub fn is_purged(&self, fork: Fork) -> bool {
-        !self.is_root(fork) && fork < self.last_root
+    pub fn is_purged(roots: &HashSet<Fork>, last_root: Fork, fork: Fork) -> bool {
+        !roots.contains(&fork) && fork < last_root
     }
+
     pub fn is_root(&self, fork: Fork) -> bool {
         self.roots.contains(&fork)
     }
+
     pub fn add_root(&mut self, fork: Fork) {
         assert!(
             (self.last_root == 0 && fork == 0) || (fork > self.last_root),
@@ -107,7 +108,8 @@ mod tests {
     fn test_insert_no_ancestors() {
         let key = Keypair::new();
         let mut index = AccountsIndex::<bool>::default();
-        let gc = index.insert(0, &key.pubkey(), true);
+        let mut gc = Vec::new();
+        index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
 
         let ancestors = HashMap::new();
@@ -118,7 +120,8 @@ mod tests {
     fn test_insert_wrong_ancestors() {
         let key = Keypair::new();
         let mut index = AccountsIndex::<bool>::default();
-        let gc = index.insert(0, &key.pubkey(), true);
+        let mut gc = Vec::new();
+        index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
 
         let ancestors = vec![(1, 1)].into_iter().collect();
@@ -129,7 +132,8 @@ mod tests {
     fn test_insert_with_ancestors() {
         let key = Keypair::new();
         let mut index = AccountsIndex::<bool>::default();
-        let gc = index.insert(0, &key.pubkey(), true);
+        let mut gc = Vec::new();
+        index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
 
         let ancestors = vec![(0, 0)].into_iter().collect();
@@ -148,7 +152,8 @@ mod tests {
     fn test_insert_with_root() {
         let key = Keypair::new();
         let mut index = AccountsIndex::<bool>::default();
-        let gc = index.insert(0, &key.pubkey(), true);
+        let mut gc = Vec::new();
+        index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
 
         let ancestors = vec![].into_iter().collect();
@@ -159,9 +164,17 @@ mod tests {
     #[test]
     fn test_is_purged() {
         let mut index = AccountsIndex::<bool>::default();
-        assert!(!index.is_purged(0));
+        assert!(!AccountsIndex::<bool>::is_purged(
+            &index.roots,
+            index.last_root,
+            0
+        ));
         index.add_root(1);
-        assert!(index.is_purged(0));
+        assert!(AccountsIndex::<bool>::is_purged(
+            &index.roots,
+            index.last_root,
+            0
+        ));
     }
 
     #[test]
@@ -205,11 +218,13 @@ mod tests {
         let key = Keypair::new();
         let mut index = AccountsIndex::<bool>::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let gc = index.insert(0, &key.pubkey(), true);
+        let mut gc = Vec::new();
+        index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
         assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 0)));
 
-        let gc = index.insert(0, &key.pubkey(), false);
+        let mut gc = Vec::new();
+        index.insert(0, &key.pubkey(), false, &mut gc);
         assert_eq!(gc, vec![(0, true)]);
         assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&false, 0)));
     }
@@ -219,9 +234,10 @@ mod tests {
         let key = Keypair::new();
         let mut index = AccountsIndex::<bool>::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let gc = index.insert(0, &key.pubkey(), true);
+        let mut gc = Vec::new();
+        index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
-        let gc = index.insert(1, &key.pubkey(), false);
+        index.insert(1, &key.pubkey(), false, &mut gc);
         assert!(gc.is_empty());
         assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&true, 0)));
         let ancestors = vec![(1, 0)].into_iter().collect();
@@ -232,10 +248,11 @@ mod tests {
     fn test_update_gc_purged_fork() {
         let key = Keypair::new();
         let mut index = AccountsIndex::<bool>::default();
-        let gc = index.insert(0, &key.pubkey(), true);
+        let mut gc = Vec::new();
+        index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
         index.add_root(1);
-        let gc = index.insert(1, &key.pubkey(), false);
+        index.insert(1, &key.pubkey(), false, &mut gc);
         assert_eq!(gc, vec![(0, true)]);
         let ancestors = vec![].into_iter().collect();
         assert_eq!(index.get(&key.pubkey(), &ancestors), Some((&false, 1)));
