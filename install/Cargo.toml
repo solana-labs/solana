@@ -36,6 +36,10 @@ tar = "0.4.26"
 tempdir = "0.3.7"
 url = "1.7.2"
 
+[target."cfg(windows)".dependencies]
+winapi = "0.3.7"
+winreg = "0.6"
+
 [[bin]]
 name = "solana-install"
 path = "src/main-install.rs"
