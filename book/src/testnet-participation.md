@@ -78,10 +78,10 @@ $ solana-install init
 ```
 
 After a successful install, `solana-install update` may be used to easily update the cluster
-software to a newer version.
+software to a newer version at any time.
 
 ##### Download Prebuilt Binaries
-Binaries are available for Linux x86_64 and mac OS systems.
+If you would rather not use `solana-install` to manage the install, you can manually download and install the binaries.
 
 ###### Linux
 Download the binaries by navigating to
@@ -132,7 +132,6 @@ $ solana-gossip --entrypoint testnet.solana.com:8001 spy
 Now configure a key pair for your validator by running:
 ```bash
 $ solana-keygen new -o ~/validator-keypair.json
-$ solana-keygen pubkey ~/validator-keypair.json
 ```
 
 Then use one of the following commands, depending on your installation
@@ -200,13 +199,3 @@ $ solana-keygen pubkey ~/.local/share/solana/install/active_release/config-local
 $ solana-keygen pubkey ./config-local/validator-vote-keypair.json
 ```
 
-### Sharing Metrics From Your Validator
-If you have obtained a metrics username/password from the Solana maintainers to
-help us monitor the health of the testnet, please perform the following steps
-before starting the validator to activate metrics reporting:
-```bash
-export u="username obtained from the Solana maintainers"
-export p="password obtained from the Solana maintainers"
-export SOLANA_METRICS_CONFIG="db=testnet,u=${u:?},p=${p:?}"
-source scripts/configure-metrics.sh
-```
