@@ -32,7 +32,7 @@ fn is_pubkey(string: String) -> Result<(), String> {
     }
 }
 
-fn main() -> Result<(), String> {
+pub fn main() -> Result<(), String> {
     solana_logger::setup();
 
     let matches = App::new(crate_name!())
@@ -228,4 +228,87 @@ fn main() -> Result<(), String> {
         }
         _ => unreachable!(),
     }
+}
+
+pub fn main_init() -> Result<(), String> {
+    solana_logger::setup();
+
+    let matches = App::new("solana-install-init")
+        .about("initializes a new installation")
+        .version(crate_version!())
+        .arg({
+            let arg = Arg::with_name("config_file")
+                .short("c")
+                .long("config")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("Configuration file to use");
+            match *defaults::CONFIG_FILE {
+                Some(ref config_file) => arg.default_value(&config_file),
+                None => arg.required(true),
+            }
+        })
+        .arg({
+            let arg = Arg::with_name("data_dir")
+                .short("d")
+                .long("data-dir")
+                .value_name("PATH")
+                .takes_value(true)
+                .required(true)
+                .help("Directory to store install data");
+            match *defaults::DATA_DIR {
+                Some(ref data_dir) => arg.default_value(&data_dir),
+                None => arg,
+            }
+        })
+        .arg(
+            Arg::with_name("json_rpc_url")
+                .short("u")
+                .long("url")
+                .value_name("URL")
+                .takes_value(true)
+                .default_value(defaults::JSON_RPC_URL)
+                .validator(is_url)
+                .help("JSON RPC URL for the solana cluster"),
+        )
+        .arg(
+            Arg::with_name("no_modify_path")
+                .long("no-modify-path")
+                .help("Don't configure the PATH environment variable"),
+        )
+        .arg({
+            let arg = Arg::with_name("update_manifest_pubkey")
+                .short("p")
+                .long("pubkey")
+                .value_name("PUBKEY")
+                .takes_value(true)
+                .required(true)
+                .validator(is_pubkey)
+                .help("Public key of the update manifest");
+
+            match defaults::update_manifest_pubkey(build_env::TARGET) {
+                Some(default_value) => arg.default_value(default_value),
+                None => arg,
+            }
+        })
+        .get_matches();
+
+    let config_file = matches.value_of("config_file").unwrap();
+
+    let json_rpc_url = matches.value_of("json_rpc_url").unwrap();
+    let update_manifest_pubkey = matches
+        .value_of("update_manifest_pubkey")
+        .unwrap()
+        .parse::<Pubkey>()
+        .unwrap();
+    let data_dir = matches.value_of("data_dir").unwrap();
+    let no_modify_path = matches.is_present("no_modify_path");
+
+    command::init(
+        config_file,
+        data_dir,
+        json_rpc_url,
+        &update_manifest_pubkey,
+        no_modify_path,
+    )
 }

@@ -12,18 +12,18 @@ updates is managed using an on-chain update manifest program.
 #### Fetch and run a pre-built installer using a bootstrap curl/shell script
 The easiest install method for supported platforms:
 ```bash
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.13.0/install/solana-install-init.sh | sh
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.0/install/solana-install-init.sh | sh
 ```
 
 This script will check github for the latest tagged release and download and run the
-`solana-install` binary from there.
+`solana-install-init` binary from there.
 
 
 If additional arguments need to be specified during the installation, the
 following shell syntax is used:
 ```bash
-$ init_args=.... # arguments for `solana-installer init ...`
-$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.13.0/install/solana-install-init.sh | sh -s - ${init_args}
+$ init_args=.... # arguments for `solana-install-init ...`
+$ curl -sSf https://raw.githubusercontent.com/solana-labs/solana/v0.16.0/install/solana-install-init.sh | sh -s - ${init_args}
 ```
 
 #### Fetch and run a pre-built installer from a Github release
@@ -31,9 +31,9 @@ With a well-known release URL, a pre-built binary can be obtained for supported
 platforms:
 
 ```bash
-$ curl -o solana-install https://github.com/solana-labs/solana/releases/download/v0.13.0/solana-install-x86_64-apple-darwin
-$ chmod +x ./solana-install
-$ ./solana-install --help
+$ curl -o solana-install-init https://github.com/solana-labs/solana/releases/download/v0.16.0/solana-install-init-x86_64-apple-darwin
+$ chmod +x ./solana-install-init
+$ ./solana-install-init --help
 ```
 
 #### Build and run the installer from source
@@ -119,7 +119,7 @@ It manages the following files and directories in the user's home directory:
 
 #### Command-line Interface
 ```manpage
-solana-install 0.13.0
+solana-install 0.16.0
 The solana cluster software installer
 
 USAGE:

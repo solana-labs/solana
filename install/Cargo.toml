@@ -35,3 +35,11 @@ solana-sdk = { path = "../sdk", version = "0.16.0" }
 tar = "0.4.26"
 tempdir = "0.3.7"
 url = "1.7.2"
+
+[[bin]]
+name = "solana-install"
+path = "src/main-install.rs"
+
+[[bin]]
+name = "solana-install-init"
+path = "src/main-install-init.rs"
