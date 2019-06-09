@@ -110,7 +110,7 @@ EOF
   chmod +x solana-release/bin/clear-config.sh
 
   tar jvcf solana-release-$TARGET.tar.bz2 solana-release/
-  cp solana-release/bin/solana-install solana-install-$TARGET
+  cp solana-release/bin/solana-install-init solana-install-init-$TARGET
 )
 
 echo --- Saving build artifacts
@@ -122,7 +122,7 @@ if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
   exit 0
 fi
 
-for file in solana-release-$TARGET.tar.bz2 solana-install-"$TARGET"*; do
+for file in solana-release-$TARGET.tar.bz2 solana-install-init-"$TARGET"*; do
   if [[ -n $BUILDKITE ]]; then
     echo --- AWS S3 Store: "$file"
     (
