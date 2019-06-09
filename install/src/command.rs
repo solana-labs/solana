@@ -276,6 +276,217 @@ fn check_env_path_for_bin_dir(config: &Config) {
     }
 }
 
+/// Encodes a UTF-8 string as a null-terminated UCS-2 string in bytes
+#[cfg(windows)]
+pub fn string_to_winreg_bytes(s: &str) -> Vec<u8> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStrExt;
+    let v: Vec<_> = OsString::from(format!("{}\x00", s)).encode_wide().collect();
+    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 2).to_vec() }
+}
+
+// This is used to decode the value of HKCU\Environment\PATH. If that
+// key is not Unicode (or not REG_SZ | REG_EXPAND_SZ) then this
+// returns null.  The winreg library itself does a lossy unicode
+// conversion.
+#[cfg(windows)]
+pub fn string_from_winreg_value(val: &winreg::RegValue) -> Option<String> {
+    use std::slice;
+    use winreg::enums::RegType;
+
+    match val.vtype {
+        RegType::REG_SZ | RegType::REG_EXPAND_SZ => {
+            // Copied from winreg
+            let words = unsafe {
+                slice::from_raw_parts(val.bytes.as_ptr() as *const u16, val.bytes.len() / 2)
+            };
+            let mut s = if let Ok(s) = String::from_utf16(words) {
+                s
+            } else {
+                return None;
+            };
+            while s.ends_with('\u{0}') {
+                s.pop();
+            }
+            Some(s)
+        }
+        _ => None,
+    }
+}
+// Get the windows PATH variable out of the registry as a String. If
+// this returns None then the PATH variable is not Unicode and we
+// should not mess with it.
+#[cfg(windows)]
+fn get_windows_path_var() -> Result<Option<String>, String> {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_WRITE};
+    use winreg::RegKey;
+
+    let root = RegKey::predef(HKEY_CURRENT_USER);
+    let environment = root
+        .open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)
+        .map_err(|err| format!("Unable to open HKEY_CURRENT_USER\\Environment: {}", err))?;
+
+    let reg_value = environment.get_raw_value("PATH");
+    match reg_value {
+        Ok(val) => {
+            if let Some(s) = string_from_winreg_value(&val) {
+                Ok(Some(s))
+            } else {
+                println!("the registry key HKEY_CURRENT_USER\\Environment\\PATH does not contain valid Unicode. Not modifying the PATH variable");
+                return Ok(None);
+            }
+        }
+        Err(ref e) if e.kind() == io::ErrorKind::NotFound => Ok(Some(String::new())),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[cfg(windows)]
+fn add_to_path(new_path: &str) -> Result<bool, String> {
+    use std::ptr;
+    use winapi::shared::minwindef::*;
+    use winapi::um::winuser::{
+        SendMessageTimeoutA, HWND_BROADCAST, SMTO_ABORTIFHUNG, WM_SETTINGCHANGE,
+    };
+    use winreg::enums::{RegType, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE};
+    use winreg::{RegKey, RegValue};
+
+    let old_path = if let Some(s) = get_windows_path_var()? {
+        s
+    } else {
+        return Ok(false);
+    };
+
+    if !old_path.contains(&new_path) {
+        let mut new_path = new_path.to_string();
+        if !old_path.is_empty() {
+            new_path.push_str(";");
+            new_path.push_str(&old_path);
+        }
+
+        let root = RegKey::predef(HKEY_CURRENT_USER);
+        let environment = root
+            .open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)
+            .map_err(|err| format!("Unable to open HKEY_CURRENT_USER\\Environment: {}", err))?;
+
+        let reg_value = RegValue {
+            bytes: string_to_winreg_bytes(&new_path),
+            vtype: RegType::REG_EXPAND_SZ,
+        };
+
+        environment
+            .set_raw_value("PATH", &reg_value)
+            .map_err(|err| format!("Unable set HKEY_CURRENT_USER\\Environment\\PATH: {}", err))?;
+
+        // Tell other processes to update their environment
+        unsafe {
+            SendMessageTimeoutA(
+                HWND_BROADCAST,
+                WM_SETTINGCHANGE,
+                0 as WPARAM,
+                "Environment\0".as_ptr() as LPARAM,
+                SMTO_ABORTIFHUNG,
+                5000,
+                ptr::null_mut(),
+            );
+        }
+    }
+
+    println!(
+        "\n{}\n  {}\n\n{}",
+        style("The HKEY_CURRENT_USER/Environment/PATH registry key has been modified to include:").bold(),
+        new_path,
+        style("Future applications will automatically have the correct environment, but you may need to restart your current shell.").bold()
+    );
+    Ok(true)
+}
+
+#[cfg(unix)]
+fn add_to_path(new_path: &str) -> Result<bool, String> {
+    let shell_export_string = format!(r#"export PATH="{}:$PATH""#, new_path);
+    let mut modified_rcfiles = false;
+
+    // Look for sh, bash, and zsh rc files
+    let mut rcfiles = vec![dirs::home_dir().map(|p| p.join(".profile"))];
+    if let Ok(shell) = std::env::var("SHELL") {
+        if shell.contains("zsh") {
+            let zdotdir = std::env::var("ZDOTDIR")
+                .ok()
+                .map(PathBuf::from)
+                .or_else(dirs::home_dir);
+            let zprofile = zdotdir.map(|p| p.join(".zprofile"));
+            rcfiles.push(zprofile);
+        }
+    }
+
+    if let Some(bash_profile) = dirs::home_dir().map(|p| p.join(".bash_profile")) {
+        // Only update .bash_profile if it exists because creating .bash_profile
+        // will cause .profile to not be read
+        if bash_profile.exists() {
+            rcfiles.push(Some(bash_profile));
+        }
+    }
+    let rcfiles = rcfiles.into_iter().filter_map(|f| f.filter(|f| f.exists()));
+
+    // For each rc file, append a PATH entry if not already present
+    for rcfile in rcfiles {
+        if !rcfile.exists() {
+            continue;
+        }
+
+        fn read_file(path: &Path) -> io::Result<String> {
+            let mut file = fs::OpenOptions::new().read(true).open(path)?;
+            let mut contents = String::new();
+            io::Read::read_to_string(&mut file, &mut contents)?;
+            Ok(contents)
+        }
+
+        match read_file(&rcfile) {
+            Err(err) => {
+                println!("Unable to read {:?}: {}", rcfile, err);
+            }
+            Ok(contents) => {
+                if !contents.contains(&shell_export_string) {
+                    println!(
+                        "Adding {} to {}",
+                        style(&shell_export_string).italic(),
+                        style(rcfile.to_str().unwrap()).bold()
+                    );
+
+                    fn append_file(dest: &Path, line: &str) -> io::Result<()> {
+                        use std::io::Write;
+                        let mut dest_file = fs::OpenOptions::new()
+                            .write(true)
+                            .append(true)
+                            .create(true)
+                            .open(dest)?;
+
+                        writeln!(&mut dest_file, "{}", line)?;
+
+                        dest_file.sync_data()?;
+
+                        Ok(())
+                    }
+                    append_file(&rcfile, &shell_export_string).unwrap_or_else(|err| {
+                        format!("Unable to append to {:?}: {}", rcfile, err);
+                    });
+                    modified_rcfiles = true;
+                }
+            }
+        }
+    }
+
+    if modified_rcfiles {
+        println!(
+            "\n{}\n  {}\n",
+            style("Close and reopen your terminal to apply the PATH changes or run the following in your existing shell:").bold().blue(),
+            shell_export_string
+       );
+    }
+
+    Ok(modified_rcfiles)
+}
+
 pub fn init(
     config_file: &str,
     data_dir: &str,
@@ -294,96 +505,18 @@ pub fn init(
         }
         config
     };
+
     update(config_file)?;
 
-    let mut modified_rcfiles = false;
-    let shell_export_string = format!(
-        r#"export PATH="{}:$PATH""#,
-        config.active_release_bin_dir().to_str().unwrap()
-    );
-
-    if !no_modify_path {
-        // Look for sh, bash, and zsh rc files
-        let mut rcfiles = vec![dirs::home_dir().map(|p| p.join(".profile"))];
-        if let Ok(shell) = std::env::var("SHELL") {
-            if shell.contains("zsh") {
-                let zdotdir = std::env::var("ZDOTDIR")
-                    .ok()
-                    .map(PathBuf::from)
-                    .or_else(dirs::home_dir);
-                let zprofile = zdotdir.map(|p| p.join(".zprofile"));
-                rcfiles.push(zprofile);
-            }
-        }
-
-        if let Some(bash_profile) = dirs::home_dir().map(|p| p.join(".bash_profile")) {
-            // Only update .bash_profile if it exists because creating .bash_profile
-            // will cause .profile to not be read
-            if bash_profile.exists() {
-                rcfiles.push(Some(bash_profile));
-            }
-        }
-        let rcfiles = rcfiles.into_iter().filter_map(|f| f.filter(|f| f.exists()));
-
-        // For each rc file, append a PATH entry if not already present
-        for rcfile in rcfiles {
-            if !rcfile.exists() {
-                continue;
-            }
-
-            fn read_file(path: &Path) -> io::Result<String> {
-                let mut file = fs::OpenOptions::new().read(true).open(path)?;
-                let mut contents = String::new();
-                io::Read::read_to_string(&mut file, &mut contents)?;
-                Ok(contents)
-            }
-
-            match read_file(&rcfile) {
-                Err(err) => {
-                    println!("Unable to read {:?}: {}", rcfile, err);
-                }
-                Ok(contents) => {
-                    if !contents.contains(&shell_export_string) {
-                        println!(
-                            "Adding {} to {}",
-                            style(&shell_export_string).italic(),
-                            style(rcfile.to_str().unwrap()).bold()
-                        );
-
-                        fn append_file(dest: &Path, line: &str) -> io::Result<()> {
-                            use std::io::Write;
-                            let mut dest_file = fs::OpenOptions::new()
-                                .write(true)
-                                .append(true)
-                                .create(true)
-                                .open(dest)?;
-
-                            writeln!(&mut dest_file, "{}", line)?;
-
-                            dest_file.sync_data()?;
-
-                            Ok(())
-                        }
-                        append_file(&rcfile, &shell_export_string).unwrap_or_else(|err| {
-                            format!("Unable to append to {:?}: {}", rcfile, err);
-                        });
-                        modified_rcfiles = true;
-                    }
-                }
-            }
-        }
-    }
-
-    if modified_rcfiles {
-        println!(
-            "\n{}\n  {}\n",
-            style("Close and reopen your terminal to apply the PATH changes or run the following in your existing shell:").bold().blue(),
-            shell_export_string
-       );
+    let path_modified = if !no_modify_path {
+        add_to_path(&config.active_release_bin_dir().to_str().unwrap())?
     } else {
+        false
+    };
+
+    if !path_modified {
         check_env_path_for_bin_dir(&config);
     }
-
     Ok(())
 }
 
@@ -393,6 +526,11 @@ pub fn info(config_file: &str, local_info_only: bool) -> Result<Option<UpdateMan
     println_name_value(
         "Update manifest pubkey:",
         &config.update_manifest_pubkey.to_string(),
+    );
+    println_name_value("Configuration:", &config_file);
+    println_name_value(
+        "Active release directory:",
+        &config.active_release_dir().to_str().unwrap_or("?"),
     );
 
     fn print_update_manifest(update_manifest: &UpdateManifest) {
