@@ -554,31 +554,7 @@ impl Accounts {
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
     ) {
-        let mut accounts: HashMap<&Pubkey, (&Account, LamportCredit)> = HashMap::new();
-        for (i, raccs) in loaded.iter().enumerate() {
-            if res[i].is_err() || raccs.is_err() {
-                continue;
-            }
-
-            let message = &txs[i].message();
-            let acc = raccs.as_ref().unwrap();
-            for ((key, account), credit) in message
-                .account_keys
-                .iter()
-                .zip(acc.0.iter())
-                .zip(acc.2.iter())
-            {
-                if !accounts.contains_key(key) {
-                    accounts.insert(key, (account, 0));
-                } else if *credit > 0 {
-                    // Credit-only accounts may be referenced by multiple transactions
-                    // Collect credits to update account lamport balance before store.
-                    if let Some((_, c)) = accounts.get_mut(key) {
-                        *c += credit;
-                    }
-                }
-            }
-        }
+        let accounts = collect_accounts(txs, res, loaded);
         self.accounts_db.store(fork, &accounts);
     }
 
@@ -591,6 +567,39 @@ impl Accounts {
     pub fn add_root(&self, fork: Fork) {
         self.accounts_db.add_root(fork)
     }
+}
+
+fn collect_accounts<'a>(
+    txs: &'a [Transaction],
+    res: &'a [Result<()>],
+    loaded: &'a [Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>],
+) -> HashMap<&'a Pubkey, (&'a Account, LamportCredit)> {
+    let mut accounts: HashMap<&Pubkey, (&Account, LamportCredit)> = HashMap::new();
+    for (i, raccs) in loaded.iter().enumerate() {
+        if res[i].is_err() || raccs.is_err() {
+            continue;
+        }
+
+        let message = &txs[i].message();
+        let acc = raccs.as_ref().unwrap();
+        for ((key, account), credit) in message
+            .account_keys
+            .iter()
+            .zip(acc.0.iter())
+            .zip(acc.2.iter())
+        {
+            if !accounts.contains_key(key) {
+                accounts.insert(key, (account, 0));
+            } else if *credit > 0 {
+                // Credit-only accounts may be referenced by multiple transactions
+                // Collect credits to update account lamport balance before store.
+                if let Some((_, c)) = accounts.get_mut(key) {
+                    *c += credit;
+                }
+            }
+        }
+    }
+    accounts
 }
 
 #[cfg(test)]
@@ -1224,5 +1233,70 @@ mod tests {
             accounts.hash_internal_state(0),
             daccounts.hash_internal_state(0)
         );
+    }
+
+    #[test]
+    fn test_collect_accounts() {
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let pubkey = Pubkey::new_rand();
+
+        let instructions = vec![CompiledInstruction::new(0, &(), vec![0, 1])];
+        let tx0 = Transaction::new_with_compiled_instructions(
+            &[&keypair0],
+            &[pubkey],
+            Hash::default(),
+            vec![native_loader::id()],
+            instructions,
+        );
+        let instructions = vec![CompiledInstruction::new(0, &(), vec![0, 1])];
+        let tx1 = Transaction::new_with_compiled_instructions(
+            &[&keypair1],
+            &[pubkey],
+            Hash::default(),
+            vec![native_loader::id()],
+            instructions,
+        );
+        let txs = vec![tx0, tx1];
+
+        let loaders = vec![Ok(()), Ok(())];
+
+        let account0 = Account::new(1, 0, &Pubkey::default());
+        let account1 = Account::new(2, 0, &Pubkey::default());
+        let account2 = Account::new(3, 0, &Pubkey::default());
+
+        let instruction_accounts0 = vec![account0, account2.clone()];
+        let instruction_loaders0 = vec![];
+        let instruction_credits0 = vec![0, 2];
+        let loaded0 = Ok((
+            instruction_accounts0,
+            instruction_loaders0,
+            instruction_credits0,
+        ));
+
+        let instruction_accounts1 = vec![account1, account2.clone()];
+        let instruction_loaders1 = vec![];
+        let instruction_credits1 = vec![2, 3];
+        let loaded1 = Ok((
+            instruction_accounts1,
+            instruction_loaders1,
+            instruction_credits1,
+        ));
+
+        let loaded = vec![loaded0, loaded1];
+
+        let accounts = collect_accounts(&txs, &loaders, &loaded);
+        assert_eq!(accounts.len(), 3);
+        assert!(accounts.contains_key(&keypair0.pubkey()));
+        assert!(accounts.contains_key(&keypair1.pubkey()));
+        assert!(accounts.contains_key(&pubkey));
+
+        // Accounts referenced once are assumed to have the correct lamport balance, even if a
+        // credit amount is reported (as in a credit-only account)
+        assert_eq!(accounts.get(&keypair0.pubkey()).unwrap().1, 0);
+        assert_eq!(accounts.get(&keypair1.pubkey()).unwrap().1, 0);
+        // Accounts referenced more than once need to pass the accumulated credits of additional
+        // references on to store
+        assert_eq!(accounts.get(&pubkey).unwrap().1, 3);
     }
 }
