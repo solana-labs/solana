@@ -271,7 +271,7 @@ fn check_env_path_for_bin_dir(config: &Config) {
     if !found {
         println!(
             "\nPlease update your PATH environment variable to include the solana programs:\n    PATH=\"{}:$PATH\"\n",
-            bin_dir.to_str().unwrap()
+            config.active_release_bin_dir().to_str().unwrap()
         );
     }
 }
