@@ -35,7 +35,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         path.extend(&[".config", "solana", "id.json"]);
         if !path.exists() {
             gen_keypair_file(path.to_str().unwrap())?;
-            println!("New keypair generated at: {:?}", path.to_str().unwrap());
+            println!("New keypair generated at: {}", path.to_str().unwrap());
         }
 
         path.to_str().unwrap()
