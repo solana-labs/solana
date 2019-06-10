@@ -1,6 +1,5 @@
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blocktree::Blocktree;
-#[cfg(feature = "chacha")]
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::cluster_info::{ClusterInfo, Node};
 use crate::contact_info::ContactInfo;
@@ -59,9 +58,7 @@ pub struct Replicator {
     ledger_data_file_encrypted: PathBuf,
     sampling_offsets: Vec<u64>,
     sha_state: Hash,
-    #[cfg(feature = "chacha")]
     num_chacha_blocks: usize,
-    #[cfg(feature = "chacha")]
     blocktree: Arc<Blocktree>,
 }
 
@@ -296,9 +293,7 @@ impl Replicator {
             ledger_data_file_encrypted: PathBuf::default(),
             sampling_offsets: vec![],
             sha_state: Hash::default(),
-            #[cfg(feature = "chacha")]
             num_chacha_blocks: 0,
-            #[cfg(feature = "chacha")]
             blocktree,
         })
     }
@@ -375,7 +370,6 @@ impl Replicator {
         let ledger_path = Path::new(&self.ledger_path);
         self.ledger_data_file_encrypted = ledger_path.join("ledger.enc");
 
-        #[cfg(feature = "chacha")]
         {
             let mut ivec = [0u8; 64];
             ivec.copy_from_slice(&self.signature.to_bytes());
@@ -400,10 +394,6 @@ impl Replicator {
     fn create_sampling_offsets(&mut self) {
         self.sampling_offsets.clear();
 
-        #[cfg(not(feature = "chacha"))]
-        self.sampling_offsets.push(0);
-
-        #[cfg(feature = "chacha")]
         {
             use crate::storage_stage::NUM_STORAGE_SAMPLES;
             use rand::SeedableRng;

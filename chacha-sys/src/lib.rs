@@ -1,4 +1,3 @@
-#[link(name = "cpu-crypt")]
 extern "C" {
     fn chacha20_cbc_encrypt(
         input: *const u8,
