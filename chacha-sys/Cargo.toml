@@ -1,0 +1,12 @@
+[package]
+name = "solana-chacha-sys"
+version = "0.16.0"
+description = "Solana chacha-sys"
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+repository = "https://github.com/solana-labs/solana"
+homepage = "https://solana.com/"
+license = "Apache-2.0"
+edition = "2018"
+
+[build-dependencies]
+cc = "1.0.37"
