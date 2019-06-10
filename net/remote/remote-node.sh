@@ -85,7 +85,7 @@ local|tar)
     mkdir ./solana-node-stakes
     if [[ -n $stakeNodesInGenesisBlock ]]; then
       for i in $(seq 1 "$numNodes"); do
-        solana-keygen new -o ./solana-node-keys/"$i"
+        solana-keygen new -f -o ./solana-node-keys/"$i"
         pubkey="$(solana-keygen pubkey ./solana-node-keys/"$i")"
         echo "${pubkey}: $stakeNodesInGenesisBlock" >> ./solana-node-stakes/fullnode-stakes.yml
       done
@@ -110,7 +110,7 @@ local|tar)
     )
 
     if [[ -n $stakeNodesInGenesisBlock ]]; then
-      args+=(--no-airdrops)
+      args+=(--no-airdrop)
     fi
     nohup ./multinode-demo/validator.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
     sleep 1
@@ -142,12 +142,12 @@ local|tar)
       args+=(--enable-rpc-exit)
     fi
 
-    if [ -f ~/solana/fullnode-identity.json ]; then
+    if [[ -f ~/solana/fullnode-identity.json ]]; then
       args+=(--identity ~/solana/fullnode-identity.json)
     fi
 
     if [[ -n $stakeNodesInGenesisBlock ]]; then
-      args+=(--no-airdrops)
+      args+=(--no-airdrop)
     fi
 
     set -x
@@ -190,7 +190,7 @@ local|tar)
     )
 
     if [[ -n $stakeNodesInGenesisBlock ]]; then
-      args+=(--no-airdrops)
+      args+=(--no-airdrop)
     fi
 
     if [[ $skipSetup != true ]]; then
