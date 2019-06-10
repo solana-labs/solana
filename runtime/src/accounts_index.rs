@@ -70,7 +70,7 @@ impl<T: Clone> AccountsIndex<T> {
     }
 
     pub fn is_purged(&self, fork: Fork) -> bool {
-        fork < self.last_root
+        !self.is_root(fork) && fork < self.last_root
     }
     pub fn is_root(&self, fork: Fork) -> bool {
         self.roots.contains(&fork)
@@ -162,8 +162,6 @@ mod tests {
         assert!(!index.is_purged(0));
         index.add_root(1);
         assert!(index.is_purged(0));
-        index.add_root(2);
-        assert!(index.is_purged(1));
     }
 
     #[test]
