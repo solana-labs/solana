@@ -84,13 +84,13 @@ local|tar)
     rm -rf ./solana-node-stakes
     mkdir ./solana-node-stakes
     if [[ -n $stakeNodesInGenesisBlock ]]; then
-      for i in $(seq 1 $numNodes); do
+      for i in $(seq 1 "$numNodes"); do
         solana-keygen new -o ./solana-node-keys/"$i"
-        pubkey="$(solana-keygen pubkey ./solana-node-keys/$i)"
+        pubkey="$(solana-keygen pubkey ./solana-node-keys/"$i")"
         echo "${pubkey}: $stakeNodesInGenesisBlock" >> ./solana-node-stakes/fullnode-stakes.yml
       done
     fi
-    [[ -z $externalPrimordialAccountsFile ]] || cat $externalPrimordialAccountsFile >> ./solana-node-stakes/fullnode-stakes.yml
+    [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-stakes/fullnode-stakes.yml
     if [ -f ./solana-node-stakes/fullnode-stakes.yml ]; then
       genesisOptions+=" --primordial-accounts-file ./solana-node-stakes/fullnode-stakes.yml"
     fi
