@@ -51,9 +51,24 @@ impl StakeState {
         Self::from(account).and_then(|state: Self| state.voter_pubkey())
     }
 
+    // utility function, used by Stakes, tests
+    pub fn voter_pubkey_and_stake_from(account: &Account) -> Option<(Pubkey, u64)> {
+        Self::from(account).and_then(|state: Self| state.voter_pubkey_and_stake())
+    }
+
     pub fn voter_pubkey(&self) -> Option<Pubkey> {
         match self {
             StakeState::Stake { voter_pubkey, .. } => Some(*voter_pubkey),
+            _ => None,
+        }
+    }
+    pub fn voter_pubkey_and_stake(&self) -> Option<(Pubkey, u64)> {
+        match self {
+            StakeState::Stake {
+                voter_pubkey,
+                stake,
+                ..
+            } => Some((*voter_pubkey, *stake)),
             _ => None,
         }
     }
