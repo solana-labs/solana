@@ -22,7 +22,6 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::instruction::InstructionError;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::solana_entrypoint;
 use std::alloc::Layout;
 use std::any::Any;
 use std::ffi::CStr;
@@ -304,8 +303,7 @@ fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
     }
 }
 
-solana_entrypoint!(entrypoint);
-fn entrypoint(
+pub fn process_instruction(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     tx_data: &[u8],

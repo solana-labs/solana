@@ -22,6 +22,9 @@ mod system_instruction_processor;
 extern crate solana_metrics;
 
 #[macro_use]
+extern crate solana_bpf_loader_program;
+
+#[macro_use]
 extern crate solana_vote_program;
 
 #[macro_use]

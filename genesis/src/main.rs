@@ -1,6 +1,10 @@
 //! A command-line executable for generating the chain's genesis block.
 #[macro_use]
+<<<<<<< HEAD
 extern crate solana_bpf_loader;
+=======
+extern crate solana_bpf_loader_program;
+>>>>>>> make runtime depend on bpf_loader
 #[macro_use]
 extern crate solana_vote_program;
 #[macro_use]
@@ -279,7 +283,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             ),
         ],
         &[
+<<<<<<< HEAD
             solana_bpf_loader!(),
+=======
+            solana_bpf_loader_program!(),
+>>>>>>> make runtime depend on bpf_loader
             solana_vote_program!(),
             solana_stake_program!(),
             solana_budget_program!(),
