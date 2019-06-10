@@ -428,31 +428,16 @@ impl LocalCluster {
             let stake_account_keypair = Keypair::new();
             let stake_account_pubkey = stake_account_keypair.pubkey();
             let mut transaction = Transaction::new_signed_instructions(
-                &[from_account.as_ref()],
-                stake_instruction::create_delegate_account(
+                &[from_account.as_ref(), &stake_account_keypair],
+                stake_instruction::create_stake_account_and_delegate_stake(
                     &from_account.pubkey(),
                     &stake_account_pubkey,
+                    &vote_account_pubkey,
                     amount,
                 ),
                 client.get_recent_blockhash().unwrap().0,
             );
 
-            client
-                .retry_transfer(&from_account, &mut transaction, 5)
-                .expect("fund stake");
-            client
-                .wait_for_balance(&stake_account_pubkey, Some(amount))
-                .expect("get balance");
-
-            let mut transaction = Transaction::new_signed_with_payer(
-                vec![stake_instruction::delegate_stake(
-                    &stake_account_pubkey,
-                    &vote_account_pubkey,
-                )],
-                Some(&from_account.pubkey()),
-                &[from_account.as_ref(), &stake_account_keypair],
-                client.get_recent_blockhash().unwrap().0,
-            );
             client
                 .send_and_confirm_transaction(
                     &[from_account.as_ref(), &stake_account_keypair],
@@ -461,6 +446,9 @@ impl LocalCluster {
                     0,
                 )
                 .expect("delegate stake");
+            client
+                .wait_for_balance(&stake_account_pubkey, Some(amount))
+                .expect("get balance");
         }
         info!("Checking for vote account registration");
         let vote_account_user_data = client.get_account_data(&vote_account_pubkey);

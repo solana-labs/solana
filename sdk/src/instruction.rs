@@ -25,6 +25,9 @@ pub enum InstructionError {
     /// An account's data was too small
     AccountDataTooSmall,
 
+    /// An account's balance was too small to complete the instruction
+    InsufficientFunds,
+
     /// The account did not have the expected program id
     IncorrectProgramId,
 
