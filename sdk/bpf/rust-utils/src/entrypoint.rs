@@ -147,9 +147,7 @@ pub unsafe fn deserialize<'a>(
         }
     };
 
-    let info = SolClusterInfo {
-        program_id,
-    };
+    let info = SolClusterInfo { program_id };
 
     Ok((ka, info, data))
 }

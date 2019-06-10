@@ -8,8 +8,8 @@ extern crate solana_sdk_bpf_utils;
 
 use solana_sdk_bpf_utils::log::*;
 
-use core::alloc::Layout;
 use alloc::vec::Vec;
+use core::alloc::Layout;
 use core::mem;
 
 #[no_mangle]
