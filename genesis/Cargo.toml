@@ -38,4 +38,4 @@ hashbrown = "0.3.0"
 
 [features]
 cuda = ["solana/cuda"]
-erasure = []
+

@@ -24,4 +24,3 @@ solana-vote-signer = { path = "../vote-signer", version = "0.16.0" }
 
 [features]
 cuda = ["solana/cuda"]
-erasure = ["solana/erasure"]

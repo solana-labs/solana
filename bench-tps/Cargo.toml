@@ -23,4 +23,4 @@ solana-sdk = { path = "../sdk", version = "0.16.0" }
 
 [features]
 cuda = ["solana/cuda"]
-erasure = []
+
