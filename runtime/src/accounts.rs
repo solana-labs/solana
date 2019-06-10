@@ -490,8 +490,6 @@ mod tests {
     use solana_sdk::syscall;
     use solana_sdk::transaction::Transaction;
     use std::io::Cursor;
-    use std::thread::{sleep, Builder};
-    use std::time::Duration;
 
     fn load_accounts_with_fee(
         tx: Transaction,
