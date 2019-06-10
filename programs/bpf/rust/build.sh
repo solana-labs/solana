@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
 if [ "$#" -ne 1 ]; then
-    echo "Error: Must provide name of the project to build"
-    exit 1
+    # Build all projects
+    for project in */ ; do
+        ./../../../sdk/bpf/rust-utils/build.sh "$PWD/$project"
+    done
+else
+    # Build requested project
+    ./../../../sdk/bpf/rust-utils/build.sh "$PWD/$1"
+    
 fi
-
-./../../../sdk/bpf/rust-utils/build.sh "$PWD"/"$1"
