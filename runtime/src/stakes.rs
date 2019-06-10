@@ -16,13 +16,17 @@ pub struct Stakes {
 
 impl Stakes {
     // sum the stakes that point to the given voter_pubkey
-    fn calculate_stake(&self, voter_pubkey: &Pubkey) -> u64 {
+    fn calculate_stake(&self, voter: &Pubkey) -> u64 {
         self.stake_accounts
             .iter()
-            .filter(|(_, stake_account)| {
-                Some(*voter_pubkey) == StakeState::voter_pubkey_from(stake_account)
+            .map(|(_, stake_account)| match StakeState::from(stake_account) {
+                Some(StakeState::Stake {
+                    voter_pubkey,
+                    stake,
+                    ..
+                }) if *voter == voter_pubkey => stake,
+                _ => 0,
             })
-            .map(|(_, stake_account)| stake_account.lamports)
             .sum()
     }
 
@@ -45,22 +49,25 @@ impl Stakes {
             }
         } else if solana_stake_api::check_id(&account.owner) {
             //  old_stake is stake lamports and voter_pubkey from the pre-store() version
-            let old_stake = self.stake_accounts.get(pubkey).and_then(|old_account| {
-                StakeState::voter_pubkey_from(old_account)
-                    .map(|old_voter_pubkey| (old_account.lamports, old_voter_pubkey))
-            });
+            let old_stake = self
+                .stake_accounts
+                .get(pubkey)
+                .and_then(|old_account| StakeState::voter_pubkey_and_stake_from(old_account));
 
-            let stake = StakeState::voter_pubkey_from(account)
-                .map(|voter_pubkey| (account.lamports, voter_pubkey));
+            let stake = if account.lamports != 0 {
+                StakeState::voter_pubkey_and_stake_from(account)
+            } else {
+                StakeState::voter_pubkey_from(account).map(|voter_pubkey| (voter_pubkey, 0))
+            };
 
             // if adjustments need to be made...
             if stake != old_stake {
-                if let Some((old_stake, old_voter_pubkey)) = old_stake {
+                if let Some((old_voter_pubkey, old_stake)) = old_stake {
                     self.vote_accounts
                         .entry(old_voter_pubkey)
                         .and_modify(|e| e.0 -= old_stake);
                 }
-                if let Some((stake, voter_pubkey)) = stake {
+                if let Some((voter_pubkey, stake)) = stake {
                     self.vote_accounts
                         .entry(voter_pubkey)
                         .and_modify(|e| e.0 += stake);
@@ -125,7 +132,16 @@ mod tests {
         {
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
-            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 42);
+            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 10); // stays old stake, because only 10 is activated
+        }
+
+        // activate more
+        let (_stake_pubkey, mut stake_account) = create_stake_account(42, &vote_pubkey);
+        stakes.store(&stake_pubkey, &stake_account);
+        {
+            let vote_accounts = stakes.vote_accounts();
+            assert!(vote_accounts.get(&vote_pubkey).is_some());
+            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 42); // now stake of 42 is activated
         }
 
         stake_account.lamports = 0;
