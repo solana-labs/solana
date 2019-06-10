@@ -333,7 +333,7 @@ startBootstrapLeader() {
          $deployMethod \
          bootstrap-leader \
          $entrypointIp \
-         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]})) \
+         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]} + ${#replicatorIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
@@ -365,7 +365,7 @@ startNode() {
          $deployMethod \
          $nodeType \
          $entrypointIp \
-         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]})) \
+         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]} + ${#replicatorIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
