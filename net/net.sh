@@ -55,6 +55,12 @@ Operate a configured testnet
                                       - Override the default --hashes-per-tick for the cluster
    -n NUM_FULL_NODES                  - Number of fullnodes to apply command to.
 
+   -x Accounts and Stakes for external nodes
+                                      - A YML file with a list of account pubkeys and corresponding stakes
+                                         for external nodes
+   -s Num lamports per node in genesis block
+                                      - Create account keypairs for internal nodes and assign these many lamports
+
  sanity/start/update-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noLedgerVerify    - Skip ledger verification
