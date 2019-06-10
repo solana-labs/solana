@@ -37,7 +37,31 @@ use allocator_bump::BPFAllocator;
 /// are expected to enforce this
 const DEFAULT_HEAP_SIZE: usize = 32 * 1024;
 
+/// Verifies a string passed out of the program
+fn verify_string(addr: u64, ro_regions: &[MemoryRegion]) -> Result<(()), Error> {
+    for region in ro_regions.iter() {
+        if region.addr <= addr && (addr as u64) < region.addr + region.len {
+            let c_buf: *const c_char = addr as *const c_char;
+            let max_size = region.addr + region.len - addr;
+            unsafe {
+                for i in 0..max_size {
+                    if std::ptr::read(c_buf.offset(i as isize)) == 0 {
+                        return Ok(());
+                    }
+                }
+            }
+            return Err(Error::new(ErrorKind::Other, "Error, Unterminated string"));
+        }
+    }
+    Err(Error::new(
+        ErrorKind::Other,
+        "Error: Load segfault, bad string pointer",
+    ))
+}
+
 /// Abort helper functions, called when the BPF program calls `abort()`
+/// The verify function returns an error which will cause the BPF program
+/// to be halted immediately
 pub fn helper_abort_verify(
     _arg1: u64,
     _arg2: u64,
@@ -69,16 +93,29 @@ pub fn helper_abort(
 /// The verify function returns an error which will cause the BPF program
 /// to be halted immediately
 pub fn helper_sol_panic_verify(
-    _arg1: u64,
-    _arg2: u64,
-    _arg3: u64,
+    file: u64,
+    line: u64,
+    column: u64,
     _arg4: u64,
     _arg5: u64,
     _context: &mut Option<Box<Any + 'static>>,
-    _ro_regions: &[MemoryRegion],
+    ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
-    Err(Error::new(ErrorKind::Other, "Error: BPF program Panic!"))
+    if verify_string(file, ro_regions).is_ok() {
+        let c_buf: *const c_char = file as *const c_char;
+        let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
+        if let Ok(slice) = c_str.to_str() {
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!(
+                    "Error: BPF program Panicked at {}, {}:{}",
+                    slice, line, column
+                ),
+            ));
+        }
+    }
+    Err(Error::new(ErrorKind::Other, "Error: BPF program Panicked"))
 }
 pub fn helper_sol_panic(
     _arg1: u64,
@@ -105,24 +142,7 @@ pub fn helper_sol_log_verify(
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
-    for region in ro_regions.iter() {
-        if region.addr <= addr && (addr as u64) < region.addr + region.len {
-            let c_buf: *const c_char = addr as *const c_char;
-            let max_size = region.addr + region.len - addr;
-            unsafe {
-                for i in 0..max_size {
-                    if std::ptr::read(c_buf.offset(i as isize)) == 0 {
-                        return Ok(());
-                    }
-                }
-            }
-            return Err(Error::new(ErrorKind::Other, "Error, Unterminated string"));
-        }
-    }
-    Err(Error::new(
-        ErrorKind::Other,
-        "Error: Load segfault, bad string pointer",
-    ))
+    verify_string(addr, ro_regions)
 }
 pub fn helper_sol_log(
     addr: u64,

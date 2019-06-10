@@ -1,5 +1,3 @@
-
-
 [dependencies.compiler_builtins]
 path = "../../../../sdk/bpf/rust-bpf-sysroot/src/compiler-builtins"
 features = ["c", "mem"]

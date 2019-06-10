@@ -1,5 +1,4 @@
-//! @brief Example Rust-based BPF program that prints out the parameters passed to it
-
+//! @brief Example Rust-based BPF program that test dynamic memory allocation
 #![no_std]
 
 #[macro_use]
