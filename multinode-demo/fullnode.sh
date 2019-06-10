@@ -29,6 +29,7 @@ Start a validator or a replicator
   --no-voting               - start node without vote signer
   --rpc-port port           - custom RPC port for this node
   --no-restart              - do not restart the node if it exits
+  --no-airdrops             - The genesis block has an account for the node. Airdrops are not required.
 
 EOF
   exit 1
@@ -97,9 +98,11 @@ setup_validator_accounts() {
   if [[ -f $configured_flag ]]; then
     echo "Vote and stake accounts have already been configured"
   else
-    # Fund the node with enough tokens to fund its Vote, Staking, and Storage accounts
-    declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
-    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop $((node_lamports+stake_lamports+fees)) || return $?
+    if ((airdrops_enabled)); then
+      # Fund the node with enough tokens to fund its Vote, Staking, and Storage accounts
+      declare fees=100 # TODO: No hardcoded transaction fees, fetch the current cluster fees
+      $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop $((node_lamports+stake_lamports+fees)) || return $?
+    fi
 
     # Fund the vote account from the node, with the node as the node_pubkey
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
@@ -149,7 +152,9 @@ setup_replicator_account() {
   if [[ -f $configured_flag ]]; then
     echo "Replicator account has already been configured"
   else
-    $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop "$node_lamports" || return $?
+    if ((airdrops_enabled)); then
+      $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" airdrop "$node_lamports" || return $?
+    fi
 
     # Setup replicator storage account
     $solana_wallet --keypair "$node_keypair_path" --url "http://$entrypoint_ip:8899" \
@@ -179,6 +184,7 @@ poll_for_new_genesis_block=0
 label=
 identity_keypair_path=
 no_restart=0
+airdrops_enabled=1
 
 positional_args=()
 while [[ -n $1 ]]; do
@@ -233,6 +239,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --gossip-port ]]; then
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 = --no-airdrops ]]; then
+      airdrops_enabled=0
+      shift
     elif [[ $1 = -h ]]; then
       fullnode_usage "$@"
     else

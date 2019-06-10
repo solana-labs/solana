@@ -109,6 +109,9 @@ local|tar)
       --gossip-port "$entrypointIp":8001
     )
 
+    if [[ -n $stakeNodesInGenesisBlock ]]; then
+      args+=(--no-airdrops)
+    fi
     nohup ./multinode-demo/validator.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
     sleep 1
     ;;
@@ -141,6 +144,10 @@ local|tar)
 
     if [ -f ~/solana/fullnode-identity.json ]; then
       args+=(--identity ~/solana/fullnode-identity.json)
+    fi
+
+    if [[ -n $stakeNodesInGenesisBlock ]]; then
+      args+=(--no-airdrops)
     fi
 
     set -x
@@ -181,6 +188,11 @@ local|tar)
     args=(
       "$entrypointIp":~/solana "$entrypointIp:8001"
     )
+
+    if [[ -n $stakeNodesInGenesisBlock ]]; then
+      args+=(--no-airdrops)
+    fi
+
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/clear-config.sh
     fi
