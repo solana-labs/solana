@@ -1,7 +1,9 @@
+use hashbrown::HashMap;
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
-use std::collections::{HashMap, HashSet};
+use std::collections;
+use std::collections::HashSet;
 
 pub type Fork = u64;
 
@@ -19,7 +21,11 @@ pub struct AccountsIndex<T> {
 impl<T: Clone> AccountsIndex<T> {
     /// Get an account
     /// The latest account that appears in `ancestors` or `roots` is returned.
-    pub fn get(&self, pubkey: &Pubkey, ancestors: &HashMap<Fork, usize>) -> Option<(&T, Fork)> {
+    pub fn get(
+        &self,
+        pubkey: &Pubkey,
+        ancestors: &collections::HashMap<Fork, usize>,
+    ) -> Option<(&T, Fork)> {
         let list = self.account_maps.get(pubkey)?;
         let mut max = 0;
         let mut rv = None;
@@ -100,7 +106,7 @@ mod tests {
     fn test_get_empty() {
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default();
-        let ancestors = HashMap::new();
+        let ancestors = collections::HashMap::new();
         assert_eq!(index.get(&key.pubkey(), &ancestors), None);
     }
 
@@ -112,7 +118,7 @@ mod tests {
         index.insert(0, &key.pubkey(), true, &mut gc);
         assert!(gc.is_empty());
 
-        let ancestors = HashMap::new();
+        let ancestors = collections::HashMap::new();
         assert_eq!(index.get(&key.pubkey(), &ancestors), None);
     }
 
