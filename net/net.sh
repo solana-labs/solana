@@ -87,7 +87,7 @@ numBenchExchangeClients=0
 benchTpsExtraArgs=
 benchExchangeExtraArgs=
 failOnValidatorBootupFailure=true
-genesisOptions="--primordial-accounts-file ~/solana/solana-node-stakes/fullnode-stakes.yml"
+genesisOptions=
 numFullnodesRequested=
 externalPrimordialAccountsFile=
 stakeNodesInGenesisBlock=
@@ -292,7 +292,7 @@ startCommon() {
   fi
   [[ -z "$externalNodeSshKey" ]] || ssh-copy-id -f -i "$externalNodeSshKey" "${sshOptions[@]}" "solana@$ipAddress"
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
-    "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo,solana-node-keys/"$ipAddress"} \
+    "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
     "$ipAddress":~/solana/
 }
 
@@ -455,7 +455,6 @@ deployUpdate() {
 }
 
 start() {
-  declare keygen=
   case $deployMethod in
   tar)
     if [[ -n $releaseChannel ]]; then
@@ -477,12 +476,10 @@ start() {
       rm -rf "$SOLANA_ROOT"/solana-release
       (cd "$SOLANA_ROOT"; tar jxv) < "$tarballFilename"
       cat "$SOLANA_ROOT"/solana-release/version.yml
-      keygen="$SOLANA_ROOT"/solana-release/bin/solana-keygen
     )
     ;;
   local)
     build
-    keygen="$SOLANA_ROOT"/target/release/solana-keygen
     ;;
   *)
     usage "Internal error: invalid deployMethod: $deployMethod"
@@ -495,16 +492,6 @@ start() {
   else
     $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
   fi
-
-  set -x
-  rm -rf "$SOLANA_ROOT"/solana-node-keys
-  rm -rf "$SOLANA_ROOT"/solana-node-stakes
-  mkdir "$SOLANA_ROOT"/solana-node-stakes
-  for ipAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}"; do
-    "$keygen" new -o "$SOLANA_ROOT"/solana-node-keys/"$ipAddress"
-    pubkey="$($keygen pubkey $SOLANA_ROOT/solana-node-keys/$ipAddress)"
-    echo "${pubkey}: 200" >> "$SOLANA_ROOT"/solana-node-stakes/fullnode-stakes.yml
-  done
 
   declare bootstrapLeader=true
   declare nodeType=validator

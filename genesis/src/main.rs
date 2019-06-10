@@ -13,7 +13,6 @@ extern crate solana_config_program;
 extern crate solana_exchange_program;
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
-use serde_derive::{Deserialize, Serialize};
 use solana::blocktree::create_new_ledger;
 use solana_sdk::account::Account;
 use solana_sdk::fee_calculator::FeeCalculator;
@@ -27,29 +26,25 @@ use solana_sdk::timing;
 use solana_stake_api::stake_state;
 use solana_storage_program::genesis_block_util::GenesisBlockUtil;
 use solana_vote_api::vote_state;
+use std::collections::HashMap;
 use std::error;
 use std::fs::File;
 use std::io;
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
-pub struct PrimordialAccount {
-    pub pubkey: Pubkey,
-    pub lamports: u64,
-}
-
 pub fn append_primordial_accounts(file: &str, genesis_block: &mut GenesisBlock) -> io::Result<()> {
     let accounts_file = File::open(file.to_string())?;
 
-    let primordial_accounts: Vec<PrimordialAccount> = serde_yaml::from_reader(accounts_file)
+    let primordial_accounts: HashMap<String, u64> = serde_yaml::from_reader(accounts_file)
         .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
 
-    primordial_accounts.iter().for_each(|primordial| {
+    primordial_accounts.into_iter().for_each(|primordial| {
         genesis_block.accounts.push((
-            primordial.pubkey,
-            Account::new(primordial.lamports, 0, &system_program::id()),
+            Pubkey::from_str(primordial.0.as_str()).unwrap(),
+            Account::new(primordial.1, 0, &system_program::id()),
         ))
     });
 
@@ -314,6 +309,7 @@ mod tests {
     use hashbrown::HashSet;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::pubkey::Pubkey;
+    use std::collections::HashMap;
     use std::fs::remove_file;
     use std::io::Write;
     use std::path::Path;
@@ -343,20 +339,10 @@ mod tests {
         // Test invalid file returns error
         assert!(append_primordial_accounts("unknownfile", &mut genesis_block).is_err());
 
-        let primordial_accounts = [
-            PrimordialAccount {
-                pubkey: Pubkey::new_rand(),
-                lamports: 2,
-            },
-            PrimordialAccount {
-                pubkey: Pubkey::new_rand(),
-                lamports: 1,
-            },
-            PrimordialAccount {
-                pubkey: Pubkey::new_rand(),
-                lamports: 3,
-            },
-        ];
+        let mut primordial_accounts = HashMap::new();
+        primordial_accounts.insert(Pubkey::new_rand().to_string(), 2 as u64);
+        primordial_accounts.insert(Pubkey::new_rand().to_string(), 1 as u64);
+        primordial_accounts.insert(Pubkey::new_rand().to_string(), 3 as u64);
 
         let serialized = serde_yaml::to_string(&primordial_accounts).unwrap();
         let path = Path::new("test_append_primordial_accounts_to_genesis.yml");
@@ -377,28 +363,17 @@ mod tests {
 
         // Test account data matches
         (0..primordial_accounts.len()).for_each(|i| {
-            assert_eq!(genesis_block.accounts[i].0, primordial_accounts[i].pubkey);
             assert_eq!(
+                primordial_accounts[&genesis_block.accounts[i].0.to_string()],
                 genesis_block.accounts[i].1.lamports,
-                primordial_accounts[i].lamports
             );
         });
 
         // Test more accounts can be appended
-        let primordial_accounts1 = [
-            PrimordialAccount {
-                pubkey: Pubkey::new_rand(),
-                lamports: 6,
-            },
-            PrimordialAccount {
-                pubkey: Pubkey::new_rand(),
-                lamports: 5,
-            },
-            PrimordialAccount {
-                pubkey: Pubkey::new_rand(),
-                lamports: 10,
-            },
-        ];
+        let mut primordial_accounts1 = HashMap::new();
+        primordial_accounts1.insert(Pubkey::new_rand().to_string(), 6 as u64);
+        primordial_accounts1.insert(Pubkey::new_rand().to_string(), 5 as u64);
+        primordial_accounts1.insert(Pubkey::new_rand().to_string(), 10 as u64);
 
         let serialized = serde_yaml::to_string(&primordial_accounts1).unwrap();
         let path = Path::new("test_append_primordial_accounts_to_genesis.yml");
@@ -421,24 +396,21 @@ mod tests {
 
         // Test old accounts are still there
         (0..primordial_accounts.len()).for_each(|i| {
-            assert_eq!(genesis_block.accounts[i].0, primordial_accounts[i].pubkey);
             assert_eq!(
+                primordial_accounts[&genesis_block.accounts[i].0.to_string()],
                 genesis_block.accounts[i].1.lamports,
-                primordial_accounts[i].lamports
             );
         });
 
         // Test new account data matches
         (0..primordial_accounts1.len()).for_each(|i| {
             assert_eq!(
-                genesis_block.accounts[primordial_accounts.len() + i].0,
-                primordial_accounts1[i].pubkey
-            );
-            assert_eq!(
+                primordial_accounts1[&genesis_block.accounts[primordial_accounts.len() + i]
+                    .0
+                    .to_string()],
                 genesis_block.accounts[primordial_accounts.len() + i]
                     .1
                     .lamports,
-                primordial_accounts1[i].lamports
             );
         });
     }
