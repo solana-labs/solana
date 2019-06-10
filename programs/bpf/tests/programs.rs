@@ -41,15 +41,15 @@ mod bpf {
             let mut elf = Vec::new();
             file.read_to_end(&mut elf).unwrap();
 
-            let (genesis_block, alice_keypair) = create_genesis_block(50);
+            let (genesis_block, mint_keypair) = create_genesis_block(50);
             let bank = Bank::new(&genesis_block);
             let bank_client = BankClient::new(bank);
 
             // Call user program
-            let program_id = load_program(&bank_client, &alice_keypair, &bpf_loader::id(), elf);
-            let instruction = create_invoke_instruction(alice_keypair.pubkey(), program_id, &1u8);
+            let program_id = load_program(&bank_client, &mint_keypair, &bpf_loader::id(), elf);
+            let instruction = create_invoke_instruction(mint_keypair.pubkey(), program_id, &1u8);
             bank_client
-                .send_instruction(&alice_keypair, instruction)
+                .send_instruction(&mint_keypair, instruction)
                 .unwrap();
         }
 
@@ -72,23 +72,23 @@ mod bpf {
                 let mut elf = Vec::new();
                 file.read_to_end(&mut elf).unwrap();
 
-                let (genesis_block, alice_keypair) = create_genesis_block(50);
+                let (genesis_block, mint_keypair) = create_genesis_block(50);
                 let bank = Bank::new(&genesis_block);
                 let bank_client = BankClient::new(bank);
 
                 let loader_pubkey = load_program(
                     &bank_client,
-                    &alice_keypair,
+                    &mint_keypair,
                     &native_loader::id(),
                     "solana_bpf_loader".as_bytes().to_vec(),
                 );
 
                 // Call user program
-                let program_id = load_program(&bank_client, &alice_keypair, &loader_pubkey, elf);
+                let program_id = load_program(&bank_client, &mint_keypair, &loader_pubkey, elf);
                 let instruction =
-                    create_invoke_instruction(alice_keypair.pubkey(), program_id, &1u8);
+                    create_invoke_instruction(mint_keypair.pubkey(), program_id, &1u8);
                 bank_client
-                    .send_instruction(&alice_keypair, instruction)
+                    .send_instruction(&mint_keypair, instruction)
                     .unwrap();
             }
         }
@@ -107,38 +107,42 @@ mod bpf {
             solana_logger::setup();
 
             let programs = [
-                "solana_bpf_rust_alloc",
-                "solana_bpf_rust_iter",
-                "solana_bpf_rust_noop",
+                ("solana_bpf_rust_alloc", true),
+                ("solana_bpf_rust_iter", true),
+                ("solana_bpf_rust_noop", true),
+                ("solana_bpf_rust_panic", false),
             ];
             for program in programs.iter() {
-                let filename = create_bpf_path(program);
-                println!("Test program: {:?} from {:?}", program, filename);
+                let filename = create_bpf_path(program.0);
+                println!("Test program: {:?} from {:?}", program.0, filename);
                 let mut file = File::open(filename).unwrap();
                 let mut elf = Vec::new();
                 file.read_to_end(&mut elf).unwrap();
 
-                let (genesis_block, alice_keypair) = create_genesis_block(50);
+                let (genesis_block, mint_keypair) = create_genesis_block(50);
                 let bank = Bank::new(&genesis_block);
                 let bank_client = BankClient::new(bank);
 
                 let loader_pubkey = load_program(
                     &bank_client,
-                    &alice_keypair,
+                    &mint_keypair,
                     &native_loader::id(),
                     "solana_bpf_loader".as_bytes().to_vec(),
                 );
 
                 // Call user program
-                let program_id = load_program(&bank_client, &alice_keypair, &loader_pubkey, elf);
+                let program_id = load_program(&bank_client, &mint_keypair, &loader_pubkey, elf);
                 let account_metas = vec![
-                    AccountMeta::new(alice_keypair.pubkey(), true),
+                    AccountMeta::new(mint_keypair.pubkey(), true),
                     AccountMeta::new(Keypair::new().pubkey(), false),
                 ];
                 let instruction = Instruction::new(program_id, &1u8, account_metas);
-                bank_client
-                    .send_instruction(&alice_keypair, instruction)
-                    .unwrap();
+                let result = bank_client.send_instruction(&mint_keypair, instruction);
+                if program.1 {
+                    assert!(result.is_ok());
+                } else {
+                    assert!(result.is_err());
+                }
             }
         }
     }
