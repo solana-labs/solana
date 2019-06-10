@@ -19,7 +19,6 @@ use solana_sdk::syscall;
 use solana_sdk::system_program;
 use solana_sdk::transaction::Result;
 use solana_sdk::transaction::{Transaction, TransactionError};
-use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::remove_dir_all;
@@ -28,28 +27,16 @@ use std::ops::Neg;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::thread::sleep;
-use std::time::Duration;
 
 const ACCOUNTSDB_DIR: &str = "accountsdb";
 const NUM_ACCOUNT_DIRS: usize = 4;
-const WAIT_FOR_PARENT_MS: u64 = 5;
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum AccountLockType {
-    AccountLock,
-    RecordLock,
-}
-
-type AccountLocks = Mutex<HashSet<Pubkey>>;
-
-// Locks for accounts that are currently being recorded + committed
-type RecordLocks = (
-    // Record Locks for the current bank
-    Arc<AccountLocks>,
-    // Any unreleased record locks from all parent/grandparent banks. We use Arc<Mutex> to
+type AccountLocks = (
+    // Locks for the current bank
+    Arc<Mutex<HashSet<Pubkey>>>,
+    // Any unreleased locks from all parent/grandparent banks. We use Arc<Mutex> to
     // avoid copies when calling new_from_parent().
-    Vec<Arc<AccountLocks>>,
+    Vec<Arc<Mutex<HashSet<Pubkey>>>>,
 );
 
 /// This structure handles synchronization for db
@@ -61,11 +48,7 @@ pub struct Accounts {
 
     /// set of accounts which are currently in the pipeline
     #[serde(skip)]
-    account_locks: AccountLocks,
-
-    /// set of accounts which are about to record + commit
-    #[serde(skip)]
-    record_locks: Mutex<RecordLocks>,
+    account_locks: Mutex<AccountLocks>,
 
     /// List of persistent stores
     paths: String,
@@ -125,8 +108,7 @@ impl Accounts {
         let accounts_db = Arc::new(AccountsDB::new(&paths));
         Accounts {
             accounts_db,
-            account_locks: Mutex::new(HashSet::new()),
-            record_locks: Mutex::new((Arc::new(Mutex::new(HashSet::new())), vec![])),
+            account_locks: Mutex::new((Arc::new(Mutex::new(HashSet::new())), vec![])),
             paths,
             own_paths,
         }
@@ -134,30 +116,29 @@ impl Accounts {
 
     pub fn new_from_parent(parent: &Accounts) -> Self {
         let accounts_db = parent.accounts_db.clone();
-        let parent_record_locks: Vec<_> = {
-            let (ref record_locks, ref mut grandparent_record_locks) =
-                *parent.record_locks.lock().unwrap();
+        let parent_locks: Vec<_> = {
+            let (ref parent_locks, ref mut grandparent_locks) =
+                *parent.account_locks.lock().unwrap();
 
-            // Note that when creating a child bank, we only care about the locks that are held for
-            // accounts that are in txs that are currently recording + committing, because other
-            // incoming txs on this bank that are not yet recording will not make it to bank commit.
-            //
+            // Copy all unreleased parent locks and the much more unlikely (but still possible)
+            // grandparent account locks into the new child. Note that by the time this function
+            // is called, no further transactions will be recorded on the parent bank, so even if
+            // banking threads grab account locks on this parent bank, none of those results will
+            // be committed.
             // Thus:
             // 1) The child doesn't need to care about potential "future" account locks on its parent
             // bank that the parent does not currently hold.
-            // 2) The child only needs the currently held "record locks" from the parent.
-            // 3) The parent doesn't need to retain any of the locks other than the ones it owns so
+            // 2) The parent doesn't need to retain any of the locks other than the ones it owns so
             // that unlock() can be called later (the grandparent locks can be given to the child).
-            once(record_locks.clone())
-                .chain(grandparent_record_locks.drain(..))
+            once(parent_locks.clone())
+                .chain(grandparent_locks.drain(..))
                 .filter(|a| !a.lock().unwrap().is_empty())
                 .collect()
         };
 
         Accounts {
             accounts_db,
-            account_locks: Mutex::new(HashSet::new()),
-            record_locks: Mutex::new((Arc::new(Mutex::new(HashSet::new())), parent_record_locks)),
+            account_locks: Mutex::new((Arc::new(Mutex::new(HashSet::new())), parent_locks)),
             paths: parent.paths.clone(),
             own_paths: parent.own_paths,
         }
@@ -365,11 +346,12 @@ impl Accounts {
     }
 
     fn lock_account(
-        (fork_locks, parent_locks): (&mut HashSet<Pubkey>, &mut Vec<Arc<AccountLocks>>),
+        (fork_locks, parent_locks): &mut AccountLocks,
         keys: &[&Pubkey],
         error_counters: &mut ErrorCounters,
     ) -> Result<()> {
         // Copy all the accounts
+        let mut fork_locks = fork_locks.lock().unwrap();
         for k in keys {
             let is_locked = {
                 if fork_locks.contains(k) {
@@ -378,25 +360,16 @@ impl Accounts {
                     // Check parent locks. As soon as a set of parent locks is empty,
                     // we can remove it from the list b/c that means the parent has
                     // released the locks.
+                    let mut is_locked = false;
                     parent_locks.retain(|p| {
-                        loop {
-                            {
-                                // If a parent bank holds a record lock for this account, then loop
-                                // until that lock is released
-                                let p = p.lock().unwrap();
-                                if !p.contains(k) {
-                                    break;
-                                }
-                            }
-
-                            // If a parent is currently recording for this key, then drop lock and wait
-                            sleep(Duration::from_millis(WAIT_FOR_PARENT_MS));
+                        let p = p.lock().unwrap();
+                        if p.contains(k) {
+                            is_locked = true;
                         }
 
-                        let p = p.lock().unwrap();
                         !p.is_empty()
                     });
-                    false
+                    is_locked
                 }
             };
             if is_locked {
@@ -411,17 +384,6 @@ impl Accounts {
         Ok(())
     }
 
-    fn lock_record_account(record_locks: &AccountLocks, keys: &[&Pubkey]) {
-        let mut fork_locks = record_locks.lock().unwrap();
-        for k in keys {
-            // The fork locks should always be a subset of the account locks, so
-            // the account locks should prevent record locks from ever touching the
-            // same accounts
-            assert!(!fork_locks.contains(k));
-            fork_locks.insert(**k);
-        }
-    }
-
     fn unlock_account(tx: &Transaction, result: &Result<()>, locks: &mut HashSet<Pubkey>) {
         match result {
             Err(TransactionError::AccountInUse) => (),
@@ -430,15 +392,6 @@ impl Accounts {
                     locks.remove(k);
                 }
             }
-        }
-    }
-
-    fn unlock_record_account<I>(tx: &I, locks: &mut HashSet<Pubkey>)
-    where
-        I: Borrow<Transaction>,
-    {
-        for k in &tx.borrow().message().account_keys {
-            locks.remove(k);
         }
     }
 
@@ -481,18 +434,14 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
-    pub fn lock_accounts<I>(&self, txs: &[I]) -> Vec<Result<()>>
-    where
-        I: Borrow<Transaction>,
-    {
-        let (_, ref mut parent_record_locks) = *self.record_locks.lock().unwrap();
+    pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let mut error_counters = ErrorCounters::default();
         let rv = txs
             .iter()
             .map(|tx| {
-                let message = tx.borrow().message();
+                let message = &tx.message();
                 Self::lock_account(
-                    (&mut self.account_locks.lock().unwrap(), parent_record_locks),
+                    &mut self.account_locks.lock().unwrap(),
                     &message.get_account_keys_by_lock_type().0,
                     &mut error_counters,
                 )
@@ -509,37 +458,13 @@ impl Accounts {
         rv
     }
 
-    pub fn lock_record_accounts<I>(&self, txs: &[I])
-    where
-        I: Borrow<Transaction>,
-    {
-        let record_locks = self.record_locks.lock().unwrap();
-        for tx in txs {
-            let message = tx.borrow().message();
-            Self::lock_record_account(&record_locks.0, &message.get_account_keys_by_lock_type().0);
-        }
-    }
-
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
-    pub fn unlock_accounts<I>(&self, txs: &[I], results: &[Result<()>])
-    where
-        I: Borrow<Transaction>,
-    {
-        let my_locks = &mut self.account_locks.lock().unwrap();
+    pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
+        let (ref my_locks, _) = *self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
-        txs.iter()
-            .zip(results.iter())
-            .for_each(|(tx, result)| Self::unlock_account(tx.borrow(), result, my_locks));
-    }
-
-    pub fn unlock_record_accounts<I>(&self, txs: &[I])
-    where
-        I: Borrow<Transaction>,
-    {
-        let (ref my_record_locks, _) = *self.record_locks.lock().unwrap();
-        for tx in txs {
-            Self::unlock_record_account(tx, &mut my_record_locks.lock().unwrap())
-        }
+        txs.iter().zip(results.iter()).for_each(|(tx, result)| {
+            Self::unlock_account(tx, result, &mut my_locks.lock().unwrap())
+        });
     }
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
@@ -1107,85 +1032,6 @@ mod tests {
         assert_eq!(accounts.hash_internal_state(0), None);
         accounts.store_slow(0, &Pubkey::default(), &Account::new(1, 0, &syscall::id()));
         assert_eq!(accounts.hash_internal_state(0), None);
-    }
-
-    #[test]
-    fn test_parent_locked_record_accounts() {
-        let mut parent = Accounts::new(None);
-        let locked_pubkey = Keypair::new().pubkey();
-        let mut locked_accounts = HashSet::new();
-        locked_accounts.insert(locked_pubkey);
-        parent.record_locks = Mutex::new((Arc::new(Mutex::new(locked_accounts.clone())), vec![]));
-        let parent = Arc::new(parent);
-        let child = Accounts::new_from_parent(&parent);
-
-        // Make sure child record locks contains the parent's locked record accounts
-        {
-            let (_, ref parent_record_locks) = *child.record_locks.lock().unwrap();
-            assert_eq!(parent_record_locks.len(), 1);
-            assert_eq!(locked_accounts, *parent_record_locks[0].lock().unwrap());
-        }
-
-        let parent_ = parent.clone();
-        let parent_thread = Builder::new()
-            .name("exit".to_string())
-            .spawn(move || {
-                sleep(Duration::from_secs(2));
-                // Unlock the accounts in the parent
-                {
-                    let (ref parent_record_locks, _) = *parent_.record_locks.lock().unwrap();
-                    parent_record_locks.lock().unwrap().clear();
-                }
-            })
-            .unwrap();
-
-        // Function will block until the parent_thread unlocks the parent's record lock
-        assert_eq!(
-            Accounts::lock_account(
-                (
-                    &mut child.account_locks.lock().unwrap(),
-                    &mut child.record_locks.lock().unwrap().1
-                ),
-                &vec![&locked_pubkey],
-                &mut ErrorCounters::default()
-            ),
-            Ok(())
-        );
-        // Make sure that the function blocked
-        parent_thread.join().unwrap();
-
-        {
-            // Check the lock was successfully obtained
-            let child_account_locks = &mut child.account_locks.lock().unwrap();
-            let parent_record_locks = child.record_locks.lock().unwrap();
-            assert_eq!(child_account_locks.len(), 1);
-
-            // Make sure child removed the parent's record locks after the parent had
-            // released all its locks
-            assert!(parent_record_locks.1.is_empty());
-
-            // After all the checks pass, clear the account we just locked from the
-            // set of locks
-            child_account_locks.clear();
-        }
-
-        // Make sure calling new_from_parent() on the child bank also cleans up the copy of old locked
-        // parent accounts, in case the child doesn't call lock_account() after a parent has
-        // released their account locks
-        {
-            // Mock an empty set of parent record accounts in the child bank
-            let (_, ref mut parent_record_locks) = *child.record_locks.lock().unwrap();
-            parent_record_locks.push(Arc::new(Mutex::new(HashSet::new())));
-        }
-
-        // Call new_from_parent, make sure the empty parent locked_accounts is purged
-        let child2 = Accounts::new_from_parent(&child);
-        {
-            let (_, ref mut parent_record_locks) = *child.record_locks.lock().unwrap();
-            assert!(parent_record_locks.is_empty());
-            let (_, ref mut parent_record_locks2) = *child2.record_locks.lock().unwrap();
-            assert!(parent_record_locks2.is_empty());
-        }
     }
 
     fn create_accounts(accounts: &Accounts, pubkeys: &mut Vec<Pubkey>, num: usize) {

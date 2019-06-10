@@ -1,48 +1,39 @@
-use crate::accounts::AccountLockType;
 use crate::bank::Bank;
 use solana_sdk::transaction::{Result, Transaction};
-use std::borrow::Borrow;
 
 // Represents the results of trying to lock a set of accounts
-pub struct LockedAccountsResults<'a, 'b, I: Borrow<Transaction>> {
+pub struct LockedAccountsResults<'a, 'b> {
     locked_accounts_results: Vec<Result<()>>,
     bank: &'a Bank,
-    transactions: &'b [I],
-    lock_type: AccountLockType,
+    transactions: &'b [Transaction],
     pub(crate) needs_unlock: bool,
 }
 
-impl<'a, 'b, I: Borrow<Transaction>> LockedAccountsResults<'a, 'b, I> {
+impl<'a, 'b> LockedAccountsResults<'a, 'b> {
     pub fn new(
         locked_accounts_results: Vec<Result<()>>,
         bank: &'a Bank,
-        transactions: &'b [I],
-        lock_type: AccountLockType,
+        transactions: &'b [Transaction],
     ) -> Self {
         Self {
             locked_accounts_results,
             bank,
             transactions,
             needs_unlock: true,
-            lock_type,
         }
-    }
-
-    pub fn lock_type(&self) -> AccountLockType {
-        self.lock_type.clone()
     }
 
     pub fn locked_accounts_results(&self) -> &Vec<Result<()>> {
         &self.locked_accounts_results
     }
 
-    pub fn transactions(&self) -> &[I] {
+    pub fn transactions(&self) -> &[Transaction] {
         self.transactions
     }
 }
 
 // Unlock all locked accounts in destructor.
-impl<'a, 'b, I: Borrow<Transaction>> Drop for LockedAccountsResults<'a, 'b, I> {
+impl<'a, 'b> Drop for LockedAccountsResults<'a, 'b> {
     fn drop(&mut self) {
         if self.needs_unlock {
             self.bank.unlock_accounts(self)
@@ -87,23 +78,6 @@ mod tests {
             .locked_accounts_results()
             .iter()
             .all(|x| x.is_ok()));
-    }
-
-    #[test]
-    fn test_record_locks() {
-        let (bank, txs) = setup();
-
-        // Test getting record locks
-        let lock_results = bank.lock_record_accounts(&txs);
-
-        // Grabbing record locks doesn't return any results, must succeed or panic.
-        assert!(lock_results.locked_accounts_results().is_empty());
-
-        drop(lock_results);
-
-        // Now grabbing record locks should work again
-        let lock_results2 = bank.lock_record_accounts(&txs);
-        assert!(lock_results2.locked_accounts_results().is_empty());
     }
 
     fn setup() -> (Bank, Vec<Transaction>) {

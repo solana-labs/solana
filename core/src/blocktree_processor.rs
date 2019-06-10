@@ -11,7 +11,6 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::timing::MAX_RECENT_BLOCKHASHES;
 use solana_sdk::transaction::Result;
-use solana_sdk::transaction::Transaction;
 use std::result;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -33,10 +32,7 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
-fn par_execute_entries(
-    bank: &Bank,
-    entries: &[(&Entry, LockedAccountsResults<Transaction>)],
-) -> Result<()> {
+fn par_execute_entries(bank: &Bank, entries: &[(&Entry, LockedAccountsResults)]) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", entries.len());
     let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
         thread_pool.borrow().install(|| {
