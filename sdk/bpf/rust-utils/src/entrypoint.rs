@@ -88,8 +88,7 @@ pub unsafe fn deserialize<'a>(
 
     let mut ka: [Option<SolKeyedAccount>; MAX_ACCOUNTS] =
         [None, None, None, None, None, None, None, None, None, None];
-    let iter = 0..num_ka; // This weirdness due to #issue $#4271
-    for (i, _) in iter.enumerate() {
+    for i in 0..num_ka {
         let is_signer = {
             #[allow(clippy::cast_ptr_alignment)]
             let is_signer_val = *(input.add(offset) as *const u64);
@@ -148,9 +147,7 @@ pub unsafe fn deserialize<'a>(
         }
     };
 
-    let info = SolClusterInfo {
-        program_id,
-    };
+    let info = SolClusterInfo { program_id };
 
     Ok((ka, info, data))
 }
