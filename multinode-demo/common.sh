@@ -38,10 +38,6 @@ else
       program=${BASH_REMATCH[1]}
       features+="cuda,"
     fi
-    if [[ $program = replicator ]]; then
-      features+="chacha,"
-    fi
-
     if [[ -r "$SOLANA_ROOT/$program"/Cargo.toml ]]; then
       maybe_package="--package solana-$program"
     fi

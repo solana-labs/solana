@@ -6,31 +6,10 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::sync::Arc;
 
+pub use solana_chacha_sys::chacha_cbc_encrypt;
+
 pub const CHACHA_BLOCK_SIZE: usize = 64;
 pub const CHACHA_KEY_SIZE: usize = 32;
-
-#[link(name = "cpu-crypt")]
-extern "C" {
-    fn chacha20_cbc_encrypt(
-        input: *const u8,
-        output: *mut u8,
-        in_len: usize,
-        key: *const u8,
-        ivec: *mut u8,
-    );
-}
-
-pub fn chacha_cbc_encrypt(input: &[u8], output: &mut [u8], key: &[u8], ivec: &mut [u8]) {
-    unsafe {
-        chacha20_cbc_encrypt(
-            input.as_ptr(),
-            output.as_mut_ptr(),
-            input.len(),
-            key.as_ptr(),
-            ivec.as_mut_ptr(),
-        );
-    }
-}
 
 pub fn chacha_cbc_encrypt_ledger(
     blocktree: &Arc<Blocktree>,

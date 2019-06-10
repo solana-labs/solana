@@ -13,10 +13,9 @@ fn main() {
     };
     let perf_libs_dir = perf_libs_dir.to_str().unwrap();
 
-    let chacha = !env::var("CARGO_FEATURE_CHACHA").is_err();
     let cuda = !env::var("CARGO_FEATURE_CUDA").is_err();
 
-    if chacha || cuda {
+    if cuda {
         // Ensure `perf_libs_dir` exists.  It's been observed that
         // a cargo:rerun-if-changed= directive with a non-existent
         // directory triggers a rebuild on every |cargo build| invocation
@@ -28,9 +27,6 @@ fn main() {
 
         println!("cargo:rerun-if-changed={}", perf_libs_dir);
         println!("cargo:rustc-link-search=native={}", perf_libs_dir);
-    }
-    if chacha {
-        println!("cargo:rerun-if-changed={}/libcpu-crypt.a", perf_libs_dir);
     }
     if cuda {
         let cuda_home = match env::var("CUDA_HOME") {

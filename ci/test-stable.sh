@@ -55,7 +55,7 @@ test-stable-perf)
     --no-default-features --features=bpf_c,bpf_rust
 
   # Run root package tests with these features
-  ROOT_FEATURES=erasure,chacha
+  ROOT_FEATURES=
   if [[ $(uname) = Darwin ]]; then
     ./build-perf-libs.sh
   else

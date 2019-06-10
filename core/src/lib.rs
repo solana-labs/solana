@@ -9,9 +9,8 @@ pub mod bank_forks;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod broadcast_stage;
-#[cfg(feature = "chacha")]
 pub mod chacha;
-#[cfg(all(feature = "chacha", feature = "cuda"))]
+#[cfg(cuda)]
 pub mod chacha_cuda;
 pub mod cluster_info_vote_listener;
 #[macro_use]
@@ -75,7 +74,6 @@ pub mod window_service;
 extern crate solana_budget_program;
 
 #[cfg(test)]
-#[cfg(any(feature = "chacha", feature = "cuda"))]
 #[macro_use]
 extern crate hex_literal;
 

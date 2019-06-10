@@ -76,7 +76,7 @@ is detected at runtime and the CUDA build is auto selected.
 If deploying a locally-built network, first run `./fetch-perf-libs.sh` then
 ensure the `cuda` feature is specified at network start:
 ```bash
-$ ./net.sh start -f "cuda,erasure"
+$ ./net.sh start -f "cuda"
 ```
 
 ### How to interact with a CD testnet deployed by ci/testnet-deploy.sh

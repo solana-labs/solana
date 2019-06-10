@@ -4,7 +4,7 @@
 
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
-#[cfg(all(feature = "chacha", feature = "cuda"))]
+#[cfg(cuda)]
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use crate::cluster_info::ClusterInfo;
 use crate::result::{Error, Result};
@@ -336,7 +336,7 @@ impl StorageStage {
         // TODO: cuda required to generate the reference values
         // but if it is missing, then we need to take care not to
         // process storage mining results.
-        #[cfg(all(feature = "chacha", feature = "cuda"))]
+        #[cfg(cuda)]
         {
             // Lock the keys, since this is the IV memory,
             // it will be updated in-place by the encryption.
@@ -669,10 +669,10 @@ mod tests {
         exit.store(true, Ordering::Relaxed);
         storage_stage.join().unwrap();
 
-        #[cfg(not(all(feature = "cuda", feature = "chacha")))]
+        #[cfg(not(cuda))]
         assert_eq!(result, Hash::default());
 
-        #[cfg(all(feature = "cuda", feature = "chacha"))]
+        #[cfg(cuda)]
         assert_ne!(result, Hash::default());
 
         remove_dir_all(ledger_path).unwrap();

@@ -35,4 +35,4 @@ solana-budget-program = { path = "../programs/budget_program", version = "0.16.0
 
 [features]
 cuda = []
-erasure = []
+
