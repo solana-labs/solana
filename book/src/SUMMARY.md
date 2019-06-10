@@ -5,6 +5,7 @@
 - [Terminology](terminology.md)
 
 - [Getting Started](getting-started.md)
+  - [Testnet Participation](testnet-participation.md)
   - [Example: Web Wallet](webwallet.md)
 
 - [Programming Model](programs.md)
@@ -61,7 +62,6 @@
   - [Fork Selection](fork-selection.md)
   - [Leader-to-Leader Transition](leader-leader-transition.md)
   - [Leader-to-Validator Transition](leader-validator-transition.md)
-  - [Testnet Participation](testnet-participation.md)
   - [Testing Programs](testing-programs.md)
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
   - [Persistent Account Storage](persistent-account-storage.md)
