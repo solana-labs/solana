@@ -92,7 +92,7 @@ local|tar)
     fi
     [[ -z $externalPrimordialAccountsFile ]] || cat $externalPrimordialAccountsFile >> ./solana-node-stakes/fullnode-stakes.yml
     if [ -f ./solana-node-stakes/fullnode-stakes.yml ]; then
-      genesisOptions+=" --primordial-accounts-file ~/solana/solana-node-stakes/fullnode-stakes.yml"
+      genesisOptions+=" --primordial-accounts-file ./solana-node-stakes/fullnode-stakes.yml"
     fi
     if [[ $skipSetup != true ]]; then
       args=(
