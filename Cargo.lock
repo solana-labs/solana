@@ -2201,6 +2201,7 @@ dependencies = [
  "solana-exchange-program 0.16.0",
  "solana-kvstore 0.16.0",
  "solana-logger 0.16.0",
+ "solana-merkle-tree 0.16.0",
  "solana-metrics 0.16.0",
  "solana-netutil 0.16.0",
  "solana-runtime 0.16.0",
@@ -2573,6 +2574,14 @@ name = "solana-logger"
 version = "0.16.0"
 dependencies = [
  "env_logger 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "solana-merkle-tree"
+version = "0.16.0"
+dependencies = [
+ "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-sdk 0.16.0",
 ]
 
 [[package]]
