@@ -15,6 +15,10 @@ pub struct GenesisBlockInfo {
     pub voting_keypair: Keypair,
 }
 
+pub fn create_genesis_block(mint_lamports: u64) -> GenesisBlockInfo {
+    create_genesis_block_with_leader(mint_lamports, &Pubkey::new_rand(), 0)
+}
+
 pub fn create_genesis_block_with_leader(
     mint_lamports: u64,
     bootstrap_leader_pubkey: &Pubkey,
