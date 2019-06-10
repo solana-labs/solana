@@ -35,7 +35,6 @@ pub fn create_genesis_block_with_leader(
     );
 
     let genesis_block = GenesisBlock::new(
-        &bootstrap_leader_pubkey,
         &[
             // the mint
             (

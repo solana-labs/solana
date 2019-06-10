@@ -391,7 +391,7 @@ impl Locktower {
         let mut lockouts = VoteState::default();
         if let Some(iter) = bank.epoch_vote_accounts(current_epoch) {
             for (delegate_pubkey, (_, account)) in iter {
-                if *delegate_pubkey == bank.collector_id() {
+                if delegate_pubkey == bank.collector_id() {
                     let state = VoteState::deserialize(&account.data).expect("votes");
                     if lockouts.votes.len() < state.votes.len() {
                         lockouts = state;
