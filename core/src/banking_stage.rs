@@ -394,7 +394,7 @@ impl BankingStage {
                 processed_transactions.len()
             );
             let hash = hash_transactions(&processed_transactions);
-            // record and unlock will unlock all the successfull transactions
+            // record and unlock will unlock all the successful transactions
             poh.lock()
                 .unwrap()
                 .record(bank_slot, hash, processed_transactions)?;

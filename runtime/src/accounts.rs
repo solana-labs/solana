@@ -22,7 +22,6 @@ use solana_sdk::transaction::{Transaction, TransactionError};
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::remove_dir_all;
-use std::iter::once;
 use std::ops::Neg;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -30,14 +29,6 @@ use std::sync::{Arc, Mutex};
 
 const ACCOUNTSDB_DIR: &str = "accountsdb";
 const NUM_ACCOUNT_DIRS: usize = 4;
-
-type AccountLocks = (
-    // Locks for the current bank
-    Arc<Mutex<HashSet<Pubkey>>>,
-    // Any unreleased locks from all parent/grandparent banks. We use Arc<Mutex> to
-    // avoid copies when calling new_from_parent().
-    Vec<Arc<Mutex<HashSet<Pubkey>>>>,
-);
 
 /// This structure handles synchronization for db
 #[derive(Default, Debug, Serialize, Deserialize)]
@@ -47,8 +38,7 @@ pub struct Accounts {
     pub accounts_db: Arc<AccountsDB>,
 
     /// set of accounts which are currently in the pipeline
-    #[serde(skip)]
-    account_locks: Mutex<AccountLocks>,
+    account_locks: Mutex<HashSet<Pubkey>>,
 
     /// List of persistent stores
     paths: String,
@@ -108,37 +98,16 @@ impl Accounts {
         let accounts_db = Arc::new(AccountsDB::new(&paths));
         Accounts {
             accounts_db,
-            account_locks: Mutex::new((Arc::new(Mutex::new(HashSet::new())), vec![])),
+            account_locks: Mutex::new(HashSet::new()),
             paths,
             own_paths,
         }
     }
-
     pub fn new_from_parent(parent: &Accounts) -> Self {
         let accounts_db = parent.accounts_db.clone();
-        let parent_locks: Vec<_> = {
-            let (ref parent_locks, ref mut grandparent_locks) =
-                *parent.account_locks.lock().unwrap();
-
-            // Copy all unreleased parent locks and the much more unlikely (but still possible)
-            // grandparent account locks into the new child. Note that by the time this function
-            // is called, no further transactions will be recorded on the parent bank, so even if
-            // banking threads grab account locks on this parent bank, none of those results will
-            // be committed.
-            // Thus:
-            // 1) The child doesn't need to care about potential "future" account locks on its parent
-            // bank that the parent does not currently hold.
-            // 2) The parent doesn't need to retain any of the locks other than the ones it owns so
-            // that unlock() can be called later (the grandparent locks can be given to the child).
-            once(parent_locks.clone())
-                .chain(grandparent_locks.drain(..))
-                .filter(|a| !a.lock().unwrap().is_empty())
-                .collect()
-        };
-
         Accounts {
             accounts_db,
-            account_locks: Mutex::new((Arc::new(Mutex::new(HashSet::new())), parent_locks)),
+            account_locks: Mutex::new(HashSet::new()),
             paths: parent.paths.clone(),
             own_paths: parent.own_paths,
         }
@@ -346,40 +315,20 @@ impl Accounts {
     }
 
     fn lock_account(
-        (fork_locks, parent_locks): &mut AccountLocks,
+        locks: &mut HashSet<Pubkey>,
         keys: &[&Pubkey],
         error_counters: &mut ErrorCounters,
     ) -> Result<()> {
         // Copy all the accounts
-        let mut fork_locks = fork_locks.lock().unwrap();
         for k in keys {
-            let is_locked = {
-                if fork_locks.contains(k) {
-                    true
-                } else {
-                    // Check parent locks. As soon as a set of parent locks is empty,
-                    // we can remove it from the list b/c that means the parent has
-                    // released the locks.
-                    let mut is_locked = false;
-                    parent_locks.retain(|p| {
-                        let p = p.lock().unwrap();
-                        if p.contains(k) {
-                            is_locked = true;
-                        }
-
-                        !p.is_empty()
-                    });
-                    is_locked
-                }
-            };
-            if is_locked {
+            if locks.contains(k) {
                 error_counters.account_in_use += 1;
                 debug!("Account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
             }
         }
         for k in keys {
-            fork_locks.insert(**k);
+            locks.insert(**k);
         }
         Ok(())
     }
@@ -460,11 +409,11 @@ impl Accounts {
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
     pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
-        let (ref my_locks, _) = *self.account_locks.lock().unwrap();
+        let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
-        txs.iter().zip(results.iter()).for_each(|(tx, result)| {
-            Self::unlock_account(tx, result, &mut my_locks.lock().unwrap())
-        });
+        txs.iter()
+            .zip(results.iter())
+            .for_each(|(tx, result)| Self::unlock_account(tx, result, &mut account_locks));
     }
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
