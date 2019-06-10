@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
 if [ "$#" -ne 1 ]; then
-    echo "Error: Must provide the full path to the project to clean"
-    exit 1
+    # Clean all projects
+    for project in */ ; do
+        ./../../../sdk/bpf/rust-utils/clean.sh "$PWD/$project"
+    done
+else
+    # Clean requested project
+    ./../../../sdk/bpf/rust-utils/clean.sh "$PWD/$1"
+    
 fi
-
-./../../../sdk/bpf/rust-utils/clean.sh "$PWD"/"$1"
