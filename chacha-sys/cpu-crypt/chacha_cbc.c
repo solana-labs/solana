@@ -10,6 +10,7 @@ void chacha20_cbc128_encrypt(const unsigned char* in, unsigned char* out,
 {
     size_t n;
     unsigned char *iv = ivec;
+    (void)key;
 
     if (len == 0) {
         return;
