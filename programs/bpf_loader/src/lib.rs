@@ -102,7 +102,7 @@ pub fn helper_sol_panic_verify(
     ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
-    if let Ok(_) = verify_string(file, ro_regions) {
+    if verify_string(file, ro_regions).is_ok() {
         let c_buf: *const c_char = file as *const c_char;
         let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
         if let Ok(slice) = c_str.to_str() {
