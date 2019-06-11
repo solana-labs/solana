@@ -2,7 +2,7 @@
 apiVersion: 1
 
 datasources:
-- name: gdev-influxdb
+- name: local-influxdb
   type: influxdb
   isDefault: true
   access: proxy
