@@ -1,5 +1,7 @@
 //! A command-line executable for generating the chain's genesis block.
 #[macro_use]
+extern crate solana_bpf_loader;
+#[macro_use]
 extern crate solana_vote_program;
 #[macro_use]
 extern crate solana_stake_program;
@@ -11,6 +13,8 @@ extern crate solana_token_program;
 extern crate solana_config_program;
 #[macro_use]
 extern crate solana_exchange_program;
+#[macro_use]
+extern crate solana_storage_program;
 
 use clap::{crate_description, crate_name, crate_version, value_t_or_exit, App, Arg};
 use solana::blocktree::create_new_ledger;
@@ -24,7 +28,7 @@ use solana_sdk::signature::{read_keypair, KeypairUtil};
 use solana_sdk::system_program;
 use solana_sdk::timing;
 use solana_stake_api::stake_state;
-use solana_storage_program::genesis_block_util::GenesisBlockUtil;
+use solana_storage_api::storage_contract;
 use solana_vote_api::vote_state;
 use std::collections::HashMap;
 use std::error;
@@ -266,25 +270,29 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     bootstrap_leader_stake_lamports,
                 ),
             ),
+            (
+                bootstrap_storage_keypair.pubkey(),
+                storage_contract::create_validator_storage_account(
+                    bootstrap_leader_keypair.pubkey(),
+                    1,
+                ),
+            ),
         ],
         &[
+            solana_bpf_loader!(),
             solana_vote_program!(),
             solana_stake_program!(),
             solana_budget_program!(),
             solana_token_program!(),
             solana_config_program!(),
             solana_exchange_program!(),
+            solana_storage_program!(),
         ],
     );
 
     if let Some(file) = matches.value_of("primordial_accounts_file") {
         append_primordial_accounts(file, &mut genesis_block)?;
     }
-
-    genesis_block.add_storage_program(
-        &bootstrap_leader_keypair.pubkey(),
-        &bootstrap_storage_keypair.pubkey(),
-    );
 
     genesis_block.fee_calculator.target_lamports_per_signature =
         value_t_or_exit!(matches, "target_lamports_per_signature", u64);

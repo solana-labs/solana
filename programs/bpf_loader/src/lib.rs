@@ -3,6 +3,16 @@ pub mod allocator_bump;
 pub mod allocator_system;
 pub mod bpf_verifier;
 
+#[macro_export]
+macro_rules! solana_bpf_loader {
+    () => {
+        (
+            "solana_bpf_loader".to_string(),
+            solana_sdk::bpf_loader::id(),
+        )
+    };
+}
+
 use alloc::Alloc;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use libc::c_char;
