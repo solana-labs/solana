@@ -20,5 +20,5 @@ solana-sdk = { path = "../sdk", version = "0.16.0" }
 assert_cmd = "0.11"
 
 [features]
-cuda = ["solana/cuda"]
+cuda = []
 
