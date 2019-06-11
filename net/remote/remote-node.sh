@@ -84,7 +84,7 @@ local|tar)
     rm -rf ./solana-node-stakes
     mkdir ./solana-node-stakes
     if [[ -n $stakeNodesInGenesisBlock ]]; then
-      for i in $(seq 1 "$numNodes"); do
+      for i in $(seq 0 "$numNodes"); do
         solana-keygen new -o ./solana-node-keys/"$i"
         pubkey="$(solana-keygen pubkey ./solana-node-keys/"$i")"
         echo "${pubkey}: $stakeNodesInGenesisBlock" >> ./solana-node-stakes/fullnode-stakes.yml
