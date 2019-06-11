@@ -9,6 +9,7 @@ cd "$(dirname "$0")"
 ./stop.sh
 
 : "${INFLUXDB_IMAGE:=influxdb:1.6}"
+: "${GRAFANA_IMAGE:=solanalabs/grafana:stable}"
 : "${GRAFANA_IMAGE:=grafana/grafana:5.2.3}"
 
 docker pull $INFLUXDB_IMAGE
@@ -28,6 +29,8 @@ docker run \
   --env INFLUXDB_DB=testnet \
   --env INFLUXDB_ADMIN_USER=admin \
   --env INFLUXDB_ADMIN_PASSWORD=admin \
+  --env INFLUXDB_WRITE_USER=write \
+  --env INFLUXDB_WRITE_PASSWORD=write \
   $INFLUXDB_IMAGE -config /etc/influxdb/influxdb.conf /init-influxdb.sh
 
 docker run \
