@@ -14,7 +14,11 @@ failOnValidatorBootupFailure="$7"
 externalPrimordialAccountsFile="$8"
 stakeNodesInGenesisBlock="$9"
 nodeIndex="${10}"
-genesisOptions="${11}"
+numBenchTpsClients="${11}"
+benchTpsExtraArgs="${12}"
+numBenchExchangeClients="${13}"
+benchExchangeExtraArgs="${14}"
+genesisOptions="${15}"
 set +x
 export RUST_LOG
 
@@ -90,9 +94,20 @@ local|tar)
         echo "${pubkey}: $stakeNodesInGenesisBlock" >> ./solana-node-stakes/fullnode-stakes.yml
       done
     fi
+    rm -rf ./solana-client-stakes
+    mkdir ./solana-client-stakes
+    for i in $(seq 0 "$numBenchTpsClients"); do
+      solana-bench-tps -w ./solana-client-stakes/bench-tps"$i".yml "$benchTpsExtraArgs"
+      cat ./solana-client-stakes/bench-tps"$i".yml >> ./solana-client-stakes/client-accounts.yml
+    done
+#    for i in $(seq "$numBenchTpsClients" "$numBenchExchangeClients"); do
+#      solana-bench-exchange -w ./solana-client-stakes/bench-exchange"$i".yml "$benchExchangeExtraArgs"
+#      cat ./solana-client-stakes/bench-exchange"$i".yml >> ./solana-client-stakes/client-accounts.yml
+#    done
     [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-stakes/fullnode-stakes.yml
     if [ -f ./solana-node-stakes/fullnode-stakes.yml ]; then
-      genesisOptions+=" --primordial-accounts-file ./solana-node-stakes/fullnode-stakes.yml"
+      genesisOptions+=" --primordial-accounts-file ./solana-node-stakes/fullnode-stakes.yml \
+      --primordial-keypairs-file ./solana-client-stakes/client-accounts.yml"
     fi
     if [[ $skipSetup != true ]]; then
       args=(
