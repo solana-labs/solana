@@ -55,7 +55,7 @@ fn get_subset_unchecked_mut<'a, T>(
 }
 
 fn verify_instruction(
-    is_credit_debit: bool,
+    is_debitable: bool,
     program_id: &Pubkey,
     pre_program_id: &Pubkey,
     pre_lamports: u64,
@@ -73,7 +73,7 @@ fn verify_instruction(
         return Err(InstructionError::ExternalAccountLamportSpend);
     }
     // The balance of credit-only accounts may only increase
-    if !is_credit_debit && pre_lamports > account.lamports {
+    if !is_debitable && pre_lamports > account.lamports {
         return Err(InstructionError::CreditOnlyLamportSpend);
     }
     // For accounts unassigned to the program, the data may not change.
@@ -84,7 +84,7 @@ fn verify_instruction(
         return Err(InstructionError::ExternalAccountDataModified);
     }
     // Credit-only account data may not change.
-    if !is_credit_debit && pre_data != &account.data[..] {
+    if !is_debitable && pre_data != &account.data[..] {
         return Err(InstructionError::CreditOnlyDataModified);
     }
     Ok(())
@@ -194,23 +194,23 @@ impl MessageProcessor {
 
         self.process_instruction(message, instruction, executable_accounts, program_accounts)?;
         // Verify the instruction
-        for ((pre_program_id, pre_lamports, pre_data), (i, post_account, is_credit_debit)) in
+        for ((pre_program_id, pre_lamports, pre_data), (i, post_account, is_debitable)) in
             pre_data.iter().zip(
                 program_accounts
                     .iter()
                     .enumerate()
-                    .map(|(i, program_account)| (i, program_account, message.is_credit_debit(i))),
+                    .map(|(i, program_account)| (i, program_account, message.is_debitable(i))),
             )
         {
             verify_instruction(
-                is_credit_debit,
+                is_debitable,
                 &program_id,
                 pre_program_id,
                 *pre_lamports,
                 pre_data,
                 post_account,
             )?;
-            if !is_credit_debit {
+            if !is_debitable {
                 *credits[i] += post_account.lamports - *pre_lamports;
             }
         }
@@ -242,8 +242,8 @@ impl MessageProcessor {
             // TODO: `get_subset_unchecked_mut` panics on an index out of bounds if an executable
             // account is also included as a regular account for an instruction, because the
             // executable account is not passed in as part of the accounts slice
-            let mut instruction_credits =
-                get_subset_unchecked_mut(credits, &instruction.accounts).expect("subset_mut");
+            let mut instruction_credits = get_subset_unchecked_mut(credits, &instruction.accounts)
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
             self.execute_instruction(
                 message,
                 instruction,
@@ -260,6 +260,9 @@ impl MessageProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
+    use solana_sdk::message::Message;
+    use solana_sdk::native_loader::{create_loadable_account, id};
 
     #[test]
     fn test_has_duplicates() {
@@ -323,11 +326,11 @@ mod tests {
 
     #[test]
     fn test_verify_instruction_change_data() {
-        fn change_data(program_id: &Pubkey, is_credit_debit: bool) -> Result<(), InstructionError> {
+        fn change_data(program_id: &Pubkey, is_debitable: bool) -> Result<(), InstructionError> {
             let alice_program_id = Pubkey::new_rand();
             let account = Account::new(0, 0, &alice_program_id);
             verify_instruction(
-                is_credit_debit,
+                is_debitable,
                 &program_id,
                 &alice_program_id,
                 0,
@@ -373,14 +376,22 @@ mod tests {
             Err(InstructionError::ExternalAccountLamportSpend),
             "debit should fail, even if system program"
         );
+        assert_eq!(
+            verify_instruction(
+                false,
+                &alice_program_id,
+                &alice_program_id,
+                42,
+                &[],
+                &account
+            ),
+            Err(InstructionError::CreditOnlyLamportSpend),
+            "debit should fail, even if owning program"
+        );
     }
 
     #[test]
     fn test_process_message_credit_only_handling() {
-        use solana_sdk::instruction::{AccountMeta, Instruction, InstructionError};
-        use solana_sdk::message::Message;
-        use solana_sdk::native_loader::{create_loadable_account, id};
-
         #[derive(Serialize, Deserialize)]
         enum MockSystemInstruction {
             Correct { lamports: u64 },

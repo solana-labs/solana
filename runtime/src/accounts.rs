@@ -821,13 +821,13 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok((a, l, d)) => {
-                assert_eq!(a.len(), 2);
-                assert_eq!(a[0], accounts[0].1);
-                assert_eq!(l.len(), 1);
-                assert_eq!(l[0].len(), 0);
-                assert_eq!(d.len(), 2);
-                assert_eq!(d, &vec![0, 0]);
+            Ok((instruction_accounts, instruction_loaders, instruction_credits)) => {
+                assert_eq!(instruction_accounts.len(), 2);
+                assert_eq!(instruction_accounts[0], accounts[0].1);
+                assert_eq!(instruction_loaders.len(), 1);
+                assert_eq!(instruction_loaders[0].len(), 0);
+                assert_eq!(instruction_credits.len(), 2);
+                assert_eq!(instruction_credits, &vec![0, 0]);
             }
             Err(e) => Err(e).unwrap(),
         }
@@ -1007,18 +1007,18 @@ mod tests {
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
-            Ok((a, l, d)) => {
-                assert_eq!(a.len(), 1);
-                assert_eq!(a[0], accounts[0].1);
-                assert_eq!(l.len(), 2);
-                assert_eq!(l[0].len(), 1);
-                assert_eq!(l[1].len(), 2);
-                assert_eq!(d.len(), 1);
-                assert_eq!(d, &vec![0]);
-                for instruction_loaders in l.iter() {
-                    for (i, a) in instruction_loaders.iter().enumerate() {
+            Ok((instruction_accounts, instruction_loaders, instruction_credits)) => {
+                assert_eq!(instruction_accounts.len(), 1);
+                assert_eq!(instruction_accounts[0], accounts[0].1);
+                assert_eq!(instruction_loaders.len(), 2);
+                assert_eq!(instruction_loaders[0].len(), 1);
+                assert_eq!(instruction_loaders[1].len(), 2);
+                assert_eq!(instruction_credits.len(), 1);
+                assert_eq!(instruction_credits, &vec![0]);
+                for loaders in instruction_loaders.iter() {
+                    for (i, accounts_subset) in loaders.iter().enumerate() {
                         // +1 to skip first not loader account
-                        assert_eq![a.1, accounts[i + 1].1];
+                        assert_eq![accounts_subset.1, accounts[i + 1].1];
                     }
                 }
             }
