@@ -4,10 +4,6 @@ mod bpf {
     use solana_runtime::bank_client::BankClient;
     use solana_runtime::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use solana_runtime::loader_utils::load_program;
-<<<<<<< HEAD
-    use solana_sdk::native_loader;
-=======
->>>>>>> bpf_loader already loaded
     use std::env;
     use std::fs::File;
     use std::path::PathBuf;
