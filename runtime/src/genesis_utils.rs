@@ -65,11 +65,7 @@ pub fn create_genesis_block_with_leader(
             ),
         ],
         &[
-<<<<<<< HEAD
-            solana_bpf_loader!(),
-=======
             solana_bpf_loader_program!(),
->>>>>>> make runtime depend on bpf_loader
             solana_vote_program!(),
             solana_stake_program!(),
         ],

@@ -20,7 +20,7 @@ pub fn load_program(
     let instruction = system_instruction::create_account(
         &from_keypair.pubkey(),
         &program_pubkey,
-        1,
+        10,
         program.len() as u64,
         loader_pubkey,
     );

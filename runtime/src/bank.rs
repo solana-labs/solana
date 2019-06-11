@@ -503,13 +503,6 @@ impl Bank {
             "solana_system_program",
             &solana_sdk::system_program::id(),
         );
-<<<<<<< HEAD
-=======
-        self.register_native_instruction_processor(
-            &solana_vote_program!().0,
-            &solana_vote_program!().1,
-        );
->>>>>>> make runtime depend on bpf_loader
 
         // Add additional native programs specified in the genesis block
         for (name, program_id) in &genesis_block.native_instruction_processors {
@@ -940,6 +933,7 @@ impl Bank {
 
         self.collector_fees
             .fetch_add(fees as usize, Ordering::Relaxed);
+        println!("{}:{}", line!(), file!());
         results
     }
 

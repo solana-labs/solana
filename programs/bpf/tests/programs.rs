@@ -4,7 +4,10 @@ mod bpf {
     use solana_runtime::bank_client::BankClient;
     use solana_runtime::genesis_utils::{create_genesis_block, GenesisBlockInfo};
     use solana_runtime::loader_utils::load_program;
+<<<<<<< HEAD
     use solana_sdk::native_loader;
+=======
+>>>>>>> bpf_loader already loaded
     use std::env;
     use std::fs::File;
     use std::path::PathBuf;
@@ -34,30 +37,6 @@ mod bpf {
         use std::io::Read;
 
         #[test]
-        fn test_program_bpf_c_noop() {
-            solana_logger::setup();
-
-            let mut file = File::open(create_bpf_path("noop")).expect("file open failed");
-            let mut elf = Vec::new();
-            file.read_to_end(&mut elf).unwrap();
-
-            let GenesisBlockInfo {
-                genesis_block,
-                mint_keypair,
-                ..
-            } = create_genesis_block(50);
-            let bank = Bank::new(&genesis_block);
-            let bank_client = BankClient::new(bank);
-
-            // Call user program
-            let program_id = load_program(&bank_client, &mint_keypair, &bpf_loader::id(), elf);
-            let instruction = create_invoke_instruction(mint_keypair.pubkey(), program_id, &1u8);
-            bank_client
-                .send_instruction(&mint_keypair, instruction)
-                .unwrap();
-        }
-
-        #[test]
         fn test_program_bpf_c() {
             solana_logger::setup();
 
@@ -84,15 +63,8 @@ mod bpf {
                 let bank = Bank::new(&genesis_block);
                 let bank_client = BankClient::new(bank);
 
-                let loader_pubkey = load_program(
-                    &bank_client,
-                    &mint_keypair,
-                    &native_loader::id(),
-                    "solana_bpf_loader".as_bytes().to_vec(),
-                );
-
                 // Call user program
-                let program_id = load_program(&bank_client, &mint_keypair, &loader_pubkey, elf);
+                let program_id = load_program(&bank_client, &mint_keypair, &bpf_loader::id(), elf);
                 let instruction =
                     create_invoke_instruction(mint_keypair.pubkey(), program_id, &1u8);
                 bank_client
@@ -105,6 +77,7 @@ mod bpf {
     #[cfg(feature = "bpf_rust")]
     mod bpf_rust {
         use super::*;
+        use solana_sdk::bpf_loader;
         use solana_sdk::client::SyncClient;
         use solana_sdk::instruction::{AccountMeta, Instruction};
         use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -135,15 +108,8 @@ mod bpf {
                 let bank = Bank::new(&genesis_block);
                 let bank_client = BankClient::new(bank);
 
-                let loader_pubkey = load_program(
-                    &bank_client,
-                    &mint_keypair,
-                    &native_loader::id(),
-                    "solana_bpf_loader".as_bytes().to_vec(),
-                );
-
                 // Call user program
-                let program_id = load_program(&bank_client, &mint_keypair, &loader_pubkey, elf);
+                let program_id = load_program(&bank_client, &mint_keypair, &bpf_loader::id(), elf);
                 let account_metas = vec![
                     AccountMeta::new(mint_keypair.pubkey(), true),
                     AccountMeta::new(Keypair::new().pubkey(), false),
