@@ -484,10 +484,9 @@ while true; do
         if [[ -d $snapshot_config_dir ]]; then
           $rsync -qrt --delete-after "$snapshot_config_dir"/ "$SOLANA_RSYNC_CONFIG_DIR"/snapshots
           $rsync -qrt --delete-after "$accounts_config_dir"/ "$SOLANA_RSYNC_CONFIG_DIR"/accounts
-#          $rsync -qrt --delete-after "$ledger_config_dir"/ "$SOLANA_RSYNC_CONFIG_DIR"/ledger
 	fi
       ) || true
-      secs_to_next_sync_poll=30
+      secs_to_next_sync_poll=60
     done
   else
     secs_to_next_genesis_poll=1
