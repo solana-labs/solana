@@ -11,7 +11,10 @@ numNodes="$4"
 RUST_LOG="$5"
 skipSetup="$6"
 failOnValidatorBootupFailure="$7"
-genesisOptions="$8"
+externalPrimordialAccountsFile="$8"
+stakeNodesInGenesisBlock="$9"
+nodeIndex="${10}"
+genesisOptions="${11}"
 set +x
 export RUST_LOG
 
@@ -77,6 +80,20 @@ local|tar)
       export SOLANA_CUDA=1
     fi
     set -x
+    rm -rf ./solana-node-keys
+    rm -rf ./solana-node-stakes
+    mkdir ./solana-node-stakes
+    if [[ -n $stakeNodesInGenesisBlock ]]; then
+      for i in $(seq 0 "$numNodes"); do
+        solana-keygen new -o ./solana-node-keys/"$i"
+        pubkey="$(solana-keygen pubkey ./solana-node-keys/"$i")"
+        echo "${pubkey}: $stakeNodesInGenesisBlock" >> ./solana-node-stakes/fullnode-stakes.yml
+      done
+    fi
+    [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-stakes/fullnode-stakes.yml
+    if [ -f ./solana-node-stakes/fullnode-stakes.yml ]; then
+      genesisOptions+=" --primordial-accounts-file ./solana-node-stakes/fullnode-stakes.yml"
+    fi
     if [[ $skipSetup != true ]]; then
       args=(
         --bootstrap-leader-stake-lamports "$stake"
@@ -92,11 +109,17 @@ local|tar)
       --gossip-port "$entrypointIp":8001
     )
 
+    if [[ -n $stakeNodesInGenesisBlock ]]; then
+      args+=(--no-airdrop)
+    fi
     nohup ./multinode-demo/validator.sh --bootstrap-leader "${args[@]}" > fullnode.log 2>&1 &
     sleep 1
     ;;
   validator|blockstreamer)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
+    rm -f ~/solana/fullnode-identity.json
+    [[ -z $stakeNodesInGenesisBlock ]] || net/scripts/rsync-retry.sh -vPrc \
+    "$entrypointIp":~/solana/solana-node-keys/"$nodeIndex" ~/solana/fullnode-identity.json
 
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-validator-cuda ]]; then
       echo Selecting solana-validator-cuda
@@ -117,6 +140,14 @@ local|tar)
     else
       args+=(--stake "$stake")
       args+=(--enable-rpc-exit)
+    fi
+
+    if [[ -f ~/solana/fullnode-identity.json ]]; then
+      args+=(--identity ~/solana/fullnode-identity.json)
+    fi
+
+    if [[ -n $stakeNodesInGenesisBlock ]]; then
+      args+=(--no-airdrop)
     fi
 
     set -x
@@ -157,6 +188,11 @@ local|tar)
     args=(
       "$entrypointIp":~/solana "$entrypointIp:8001"
     )
+
+    if [[ -n $stakeNodesInGenesisBlock ]]; then
+      args+=(--no-airdrop)
+    fi
+
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/clear-config.sh
     fi

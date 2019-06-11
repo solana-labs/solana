@@ -55,6 +55,12 @@ Operate a configured testnet
                                       - Override the default --hashes-per-tick for the cluster
    -n NUM_FULL_NODES                  - Number of fullnodes to apply command to.
 
+   -x Accounts and Stakes for external nodes
+                                      - A YML file with a list of account pubkeys and corresponding stakes
+                                         for external nodes
+   -s Num lamports per node in genesis block
+                                      - Create account keypairs for internal nodes and assign these many lamports
+
  sanity/start/update-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noLedgerVerify    - Skip ledger verification
@@ -89,6 +95,8 @@ benchExchangeExtraArgs=
 failOnValidatorBootupFailure=true
 genesisOptions=
 numFullnodesRequested=
+externalPrimordialAccountsFile=
+stakeNodesInGenesisBlock=
 
 command=$1
 [[ -n $command ]] || usage
@@ -112,7 +120,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?T:t:o:f:rD:c:Fn:" opt "${shortArgs[@]}"; do
+while getopts "h?T:t:o:f:rD:c:Fn:x:s:" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -190,6 +198,12 @@ while getopts "h?T:t:o:f:rD:c:Fn:" opt "${shortArgs[@]}"; do
     ;;
   F)
     failOnValidatorBootupFailure=false
+    ;;
+  x)
+    externalPrimordialAccountsFile=$OPTARG
+    ;;
+  s)
+    stakeNodesInGenesisBlock=$OPTARG
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -291,6 +305,7 @@ startCommon() {
 startBootstrapLeader() {
   declare ipAddress=$1
   declare logFile="$2"
+  declare nodeIndex="$3"
   echo "--- Starting bootstrap leader: $ipAddress"
   echo "start log: $logFile"
 
@@ -299,6 +314,8 @@ startBootstrapLeader() {
   (
     set -x
     startCommon "$ipAddress" || exit 1
+    [[ -z "$externalPrimordialAccountsFile" ]] || rsync -vPrc -e "ssh ${sshOptions[*]}" "$externalPrimordialAccountsFile" \
+      "$ipAddress:~/solana/config/external-primodial-accounts.yml"
     case $deployMethod in
     tar)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:~/.cargo/bin/"
@@ -316,10 +333,13 @@ startBootstrapLeader() {
          $deployMethod \
          bootstrap-leader \
          $entrypointIp \
-         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]})) \
+         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]} + ${#replicatorIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
+         \"$externalPrimordialAccountsFile\" \
+         \"$stakeNodesInGenesisBlock\" \
+         $nodeIndex \
          \"$genesisOptions\" \
       "
   ) >> "$logFile" 2>&1 || {
@@ -332,6 +352,7 @@ startBootstrapLeader() {
 startNode() {
   declare ipAddress=$1
   declare nodeType=$2
+  declare nodeIndex="$3"
   declare logFile="$netLogDir/fullnode-$ipAddress.log"
 
   echo "--- Starting $nodeType: $ipAddress"
@@ -344,10 +365,13 @@ startNode() {
          $deployMethod \
          $nodeType \
          $entrypointIp \
-         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]})) \
+         $((${#fullnodeIpList[@]} + ${#blockstreamerIpList[@]} + ${#replicatorIpList[@]})) \
          \"$RUST_LOG\" \
          $skipSetup \
          $failOnValidatorBootupFailure \
+         \"$externalPrimordialAccountsFile\" \
+         \"$stakeNodesInGenesisBlock\" \
+         $nodeIndex \
          \"$genesisOptions\" \
       "
   ) >> "$logFile" 2>&1 &
@@ -492,7 +516,7 @@ start() {
     if $bootstrapLeader; then
       SECONDS=0
       declare bootstrapNodeDeployTime=
-      startBootstrapLeader "$ipAddress" "$netLogDir/bootstrap-leader-$ipAddress.log"
+      startBootstrapLeader "$ipAddress" "$netLogDir/bootstrap-leader-$ipAddress.log" $loopCount
       bootstrapNodeDeployTime=$SECONDS
       $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
 
@@ -500,7 +524,7 @@ start() {
       SECONDS=0
       pids=()
     else
-      startNode "$ipAddress" $nodeType
+      startNode "$ipAddress" $nodeType $loopCount
 
       # Stagger additional node start time. If too many nodes start simultaneously
       # the bootstrap node gets more rsync requests from the additional nodes than
