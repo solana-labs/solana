@@ -2,7 +2,7 @@
 //! programs. It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
-use crate::accounts::{AccountLockType, Accounts};
+use crate::accounts::Accounts;
 use crate::accounts_db::{
     AccountsDB, ErrorCounters, InstructionAccounts, InstructionCredits, InstructionLoaders,
 };
@@ -38,7 +38,6 @@ use solana_sdk::syscall::tick_height::{self, TickHeight};
 use solana_sdk::system_transaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_us, MAX_RECENT_BLOCKHASHES};
 use solana_sdk::transaction::{Result, Transaction, TransactionError};
-use std::borrow::Borrow;
 use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
@@ -629,51 +628,27 @@ impl Bank {
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
     }
 
-    pub fn lock_accounts<'a, 'b, I>(&'a self, txs: &'b [I]) -> LockedAccountsResults<'a, 'b, I>
-    where
-        I: std::borrow::Borrow<Transaction>,
-    {
+    pub fn lock_accounts<'a, 'b>(
+        &'a self,
+        txs: &'b [Transaction],
+    ) -> LockedAccountsResults<'a, 'b> {
         if self.is_frozen() {
             warn!("=========== FIXME: lock_accounts() working on a frozen bank! ================");
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
         let results = self.rc.accounts.lock_accounts(txs);
-        LockedAccountsResults::new(results, &self, txs, AccountLockType::AccountLock)
+        LockedAccountsResults::new(results, &self, txs)
     }
 
-    pub fn unlock_accounts<I>(&self, locked_accounts_results: &mut LockedAccountsResults<I>)
-    where
-        I: Borrow<Transaction>,
-    {
+    pub fn unlock_accounts(&self, locked_accounts_results: &mut LockedAccountsResults) {
         if locked_accounts_results.needs_unlock {
             locked_accounts_results.needs_unlock = false;
-            match locked_accounts_results.lock_type() {
-                AccountLockType::AccountLock => self.rc.accounts.unlock_accounts(
-                    locked_accounts_results.transactions(),
-                    locked_accounts_results.locked_accounts_results(),
-                ),
-                AccountLockType::RecordLock => self
-                    .rc
-                    .accounts
-                    .unlock_record_accounts(locked_accounts_results.transactions()),
-            }
+            self.rc.accounts.unlock_accounts(
+                locked_accounts_results.transactions(),
+                locked_accounts_results.locked_accounts_results(),
+            )
         }
-    }
-
-    pub fn lock_record_accounts<'a, 'b, I>(
-        &'a self,
-        txs: &'b [I],
-    ) -> LockedAccountsResults<'a, 'b, I>
-    where
-        I: std::borrow::Borrow<Transaction>,
-    {
-        self.rc.accounts.lock_record_accounts(txs);
-        LockedAccountsResults::new(vec![], &self, txs, AccountLockType::RecordLock)
-    }
-
-    pub fn unlock_record_accounts(&self, txs: &[Transaction]) {
-        self.rc.accounts.unlock_record_accounts(txs)
     }
 
     fn load_accounts(
@@ -836,7 +811,7 @@ impl Bank {
     pub fn load_and_execute_transactions(
         &self,
         txs: &[Transaction],
-        lock_results: &LockedAccountsResults<Transaction>,
+        lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> (
         Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>>,
@@ -978,7 +953,7 @@ impl Bank {
     pub fn load_execute_and_commit_transactions(
         &self,
         txs: &[Transaction],
-        lock_results: &LockedAccountsResults<Transaction>,
+        lock_results: &LockedAccountsResults,
         max_age: usize,
     ) -> Vec<Result<()>> {
         let (loaded_accounts, executed) =

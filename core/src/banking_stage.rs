@@ -369,26 +369,23 @@ impl BankingStage {
             .collect()
     }
 
-    fn record_transactions<'a, 'b>(
-        bank: &'a Bank,
-        txs: &'b [Transaction],
+    fn record_transactions(
+        bank_slot: u64,
+        txs: &[Transaction],
         results: &[transaction::Result<()>],
         poh: &Arc<Mutex<PohRecorder>>,
-        recordable_txs: &'b mut Vec<&'b Transaction>,
-    ) -> Result<LockedAccountsResults<'a, 'b, &'b Transaction>> {
+    ) -> Result<()> {
         let processed_transactions: Vec<_> = results
             .iter()
             .zip(txs.iter())
             .filter_map(|(r, x)| {
                 if Bank::can_commit(r) {
-                    recordable_txs.push(x);
                     Some(x.clone())
                 } else {
                     None
                 }
             })
             .collect();
-        let record_locks = bank.lock_record_accounts(recordable_txs);
         debug!("processed: {} ", processed_transactions.len());
         // unlock all the accounts with errors which are filtered by the above `filter_map`
         if !processed_transactions.is_empty() {
@@ -400,16 +397,16 @@ impl BankingStage {
             // record and unlock will unlock all the successful transactions
             poh.lock()
                 .unwrap()
-                .record(bank.slot(), hash, processed_transactions)?;
+                .record(bank_slot, hash, processed_transactions)?;
         }
-        Ok(record_locks)
+        Ok(())
     }
 
     fn process_and_record_transactions_locked(
         bank: &Bank,
         txs: &[Transaction],
         poh: &Arc<Mutex<PohRecorder>>,
-        lock_results: &LockedAccountsResults<Transaction>,
+        lock_results: &LockedAccountsResults,
     ) -> Result<()> {
         let now = Instant::now();
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
@@ -422,12 +419,10 @@ impl BankingStage {
 
         let freeze_lock = bank.freeze_lock();
 
-        let mut recordable_txs = vec![];
-        let (record_time, record_locks) = {
+        let record_time = {
             let now = Instant::now();
-            let record_locks =
-                Self::record_transactions(bank, txs, &results, poh, &mut recordable_txs)?;
-            (now.elapsed(), record_locks)
+            Self::record_transactions(bank.slot(), txs, &results, poh)?;
+            now.elapsed()
         };
 
         let commit_time = {
@@ -436,7 +431,6 @@ impl BankingStage {
             now.elapsed()
         };
 
-        drop(record_locks);
         drop(freeze_lock);
 
         debug!(
@@ -1182,14 +1176,8 @@ mod tests {
             ];
 
             let mut results = vec![Ok(()), Ok(())];
-            BankingStage::record_transactions(
-                &bank,
-                &transactions,
-                &results,
-                &poh_recorder,
-                &mut vec![],
-            )
-            .unwrap();
+            BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
+                .unwrap();
             let (_, entries) = entry_receiver.recv().unwrap();
             assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
@@ -1198,27 +1186,15 @@ mod tests {
                 1,
                 InstructionError::new_result_with_negative_lamports(),
             ));
-            BankingStage::record_transactions(
-                &bank,
-                &transactions,
-                &results,
-                &poh_recorder,
-                &mut vec![],
-            )
-            .unwrap();
+            BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
+                .unwrap();
             let (_, entries) = entry_receiver.recv().unwrap();
             assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
             // Other TransactionErrors should not be recorded
             results[0] = Err(TransactionError::AccountNotFound);
-            BankingStage::record_transactions(
-                &bank,
-                &transactions,
-                &results,
-                &poh_recorder,
-                &mut vec![],
-            )
-            .unwrap();
+            BankingStage::record_transactions(bank.slot(), &transactions, &results, &poh_recorder)
+                .unwrap();
             let (_, entries) = entry_receiver.recv().unwrap();
             assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
         }
