@@ -43,7 +43,6 @@ impl Default for GenesisBlock {
     fn default() -> Self {
         Self {
             accounts: Vec::new(),
-            bootstrap_leader_pubkey: Pubkey::default(),
             epoch_warmup: true,
             fee_calculator: FeeCalculator::default(),
             native_instruction_processors: Vec::new(),
