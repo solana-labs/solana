@@ -61,13 +61,8 @@ impl GenesisBlock {
     ) -> Self {
         Self {
             accounts: accounts.to_vec(),
-            epoch_warmup: true,
-            fee_calculator: FeeCalculator::default(),
             native_instruction_processors: native_instruction_processors.to_vec(),
-            slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
-            stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
-            ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
-            poh_config: PohConfig::default(),
+            ..GenesisBlock::default()
         }
     }
 
