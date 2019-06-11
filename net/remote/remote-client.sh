@@ -56,7 +56,7 @@ scripts/net-stats.sh  > net-stats.log 2>&1 &
 case $clientToRun in
 solana-bench-tps)
   net/scripts/rsync-retry.sh -vPrc \
-    "$entrypointIp":~/solana/solana-client-stakes/bench-tps"$clientIndex".yml ./client-stakes.yml
+    "$entrypointIp":~/solana/solana-client-accounts/bench-tps"$clientIndex".yml ./client-accounts.yml
   clientCommand="\
     solana-bench-tps \
       --entrypoint $entrypointIp:8001 \
@@ -65,7 +65,7 @@ solana-bench-tps)
       --sustained \
       --threads $threadCount \
       $benchTpsExtraArgs \
-      -r ./client-stakes.yml \
+      -r ./client-accounts.yml \
   "
   ;;
 solana-bench-exchange)

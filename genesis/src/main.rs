@@ -39,9 +39,14 @@ use std::time::{Duration, Instant};
 
 pub const BOOTSTRAP_LEADER_LAMPORTS: u64 = 42;
 
+pub enum AccountFileFormat {
+    Pubkey,
+    Keypair,
+}
+
 pub fn append_primordial_accounts(
     file: &str,
-    contains_keypairs: bool,
+    file_format: AccountFileFormat,
     genesis_block: &mut GenesisBlock,
 ) -> io::Result<()> {
     let accounts_file = File::open(file.to_string())?;
@@ -52,11 +57,12 @@ pub fn append_primordial_accounts(
     primordial_accounts
         .into_iter()
         .for_each(|(account, balance)| {
-            let pubkey = if contains_keypairs {
-                let bytes: Vec<u8> = serde_json::from_str(account.as_str()).unwrap();
-                Keypair::from_bytes(&bytes).unwrap().pubkey()
-            } else {
-                Pubkey::from_str(account.as_str()).unwrap()
+            let pubkey = match file_format {
+                AccountFileFormat::Pubkey => Pubkey::from_str(account.as_str()).unwrap(),
+                AccountFileFormat::Keypair => {
+                    let bytes: Vec<u8> = serde_json::from_str(account.as_str()).unwrap();
+                    Keypair::from_bytes(&bytes).unwrap().pubkey()
+                }
             };
 
             genesis_block
@@ -309,11 +315,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     );
 
     if let Some(file) = matches.value_of("primordial_accounts_file") {
-        append_primordial_accounts(file, false, &mut genesis_block)?;
+        append_primordial_accounts(file, AccountFileFormat::Pubkey, &mut genesis_block)?;
     }
 
     if let Some(file) = matches.value_of("primordial_keypairs_file") {
-        append_primordial_accounts(file, true, &mut genesis_block)?;
+        append_primordial_accounts(file, AccountFileFormat::Keypair, &mut genesis_block)?;
     }
 
     genesis_block.fee_calculator.target_lamports_per_signature =
@@ -391,7 +397,12 @@ mod tests {
         let mut genesis_block = GenesisBlock::new(&[], &[]);
 
         // Test invalid file returns error
-        assert!(append_primordial_accounts("unknownfile", false, &mut genesis_block).is_err());
+        assert!(append_primordial_accounts(
+            "unknownfile",
+            AccountFileFormat::Pubkey,
+            &mut genesis_block
+        )
+        .is_err());
 
         let mut primordial_accounts = HashMap::new();
         primordial_accounts.insert(Pubkey::new_rand().to_string(), 2 as u64);
@@ -406,7 +417,7 @@ mod tests {
         // Test valid file returns ok
         assert!(append_primordial_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
-            false,
+            AccountFileFormat::Pubkey,
             &mut genesis_block
         )
         .is_ok());
@@ -437,7 +448,7 @@ mod tests {
 
         assert!(append_primordial_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
-            false,
+            AccountFileFormat::Pubkey,
             &mut genesis_block
         )
         .is_ok());
@@ -493,7 +504,7 @@ mod tests {
 
         assert!(append_primordial_accounts(
             "test_append_primordial_accounts_to_genesis.yml",
-            true,
+            AccountFileFormat::Keypair,
             &mut genesis_block
         )
         .is_ok());
