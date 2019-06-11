@@ -103,7 +103,7 @@ impl JsonRpcRequestProcessor {
     fn get_epoch_vote_accounts(&self) -> Result<Vec<(Pubkey, u64, VoteState)>> {
         let bank = self.bank();
         Ok(bank
-            .epoch_vote_accounts(bank.get_stakers_epoch(bank.slot()))
+            .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
             .ok_or_else(Error::invalid_request)?
             .iter()
             .map(|(k, (s, a))| (*k, *s, VoteState::from(a).unwrap_or_default()))
