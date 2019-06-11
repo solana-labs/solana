@@ -3,6 +3,7 @@
 use crate::account::Account;
 use crate::fee_calculator::FeeCalculator;
 use crate::hash::{hash, Hash};
+use crate::inflation::Inflation;
 use crate::poh_config::PohConfig;
 use crate::pubkey::Pubkey;
 use crate::signature::{Keypair, KeypairUtil};
@@ -22,6 +23,7 @@ pub struct GenesisBlock {
     pub stakers_slot_offset: u64,
     pub epoch_warmup: bool,
     pub poh_config: PohConfig,
+    pub inflation: Inflation,
 }
 
 // useful for basic tests
@@ -50,6 +52,7 @@ impl Default for GenesisBlock {
             stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
             poh_config: PohConfig::default(),
+            inflation: Inflation::default(),
         }
     }
 }

@@ -5,6 +5,7 @@ pub mod client;
 pub mod fee_calculator;
 pub mod genesis_block;
 pub mod hash;
+pub mod inflation;
 pub mod instruction;
 pub mod instruction_processor_utils;
 pub mod loader_instruction;
