@@ -360,12 +360,14 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
         let split_path: Vec<&str> = path.to_str().unwrap().rsplit('/').collect();
         let account_paths = ACCOUNT_PATHS.lock().unwrap().clone();
         let mut account_path = path.clone();
-        for dir_path in account_paths.iter() {
-            let fullpath = format!("{}/{}/{}", dir_path, split_path[1], split_path[0]);
-            let file_path = Path::new(&fullpath);
-            if file_path.exists() {
-                account_path = file_path.to_path_buf();
-                break;
+        if split_path.len() >= 2 {
+            for dir_path in account_paths.iter() {
+                let fullpath = format!("{}/{}/{}", dir_path, split_path[1], split_path[0]);
+                let file_path = Path::new(&fullpath);
+                if file_path.exists() {
+                    account_path = file_path.to_path_buf();
+                    break;
+                }
             }
         }
 
@@ -376,7 +378,7 @@ impl<'a> serde::de::Visitor<'a> for AppendVecVisitor {
             .open(account_path.as_path());
 
         if data.is_err() {
-            warn!("account open {:?} failed, create empty", account_path);
+            warn!("account open {:?} failed", account_path);
             std::fs::create_dir_all(&account_path.parent().unwrap())
                 .expect("Create directory failed");
             return Ok(AppendVec::new(&account_path, true, file_size as usize));
