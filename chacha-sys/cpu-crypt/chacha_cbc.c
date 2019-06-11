@@ -70,4 +70,3 @@ void chacha20_cbc_encrypt(const uint8_t *in, uint8_t *out, size_t in_len,
 {
     chacha20_cbc128_encrypt(in, out, in_len, key, ivec);
 }
-
