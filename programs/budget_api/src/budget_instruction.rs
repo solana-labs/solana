@@ -4,6 +4,7 @@ use crate::id;
 use bincode::serialized_size;
 use chrono::prelude::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
+use solana_sdk::hash::Hash;
 use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction;
@@ -28,6 +29,9 @@ pub enum BudgetInstruction {
     /// Tell the budget that the `InitializeAccount` with `Signature` has been
     /// signed by the containing transaction's `Pubkey`.
     ApplySignature,
+
+    /// Load an account and pass its data to the budget for inspection.
+    ApplyAccountData,
 }
 
 fn initialize_account(contract: &Pubkey, expr: BudgetExpr) -> Instruction {
@@ -89,6 +93,20 @@ pub fn when_signed(
     create_account(from, contract, lamports, expr)
 }
 
+/// Make a payment when an account has the given data
+pub fn when_account_data(
+    from: &Pubkey,
+    to: &Pubkey,
+    contract: &Pubkey,
+    account_pubkey: &Pubkey,
+    account_hash: Hash,
+    lamports: u64,
+) -> Vec<Instruction> {
+    let expr =
+        BudgetExpr::new_payment_when_account_data(account_pubkey, account_hash, lamports, to);
+    create_account(from, contract, lamports, expr)
+}
+
 pub fn apply_timestamp(
     from: &Pubkey,
     contract: &Pubkey,
@@ -114,6 +132,23 @@ pub fn apply_signature(from: &Pubkey, contract: &Pubkey, to: &Pubkey) -> Instruc
         account_metas.push(AccountMeta::new(*to, false));
     }
     Instruction::new(id(), &BudgetInstruction::ApplySignature, account_metas)
+}
+
+pub fn apply_account_data(
+    from: &Pubkey,
+    contract: &Pubkey,
+    account: &Pubkey,
+    to: &Pubkey,
+) -> Instruction {
+    let mut account_metas = vec![
+        AccountMeta::new(*from, true),
+        AccountMeta::new(*contract, false),
+        AccountMeta::new(*account, false),
+    ];
+    if from != to {
+        account_metas.push(AccountMeta::new(*to, false));
+    }
+    Instruction::new(id(), &BudgetInstruction::ApplyAccountData, account_metas)
 }
 
 #[cfg(test)]

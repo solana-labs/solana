@@ -1034,7 +1034,7 @@ impl Bank {
         parents
     }
 
-    fn store(&self, pubkey: &Pubkey, account: &Account) {
+    pub fn store(&self, pubkey: &Pubkey, account: &Account) {
         self.rc.accounts.store_slow(self.slot(), pubkey, account);
 
         if Stakes::is_stake(account) {

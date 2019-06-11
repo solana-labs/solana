@@ -5,6 +5,7 @@
 
 use chrono::prelude::*;
 use serde_derive::{Deserialize, Serialize};
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::mem;
 
@@ -16,6 +17,9 @@ pub enum Witness {
 
     /// A signature from Pubkey.
     Signature,
+
+    /// Account snapshot.
+    AccountData(Hash),
 }
 
 /// Some amount of lamports that should be sent to the `to` `Pubkey`.
@@ -36,6 +40,9 @@ pub enum Condition {
 
     /// Wait for a `Signature` `Witness` from `Pubkey`.
     Signature(Pubkey),
+
+    /// Wait for the account with the given pubkey to contain the expected data.
+    AccountData(Hash, Pubkey),
 }
 
 impl Condition {
@@ -45,6 +52,9 @@ impl Condition {
             (Condition::Signature(pubkey), Witness::Signature) => pubkey == from,
             (Condition::Timestamp(dt, pubkey), Witness::Timestamp(last_time)) => {
                 pubkey == from && dt <= last_time
+            }
+            (Condition::AccountData(expected_hash, pubkey), Witness::AccountData(actual_hash)) => {
+                pubkey == from && actual_hash == expected_hash
             }
             _ => false,
         }
@@ -79,6 +89,19 @@ impl BudgetExpr {
     pub fn new_authorized_payment(from: &Pubkey, lamports: u64, to: &Pubkey) -> Self {
         BudgetExpr::After(
             Condition::Signature(*from),
+            Box::new(Self::new_payment(lamports, to)),
+        )
+    }
+
+    /// Create a budget that pays `lamports` to `to` after witnessing account data in `account_pubkey` with the given hash.
+    pub fn new_payment_when_account_data(
+        account_pubkey: &Pubkey,
+        account_hash: Hash,
+        lamports: u64,
+        to: &Pubkey,
+    ) -> Self {
+        BudgetExpr::After(
+            Condition::AccountData(account_hash, *account_pubkey),
             Box::new(Self::new_payment(lamports, to)),
         )
     }
