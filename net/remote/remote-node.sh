@@ -96,13 +96,17 @@ local|tar)
     fi
     rm -rf ./solana-client-stakes
     mkdir ./solana-client-stakes
-    for i in $(seq 0 "$numBenchTpsClients"); do
-      solana-bench-tps -w ./solana-client-stakes/bench-tps"$i".yml "$benchTpsExtraArgs"
-      cat ./solana-client-stakes/bench-tps"$i".yml >> ./solana-client-stakes/client-accounts.yml
+    for i in $(seq 0 $((numBenchTpsClients-1))); do
+      # shellcheck disable=SC2206 # Do not want to quote $benchTpsExtraArgs
+      solana-bench-tps -w ./solana-client-stakes/bench-tps"$i".yml $benchTpsExtraArgs
+      # Skip first line, as it contains header
+      tail -n +2 -q ./solana-client-stakes/bench-tps"$i".yml >> ./solana-client-stakes/client-accounts.yml
+      echo "" >> ./solana-client-stakes/client-accounts.yml
     done
 #    for i in $(seq "$numBenchTpsClients" "$numBenchExchangeClients"); do
-#      solana-bench-exchange -w ./solana-client-stakes/bench-exchange"$i".yml "$benchExchangeExtraArgs"
-#      cat ./solana-client-stakes/bench-exchange"$i".yml >> ./solana-client-stakes/client-accounts.yml
+#      # shellcheck disable=SC2206 # Do not want to quote $benchExchangeExtraArgs
+#      solana-bench-exchange -w ./solana-client-stakes/bench-exchange"$i".yml $benchExchangeExtraArgs
+#      tail -n +2 -q ./solana-client-stakes/bench-exchange"$i".yml >> ./solana-client-stakes/client-accounts.yml
 #    done
     [[ -z $externalPrimordialAccountsFile ]] || cat "$externalPrimordialAccountsFile" >> ./solana-node-stakes/fullnode-stakes.yml
     if [ -f ./solana-node-stakes/fullnode-stakes.yml ]; then
