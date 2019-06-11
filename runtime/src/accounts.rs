@@ -250,12 +250,17 @@ impl Accounts {
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 (tx, Ok(())) => {
+<<<<<<< HEAD
                     let fee_calculator = hash_queue
                         .get_fee_calculator(&tx.message().recent_blockhash)
                         .ok_or(TransactionError::BlockhashNotFound)?;
 
                     let fee = fee_calculator.calculate_fee(tx.message());
                     let (accounts, credits) = Self::load_tx_accounts(
+=======
+                    let fee = fee_calculator.calculate_fee(tx.message());
+                    let accounts = Self::load_tx_accounts(
+>>>>>>> nudge
                         &storage,
                         ancestors,
                         &accounts_index,

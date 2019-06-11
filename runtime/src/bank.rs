@@ -933,7 +933,6 @@ impl Bank {
 
         self.collector_fees
             .fetch_add(fees as usize, Ordering::Relaxed);
-        println!("{}:{}", line!(), file!());
         results
     }
 
