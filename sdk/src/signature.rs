@@ -42,8 +42,8 @@ impl Signature {
 
 pub trait Signable {
     fn sign(&mut self, keypair: &Keypair) {
-        let data = self.signable_data();
-        self.set_signature(keypair.sign_message(data.borrow()));
+        let signature = keypair.sign_message(self.signable_data().borrow());
+        self.set_signature(signature);
     }
     fn verify(&self) -> bool {
         self.get_signature()
