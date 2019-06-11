@@ -487,10 +487,9 @@ impl AccountsDB {
         fork_id: Fork,
         infos: Vec<AccountInfo>,
         accounts: &HashMap<&Pubkey, (&Account, LamportCredit)>,
-    ) -> Vec<(Fork, AccountInfo)> {
-        let mut reclaims = Vec::with_capacity(infos.len() * 2);
+    ) -> (Vec<(Fork, AccountInfo)>, u64) {
+        let mut reclaims: Vec<(Fork, AccountInfo)> = Vec::with_capacity(infos.len() * 2);
         let mut index = self.accounts_index.write().unwrap();
-        let mut reclaims = vec![];
         for (info, account) in infos.into_iter().zip(accounts.iter()) {
             let key = &account.0;
             index.insert(fork_id, key, info, &mut reclaims);
