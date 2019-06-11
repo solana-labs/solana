@@ -101,7 +101,6 @@ mod tests {
     fn test_genesis_block() {
         let mint_keypair = Keypair::new();
         let block = GenesisBlock::new(
-            &Pubkey::default(),
             &[
                 (
                     mint_keypair.pubkey(),
