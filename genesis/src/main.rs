@@ -247,7 +247,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     );
 
     let mut genesis_block = GenesisBlock::new(
-        &bootstrap_leader_keypair.pubkey(),
         &[
             // the mint
             (
@@ -366,7 +365,7 @@ mod tests {
 
     #[test]
     fn test_append_primordial_accounts_to_genesis() {
-        let mut genesis_block = GenesisBlock::new(&Pubkey::new_rand(), &[], &[]);
+        let mut genesis_block = GenesisBlock::new(&[], &[]);
 
         // Test invalid file returns error
         assert!(append_primordial_accounts("unknownfile", &mut genesis_block).is_err());

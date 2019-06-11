@@ -3,6 +3,7 @@
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_stake_api::stake_state::StakeState;
+use solana_vote_api::vote_state::VoteState;
 use std::collections::HashMap;
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -84,6 +85,14 @@ impl Stakes {
     pub fn vote_accounts(&self) -> &HashMap<Pubkey, (u64, Account)> {
         &self.vote_accounts
     }
+
+    pub fn highest_staked_node(&self) -> Option<Pubkey> {
+        self.vote_accounts
+            .iter()
+            .max_by(|(_ak, av), (_bk, bv)| av.0.cmp(&bv.0))
+            .and_then(|(_k, (_stake, account))| VoteState::from(account))
+            .map(|vote_state| vote_state.node_pubkey)
+    }
 }
 
 #[cfg(test)]
@@ -151,6 +160,29 @@ mod tests {
             assert!(vote_accounts.get(&vote_pubkey).is_some());
             assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 0);
         }
+    }
+
+    #[test]
+    fn test_stakes_highest() {
+        let mut stakes = Stakes::default();
+
+        assert_eq!(stakes.highest_staked_node(), None);
+
+        let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
+            create_staked_node_accounts(10);
+
+        stakes.store(&vote_pubkey, &vote_account);
+        stakes.store(&stake_pubkey, &stake_account);
+
+        let ((vote11_pubkey, vote11_account), (stake11_pubkey, stake11_account)) =
+            create_staked_node_accounts(11);
+
+        stakes.store(&vote11_pubkey, &vote11_account);
+        stakes.store(&stake11_pubkey, &stake11_account);
+
+        let vote11_node_pubkey = VoteState::from(&vote11_account).unwrap().node_pubkey;
+
+        assert_eq!(stakes.highest_staked_node(), Some(vote11_node_pubkey))
     }
 
     #[test]

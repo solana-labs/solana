@@ -388,7 +388,7 @@ impl ReplayStage {
         for bank_slot in &active_banks {
             let bank = bank_forks.read().unwrap().get(*bank_slot).unwrap().clone();
             *ticks_per_slot = bank.ticks_per_slot();
-            if bank.collector_id() != *my_pubkey {
+            if bank.collector_id() != my_pubkey {
                 Self::replay_blocktree_into_bank(&bank, &blocktree, progress)?;
             }
             let max_tick_height = (*bank_slot + 1) * bank.ticks_per_slot() - 1;
@@ -567,7 +567,7 @@ impl ReplayStage {
     ) {
         bank.freeze();
         info!("bank frozen {}", bank.slot());
-        if let Err(e) = slot_full_sender.send((bank.slot(), bank.collector_id())) {
+        if let Err(e) = slot_full_sender.send((bank.slot(), *bank.collector_id())) {
             trace!("{} slot_full alert failed: {:?}", my_pubkey, e);
         }
     }

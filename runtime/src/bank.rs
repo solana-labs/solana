@@ -345,8 +345,8 @@ impl Bank {
         bank
     }
 
-    pub fn collector_id(&self) -> Pubkey {
-        self.collector_id
+    pub fn collector_id(&self) -> &Pubkey {
+        &self.collector_id
     }
 
     pub fn slot(&self) -> u64 {
@@ -473,13 +473,19 @@ impl Bank {
 
     fn process_genesis_block(&mut self, genesis_block: &GenesisBlock) {
         // Bootstrap leader collects fees until `new_from_parent` is called.
-        self.collector_id = genesis_block.bootstrap_leader_pubkey;
         self.fee_calculator = genesis_block.fee_calculator.clone();
         self.update_fees();
 
         for (pubkey, account) in genesis_block.accounts.iter() {
             self.store(pubkey, account);
         }
+        // highest staked node is the first collector
+        self.collector_id = self
+            .stakes
+            .read()
+            .unwrap()
+            .highest_staked_node()
+            .unwrap_or_default();
 
         self.blockhash_queue
             .write()

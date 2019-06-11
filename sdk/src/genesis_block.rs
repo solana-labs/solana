@@ -15,7 +15,6 @@ use std::path::Path;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GenesisBlock {
     pub accounts: Vec<(Pubkey, Account)>,
-    pub bootstrap_leader_pubkey: Pubkey,
     pub epoch_warmup: bool,
     pub fee_calculator: FeeCalculator,
     pub native_instruction_processors: Vec<(String, Pubkey)>,
@@ -30,7 +29,6 @@ pub fn create_genesis_block(lamports: u64) -> (GenesisBlock, Keypair) {
     let mint_keypair = Keypair::new();
     (
         GenesisBlock::new(
-            &Pubkey::default(),
             &[(
                 mint_keypair.pubkey(),
                 Account::new(lamports, 0, &system_program::id()),
@@ -43,13 +41,11 @@ pub fn create_genesis_block(lamports: u64) -> (GenesisBlock, Keypair) {
 
 impl GenesisBlock {
     pub fn new(
-        bootstrap_leader_pubkey: &Pubkey,
         accounts: &[(Pubkey, Account)],
         native_instruction_processors: &[(String, Pubkey)],
     ) -> Self {
         Self {
             accounts: accounts.to_vec(),
-            bootstrap_leader_pubkey: *bootstrap_leader_pubkey, // TODO: leader_schedule to derive from actual stakes, instead ;)
             epoch_warmup: true,
             fee_calculator: FeeCalculator::default(),
             native_instruction_processors: native_instruction_processors.to_vec(),
@@ -105,7 +101,6 @@ mod tests {
     fn test_genesis_block() {
         let mint_keypair = Keypair::new();
         let block = GenesisBlock::new(
-            &Pubkey::default(),
             &[
                 (
                     mint_keypair.pubkey(),
