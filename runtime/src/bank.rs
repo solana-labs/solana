@@ -478,7 +478,7 @@ impl Bank {
             .read()
             .unwrap()
             .highest_staked_node()
-            .unwrap_or(Pubkey::default());
+            .unwrap_or_default();
 
         self.blockhash_queue
             .write()

@@ -228,7 +228,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     );
 
     let mut genesis_block = GenesisBlock::new(
-        &bootstrap_leader_keypair.pubkey(),
         &[
             // the mint
             (
