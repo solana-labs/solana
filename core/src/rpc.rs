@@ -119,7 +119,9 @@ impl JsonRpcRequestProcessor {
     }
 
     fn get_storage_pubkeys_for_slot(&self, slot: u64) -> Result<Vec<Pubkey>> {
-        Ok(self.storage_state.get_pubkeys_for_slot(slot))
+        Ok(self
+            .storage_state
+            .get_pubkeys_for_slot(slot, &self.bank_forks))
     }
 
     pub fn fullnode_exit(&self) -> Result<bool> {

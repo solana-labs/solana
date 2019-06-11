@@ -83,11 +83,11 @@ impl ReplayStage {
         subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-    ) -> (Self, Receiver<(u64, Pubkey)>, Receiver<Vec<u64>>)
+    ) -> (Self, Receiver<(u64, Pubkey)>, Receiver<Vec<Arc<Bank>>>)
     where
         T: 'static + KeypairUtil + Send + Sync,
     {
-        let (root_slot_sender, root_slot_receiver) = channel();
+        let (root_bank_sender, root_bank_receiver) = channel();
         let (slot_full_sender, slot_full_receiver) = channel();
         trace!("replay stage");
         let exit_ = exit.clone();
@@ -152,7 +152,7 @@ impl ReplayStage {
                             &cluster_info,
                             &blocktree,
                             &leader_schedule_cache,
-                            &root_slot_sender,
+                            &root_bank_sender,
                         )?;
 
                         Self::reset_poh_recorder(
@@ -208,7 +208,7 @@ impl ReplayStage {
                 Ok(())
             })
             .unwrap();
-        (Self { t_replay }, slot_full_receiver, root_slot_receiver)
+        (Self { t_replay }, slot_full_receiver, root_bank_receiver)
     }
     pub fn start_leader(
         my_pubkey: &Pubkey,
@@ -297,7 +297,7 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: &Arc<Blocktree>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        root_slot_sender: &Sender<Vec<u64>>,
+        root_bank_sender: &Sender<Vec<Arc<Bank>>>,
     ) -> Result<()>
     where
         T: 'static + KeypairUtil + Send + Sync,
@@ -310,12 +310,9 @@ impl ReplayStage {
                 .get(new_root)
                 .expect("Root bank doesn't exist")
                 .clone();
-            let mut rooted_slots = root_bank
-                .parents()
-                .into_iter()
-                .map(|bank| bank.slot())
-                .collect::<Vec<_>>();
-            rooted_slots.push(root_bank.slot());
+            let mut rooted_banks = root_bank.parents();
+            rooted_banks.push(root_bank);
+            let rooted_slots: Vec<_> = rooted_banks.iter().map(|bank| bank.slot()).collect();
             blocktree
                 .set_roots(&rooted_slots)
                 .expect("Ledger set roots failed");
@@ -325,7 +322,7 @@ impl ReplayStage {
             leader_schedule_cache.set_root(new_root);
             bank_forks.write().unwrap().set_root(new_root);
             Self::handle_new_root(&bank_forks, progress);
-            root_slot_sender.send(rooted_slots)?;
+            root_bank_sender.send(rooted_banks)?;
         }
         locktower.update_epoch(&bank);
         if let Some(ref voting_keypair) = voting_keypair {

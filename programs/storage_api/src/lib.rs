@@ -5,7 +5,7 @@ pub mod storage_processor;
 pub const SLOTS_PER_SEGMENT: u64 = 16;
 
 pub fn get_segment_from_slot(slot: u64) -> usize {
-    (slot / SLOTS_PER_SEGMENT) as usize
+    ((slot + (SLOTS_PER_SEGMENT - 1)) / SLOTS_PER_SEGMENT) as usize
 }
 
 const STORAGE_PROGRAM_ID: [u8; 32] = [

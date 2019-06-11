@@ -32,6 +32,8 @@ impl Default for ProofStatus {
 pub struct Proof {
     pub signature: Signature,
     pub sha_state: Hash,
+    /// The start index of the segment proof is for
+    pub segment_index: usize,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
@@ -134,13 +136,12 @@ impl<'a> StorageAccount<'a> {
     pub fn submit_mining_proof(
         &mut self,
         sha_state: Hash,
-        slot: u64,
+        segment_index: usize,
         signature: Signature,
         current_slot: u64,
     ) -> Result<(), InstructionError> {
         let mut storage_contract = &mut self.account.state()?;
         if let StorageContract::ReplicatorStorage { proofs, .. } = &mut storage_contract {
-            let segment_index = get_segment_from_slot(slot);
             let current_segment = get_segment_from_slot(current_slot);
 
             if segment_index >= current_segment {
@@ -149,11 +150,12 @@ impl<'a> StorageAccount<'a> {
             }
 
             debug!(
-                "Mining proof submitted with contract {:?} slot: {}",
-                sha_state, slot
+                "Mining proof submitted with contract {:?} segment_index: {}",
+                sha_state, segment_index
             );
 
-            let segment_proofs = proofs.entry(segment_index).or_default();
+            // store the proofs in the "current" segment's entry in the hash map.
+            let segment_proofs = proofs.entry(current_segment).or_default();
             if segment_proofs.contains_key(&sha_state) {
                 // do not accept duplicate proofs
                 return Err(InstructionError::InvalidArgument);
@@ -163,8 +165,17 @@ impl<'a> StorageAccount<'a> {
                 Proof {
                     sha_state,
                     signature,
+                    segment_index,
                 },
             );
+            // TODO check for time correctness
+            proofs.retain(|segment, _| {
+                if segment >= &current_segment.saturating_sub(5) {
+                    true
+                } else {
+                    false
+                }
+            });
 
             self.account.set_state(storage_contract)
         } else {
@@ -491,6 +502,7 @@ mod tests {
         let proof = Proof {
             signature: Signature::default(),
             sha_state: Hash::default(),
+            segment_index,
         };
         let mut checked_proof = CheckedProof {
             proof: proof.clone(),

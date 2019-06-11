@@ -282,6 +282,7 @@ fn test_validate_mining() {
                 &replicator_1_storage_keypair,
                 slot,
                 &bank_client,
+                0,
             ));
         checked_proofs
             .entry(replicator_2_storage_id)
@@ -291,6 +292,7 @@ fn test_validate_mining() {
                 &replicator_2_storage_keypair,
                 slot,
                 &bank_client,
+                0,
             ));
     }
     let message = Message::new_with_payer(
@@ -455,6 +457,7 @@ fn submit_proof(
     storage_keypair: &Keypair,
     slot: u64,
     bank_client: &BankClient,
+    segment_index: u64,
 ) -> CheckedProof {
     let sha_state = Hash::new(Pubkey::new_rand().as_ref());
     let message = Message::new_with_payer(
@@ -475,6 +478,7 @@ fn submit_proof(
         proof: Proof {
             signature: Signature::default(),
             sha_state,
+            segment_index: segment_index as usize,
         },
         status: ProofStatus::Valid,
     }
