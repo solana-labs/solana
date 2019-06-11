@@ -107,9 +107,7 @@ impl SyncClient for BankClient {
     }
 
     fn get_recent_blockhash(&self) -> Result<(Hash, FeeCalculator)> {
-        let last_blockhash = self.bank.last_blockhash();
-        let fee_calculator = self.bank.fee_calculator.clone();
-        Ok((last_blockhash, fee_calculator))
+        Ok(self.bank.last_blockhash_with_fee_calculator())
     }
 
     fn get_transaction_count(&self) -> Result<u64> {

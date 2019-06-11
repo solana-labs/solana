@@ -4,13 +4,13 @@ use crate::accounts_db::{
 };
 use crate::accounts_index::{AccountsIndex, Fork};
 use crate::append_vec::StoredAccount;
+use crate::blockhash_queue::BlockhashQueue;
 use crate::message_processor::has_duplicates;
 use bincode::serialize;
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_metrics::inc_new_counter_error;
 use solana_sdk::account::{Account, LamportCredit};
-use solana_sdk::fee_calculator::FeeCalculator;
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
@@ -239,7 +239,7 @@ impl Accounts {
         ancestors: &HashMap<Fork, usize>,
         txs: &[Transaction],
         lock_results: Vec<Result<()>>,
-        fee_calculator: &FeeCalculator,
+        hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
         //PERF: hold the lock to scan for the references, but not to clone the accounts
@@ -250,6 +250,10 @@ impl Accounts {
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 (tx, Ok(())) => {
+                    let fee_calculator = hash_queue
+                        .get_fee_calculator(&tx.message().recent_blockhash)
+                        .ok_or(TransactionError::BlockhashNotFound)?;
+
                     let fee = fee_calculator.calculate_fee(tx.message());
                     let (accounts, credits) = Self::load_tx_accounts(
                         &storage,
@@ -484,6 +488,7 @@ mod tests {
     use bincode::{deserialize_from, serialize_into, serialized_size};
     use rand::{thread_rng, Rng};
     use solana_sdk::account::Account;
+    use solana_sdk::fee_calculator::FeeCalculator;
     use solana_sdk::hash::Hash;
     use solana_sdk::instruction::CompiledInstruction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -497,19 +502,16 @@ mod tests {
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders, InstructionCredits)>> {
+        let mut hash_queue = BlockhashQueue::new(100);
+        hash_queue.register_hash(&tx.message().recent_blockhash, &fee_calculator);
         let accounts = Accounts::new(None);
         for ka in ka.iter() {
             accounts.store_slow(0, &ka.0, &ka.1);
         }
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let res = accounts.load_accounts(
-            &ancestors,
-            &[tx],
-            vec![Ok(())],
-            &fee_calculator,
-            error_counters,
-        );
+        let res =
+            accounts.load_accounts(&ancestors, &[tx], vec![Ok(())], &hash_queue, error_counters);
         res
     }
 

@@ -53,8 +53,12 @@ pub fn append_primordial_accounts(file: &str, genesis_block: &mut GenesisBlock) 
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let default_bootstrap_leader_lamports = &BOOTSTRAP_LEADER_LAMPORTS.to_string();
-    let default_lamports_per_signature =
-        &FeeCalculator::default().lamports_per_signature.to_string();
+    let default_target_lamports_per_signature = &FeeCalculator::default()
+        .target_lamports_per_signature
+        .to_string();
+    let default_target_signatures_per_slot = &FeeCalculator::default()
+        .target_signatures_per_slot
+        .to_string();
     let default_target_tick_duration =
         &timing::duration_as_ms(&PohConfig::default().target_tick_duration).to_string();
     let default_ticks_per_slot = &timing::DEFAULT_TICKS_PER_SLOT.to_string();
@@ -144,12 +148,28 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Number of lamports to assign to the bootstrap leader's stake account"),
         )
         .arg(
-            Arg::with_name("lamports_per_signature")
-                .long("lamports-per-signature")
+            Arg::with_name("target_lamports_per_signature")
+                .long("target-lamports-per-signature")
                 .value_name("LAMPORTS")
                 .takes_value(true)
-                .default_value(default_lamports_per_signature)
-                .help("Number of lamports the cluster will charge for signature verification"),
+                .default_value(default_target_lamports_per_signature)
+                .help(
+                    "The cost in lamports that the cluster will charge for signature \
+                     verification when the cluster is operating at target-signatures-per-slot",
+                ),
+        )
+        .arg(
+            Arg::with_name("target_signatures_per_slot")
+                .long("target-signatures-per-slot")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .default_value(default_target_signatures_per_slot)
+                .help(
+                    "Used to estimate the desired processing capacity of the cluster.
+                    When the latest slot processes fewer/greater signatures than this \
+                    value, the lamports-per-signature fee will decrease/increase for \
+                    the next slot. A value of 0 disables signature-based fee adjustments",
+                ),
         )
         .arg(
             Arg::with_name("target_tick_duration")
@@ -266,8 +286,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         &bootstrap_storage_keypair.pubkey(),
     );
 
-    genesis_block.fee_calculator.lamports_per_signature =
-        value_t_or_exit!(matches, "lamports_per_signature", u64);
+    genesis_block.fee_calculator.target_lamports_per_signature =
+        value_t_or_exit!(matches, "target_lamports_per_signature", u64);
+    genesis_block.fee_calculator.target_signatures_per_slot =
+        value_t_or_exit!(matches, "target_signatures_per_slot", usize);
+    genesis_block.fee_calculator = FeeCalculator::new_derived(&genesis_block.fee_calculator, 0);
+
     genesis_block.ticks_per_slot = value_t_or_exit!(matches, "ticks_per_slot", u64);
     genesis_block.slots_per_epoch = value_t_or_exit!(matches, "slots_per_epoch", u64);
     genesis_block.poh_config.target_tick_duration =

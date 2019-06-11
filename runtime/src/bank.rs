@@ -207,6 +207,11 @@ pub struct Bank {
     #[serde(deserialize_with = "deserialize_atomicusize")]
     tick_height: AtomicUsize, // TODO: Use AtomicU64 if/when available
 
+    /// The number of signatures from valid transactions in this slot
+    #[serde(serialize_with = "serialize_atomicusize")]
+    #[serde(deserialize_with = "deserialize_atomicusize")]
+    signature_count: AtomicUsize,
+
     // Bank max_tick_height
     max_tick_height: u64,
 
@@ -227,8 +232,8 @@ pub struct Bank {
     #[serde(deserialize_with = "deserialize_atomicusize")]
     collector_fees: AtomicUsize, // TODO: Use AtomicU64 if/when available
 
-    /// An object to calculate transaction fees.
-    pub fee_calculator: FeeCalculator,
+    /// Latest transaction fees for transactions processed by this bank
+    fee_calculator: FeeCalculator,
 
     /// initialized from genesis
     epoch_schedule: EpochSchedule,
@@ -290,7 +295,8 @@ impl Bank {
         bank.blockhash_queue = RwLock::new(parent.blockhash_queue.read().unwrap().clone());
         bank.src.status_cache = parent.src.status_cache.clone();
         bank.bank_height = parent.bank_height + 1;
-        bank.fee_calculator = parent.fee_calculator.clone();
+        bank.fee_calculator =
+            FeeCalculator::new_derived(&parent.fee_calculator, parent.signature_count());
 
         bank.transaction_count
             .store(parent.transaction_count() as usize, Ordering::Relaxed);
@@ -335,7 +341,7 @@ impl Bank {
             bank.ancestors.insert(p.slot(), i + 1);
         });
         bank.update_current();
-
+        bank.update_fees();
         bank
     }
 
@@ -478,7 +484,7 @@ impl Bank {
         self.blockhash_queue
             .write()
             .unwrap()
-            .genesis_hash(&genesis_block.hash());
+            .genesis_hash(&genesis_block.hash(), &self.fee_calculator);
 
         self.ticks_per_slot = genesis_block.ticks_per_slot;
         self.max_tick_height = (self.slot + 1) * self.ticks_per_slot - 1;
@@ -523,16 +529,27 @@ impl Bank {
         self.blockhash_queue.read().unwrap().last_hash()
     }
 
-    /// Return a confirmed blockhash with NUM_BLOCKHASH_CONFIRMATIONS
-    pub fn confirmed_last_blockhash(&self) -> Hash {
+    pub fn last_blockhash_with_fee_calculator(&self) -> (Hash, FeeCalculator) {
+        let blockhash_queue = self.blockhash_queue.read().unwrap();
+        let last_hash = blockhash_queue.last_hash();
+        (
+            last_hash,
+            blockhash_queue
+                .get_fee_calculator(&last_hash)
+                .unwrap()
+                .clone(),
+        )
+    }
+
+    pub fn confirmed_last_blockhash(&self) -> (Hash, FeeCalculator) {
         const NUM_BLOCKHASH_CONFIRMATIONS: usize = 3;
 
         let parents = self.parents();
         if parents.is_empty() {
-            self.last_blockhash()
+            self.last_blockhash_with_fee_calculator()
         } else {
             let index = cmp::min(NUM_BLOCKHASH_CONFIRMATIONS, parents.len() - 1);
-            parents[index].last_blockhash()
+            parents[index].last_blockhash_with_fee_calculator()
         }
     }
 
@@ -615,7 +632,10 @@ impl Bank {
 
         // Register a new block hash if at the last tick in the slot
         if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
-            self.blockhash_queue.write().unwrap().register_hash(hash);
+            self.blockhash_queue
+                .write()
+                .unwrap()
+                .register_hash(hash, &self.fee_calculator);
         }
     }
 
@@ -661,7 +681,7 @@ impl Bank {
             &self.ancestors,
             txs,
             results,
-            &self.fee_calculator,
+            &self.blockhash_queue.read().unwrap(),
             error_counters,
         )
     }
@@ -695,7 +715,7 @@ impl Bank {
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok()
-                    && !hash_queue.check_hash_age(tx.message().recent_blockhash, max_age)
+                    && !hash_queue.check_hash_age(&tx.message().recent_blockhash, max_age)
                 {
                     error_counters.reserve_blockhash += 1;
                     Err(TransactionError::BlockhashNotFound)
@@ -830,14 +850,17 @@ impl Bank {
 
         let load_elapsed = now.elapsed();
         let now = Instant::now();
+        let mut signature_count = 0;
         let executed: Vec<Result<()>> = loaded_accounts
             .iter_mut()
             .zip(txs.iter())
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
-                Ok((ref mut accounts, ref mut loaders, ref mut credits)) => self
-                    .message_processor
-                    .process_message(tx.message(), loaders, accounts, credits),
+                Ok((ref mut accounts, ref mut loaders, ref mut credits)) => {
+                    signature_count += tx.message().header.num_required_signatures as usize;
+                    self.message_processor
+                        .process_message(tx.message(), loaders, accounts, credits)
+                }
             })
             .collect();
 
@@ -873,8 +896,10 @@ impl Bank {
         }
 
         self.increment_transaction_count(tx_count);
+        self.increment_signature_count(signature_count);
 
         inc_new_counter_info!("bank-process_transactions-txs", tx_count, 0, 1000);
+        inc_new_counter_info!("bank-process_transactions-sigs", signature_count, 0, 1000);
         Self::update_error_counters(&error_counters);
         (loaded_accounts, executed)
     }
@@ -884,12 +909,17 @@ impl Bank {
         txs: &[Transaction],
         executed: &[Result<()>],
     ) -> Vec<Result<()>> {
+        let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
         let results = txs
             .iter()
             .zip(executed.iter())
             .map(|(tx, res)| {
-                let fee = self.fee_calculator.calculate_fee(tx.message());
+                let fee_calculator = hash_queue
+                    .get_fee_calculator(&tx.message().recent_blockhash)
+                    .ok_or(TransactionError::BlockhashNotFound)?;
+                let fee = fee_calculator.calculate_fee(tx.message());
+
                 let message = tx.message();
                 match *res {
                     Err(TransactionError::InstructionError(_, _)) => {
@@ -1069,9 +1099,19 @@ impl Bank {
     pub fn transaction_count(&self) -> u64 {
         self.transaction_count.load(Ordering::Relaxed) as u64
     }
+
     fn increment_transaction_count(&self, tx_count: usize) {
         self.transaction_count
             .fetch_add(tx_count, Ordering::Relaxed);
+    }
+
+    pub fn signature_count(&self) -> usize {
+        self.signature_count.load(Ordering::Relaxed)
+    }
+
+    fn increment_signature_count(&self, signature_count: usize) {
+        self.signature_count
+            .fetch_add(signature_count, Ordering::Relaxed);
     }
 
     pub fn get_signature_confirmation_status(
@@ -1381,9 +1421,9 @@ mod tests {
     // This test demonstrates that fees are paid even when a program fails.
     #[test]
     fn test_detect_failed_duplicate_transactions() {
-        let (genesis_block, mint_keypair) = create_genesis_block(2);
-        let mut bank = Bank::new(&genesis_block);
-        bank.fee_calculator.lamports_per_signature = 1;
+        let (mut genesis_block, mint_keypair) = create_genesis_block(2);
+        genesis_block.fee_calculator.lamports_per_signature = 1;
+        let bank = Bank::new(&genesis_block);
 
         let dest = Keypair::new();
 
@@ -1496,67 +1536,123 @@ mod tests {
         assert_eq!(bank.get_balance(&key.pubkey()), 1);
     }
 
+    fn goto_end_of_slot(bank: &mut Bank) {
+        let mut tick_hash = bank.last_blockhash();
+        loop {
+            tick_hash = extend_and_hash(&tick_hash, &[42]);
+            bank.register_tick(&tick_hash);
+            if tick_hash == bank.last_blockhash() {
+                bank.freeze();
+                return;
+            }
+        }
+    }
+
     #[test]
     fn test_bank_tx_fee() {
         let leader = Pubkey::new_rand();
         let GenesisBlockInfo {
-            genesis_block,
+            mut genesis_block,
             mint_keypair,
             ..
         } = create_genesis_block_with_leader(100, &leader, 3);
+        genesis_block.fee_calculator.lamports_per_signature = 3;
         let mut bank = Bank::new(&genesis_block);
-        bank.fee_calculator.lamports_per_signature = 3;
 
-        let key1 = Keypair::new();
-        let key2 = Keypair::new();
-
+        let key = Keypair::new();
         let tx =
-            system_transaction::transfer(&mint_keypair, &key1.pubkey(), 2, genesis_block.hash());
+            system_transaction::transfer(&mint_keypair, &key.pubkey(), 2, bank.last_blockhash());
 
         let initial_balance = bank.get_balance(&leader);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
+        assert_eq!(bank.get_balance(&key.pubkey()), 2);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5);
+
         assert_eq!(bank.get_balance(&leader), initial_balance);
-        assert_eq!(bank.get_balance(&key1.pubkey()), 2);
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5);
-        bank.freeze();
-        assert_eq!(bank.get_balance(&leader), initial_balance + 3); // leader collects fee after the bank is frozen
+        goto_end_of_slot(&mut bank);
+        assert_eq!(bank.signature_count(), 1);
+        assert_eq!(bank.get_balance(&leader), initial_balance + 3); // Leader collects fee after the bank is frozen
 
+        // Verify that an InstructionError collects fees, too
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
-        bank.fee_calculator.lamports_per_signature = 1;
-        let tx = system_transaction::transfer(&key1, &key2.pubkey(), 1, genesis_block.hash());
-
-        assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&leader), initial_balance + 3);
-        assert_eq!(bank.get_balance(&key1.pubkey()), 0);
-        assert_eq!(bank.get_balance(&key2.pubkey()), 1);
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5);
-        bank.freeze();
-        assert_eq!(bank.get_balance(&leader), initial_balance + 4); // leader collects fee after the bank is frozen
-
-        // verify that an InstructionError collects fees, too
-        let bank = Bank::new_from_parent(&Arc::new(bank), &leader, 2);
         let mut tx =
-            system_transaction::transfer(&mint_keypair, &key2.pubkey(), 1, genesis_block.hash());
-        // send a bogus instruction to system_program, cause an instruction error
+            system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, bank.last_blockhash());
+        // Create a bogus instruction to system_program to cause an instruction error
         tx.message.instructions[0].data[0] = 40;
 
         bank.process_transaction(&tx)
-            .expect_err("instruction error"); // fails with an instruction error
-        assert_eq!(bank.get_balance(&key2.pubkey()), 1); //  our fee --V
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5 - 1);
-        bank.freeze();
-        assert_eq!(bank.get_balance(&leader), initial_balance + 5); // gots our bucks
+            .expect_err("instruction error");
+        assert_eq!(bank.get_balance(&key.pubkey()), 2); // no change
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5 - 3); // mint_keypair still pays a fee
+        goto_end_of_slot(&mut bank);
+        assert_eq!(bank.signature_count(), 1);
+
+        // Profit! 2 transaction signatures processed at 3 lamports each
+        assert_eq!(bank.get_balance(&leader), initial_balance + 6);
+    }
+
+    #[test]
+    fn test_bank_blockhash_fee_schedule() {
+        //solana_logger::setup();
+
+        let leader = Pubkey::new_rand();
+        let GenesisBlockInfo {
+            mut genesis_block,
+            mint_keypair,
+            ..
+        } = create_genesis_block_with_leader(1_000_000, &leader, 3);
+        genesis_block.fee_calculator.target_lamports_per_signature = 1000;
+        genesis_block.fee_calculator.target_signatures_per_slot = 1;
+
+        let mut bank = Bank::new(&genesis_block);
+        goto_end_of_slot(&mut bank);
+        let (cheap_blockhash, cheap_fee_calculator) = bank.last_blockhash_with_fee_calculator();
+        assert_eq!(cheap_fee_calculator.lamports_per_signature, 0);
+
+        let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
+        goto_end_of_slot(&mut bank);
+        let (expensive_blockhash, expensive_fee_calculator) =
+            bank.last_blockhash_with_fee_calculator();
+        assert!(
+            cheap_fee_calculator.lamports_per_signature
+                < expensive_fee_calculator.lamports_per_signature
+        );
+
+        let bank = Bank::new_from_parent(&Arc::new(bank), &leader, 2);
+
+        // Send a transfer using cheap_blockhash
+        let key = Keypair::new();
+        let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
+        let tx = system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, cheap_blockhash);
+        assert_eq!(bank.process_transaction(&tx), Ok(()));
+        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+        assert_eq!(
+            bank.get_balance(&mint_keypair.pubkey()),
+            initial_mint_balance - 1 - cheap_fee_calculator.lamports_per_signature
+        );
+
+        // Send a transfer using expensive_blockhash
+        let key = Keypair::new();
+        let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
+        let tx = system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, expensive_blockhash);
+        assert_eq!(bank.process_transaction(&tx), Ok(()));
+        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+        assert_eq!(
+            bank.get_balance(&mint_keypair.pubkey()),
+            initial_mint_balance - 1 - expensive_fee_calculator.lamports_per_signature
+        );
     }
 
     #[test]
     fn test_filter_program_errors_and_collect_fee() {
         let leader = Pubkey::new_rand();
         let GenesisBlockInfo {
-            genesis_block,
+            mut genesis_block,
             mint_keypair,
             ..
         } = create_genesis_block_with_leader(100, &leader, 3);
-        let mut bank = Bank::new(&genesis_block);
+        genesis_block.fee_calculator.lamports_per_signature = 2;
+        let bank = Bank::new(&genesis_block);
 
         let key = Keypair::new();
         let tx1 =
@@ -1572,7 +1668,6 @@ mod tests {
             )),
         ];
 
-        bank.fee_calculator.lamports_per_signature = 2;
         let initial_balance = bank.get_balance(&leader);
         let results = bank.filter_program_errors_and_collect_fee(&vec![tx1, tx2], &results);
         bank.freeze();
@@ -2176,11 +2271,12 @@ mod tests {
     #[test]
     fn test_bank_inherit_fee_calculator() {
         let (mut genesis_block, _mint_keypair) = create_genesis_block(500);
-        genesis_block.fee_calculator.lamports_per_signature = 123;
+        genesis_block.fee_calculator.target_lamports_per_signature = 123;
+        assert_eq!(genesis_block.fee_calculator.target_signatures_per_slot, 0);
         let bank0 = Arc::new(Bank::new(&genesis_block));
         let bank1 = Arc::new(new_from_parent(&bank0));
         assert_eq!(
-            bank0.fee_calculator.lamports_per_signature,
+            bank0.fee_calculator.target_lamports_per_signature,
             bank1.fee_calculator.lamports_per_signature
         );
     }

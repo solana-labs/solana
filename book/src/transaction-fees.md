@@ -8,17 +8,14 @@ client won't know how much was collected until the transaction is confirmed by
 the cluster and the remaining balance is checked. It smells of exactly what we
 dislike about Ethereum's "gas", non-determinism.
 
-## Implementation Status
-
-This design is not yet implemented, but is written as though it has been.  Once
-implemented, delete this comment.
-
 ### Congestion-driven fees
 
 Each validator uses *signatures per slot* (SPS) to estimate network congestion
 and *SPS target* to estimate the desired processing capacity of the cluster.
 The validator learns the SPS target from the genesis block, whereas it
-calculates SPS from the ledger data in the previous epoch.
+calculates SPS from recently processed transactions.  The genesis block also
+defines a target `lamports_per_signature`, which is the fee to charge per
+signature when the cluster is operating at *SPS target*.
 
 ### Calculating fees
 
@@ -37,8 +34,11 @@ lamports as returned by the fee calculator.
 In the first implementation of this design, the only fee parameter is
 `lamports_per_signature`. The more signatures the cluster needs to verify, the
 higher the fee. The exact number of lamports is determined by the ratio of SPS
-to the SPS target. The cluster lowers `lamports_per_signature` when SPS is
-below the target and raises it when at or above the target.
+to the SPS target. At the end of each slot, the cluster lowers
+`lamports_per_signature` when SPS is below the target and raises it when above
+the target.  The minimum value for `lamports_per_signature` is 50% of the target
+`lamports_per_signature` and the maximum value is 10x the target
+`lamports_per_signature'
 
 Future parameters might include:
 

@@ -23,7 +23,8 @@ default_arg --ledger "$SOLANA_RSYNC_CONFIG_DIR"/ledger
 default_arg --mint "$SOLANA_CONFIG_DIR"/mint-keypair.json
 default_arg --lamports 100000000000000
 default_arg --bootstrap-leader-lamports 424242
-default_arg --lamports-per-signature 1
+default_arg --target-lamports-per-signature 42
+default_arg --target-signatures-per-slot 42
 default_arg --hashes-per-tick auto
 $solana_genesis "${args[@]}"
 
