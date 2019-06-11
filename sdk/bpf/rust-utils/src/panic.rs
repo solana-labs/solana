@@ -1,7 +1,5 @@
 //! @brief Solana Rust-based BPF program panic handling
 
-use crate::log::*;
-use core::fmt::{self, Write};
 use core::panic::PanicInfo;
 
 #[cfg(not(test))]

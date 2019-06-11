@@ -8,10 +8,10 @@
 
 extern crate compiler_builtins;
 
-pub mod alloc;
+pub mod allocator;
 pub mod entrypoint;
 pub mod log;
 pub mod panic;
 
 #[global_allocator]
-static A: alloc::Allocator = alloc::Allocator;
+static A: allocator::Allocator = allocator::Allocator;
